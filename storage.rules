@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 1. Public Read Access for E-Commerce Product Images & Assets
+    // Allows unauthenticated public shoppers to view catalog photos
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 2. Restricted / Authenticated access for internal user uploads
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 3. Fallback Catch-All
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

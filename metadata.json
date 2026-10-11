@@ -1,0 +1,8 @@
+{
+  "name": "GroceMart - Retail Chain & Online Groceries",
+  "description": "Company profile for GroceMart local grocery retail chain highlighting heritage, 34 store locations, online ordering with QRIS payment, and customer order tracking portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

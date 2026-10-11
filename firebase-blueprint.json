@@ -1,0 +1,269 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Customer account profile",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the customer",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of customer",
+          "maxLength": 100
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number",
+          "maxLength": 30
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "Base64 data URI string or public avatar URL"
+        },
+        "memberTier": {
+          "type": "string",
+          "description": "Membership tier",
+          "enum": ["Silver Member", "Gold Member", "Platinum Member"]
+        },
+        "grocePoints": {
+          "type": "number",
+          "description": "Loyalty points balance"
+        },
+        "memberSince": {
+          "type": "string",
+          "description": "Date or year customer joined"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Update timestamp"
+        }
+      },
+      "required": ["userId", "name", "email", "memberTier", "grocePoints"]
+    },
+    "Address": {
+      "title": "Address",
+      "description": "Saved delivery address for a customer",
+      "type": "object",
+      "properties": {
+        "addressId": {
+          "type": "string",
+          "description": "Address identifier"
+        },
+        "label": {
+          "type": "string",
+          "description": "Label like Home or Office",
+          "maxLength": 50
+        },
+        "recipient": {
+          "type": "string",
+          "description": "Name of recipient",
+          "maxLength": 100
+        },
+        "phone": {
+          "type": "string",
+          "description": "Recipient phone number",
+          "maxLength": 30
+        },
+        "addressLine": {
+          "type": "string",
+          "description": "Full street address",
+          "maxLength": 300
+        },
+        "city": {
+          "type": "string",
+          "description": "City",
+          "maxLength": 50
+        },
+        "postalCode": {
+          "type": "string",
+          "description": "Postal code",
+          "maxLength": 10
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "Whether this is the primary default address"
+        }
+      },
+      "required": ["addressId", "label", "recipient", "phone", "addressLine", "city"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer grocery order record",
+      "type": "object",
+      "properties": {
+        "orderId": {
+          "type": "string",
+          "description": "Order reference code (e.g. GCM-2026-XXXX)",
+          "maxLength": 50
+        },
+        "userId": {
+          "type": "string",
+          "description": "User UID who placed the order",
+          "maxLength": 128
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Recipient customer name",
+          "maxLength": 100
+        },
+        "customerEmail": {
+          "type": "string",
+          "description": "Customer contact email",
+          "maxLength": 100
+        },
+        "customerPhone": {
+          "type": "string",
+          "description": "Customer contact phone",
+          "maxLength": 30
+        },
+        "deliveryMethod": {
+          "type": "string",
+          "enum": ["instant", "scheduled", "pickup"]
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Grocery subtotal in IDR"
+        },
+        "deliveryFee": {
+          "type": "number",
+          "description": "Delivery fee in IDR"
+        },
+        "discount": {
+          "type": "number",
+          "description": "Discount in IDR"
+        },
+        "total": {
+          "type": "number",
+          "description": "Total paid in IDR"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["qris", "bank_transfer", "card"]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["unpaid", "paid"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["placed", "paid", "packing", "in_transit", "delivered"]
+        },
+        "qrisRef": {
+          "type": "string",
+          "description": "QRIS payment reference"
+        },
+        "qrisNmid": {
+          "type": "string",
+          "description": "Merchant NMID"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Order placement ISO timestamp"
+        }
+      },
+      "required": ["orderId", "customerName", "customerEmail", "deliveryMethod", "total", "paymentMethod", "paymentStatus", "status"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Grocery catalog product with Base64 or public image",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Product identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Product name",
+          "maxLength": 150
+        },
+        "category": {
+          "type": "string"
+        },
+        "categoryLabel": {
+          "type": "string"
+        },
+        "price": {
+          "type": "number",
+          "description": "Price in IDR"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "farmPartner": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string",
+          "description": "Base64 data URI string or public image URL"
+        },
+        "fallbackGradient": {
+          "type": "string"
+        },
+        "isOrganic": {
+          "type": "boolean"
+        },
+        "isFarmDirect": {
+          "type": "boolean"
+        },
+        "stock": {
+          "type": "number"
+        },
+        "rating": {
+          "type": "number"
+        },
+        "reviewCount": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "name", "category", "price", "image"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": {
+        "$ref": "#/entities/Product"
+      },
+      "description": "Grocery catalog items with Base64 or public image URLs"
+    },
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Customer profiles and points balance"
+    },
+    "/users/{userId}/addresses/{addressId}": {
+      "schema": {
+        "$ref": "#/entities/Address"
+      },
+      "description": "User saved delivery addresses"
+    },
+    "/orders/{orderId}": {
+      "schema": {
+        "$ref": "#/entities/Order"
+      },
+      "description": "Customer orders with QRIS status and tracking"
+    }
+  }
+}

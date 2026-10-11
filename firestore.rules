@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['userId', 'name', 'email', 'memberTier', 'grocePoints'])
+        && data.userId is string && data.userId.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 100
+        && (data.memberTier in ['Silver Member', 'Gold Member', 'Platinum Member'])
+        && data.grocePoints is number && data.grocePoints >= 0;
+    }
+
+    function isValidAddress(data) {
+      return data.keys().hasAll(['addressId', 'label', 'recipient', 'phone', 'addressLine', 'city'])
+        && data.label is string && data.label.size() <= 50
+        && data.recipient is string && data.recipient.size() <= 100
+        && data.addressLine is string && data.addressLine.size() <= 300
+        && data.city is string && data.city.size() <= 50;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['orderId', 'customerName', 'customerEmail', 'deliveryMethod', 'total', 'paymentMethod', 'paymentStatus', 'status'])
+        && data.orderId is string && data.orderId.size() <= 50
+        && data.customerName is string && data.customerName.size() <= 100
+        && (data.deliveryMethod in ['instant', 'scheduled', 'pickup'])
+        && (data.paymentMethod in ['qris', 'bank_transfer', 'card'])
+        && (data.paymentStatus in ['unpaid', 'paid'])
+        && (data.status in ['placed', 'paid', 'packing', 'in_transit', 'delivered'])
+        && data.total is number && data.total >= 0;
+    }
+
+    // Users Collection & Subcollections
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Disallow user scraping
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming());
+      allow delete: if false;
+
+      match /addresses/{addressId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidAddress(incoming());
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // Orders Collection
+    match /orders/{orderId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.customerEmail == request.auth.token.email);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidOrder(incoming());
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidOrder(incoming());
+      allow delete: if false;
+    }
+
+    // Products Collection (Allows public reading of catalog and direct Firestore storage of Base64 images)
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    // Connection Healthcheck Document
+    match /test/{docId} {
+      allow read: if true;
+    }
+  }
+}
