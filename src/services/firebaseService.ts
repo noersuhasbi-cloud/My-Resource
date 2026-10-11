@@ -201,10 +201,11 @@ export function subscribeToUserOrders(
 export async function saveOrderToFirestore(order: Order, userId?: string): Promise<void> {
   const path = `orders/${order.id}`;
   try {
+    const effectiveUserId = auth.currentUser?.uid || userId || order.userId || 'guest-user';
     const orderDocRef = doc(db, 'orders', order.id);
     await setDoc(orderDocRef, {
       orderId: order.id,
-      userId: userId || auth.currentUser?.uid || 'guest-user',
+      userId: effectiveUserId,
       customerName: order.customerName,
       customerEmail: order.customerEmail,
       customerPhone: order.customerPhone,

@@ -15,7 +15,7 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { Footer } from './components/Footer';
 import { ToastContainer, ToastMessage } from './components/Toast';
 
-import { CartItem, Product, StoreLocation, CustomerAccount, Order, OrderStatus } from './types';
+import { CartItem, Product, StoreLocation, CustomerAccount, Order, OrderStatus, StoreOperationalStatus, UserRole } from './types';
 import { STORE_LOCATIONS, PRODUCTS, INITIAL_DEMO_ACCOUNT, INITIAL_ORDERS } from './data/mockData';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -26,8 +26,21 @@ import {
   initOrUpdateUserProfile,
   logoutFirebase,
 } from './services/firebaseService';
+import { AdminDashboard } from './components/AdminDashboard/AdminDashboard';
+import { apiClient } from './services/apiClient';
 
 export default function App() {
+  // 0. RBAC Current Active Role ('admin' vs 'customer')
+  const [currentRole, setCurrentRole] = useState<UserRole>('customer');
+  const [storeStatus, setStoreStatus] = useState<StoreOperationalStatus | null>(null);
+
+  // Sync store operational status from backend
+  useEffect(() => {
+    apiClient.getStoreStatus().then(setStoreStatus).catch((err) => {
+      console.warn('Backend store status notice:', err);
+    });
+  }, []);
+
   // 1. Toast notifications state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -289,6 +302,18 @@ export default function App() {
     }
   };
 
+  if (currentRole === 'admin') {
+    return (
+      <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+        <AdminDashboard
+          onCloseToStorefront={() => setCurrentRole('customer')}
+          onShowToast={showToast}
+        />
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans selection:bg-emerald-800 selection:text-white">
       {/* Top Navigation */}
@@ -296,6 +321,8 @@ export default function App() {
         cartItems={cartItems}
         onOpenCart={() => setIsCartOpen(true)}
         onOpenPortal={() => setIsPortalOpen(true)}
+        onOpenAdminDashboard={() => setCurrentRole('admin')}
+        storeStatus={storeStatus}
         activeSection={activeSection}
         onNavigate={handleNavigate}
         isLoggedIn={!!customerAccount}
@@ -361,6 +388,7 @@ export default function App() {
         appliedDiscount={appliedDiscount}
         onApplyVoucher={handleApplyVoucher}
         onRemoveVoucher={handleRemoveVoucher}
+        storeStatus={storeStatus}
       />
 
       {/* QRIS Checkout Modal */}
@@ -373,6 +401,7 @@ export default function App() {
         appliedDiscount={appliedDiscount}
         voucherCode={voucherCode}
         customerAccount={customerAccount}
+        storeStatus={storeStatus}
         onOrderSuccess={handleOrderSuccess}
         onOpenOrderTracking={handleOpenOrderTracking}
       />

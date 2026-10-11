@@ -431,6 +431,7 @@ export const INITIAL_DEMO_ACCOUNT: CustomerAccount = {
 export const INITIAL_ORDERS: Order[] = [
   {
     id: 'GCM-2026-8910',
+    userId: 'cust-sarah-882',
     createdAt: '2026-10-10T08:15:00.000Z',
     customerName: 'Sarah Wijaya',
     customerEmail: 'sarah.wijaya@example.com',
@@ -507,6 +508,84 @@ export const INITIAL_ORDERS: Order[] = [
         label: 'Delivered to Doorstep',
         description: 'Customer receives fresh groceries in biodegradable bag.',
         timestamp: 'Estimated 09:10 AM',
+        completed: false,
+      }
+    ]
+  },
+  {
+    id: 'GCM-2026-7731',
+    userId: 'cust-budi-991',
+    createdAt: '2026-10-10T09:45:00.000Z',
+    customerName: 'Budi Santoso',
+    customerEmail: 'budi.santoso@example.com',
+    customerPhone: '+62 811 3344 5566',
+    deliveryMethod: 'instant',
+    deliveryAddress: {
+      label: 'Office (Pakuwon Tower)',
+      recipient: 'Budi Santoso',
+      phone: '+62 811 3344 5566',
+      addressLine: 'Pakuwon Tower Lt. 22, Jl. Casablanca Raya Kav. 88',
+      city: 'Jakarta',
+      notes: 'Drop off at security desk reception.'
+    },
+    items: [
+      {
+        product: PRODUCTS[1],
+        quantity: 2,
+      },
+      {
+        product: PRODUCTS[2],
+        quantity: 1,
+      }
+    ],
+    subtotal: 98000,
+    deliveryFee: 15000,
+    discount: 0,
+    total: 113000,
+    paymentMethod: 'qris',
+    paymentStatus: 'paid',
+    qrisRef: 'QRIS-GCM-88390123',
+    qrisNmid: 'ID1020260489110',
+    qrisPaidAt: '2026-10-10T09:46:12.000Z',
+    status: 'packing',
+    courierName: 'Eko Prasetyo (GroceFleet Express)',
+    courierPhone: '+62 812 4455 6677',
+    vehiclePlate: 'B 2981 TXX (Chilled Electric Bike)',
+    estimatedArrival: '35 minutes',
+    timeline: [
+      {
+        status: 'placed',
+        label: 'Order Placed',
+        description: 'Order registered via GroceMart Online Portal.',
+        timestamp: '09:45 AM',
+        completed: true,
+      },
+      {
+        status: 'paid',
+        label: 'QRIS Payment Verified',
+        description: 'Payment settled instantly via QRIS National Switch.',
+        timestamp: '09:46 AM',
+        completed: true,
+      },
+      {
+        status: 'packing',
+        label: 'Chilled Picking & Packing',
+        description: 'GroceMart SCBD fulfillment hub is packing fresh organic items.',
+        timestamp: '09:50 AM',
+        completed: true,
+      },
+      {
+        status: 'in_transit',
+        label: 'Dispatched with Courier',
+        description: 'Courier assigned with insulated delivery container.',
+        timestamp: 'Pending',
+        completed: false,
+      },
+      {
+        status: 'delivered',
+        label: 'Delivered to Doorstep',
+        description: 'Handed over to customer.',
+        timestamp: 'Pending',
         completed: false,
       }
     ]

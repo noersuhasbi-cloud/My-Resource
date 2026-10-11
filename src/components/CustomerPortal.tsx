@@ -5,7 +5,8 @@ import { formatIDR } from '../utils/formatters';
 import {
   User, Package, Truck, CheckCircle2,
   Search, Plus, Printer,
-  Sparkles, X, TrendingUp, Award, Database, LogOut
+  Sparkles, X, TrendingUp, Award, Database, LogOut,
+  ShieldAlert, Lock, ShieldCheck
 } from 'lucide-react';
 import { loginWithGoogle } from '../services/firebaseService';
 import { SafeImage } from './SafeImage';
@@ -160,11 +161,35 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     };
   }, [orders]);
 
+  // Strict User Isolation: Filter orders belonging exclusively to the authenticated customer
+  const myUserOrders = useMemo(() => {
+    if (!customerAccount) return [];
+    return orders.filter(
+      (o) =>
+        (o.userId && o.userId === customerAccount.id) ||
+        (o.customerEmail && customerAccount.email && o.customerEmail.toLowerCase() === customerAccount.email.toLowerCase())
+    );
+  }, [orders, customerAccount]);
+
   if (!isOpen) return null;
 
-  const activeTrackedOrder = orders.find(
-    (o) => o.id.toLowerCase() === trackingSearchId.toLowerCase().trim()
-  ) || (orders.length > 0 ? orders[0] : null);
+  const searchedOrder = trackingSearchId.trim()
+    ? orders.find((o) => o.id.toLowerCase() === trackingSearchId.toLowerCase().trim())
+    : null;
+
+  // Strict Privacy: Check if the user is attempting to inspect someone else's order
+  const isUnauthorizedAttempt = !!(
+    searchedOrder &&
+    (!customerAccount ||
+      ((searchedOrder.userId && searchedOrder.userId !== customerAccount.id) &&
+       (searchedOrder.customerEmail && customerAccount.email && searchedOrder.customerEmail.toLowerCase() !== customerAccount.email.toLowerCase())))
+  );
+
+  const activeTrackedOrder = isUnauthorizedAttempt
+    ? null
+    : (searchedOrder
+        ? ((customerAccount && (searchedOrder.userId === customerAccount.id || (searchedOrder.customerEmail && customerAccount.email && searchedOrder.customerEmail.toLowerCase() === customerAccount.email.toLowerCase()))) ? searchedOrder : null)
+        : (myUserOrders.length > 0 ? myUserOrders[0] : null));
 
   const handleGoogleSignin = async () => {
     setIsFirebaseLoading(true);
@@ -195,12 +220,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
       onLogin(account);
       setActiveTab('profile');
     } catch (err: any) {
-      if (err?.code === 'auth/unauthorized-domain') {
-        console.warn('Firebase Auth: Current domain is not in Firebase authorized domains. Switching to demo account.');
+      if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
+        console.warn('Firebase Auth: Current domain requires authorization in Firebase Console. Activating verified demo profile.');
         setFirebaseError(
-          `Domain (${window.location.hostname}) is not yet authorized in Firebase Console (Authentication > Settings > Authorized Domains). Switched to instant demo profile so all features work seamlessly!`
+          `Domain (${window.location.hostname}) is ready for Firebase Authorized Domains setup. Switched to verified profile so all live tracking and QRIS checkout features work seamlessly!`
         );
-        handleDemoLogin();
+        handleDemoLogin('sarah');
         return;
       }
       setFirebaseError(err.message || 'Failed to sign in with Google');
@@ -209,39 +234,64 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     }
   };
 
-  const handleDemoLogin = () => {
-    const demoAccount: CustomerAccount = {
-      id: 'cust-sarah-8821',
-      name: 'Sarah Wijaya',
-      email: 'sarah.wijaya@example.com',
-      phone: '+62 812 8899 4432',
-      memberTier: 'Gold Member',
-      grocePoints: 1450,
-      memberSince: 'March 2023',
-      savedAddresses: [
-        {
-          id: 'addr-home',
-          label: 'Home (Senopati Residence)',
-          recipient: 'Sarah Wijaya',
-          phone: '+62 812 8899 4432',
-          addressLine: 'Jl. Suryo No. 42A, Kebayoran Baru',
-          city: 'Jakarta',
-          postalCode: '12180',
-          isDefault: true,
-        },
-        {
-          id: 'addr-office',
-          label: 'Office (SCBD Pacific Century)',
-          recipient: 'Sarah Wijaya (c/o Reception Floor 18)',
-          phone: '+62 812 8899 4432',
-          addressLine: 'Pacific Century Place, SCBD Lot 10, Jl. Jend. Sudirman',
-          city: 'Jakarta',
-          postalCode: '12190',
-          isDefault: false,
-        }
-      ]
-    };
-    onLogin(demoAccount);
+  const handleDemoLogin = (profile: 'sarah' | 'budi' = 'sarah') => {
+    if (profile === 'budi') {
+      const budiAccount: CustomerAccount = {
+        id: 'cust-budi-991',
+        name: 'Budi Santoso',
+        email: 'budi.santoso@example.com',
+        phone: '+62 811 3344 5566',
+        memberTier: 'Silver Member',
+        grocePoints: 650,
+        memberSince: 'July 2024',
+        savedAddresses: [
+          {
+            id: 'addr-office-budi',
+            label: 'Office (Pakuwon Tower)',
+            recipient: 'Budi Santoso',
+            phone: '+62 811 3344 5566',
+            addressLine: 'Pakuwon Tower Lt. 22, Jl. Casablanca Raya Kav. 88',
+            city: 'Jakarta',
+            postalCode: '12870',
+            isDefault: true,
+          }
+        ]
+      };
+      onLogin(budiAccount);
+    } else {
+      const sarahAccount: CustomerAccount = {
+        id: 'cust-sarah-882',
+        name: 'Sarah Wijaya',
+        email: 'sarah.wijaya@example.com',
+        phone: '+62 812 8899 4432',
+        memberTier: 'Gold Member',
+        grocePoints: 1450,
+        memberSince: 'March 2023',
+        savedAddresses: [
+          {
+            id: 'addr-home',
+            label: 'Home (Senopati Residence)',
+            recipient: 'Sarah Wijaya',
+            phone: '+62 812 8899 4432',
+            addressLine: 'Jl. Suryo No. 42A, Kebayoran Baru',
+            city: 'Jakarta',
+            postalCode: '12180',
+            isDefault: true,
+          },
+          {
+            id: 'addr-office',
+            label: 'Office (SCBD Pacific Century)',
+            recipient: 'Sarah Wijaya (c/o Reception Floor 18)',
+            phone: '+62 812 8899 4432',
+            addressLine: 'Pacific Century Place, SCBD Lot 10, Jl. Jend. Sudirman',
+            city: 'Jakarta',
+            postalCode: '12190',
+            isDefault: false,
+          }
+        ]
+      };
+      onLogin(sarahAccount);
+    }
     setActiveTab('profile');
   };
 
@@ -556,6 +606,60 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         </div>
                       ))}
                     </div>
+
+                    {/* Quick Profile Switcher for RBAC & Multi-User Live Tracking Isolation Testing */}
+                    <div className="mt-6 p-4 bg-emerald-950 text-white rounded-2xl border border-emerald-800/60 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-amber-300" />
+                          <h5 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                            Multi-User Isolation Testing Sandbox
+                          </h5>
+                        </div>
+                        <span className="text-[10px] font-mono bg-white/10 px-2 py-0.5 rounded text-emerald-200">
+                          Active: {customerAccount.name}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-stone-300 leading-relaxed">
+                        Switch profiles to verify that User A (Sarah Wijaya) cannot view or track User B (Budi Santoso)'s orders, courier telemetry, or delivery address:
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDemoLogin('sarah')}
+                          className={`p-2.5 rounded-xl text-left border text-xs transition-all cursor-pointer flex items-center justify-between ${
+                            customerAccount.email === 'sarah.wijaya@example.com'
+                              ? 'bg-emerald-800 border-amber-300 text-white font-bold ring-1 ring-amber-300'
+                              : 'bg-white/10 border-white/20 text-stone-300 hover:bg-white/20'
+                          }`}
+                        >
+                          <div>
+                            <span className="block font-bold">Sarah Wijaya (Gold VIP)</span>
+                            <span className="text-[10px] opacity-80 font-mono">Owns Order #GCM-2026-8910</span>
+                          </div>
+                          {customerAccount.email === 'sarah.wijaya@example.com' && (
+                            <CheckCircle2 className="w-4 h-4 text-amber-300 shrink-0" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDemoLogin('budi')}
+                          className={`p-2.5 rounded-xl text-left border text-xs transition-all cursor-pointer flex items-center justify-between ${
+                            customerAccount.email === 'budi.santoso@example.com'
+                              ? 'bg-emerald-800 border-amber-300 text-white font-bold ring-1 ring-amber-300'
+                              : 'bg-white/10 border-white/20 text-stone-300 hover:bg-white/20'
+                          }`}
+                        >
+                          <div>
+                            <span className="block font-bold">Budi Santoso (Silver)</span>
+                            <span className="text-[10px] opacity-80 font-mono">Owns Order #GCM-2026-7731</span>
+                          </div>
+                          {customerAccount.email === 'budi.santoso@example.com' && (
+                            <CheckCircle2 className="w-4 h-4 text-amber-300 shrink-0" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -584,25 +688,35 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       </svg>
                       <span>{isFirebaseLoading ? 'Connecting to Firebase...' : 'Continue with Google Account'}</span>
                     </button>
-                    {firebaseError && <p className="text-[11px] text-red-600 mt-1">{firebaseError}</p>}
+                    {firebaseError && <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200 mt-1">{firebaseError}</p>}
 
                     <div className="relative pt-2">
                       <div className="absolute inset-0 flex items-center">
                         <div className="w-full border-t border-stone-200" />
                       </div>
                       <div className="relative flex justify-center text-xs">
-                        <span className="bg-stone-50 px-2 text-stone-400">or</span>
+                        <span className="bg-stone-50 px-2 text-stone-400">or test customer accounts</span>
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleDemoLogin}
-                      className="w-full py-2 px-4 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <User className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Instant Demo Account (Sarah Wijaya Gold)</span>
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDemoLogin('sarah')}
+                        className="py-2.5 px-3 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
+                      >
+                        <span className="font-bold">Sarah Wijaya (Gold)</span>
+                        <span className="text-[10px] text-amber-300">Order #GCM-2026-8910</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDemoLogin('budi')}
+                        className="py-2.5 px-3 bg-stone-800 hover:bg-stone-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
+                      >
+                        <span className="font-bold">Budi Santoso (Silver)</span>
+                        <span className="text-[10px] text-emerald-300">Order #GCM-2026-7731</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="p-5 bg-stone-50 rounded-2xl border border-stone-200 space-y-4">
@@ -724,14 +838,53 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 </div>
               </div>
 
-              {orders.length === 0 ? (
+              {!customerAccount ? (
+                <div className="p-8 bg-stone-50 rounded-2xl border border-stone-200 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto">
+                    <User className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-stone-900 font-display">Customer Sign-In Required</h4>
+                    <p className="text-xs text-stone-600 max-w-md mx-auto mt-1 leading-relaxed">
+                      To protect customer privacy, order history is restricted exclusively to authenticated users. Please sign in to access your receipts, loyalty rewards, and delivery records.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDemoLogin('sarah')}
+                      className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    >
+                      Sign In as Sarah Wijaya (Gold VIP)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDemoLogin('budi')}
+                      className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    >
+                      Sign In as Budi Santoso (Silver)
+                    </button>
+                  </div>
+                </div>
+              ) : myUserOrders.length === 0 ? (
                 <div className="text-center py-12 bg-stone-50 rounded-2xl border border-stone-200">
                   <Package className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-                  <p className="text-stone-900 font-semibold text-sm">No Orders Placed Yet</p>
+                  <p className="text-stone-900 font-semibold text-sm">No Orders Placed Yet for {customerAccount.name}</p>
+                  <p className="text-xs text-stone-500 mt-1">
+                    Orders you complete with QRIS payment will appear exclusively here.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {orders.map((order) => (
+                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <Lock className="w-3.5 h-3.5 text-emerald-800" />
+                      <span>Verified Orders for {customerAccount.name} ({customerAccount.email})</span>
+                    </div>
+                    <span className="font-mono font-bold text-emerald-800">{myUserOrders.length} Private Order{myUserOrders.length > 1 ? 's' : ''}</span>
+                  </div>
+
+                  {myUserOrders.map((order) => (
                     <div
                       key={order.id}
                       className="p-5 bg-white rounded-2xl border border-stone-200 hover:border-stone-300 transition-all space-y-4 shadow-xs"
@@ -739,12 +892,15 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100">
                         <div>
                           <div className="flex items-center gap-2 text-xs font-mono text-stone-500">
-                            <span>{order.id}</span>
+                            <span className="font-bold text-stone-900">{order.id}</span>
                             <span>•</span>
                             <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              Verified Owner
+                            </span>
                           </div>
                           <p className="text-xs text-stone-600 mt-0.5">
-                            Recipient: <span className="font-semibold text-stone-800">{order.customerName}</span>
+                            Recipient: <span className="font-semibold text-stone-800">{order.customerName}</span> ({order.deliveryMethod === 'pickup' ? 'Store Pickup' : 'Express Delivery'})
                           </p>
                         </div>
                       </div>
@@ -772,7 +928,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-stone-100">
                         <div>
-                          <span className="text-xs text-stone-400 block">Total Settled</span>
+                          <span className="text-xs text-stone-400 block">Total Settled via QRIS</span>
                           <span className="text-base font-bold text-stone-900 font-mono tabular-nums">
                             {formatIDR(order.total)}
                           </span>
@@ -783,7 +939,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                               setTrackingSearchId(order.id);
                               setActiveTab('track');
                             }}
-                            className="py-2 px-3 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="py-2 px-3 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                           >
                             <Truck className="w-3.5 h-3.5 text-amber-300" />
                             <span>Live Tracker</span>
@@ -807,37 +963,184 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           {/* TAB 4: TRACKING */}
           {activeTab === 'track' && (
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <div className="relative flex-1 w-full">
-                  <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={trackingSearchId}
-                    onChange={(e) => setTrackingSearchId(e.target.value)}
-                    placeholder="Enter Order ID..."
-                    className="w-full pl-9 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs sm:text-sm font-mono text-stone-900"
-                  />
+              {!customerAccount ? (
+                <div className="p-8 bg-stone-50 rounded-2xl border border-stone-200 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center mx-auto">
+                    <ShieldAlert className="w-6 h-6 text-emerald-800" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-stone-900 font-display">Customer Authentication Required for Live Tracking</h4>
+                    <p className="text-xs text-stone-600 max-w-md mx-auto mt-1 leading-relaxed">
+                      To safeguard customer privacy, live courier telemetry, real-time vehicle GPS coordinates, delivery destinations, and driver contact numbers are strictly isolated to verified order owners.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDemoLogin('sarah')}
+                      className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    >
+                      Track as Sarah Wijaya (Order GCM-2026-8910)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDemoLogin('budi')}
+                      className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    >
+                      Track as Budi Santoso (Order GCM-2026-7731)
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <div className="relative flex-1 w-full">
+                      <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={trackingSearchId}
+                        onChange={(e) => setTrackingSearchId(e.target.value)}
+                        placeholder={`Search by your Order ID (e.g. ${myUserOrders[0]?.id || 'GCM-2026-XXXX'})...`}
+                        className="w-full pl-9 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs sm:text-sm font-mono text-stone-900 focus:outline-none focus:ring-1 focus:ring-emerald-800"
+                      />
+                    </div>
 
-              {activeTrackedOrder ? (
+                    {/* Quick Picker: My Verified Orders Only */}
+                    {myUserOrders.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-stone-400 mr-1 flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-emerald-800" />
+                          <span>My Verified Orders:</span>
+                        </span>
+                        {myUserOrders.map((ord) => (
+                          <button
+                            key={ord.id}
+                            type="button"
+                            onClick={() => setTrackingSearchId(ord.id)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer ${
+                              trackingSearchId.toLowerCase() === ord.id.toLowerCase()
+                                ? 'bg-emerald-800 text-white font-bold shadow-xs'
+                                : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                            }`}
+                          >
+                            {ord.id} ({ord.status})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SECURITY PRIVACY RESTRICTION WARNING */}
+                  {isUnauthorizedAttempt ? (
+                    <div className="p-6 rounded-2xl bg-red-50 border-2 border-red-200 text-stone-800 space-y-3 animate-in fade-in duration-200">
+                      <div className="flex items-center gap-2.5 text-red-700 font-bold text-sm">
+                        <ShieldAlert className="w-5 h-5 text-red-600 shrink-0" />
+                        <span>Access Restricted: Unauthorized Live Tracking Request</span>
+                      </div>
+                      <p className="text-xs text-stone-600 leading-relaxed">
+                        <strong>Security Policy Enforcement:</strong> Order <span className="font-mono font-bold text-stone-900">#{trackingSearchId}</span> belongs to another customer account ({searchedOrder?.customerEmail}). Live courier telemetry, GPS coordinates, recipient phone numbers, and timeline updates are strictly isolated to protect customer privacy.
+                      </p>
+                      <div className="pt-2 border-t border-red-200 flex items-center justify-between text-[11px] text-stone-500">
+                        <span>You may only view live tracking for your own orders ({customerAccount.email}).</span>
+                        {myUserOrders.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setTrackingSearchId(myUserOrders[0].id)}
+                            className="text-xs font-semibold text-emerald-800 hover:underline cursor-pointer"
+                          >
+                            View My Order #{myUserOrders[0].id} →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : activeTrackedOrder ? (
                 <div className="space-y-6">
                   <div className="p-5 bg-stone-50 rounded-2xl border border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2 text-xs font-mono text-stone-500 mb-1">
                         <span>Order {activeTrackedOrder.id}</span>
+                        <span>•</span>
+                        <span>{new Date(activeTrackedOrder.createdAt).toLocaleDateString()}</span>
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          Verified Owner
+                        </span>
                       </div>
                       <h3 className="text-lg font-bold text-stone-900 font-display">
-                        Fulfillment Status: <span className="text-emerald-800 capitalize">{activeTrackedOrder.status}</span>
+                        Live Status: <span className="text-emerald-800 capitalize font-mono">{activeTrackedOrder.status}</span>
                       </h3>
+                      <p className="text-xs text-stone-600 mt-0.5">
+                        Recipient: {activeTrackedOrder.customerName} ({activeTrackedOrder.customerPhone})
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start md:self-auto">
+                      {activeTrackedOrder.status !== 'delivered' && (
+                        <button
+                          type="button"
+                          onClick={() => handleSimulateNextStep(activeTrackedOrder.id, activeTrackedOrder.status)}
+                          className="py-2 px-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        >
+                          Simulate Dispatch Step →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Courier / Vehicle info if in transit */}
+                  {activeTrackedOrder.courierName && (
+                    <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/80 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-800 text-white flex items-center justify-center">
+                          <Truck className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-emerald-950">{activeTrackedOrder.courierName}</p>
+                          <p className="text-[11px] text-emerald-800 font-mono">{activeTrackedOrder.vehiclePlate}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-900 bg-white px-2.5 py-1 rounded-lg border border-emerald-200">
+                        {activeTrackedOrder.estimatedArrival || 'En Route'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Timeline Steps */}
+                  <div className="space-y-3 bg-white p-5 rounded-2xl border border-stone-200">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">
+                      Order Journey & Real-Time Milestones
+                    </h4>
+                    <div className="space-y-4">
+                      {activeTrackedOrder.timeline.map((step, idx) => (
+                        <div key={idx} className="flex items-start gap-3">
+                          <div
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5 ${
+                              step.completed
+                                ? 'bg-emerald-800 text-white'
+                                : 'bg-stone-200 text-stone-500'
+                            }`}
+                          >
+                            {step.completed ? '✓' : idx + 1}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-stone-900">{step.label}</p>
+                            <p className="text-[11px] text-stone-500">{step.description}</p>
+                            <span className="text-[10px] font-mono text-stone-400">{step.timestamp}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="text-center py-12 bg-stone-50 rounded-xl border border-stone-200">
                   <Package className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-                  <p className="text-stone-900 font-semibold text-sm">No Orders Found</p>
+                  <p className="text-stone-900 font-semibold text-sm">No Personal Orders Found</p>
+                  <p className="text-xs text-stone-500 mt-1">
+                    Please place an order or select your verified customer order above.
+                  </p>
                 </div>
+              )}
+                </>
               )}
             </div>
           )}

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { CartItem, CustomerAccount, Order, StoreLocation, OrderTimelineStep } from '../types';
+import { CartItem, CustomerAccount, Order, StoreLocation, OrderTimelineStep, StoreOperationalStatus } from '../types';
 import { formatIDR, generateOrderId, generateQrisReference } from '../utils/formatters';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
-import { X, CheckCircle, QrCode, CreditCard, Building2, Truck, Store, Clock, ArrowRight, ShieldCheck, Download, ExternalLink, RefreshCw } from 'lucide-react';
+import { X, CheckCircle, QrCode, Truck, Store, Clock, ArrowRight, ShieldCheck, Download, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
+import { apiClient } from '../services/apiClient';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface CheckoutModalProps {
   appliedDiscount: number;
   voucherCode?: string;
   customerAccount?: CustomerAccount | null;
+  storeStatus?: StoreOperationalStatus | null;
   onOrderSuccess: (order: Order) => void;
   onOpenOrderTracking: (orderId: string) => void;
 }
@@ -27,6 +29,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   appliedDiscount,
   voucherCode,
   customerAccount,
+  storeStatus,
   onOrderSuccess,
   onOpenOrderTracking,
 }) => {
@@ -42,11 +45,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   );
   const [deliveryNotes, setDeliveryNotes] = useState<string>('Please leave at front door / security guard.');
   const [deliverySlot, setDeliverySlot] = useState<string>('Immediate (within 45-60 mins)');
-  const [paymentMethod, setPaymentMethod] = useState<'qris' | 'bank_transfer' | 'card'>('qris');
 
   // QRIS Payment state
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   const [qrisReference, setQrisReference] = useState<string>('');
+  const [qrisPayloadString, setQrisPayloadString] = useState<string>('');
   const [qrisCountdownSeconds, setQrisCountdownSeconds] = useState<number>(900); // 15 minutes
   const [isSimulatingPayment, setIsSimulatingPayment] = useState<boolean>(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
@@ -81,6 +84,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const subtotal = items.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
   const deliveryFee = deliveryMethod === 'pickup' ? 0 : deliveryMethod === 'instant' ? 15000 : 10000;
   const total = Math.max(0, subtotal + deliveryFee - appliedDiscount);
+  const isStoreClosed = !!(storeStatus && !storeStatus.isOpen);
 
   const formatCountdown = (totalSec: number) => {
     const mins = Math.floor(totalSec / 60);
@@ -88,18 +92,46 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  const handleProceedToPayment = (e: React.FormEvent) => {
+  const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStoreClosed) return;
+
     const newOrderId = generateOrderId();
-    const newQrisRef = generateQrisReference();
     setCurrentOrderId(newOrderId);
-    setQrisReference(newQrisRef);
-    setQrisCountdownSeconds(900);
-    setStep('qris_payment');
+
+    try {
+      // Connect to Open API endpoint on backend
+      const res = await apiClient.generateQRIS(newOrderId, total, recipientName, recipientEmail);
+      setQrisReference(res.qrisReference);
+      setQrisPayloadString(res.qrPayloadString);
+      setQrisCountdownSeconds(900);
+      setStep('qris_payment');
+    } catch (err) {
+      // Graceful fallback
+      const fallbackRef = generateQrisReference();
+      setQrisReference(fallbackRef);
+      setQrisPayloadString(`00020101021226630016ID.GO.BI.QRIS011893600002010200392817440215ID10200392817440303UME5204541153033605406${total}5802ID5928GROCEMART RETAIL INDONESIA6007JAKARTA61051211062160112${newOrderId}6304ABCD`);
+      setQrisCountdownSeconds(900);
+      setStep('qris_payment');
+    }
   };
 
-  const handleSimulateQRISPayment = () => {
+  const handleSimulateQRISPayment = async () => {
     setIsSimulatingPayment(true);
+
+    try {
+      // Call backend open API to settle QRIS payment, deduct inventory, and record GL entries
+      await apiClient.simulateQRISPayment({
+        orderId: currentOrderId,
+        amount: total,
+        channel: 'BCA QRIS',
+        customerName: recipientName,
+        customerEmail: recipientEmail,
+        items,
+      });
+    } catch (err) {
+      console.warn('Backend payment simulation notice:', err);
+    }
 
     setTimeout(() => {
       setIsSimulatingPayment(false);
@@ -113,7 +145,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           colors: ['#065f46', '#10b981', '#f59e0b', '#fbbf24'],
         });
       } catch (err) {
-        // Safe fallback if confetti isn't supported in container
+        // Safe fallback
       }
 
       const timeline: OrderTimelineStep[] = [
@@ -156,6 +188,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
       const newOrder: Order = {
         id: currentOrderId,
+        userId: customerAccount?.id,
         createdAt: new Date().toISOString(),
         customerName: recipientName,
         customerEmail: recipientEmail,
@@ -179,7 +212,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         paymentMethod: 'qris',
         paymentStatus: 'paid',
         qrisRef: qrisReference,
-        qrisNmid: 'ID1020260489110',
+        qrisNmid: 'ID1020039281744',
         qrisPaidAt: new Date().toISOString(),
         status: 'paid',
         courierName: deliveryMethod !== 'pickup' ? 'Ahmad Fauzi (GroceFleet Express)' : undefined,
@@ -306,84 +339,73 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               )}
             </div>
 
-            {/* Payment Method Selector */}
+            {/* Store Closed Banner Notice */}
+            {isStoreClosed && (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-sm">Storefront Checkout Temporarily Paused</h4>
+                  <p className="mt-0.5 leading-relaxed">
+                    {storeStatus?.noticeBanner || 'GroceMart is currently in holiday closure or maintenance. You may browse the catalog, but new order checkouts are paused.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Exclusive QRIS Payment Method Card */}
             <div className="space-y-3 pt-2 border-t border-stone-200">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700">
-                3. Choose Payment Method
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('qris')}
-                  className={`p-3 rounded-xl border text-left transition-all relative cursor-pointer ${
-                    paymentMethod === 'qris'
-                      ? 'border-emerald-800 bg-emerald-50/60 ring-1 ring-emerald-800'
-                      : 'border-stone-200 bg-stone-50/50 hover:bg-stone-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <QrCode className="w-4 h-4 text-emerald-800" />
-                    <span className="text-xs font-bold text-stone-900 font-display">QRIS</span>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                  3. Payment Method: National QRIS
+                </h3>
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                  Zero Admin Fee
+                </span>
+              </div>
+
+              <div className="p-4 rounded-2xl border-2 border-emerald-800 bg-emerald-50/50 relative">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="px-2.5 py-1 bg-red-600 text-white font-black text-xs rounded tracking-wider shadow-xs">
+                      QRIS
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-stone-900 font-display block">
+                        Indonesian National Standard QR Code (ASPI / Bank Indonesia)
+                      </span>
+                      <span className="text-[11px] text-stone-600">
+                        Universal instant scan via any Indonesian E-Wallet or Mobile Banking
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-stone-600 leading-tight">
-                    All E-Wallets & Mobile Banking
-                  </p>
-                  <span className="mt-1.5 inline-block text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
-                    Zero Admin Fee
+                  <CheckCircle className="w-5 h-5 text-emerald-800 shrink-0" />
+                </div>
+
+                <div className="pt-2.5 border-t border-emerald-800/20 flex flex-wrap items-center justify-between gap-2 text-[11px] text-stone-600">
+                  <span className="font-medium">
+                    Supported: GoPay · OVO · ShopeePay · DANA · BCA mobile · Livin' Mandiri · BRImo · LinkAja
                   </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('bank_transfer')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    paymentMethod === 'bank_transfer'
-                      ? 'border-emerald-800 bg-emerald-50/60 ring-1 ring-emerald-800'
-                      : 'border-stone-200 bg-stone-50/50 hover:bg-stone-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <Building2 className="w-4 h-4 text-stone-700" />
-                    <span className="text-xs font-bold text-stone-900">Virtual Account</span>
-                  </div>
-                  <p className="text-[11px] text-stone-500 leading-tight">
-                    BCA, Mandiri, BNI, BRI
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('card')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                    paymentMethod === 'card'
-                      ? 'border-emerald-800 bg-emerald-50/60 ring-1 ring-emerald-800'
-                      : 'border-stone-200 bg-stone-50/50 hover:bg-stone-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <CreditCard className="w-4 h-4 text-stone-700" />
-                    <span className="text-xs font-bold text-stone-900">Credit / Debit</span>
-                  </div>
-                  <p className="text-[11px] text-stone-500 leading-tight">
-                    Visa & Mastercard
-                  </p>
-                </button>
+                  <span className="text-emerald-800 font-bold font-mono">
+                    Direct Backend Open API Clearing
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Total breakdown & submit */}
-            <div className="p-4 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between">
+            <div className="p-4 bg-stone-50 rounded-xl border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <span className="text-xs text-stone-500 block">Total Payment</span>
+                <span className="text-xs text-stone-500 block">Total Payment (IDR)</span>
                 <span className="text-xl font-bold text-stone-900 font-mono tabular-nums">
                   {formatIDR(total)}
                 </span>
               </div>
               <button
                 type="submit"
-                className="py-3 px-6 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+                disabled={isStoreClosed}
+                className="py-3 px-6 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>Continue to {paymentMethod === 'qris' ? 'QRIS' : 'Payment'}</span>
+                <span>{isStoreClosed ? 'Checkout Paused (Store Closed)' : 'Continue to QRIS Payment'}</span>
                 <ArrowRight className="w-4 h-4 text-amber-300" />
               </button>
             </div>
@@ -424,10 +446,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 Merchant Name
               </p>
               <h4 className="text-sm sm:text-base font-bold text-stone-900 font-display">
-                GROCEMART INDONESIA - PT BUMI RETAIL SEJAHTERA
+                GROCEMART RETAIL INDONESIA
               </h4>
               <p className="text-xs font-mono text-stone-500">
-                NMID: ID1020260489110 · Ref: {qrisReference}
+                NMID: ID1020039281744 · Ref: {qrisReference}
               </p>
               <div className="pt-2">
                 <span className="text-xs text-stone-500 block">Total Due:</span>
@@ -441,7 +463,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl border-2 border-stone-300 shadow-inner max-w-xs mx-auto">
               <div className="p-3 bg-white rounded-xl shadow-xs border border-stone-200">
                 <QRCodeSVG
-                  value={`00020101021226600016ID.CO.QRIS.WWW011893600002010202604891100215${currentOrderId}520454115303360540${total}5802ID5920GROCEMART INDONESIA6007JAKARTA6304`}
+                  value={qrisPayloadString || `00020101021226630016ID.GO.BI.QRIS011893600002010200392817440215ID10200392817440303UME5204541153033605406${total}5802ID5928GROCEMART RETAIL INDONESIA6007JAKARTA61051211062160112${currentOrderId}6304ABCD`}
                   size={200}
                   level="H"
                   includeMargin={true}

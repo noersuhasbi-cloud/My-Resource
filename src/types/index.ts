@@ -127,4 +127,388 @@ export interface CustomerAccount {
   grocePoints: number;
   memberSince: string;
   savedAddresses: SavedAddress[];
+  role?: 'admin' | 'customer';
+}
+
+// -------------------------------------------------------------
+// Role-Based Access Control (RBAC) & Operations
+// -------------------------------------------------------------
+export type UserRole = 'admin' | 'customer';
+
+export interface StoreOperationalStatus {
+  isOpen: boolean;
+  isHolidayMode: boolean;
+  noticeBanner: string;
+  reopenEstimated?: string;
+  maintenanceReason?: string;
+  allowCatalogBrowsing: boolean;
+  updatedAt: string;
+}
+
+export interface StoreOutletSchedule {
+  storeId: string;
+  storeName: string;
+  city: 'Jakarta' | 'Bandung' | 'Surabaya' | 'Bali' | 'Yogyakarta' | 'Medan';
+  district: string;
+  timezone: 'WIB' | 'WITA' | 'WIT';
+  openTime: string; // e.g. "07:00"
+  closeTime: string; // e.g. "22:00"
+  daysOpen: string; // e.g. "Mon - Sun"
+  isEmergencyClosed: boolean;
+  closureReason?: string;
+  isHolidayMode: boolean;
+  holidayNotice?: string;
+  allowCatalogBrowsingWhenClosed: boolean;
+  activeWarehouses: string[];
+  contactPhone: string;
+  updatedAt: string;
+}
+
+// -------------------------------------------------------------
+// Multi-Warehouse & Storage Zones
+// -------------------------------------------------------------
+export type StorageZoneType = 'ambient' | 'cold_chilled' | 'freezer';
+
+export interface WarehouseZone {
+  id: string; // e.g. WH-JKT-SEN-COLD
+  storeId: string;
+  name: string;
+  type: StorageZoneType;
+  temperatureTarget: string; // e.g. "4°C", "-18°C", "24°C"
+  capacityCubicMeters: number;
+  currentOccupancyPercent: number;
+  managerInCharge: string;
+}
+
+// -------------------------------------------------------------
+// Inventory & Valuation (Multi-Tier & Store-Specific)
+// -------------------------------------------------------------
+export interface StoreInventoryStock {
+  id: string;
+  sku: string;
+  productId: string;
+  productName: string;
+  category: ProductCategory | string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId: string;
+  storageType: StorageZoneType;
+  
+  // Multi-tier stock tracking
+  physicalStock: number;   // Actual on-hand count in bin
+  availableStock: number;  // Ready to sell (physical - reserved)
+  reservedStock: number;   // Locked in active checkout carts
+  incomingStock: number;   // In transit from approved/partial POs
+  
+  // Thresholds & Buffers
+  minimumThreshold: number;
+  safetyStockBuffer: number;
+  maxCapacity: number;
+  reorderQuantity: number;
+  
+  // Cost & Valuation
+  unitCost: number;        // WAC or FIFO cost
+  sellingPrice: number;
+  unit: string;
+  
+  // Handling & Notes
+  handlingInstructions?: string; // e.g. "Keep refrigerated at 4°C", "Fragile produce"
+  internalNotes?: string;        // Admin notes
+  supplierRemarks?: string;
+  
+  supplierId: string;
+  supplierName: string;
+  lastRestockedAt: string;
+  updatedAt: string;
+}
+
+export interface InventoryItem {
+  sku: string;
+  productId: string;
+  productName: string;
+  category: ProductCategory | string;
+  currentStock: number;
+  minimumThreshold: number;
+  unitCost: number; // Acquisition cost in IDR
+  sellingPrice: number; // Retail price in IDR
+  unit: string;
+  supplierId: string;
+  supplierName: string;
+  lastRestockedAt: string;
+  incomingStock: number; // Stock pending from approved POs
+  outgoingStock: number; // Cumulative sold units
+  reorderQuantity: number;
+  valuationMethod: 'FIFO' | 'Weighted Average';
+  stockBatches?: {
+    batchId: string;
+    quantity: number;
+    unitCost: number;
+    receivedAt: string;
+  }[];
+  // Extended ERP Attributes
+  handlingInstructions?: string;
+  internalNotes?: string;
+  supplierRemarks?: string;
+  safetyStockBuffer?: number;
+  maxCapacity?: number;
+  storageType?: StorageZoneType;
+}
+
+// -------------------------------------------------------------
+// Procurement & Purchasing (PR, PO, and Partial Goods Receipt)
+// -------------------------------------------------------------
+export interface PurchaseRequest {
+  id: string; // e.g. PR-2026-001
+  createdAt: string;
+  requestedBy: string;
+  sku: string;
+  productId: string;
+  productName: string;
+  storeId?: string;
+  storeName?: string;
+  suggestedQuantity: number;
+  estimatedUnitCost: number;
+  totalEstimatedCost: number;
+  status: 'pending' | 'approved' | 'rejected' | 'converted_to_po';
+  reason: 'low_stock_auto_trigger' | 'seasonal_demand' | 'manual_request';
+  priority: 'high' | 'medium' | 'low';
+  poId?: string;
+  approvedAt?: string;
+}
+
+export interface PurchaseOrderItem {
+  sku: string;
+  productName: string;
+  orderedQuantity: number;
+  receivedQuantity: number;      // Tracks cumulative received items
+  remainingBackorder: number;    // ordered - received
+  unitCost: number;
+  totalCost: number;
+  handlingNotes?: string;
+}
+
+export interface PurchaseOrder {
+  id: string; // e.g. PO-2026-089
+  createdAt: string;
+  prId?: string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId?: string;
+  supplierName: string;
+  supplierContact: string;
+  items: PurchaseOrderItem[];
+  subtotalCost: number;
+  taxPercent: number; // e.g. 11% PPN
+  taxAmount: number;
+  totalCost: number;
+  expectedDeliveryDate: string;
+  actualDeliveryDate?: string;
+  status: 'Draft' | 'Sent' | 'Partially Received' | 'Completed' | 'Cancelled';
+  notes?: string;
+  supplierRemarks?: string;
+  paymentTerms: 'Net 30' | 'COD' | 'Advance Payment';
+  goodsReceiptIds?: string[];
+}
+
+export interface GoodsReceiptItem {
+  sku: string;
+  productName: string;
+  quantityOrdered: number;
+  quantityReceived: number;
+  batchNumber: string;
+  expiryDate?: string;
+  qualityCondition: 'Passed - Grade A' | 'Minor Discrepancy' | 'Cold-Chain Verified';
+  tempCheckCelsius?: number; // e.g. 3.8°C for cold produce
+}
+
+export interface GoodsReceiptRecord {
+  id: string; // e.g. GR-2026-041
+  poId: string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId: string;
+  deliveryNoteNumber: string; // Surat Jalan vendor
+  vendorName: string;
+  receivedAt: string;
+  receivedBy: string;
+  isPartial: boolean;
+  items: GoodsReceiptItem[];
+  receiverNotes?: string;
+  glEntryId?: string;
+}
+
+// -------------------------------------------------------------
+// Accounting & Financial Management (Store-Tagged Multi-COA)
+// -------------------------------------------------------------
+export type AccountCode = '1010' | '1020' | '1030' | '1040' | '2010' | '2020' | '3010' | '3020' | '4010' | '5010' | '6010' | '6020' | '6030';
+
+export interface ChartOfAccount {
+  accountCode: AccountCode;
+  accountName: string;
+  category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
+  storeId: 'CONSOLIDATED' | string;
+  normalBalance: 'Debit' | 'Credit';
+  balance: number;
+  description: string;
+}
+
+export interface GeneralLedgerEntry {
+  id: string; // GLE-2026-0042
+  timestamp: string;
+  storeId?: string; // Tagged per store outlet
+  storeName?: string;
+  accountCode: AccountCode;
+  accountName: string;
+  category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
+  debit: number;
+  credit: number;
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT';
+  referenceId: string; // Order ID or PO ID or GR ID
+  description: string;
+}
+
+export interface ProfitAndLossReport {
+  period: string;
+  storeId?: string;
+  storeName?: string;
+  grossSalesRevenue: number;
+  discountsGiven: number;
+  netSalesRevenue: number;
+  costOfGoodsSold: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+  operatingExpenses: {
+    category: string;
+    amount: number;
+  }[];
+  totalOperatingExpenses: number;
+  netProfit: number;
+  netMarginPercent: number;
+}
+
+export interface BalanceSheetReport {
+  period: string;
+  storeId?: string;
+  storeName?: string;
+  assets: {
+    currentAssets: { category: string; amount: number }[];
+    nonCurrentAssets: { category: string; amount: number }[];
+    totalAssets: number;
+  };
+  liabilities: {
+    currentLiabilities: { category: string; amount: number }[];
+    totalLiabilities: number;
+  };
+  equity: {
+    equityItems: { category: string; amount: number }[];
+    totalEquity: number;
+  };
+  isBalanced: boolean;
+}
+
+export interface CashFlowStatementReport {
+  period: string;
+  storeId?: string;
+  operatingActivities: { category: string; amount: number }[];
+  netOperatingCash: number;
+  investingActivities: { category: string; amount: number }[];
+  netInvestingCash: number;
+  financingActivities: { category: string; amount: number }[];
+  netFinancingCash: number;
+  netCashIncrease: number;
+  beginningCash: number;
+  endingCash: number;
+}
+
+export interface OmzetAnalyticsReport {
+  totalRevenueMTD: number;
+  dodGrowthPercent: number; // Day-over-Day
+  wowGrowthPercent: number; // Week-over-Week
+  momGrowthPercent: number; // Month-over-Month
+  totalOrders: number;
+  averageBasketValue: number;
+  qrisMetrics: {
+    totalAttempts: number;
+    settledCount: number;
+    failedOrExpiredCount: number;
+    conversionRatePercent: number;
+    averageSettlementSeconds: number;
+  };
+  storeBreakdown: {
+    storeId: string;
+    storeName: string;
+    city: string;
+    omzet: number;
+    orderCount: number;
+    sharePercent: number;
+    status: 'Open' | 'Closed' | 'Maintenance';
+  }[];
+  categoryBreakdown: {
+    category: ProductCategory | string;
+    label: string;
+    omzet: number;
+    unitsSold: number;
+    sharePercent: number;
+  }[];
+  topSkus: {
+    sku: string;
+    productName: string;
+    category: string;
+    unitsSold: number;
+    revenue: number;
+  }[];
+}
+
+export interface TransactionAuditRecord {
+  id: string;
+  qrisReference: string;
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  amount: number;
+  paymentTimestamp: string;
+  settlementChannel: 'BCA QRIS' | 'GoPay' | 'OVO' | 'ShopeePay' | 'Dana';
+  journalEntryIds: string[];
+  inventoryDeducted: {
+    sku: string;
+    quantity: number;
+    cogsCost: number;
+  }[];
+  status: 'SETTLED' | 'PENDING' | 'FAILED';
+}
+
+// -------------------------------------------------------------
+// QRIS OpenAPI Payload Interfaces
+// -------------------------------------------------------------
+export interface QRISGenerateRequest {
+  orderId: string;
+  amount: number;
+  customerName: string;
+  customerEmail: string;
+  itemsCount: number;
+}
+
+export interface QRISGenerateResponse {
+  success: boolean;
+  orderId: string;
+  qrisReference: string;
+  nmid: string;
+  merchantName: string;
+  merchantCity: string;
+  postalCode: string;
+  amount: number;
+  currency: string;
+  qrPayloadString: string;
+  expiresAt: string;
+  fee: number;
+  acquirer: string;
+}
+
+export interface QRISStatusResponse {
+  orderId: string;
+  qrisReference: string;
+  status: 'unpaid' | 'paid' | 'expired';
+  amount: number;
+  paidAt?: string;
+  settlementChannel?: string;
 }

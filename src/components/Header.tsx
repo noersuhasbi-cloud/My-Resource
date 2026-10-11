@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { ShoppingBag, User, Menu, X, ArrowRight, Store, BookOpen, Truck, Sparkles } from 'lucide-react';
-import { CartItem } from '../types';
+import { ShoppingBag, User, Menu, X, ArrowRight, Store, BookOpen, Truck, Sparkles, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { CartItem, StoreOperationalStatus } from '../types';
 import { formatIDR } from '../utils/formatters';
 
 interface HeaderProps {
   cartItems: CartItem[];
   onOpenCart: () => void;
   onOpenPortal: () => void;
+  onOpenAdminDashboard?: () => void;
+  storeStatus?: StoreOperationalStatus | null;
   activeSection: string;
   onNavigate: (sectionId: string) => void;
   isLoggedIn: boolean;
@@ -18,6 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   cartItems,
   onOpenCart,
   onOpenPortal,
+  onOpenAdminDashboard,
+  storeStatus,
   activeSection,
   onNavigate,
   isLoggedIn,
@@ -36,6 +40,17 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 transition-all">
+      {/* Dynamic Storefront Announcement / Closure Banner */}
+      {storeStatus?.noticeBanner && (
+        <div className="bg-amber-500 text-stone-950 font-semibold text-xs px-4 py-2 text-center flex items-center justify-center gap-2 shadow-xs border-b border-amber-600/30">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-stone-950" />
+          <span className="font-bold">{storeStatus.noticeBanner}</span>
+          {storeStatus.reopenEstimated && (
+            <span className="opacity-90 hidden sm:inline font-normal">· {storeStatus.reopenEstimated}</span>
+          )}
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-4 sm:gap-8 h-20">
           {/* Zone 1: Brand Wordmark (Strict single element) */}
@@ -95,6 +110,19 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Zone 3: Primary Action & Portal Trigger */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Admin Dashboard Switcher Button */}
+            {onOpenAdminDashboard && (
+              <button
+                onClick={onOpenAdminDashboard}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-stone-950 bg-amber-400 hover:bg-amber-300 rounded-xl transition-all shadow-xs cursor-pointer shrink-0"
+                title="Switch to Role A: Administrator Dashboard (Inventory, Procurement, Accounting)"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-stone-950" />
+                <span className="hidden sm:inline">Admin HQ</span>
+                <span className="sm:hidden">Admin</span>
+              </button>
+            )}
+
             {/* Customer Portal Button */}
             <button
               onClick={onOpenPortal}

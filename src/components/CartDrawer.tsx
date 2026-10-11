@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { CartItem, StoreLocation } from '../types';
+import type { CartItem, StoreLocation, StoreOperationalStatus } from '../types';
 import { formatIDR } from '../utils/formatters';
 import { STORE_LOCATIONS } from '../data/mockData';
-import { X, Trash2, Plus, Minus, ArrowRight, Tag, Truck, Store, Clock, ShoppingBag } from 'lucide-react';
+import { X, Trash2, Plus, Minus, ArrowRight, Tag, Truck, Store, Clock, ShoppingBag, AlertTriangle } from 'lucide-react';
 import { SafeImage } from './SafeImage';
 
 interface CartDrawerProps {
@@ -20,6 +20,7 @@ interface CartDrawerProps {
   appliedDiscount: number;
   onApplyVoucher: (code: string) => { success: boolean; message: string };
   onRemoveVoucher: () => void;
+  storeStatus?: StoreOperationalStatus | null;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -37,6 +38,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   appliedDiscount,
   onApplyVoucher,
   onRemoveVoucher,
+  storeStatus,
 }) => {
   const [voucherInput, setVoucherInput] = useState<string>('');
   const [voucherFeedback, setVoucherFeedback] = useState<string | null>(null);
@@ -279,6 +281,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           {/* Footer & Pricing Summary */}
           {items.length > 0 && (
             <div className="p-6 border-t border-stone-200 bg-stone-50/70 space-y-3">
+              {/* Store Closure Notice Banner */}
+              {storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode) && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5 animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Outlet Currently Closed</span>
+                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                      {storeStatus.noticeBanner || 'This outlet is currently closed. Operating hours resume at 07:00 WIB. Catalog browsing is open, but online checkout is temporarily locked.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1.5 text-xs text-stone-600">
                 <div className="flex justify-between">
                   <span>Groceries Subtotal</span>
@@ -304,9 +319,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
               <button
                 onClick={onProceedToCheckout}
-                className="w-full py-3.5 px-4 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                disabled={!!(storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode))}
+                className="w-full py-3.5 px-4 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-stone-400"
               >
-                <span>Proceed to QRIS Checkout</span>
+                <span>
+                  {storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode)
+                    ? 'Checkout Locked (Outlet Closed)'
+                    : 'Proceed to QRIS Checkout'}
+                </span>
                 <ArrowRight className="w-4 h-4 text-amber-300" />
               </button>
               <p className="text-[11px] text-stone-400 text-center">
