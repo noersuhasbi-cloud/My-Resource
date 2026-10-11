@@ -54,7 +54,7 @@ export const HeritageStory: React.FC = () => {
           <div className="lg:col-span-6">
             <div className="relative rounded-xl overflow-hidden aspect-4/3 bg-stone-200 shadow-xs">
               <img
-                src="/src/assets/images/about_heritage_farm_1791623371694.jpg"
+                src="/images/about_heritage_farm_1791623371694.jpg"
                 alt="Indonesian local farm partner harvesting crisp vegetables in morning light"
                 className="w-full h-full object-cover"
                 loading="lazy"

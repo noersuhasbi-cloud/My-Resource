@@ -1,10 +1,11 @@
-import { StoreLocation, Milestone, Product, CustomerAccount, Order } from '../types';
-import heroStoreImg from '../assets/images/hero_grocemart_store_1791623358669.jpg';
-import heritageFarmImg from '../assets/images/about_heritage_farm_1791623371694.jpg';
-import freshProduceImg from '../assets/images/category_fresh_produce_1791623385871.jpg';
-import bakeryDeliImg from '../assets/images/category_bakery_deli_1791623399386.jpg';
+import { StoreLocation, Milestone, Product, CustomerAccount, Order } from '../types/index.ts';
 
-export { heroStoreImg, heritageFarmImg, freshProduceImg, bakeryDeliImg };
+export const heroStoreImg = '/images/hero_grocemart_store_1791623358669.jpg';
+export const heritageFarmImg = '/images/about_heritage_farm_1791623371694.jpg';
+export const freshProduceImg = '/images/category_fresh_produce_1791623385871.jpg';
+export const bakeryDeliImg = '/images/category_bakery_deli_1791623399386.jpg';
+
+export { heroStoreImg as defaultHeroStoreImg };
 
 export const STORE_LOCATIONS: StoreLocation[] = [
   {

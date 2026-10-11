@@ -125,6 +125,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editingOutlet, setEditingOutlet] = useState<StoreOutletSchedule | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<boolean>(false);
 
+  // State Machine Guard Y.4: Store Closure Override Warning Modal
+  const [closureWarningModal, setClosureWarningModal] = useState<{
+    outlet: StoreOutletSchedule;
+    warningMessage: string;
+    activeOrdersCount: number;
+  } | null>(null);
+
   // Multi-Warehouse & Inventory
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [warehouseZones, setWarehouseZones] = useState<WarehouseZone[]>([]);
@@ -314,13 +321,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleToggleOutletEmergency = async (outlet: StoreOutletSchedule) => {
+  const handleToggleOutletEmergency = async (outlet: StoreOutletSchedule, forceOverride = false) => {
     try {
-      const updatedEmergency = !outlet.isEmergencyClosed;
+      const updatedEmergency = forceOverride ? true : !outlet.isEmergencyClosed;
       const res = await apiClient.updateStoreOutlet(outlet.storeId, {
         isEmergencyClosed: updatedEmergency,
         closureReason: updatedEmergency ? 'Emergency refrigeration maintenance' : '',
+        forceOverride,
       });
+
+      if (res.requiresConfirmation || res.warning === 'ACTIVE_DELIVERIES_IN_PROGRESS') {
+        setClosureWarningModal({
+          outlet,
+          warningMessage: res.message || `${res.activeOrdersCount || 'Active'} orders currently in transit.`,
+          activeOrdersCount: res.activeOrdersCount || 1,
+        });
+        return;
+      }
+
       if (res.outlet) {
         const updatedOutlet = res.outlet;
         setStoreOutlets((prev) => prev.map((o) => (o.storeId === outlet.storeId ? updatedOutlet : o)));
@@ -329,8 +347,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         updatedEmergency ? `${outlet.storeName} Closed` : `${outlet.storeName} Reopened`,
         updatedEmergency ? 'Checkout restricted for this specific outlet; catalog view retained.' : 'Operating schedule restored.'
       );
-    } catch (err) {
-      onShowToast('Outlet Update Failed', String(err));
+    } catch (err: any) {
+      onShowToast('Outlet Update Failed', String(err?.message || err));
     }
   };
 
@@ -474,27 +492,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
 
   const cardClass = isLight
-    ? 'bg-white border border-stone-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.03)] text-stone-900 rounded-2xl'
+    ? 'bg-white border border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 rounded-2xl'
     : 'bg-stone-900/90 border border-stone-800 text-stone-100 rounded-2xl';
   const subCardClass = isLight
-    ? 'bg-stone-50/70 border border-stone-200 text-stone-900 rounded-xl'
+    ? 'bg-white border border-gray-200 text-gray-900 rounded-xl shadow-xs'
     : 'bg-stone-800/80 border border-stone-700 text-stone-100 rounded-xl';
-  const textTitle = isLight ? 'text-stone-900' : 'text-white';
-  const textMuted = isLight ? 'text-stone-500' : 'text-stone-400';
+  const textTitle = isLight ? 'text-gray-900' : 'text-white';
+  const textMuted = isLight ? 'text-gray-500' : 'text-stone-400';
   const tableHeaderClass = isLight
-    ? 'border-b border-stone-200 bg-stone-50 text-stone-500 font-semibold uppercase text-[10px]'
+    ? 'border-b border-gray-200 bg-gray-50/70 text-gray-500 font-semibold uppercase text-[10px]'
     : 'border-b border-stone-800 bg-stone-800/50 text-stone-400 font-semibold uppercase text-[10px]';
   const inputClass = isLight
-    ? 'bg-stone-50 border border-stone-300 text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#0F4C3A]'
+    ? 'bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
     : 'bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:outline-none focus:border-emerald-500';
   const modalClass = isLight
-    ? 'bg-white border border-stone-200 text-stone-900 shadow-2xl rounded-2xl'
+    ? 'bg-white border border-gray-200 text-gray-900 shadow-2xl rounded-2xl'
     : 'bg-stone-900 border border-stone-700 text-white shadow-2xl rounded-2xl';
 
   return (
-    <div className={`min-h-screen ${isLight ? 'bg-stone-50 text-stone-900' : 'bg-stone-950 text-stone-100'} flex flex-col font-sans transition-colors duration-200`}>
+    <div className={`min-h-screen ${isLight ? 'bg-[#F9FAFB] text-gray-900' : 'bg-stone-950 text-stone-100'} flex flex-col font-sans transition-colors duration-200`}>
       {/* Top Utility Header */}
-      <header className={`${isLight ? 'bg-white border-stone-200/90 text-stone-900 shadow-xs' : 'bg-stone-900/95 border-stone-800 text-white'} backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-3 transition-colors duration-200`}>
+      <header className={`${isLight ? 'bg-white border-gray-200/90 text-gray-900 shadow-2xs' : 'bg-stone-900/95 border-stone-800 text-white'} backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-3 transition-colors duration-200`}>
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#0F4C3A] flex items-center justify-center shadow-md shadow-[#0F4C3A]/20 text-white font-extrabold text-base tracking-wider">
@@ -502,7 +520,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className={`text-base sm:text-lg font-bold tracking-tight ${isLight ? 'text-stone-900' : 'text-white'}`}>
+                <h1 className={`text-base sm:text-lg font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
                   GroceMart Enterprise ERP
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] border border-[#0F4C3A]/20">
@@ -512,7 +530,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   FEFO &amp; Waste Active
                 </span>
               </div>
-              <p className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
                 Indonesian Multi-Store Retail Operations, Cold-Chain Inventory, Catch-Weight &amp; Multi-Store COA
               </p>
             </div>
@@ -522,7 +540,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="flex items-center gap-2 flex-wrap">
             {/* Store Outlet Selector Dropdown */}
             <div className="flex items-center gap-1.5">
-              <span className={`text-[11px] font-medium hidden sm:inline ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+              <span className={`text-[11px] font-medium hidden sm:inline ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
                 Outlet:
               </span>
               <select
@@ -536,7 +554,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 }}
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
                   isLight
-                    ? 'bg-stone-50 border-stone-200 text-stone-800 hover:bg-white focus:border-emerald-600'
+                    ? 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50 focus:border-[#0F4C3A]'
                     : 'bg-stone-800 border-stone-700 text-stone-100 hover:bg-stone-700'
                 }`}
               >
@@ -555,7 +573,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               onClick={toggleTheme}
               className={`p-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center ${
                 isLight
-                  ? 'bg-stone-100 hover:bg-stone-200 border-stone-200 text-stone-700'
+                  ? 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700'
                   : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-amber-400'
               }`}
               title={isLight ? 'Switch to Dark Mode' : 'Switch to Clean Light Mode'}
@@ -570,7 +588,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               disabled={isLoading}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-all disabled:opacity-50 ${
                 isLight
-                  ? 'bg-white hover:bg-stone-50 border-stone-200 text-stone-700 shadow-2xs'
+                  ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700 shadow-2xs'
                   : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-300'
               }`}
               title="Refresh Data"
@@ -592,7 +610,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </header>
 
       {/* Main Tab Navigation Bar */}
-      <div className={`${isLight ? 'bg-white border-b border-stone-200/80 shadow-2xs' : 'bg-stone-900 border-b border-stone-800'} px-4 sm:px-6 transition-colors duration-200`}>
+      <div className={`${isLight ? 'bg-white border-b border-gray-200/90 shadow-2xs' : 'bg-stone-900 border-b border-stone-800'} px-4 sm:px-6 transition-colors duration-200`}>
         <div className="max-w-7xl mx-auto flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none py-2">
           <button
             onClick={() => setActiveTab('overview')}
@@ -602,7 +620,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
@@ -618,12 +636,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <Store className="w-4 h-4" />
-            Store Hours &amp; Outlets
+            Store Operations
             {storeOutlets.some((o) => o.isEmergencyClosed) && (
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             )}
@@ -637,12 +655,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <Boxes className="w-4 h-4" />
-            Multi-Warehouse Stock
+            Inventory
             {inventoryMetrics.lowStockCount > 0 && (
               <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                 {inventoryMetrics.lowStockCount}
@@ -650,7 +668,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
           </button>
 
-          {/* NEW MODULE: FEFO & BATCH EXPIRY */}
+          {/* NEW MODULE: FEFO & BATCH */}
           <button
             onClick={() => setActiveTab('fefo')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
@@ -659,18 +677,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <Clock className="w-4 h-4" />
-            FEFO &amp; Batch Expiry
+            FEFO &amp; Batch
             <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
               FEFO
             </span>
           </button>
 
-          {/* NEW MODULE: SCRAP & WASTE MANAGEMENT */}
+          {/* NEW MODULE: SCRAP & WASTE */}
           <button
             onClick={() => setActiveTab('waste')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
@@ -679,7 +697,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
@@ -699,7 +717,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
@@ -715,12 +733,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <Truck className="w-4 h-4" />
-            Procurement &amp; Partial GR
+            Procurement: PR/PO/GR
             {purchaseOrders.some((p) => p.status === 'Partially Received') && (
               <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
                 Partial
@@ -736,12 +754,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <ReceiptText className="w-4 h-4" />
-            Store COA &amp; Financials
+            Accounting &amp; P&amp;L
           </button>
 
           <button
@@ -752,7 +770,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
@@ -769,7 +787,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : 'bg-emerald-600 text-white shadow-sm'
                 : isLight
-                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
@@ -1780,6 +1798,64 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* ========================================================================= */}
         {activeTab === 'erd' && (
           <ErdSpecsModule theme={theme} />
+        )}
+
+        {/* State Machine Guard Y.4: Active Delivery In-Flight Store Closure Warning Modal */}
+        {closureWarningModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className={`${modalClass} max-w-md w-full p-6 space-y-4 shadow-2xl`}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className={`text-base font-bold ${textTitle}`}>
+                    Active Orders In-Flight Warning
+                  </h3>
+                  <p className={`text-xs ${textMuted}`}>
+                    Store Closure Schedule Guard (Y.4)
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-xs text-amber-900 dark:text-amber-200 space-y-1.5 leading-relaxed">
+                <div className="font-semibold flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <span>{closureWarningModal.activeOrdersCount} Active In-Transit Orders Detected</span>
+                </div>
+                <p>
+                  {closureWarningModal.warningMessage}
+                </p>
+                <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                  Emergency closing <span className="font-bold">{closureWarningModal.outlet.storeName}</span> while orders are currently &quot;Out for Delivery&quot; or &quot;Awaiting Pickup&quot; may disrupt customer tracking or driver dispatch.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-200 dark:border-stone-800">
+                <button
+                  onClick={() => setClosureWarningModal(null)}
+                  className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-all ${
+                    isLight
+                      ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                      : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200'
+                  }`}
+                >
+                  Abort / Keep Open
+                </button>
+                <button
+                  onClick={() => {
+                    const targetOutlet = closureWarningModal.outlet;
+                    setClosureWarningModal(null);
+                    handleToggleOutletEmergency(targetOutlet, true);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Confirm &amp; Force Closure
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>
