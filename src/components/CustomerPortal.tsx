@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { CustomerAccount, Order, OrderStatus, Product } from '../types';
-import PRODUCTS from '../data/mockData';
-import formatIDR from '../utils/formatters';
+import { PRODUCTS } from '../data/mockData';
+import { formatIDR } from '../utils/formatters';
 import {
   User, Package, Truck, CheckCircle2,
   Search, Plus, Printer,
-  Sparkles, X, TrendingUp, Award, Database, Logout
+  Sparkles, X, TrendingUp, Award, Database, LogOut
 } from 'lucide-react';
 import { loginWithGoogle } from '../services/firebaseService';
 import { SafeImage } from './SafeImage';
@@ -290,8 +290,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     let next: OrderStatus = 'paid';
     if (currentStatus === 'placed') next = 'paid';
     else if (currentStatus === 'paid') next = 'packing';
-    else if (currentStatus === 'packing') next = 'in transit';
-    else if (currentStatus === 'in transit') next = 'delivered';
+    else if (currentStatus === 'packing') next = 'in_transit';
+    else if (currentStatus === 'in_transit') next = 'delivered';
     else if (currentStatus === 'delivered') return;
     onUpdateOrderStatus(orderId, next);
   };
@@ -382,7 +382,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               onClick={onLogout}
               className="pb-3 text-xs font-medium text-stone-400 hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
             >
-              <Logout className="w-3.5 h-3.5" />
+              <LogOut className="w-3.5 h-3.5" />
               <span>Sign Out</span>
             </button>
           )}
