@@ -281,7 +281,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isHolidayMode: !newOpen,
         noticeBanner: !newOpen ? (bannerInput || 'Notice: All GroceMart outlets are temporarily closed for scheduled cold-chain inventory audit. Catalog browsing remains available.') : '',
       });
-      setStoreStatus(res.storeStatus);
+      if (res.storeStatus) {
+        setStoreStatus(res.storeStatus);
+      }
       onShowToast(
         newOpen ? 'Store Network Opened' : 'Network Closure Mode Activated',
         newOpen ? 'Customer checkouts are live and accepting QRIS payments.' : 'Customer checkouts locked across all outlets.'
@@ -301,7 +303,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         noticeBanner: bannerInput,
         reopenEstimated: reopenInput,
       });
-      setStoreStatus(res.storeStatus);
+      if (res.storeStatus) {
+        setStoreStatus(res.storeStatus);
+      }
       onShowToast('Notice Banner Updated', 'Custom announcement published to storefront header.');
     } catch (err) {
       onShowToast('Update Failed', String(err));
@@ -317,7 +321,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isEmergencyClosed: updatedEmergency,
         closureReason: updatedEmergency ? 'Emergency refrigeration maintenance' : '',
       });
-      setStoreOutlets((prev) => prev.map((o) => (o.storeId === outlet.storeId ? res.outlet : o)));
+      if (res.outlet) {
+        const updatedOutlet = res.outlet;
+        setStoreOutlets((prev) => prev.map((o) => (o.storeId === outlet.storeId ? updatedOutlet : o)));
+      }
       onShowToast(
         updatedEmergency ? `${outlet.storeName} Closed` : `${outlet.storeName} Reopened`,
         updatedEmergency ? 'Checkout restricted for this specific outlet; catalog view retained.' : 'Operating schedule restored.'
@@ -338,9 +345,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         holidayNotice: editingOutlet.holidayNotice,
         closureReason: editingOutlet.closureReason,
       });
-      setStoreOutlets((prev) => prev.map((o) => (o.storeId === editingOutlet.storeId ? res.outlet : o)));
+      if (res.outlet) {
+        const updatedOutlet = res.outlet;
+        setStoreOutlets((prev) => prev.map((o) => (o.storeId === editingOutlet.storeId ? updatedOutlet : o)));
+        onShowToast('Operating Hours Updated', `${res.outlet.storeName} schedule synchronized.`);
+      }
       setEditingOutlet(null);
-      onShowToast('Operating Hours Updated', `${res.outlet.storeName} schedule synchronized.`);
     } catch (err) {
       onShowToast('Update Failed', String(err));
     }

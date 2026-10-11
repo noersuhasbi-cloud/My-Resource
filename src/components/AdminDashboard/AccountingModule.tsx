@@ -15,6 +15,7 @@ import {
   Search,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   DollarSign,
   ArrowDownRight,
   ArrowUpRight,
@@ -23,7 +24,9 @@ import {
   SlidersHorizontal,
   Sparkles,
   ShieldCheck,
+  X,
 } from 'lucide-react';
+import { apiClient } from '../../services/apiClient';
 
 interface AccountingModuleProps {
   theme: 'light' | 'dark';
