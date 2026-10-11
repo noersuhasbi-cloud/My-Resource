@@ -52,7 +52,20 @@ import {
   Check,
   X,
   Edit3,
+  Sun,
+  Moon,
+  Trash2,
+  Scan,
+  Database,
+  BookOpen,
 } from 'lucide-react';
+
+import { FefoModule } from './FefoModule';
+import { WasteModule } from './WasteModule';
+import { PickerModule } from './PickerModule';
+import { ErdSpecsModule } from './ErdSpecsModule';
+import { ProcurementModule } from './ProcurementModule';
+import { AccountingModule } from './AccountingModule';
 
 interface AdminDashboardProps {
   onCloseToStorefront: () => void;
@@ -63,7 +76,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onCloseToStorefront,
   onShowToast,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'operations' | 'inventory' | 'procurement' | 'accounting' | 'openapi'>('overview');
+  // Theme Toggle: Clean Light Mode (Default) & Dark Mode
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('grocemart_admin_theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+    } catch {}
+    return 'light'; // Default clean light mode
+  });
+
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    try {
+      localStorage.setItem('grocemart_admin_theme', next);
+    } catch {}
+  };
+
+  const isLight = theme === 'light';
+
+  // Global Store Outlet Filter Selector
+  const [selectedGlobalStore, setSelectedGlobalStore] = useState<string>('CONSOLIDATED');
+
+  const [activeTab, setActiveTab] = useState<
+    | 'overview'
+    | 'operations'
+    | 'inventory'
+    | 'fefo'
+    | 'waste'
+    | 'picker'
+    | 'procurement'
+    | 'accounting'
+    | 'openapi'
+    | 'erd'
+  >('overview');
 
   // Loading & refresh
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -417,45 +463,116 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return true;
   });
 
+  const cardClass = isLight
+    ? 'bg-white border border-stone-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.03)] text-stone-900 rounded-2xl'
+    : 'bg-stone-900/90 border border-stone-800 text-stone-100 rounded-2xl';
+  const subCardClass = isLight
+    ? 'bg-stone-50/70 border border-stone-200 text-stone-900 rounded-xl'
+    : 'bg-stone-800/80 border border-stone-700 text-stone-100 rounded-xl';
+  const textTitle = isLight ? 'text-stone-900' : 'text-white';
+  const textMuted = isLight ? 'text-stone-500' : 'text-stone-400';
+  const tableHeaderClass = isLight
+    ? 'border-b border-stone-200 bg-stone-50 text-stone-500 font-semibold uppercase text-[10px]'
+    : 'border-b border-stone-800 bg-stone-800/50 text-stone-400 font-semibold uppercase text-[10px]';
+  const inputClass = isLight
+    ? 'bg-stone-50 border border-stone-300 text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#0F4C3A]'
+    : 'bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:outline-none focus:border-emerald-500';
+  const modalClass = isLight
+    ? 'bg-white border border-stone-200 text-stone-900 shadow-2xl rounded-2xl'
+    : 'bg-stone-900 border border-stone-700 text-white shadow-2xl rounded-2xl';
+
   return (
-    <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col font-sans">
-      {/* Top Header */}
-      <header className="bg-stone-950/80 backdrop-blur-md border-b border-stone-800 sticky top-0 z-30 px-4 sm:px-6 py-3.5">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className={`min-h-screen ${isLight ? 'bg-stone-50 text-stone-900' : 'bg-stone-950 text-stone-100'} flex flex-col font-sans transition-colors duration-200`}>
+      {/* Top Utility Header */}
+      <header className={`${isLight ? 'bg-white border-stone-200/90 text-stone-900 shadow-xs' : 'bg-stone-900/95 border-stone-800 text-white'} backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-3 transition-colors duration-200`}>
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-900/30 text-white font-bold text-lg">
+            <div className="w-10 h-10 rounded-xl bg-[#0F4C3A] flex items-center justify-center shadow-md shadow-[#0F4C3A]/20 text-white font-extrabold text-base tracking-wider">
               GM
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">GroceMart Mini ERP</h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Enterprise v2.4
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className={`text-base sm:text-lg font-bold tracking-tight ${isLight ? 'text-stone-900' : 'text-white'}`}>
+                  GroceMart Enterprise ERP
+                </h1>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] border border-[#0F4C3A]/20">
+                  Supply Chain v2.4
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  Multi-Outlet
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                  FEFO &amp; Waste Active
                 </span>
               </div>
-              <p className="text-xs text-stone-400">
-                Indonesian Multi-Store Retail Operations, Cold-Chain Inventory, Partial GR & Double-Entry Financials
+              <p className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+                Indonesian Multi-Store Retail Operations, Cold-Chain Inventory, Catch-Weight &amp; Multi-Store COA
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          {/* Right Utility Controls: Store Selector + Dark/Light Toggle + Sync + Back */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Store Outlet Selector Dropdown */}
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[11px] font-medium hidden sm:inline ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+                Outlet:
+              </span>
+              <select
+                value={selectedGlobalStore}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedGlobalStore(val);
+                  setSelectedOutletFilter(val);
+                  setSelectedFinanceStore(val);
+                  onShowToast('Store Filter Applied', val === 'CONSOLIDATED' ? 'Showing Consolidated Network Data' : `Filtered to ${val}`);
+                }}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                  isLight
+                    ? 'bg-stone-50 border-stone-200 text-stone-800 hover:bg-white focus:border-emerald-600'
+                    : 'bg-stone-800 border-stone-700 text-stone-100 hover:bg-stone-700'
+                }`}
+              >
+                <option value="CONSOLIDATED">All Outlets (Consolidated)</option>
+                <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
+                <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
+                <option value="store-jkt-menteng">Menteng Heritage (Jakarta)</option>
+                <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
+                <option value="store-sby-gubeng">Gubeng Central Hub (Surabaya)</option>
+                <option value="store-bali-canggu">Batu Bolong Organic (Bali)</option>
+              </select>
+            </div>
+
+            {/* Dark / Light Mode Instant Toggle Switch */}
+            <button
+              onClick={toggleTheme}
+              className={`p-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center ${
+                isLight
+                  ? 'bg-stone-100 hover:bg-stone-200 border-stone-200 text-stone-700'
+                  : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-amber-400'
+              }`}
+              title={isLight ? 'Switch to Dark Mode' : 'Switch to Clean Light Mode'}
+              aria-label="Toggle theme"
+            >
+              {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            </button>
+
+            {/* Refresh Sync Button */}
             <button
               onClick={refreshAllData}
               disabled={isLoading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 transition-all border border-stone-700 disabled:opacity-50"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-all disabled:opacity-50 ${
+                isLight
+                  ? 'bg-white hover:bg-stone-50 border-stone-200 text-stone-700 shadow-2xs'
+                  : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-300'
+              }`}
               title="Refresh Data"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Sync Data</span>
+              <span className="hidden lg:inline">Sync Data</span>
             </button>
 
+            {/* Storefront Exit Button */}
             <button
               onClick={onCloseToStorefront}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm hover:shadow-emerald-600/30"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all shadow-sm"
             >
               <Store className="w-3.5 h-3.5" />
               <span>Back to Storefront</span>
@@ -464,15 +581,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </header>
 
-      {/* Main Tab Navigation */}
-      <div className="bg-stone-950/60 border-b border-stone-800 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-none py-2">
+      {/* Main Tab Navigation Bar */}
+      <div className={`${isLight ? 'bg-white border-b border-stone-200/80 shadow-2xs' : 'bg-stone-900 border-b border-stone-800'} px-4 sm:px-6 transition-colors duration-200`}>
+        <div className="max-w-7xl mx-auto flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none py-2">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'overview'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
@@ -481,14 +602,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => setActiveTab('operations')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'operations'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <Store className="w-4 h-4" />
-            Store Hours & Outlets
+            Store Hours &amp; Outlets
             {storeOutlets.some((o) => o.isEmergencyClosed) && (
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             )}
@@ -496,33 +621,98 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => setActiveTab('inventory')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'inventory'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <Boxes className="w-4 h-4" />
             Multi-Warehouse Stock
             {inventoryMetrics.lowStockCount > 0 && (
-              <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                 {inventoryMetrics.lowStockCount}
               </span>
             )}
           </button>
 
+          {/* NEW MODULE: FEFO & BATCH EXPIRY */}
+          <button
+            onClick={() => setActiveTab('fefo')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+              activeTab === 'fefo'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            FEFO &amp; Batch Expiry
+            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+              FEFO
+            </span>
+          </button>
+
+          {/* NEW MODULE: SCRAP & WASTE MANAGEMENT */}
+          <button
+            onClick={() => setActiveTab('waste')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+              activeTab === 'waste'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+            Scrap &amp; Waste
+            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+              Shrinkage
+            </span>
+          </button>
+
+          {/* NEW MODULE: IN-STORE PICKER & CATCH WEIGHT */}
+          <button
+            onClick={() => setActiveTab('picker')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+              activeTab === 'picker'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
+            }`}
+          >
+            <Scan className="w-4 h-4" />
+            Picker &amp; Catch Weight
+          </button>
+
           <button
             onClick={() => setActiveTab('procurement')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'procurement'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <Truck className="w-4 h-4" />
-            Procurement & Partial GR
+            Procurement &amp; Partial GR
             {purchaseOrders.some((p) => p.status === 'Partially Received') && (
-              <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+              <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
                 Partial
               </span>
             )}
@@ -530,26 +720,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => setActiveTab('accounting')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'accounting'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <ReceiptText className="w-4 h-4" />
-            Store COA & Financials
+            Store COA &amp; Financials
           </button>
 
           <button
             onClick={() => setActiveTab('openapi')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
               activeTab === 'openapi'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
             }`}
           >
             <FileCode2 className="w-4 h-4" />
-            QRIS Open API & Specs
+            QRIS Open API
+          </button>
+
+          {/* NEW MODULE: TECHNICAL ARCHITECTURE & ERD */}
+          <button
+            onClick={() => setActiveTab('erd')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+              activeTab === 'erd'
+                ? isLight
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : 'bg-emerald-600 text-white shadow-sm'
+                : isLight
+                ? 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            ERD &amp; Specs
           </button>
         </div>
       </div>
@@ -563,79 +778,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="space-y-6">
             {/* KPI Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-stone-800/60 border border-stone-700/60 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between text-stone-400 text-xs font-medium">
+              <div className={`${cardClass} p-5`}>
+                <div className={`flex items-center justify-between ${textMuted} text-xs font-medium`}>
                   <span>Gross Omzet (October MTD)</span>
-                  <span className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                  <span className="p-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg">
                     <TrendingUp className="w-4 h-4" />
                   </span>
                 </div>
-                <div className="mt-3 text-2xl font-bold text-white tracking-tight">
+                <div className={`mt-3 text-2xl font-bold ${textTitle} tracking-tight`}>
                   {formatIDR(omzetData?.totalRevenueMTD || 388500000)}
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-xs">
-                  <span className="inline-flex items-center text-emerald-400 font-semibold">
+                  <span className="inline-flex items-center text-emerald-600 dark:text-emerald-400 font-semibold">
                     <ArrowUpRight className="w-3.5 h-3.5" />
                     +{omzetData?.momGrowthPercent || 18.2}% MoM
                   </span>
-                  <span className="text-stone-500">•</span>
-                  <span className="text-stone-400">+{omzetData?.wowGrowthPercent || 12.4}% WoW</span>
+                  <span className={textMuted}>•</span>
+                  <span className={textMuted}>+{omzetData?.wowGrowthPercent || 12.4}% WoW</span>
                 </div>
               </div>
 
-              <div className="bg-stone-800/60 border border-stone-700/60 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between text-stone-400 text-xs font-medium">
+              <div className={`${cardClass} p-5`}>
+                <div className={`flex items-center justify-between ${textMuted} text-xs font-medium`}>
                   <span>Total Settled Orders</span>
-                  <span className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg">
+                  <span className="p-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg">
                     <Package className="w-4 h-4" />
                   </span>
                 </div>
-                <div className="mt-3 text-2xl font-bold text-white tracking-tight">
+                <div className={`mt-3 text-2xl font-bold ${textTitle} tracking-tight`}>
                   {(omzetData?.totalOrders || 1311).toLocaleString('id-ID')}
                 </div>
-                <div className="mt-2 flex items-center gap-2 text-xs text-stone-400">
+                <div className={`mt-2 flex items-center gap-2 text-xs ${textMuted}`}>
                   <span>Avg Basket:</span>
-                  <span className="text-stone-200 font-medium">
+                  <span className={`font-semibold ${textTitle}`}>
                     {formatIDR(omzetData?.averageBasketValue || 296338)}
                   </span>
                 </div>
               </div>
 
-              <div className="bg-stone-800/60 border border-stone-700/60 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between text-stone-400 text-xs font-medium">
+              <div className={`${cardClass} p-5`}>
+                <div className={`flex items-center justify-between ${textMuted} text-xs font-medium`}>
                   <span>QRIS Conversion Rate</span>
-                  <span className="p-1.5 bg-purple-500/10 text-purple-400 rounded-lg">
+                  <span className="p-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-lg">
                     <QrCode className="w-4 h-4" />
                   </span>
                 </div>
-                <div className="mt-3 text-2xl font-bold text-white tracking-tight">
+                <div className={`mt-3 text-2xl font-bold ${textTitle} tracking-tight`}>
                   {omzetData?.qrisMetrics.conversionRatePercent || 96.8}%
                 </div>
-                <div className="mt-2 flex items-center gap-2 text-xs text-stone-400">
-                  <span className="text-purple-400 font-medium">
+                <div className={`mt-2 flex items-center gap-2 text-xs ${textMuted}`}>
+                  <span className="text-purple-600 dark:text-purple-400 font-medium">
                     {omzetData?.qrisMetrics.settledCount || 1336} / {omzetData?.qrisMetrics.totalAttempts || 1380} paid
                   </span>
-                  <span className="text-stone-500">•</span>
+                  <span>•</span>
                   <span>Avg {omzetData?.qrisMetrics.averageSettlementSeconds || 6.2}s</span>
                 </div>
               </div>
 
-              <div className="bg-stone-800/60 border border-stone-700/60 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between text-stone-400 text-xs font-medium">
+              <div className={`${cardClass} p-5`}>
+                <div className={`flex items-center justify-between ${textMuted} text-xs font-medium`}>
                   <span>Inventory Health</span>
-                  <span className="p-1.5 bg-amber-500/10 text-amber-400 rounded-lg">
+                  <span className="p-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg">
                     <AlertTriangle className="w-4 h-4" />
                   </span>
                 </div>
-                <div className="mt-3 text-2xl font-bold text-white tracking-tight">
+                <div className={`mt-3 text-2xl font-bold ${textTitle} tracking-tight`}>
                   {formatIDR(inventoryMetrics.totalValuationWAC || 48200000)}
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-xs">
-                  <span className={`font-semibold ${inventoryMetrics.lowStockCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  <span className={`font-semibold ${inventoryMetrics.lowStockCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'}`}>
                     {inventoryMetrics.lowStockCount} items low stock
                   </span>
-                  <span className="text-stone-500">•</span>
-                  <span className="text-stone-400">{inventoryMetrics.totalStockCount} units in bins</span>
+                  <span className={textMuted}>•</span>
+                  <span className={textMuted}>{inventoryMetrics.totalStockCount} units in bins</span>
                 </div>
               </div>
             </div>
@@ -643,11 +858,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {/* Omzet by Store Outlet & Category Breakdown */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Store Outlet Breakdown */}
-              <div className="lg:col-span-2 bg-stone-800/40 border border-stone-700/60 rounded-2xl p-5">
+              <div className={`lg:col-span-2 ${cardClass} p-5`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-base font-bold text-white">Omzet per Outlet Store</h2>
-                    <p className="text-xs text-stone-400">Granular performance across Indonesian physical hubs</p>
+                    <h2 className={`text-base font-bold ${textTitle}`}>Omzet per Outlet Store</h2>
+                    <p className={`text-xs ${textMuted}`}>Granular performance across Indonesian physical hubs</p>
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-500/10 text-emerald-300 rounded-lg border border-emerald-500/20">
                     6 Active Outlets
@@ -657,7 +872,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="border-b border-stone-700 text-stone-400 font-semibold uppercase text-[10px]">
+                      <tr className={tableHeaderClass}>
                         <th className="py-2.5 px-3">Store Location</th>
                         <th className="py-2.5 px-3">City</th>
                         <th className="py-2.5 px-3">Orders</th>
@@ -666,33 +881,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <th className="py-2.5 px-3 text-right">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-stone-700/50">
+                    <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
                       {(omzetData?.storeBreakdown || []).map((store) => (
-                        <tr key={store.storeId} className="hover:bg-stone-700/20 transition-colors">
-                          <td className="py-3 px-3 font-semibold text-white">
+                        <tr key={store.storeId} className={`transition-colors ${isLight ? 'hover:bg-stone-50/80' : 'hover:bg-stone-800/40'}`}>
+                          <td className={`py-3 px-3 font-semibold ${textTitle}`}>
                             {store.storeName}
                           </td>
-                          <td className="py-3 px-3 text-stone-300">{store.city}</td>
-                          <td className="py-3 px-3 text-stone-300">{store.orderCount}</td>
-                          <td className="py-3 px-3 font-mono font-semibold text-emerald-400">
+                          <td className={`py-3 px-3 ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>{store.city}</td>
+                          <td className={`py-3 px-3 ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>{store.orderCount}</td>
+                          <td className="py-3 px-3 font-mono font-semibold text-[#0F4C3A] dark:text-emerald-400">
                             {formatIDR(store.omzet)}
                           </td>
                           <td className="py-3 px-3">
                             <div className="flex items-center gap-2">
-                              <div className="w-16 bg-stone-700 h-1.5 rounded-full overflow-hidden">
+                              <div className={`w-16 ${isLight ? 'bg-stone-200' : 'bg-stone-700'} h-1.5 rounded-full overflow-hidden`}>
                                 <div
-                                  className="bg-emerald-500 h-full rounded-full"
+                                  className="bg-[#0F4C3A] dark:bg-emerald-500 h-full rounded-full"
                                   style={{ width: `${store.sharePercent}%` }}
                                 />
                               </div>
-                              <span className="text-[11px] text-stone-400 font-mono">
+                              <span className={`text-[11px] ${textMuted} font-mono`}>
                                 {store.sharePercent}%
                               </span>
                             </div>
                           </td>
                           <td className="py-3 px-3 text-right">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                               Open
                             </span>
                           </td>
@@ -704,26 +919,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               {/* Category Share */}
-              <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-5 space-y-4">
+              <div className={`${cardClass} p-5 space-y-4`}>
                 <div>
-                  <h2 className="text-base font-bold text-white">Category Distribution</h2>
-                  <p className="text-xs text-stone-400">Share of revenue by grocery department</p>
+                  <h2 className={`text-base font-bold ${textTitle}`}>Category Distribution</h2>
+                  <p className={`text-xs ${textMuted}`}>Share of revenue by grocery department</p>
                 </div>
 
                 <div className="space-y-3">
                   {(omzetData?.categoryBreakdown || []).map((cat) => (
                     <div key={cat.category} className="space-y-1">
                       <div className="flex justify-between text-xs">
-                        <span className="text-stone-300 font-medium">{cat.label}</span>
-                        <span className="text-emerald-400 font-mono font-semibold">{cat.sharePercent}%</span>
+                        <span className={`${textTitle} font-medium`}>{cat.label}</span>
+                        <span className="text-[#0F4C3A] dark:text-emerald-400 font-mono font-semibold">{cat.sharePercent}%</span>
                       </div>
-                      <div className="w-full bg-stone-700 h-2 rounded-full overflow-hidden">
+                      <div className={`w-full ${isLight ? 'bg-stone-200' : 'bg-stone-700'} h-2 rounded-full overflow-hidden`}>
                         <div
-                          className="bg-emerald-500 h-full rounded-full"
+                          className="bg-[#0F4C3A] dark:bg-emerald-500 h-full rounded-full"
                           style={{ width: `${cat.sharePercent}%` }}
                         />
                       </div>
-                      <div className="flex justify-between text-[11px] text-stone-500">
+                      <div className={`flex justify-between text-[11px] ${textMuted}`}>
                         <span>{cat.unitsSold.toLocaleString('id-ID')} units sold</span>
                         <span>{formatIDR(cat.omzet)}</span>
                       </div>
@@ -731,13 +946,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ))}
                 </div>
 
-                <div className="pt-2 border-t border-stone-700/60">
-                  <div className="p-3 bg-stone-800/80 rounded-xl border border-stone-700 text-xs text-stone-300 flex items-start gap-2.5">
-                    <Sparkles className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <div className={`pt-2 border-t ${isLight ? 'border-stone-200' : 'border-stone-700/60'}`}>
+                  <div className={`p-3 ${isLight ? 'bg-emerald-50/80 border border-emerald-200 text-stone-800' : 'bg-stone-800/80 border border-stone-700 text-stone-300'} rounded-xl text-xs flex items-start gap-2.5`}>
+                    <Sparkles className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-white">Cold-Chain Highlight</p>
-                      <p className="text-stone-400 text-[11px] mt-0.5">
-                        Fresh Produce & Chilled Dairy represent 61.4% of retail volume, requiring active temperature verification at Goods Receipt.
+                      <p className={`font-semibold ${textTitle}`}>Cold-Chain Priority</p>
+                      <p className={`${textMuted} text-[11px] mt-0.5`}>
+                        Fresh Produce &amp; Chilled Dairy represent 61.4% of retail volume, requiring active temperature verification at Goods Receipt.
                       </p>
                     </div>
                   </div>
@@ -746,15 +961,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             {/* Top Revenue SKUs */}
-            <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-5">
+            <div className={`${cardClass} p-5`}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-base font-bold text-white">Top-Selling SKUs by Revenue</h2>
-                  <p className="text-xs text-stone-400">Fastest-moving items generating maximum gross margin</p>
+                  <h2 className={`text-base font-bold ${textTitle}`}>Top-Selling SKUs by Revenue</h2>
+                  <p className={`text-xs ${textMuted}`}>Fastest-moving items generating maximum gross margin</p>
                 </div>
                 <button
                   onClick={() => setActiveTab('inventory')}
-                  className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
+                  className="text-xs text-[#0F4C3A] dark:text-emerald-400 hover:underline font-semibold flex items-center gap-1"
                 >
                   View Inventory Matrix
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -763,11 +978,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                 {(omzetData?.topSkus || []).map((sku) => (
-                  <div key={sku.sku} className="bg-stone-800/80 border border-stone-700 p-3.5 rounded-xl space-y-1.5">
-                    <span className="text-[10px] font-mono text-stone-400">{sku.sku}</span>
-                    <h3 className="text-xs font-bold text-white line-clamp-1">{sku.productName}</h3>
-                    <p className="text-[11px] text-stone-400">{sku.unitsSold} units sold</p>
-                    <p className="text-xs font-mono font-bold text-emerald-400">{formatIDR(sku.revenue)}</p>
+                  <div key={sku.sku} className={`${subCardClass} p-3.5 space-y-1.5`}>
+                    <span className={`text-[10px] font-mono ${textMuted}`}>{sku.sku}</span>
+                    <h3 className={`text-xs font-bold ${textTitle} line-clamp-1`}>{sku.productName}</h3>
+                    <p className={`text-[11px] ${textMuted}`}>{sku.unitsSold} units sold</p>
+                    <p className="text-xs font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{formatIDR(sku.revenue)}</p>
                   </div>
                 ))}
               </div>
@@ -781,28 +996,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'operations' && (
           <div className="space-y-6">
             {/* Network Master Switch & Announcement Banner */}
-            <div className="bg-stone-800/50 border border-stone-700/60 rounded-2xl p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-stone-700/60">
+            <div className={`${cardClass} p-6`}>
+              <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
                 <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <Store className="w-5 h-5 text-emerald-400" />
+                  <h2 className={`text-base font-bold ${textTitle} flex items-center gap-2`}>
+                    <Store className="w-5 h-5 text-[#0F4C3A] dark:text-emerald-400" />
                     Company-Wide Storefront Network Status
                   </h2>
-                  <p className="text-xs text-stone-400 mt-0.5">
+                  <p className={`text-xs ${textMuted} mt-0.5`}>
                     Control all 34 outlets simultaneously or override specific store hubs.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-stone-300">
+                    <span className={`text-xs font-medium ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
                       {storeStatus?.isOpen ? 'Network Online' : 'Network Closed'}
                     </span>
                     <button
                       onClick={handleToggleStoreOpen}
                       disabled={isUpdatingStatus}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                        storeStatus?.isOpen ? 'bg-emerald-600' : 'bg-red-600'
+                        storeStatus?.isOpen ? 'bg-[#0F4C3A] dark:bg-emerald-600' : 'bg-red-600'
                       }`}
                     >
                       <span
@@ -819,7 +1034,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="mt-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
                       Customer Notice Banner (Displayed on Storefront Header)
                     </label>
                     <input
@@ -827,12 +1042,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={bannerInput}
                       onChange={(e) => setBannerInput(e.target.value)}
                       placeholder="e.g. Fresh harvest arrives daily from Lembang! Open 07:00 - 22:00 WIB."
-                      className="w-full px-3.5 py-2 text-xs rounded-xl bg-stone-900 border border-stone-700 text-stone-100 focus:outline-none focus:border-emerald-500"
+                      className={`w-full px-3.5 py-2 text-xs rounded-xl ${inputClass}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
                       Estimated Operating Window
                     </label>
                     <input
@@ -840,7 +1055,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={reopenInput}
                       onChange={(e) => setReopenInput(e.target.value)}
                       placeholder="Open 07:00 - 22:00 Daily"
-                      className="w-full px-3.5 py-2 text-xs rounded-xl bg-stone-900 border border-stone-700 text-stone-100 focus:outline-none focus:border-emerald-500"
+                      className={`w-full px-3.5 py-2 text-xs rounded-xl ${inputClass}`}
                     />
                   </div>
                 </div>
@@ -849,9 +1064,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <button
                     onClick={handleSaveBanner}
                     disabled={isUpdatingStatus}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition-all shadow-sm disabled:opacity-50"
+                    className="px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl transition-all shadow-sm disabled:opacity-50"
                   >
-                    Save & Broadcast Banner
+                    Save &amp; Broadcast Banner
                   </button>
                 </div>
               </div>
@@ -861,8 +1076,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-base font-bold text-white">Store Outlets Schedule & Closure Control</h2>
-                  <p className="text-xs text-stone-400">Configure operating hours, local timezone, and emergency closure per location</p>
+                  <h2 className={`text-base font-bold ${textTitle}`}>Store Outlets Schedule &amp; Closure Control</h2>
+                  <p className={`text-xs ${textMuted}`}>Configure operating hours, local timezone, and emergency closure per location</p>
                 </div>
               </div>
 
@@ -872,62 +1087,68 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   return (
                     <div
                       key={outlet.storeId}
-                      className={`bg-stone-800/60 border rounded-2xl p-5 transition-all space-y-4 ${
-                        isClosed ? 'border-red-900/50 bg-red-950/10' : 'border-stone-700/60'
+                      className={`border rounded-2xl p-5 transition-all space-y-4 ${
+                        isClosed
+                          ? isLight
+                            ? 'border-rose-200 bg-rose-50/40 text-stone-900'
+                            : 'border-red-900/50 bg-red-950/10 text-white'
+                          : cardClass
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-white text-sm">{outlet.storeName}</span>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-stone-700 text-stone-300">
+                            <span className={`font-bold ${textTitle} text-sm`}>{outlet.storeName}</span>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                              isLight ? 'bg-stone-100 text-stone-700 border border-stone-200' : 'bg-stone-800 text-stone-300'
+                            }`}>
                               {outlet.timezone}
                             </span>
                           </div>
-                          <p className="text-xs text-stone-400 mt-0.5">{outlet.district}, {outlet.city}</p>
+                          <p className={`text-xs ${textMuted} mt-0.5`}>{outlet.district}, {outlet.city}</p>
                         </div>
 
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                             isClosed
-                              ? 'bg-red-500/20 text-red-300 border-red-500/30'
-                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                              : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                           }`}
                         >
                           {isClosed ? 'CLOSED' : 'OPEN'}
                         </span>
                       </div>
 
-                      <div className="p-3 bg-stone-900/80 rounded-xl space-y-1.5 text-xs">
-                        <div className="flex justify-between text-stone-300">
-                          <span className="text-stone-400">Operating Hours:</span>
-                          <span className="font-semibold">{outlet.openTime} - {outlet.closeTime} {outlet.timezone}</span>
+                      <div className={`p-3 ${subCardClass} space-y-1.5 text-xs`}>
+                        <div className="flex justify-between">
+                          <span className={textMuted}>Operating Hours:</span>
+                          <span className={`font-semibold ${textTitle}`}>{outlet.openTime} - {outlet.closeTime} {outlet.timezone}</span>
                         </div>
-                        <div className="flex justify-between text-stone-300">
-                          <span className="text-stone-400">Days Active:</span>
-                          <span>{outlet.daysOpen}</span>
+                        <div className="flex justify-between">
+                          <span className={textMuted}>Days Active:</span>
+                          <span className={isLight ? 'text-stone-700' : 'text-stone-300'}>{outlet.daysOpen}</span>
                         </div>
-                        <div className="flex justify-between text-stone-300">
-                          <span className="text-stone-400">Contact:</span>
-                          <span className="font-mono text-stone-400">{outlet.contactPhone}</span>
+                        <div className="flex justify-between">
+                          <span className={textMuted}>Contact:</span>
+                          <span className={`font-mono ${isLight ? 'text-stone-700' : 'text-stone-400'}`}>{outlet.contactPhone}</span>
                         </div>
                       </div>
 
                       {outlet.isEmergencyClosed && outlet.closureReason && (
-                        <div className="p-2.5 bg-red-950/40 border border-red-800/40 rounded-xl text-xs text-red-300 flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <div className="p-2.5 bg-rose-50 dark:bg-red-950/40 border border-rose-200 dark:border-red-800/40 rounded-xl text-xs text-rose-700 dark:text-rose-300 flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
                           <span>Emergency Note: {outlet.closureReason}</span>
                         </div>
                       )}
 
                       {/* Action buttons */}
-                      <div className="flex items-center justify-between pt-2 border-t border-stone-700/60">
+                      <div className={`flex items-center justify-between pt-2 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
                         <button
                           onClick={() => handleToggleOutletEmergency(outlet)}
                           className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
                             outlet.isEmergencyClosed
-                              ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30'
-                              : 'bg-red-600/20 text-red-300 border-red-500/40 hover:bg-red-600/30'
+                              ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/20'
+                              : 'bg-rose-600/10 text-rose-700 dark:text-rose-300 border-rose-500/40 hover:bg-rose-600/20'
                           }`}
                         >
                           {outlet.isEmergencyClosed ? 'Restore Open' : 'Emergency Close'}
@@ -935,7 +1156,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                         <button
                           onClick={() => setEditingOutlet(outlet)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-stone-700 hover:bg-stone-600 text-stone-200 transition-all flex items-center gap-1.5"
+                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 border ${
+                            isLight
+                              ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
+                              : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                          }`}
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                           Edit Schedule
@@ -949,67 +1174,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Edit Outlet Modal */}
             {editingOutlet && (
-              <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-stone-900 border border-stone-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-bold text-white">Edit Schedule: {editingOutlet.storeName}</h3>
-                    <button onClick={() => setEditingOutlet(null)} className="text-stone-400 hover:text-white">
+              <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4`}>
+                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                    <h3 className={`text-base font-bold ${textTitle}`}>Edit Schedule: {editingOutlet.storeName}</h3>
+                    <button
+                      onClick={() => setEditingOutlet(null)}
+                      className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-stone-100 text-stone-500' : 'hover:bg-stone-800 text-stone-400'}`}
+                    >
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-300 mb-1">Open Time</label>
+                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Open Time</label>
                       <input
                         type="time"
                         value={editingOutlet.openTime}
                         onChange={(e) => setEditingOutlet({ ...editingOutlet, openTime: e.target.value })}
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                        className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-stone-300 mb-1">Close Time</label>
+                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Close Time</label>
                       <input
                         type="time"
                         value={editingOutlet.closeTime}
                         onChange={(e) => setEditingOutlet({ ...editingOutlet, closeTime: e.target.value })}
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                        className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Days Open</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Days Open</label>
                     <input
                       type="text"
                       value={editingOutlet.daysOpen}
                       onChange={(e) => setEditingOutlet({ ...editingOutlet, daysOpen: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Emergency Closure Reason (Optional)</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Emergency Closure Reason (Optional)</label>
                     <input
                       type="text"
                       value={editingOutlet.closureReason || ''}
                       onChange={(e) => setEditingOutlet({ ...editingOutlet, closureReason: e.target.value })}
                       placeholder="e.g. Sub-zero walk-in chiller routine servicing"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
                     />
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-3 border-t border-stone-800">
+                  <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
                     <button
                       onClick={() => setEditingOutlet(null)}
-                      className="px-4 py-2 text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl"
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
+                        isLight
+                          ? 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
+                          : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                      }`}
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSaveOutletHours}
-                      className="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm"
+                      className="px-4 py-2 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-sm transition-all"
                     >
                       Save Operating Hours
                     </button>
@@ -1027,47 +1259,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="space-y-6">
             {/* Warehouse Storage Zones Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-stone-800/50 border border-stone-700/60 rounded-2xl p-4 flex items-center gap-3">
-                <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl">
+              <div className={`${cardClass} p-4 flex items-center gap-3`}>
+                <div className="p-3 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl">
                   <Boxes className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-white">Ambient Dry Storage</h3>
-                  <p className="text-[11px] text-stone-400">Target: 24°C • Rice, pantry, grains</p>
-                  <p className="text-xs font-mono font-semibold text-emerald-400 mt-1">68% Capacity</p>
+                  <h3 className={`text-xs font-bold ${textTitle}`}>Ambient Dry Storage</h3>
+                  <p className={`text-[11px] ${textMuted}`}>Target: 24°C • Rice, pantry, grains</p>
+                  <p className="text-xs font-mono font-semibold text-[#0F4C3A] dark:text-emerald-400 mt-1">68% Capacity</p>
                 </div>
               </div>
 
-              <div className="bg-stone-800/50 border border-stone-700/60 rounded-2xl p-4 flex items-center gap-3">
-                <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl">
+              <div className={`${cardClass} p-4 flex items-center gap-3`}>
+                <div className="p-3 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
                   <Thermometer className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-white">Chilled Cold Storage</h3>
-                  <p className="text-[11px] text-stone-400">Target: 4°C • Produce, dairy, eggs</p>
-                  <p className="text-xs font-mono font-semibold text-emerald-400 mt-1">82% Capacity</p>
+                  <h3 className={`text-xs font-bold ${textTitle}`}>Chilled Cold Storage</h3>
+                  <p className={`text-[11px] ${textMuted}`}>Target: 4°C • Produce, dairy, eggs</p>
+                  <p className="text-xs font-mono font-semibold text-[#0F4C3A] dark:text-emerald-400 mt-1">82% Capacity</p>
                 </div>
               </div>
 
-              <div className="bg-stone-800/50 border border-stone-700/60 rounded-2xl p-4 flex items-center gap-3">
-                <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl">
+              <div className={`${cardClass} p-4 flex items-center gap-3`}>
+                <div className="p-3 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl">
                   <Layers className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-white">Sub-Zero Deep Freezer</h3>
-                  <p className="text-[11px] text-stone-400">Target: -18°C • Meats & seafood</p>
-                  <p className="text-xs font-mono font-semibold text-emerald-400 mt-1">54% Capacity</p>
+                  <h3 className={`text-xs font-bold ${textTitle}`}>Sub-Zero Deep Freezer</h3>
+                  <p className={`text-[11px] ${textMuted}`}>Target: -18°C • Meats &amp; seafood</p>
+                  <p className="text-xs font-mono font-semibold text-[#0F4C3A] dark:text-emerald-400 mt-1">54% Capacity</p>
                 </div>
               </div>
             </div>
 
             {/* Filter Bar */}
-            <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className={`${cardClass} p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3`}>
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={selectedOutletFilter}
                   onChange={(e) => setSelectedOutletFilter(e.target.value)}
-                  className="px-3 py-1.5 text-xs rounded-xl bg-stone-900 border border-stone-700 text-stone-200 focus:outline-none focus:border-emerald-500"
+                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
                 >
                   <option value="ALL">All Store Outlets</option>
                   <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
@@ -1078,7 +1310,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <select
                   value={selectedStorageZoneFilter}
                   onChange={(e) => setSelectedStorageZoneFilter(e.target.value)}
-                  className="px-3 py-1.5 text-xs rounded-xl bg-stone-900 border border-stone-700 text-stone-200 focus:outline-none focus:border-emerald-500"
+                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
                 >
                   <option value="ALL">All Storage Zones</option>
                   <option value="cold_chilled">Cold Chilled (4°C)</option>
@@ -1087,31 +1319,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </select>
 
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-stone-500 absolute left-3 top-2.5" />
+                  <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
                     value={inventorySearch}
                     onChange={(e) => setInventorySearch(e.target.value)}
                     placeholder="Search SKU or item..."
-                    className="pl-8 pr-3 py-1.5 text-xs rounded-xl bg-stone-900 border border-stone-700 text-stone-200 focus:outline-none focus:border-emerald-500 w-48"
+                    className={`pl-8 pr-3 py-1.5 text-xs rounded-xl w-48 ${inputClass}`}
                   />
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs text-stone-400">
-                  Showing <strong className="text-white">{filteredTiers.length}</strong> location items
+                <span className={`text-xs ${textMuted}`}>
+                  Showing <strong className={textTitle}>{filteredTiers.length}</strong> location items
                 </span>
               </div>
             </div>
 
             {/* Multi-Tier Stock Matrix Table */}
-            <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl overflow-hidden shadow-sm">
+            <div className={`${cardClass} overflow-hidden shadow-xs`}>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead>
-                    <tr className="bg-stone-900/60 border-b border-stone-700 text-stone-400 font-semibold uppercase text-[10px]">
-                      <th className="py-3 px-3.5">SKU & Item Details</th>
+                    <tr className={tableHeaderClass}>
+                      <th className="py-3 px-3.5">SKU &amp; Item Details</th>
                       <th className="py-3 px-3.5">Store / Warehouse Hub</th>
                       <th className="py-3 px-3 text-center">Physical</th>
                       <th className="py-3 px-3 text-center">Available</th>
@@ -1122,26 +1354,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="py-3 px-3.5 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-stone-700/50">
+                  <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
                     {filteredTiers.map((tier) => {
                       const isLowStock = tier.availableStock <= tier.minimumThreshold;
                       return (
-                        <tr key={tier.id} className="hover:bg-stone-700/20 transition-colors">
+                        <tr key={tier.id} className={`transition-colors ${isLight ? 'hover:bg-stone-50/80' : 'hover:bg-stone-800/40'}`}>
                           <td className="py-3 px-3.5">
-                            <span className="font-mono text-[10px] text-emerald-400">{tier.sku}</span>
-                            <div className="font-bold text-white text-xs">{tier.productName}</div>
-                            <span className="text-[11px] text-stone-400">{tier.unit}</span>
+                            <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">{tier.sku}</span>
+                            <div className={`font-bold ${textTitle} text-xs`}>{tier.productName}</div>
+                            <span className={`text-[11px] ${textMuted}`}>{tier.unit}</span>
                           </td>
 
                           <td className="py-3 px-3.5">
-                            <div className="font-semibold text-stone-200">{tier.storeName}</div>
-                            <div className="text-[11px] text-stone-400 font-mono flex items-center gap-1 mt-0.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                            <div className={`font-semibold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>{tier.storeName}</div>
+                            <div className={`text-[11px] ${textMuted} font-mono flex items-center gap-1 mt-0.5`}>
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                               {tier.warehouseZoneId}
                             </div>
                           </td>
 
-                          <td className="py-3 px-3 text-center font-mono font-bold text-white">
+                          <td className={`py-3 px-3 text-center font-mono font-bold ${textTitle}`}>
                             {tier.physicalStock}
                           </td>
 
@@ -1149,29 +1381,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <span
                               className={`px-2 py-0.5 rounded-full ${
                                 isLowStock
-                                  ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
-                                  : 'text-emerald-400'
+                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/30'
+                                  : 'text-emerald-600 dark:text-emerald-400 font-bold'
                               }`}
                             >
                               {tier.availableStock}
                             </span>
                           </td>
 
-                          <td className="py-3 px-3 text-center font-mono text-stone-400">
+                          <td className={`py-3 px-3 text-center font-mono ${textMuted}`}>
                             {tier.reservedStock}
                           </td>
 
-                          <td className="py-3 px-3 text-center font-mono text-blue-400 font-semibold">
+                          <td className="py-3 px-3 text-center font-mono text-blue-600 dark:text-blue-400 font-semibold">
                             +{tier.incomingStock}
                           </td>
 
-                          <td className="py-3 px-3.5 font-mono text-stone-300">
+                          <td className={`py-3 px-3.5 font-mono ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
                             <div>Min: {tier.minimumThreshold}</div>
-                            <div className="text-[10px] text-stone-500">Buffer: {tier.safetyStockBuffer} | Max: {tier.maxCapacity}</div>
+                            <div className={`text-[10px] ${textMuted}`}>Buffer: {tier.safetyStockBuffer} | Max: {tier.maxCapacity}</div>
                           </td>
 
-                          <td className="py-3 px-3.5 text-[11px] text-stone-300 max-w-xs">
-                            <p className="line-clamp-2 text-stone-400">
+                          <td className={`py-3 px-3.5 text-[11px] max-w-xs ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
+                            <p className="line-clamp-2">
                               {tier.handlingInstructions || 'Standard cold-chain storage.'}
                             </p>
                           </td>
@@ -1182,13 +1414,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 setAdjustingSku(tier.sku);
                                 setAdjustQty(0);
                               }}
-                              className="px-2.5 py-1 text-[11px] font-semibold bg-stone-700 hover:bg-stone-600 text-stone-200 rounded-lg transition-all"
+                              className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border ${
+                                isLight
+                                  ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
+                                  : 'bg-stone-700 border-stone-600 text-stone-200 hover:bg-stone-600'
+                              }`}
                             >
                               Audit Count
                             </button>
                             <button
                               onClick={() => setEditingTier(tier)}
-                              className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 rounded-lg transition-all"
+                              className="px-2.5 py-1 text-[11px] font-semibold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-300 border border-[#0F4C3A]/20 hover:bg-[#0F4C3A]/20 rounded-lg transition-all"
                             >
                               Edit Notes
                             </button>
@@ -1203,65 +1439,72 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Edit Stock Tier Modal */}
             {editingTier && (
-              <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-stone-900 border border-stone-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
-                  <div className="flex items-center justify-between">
+              <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4`}>
+                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
                     <div>
-                      <h3 className="text-base font-bold text-white">Item Metadata & Handling Notes</h3>
-                      <p className="text-xs text-stone-400">{editingTier.sku} - {editingTier.productName}</p>
+                      <h3 className={`text-base font-bold ${textTitle}`}>Item Metadata &amp; Handling Notes</h3>
+                      <p className={`text-xs ${textMuted}`}>{editingTier.sku} - {editingTier.productName}</p>
                     </div>
-                    <button onClick={() => setEditingTier(null)} className="text-stone-400 hover:text-white">
+                    <button
+                      onClick={() => setEditingTier(null)}
+                      className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-stone-100 text-stone-500' : 'hover:bg-stone-800 text-stone-400'}`}
+                    >
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-300 mb-1">Safety Stock Buffer</label>
+                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Safety Stock Buffer</label>
                       <input
                         type="number"
                         value={editingTier.safetyStockBuffer}
                         onChange={(e) => setEditingTier({ ...editingTier, safetyStockBuffer: Number(e.target.value) })}
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                        className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-stone-300 mb-1">Maximum Bin Capacity</label>
+                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Maximum Bin Capacity</label>
                       <input
                         type="number"
                         value={editingTier.maxCapacity}
                         onChange={(e) => setEditingTier({ ...editingTier, maxCapacity: Number(e.target.value) })}
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                        className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Handling Instructions (Staff Directives)</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Handling Instructions (Staff Directives)</label>
                     <textarea
                       rows={3}
                       value={editingTier.handlingInstructions || ''}
                       onChange={(e) => setEditingTier({ ...editingTier, handlingInstructions: e.target.value })}
                       placeholder="e.g. Keep refrigerated at 4°C with gentle misting. Do not stack beyond 3 tiers."
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Internal Admin Notes</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Internal Admin Notes</label>
                     <input
                       type="text"
                       value={editingTier.internalNotes || ''}
                       onChange={(e) => setEditingTier({ ...editingTier, internalNotes: e.target.value })}
                       placeholder="e.g. Ciwidey morning harvest direct pick-up."
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
                     />
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-3 border-t border-stone-800">
+                  <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
                     <button
                       onClick={() => setEditingTier(null)}
-                      className="px-4 py-2 text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl"
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
+                        isLight
+                          ? 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
+                          : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                      }`}
                     >
                       Cancel
                     </button>
@@ -1277,7 +1520,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         setEditingTier(null);
                         refreshAllData();
                       }}
-                      className="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm"
+                      className="px-4 py-2 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-sm transition-all"
                     >
                       Save Attributes
                     </button>
@@ -1288,36 +1531,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Audit Adjustment Modal */}
             {adjustingSku && (
-              <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-stone-900 border border-stone-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-bold text-white">Physical Stocktake Adjustment</h3>
-                    <button onClick={() => setAdjustingSku(null)} className="text-stone-400 hover:text-white">
+              <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className={`${modalClass} max-w-md w-full p-6 space-y-4`}>
+                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                    <h3 className={`text-base font-bold ${textTitle}`}>Physical Stocktake Adjustment</h3>
+                    <button
+                      onClick={() => setAdjustingSku(null)}
+                      className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-stone-100 text-stone-500' : 'hover:bg-stone-800 text-stone-400'}`}
+                    >
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
-                  <p className="text-xs text-stone-400">
-                    SKU: <strong className="text-emerald-400 font-mono">{adjustingSku}</strong>. Adjusting quantity will automatically calculate variance value and post a double-entry General Ledger entry.
+                  <p className={`text-xs ${textMuted}`}>
+                    SKU: <strong className="text-[#0F4C3A] dark:text-emerald-400 font-mono">{adjustingSku}</strong>. Adjusting quantity will automatically calculate variance value and post a double-entry General Ledger entry.
                   </p>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Adjustment Delta (+ or - units)</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Adjustment Delta (+ or - units)</label>
                     <input
                       type="number"
                       value={adjustQty}
                       onChange={(e) => setAdjustQty(Number(e.target.value))}
                       placeholder="+5 or -3"
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass} font-mono`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Adjustment Reason</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Adjustment Reason</label>
                     <select
                       value={adjustReason}
                       onChange={(e) => setAdjustReason(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
+                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
                     >
                       <option value="Physical stocktake audit count">Physical stocktake audit count</option>
                       <option value="Spoilage / Damaged produce write-off">Spoilage / Damaged produce write-off</option>
@@ -1326,16 +1572,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </select>
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-3 border-t border-stone-800">
+                  <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
                     <button
                       onClick={() => setAdjustingSku(null)}
-                      className="px-4 py-2 text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl"
+                      className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
+                        isLight
+                          ? 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
+                          : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                      }`}
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handlePerformStockAdjust}
-                      className="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm"
+                      className="px-4 py-2 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-sm transition-all"
                     >
                       Post Adjustment to GL
                     </button>
@@ -1350,935 +1600,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* TAB 4: ADVANCED PROCUREMENT & PARTIAL GOODS RECEIPT (GR) */}
         {/* ========================================================================= */}
         {activeTab === 'procurement' && (
-          <div className="space-y-6">
-            {/* Purchase Requests Section */}
-            <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-white">Purchase Requests (PR)</h2>
-                  <p className="text-xs text-stone-400">Automated low-stock threshold triggers and manual store restock requests</p>
-                </div>
-
-                <button
-                  onClick={() => setIsCreatingPR(true)}
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  New Restock PR
-                </button>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-stone-700 text-stone-400 font-semibold uppercase text-[10px]">
-                      <th className="py-2.5 px-3">PR Number</th>
-                      <th className="py-2.5 px-3">Store Outlet</th>
-                      <th className="py-2.5 px-3">Requested Item</th>
-                      <th className="py-2.5 px-3">Quantity</th>
-                      <th className="py-2.5 px-3">Est. Cost (IDR)</th>
-                      <th className="py-2.5 px-3">Trigger Reason</th>
-                      <th className="py-2.5 px-3 text-right">Status / Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-700/50">
-                    {purchaseRequests.map((pr) => (
-                      <tr key={pr.id} className="hover:bg-stone-700/20 transition-colors">
-                        <td className="py-3 px-3 font-mono font-bold text-emerald-400">{pr.id}</td>
-                        <td className="py-3 px-3 text-stone-300">{pr.storeName || 'Senopati Flagship'}</td>
-                        <td className="py-3 px-3 font-semibold text-white">
-                          {pr.productName}
-                          <div className="font-mono text-[10px] text-stone-400">{pr.sku}</div>
-                        </td>
-                        <td className="py-3 px-3 font-mono font-bold text-stone-200">{pr.suggestedQuantity}</td>
-                        <td className="py-3 px-3 font-mono text-emerald-400">{formatIDR(pr.totalEstimatedCost)}</td>
-                        <td className="py-3 px-3">
-                          <span className="text-[11px] text-stone-400 capitalize">
-                            {pr.reason.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          {pr.status === 'pending' ? (
-                            <button
-                              onClick={() => handleApprovePR(pr.id)}
-                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg transition-all"
-                            >
-                              Approve → PO
-                            </button>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              PO #{pr.poId}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Purchase Orders with Partial Shipment Support */}
-            <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <FileCheck2 className="w-5 h-5 text-emerald-400" />
-                    Purchase Orders (PO) & Partial Shipment Tracking
-                  </h2>
-                  <p className="text-xs text-stone-400">
-                    Formal orders sent to suppliers with backorder tracking for split/partial deliveries
-                  </p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-stone-700 text-stone-400 font-semibold uppercase text-[10px]">
-                      <th className="py-2.5 px-3">PO Number</th>
-                      <th className="py-2.5 px-3">Supplier & Destination</th>
-                      <th className="py-2.5 px-3">Items & Quantities</th>
-                      <th className="py-2.5 px-3">Fulfillment Progress</th>
-                      <th className="py-2.5 px-3">Total Value</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3 text-right">Receive Goods</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-700/50">
-                    {purchaseOrders.map((po) => {
-                      const totalOrdered = po.items.reduce((s, i) => s + i.orderedQuantity, 0);
-                      const totalReceived = po.items.reduce((s, i) => s + (i.receivedQuantity || 0), 0);
-                      const totalBackorder = po.items.reduce((s, i) => s + (i.remainingBackorder || 0), 0);
-                      const percent = totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
-
-                      return (
-                        <tr key={po.id} className="hover:bg-stone-700/20 transition-colors">
-                          <td className="py-3 px-3">
-                            <span className="font-mono font-bold text-emerald-400">{po.id}</span>
-                            <div className="text-[10px] text-stone-400">Expected: {po.expectedDeliveryDate}</div>
-                          </td>
-
-                          <td className="py-3 px-3">
-                            <div className="font-semibold text-white">{po.supplierName}</div>
-                            <div className="text-[11px] text-stone-400">{po.storeName}</div>
-                          </td>
-
-                          <td className="py-3 px-3 max-w-xs">
-                            {po.items.map((item, idx) => (
-                              <div key={idx} className="text-[11px]">
-                                <span className="font-medium text-stone-200">{item.productName}</span>
-                                <span className="text-stone-400 font-mono ml-1">
-                                  ({item.receivedQuantity}/{item.orderedQuantity} rcvd)
-                                </span>
-                              </div>
-                            ))}
-                          </td>
-
-                          <td className="py-3 px-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-20 bg-stone-700 h-2 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full ${
-                                    po.status === 'Completed' ? 'bg-emerald-500' : 'bg-blue-500'
-                                  }`}
-                                  style={{ width: `${percent}%` }}
-                                />
-                              </div>
-                              <span className="font-mono text-[11px] font-semibold text-stone-300">{percent}%</span>
-                            </div>
-                            {totalBackorder > 0 && (
-                              <div className="text-[10px] text-amber-400 font-mono mt-0.5">
-                                {totalBackorder} units backordered
-                              </div>
-                            )}
-                          </td>
-
-                          <td className="py-3 px-3 font-mono font-semibold text-emerald-400">
-                            {formatIDR(po.totalCost)}
-                          </td>
-
-                          <td className="py-3 px-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                po.status === 'Completed'
-                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                  : po.status === 'Partially Received'
-                                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                                  : 'bg-stone-700 text-stone-300 border-stone-600'
-                              }`}
-                            >
-                              {po.status}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3 text-right">
-                            {po.status !== 'Completed' ? (
-                              <button
-                                onClick={() => openReceivingModal(po)}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg transition-all shadow-sm"
-                              >
-                                Receive GR
-                              </button>
-                            ) : (
-                              <span className="text-[11px] text-stone-500 font-medium">All Received</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Goods Receipts (GR) History */}
-            <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-5 space-y-4">
-              <div>
-                <h2 className="text-base font-bold text-white">Goods Receipts (GR) Log</h2>
-                <p className="text-xs text-stone-400">Surat Jalan delivery notes, cold-chain temp checks, and linked GL journal vouchers</p>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-stone-700 text-stone-400 font-semibold uppercase text-[10px]">
-                      <th className="py-2.5 px-3">GR Number</th>
-                      <th className="py-2.5 px-3">Surat Jalan / Delivery Note</th>
-                      <th className="py-2.5 px-3">PO Reference</th>
-                      <th className="py-2.5 px-3">Vendor / Store</th>
-                      <th className="py-2.5 px-3">Shipment Type</th>
-                      <th className="py-2.5 px-3">Receiver / Temp</th>
-                      <th className="py-2.5 px-3 text-right">Linked GL</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-700/50">
-                    {goodsReceipts.map((gr) => (
-                      <tr key={gr.id} className="hover:bg-stone-700/20 transition-colors">
-                        <td className="py-3 px-3 font-mono font-bold text-emerald-400">{gr.id}</td>
-                        <td className="py-3 px-3 font-mono text-stone-200">{gr.deliveryNoteNumber}</td>
-                        <td className="py-3 px-3 font-mono text-blue-400">{gr.poId}</td>
-                        <td className="py-3 px-3">
-                          <div className="font-semibold text-white">{gr.vendorName}</div>
-                          <div className="text-[10px] text-stone-400">{gr.storeName}</div>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                              gr.isPartial
-                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                            }`}
-                          >
-                            {gr.isPartial ? 'Partial Delivery' : 'Full Delivery'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3">
-                          <div className="text-stone-300">{gr.receivedBy}</div>
-                          <div className="text-[10px] text-blue-300 flex items-center gap-1">
-                            <Thermometer className="w-3 h-3" />
-                            {gr.items[0]?.tempCheckCelsius ? `${gr.items[0].tempCheckCelsius}°C Verified` : 'Temp OK'}
-                          </div>
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono text-[11px] text-stone-400">
-                          {gr.glEntryId || 'GLE-Posted'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Interactive Partial Goods Receipt Modal */}
-            {activeReceivingPO && (
-              <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-stone-900 border border-stone-700 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-                  <div className="flex items-center justify-between border-b border-stone-800 pb-3">
-                    <div>
-                      <h3 className="text-base font-bold text-white flex items-center gap-2">
-                        <Truck className="w-5 h-5 text-emerald-400" />
-                        Receive Goods: PO #{activeReceivingPO.id}
-                      </h3>
-                      <p className="text-xs text-stone-400">
-                        Vendor: <strong className="text-white">{activeReceivingPO.supplierName}</strong> • Destination: <strong className="text-white">{activeReceivingPO.storeName}</strong>
-                      </p>
-                    </div>
-                    <button onClick={() => setActiveReceivingPO(null)} className="text-stone-400 hover:text-white">
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-300 mb-1">
-                        Surat Jalan / Delivery Note #
-                      </label>
-                      <input
-                        type="text"
-                        value={deliveryNoteInput}
-                        onChange={(e) => setDeliveryNoteInput(e.target.value)}
-                        placeholder="e.g. SJ-BLC-2026-9921"
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-300 mb-1">
-                        Receiving Officer Name
-                      </label>
-                      <input
-                        type="text"
-                        value={receivedByInput}
-                        onChange={(e) => setReceivedByInput(e.target.value)}
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Items to receive with partial quantity inputs */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-stone-200 uppercase tracking-wider">
-                      Specify Received Items (Partial Fulfillment Supported)
-                    </h4>
-
-                    {activeReceivingPO.items.map((item) => {
-                      const itemState = receivingItemsState[item.sku] || {
-                        quantityReceived: item.remainingBackorder,
-                        batchNumber: 'BAT-NEW',
-                        expiryDate: '',
-                        qualityCondition: 'Cold-Chain Verified',
-                        tempCheckCelsius: 4.0,
-                      };
-
-                      const currentBackorder = Math.max(0, item.remainingBackorder - itemState.quantityReceived);
-
-                      return (
-                        <div key={item.sku} className="bg-stone-800/80 border border-stone-700 p-4 rounded-xl space-y-3">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                            <div>
-                              <h5 className="font-bold text-white text-xs">{item.productName}</h5>
-                              <span className="font-mono text-[10px] text-stone-400">{item.sku}</span>
-                            </div>
-                            <div className="text-xs font-mono text-stone-300">
-                              Ordered: <strong className="text-white">{item.orderedQuantity}</strong> | Remaining: <strong className="text-amber-400">{item.remainingBackorder}</strong>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                            <div>
-                              <label className="block text-[10px] text-stone-400 mb-1">Quantity Received Now</label>
-                              <input
-                                type="number"
-                                min={0}
-                                max={item.remainingBackorder}
-                                value={itemState.quantityReceived}
-                                onChange={(e) => {
-                                  const val = Number(e.target.value);
-                                  setReceivingItemsState((prev) => ({
-                                    ...prev,
-                                    [item.sku]: { ...itemState, quantityReceived: val },
-                                  }));
-                                }}
-                                className="w-full px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg bg-stone-900 border border-stone-600 text-emerald-400"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] text-stone-400 mb-1">Batch / Lot #</label>
-                              <input
-                                type="text"
-                                value={itemState.batchNumber}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setReceivingItemsState((prev) => ({
-                                    ...prev,
-                                    [item.sku]: { ...itemState, batchNumber: val },
-                                  }));
-                                }}
-                                className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-stone-900 border border-stone-600 text-white"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] text-stone-400 mb-1">Cold Temp (°C)</label>
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={itemState.tempCheckCelsius}
-                                onChange={(e) => {
-                                  const val = Number(e.target.value);
-                                  setReceivingItemsState((prev) => ({
-                                    ...prev,
-                                    [item.sku]: { ...itemState, tempCheckCelsius: val },
-                                  }));
-                                }}
-                                className="w-full px-2.5 py-1.5 text-xs font-mono rounded-lg bg-stone-900 border border-stone-600 text-blue-300"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] text-stone-400 mb-1">Quality Status</label>
-                              <select
-                                value={itemState.qualityCondition}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setReceivingItemsState((prev) => ({
-                                    ...prev,
-                                    [item.sku]: { ...itemState, qualityCondition: val },
-                                  }));
-                                }}
-                                className="w-full px-2 py-1.5 text-xs rounded-lg bg-stone-900 border border-stone-600 text-white"
-                              >
-                                <option value="Cold-Chain Verified">Cold-Chain Verified</option>
-                                <option value="Passed - Grade A">Passed - Grade A</option>
-                                <option value="Minor Discrepancy">Minor Discrepancy</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between text-[11px] pt-1">
-                            <span className="text-stone-400">
-                              Resulting Backorder Remaining on PO:
-                            </span>
-                            <span className={`font-mono font-semibold ${currentBackorder > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                              {currentBackorder > 0 ? `${currentBackorder} units (Partially Received)` : '0 units (Fully Fulfilled)'}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Receiving Remarks / Storage Notes</label>
-                    <input
-                      type="text"
-                      value={receiverNotesInput}
-                      onChange={(e) => setReceiverNotesInput(e.target.value)}
-                      placeholder="e.g. Produce transferred to walk-in cold room WH-JKT-SEN-COLD; quality seal intact."
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
-                    />
-                  </div>
-
-                  <div className="p-3 bg-stone-950/80 rounded-xl border border-stone-800 text-xs text-stone-400 space-y-1">
-                    <p className="font-semibold text-stone-300 flex items-center gap-1.5">
-                      <Scale className="w-3.5 h-3.5 text-emerald-400" />
-                      Automated Double-Entry Accounting Posting:
-                    </p>
-                    <p>• <strong>Debit 1040 Merchandise Inventory Asset</strong>: +Value of received items into store warehouse</p>
-                    <p>• <strong>Credit 2010 Trade Accounts Payable</strong>: +Liability recognized for vendor settlement</p>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-3 border-t border-stone-800">
-                    <button
-                      onClick={() => setActiveReceivingPO(null)}
-                      className="px-4 py-2 text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSubmitPartialGR}
-                      disabled={isSubmittingGR}
-                      className="px-5 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm disabled:opacity-50"
-                    >
-                      {isSubmittingGR ? 'Posting GR & Inventory...' : 'Confirm Goods Receipt & Update Stock'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Create PR Modal */}
-            {isCreatingPR && (
-              <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-stone-900 border border-stone-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-bold text-white">New Purchase Request (PR)</h3>
-                    <button onClick={() => setIsCreatingPR(false)} className="text-stone-400 hover:text-white">
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Target Store Hub</label>
-                    <select
-                      value={prStoreId}
-                      onChange={(e) => setPrStoreId(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
-                    >
-                      <option value="store-jkt-senopati">GroceMart Senopati Flagship (Jakarta)</option>
-                      <option value="store-jkt-pik">GroceMart PIK 2 The Avenue (Jakarta)</option>
-                      <option value="store-bdg-dago">GroceMart Dago Green Market (Bandung)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Select Product / SKU</label>
-                    <select
-                      value={selectedPrSku}
-                      onChange={(e) => setSelectedPrSku(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
-                    >
-                      <option value="">-- Choose Item to Restock --</option>
-                      {inventory.map((item) => (
-                        <option key={item.sku} value={item.sku}>
-                          {item.productName} ({item.sku}) - Current Stock: {item.currentStock}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-300 mb-1">Requested Quantity</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={prQuantity}
-                      onChange={(e) => setPrQuantity(Number(e.target.value))}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-stone-800 border border-stone-700 text-white"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-3 border-t border-stone-800">
-                    <button
-                      onClick={() => setIsCreatingPR(false)}
-                      className="px-4 py-2 text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleCreatePR}
-                      disabled={!selectedPrSku}
-                      className="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm disabled:opacity-50"
-                    >
-                      Submit Purchase Request
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <ProcurementModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            inventory={inventory}
+            purchaseRequests={purchaseRequests}
+            purchaseOrders={purchaseOrders}
+            goodsReceipts={goodsReceipts}
+            onRefreshData={refreshAllData}
+            onShowToast={onShowToast}
+          />
         )}
 
         {/* ========================================================================= */}
         {/* TAB 5: MULTI-STORE CHART OF ACCOUNTS & FINANCIAL ACCOUNTING */}
         {/* ========================================================================= */}
         {activeTab === 'accounting' && (
-          <div className="space-y-6">
-            {/* Store Filter Selector & Sub Tabs */}
-            <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <Building2 className="w-5 h-5 text-emerald-400" />
-                <div>
-                  <span className="text-xs text-stone-400">Reporting Scope:</span>
-                  <select
-                    value={selectedFinanceStore}
-                    onChange={(e) => setSelectedFinanceStore(e.target.value)}
-                    className="ml-2 px-3 py-1.5 text-xs font-semibold rounded-xl bg-stone-900 border border-stone-700 text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="CONSOLIDATED">Consolidated Company-Wide (All Outlets)</option>
-                    <option value="store-jkt-senopati">Senopati Flagship Hub (Jakarta)</option>
-                    <option value="store-jkt-pik">PIK 2 The Avenue Hub (Jakarta)</option>
-                    <option value="store-bdg-dago">Dago Green Market Hub (Bandung)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Sub-Tabs */}
-              <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
-                <button
-                  onClick={() => setFinanceSubTab('pnl')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    financeSubTab === 'pnl' ? 'bg-emerald-600 text-white' : 'text-stone-400 hover:text-white'
-                  }`}
-                >
-                  P&L Statement
-                </button>
-                <button
-                  onClick={() => setFinanceSubTab('balance_sheet')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    financeSubTab === 'balance_sheet' ? 'bg-emerald-600 text-white' : 'text-stone-400 hover:text-white'
-                  }`}
-                >
-                  Balance Sheet
-                </button>
-                <button
-                  onClick={() => setFinanceSubTab('cash_flow')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    financeSubTab === 'cash_flow' ? 'bg-emerald-600 text-white' : 'text-stone-400 hover:text-white'
-                  }`}
-                >
-                  Cash Flow
-                </button>
-                <button
-                  onClick={() => setFinanceSubTab('gl')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    financeSubTab === 'gl' ? 'bg-emerald-600 text-white' : 'text-stone-400 hover:text-white'
-                  }`}
-                >
-                  General Ledger
-                </button>
-                <button
-                  onClick={() => setFinanceSubTab('coa')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    financeSubTab === 'coa' ? 'bg-emerald-600 text-white' : 'text-stone-400 hover:text-white'
-                  }`}
-                >
-                  Chart of Accounts
-                </button>
-              </div>
-            </div>
-
-            {/* Sub-Tab 1: Profit & Loss Statement */}
-            {financeSubTab === 'pnl' && pnlReport && (
-              <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-6 space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-stone-700/60 pb-4 gap-2">
-                  <div>
-                    <h2 className="text-lg font-bold text-white">Profit & Loss (P&L) Statement</h2>
-                    <p className="text-xs text-stone-400">
-                      Scope: <strong className="text-emerald-400">{pnlReport.storeName || 'Consolidated'}</strong> • Period: {pnlReport.period}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs text-stone-400">Net Profit Margin:</span>
-                    <span className="ml-2 font-mono font-bold text-emerald-400 text-sm">
-                      {pnlReport.netMarginPercent}%
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-4 text-xs font-mono">
-                  {/* Revenue */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-stone-300 font-bold uppercase text-[11px] pb-1 border-b border-stone-700/60">
-                      <span>1. Operating Sales Revenue</span>
-                      <span>Amount (IDR)</span>
-                    </div>
-                    <div className="flex justify-between text-stone-400 pl-4">
-                      <span>Gross Customer QRIS Checkout Revenue</span>
-                      <span>{formatIDR(pnlReport.grossSalesRevenue)}</span>
-                    </div>
-                    <div className="flex justify-between text-amber-400 pl-4">
-                      <span>Less: Promotional Vouchers & Discounts</span>
-                      <span>-{formatIDR(pnlReport.discountsGiven)}</span>
-                    </div>
-                    <div className="flex justify-between text-white font-bold pl-4 pt-1 border-t border-stone-800">
-                      <span>Net Sales Revenue</span>
-                      <span>{formatIDR(pnlReport.netSalesRevenue)}</span>
-                    </div>
-                  </div>
-
-                  {/* COGS */}
-                  <div className="space-y-1.5 pt-2">
-                    <div className="flex justify-between text-stone-300 font-bold uppercase text-[11px] pb-1 border-b border-stone-700/60">
-                      <span>2. Cost of Goods Sold (COGS - Weighted Average / FIFO)</span>
-                      <span>Amount (IDR)</span>
-                    </div>
-                    <div className="flex justify-between text-red-400 pl-4">
-                      <span>Direct Farm Acquisition & Butchery Cost</span>
-                      <span>-{formatIDR(pnlReport.costOfGoodsSold)}</span>
-                    </div>
-                    <div className="flex justify-between text-emerald-400 font-bold pl-4 pt-1 border-t border-stone-800 text-sm">
-                      <span>Gross Profit ({pnlReport.grossMarginPercent}% margin)</span>
-                      <span>{formatIDR(pnlReport.grossProfit)}</span>
-                    </div>
-                  </div>
-
-                  {/* Operating Expenses */}
-                  <div className="space-y-1.5 pt-2">
-                    <div className="flex justify-between text-stone-300 font-bold uppercase text-[11px] pb-1 border-b border-stone-700/60">
-                      <span>3. Operating & Cold-Chain Expenses (OPEX)</span>
-                      <span>Amount (IDR)</span>
-                    </div>
-                    {pnlReport.operatingExpenses.map((exp, idx) => (
-                      <div key={idx} className="flex justify-between text-stone-400 pl-4">
-                        <span>{exp.category}</span>
-                        <span>-{formatIDR(exp.amount)}</span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between text-stone-300 font-bold pl-4 pt-1 border-t border-stone-800">
-                      <span>Total Operating Expenses</span>
-                      <span>-{formatIDR(pnlReport.totalOperatingExpenses)}</span>
-                    </div>
-                  </div>
-
-                  {/* Bottom Line Net Profit */}
-                  <div className="p-4 bg-emerald-950/20 border border-emerald-800/40 rounded-xl flex justify-between items-center text-base font-sans">
-                    <div>
-                      <span className="font-bold text-white">Net Operating Profit</span>
-                      <p className="text-xs text-emerald-300">Net Profit Margin: {pnlReport.netMarginPercent}%</p>
-                    </div>
-                    <span className="font-mono font-bold text-emerald-400 text-lg">
-                      {formatIDR(pnlReport.netProfit)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Sub-Tab 2: Balance Sheet */}
-            {financeSubTab === 'balance_sheet' && balanceSheet && (
-              <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-6 space-y-6">
-                <div className="flex items-center justify-between border-b border-stone-700/60 pb-4">
-                  <div>
-                    <h2 className="text-lg font-bold text-white">Automated Balance Sheet</h2>
-                    <p className="text-xs text-stone-400">Statement of Financial Position • {balanceSheet.period}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {balanceSheet.isBalanced ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Balanced: Assets = Liabilities + Equity
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30">
-                        Discrepancy Detected
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs font-mono">
-                  {/* Assets */}
-                  <div className="space-y-4 bg-stone-900/60 p-5 rounded-xl border border-stone-800">
-                    <h3 className="font-bold text-emerald-400 uppercase tracking-wider text-xs border-b border-stone-700 pb-2">
-                      Total Assets: {formatIDR(balanceSheet.assets.totalAssets)}
-                    </h3>
-
-                    <div className="space-y-1.5">
-                      <span className="text-stone-300 font-bold">Current Assets</span>
-                      {balanceSheet.assets.currentAssets.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-stone-400 pl-3">
-                          <span>{item.category}</span>
-                          <span>{formatIDR(item.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-1.5 pt-2">
-                      <span className="text-stone-300 font-bold">Non-Current Assets (Equipment)</span>
-                      {balanceSheet.assets.nonCurrentAssets.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-stone-400 pl-3">
-                          <span>{item.category}</span>
-                          <span>{formatIDR(item.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Liabilities & Equity */}
-                  <div className="space-y-4 bg-stone-900/60 p-5 rounded-xl border border-stone-800">
-                    <h3 className="font-bold text-blue-400 uppercase tracking-wider text-xs border-b border-stone-700 pb-2">
-                      Liabilities & Equity: {formatIDR(balanceSheet.liabilities.totalLiabilities + balanceSheet.equity.totalEquity)}
-                    </h3>
-
-                    <div className="space-y-1.5">
-                      <span className="text-stone-300 font-bold">Current Liabilities</span>
-                      {balanceSheet.liabilities.currentLiabilities.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-stone-400 pl-3">
-                          <span>{item.category}</span>
-                          <span>{formatIDR(item.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-1.5 pt-2">
-                      <span className="text-stone-300 font-bold">Shareholders' Equity</span>
-                      {balanceSheet.equity.equityItems.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-stone-400 pl-3">
-                          <span>{item.category}</span>
-                          <span>{formatIDR(item.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Sub-Tab 3: Cash Flow Statement */}
-            {financeSubTab === 'cash_flow' && cashFlow && (
-              <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-6 space-y-6">
-                <div>
-                  <h2 className="text-lg font-bold text-white">Cash Flow Statement</h2>
-                  <p className="text-xs text-stone-400">Operating, Investing, and Financing Cash Movements • {cashFlow.period}</p>
-                </div>
-
-                <div className="space-y-4 text-xs font-mono">
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-stone-300 font-bold uppercase pb-1 border-b border-stone-700">
-                      <span>Cash Flows from Operating Activities</span>
-                      <span>{formatIDR(cashFlow.netOperatingCash)}</span>
-                    </div>
-                    {cashFlow.operatingActivities.map((act, idx) => (
-                      <div key={idx} className="flex justify-between text-stone-400 pl-4">
-                        <span>{act.category}</span>
-                        <span className={act.amount < 0 ? 'text-red-400' : 'text-emerald-400'}>
-                          {act.amount < 0 ? `-${formatIDR(Math.abs(act.amount))}` : formatIDR(act.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="space-y-1.5 pt-2">
-                    <div className="flex justify-between text-stone-300 font-bold uppercase pb-1 border-b border-stone-700">
-                      <span>Cash Flows from Investing Activities</span>
-                      <span>{formatIDR(cashFlow.netInvestingCash)}</span>
-                    </div>
-                    {cashFlow.investingActivities.map((act, idx) => (
-                      <div key={idx} className="flex justify-between text-stone-400 pl-4">
-                        <span>{act.category}</span>
-                        <span className={act.amount < 0 ? 'text-red-400' : 'text-emerald-400'}>
-                          {act.amount < 0 ? `-${formatIDR(Math.abs(act.amount))}` : formatIDR(act.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="p-4 bg-stone-900 rounded-xl border border-stone-800 flex justify-between items-center text-sm font-sans">
-                    <span className="font-bold text-white">Ending Cash Balance</span>
-                    <span className="font-mono font-bold text-emerald-400 text-base">
-                      {formatIDR(cashFlow.endingCash)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Sub-Tab 4: General Ledger Drill-Down */}
-            {financeSubTab === 'gl' && (
-              <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-bold text-white">General Ledger (GL) Journal Entries</h2>
-                    <p className="text-xs text-stone-400">Complete double-entry audit trail tagged per outlet</p>
-                  </div>
-
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-stone-500 absolute left-3 top-2.5" />
-                    <input
-                      type="text"
-                      value={glSearch}
-                      onChange={(e) => setGlSearch(e.target.value)}
-                      placeholder="Search voucher or description..."
-                      className="pl-8 pr-3 py-1.5 text-xs rounded-xl bg-stone-900 border border-stone-700 text-stone-200 focus:outline-none focus:border-emerald-500 w-64"
-                    />
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead>
-                      <tr className="border-b border-stone-700 text-stone-400 font-semibold uppercase text-[10px]">
-                        <th className="py-2.5 px-3">Entry ID</th>
-                        <th className="py-2.5 px-3">Date / Outlet</th>
-                        <th className="py-2.5 px-3">Account</th>
-                        <th className="py-2.5 px-3 text-right">Debit</th>
-                        <th className="py-2.5 px-3 text-right">Credit</th>
-                        <th className="py-2.5 px-3">Ref Type</th>
-                        <th className="py-2.5 px-3">Description</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-700/50">
-                      {ledgerEntries
-                        .filter((entry) => {
-                          if (!glSearch) return true;
-                          const q = glSearch.toLowerCase();
-                          return (
-                            entry.id.toLowerCase().includes(q) ||
-                            entry.description.toLowerCase().includes(q) ||
-                            entry.accountName.toLowerCase().includes(q) ||
-                            entry.accountCode.includes(q)
-                          );
-                        })
-                        .map((entry) => (
-                          <tr key={entry.id} className="hover:bg-stone-700/20 transition-colors">
-                            <td className="py-2.5 px-3 font-bold text-emerald-400">{entry.id}</td>
-                            <td className="py-2.5 px-3 text-[11px] text-stone-300">
-                              <div>{entry.timestamp.split('T')[0]}</div>
-                              <span className="text-[10px] text-stone-500">{entry.storeName || 'Senopati'}</span>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span className="font-bold text-white">{entry.accountCode}</span>
-                              <div className="text-[11px] text-stone-400">{entry.accountName}</div>
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-semibold text-emerald-400">
-                              {entry.debit > 0 ? formatIDR(entry.debit) : '-'}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-semibold text-amber-400">
-                              {entry.credit > 0 ? formatIDR(entry.credit) : '-'}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-700 text-stone-300">
-                                {entry.referenceType}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-[11px] text-stone-300 max-w-xs truncate">
-                              {entry.description}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Sub-Tab 5: Chart of Accounts */}
-            {financeSubTab === 'coa' && (
-              <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-5 space-y-4">
-                <div>
-                  <h2 className="text-base font-bold text-white">Chart of Accounts (COA) Structure</h2>
-                  <p className="text-xs text-stone-400">Standardized Indonesian retail accounting codes segregated by store outlet</p>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead>
-                      <tr className="border-b border-stone-700 text-stone-400 font-semibold uppercase text-[10px]">
-                        <th className="py-2.5 px-3">Code</th>
-                        <th className="py-2.5 px-3">Account Name</th>
-                        <th className="py-2.5 px-3">Category</th>
-                        <th className="py-2.5 px-3">Normal Balance</th>
-                        <th className="py-2.5 px-3">Reporting Entity</th>
-                        <th className="py-2.5 px-3 text-right">Current Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-700/50">
-                      {chartOfAccounts.map((acc) => (
-                        <tr key={acc.accountCode} className="hover:bg-stone-700/20 transition-colors">
-                          <td className="py-3 px-3 font-bold text-emerald-400">{acc.accountCode}</td>
-                          <td className="py-3 px-3 font-bold text-white">{acc.accountName}</td>
-                          <td className="py-3 px-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                acc.category === 'Asset'
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : acc.category === 'Liability'
-                                  ? 'bg-red-500/20 text-red-300'
-                                  : acc.category === 'Revenue'
-                                  ? 'bg-blue-500/20 text-blue-300'
-                                  : 'bg-amber-500/20 text-amber-300'
-                              }`}
-                            >
-                              {acc.category}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-stone-400">{acc.normalBalance}</td>
-                          <td className="py-3 px-3 text-stone-300">{acc.storeId}</td>
-                          <td className="py-3 px-3 text-right font-bold text-white">
-                            {formatIDR(acc.balance)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
+          <AccountingModule
+            theme={theme}
+            selectedStore={selectedFinanceStore}
+            onStoreChange={(s) => {
+              setSelectedFinanceStore(s);
+              setSelectedGlobalStore(s);
+            }}
+            chartOfAccounts={chartOfAccounts}
+            ledgerEntries={ledgerEntries}
+            pnlReport={pnlReport}
+            balanceSheet={balanceSheet}
+            cashFlow={cashFlow}
+            onRefreshData={refreshAllData}
+            onShowToast={onShowToast}
+          />
         )}
 
         {/* ========================================================================= */}
@@ -2286,22 +1638,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* ========================================================================= */}
         {activeTab === 'openapi' && (
           <div className="space-y-6">
-            <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-6 space-y-4">
+            <div className={`${cardClass} p-6 space-y-4`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <QrCode className="w-5 h-5 text-purple-400" />
+                  <h2 className={`text-base font-bold ${textTitle} flex items-center gap-2`}>
+                    <QrCode className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                     Indonesian National QR Standard (QRIS) Open API
                   </h2>
-                  <p className="text-xs text-stone-400">
-                    Compliant with Bank Indonesia & ASPI Dynamic QRIS Specifications (NMID: ID1020039281744)
+                  <p className={`text-xs ${textMuted}`}>
+                    Compliant with Bank Indonesia &amp; ASPI Dynamic QRIS Specifications (NMID: ID1020039281744)
                   </p>
                 </div>
                 <a
                   href="/api/qris/openapi.json"
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-1.5 text-xs font-semibold bg-stone-700 hover:bg-stone-600 text-white rounded-xl flex items-center gap-1.5 transition-all"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all border ${
+                    isLight
+                      ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
+                      : 'bg-stone-700 border-stone-600 text-white hover:bg-stone-600'
+                  }`}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   View Raw openapi.json
@@ -2310,37 +1666,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* Spec Summary Card */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                <div className="p-4 bg-stone-900 rounded-xl border border-stone-800 space-y-1">
-                  <span className="text-[11px] text-stone-400">Endpoint 1: Generate QRIS</span>
-                  <p className="font-mono text-xs font-bold text-emerald-400">POST /api/qris/generate</p>
-                  <p className="text-[11px] text-stone-400">Generates EMVCo string payload with CRC16 checksum & 15-minute expiry.</p>
+                <div className={`p-4 rounded-xl border space-y-1 ${subCardClass}`}>
+                  <span className={`text-[11px] ${textMuted}`}>Endpoint 1: Generate QRIS</span>
+                  <p className="font-mono text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">POST /api/qris/generate</p>
+                  <p className={`text-[11px] ${textMuted}`}>Generates EMVCo string payload with CRC16 checksum &amp; 15-minute expiry.</p>
                 </div>
 
-                <div className="p-4 bg-stone-900 rounded-xl border border-stone-800 space-y-1">
-                  <span className="text-[11px] text-stone-400">Endpoint 2: Real-Time Polling</span>
-                  <p className="font-mono text-xs font-bold text-blue-400">GET /api/qris/status/:orderId</p>
-                  <p className="text-[11px] text-stone-400">Zero-lag payment status polling for instant checkout transitions.</p>
+                <div className={`p-4 rounded-xl border space-y-1 ${subCardClass}`}>
+                  <span className={`text-[11px] ${textMuted}`}>Endpoint 2: Real-Time Polling</span>
+                  <p className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">GET /api/qris/status/:orderId</p>
+                  <p className={`text-[11px] ${textMuted}`}>Zero-lag payment status polling for instant checkout transitions.</p>
                 </div>
 
-                <div className="p-4 bg-stone-900 rounded-xl border border-stone-800 space-y-1">
-                  <span className="text-[11px] text-stone-400">Endpoint 3: Settlement Webhook</span>
-                  <p className="font-mono text-xs font-bold text-purple-400">POST /api/qris/simulate-pay</p>
-                  <p className="text-[11px] text-stone-400">Simulates ASPI clearing, deducts warehouse inventory, posts GL entries.</p>
+                <div className={`p-4 rounded-xl border space-y-1 ${subCardClass}`}>
+                  <span className={`text-[11px] ${textMuted}`}>Endpoint 3: Settlement Webhook</span>
+                  <p className="font-mono text-xs font-bold text-purple-600 dark:text-purple-400">POST /api/qris/simulate-pay</p>
+                  <p className={`text-[11px] ${textMuted}`}>Simulates ASPI clearing, deducts warehouse inventory, posts GL entries.</p>
                 </div>
               </div>
             </div>
 
             {/* Audit Trail Log */}
-            <div className="bg-stone-800/40 border border-stone-700/60 rounded-2xl p-5 space-y-4">
+            <div className={`${cardClass} p-5 space-y-4`}>
               <div>
-                <h3 className="text-sm font-bold text-white">QRIS Transaction Settlement Audit Trail</h3>
-                <p className="text-xs text-stone-400">Real-time ledger links between customer QR payments and stock deductions</p>
+                <h3 className={`text-sm font-bold ${textTitle}`}>QRIS Transaction Settlement Audit Trail</h3>
+                <p className={`text-xs ${textMuted}`}>Real-time ledger links between customer QR payments and stock deductions</p>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs font-mono">
                   <thead>
-                    <tr className="border-b border-stone-700 text-stone-400 font-semibold uppercase text-[10px]">
+                    <tr className={tableHeaderClass}>
                       <th className="py-2.5 px-3">Audit ID</th>
                       <th className="py-2.5 px-3">QRIS Ref</th>
                       <th className="py-2.5 px-3">Order ID</th>
@@ -2350,17 +1706,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="py-2.5 px-3 text-right">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-stone-700/50">
+                  <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
                     {auditRecords.map((aud) => (
-                      <tr key={aud.id} className="hover:bg-stone-700/20 transition-colors">
-                        <td className="py-3 px-3 font-bold text-emerald-400">{aud.id}</td>
-                        <td className="py-3 px-3 text-stone-200">{aud.qrisReference}</td>
-                        <td className="py-3 px-3 text-blue-400 font-bold">{aud.orderId}</td>
-                        <td className="py-3 px-3 text-stone-300 font-sans">{aud.customerName}</td>
-                        <td className="py-3 px-3 text-emerald-400 font-bold">{formatIDR(aud.amount)}</td>
-                        <td className="py-3 px-3 text-stone-400">{aud.settlementChannel}</td>
+                      <tr key={aud.id} className={`transition-colors ${isLight ? 'hover:bg-stone-50/80' : 'hover:bg-stone-800/40'}`}>
+                        <td className="py-3 px-3 font-bold text-[#0F4C3A] dark:text-emerald-400">{aud.id}</td>
+                        <td className={`py-3 px-3 ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>{aud.qrisReference}</td>
+                        <td className="py-3 px-3 text-blue-600 dark:text-blue-400 font-bold">{aud.orderId}</td>
+                        <td className={`py-3 px-3 ${isLight ? 'text-stone-700' : 'text-stone-300'} font-sans`}>{aud.customerName}</td>
+                        <td className="py-3 px-3 text-[#0F4C3A] dark:text-emerald-400 font-bold">{formatIDR(aud.amount)}</td>
+                        <td className={`py-3 px-3 ${textMuted}`}>{aud.settlementChannel}</td>
                         <td className="py-3 px-3 text-right">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                             {aud.status}
                           </span>
                         </td>
@@ -2371,6 +1727,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: FEFO & BATCH EXPIRY */}
+        {/* ========================================================================= */}
+        {activeTab === 'fefo' && (
+          <FefoModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            inventory={inventory}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: SCRAP & WASTE MANAGEMENT */}
+        {/* ========================================================================= */}
+        {activeTab === 'waste' && (
+          <WasteModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            inventory={inventory}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: IN-STORE PICKER TERMINAL & CATCH WEIGHT */}
+        {/* ========================================================================= */}
+        {activeTab === 'picker' && (
+          <PickerModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            inventory={inventory}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: SYSTEM ARCHITECTURE & ERD SPECIFICATION */}
+        {/* ========================================================================= */}
+        {activeTab === 'erd' && (
+          <ErdSpecsModule theme={theme} />
         )}
       </main>
     </div>

@@ -338,6 +338,155 @@ export interface GoodsReceiptRecord {
 }
 
 // -------------------------------------------------------------
+// FEFO (First Expired, First Out) Batch Tracking
+// -------------------------------------------------------------
+export type BatchExpiryStatus = 'fresh' | 'near_expiry' | 'critical' | 'expired';
+
+export interface InventoryBatch {
+  batchId: string; // e.g. BAT-2026-081
+  sku: string;
+  productName: string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId: string;
+  lotNumber: string;
+  initialQuantity: number;
+  currentStock: number;
+  unitCost: number;
+  sellingPrice: number;
+  receivedDate: string;
+  expiryDate: string;
+  daysUntilExpiry: number;
+  status: BatchExpiryStatus;
+  storageZone: StorageZoneType;
+  supplierName: string;
+}
+
+export interface FEFOAllocationTrace {
+  batchId: string;
+  lotNumber: string;
+  expiryDate: string;
+  allocatedQty: number;
+  unitCost: number;
+  subtotalCost: number;
+}
+
+export interface FEFOAllocationResult {
+  sku: string;
+  productName: string;
+  requestedQty: number;
+  allocatedQty: number;
+  remainingShortage: number;
+  allocations: FEFOAllocationTrace[];
+  totalCogs: number;
+  fefoRuleApplied: string;
+}
+
+// -------------------------------------------------------------
+// Scrap & Waste Management Module
+// -------------------------------------------------------------
+export type WasteReason =
+  | 'expired'
+  | 'damaged_in_transit'
+  | 'chiller_temp_breach'
+  | 'pest_spoilage'
+  | 'trimming_loss';
+
+export type WasteAction =
+  | 'bio_compost'
+  | 'safe_disposal'
+  | 'supplier_claim'
+  | 'donated_animal_feed';
+
+export interface WasteRecord {
+  id: string; // e.g. WST-2026-001
+  sku: string;
+  productName: string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId: string;
+  batchId?: string;
+  lotNumber?: string;
+  quantityScrapped: number;
+  unit: string;
+  unitCost: number;
+  totalShrinkageCost: number;
+  reason: WasteReason;
+  actionTaken: WasteAction;
+  reportedBy: string;
+  reportedAt: string;
+  glEntryId?: string;
+  notes?: string;
+}
+
+// -------------------------------------------------------------
+// In-Store Picker App, Real-Time Substitutions & Catch-Weight
+// -------------------------------------------------------------
+export type PickerItemStatus = 'pending' | 'picked' | 'substituted' | 'out_of_stock';
+export type PickerOrderStatus = 'assigned' | 'in_progress' | 'ready_for_packing' | 'completed';
+
+export interface PickerItemSubstitution {
+  replacementProductId: string;
+  replacementSku: string;
+  replacementName: string;
+  replacementBarcode: string;
+  originalPrice: number;
+  replacementPrice: number;
+  priceDelta: number;
+  reason: string;
+  customerApprovalStatus: 'pending' | 'auto_approved' | 'rejected';
+  suggestedAt: string;
+}
+
+export interface PickerOrderItem {
+  id: string;
+  orderId: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  barcode: string; // EAN-13
+  aisleLocation: string; // e.g. Aisle 2 - Fresh Greens
+  shelfLocation: string; // e.g. Bay B-04 Chilled
+  storageZone: StorageZoneType;
+  orderedQty: number;
+  pickedQty: number;
+  unit: string;
+  pricePerUnit: number;
+  
+  // Catch Weight Attributes
+  isCatchWeight: boolean;
+  pricePer100g?: number;
+  estimatedWeightGrams?: number;
+  actualWeighedGrams?: number;
+  weightVariancePercent?: number;
+  finalPrice: number;
+
+  status: PickerItemStatus;
+  substitution?: PickerItemSubstitution;
+}
+
+export interface PickerOrder {
+  orderId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  storeId: string;
+  storeName: string;
+  deliveryMethod: 'instant' | 'scheduled' | 'pickup';
+  assignedPicker: string;
+  pickerStatus: PickerOrderStatus;
+  priority: 'express_30min' | 'standard' | 'scheduled';
+  targetDispatchTime: string;
+  items: PickerOrderItem[];
+  totalItems: number;
+  pickedItems: number;
+  hasCatchWeight: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// -------------------------------------------------------------
 // Accounting & Financial Management (Store-Tagged Multi-COA)
 // -------------------------------------------------------------
 export type AccountCode = '1010' | '1020' | '1030' | '1040' | '2010' | '2020' | '3010' | '3020' | '4010' | '5010' | '6010' | '6020' | '6030';
@@ -362,8 +511,8 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT';
-  referenceId: string; // Order ID or PO ID or GR ID
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE';
+  referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
 }
 

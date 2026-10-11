@@ -16,6 +16,9 @@ import {
   INITIAL_COA,
   INITIAL_GENERAL_LEDGER,
   INITIAL_AUDIT_TRAIL,
+  INITIAL_BATCHES,
+  INITIAL_WASTE_RECORDS,
+  INITIAL_PICKER_ORDERS,
 } from './src/data/inventoryData.ts';
 
 import type {
@@ -30,6 +33,10 @@ import type {
   StoreInventoryStock,
   GoodsReceiptRecord,
   ChartOfAccount,
+  InventoryBatch,
+  WasteRecord,
+  PickerOrder,
+  FEFOAllocationResult,
 } from './src/types/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +54,9 @@ let goodsReceipts: GoodsReceiptRecord[] = JSON.parse(JSON.stringify(INITIAL_GOOD
 let chartOfAccounts: ChartOfAccount[] = JSON.parse(JSON.stringify(INITIAL_COA));
 let generalLedger: GeneralLedgerEntry[] = JSON.parse(JSON.stringify(INITIAL_GENERAL_LEDGER));
 let auditTrail: TransactionAuditRecord[] = JSON.parse(JSON.stringify(INITIAL_AUDIT_TRAIL));
+let inventoryBatches: InventoryBatch[] = JSON.parse(JSON.stringify(INITIAL_BATCHES));
+let wasteRecords: WasteRecord[] = JSON.parse(JSON.stringify(INITIAL_WASTE_RECORDS));
+let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDERS));
 
 // Mock QRIS payment transaction statuses
 const qrisTransactions = new Map<string, {
@@ -281,7 +291,40 @@ async function startServer() {
   app.post('/api/qris/simulate-pay', (req: Request, res: Response) => {
     const { orderId, channel = 'BCA QRIS', customerName = 'GroceMart Customer', customerEmail = 'customer@grocemart.co.id', items = [] } = req.body;
     
-    const tx = qrisTransactions.get(orderId) || {
+    // GUARD 1: Payment Webhook Idempotency (QRIS Safety)
+    const existingSettled = auditTrail.find((a) => a.orderId === orderId && a.status === 'SETTLED');
+    const existingTx = qrisTransactions.get(orderId);
+    if (existingSettled || (existingTx && existingTx.status === 'paid' && existingTx.paidAt)) {
+      return res.json({
+        success: true,
+        message: 'Idempotency Guard: QRIS transaction already settled. Returning existing settlement receipt.',
+        orderId,
+        qrisReference: existingTx?.qrisReference || existingSettled?.qrisReference,
+        paidAt: existingTx?.paidAt || existingSettled?.paymentTimestamp,
+        settlementChannel: existingTx?.settlementChannel || channel,
+        journalEntryIds: existingSettled?.journalEntryIds || [],
+        auditRecordId: existingSettled?.id || '',
+        inventoryDeductions: existingSettled?.inventoryDeducted || [],
+        isIdempotentReplay: true,
+      });
+    }
+
+    // GUARD 2: Concurrency & Anti-Overselling Protection (Race Condition Prevention)
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        const prodId = item.product?.id || item.productId;
+        const qty = item.quantity || 1;
+        const invItem = inventoryList.find((inv) => inv.productId === prodId || inv.sku === item.sku);
+        if (invItem && invItem.currentStock < qty) {
+          return res.status(409).json({
+            success: false,
+            error: `Anti-Overselling Guard: Insufficient inventory for "${invItem.productName}". Available: ${invItem.currentStock}, Requested: ${qty}. Transaction aborted.`,
+          });
+        }
+      }
+    }
+
+    const tx = existingTx || {
       orderId,
       qrisReference: `QRIS-GCM-${Date.now().toString().slice(-6)}`,
       amount: req.body.amount || 75000,
@@ -677,6 +720,407 @@ async function startServer() {
   });
 
   // -------------------------------------------------------------
+  // ADVANCED INVENTORY: FEFO (FIRST EXPIRED, FIRST OUT) BATCHES
+  // -------------------------------------------------------------
+  app.get('/api/admin/inventory/batches', (req: Request, res: Response) => {
+    const { storeId, sku, status } = req.query;
+    let list = [...inventoryBatches];
+
+    if (storeId && storeId !== 'ALL') {
+      list = list.filter((b) => b.storeId === storeId);
+    }
+    if (sku) {
+      list = list.filter((b) => b.sku === sku);
+    }
+    if (status && status !== 'ALL') {
+      list = list.filter((b) => b.status === status);
+    }
+
+    // Sort ascending by expiration date (FEFO sequence)
+    list.sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+    res.json(list);
+  });
+
+  app.post('/api/inventory/fefo-allocate', (req: Request, res: Response) => {
+    const { sku, quantity, storeId = 'store-jkt-senopati' } = req.body;
+    const reqQty = Number(quantity);
+
+    if (!sku || !reqQty || reqQty <= 0) {
+      return res.status(400).json({ error: 'Valid SKU and quantity (>0) are required' });
+    }
+
+    const item = inventoryList.find((i) => i.sku === sku);
+    if (!item) {
+      return res.status(404).json({ error: 'SKU not found in inventory catalog' });
+    }
+
+    // Filter available batches for this SKU & store that are not fully depleted
+    const eligibleBatches = inventoryBatches
+      .filter((b) => b.sku === sku && (storeId === 'ALL' || b.storeId === storeId) && b.currentStock > 0)
+      .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+    let remainingToAllocate = reqQty;
+    const allocations: {
+      batchId: string;
+      lotNumber: string;
+      expiryDate: string;
+      allocatedQty: number;
+      unitCost: number;
+      subtotalCost: number;
+    }[] = [];
+    let totalCogs = 0;
+
+    for (const batch of eligibleBatches) {
+      if (remainingToAllocate <= 0) break;
+      const take = Math.min(batch.currentStock, remainingToAllocate);
+      batch.currentStock -= take;
+      remainingToAllocate -= take;
+
+      const subtotalCost = take * batch.unitCost;
+      totalCogs += subtotalCost;
+
+      allocations.push({
+        batchId: batch.batchId,
+        lotNumber: batch.lotNumber,
+        expiryDate: batch.expiryDate,
+        allocatedQty: take,
+        unitCost: batch.unitCost,
+        subtotalCost,
+      });
+
+      // Update batch status if depleted
+      if (batch.currentStock === 0) {
+        batch.status = 'critical';
+      }
+    }
+
+    // Also deduct catalog stock
+    const actualAllocated = reqQty - remainingToAllocate;
+    item.currentStock = Math.max(0, item.currentStock - actualAllocated);
+    item.outgoingStock += actualAllocated;
+
+    const result: FEFOAllocationResult = {
+      sku,
+      productName: item.productName,
+      requestedQty: reqQty,
+      allocatedQty: actualAllocated,
+      remainingShortage: remainingToAllocate,
+      allocations,
+      totalCogs,
+      fefoRuleApplied: 'First Expired, First Out (Earliest lot expiration date allocated first to minimize food spoilage)',
+    };
+
+    res.json({ success: true, result });
+  });
+
+  // -------------------------------------------------------------
+  // SCRAP & WASTE MANAGEMENT (SHRINKAGE ACCOUNTING) ENDPOINTS
+  // -------------------------------------------------------------
+  app.get('/api/admin/waste', (req: Request, res: Response) => {
+    const { storeId } = req.query;
+    let records = wasteRecords;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      records = records.filter((w) => w.storeId === storeId);
+    }
+
+    let totalShrinkageCost = 0;
+    const byReason: { [reason: string]: number } = {};
+    const byStore: { [store: string]: number } = {};
+
+    records.forEach((r) => {
+      totalShrinkageCost += r.totalShrinkageCost;
+      byReason[r.reason] = (byReason[r.reason] || 0) + r.totalShrinkageCost;
+      byStore[r.storeName] = (byStore[r.storeName] || 0) + r.totalShrinkageCost;
+    });
+
+    res.json({
+      records,
+      metrics: {
+        totalShrinkageCost,
+        count: records.length,
+        byReason,
+        byStore,
+      },
+    });
+  });
+
+  app.post('/api/admin/waste', (req: Request, res: Response) => {
+    const {
+      sku,
+      storeId = 'store-jkt-senopati',
+      batchId,
+      quantityScrapped,
+      reason = 'expired',
+      actionTaken = 'bio_compost',
+      reportedBy = 'Store Quality Inspector',
+      notes = '',
+    } = req.body;
+
+    const qty = Number(quantityScrapped);
+    if (!sku || !qty || qty <= 0) {
+      return res.status(400).json({ error: 'Valid SKU and positive quantityScrapped are required' });
+    }
+
+    const item = inventoryList.find((i) => i.sku === sku);
+    if (!item) return res.status(404).json({ error: 'SKU not found in inventory catalog' });
+
+    const outlet = storeSchedules.find((s) => s.storeId === storeId);
+    const storeName = outlet?.storeName || 'GroceMart Senopati Flagship';
+    const unitCost = item.unitCost;
+    const totalShrinkageCost = qty * unitCost;
+
+    // Deduct stock from catalog
+    item.currentStock = Math.max(0, item.currentStock - qty);
+
+    // Deduct stock from store inventory tier
+    const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
+    if (tier) {
+      tier.physicalStock = Math.max(0, tier.physicalStock - qty);
+      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.updatedAt = new Date().toISOString();
+    }
+
+    // Deduct from batch if specified or find earliest matching batch
+    let lotNumber = '';
+    if (batchId) {
+      const batch = inventoryBatches.find((b) => b.batchId === batchId);
+      if (batch) {
+        batch.currentStock = Math.max(0, batch.currentStock - qty);
+        lotNumber = batch.lotNumber;
+      }
+    } else {
+      const earliestBatch = inventoryBatches.find((b) => b.sku === sku && b.storeId === storeId && b.currentStock > 0);
+      if (earliestBatch) {
+        earliestBatch.currentStock = Math.max(0, earliestBatch.currentStock - qty);
+        lotNumber = earliestBatch.lotNumber;
+      }
+    }
+
+    const wasteId = `WST-2026-${(wasteRecords.length + 1).toString().padStart(3, '0')}`;
+    const timestamp = new Date().toISOString();
+
+    // Auto-Post Double-Entry General Ledger journal:
+    // Debit 6030: Inventory Shrinkage & Spoilage Expense
+    // Credit 1040: Merchandise Inventory Asset
+    const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+
+    generalLedger.unshift({
+      id: gleId1,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '6030',
+      accountName: 'Inventory Shrinkage & Spoilage Expense',
+      category: 'Expense',
+      debit: totalShrinkageCost,
+      credit: 0,
+      referenceType: 'WASTE_SHRINKAGE',
+      referenceId: wasteId,
+      description: `Shrinkage write-off: ${qty} units of ${item.productName} (${reason.replace(/_/g, ' ')})`,
+    });
+
+    generalLedger.unshift({
+      id: gleId2,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '1040',
+      accountName: 'Merchandise Inventory Asset',
+      category: 'Asset',
+      debit: 0,
+      credit: totalShrinkageCost,
+      referenceType: 'WASTE_SHRINKAGE',
+      referenceId: wasteId,
+      description: `Inventory reduction for waste loss #${wasteId}`,
+    });
+
+    const newRecord: WasteRecord = {
+      id: wasteId,
+      sku,
+      productName: item.productName,
+      storeId,
+      storeName,
+      warehouseZoneId: tier?.warehouseZoneId || 'WH-JKT-SEN-COLD',
+      batchId,
+      lotNumber: lotNumber || `LOT-${sku.slice(-3)}-MANUAL`,
+      quantityScrapped: qty,
+      unit: item.unit,
+      unitCost,
+      totalShrinkageCost,
+      reason,
+      actionTaken,
+      reportedBy,
+      reportedAt: timestamp,
+      glEntryId: gleId1,
+      notes,
+    };
+
+    wasteRecords.unshift(newRecord);
+
+    res.json({
+      success: true,
+      message: 'Waste logged, inventory deducted, and shrinkage GL journal accrued.',
+      wasteRecord: newRecord,
+      journalEntryIds: [gleId1, gleId2],
+    });
+  });
+
+  // -------------------------------------------------------------
+  // IN-STORE PICKER & PACKER APP WITH SUBSTITUTION ENGINE
+  // -------------------------------------------------------------
+  app.get('/api/admin/picker/orders', (req: Request, res: Response) => {
+    const { storeId, pickerStatus } = req.query;
+    let list = pickerOrders;
+    if (storeId && storeId !== 'ALL') {
+      list = list.filter((o) => o.storeId === storeId);
+    }
+    if (pickerStatus && pickerStatus !== 'ALL') {
+      list = list.filter((o) => o.pickerStatus === pickerStatus);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/admin/picker/orders/:orderId/items/:itemId/pick', (req: Request, res: Response) => {
+    const { orderId, itemId } = req.params;
+    const { barcode } = req.body;
+
+    const order = pickerOrders.find((o) => o.orderId === orderId);
+    if (!order) return res.status(404).json({ error: 'Picker order not found' });
+
+    const item = order.items.find((i) => i.id === itemId);
+    if (!item) return res.status(404).json({ error: 'Item not found in order' });
+
+    // Barcode check (simulated verification)
+    if (barcode && barcode !== item.barcode) {
+      return res.status(400).json({
+        error: `Barcode mismatch: scanned "${barcode}", expected item barcode "${item.barcode}"`,
+      });
+    }
+
+    item.pickedQty = item.orderedQty;
+    item.status = 'picked';
+
+    order.pickedItems = order.items.filter((i) => i.status === 'picked' || i.status === 'substituted').length;
+    if (order.pickedItems === order.totalItems) {
+      order.pickerStatus = 'ready_for_packing';
+    } else {
+      order.pickerStatus = 'in_progress';
+    }
+    order.updatedAt = new Date().toISOString();
+
+    res.json({ success: true, order, item });
+  });
+
+  app.post('/api/admin/picker/orders/:orderId/items/:itemId/substitute', (req: Request, res: Response) => {
+    const { orderId, itemId } = req.params;
+    const { replacementSku, reason = 'Out of Stock on Shelf' } = req.body;
+
+    const order = pickerOrders.find((o) => o.orderId === orderId);
+    if (!order) return res.status(404).json({ error: 'Picker order not found' });
+
+    const item = order.items.find((i) => i.id === itemId);
+    if (!item) return res.status(404).json({ error: 'Item not found in order' });
+
+    const replacement = inventoryList.find((i) => i.sku === replacementSku);
+    if (!replacement) return res.status(404).json({ error: 'Replacement SKU not found' });
+
+    const priceDelta = (replacement.sellingPrice * item.orderedQty) - item.finalPrice;
+
+    item.status = 'substituted';
+    item.substitution = {
+      replacementProductId: replacement.productId,
+      replacementSku: replacement.sku,
+      replacementName: replacement.productName,
+      replacementBarcode: `899${Date.now().toString().slice(-10)}`,
+      originalPrice: item.finalPrice,
+      replacementPrice: replacement.sellingPrice * item.orderedQty,
+      priceDelta,
+      reason,
+      customerApprovalStatus: 'auto_approved',
+      suggestedAt: new Date().toISOString(),
+    };
+    item.finalPrice = replacement.sellingPrice * item.orderedQty;
+    item.productName = `${replacement.productName} (Substituted for ${item.productName})`;
+
+    order.pickedItems = order.items.filter((i) => i.status === 'picked' || i.status === 'substituted').length;
+    if (order.pickedItems === order.totalItems) {
+      order.pickerStatus = 'ready_for_packing';
+    }
+    order.updatedAt = new Date().toISOString();
+
+    res.json({
+      success: true,
+      message: `Item substituted with ${replacement.productName}. Customer notified via SMS/App notification.`,
+      order,
+      item,
+      notificationMessage: `Hi ${order.customerName}, due to fresh stock freshness standard, we upgraded your ${item.sku} to ${replacement.productName} at no extra charge penalty!`,
+    });
+  });
+
+  app.post('/api/admin/picker/orders/:orderId/complete', (req: Request, res: Response) => {
+    const { orderId } = req.params;
+    const order = pickerOrders.find((o) => o.orderId === orderId);
+    if (!order) return res.status(404).json({ error: 'Picker order not found' });
+
+    order.pickerStatus = 'completed';
+    order.updatedAt = new Date().toISOString();
+
+    res.json({ success: true, order, message: `Order #${orderId} packed and staged at Cold-Chain Dispatch Bay!` });
+  });
+
+  // -------------------------------------------------------------
+  // VARIABLE-WEIGHT ITEMS (CATCH WEIGHT MANAGEMENT)
+  // -------------------------------------------------------------
+  app.post('/api/admin/catch-weight/weigh', (req: Request, res: Response) => {
+    const { orderId, itemId, actualWeighedGrams } = req.body;
+    const grams = Number(actualWeighedGrams);
+
+    if (!orderId || !itemId || !grams || grams <= 0) {
+      return res.status(400).json({ error: 'orderId, itemId, and valid actualWeighedGrams (>0) required' });
+    }
+
+    const order = pickerOrders.find((o) => o.orderId === orderId);
+    if (!order) return res.status(404).json({ error: 'Picker order not found' });
+
+    const item = order.items.find((i) => i.id === itemId);
+    if (!item) return res.status(404).json({ error: 'Item not found in order' });
+
+    if (!item.isCatchWeight) {
+      return res.status(400).json({ error: 'This item is not configured as a catch-weight item' });
+    }
+
+    const pricePer100g = item.pricePer100g || 40000;
+    const newPrice = Math.round((grams / 100) * pricePer100g);
+    const originalEstimatedGrams = item.estimatedWeightGrams || grams;
+    const weightVariance = Number((((grams - originalEstimatedGrams) / originalEstimatedGrams) * 100).toFixed(1));
+
+    item.actualWeighedGrams = grams;
+    item.weightVariancePercent = weightVariance;
+    const previousFinalPrice = item.finalPrice;
+    item.finalPrice = newPrice;
+    item.status = 'picked';
+    item.pickedQty = 1;
+
+    order.pickedItems = order.items.filter((i) => i.status === 'picked' || i.status === 'substituted').length;
+    order.updatedAt = new Date().toISOString();
+
+    res.json({
+      success: true,
+      item,
+      order,
+      priceAdjustment: {
+        previousPrice: previousFinalPrice,
+        newPrice,
+        difference: newPrice - previousFinalPrice,
+        gramsRecorded: grams,
+        variancePercent: weightVariance,
+      },
+    });
+  });
+
+  // -------------------------------------------------------------
   // PROCUREMENT: PR, PO, & PARTIAL GOODS RECEIPT (GR) ENDPOINTS
   // -------------------------------------------------------------
   app.get('/api/admin/procurement/requests', (_req: Request, res: Response) => {
@@ -792,6 +1236,19 @@ async function startServer() {
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'At least one item must be received' });
+    }
+
+    // Strict State Machine Pre-Validation: Validate no line item exceeds remaining backorder balance
+    for (const itemInput of items) {
+      const poItem = po.items.find((i) => i.sku === itemInput.sku);
+      if (poItem) {
+        const receivedQty = Math.max(0, Number(itemInput.quantityReceived) || 0);
+        if (receivedQty > poItem.remainingBackorder) {
+          return res.status(400).json({
+            error: `Strict State Machine Guard: Received quantity (${receivedQty}) exceeds remaining open backorder balance (${poItem.remainingBackorder}) for SKU ${poItem.sku}. Receipt rejected.`,
+          });
+        }
+      }
     }
 
     let grTotalCost = 0;

@@ -16,6 +16,11 @@ import type {
   TransactionAuditRecord,
   QRISGenerateResponse,
   CartItem,
+  InventoryBatch,
+  FEFOAllocationResult,
+  WasteRecord,
+  PickerOrder,
+  PickerOrderItem,
 } from '../types/index.ts';
 
 export const apiClient = {
@@ -278,6 +283,152 @@ export const apiClient = {
 
   async getAuditTrail(): Promise<TransactionAuditRecord[]> {
     const res = await fetch('/api/admin/accounting/audit-trail');
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // FEFO (First Expired, First Out) Batch APIs
+  // -------------------------------------------------------------
+  async getInventoryBatches(storeId?: string, sku?: string, status?: string): Promise<InventoryBatch[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL') params.append('storeId', storeId);
+    if (sku) params.append('sku', sku);
+    if (status && status !== 'ALL') params.append('status', status);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/admin/inventory/batches${query}`);
+    return res.json();
+  },
+
+  async allocateFEFO(sku: string, quantity: number, storeId?: string): Promise<{ success: boolean; result: FEFOAllocationResult }> {
+    const res = await fetch('/api/inventory/fefo-allocate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sku, quantity, storeId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to simulate FEFO allocation');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // Scrap & Waste Management (Shrinkage Accounting) APIs
+  // -------------------------------------------------------------
+  async getWasteRecords(storeId?: string): Promise<{
+    records: WasteRecord[];
+    metrics: {
+      totalShrinkageCost: number;
+      count: number;
+      byReason: { [reason: string]: number };
+      byStore: { [store: string]: number };
+    };
+  }> {
+    const url = storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED'
+      ? `/api/admin/waste?storeId=${encodeURIComponent(storeId)}`
+      : '/api/admin/waste';
+    const res = await fetch(url);
+    return res.json();
+  },
+
+  async logWaste(payload: {
+    sku: string;
+    storeId?: string;
+    batchId?: string;
+    quantityScrapped: number;
+    reason?: string;
+    actionTaken?: string;
+    reportedBy?: string;
+    notes?: string;
+  }): Promise<{ success: boolean; wasteRecord: WasteRecord; journalEntryIds: string[] }> {
+    const res = await fetch('/api/admin/waste', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to log waste');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // In-Store Picker & Packer App APIs
+  // -------------------------------------------------------------
+  async getPickerOrders(storeId?: string, pickerStatus?: string): Promise<PickerOrder[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL') params.append('storeId', storeId);
+    if (pickerStatus && pickerStatus !== 'ALL') params.append('pickerStatus', pickerStatus);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/admin/picker/orders${query}`);
+    return res.json();
+  },
+
+  async pickOrderItem(orderId: string, itemId: string, barcode?: string): Promise<{ success: boolean; order: PickerOrder; item: PickerOrderItem }> {
+    const res = await fetch(`/api/admin/picker/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/pick`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ barcode }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to pick item');
+    }
+    return res.json();
+  },
+
+  async substituteOrderItem(orderId: string, itemId: string, payload: {
+    replacementSku: string;
+    reason?: string;
+  }): Promise<{ success: boolean; order: PickerOrder; item: PickerOrderItem; notificationMessage: string }> {
+    const res = await fetch(`/api/admin/picker/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/substitute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to substitute item');
+    }
+    return res.json();
+  },
+
+  async completePickerOrder(orderId: string): Promise<{ success: boolean; order: PickerOrder; message: string }> {
+    const res = await fetch(`/api/admin/picker/orders/${encodeURIComponent(orderId)}/complete`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to complete picker order');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // Catch Weight Management API
+  // -------------------------------------------------------------
+  async recordCatchWeight(orderId: string, itemId: string, actualWeighedGrams: number): Promise<{
+    success: boolean;
+    item: PickerOrderItem;
+    order: PickerOrder;
+    priceAdjustment: {
+      previousPrice: number;
+      newPrice: number;
+      difference: number;
+      gramsRecorded: number;
+      variancePercent: number;
+    };
+  }> {
+    const res = await fetch('/api/admin/catch-weight/weigh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, itemId, actualWeighedGrams }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to record catch weight');
+    }
     return res.json();
   },
 };
