@@ -63,6 +63,11 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [receiverNotesInput, setReceiverNotesInput] = useState<string>('');
   const [isSubmittingGR, setIsSubmittingGR] = useState<boolean>(false);
 
+  // State Machine Guard: Force Close PO with Written Adjustment Notes
+  const [forceClosingPO, setForceClosingPO] = useState<PurchaseOrder | null>(null);
+  const [forceCloseNotes, setForceCloseNotes] = useState<string>('');
+  const [isSubmittingClosePO, setIsSubmittingClosePO] = useState<boolean>(false);
+
   const [receivingItemsState, setReceivingItemsState] = useState<
     Record<
       string,
@@ -189,6 +194,19 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
   const handleSubmitPartialGR = async () => {
     if (!activeReceivingPO) return;
+
+    // Strict State Machine Guard: Verify no line item exceeds remaining open backorder
+    for (const item of activeReceivingPO.items) {
+      const inputQty = receivingItemsState[item.sku]?.quantityReceived || 0;
+      if (inputQty > item.remainingBackorder) {
+        onShowToast(
+          'Validation Error: Over-Receipt Disallowed',
+          `Received quantity (${inputQty}) exceeds remaining open backorder (${item.remainingBackorder}) for ${item.productName}.`
+        );
+        return;
+      }
+    }
+
     setIsSubmittingGR(true);
     try {
       const itemsPayload = Object.entries(receivingItemsState).map(([sku, data]) => ({
@@ -216,10 +234,30 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       setActiveReceivingPO(null);
       onRefreshData();
-    } catch (err) {
-      onShowToast('Goods Receipt Failed', String(err));
+    } catch (err: any) {
+      onShowToast('Goods Receipt Failed', String(err.message || err));
     } finally {
       setIsSubmittingGR(false);
+    }
+  };
+
+  const handleForceClosePO = async () => {
+    if (!forceClosingPO) return;
+    if (!forceCloseNotes.trim()) {
+      onShowToast('Mandatory Notes Missing', 'Please enter written adjustment notes explaining why this PO is being prematurely closed.');
+      return;
+    }
+    setIsSubmittingClosePO(true);
+    try {
+      const res = await apiClient.updatePurchaseOrderStatus(forceClosingPO.id, 'Completed', forceCloseNotes);
+      onShowToast('Purchase Order Closed', res.message || `PO #${forceClosingPO.id} marked as closed with written adjustment notes.`);
+      setForceClosingPO(null);
+      setForceCloseNotes('');
+      onRefreshData();
+    } catch (err: any) {
+      onShowToast('Closure Rejected', String(err.message || err));
+    } finally {
+      setIsSubmittingClosePO(false);
     }
   };
 
@@ -625,16 +663,41 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
                       <td className="py-3.5 px-4 text-right">
                         {po.status !== 'Completed' ? (
-                          <button
-                            onClick={() => openReceivingModal(po)}
-                            className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"
-                          >
-                            Receive GR
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => openReceivingModal(po)}
+                              className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"
+                            >
+                              Receive GR
+                            </button>
+                            {totalBackorder > 0 && (
+                              <button
+                                onClick={() => {
+                                  setForceClosingPO(po);
+                                  setForceCloseNotes('');
+                                }}
+                                className={`px-2 py-1 text-xs font-semibold rounded-lg border transition-all ${
+                                  isLight
+                                    ? 'bg-stone-100 hover:bg-stone-200 text-stone-700 border-stone-300'
+                                    : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'
+                                }`}
+                                title="Close unfulfilled backorder balance with written adjustment notes"
+                              >
+                                Close PO
+                              </button>
+                            )}
+                          </div>
                         ) : (
-                          <span className={`text-[11px] font-medium ${isLight ? 'text-stone-400' : 'text-stone-500'}`}>
-                            100% Received
-                          </span>
+                          <div>
+                            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block">
+                              Completed
+                            </span>
+                            {po.closureNotes && (
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400 block max-w-xs truncate" title={po.closureNotes}>
+                                Note: {po.closureNotes}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>

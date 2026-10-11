@@ -73,7 +73,15 @@ export const apiClient = {
     return res.json();
   },
 
-  async updateStoreStatus(update: Partial<StoreOperationalStatus>): Promise<{ success: boolean; storeStatus: StoreOperationalStatus }> {
+  async updateStoreStatus(update: Partial<StoreOperationalStatus> & { forceOverride?: boolean }): Promise<{
+    success: boolean;
+    storeStatus?: StoreOperationalStatus;
+    warning?: string;
+    requiresConfirmation?: boolean;
+    activeOrdersCount?: number;
+    activeOrders?: any[];
+    message?: string;
+  }> {
     const res = await fetch('/api/admin/store-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -87,7 +95,16 @@ export const apiClient = {
     return res.json();
   },
 
-  async updateStoreOutlet(storeId: string, update: Partial<StoreOutletSchedule>): Promise<{ success: boolean; outlet: StoreOutletSchedule }> {
+  async updateStoreOutlet(storeId: string, update: Partial<StoreOutletSchedule> & { forceOverride?: boolean }): Promise<{
+    success: boolean;
+    outlet?: StoreOutletSchedule;
+    warning?: string;
+    requiresConfirmation?: boolean;
+    activeOrdersCount?: number;
+    activeOrders?: any[];
+    message?: string;
+    storeName?: string;
+  }> {
     const res = await fetch(`/api/admin/store-outlets/${encodeURIComponent(storeId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -197,6 +214,28 @@ export const apiClient = {
     return res.json();
   },
 
+  async updatePurchaseOrderStatus(
+    id: string,
+    status: 'Completed' | 'Cancelled' | 'Partially Received' | 'Sent',
+    closureNotes?: string
+  ): Promise<{
+    success: boolean;
+    purchaseOrder?: PurchaseOrder;
+    error?: string;
+    message?: string;
+  }> {
+    const res = await fetch(`/api/admin/procurement/orders/${encodeURIComponent(id)}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, closureNotes }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Failed to update Purchase Order status');
+    }
+    return data;
+  },
+
   async getGoodsReceipts(): Promise<GoodsReceiptRecord[]> {
     const res = await fetch('/api/admin/procurement/gr');
     return res.json();
@@ -283,6 +322,59 @@ export const apiClient = {
 
   async getAuditTrail(): Promise<TransactionAuditRecord[]> {
     const res = await fetch('/api/admin/accounting/audit-trail');
+    return res.json();
+  },
+
+  async reverseGeneralLedgerEntry(id: string, reason?: string): Promise<{
+    success: boolean;
+    message: string;
+    originalVoucher: GeneralLedgerEntry;
+    reversingVoucher: GeneralLedgerEntry;
+  }> {
+    const res = await fetch(`/api/admin/accounting/general-ledger/${encodeURIComponent(id)}/reverse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Failed to post reversing journal entry');
+    }
+    return data;
+  },
+
+  async testInventoryConcurrency(sku = 'SKU-PRD-001', concurrentRequests = 10, qtyPerRequest = 1): Promise<{
+    success: boolean;
+    sku: string;
+    productName: string;
+    initialStock: number;
+    currentStock: number;
+    totalAttempts: number;
+    successfulAllocations: number;
+    rejectedOversellAttempts: number;
+    raceConditionDetected: boolean;
+    negativeInventoryPrevented: boolean;
+    trace: { attempt: number; success: boolean; stockRemaining: number; error?: string }[];
+  }> {
+    const res = await fetch('/api/admin/inventory/concurrency-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sku, concurrentRequests, qtyPerRequest }),
+    });
+    return res.json();
+  },
+
+  async testQRISWebhook(payload: any): Promise<{
+    success: boolean;
+    message: string;
+    isIdempotentReplay?: boolean;
+    idempotencyKey?: string;
+  }> {
+    const res = await fetch('/api/qris/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
     return res.json();
   },
 

@@ -58,6 +58,29 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   const [glRefFilter, setGlRefFilter] = useState<string>('ALL');
   const [coaCategoryFilter, setCoaCategoryFilter] = useState<string>('ALL');
 
+  // Immutability & Reversing Journal Entry State
+  const [reversingEntry, setReversingEntry] = useState<GeneralLedgerEntry | null>(null);
+  const [reversalReason, setReversalReason] = useState<string>('Auditor correction / price variance offset');
+  const [isSubmittingReversal, setIsSubmittingReversal] = useState<boolean>(false);
+
+  const handlePostReversal = async () => {
+    if (!reversingEntry) return;
+    setIsSubmittingReversal(true);
+    try {
+      const res = await apiClient.reverseGeneralLedgerEntry(reversingEntry.id, reversalReason);
+      onShowToast(
+        'Reversing Counter-Entry Posted',
+        `Reversing voucher #${res.reversingVoucher.id} posted. Original #${res.originalVoucher.id} marked as reversed.`
+      );
+      setReversingEntry(null);
+      onRefreshData();
+    } catch (err: any) {
+      onShowToast('Reversal Failed', String(err.message || err));
+    } finally {
+      setIsSubmittingReversal(false);
+    }
+  };
+
   // Filtered GL entries
   const filteredLedger = ledgerEntries.filter((entry) => {
     if (selectedStore !== 'CONSOLIDATED' && entry.storeId && entry.storeId !== selectedStore) return false;
@@ -505,12 +528,17 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           <div className={`p-5 border-b ${isLight ? 'border-stone-200 bg-stone-50/50' : 'border-stone-800 bg-stone-900/50'}`}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h3 className={`text-base font-bold ${isLight ? 'text-stone-900' : 'text-white'} flex items-center gap-2`}>
-                  <ReceiptText className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
-                  General Ledger (GL) Immutable Journal Vouchers
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className={`text-base font-bold ${isLight ? 'text-stone-900' : 'text-white'} flex items-center gap-2`}>
+                    <ReceiptText className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                    General Ledger (GL) Immutable Journal Vouchers
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
+                    GAAP/IFRS Immutability Enforced
+                  </span>
+                </div>
                 <p className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'} mt-0.5`}>
-                  Double-entry accounting records with audit-grade immutability and store outlet tags
+                  Double-entry accounting records with audit-grade immutability. Hard deletes are strictly disabled; corrections are made via counter-entries.
                 </p>
               </div>
 
@@ -541,10 +569,11 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 >
                   <option value="ALL">All Ref Types</option>
                   <option value="QRIS_SALE">QRIS Sales</option>
-                  <option value="PO_RECEIPT">PO Goods Receipt</option>
-                  <option value="INVENTORY_ADJUST">Stock Adjustments</option>
+                  <option value="PURCHASE_ORDER">PO Accrual</option>
+                  <option value="PARTIAL_GR">Goods Receipt</option>
+                  <option value="INVENTORY_ADJUSTMENT">Stock Adjustments</option>
                   <option value="WASTE_SHRINKAGE">Waste Shrinkage</option>
-                  <option value="COGS_RECOGNITION">COGS Recognition</option>
+                  <option value="REVERSING_ENTRY">Reversing Counter-Entries</option>
                 </select>
               </div>
             </div>
@@ -563,12 +592,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   <th className="py-3 px-4 text-right">Credit</th>
                   <th className="py-3 px-4">Ref Type</th>
                   <th className="py-3 px-4">Description</th>
+                  <th className="py-3 px-4 text-right">Audit Action</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
                 {filteredLedger.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className={`py-8 text-center text-xs font-sans ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+                    <td colSpan={8} className={`py-8 text-center text-xs font-sans ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
                       No general ledger entries matching current filters.
                     </td>
                   </tr>
@@ -577,11 +607,28 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     <tr
                       key={entry.id}
                       className={`transition-colors ${
-                        isLight ? 'hover:bg-stone-50/80' : 'hover:bg-stone-800/40'
+                        entry.isReversal
+                          ? isLight
+                            ? 'bg-purple-50/50 hover:bg-purple-50/80'
+                            : 'bg-purple-950/20 hover:bg-purple-950/30'
+                          : entry.isReversed
+                          ? isLight
+                            ? 'bg-stone-100/50 opacity-75'
+                            : 'bg-stone-900/50 opacity-75'
+                          : isLight
+                          ? 'hover:bg-stone-50/80'
+                          : 'hover:bg-stone-800/40'
                       }`}
                     >
-                      <td className="py-3 px-4 font-bold text-[#0F4C3A] dark:text-emerald-400">
-                        {entry.id}
+                      <td className="py-3 px-4 font-bold">
+                        <span className={entry.isReversal ? 'text-purple-600 dark:text-purple-400' : 'text-[#0F4C3A] dark:text-emerald-400'}>
+                          {entry.id}
+                        </span>
+                        {entry.isReversal && (
+                          <div className="text-[9px] font-sans text-purple-600 dark:text-purple-400 font-semibold">
+                            Reverses #{entry.reversesVoucherId}
+                          </div>
+                        )}
                       </td>
                       <td className={`py-3 px-4 text-[11px] font-sans ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
                         <div>{entry.timestamp.split('T')[0]}</div>
@@ -605,7 +652,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                       </td>
                       <td className="py-3 px-4">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                          isLight
+                          entry.referenceType === 'REVERSING_ENTRY'
+                            ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
+                            : isLight
                             ? 'bg-stone-100 text-stone-700 border-stone-200'
                             : 'bg-stone-800 text-stone-300 border-stone-700'
                         }`}>
@@ -614,6 +663,29 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                       </td>
                       <td className={`py-3 px-4 text-[11px] font-sans max-w-xs truncate ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
                         {entry.description}
+                      </td>
+                      <td className="py-3 px-4 text-right font-sans">
+                        {entry.isReversed ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            Reversed
+                          </span>
+                        ) : entry.isReversal ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                            Counter-Voucher
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setReversingEntry(entry)}
+                            className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all ${
+                              isLight
+                                ? 'bg-white hover:bg-stone-100 border-stone-300 text-stone-700'
+                                : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-300'
+                            }`}
+                            title="Generate an audit-certified reversing counter-entry to correct this voucher"
+                          >
+                            Reverse Entry
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -721,6 +793,101 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+      {/* MODAL: POST REVERSING JOURNAL ENTRY */}
+      {reversingEntry && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div
+            className={`border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl ${
+              isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-stone-900 border-stone-700 text-white'
+            }`}
+          >
+            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+              <div>
+                <h3 className={`text-base font-bold ${isLight ? 'text-stone-900' : 'text-white'}`}>
+                  Post Reversing Journal Voucher
+                </h3>
+                <p className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+                  Immutable GAAP Counter-Entry for #{reversingEntry.id}
+                </p>
+              </div>
+              <button
+                onClick={() => setReversingEntry(null)}
+                className={`p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${
+                  isLight ? 'text-stone-500' : 'text-stone-400'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className={`p-3 rounded-xl border text-xs space-y-1 ${
+              isLight ? 'bg-amber-50/60 border-amber-200 text-amber-900' : 'bg-amber-950/20 border-amber-800/40 text-amber-200'
+            }`}>
+              <div className="font-semibold flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                Immutable Audit Trail Protection
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                Under financial regulations, original voucher <strong>#{reversingEntry.id}</strong> will remain permanently logged. This counter-entry flips its debit and credit amounts to reconcile the ledger.
+              </p>
+            </div>
+
+            <div className={`p-3 rounded-xl border text-xs space-y-1.5 font-mono ${
+              isLight ? 'bg-stone-50 border-stone-200 text-stone-800' : 'bg-stone-800 border-stone-700 text-stone-200'
+            }`}>
+              <div className="flex justify-between">
+                <span className="font-sans text-stone-500">Account:</span>
+                <span className="font-bold">{reversingEntry.accountCode} - {reversingEntry.accountName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-sans text-stone-500">Original Debit / Credit:</span>
+                <span>Debit {formatIDR(reversingEntry.debit)} • Credit {formatIDR(reversingEntry.credit)}</span>
+              </div>
+              <div className="flex justify-between text-purple-600 dark:text-purple-400 font-bold border-t pt-1 border-stone-200 dark:border-stone-700">
+                <span className="font-sans">Counter-Entry Will Post:</span>
+                <span>Debit {formatIDR(reversingEntry.credit)} • Credit {formatIDR(reversingEntry.debit)}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
+                Reason for Reversal / Counter-Entry (Required)
+              </label>
+              <input
+                type="text"
+                value={reversalReason}
+                onChange={(e) => setReversalReason(e.target.value)}
+                placeholder="e.g. Supplier invoice mismatch / Audit variance reconciliation"
+                className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
+                  isLight
+                    ? 'bg-stone-50 border-stone-300 text-stone-900'
+                    : 'bg-stone-800 border-stone-700 text-white'
+                }`}
+              />
+            </div>
+
+            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+              <button
+                onClick={() => setReversingEntry(null)}
+                className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
+                  isLight
+                    ? 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
+                    : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                }`}
+              >
+                Abort
+              </button>
+              <button
+                onClick={handlePostReversal}
+                disabled={isSubmittingReversal || !reversalReason.trim()}
+                className="px-4 py-2 text-xs font-semibold bg-purple-700 hover:bg-purple-800 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
+              >
+                {isSubmittingReversal ? 'Posting Counter-Entry...' : 'Post Reversing Entry'}
+              </button>
+            </div>
           </div>
         </div>
       )}

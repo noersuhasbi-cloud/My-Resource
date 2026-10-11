@@ -308,6 +308,9 @@ export interface PurchaseOrder {
   supplierRemarks?: string;
   paymentTerms: 'Net 30' | 'COD' | 'Advance Payment';
   goodsReceiptIds?: string[];
+  closureNotes?: string;
+  forceClosedAt?: string;
+  isForceClosed?: boolean;
 }
 
 export interface GoodsReceiptItem {
@@ -511,9 +514,14 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
+  isReversal?: boolean;
+  reversesVoucherId?: string;
+  isReversed?: boolean;
+  reversedByVoucherId?: string;
+  reversalReason?: string;
 }
 
 export interface ProfitAndLossReport {
