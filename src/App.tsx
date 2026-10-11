@@ -221,11 +221,9 @@ export default function App() {
     }
 
     // Persist to Firestore
-    try {
-      saveOrderToFirestore(newOrder, customerAccount?.id);
-    } catch (e) {
-      console.warn('Could not sync order to Firestore:', e);
-    }
+    saveOrderToFirestore(newOrder, customerAccount?.id).catch((e) => {
+      console.warn('Could not sync order to Firestore (local state preserved):', e);
+    });
 
     // Clear cart & voucher
     setCartItems([]);
@@ -272,11 +270,9 @@ export default function App() {
     // Update in Firestore
     const changed = updatedOrders.find((o) => o.id === orderId);
     if (changed) {
-      try {
-        updateOrderStatusInFirestore(orderId, nextStatus, changed.timeline);
-      } catch (e) {
-        console.warn('Could not sync status to Firestore:', e);
-      }
+      updateOrderStatusInFirestore(orderId, nextStatus, changed.timeline).catch((e) => {
+        console.warn('Could not sync status to Firestore (local state updated):', e);
+      });
     }
   };
 

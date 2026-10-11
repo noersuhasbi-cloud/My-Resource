@@ -232,17 +232,20 @@ export async function saveOrderToFirestore(order: Order, userId?: string): Promi
     });
 
     // Update loyalty points in user document if authenticated
-    const targetUserId = userId || auth.currentUser?.uid;
-    if (targetUserId) {
-      const userDocRef = doc(db, 'users', targetUserId);
-      const userSnap = await getDoc(userDocRef);
-      if (userSnap.exists()) {
-        const currentPoints = userSnap.data().grocePoints || 0;
-        const earned = Math.floor(order.total / 1000);
-        await updateDoc(userDocRef, {
-          grocePoints: currentPoints + earned,
-          updatedAt: new Date().toISOString(),
-        });
+    if (auth.currentUser) {
+      try {
+        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+        const userSnap = await getDoc(userDocRef);
+        if (userSnap.exists()) {
+          const currentPoints = userSnap.data().grocePoints || 0;
+          const earned = Math.floor(order.total / 1000);
+          await updateDoc(userDocRef, {
+            grocePoints: currentPoints + earned,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      } catch (pointsErr) {
+        console.warn('Could not update loyalty points in Firestore:', pointsErr);
       }
     }
   } catch (error) {

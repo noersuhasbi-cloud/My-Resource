@@ -73,10 +73,15 @@ service cloud.firestore {
 
     // Orders Collection
     match /orders/{orderId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.customerEmail == request.auth.token.email);
+      allow get: if (isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.customerEmail == request.auth.token.email))
+        || (!isSignedIn() && resource.data.orderId == orderId);
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidOrder(incoming());
-      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidOrder(incoming());
+      allow create: if isValidOrder(incoming()) && (
+        (isSignedIn() && incoming().userId == request.auth.uid) ||
+        (!isSignedIn())
+      );
+      allow update: if (isSignedIn() && existing().userId == request.auth.uid && isValidOrder(incoming()))
+        || (!isSignedIn() && existing().userId == incoming().userId && isValidOrder(incoming()));
       allow delete: if false;
     }
 

@@ -60,12 +60,6 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const [newAddrRecipient, setNewAddrRecipient] = useState<string>('');
   const [newAddrLine, setNewAddrLine] = useState<string>('');
 
-  if (!isOpen) return null;
-
-  const activeTrackedOrder = orders.find(
-    (o) => o.id.toLowerCase() === trackingSearchId.toLowerCase().trim()
-  ) || (orders.length > 0 ? orders[0] : null);
-
   const tierProgress = useMemo(() => {
     const points = customerAccount?.grocePoints ?? 0;
     if (points >= 2500 || customerAccount?.memberTier === 'Platinum Member') {
@@ -166,6 +160,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     };
   }, [orders]);
 
+  if (!isOpen) return null;
+
+  const activeTrackedOrder = orders.find(
+    (o) => o.id.toLowerCase() === trackingSearchId.toLowerCase().trim()
+  ) || (orders.length > 0 ? orders[0] : null);
+
   const handleGoogleSignin = async () => {
     setIsFirebaseLoading(true);
     setFirebaseError(null);
@@ -195,6 +195,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
       onLogin(account);
       setActiveTab('profile');
     } catch (err: any) {
+      if (err?.code === 'auth/unauthorized-domain') {
+        console.warn('Firebase Auth: Current domain is not in Firebase authorized domains. Switching to demo account.');
+        setFirebaseError(
+          `Domain (${window.location.hostname}) is not yet authorized in Firebase Console (Authentication > Settings > Authorized Domains). Switched to instant demo profile so all features work seamlessly!`
+        );
+        handleDemoLogin();
+        return;
+      }
       setFirebaseError(err.message || 'Failed to sign in with Google');
     } finally {
       setIsFirebaseLoading(false);
