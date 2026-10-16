@@ -110,11 +110,12 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
       } else {
         onShowToast('Zone Access Blocked', `Permission Denied: Zone restricted by active shift policy.`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       setZoneTestResult({
         tested: true,
         authorized: false,
-        message: String(err.message || err),
+        message: msg,
       });
       onShowToast('Access Denied', 'Zone restricted by active shift policy.');
     } finally {

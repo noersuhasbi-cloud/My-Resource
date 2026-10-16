@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type {
   PurchaseRequest,
   PurchaseOrder,
@@ -87,46 +87,52 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Calculations
-  const filteredPRs = purchaseRequests.filter((pr) => {
-    if (selectedStore !== 'CONSOLIDATED' && pr.storeId && pr.storeId !== selectedStore) return false;
-    if (prFilter !== 'ALL' && pr.status !== prFilter) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return (
-        pr.id.toLowerCase().includes(q) ||
-        pr.productName.toLowerCase().includes(q) ||
-        pr.sku.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  const filteredPRs = useMemo(() => {
+    return purchaseRequests.filter((pr) => {
+      if (selectedStore !== 'CONSOLIDATED' && pr.storeId && pr.storeId !== selectedStore) return false;
+      if (prFilter !== 'ALL' && pr.status !== prFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (
+          pr.id.toLowerCase().includes(q) ||
+          pr.productName.toLowerCase().includes(q) ||
+          pr.sku.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [purchaseRequests, selectedStore, prFilter, searchQuery]);
 
-  const filteredPOs = purchaseOrders.filter((po) => {
-    if (selectedStore !== 'CONSOLIDATED' && po.storeId && po.storeId !== selectedStore) return false;
-    if (poFilter !== 'ALL' && po.status !== poFilter) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return (
-        po.id.toLowerCase().includes(q) ||
-        po.supplierName.toLowerCase().includes(q) ||
-        po.items.some((i) => i.productName.toLowerCase().includes(q))
-      );
-    }
-    return true;
-  });
+  const filteredPOs = useMemo(() => {
+    return purchaseOrders.filter((po) => {
+      if (selectedStore !== 'CONSOLIDATED' && po.storeId && po.storeId !== selectedStore) return false;
+      if (poFilter !== 'ALL' && po.status !== poFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (
+          po.id.toLowerCase().includes(q) ||
+          po.supplierName.toLowerCase().includes(q) ||
+          po.items.some((i) => i.productName.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    });
+  }, [purchaseOrders, selectedStore, poFilter, searchQuery]);
 
-  const filteredGRs = goodsReceipts.filter((gr) => {
-    if (selectedStore !== 'CONSOLIDATED' && gr.storeId && gr.storeId !== selectedStore) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return (
-        gr.id.toLowerCase().includes(q) ||
-        gr.deliveryNoteNumber.toLowerCase().includes(q) ||
-        gr.vendorName.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  const filteredGRs = useMemo(() => {
+    return goodsReceipts.filter((gr) => {
+      if (selectedStore !== 'CONSOLIDATED' && gr.storeId && gr.storeId !== selectedStore) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (
+          gr.id.toLowerCase().includes(q) ||
+          gr.deliveryNoteNumber.toLowerCase().includes(q) ||
+          gr.vendorName.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [goodsReceipts, selectedStore, searchQuery]);
 
   const totalPOValue = purchaseOrders.reduce((sum, po) => sum + po.totalCost, 0);
   const pendingPRCount = purchaseRequests.filter((p) => p.status === 'pending').length;
@@ -234,8 +240,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       setActiveReceivingPO(null);
       onRefreshData();
-    } catch (err: any) {
-      onShowToast('Goods Receipt Failed', String(err.message || err));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Goods Receipt Failed', msg);
     } finally {
       setIsSubmittingGR(false);
     }
@@ -254,8 +261,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       setForceClosingPO(null);
       setForceCloseNotes('');
       onRefreshData();
-    } catch (err: any) {
-      onShowToast('Closure Rejected', String(err.message || err));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Closure Rejected', msg);
     } finally {
       setIsSubmittingClosePO(false);
     }

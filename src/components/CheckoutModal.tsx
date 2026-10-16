@@ -171,7 +171,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           completed: false,
         },
         {
-          status: 'in_transit',
+          status: deliveryMethod === 'pickup' ? 'ready_for_pickup' : 'in_transit',
           label: deliveryMethod === 'pickup' ? 'Ready for In-Store Pickup' : 'Dispatched with GroceFleet Courier',
           description: deliveryMethod === 'pickup' ? 'Present order ID at Click & Collect counter.' : 'Courier assigned with insulated refrigerated vehicle.',
           timestamp: 'Scheduled',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type {
   ChartOfAccount,
   GeneralLedgerEntry,
@@ -105,37 +105,42 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       );
       setReversingEntry(null);
       onRefreshData();
-    } catch (err: any) {
-      onShowToast('Reversal Failed', String(err.message || err));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Reversal Failed', msg);
     } finally {
       setIsSubmittingReversal(false);
     }
   };
 
   // Filtered GL entries
-  const filteredLedger = ledgerEntries.filter((entry) => {
-    if (selectedStore !== 'CONSOLIDATED' && entry.storeId && entry.storeId !== selectedStore) return false;
-    if (glRefFilter !== 'ALL' && entry.referenceType !== glRefFilter) return false;
-    if (glSearch) {
-      const q = glSearch.toLowerCase();
-      return (
-        entry.id.toLowerCase().includes(q) ||
-        entry.description.toLowerCase().includes(q) ||
-        entry.accountName.toLowerCase().includes(q) ||
-        entry.accountCode.includes(q)
-      );
-    }
-    return true;
-  });
+  const filteredLedger = useMemo(() => {
+    return ledgerEntries.filter((entry) => {
+      if (selectedStore !== 'CONSOLIDATED' && entry.storeId && entry.storeId !== selectedStore) return false;
+      if (glRefFilter !== 'ALL' && entry.referenceType !== glRefFilter) return false;
+      if (glSearch) {
+        const q = glSearch.toLowerCase();
+        return (
+          entry.id.toLowerCase().includes(q) ||
+          entry.description.toLowerCase().includes(q) ||
+          entry.accountName.toLowerCase().includes(q) ||
+          entry.accountCode.includes(q)
+        );
+      }
+      return true;
+    });
+  }, [ledgerEntries, selectedStore, glRefFilter, glSearch]);
 
   // Filtered COA
-  const filteredCOA = chartOfAccounts.filter((acc) => {
-    if (selectedStore !== 'CONSOLIDATED' && acc.storeId && acc.storeId !== selectedStore && acc.storeId !== 'GLOBAL') {
-      return false;
-    }
-    if (coaCategoryFilter !== 'ALL' && acc.category !== coaCategoryFilter) return false;
-    return true;
-  });
+  const filteredCOA = useMemo(() => {
+    return chartOfAccounts.filter((acc) => {
+      if (selectedStore !== 'CONSOLIDATED' && acc.storeId && acc.storeId !== selectedStore && acc.storeId !== 'GLOBAL') {
+        return false;
+      }
+      if (coaCategoryFilter !== 'ALL' && acc.category !== coaCategoryFilter) return false;
+      return true;
+    });
+  }, [chartOfAccounts, selectedStore, coaCategoryFilter]);
 
   return (
     <div className="space-y-6">

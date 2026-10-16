@@ -392,8 +392,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         updatedEmergency ? `${outlet.storeName} Closed` : `${outlet.storeName} Reopened`,
         updatedEmergency ? 'Checkout restricted for this specific outlet; catalog view retained.' : 'Operating schedule restored.'
       );
-    } catch (err: any) {
-      onShowToast('Outlet Update Failed', String(err?.message || err));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Outlet Update Failed', msg);
     }
   };
 
