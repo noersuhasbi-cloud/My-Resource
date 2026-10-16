@@ -514,6 +514,74 @@ export const INITIAL_ORDERS: Order[] = [
     ]
   },
   {
+    id: 'GCM-2026-8920',
+    userId: 'cust-sarah-882',
+    createdAt: '2026-10-10T09:10:00.000Z',
+    customerName: 'Sarah Wijaya',
+    customerEmail: 'sarah.wijaya@example.com',
+    customerPhone: '+62 812 8899 4432',
+    deliveryMethod: 'pickup',
+    pickupStore: STORE_LOCATIONS[0],
+    items: [
+      {
+        product: PRODUCTS[1], // Highland Strawberries
+        quantity: 2,
+      },
+      {
+        product: PRODUCTS[2], // Organic Heirloom Carrots
+        quantity: 1,
+      }
+    ],
+    subtotal: 104000,
+    deliveryFee: 0,
+    discount: 0,
+    total: 104000,
+    paymentMethod: 'qris',
+    paymentStatus: 'paid',
+    qrisRef: 'QRIS-GCM-77192899',
+    qrisNmid: 'ID1020260489110',
+    qrisPaidAt: '2026-10-10T09:11:15.000Z',
+    status: 'ready_for_pickup',
+    estimatedArrival: 'Ready for Collection',
+    timeline: [
+      {
+        status: 'placed',
+        label: 'Order Placed',
+        description: 'Order registered via GroceMart Online Portal (Store Pickup).',
+        timestamp: '09:10 AM',
+        completed: true,
+      },
+      {
+        status: 'paid',
+        label: 'QRIS Payment Verified',
+        description: 'Payment settled instantly via QRIS National Switch.',
+        timestamp: '09:11 AM',
+        completed: true,
+      },
+      {
+        status: 'packing',
+        label: 'Chilled Picking & Packing',
+        description: 'GroceMart Senopati team packed items in temperature-controlled bag.',
+        timestamp: '09:25 AM',
+        completed: true,
+      },
+      {
+        status: 'ready_for_pickup',
+        label: 'Ready for In-Store Pickup',
+        description: 'Order is staged at Click & Collect counter. Show Order ID to pick up.',
+        timestamp: '09:32 AM',
+        completed: true,
+      },
+      {
+        status: 'delivered',
+        label: 'Handed Over',
+        description: 'Customer receives fresh order at store counter.',
+        timestamp: 'Pending Collection',
+        completed: false,
+      }
+    ]
+  },
+  {
     id: 'GCM-2026-7731',
     userId: 'cust-budi-991',
     createdAt: '2026-10-10T09:45:00.000Z',

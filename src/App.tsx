@@ -231,6 +231,30 @@ export default function App() {
       showToast('Order Paid with QRIS!', `Earned +${earnedPoints} GrocePoints for this order!`);
     } else {
       showToast('Order Paid with QRIS!', `Order #${newOrder.id} confirmed!`);
+      // Auto-create customer profile for verified tracking access
+      if (newOrder.customerEmail) {
+        setCustomerAccount({
+          id: newOrder.userId || `cust-${Date.now().toString().slice(-4)}`,
+          name: newOrder.customerName || 'Customer',
+          email: newOrder.customerEmail,
+          phone: newOrder.customerPhone || '+62 812 0000 0000',
+          memberTier: 'Silver Member',
+          grocePoints: Math.floor(newOrder.total / 1000),
+          memberSince: 'Today',
+          savedAddresses: newOrder.deliveryAddress ? [
+            {
+              id: 'addr-default',
+              label: newOrder.deliveryAddress.label || 'Home',
+              recipient: newOrder.deliveryAddress.recipient || newOrder.customerName,
+              phone: newOrder.deliveryAddress.phone || newOrder.customerPhone,
+              addressLine: newOrder.deliveryAddress.addressLine || '',
+              city: newOrder.deliveryAddress.city || 'Jakarta',
+              postalCode: '10220',
+              isDefault: true,
+            }
+          ] : []
+        });
+      }
     }
 
     // Persist to Firestore
@@ -261,7 +285,11 @@ export default function App() {
         if (ord.id !== orderId) return ord;
 
         const updatedTimeline = ord.timeline.map((step) => {
-          if (step.status === nextStatus) {
+          if (
+            step.status === nextStatus ||
+            (nextStatus === 'ready_for_pickup' && (step.status === 'ready_for_pickup' || step.status === 'in_transit')) ||
+            (nextStatus === 'in_transit' && (step.status === 'ready_for_pickup' || step.status === 'in_transit'))
+          ) {
             return {
               ...step,
               completed: true,

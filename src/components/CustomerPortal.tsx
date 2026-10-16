@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { CustomerAccount, Order, OrderStatus, Product } from '../types';
 import { PRODUCTS } from '../data/mockData';
 import { formatIDR } from '../utils/formatters';
@@ -6,7 +6,8 @@ import {
   User, Package, Truck, CheckCircle2,
   Search, Plus, Printer,
   Sparkles, X, TrendingUp, Award, Database, LogOut,
-  ShieldAlert, Lock, ShieldCheck
+  ShieldAlert, Lock, ShieldCheck,
+  Bell, BellRing, Store, Volume2
 } from 'lucide-react';
 import { loginWithGoogle } from '../services/firebaseService';
 import { SafeImage } from './SafeImage';
@@ -47,6 +48,13 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   );
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<Order | null>(null);
 
+  useEffect(() => {
+    if (initialTrackingOrderId) {
+      setTrackingSearchId(initialTrackingOrderId);
+      setActiveTab('track');
+    }
+  }, [initialTrackingOrderId]);
+
   const [authMode] = useState<'signin' | 'signup'>('signin');
   const [authName, setAuthName] = useState<string>('');
   const [authEmail, setAuthEmail] = useState<string>('');
@@ -60,6 +68,114 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const [newAddrLabel, setNewAddrLabel] = useState<string>('');
   const [newAddrRecipient, setNewAddrRecipient] = useState<string>('');
   const [newAddrLine, setNewAddrLine] = useState<string>('');
+
+  // Notification states & permissions for Ready for Pickup alerts
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'default';
+  });
+
+  const [readyPickupAlert, setReadyPickupAlert] = useState<{
+    orderId: string;
+    order: Order;
+    timestamp: number;
+  } | null>(null);
+
+  const prevOrdersRef = useRef<Record<string, OrderStatus>>({});
+
+  const playPickupChime = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); // E5
+      osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2); // G5
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.45);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.45);
+    } catch {
+      // Audio autoplay policy fallback
+    }
+  };
+
+  const triggerPickupNotification = (order: Order) => {
+    const storeName = order.pickupStore?.name || 'GroceMart Senopati Flagship';
+    const title = `🛍️ Order #${order.id} Ready for Pickup!`;
+    const body = `Hooray ${order.customerName}! Your fresh items are chilled and ready at ${storeName}. Present your order ID at the Click & Collect counter.`;
+
+    // 1. In-portal banner with pulse animation
+    setReadyPickupAlert({
+      orderId: order.id,
+      order,
+      timestamp: Date.now(),
+    });
+
+    // 2. Native browser notification
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        try {
+          new Notification(title, {
+            body,
+            icon: '/favicon.ico',
+          });
+        } catch (e) {
+          console.warn('Native notification failed:', e);
+        }
+      } else if (Notification.permission === 'default') {
+        Notification.requestPermission().then((perm) => {
+          setNotificationPermission(perm);
+          if (perm === 'granted') {
+            try {
+              new Notification(title, { body, icon: '/favicon.ico' });
+            } catch (e) {
+              console.warn('Native notification failed:', e);
+            }
+          }
+        });
+      }
+    }
+
+    // 3. Audio Chime
+    playPickupChime();
+  };
+
+  const requestNotificationPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        setNotificationPermission(perm);
+        return perm;
+      } catch (e) {
+        console.warn('Error requesting notification permission:', e);
+      }
+    }
+    return 'denied';
+  };
+
+  // Real-time transition listener: detect when any order changes status to ready_for_pickup
+  useEffect(() => {
+    orders.forEach((ord) => {
+      const prevStatus = prevOrdersRef.current[ord.id];
+      const isNowReady =
+        ord.status === 'ready_for_pickup' ||
+        (ord.deliveryMethod === 'pickup' && ord.status === 'in_transit');
+      const wasAlreadyReady =
+        prevStatus === 'ready_for_pickup' ||
+        (ord.deliveryMethod === 'pickup' && prevStatus === 'in_transit');
+
+      if (prevStatus && !wasAlreadyReady && isNowReady) {
+        triggerPickupNotification(ord);
+      }
+      prevOrdersRef.current[ord.id] = ord.status;
+    });
+  }, [orders]);
 
   const tierProgress = useMemo(() => {
     const points = customerAccount?.grocePoints ?? 0;
@@ -346,11 +462,16 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
   const handleSimulateNextStep = (orderId: string, currentStatus: OrderStatus) => {
     let next: OrderStatus = 'paid';
+    const targetOrder = orders.find((o) => o.id === orderId);
+    const isPickup = targetOrder?.deliveryMethod === 'pickup';
+
     if (currentStatus === 'placed') next = 'paid';
     else if (currentStatus === 'paid') next = 'packing';
-    else if (currentStatus === 'packing') next = 'in_transit';
-    else if (currentStatus === 'in_transit') next = 'delivered';
-    else if (currentStatus === 'delivered') return;
+    else if (currentStatus === 'packing') {
+      next = isPickup ? 'ready_for_pickup' : 'in_transit';
+    } else if (currentStatus === 'ready_for_pickup' || currentStatus === 'in_transit') {
+      next = 'delivered';
+    } else if (currentStatus === 'delivered') return;
     onUpdateOrderStatus(orderId, next);
   };
 
@@ -435,16 +556,79 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               <span>Track Orders</span>
             </button>
           </div>
-          {customerAccount && (
-            <button
-              onClick={onLogout}
-              className="pb-3 text-xs font-medium text-stone-400 hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
-            </button>
-          )}
+          <div className="flex items-center gap-3 shrink-0 pb-3">
+            {/* Browser Notification Status Pill */}
+            {notificationPermission === 'granted' ? (
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-lg">
+                <Bell className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Pickup Alerts On</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={requestNotificationPermission}
+                className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-600 hover:text-emerald-800 bg-stone-100 hover:bg-stone-200 px-2.5 py-1 rounded-lg border border-stone-200 transition-colors cursor-pointer"
+                title="Enable browser notifications for real-time pickup alerts"
+              >
+                <Bell className="w-3.5 h-3.5 text-amber-600" />
+                <span>Enable Alerts</span>
+              </button>
+            )}
+
+            {customerAccount && (
+              <button
+                onClick={onLogout}
+                className="text-xs font-medium text-stone-400 hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Real-time Order Ready for Pickup Visual Notification Banner */}
+        {readyPickupAlert && (
+          <div className="mx-6 sm:mx-8 mt-4 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white flex items-center justify-between gap-3 shadow-lg ring-4 ring-emerald-500/30 animate-pulse">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <BellRing className="w-5 h-5 text-amber-300 animate-bounce" />
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs sm:text-sm font-bold truncate">
+                    Order #{readyPickupAlert.orderId} is Ready for In-Store Pickup!
+                  </p>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-400 text-stone-900 uppercase">
+                    Click &amp; Collect
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-100 truncate mt-0.5">
+                  Chilled and staged at {readyPickupAlert.order.pickupStore?.name || 'GroceMart Senopati Flagship'}. Show Order ID at counter.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  setTrackingSearchId(readyPickupAlert.orderId);
+                  setActiveTab('track');
+                  setReadyPickupAlert(null);
+                }}
+                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-300 text-emerald-950 hover:bg-amber-200 transition-colors cursor-pointer shadow-xs"
+              >
+                View Tracker →
+              </button>
+              <button
+                onClick={() => setReadyPickupAlert(null)}
+                className="p-1.5 text-white/80 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Dismiss alert"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
@@ -884,26 +1068,43 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     <span className="font-mono font-bold text-emerald-800">{myUserOrders.length} Private Order{myUserOrders.length > 1 ? 's' : ''}</span>
                   </div>
 
-                  {myUserOrders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="p-5 bg-white rounded-2xl border border-stone-200 hover:border-stone-300 transition-all space-y-4 shadow-xs"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100">
-                        <div>
-                          <div className="flex items-center gap-2 text-xs font-mono text-stone-500">
-                            <span className="font-bold text-stone-900">{order.id}</span>
-                            <span>•</span>
-                            <span>{new Date(order.createdAt).toLocaleDateString()}</span>
-                            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              Verified Owner
-                            </span>
+                  {myUserOrders.map((order) => {
+                    const isPickup = order.deliveryMethod === 'pickup';
+                    const isReady = order.status === 'ready_for_pickup' || (isPickup && order.status === 'in_transit');
+
+                    return (
+                      <div
+                        key={order.id}
+                        className={`p-5 rounded-2xl transition-all space-y-4 shadow-xs ${
+                          isReady
+                            ? 'bg-gradient-to-r from-emerald-50/60 via-white to-white border-2 border-emerald-500/80 ring-2 ring-emerald-500/20 shadow-md'
+                            : 'bg-white border border-stone-200 hover:border-stone-300'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100">
+                          <div>
+                            <div className="flex items-center gap-2 text-xs font-mono text-stone-500 flex-wrap">
+                              <span className="font-bold text-stone-900">{order.id}</span>
+                              <span>•</span>
+                              <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                Verified Owner
+                              </span>
+                              {isReady && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-700 text-white shadow-xs animate-pulse ring-2 ring-emerald-500/40">
+                                  <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                                  </span>
+                                  Ready for Pickup
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-stone-600 mt-0.5">
+                              Recipient: <span className="font-semibold text-stone-800">{order.customerName}</span> ({order.deliveryMethod === 'pickup' ? 'Store Pickup' : 'Express Delivery'})
+                            </p>
                           </div>
-                          <p className="text-xs text-stone-600 mt-0.5">
-                            Recipient: <span className="font-semibold text-stone-800">{order.customerName}</span> ({order.deliveryMethod === 'pickup' ? 'Store Pickup' : 'Express Delivery'})
-                          </p>
                         </div>
-                      </div>
 
                       <div className="flex items-center gap-2 overflow-x-auto pb-2">
                         {order.items.map((it, idx) => (
@@ -954,7 +1155,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         </div>
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
                 </div>
               )}
             </div>
@@ -977,17 +1179,34 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                     <button
                       type="button"
-                      onClick={() => handleDemoLogin('sarah')}
-                      className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                      onClick={() => {
+                        handleDemoLogin('sarah');
+                        setTrackingSearchId('GCM-2026-8920');
+                      }}
+                      className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
                     >
-                      Track as Sarah Wijaya (Order GCM-2026-8910)
+                      <Store className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Track Sarah's Store Pickup (GCM-2026-8920)</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDemoLogin('budi')}
+                      onClick={() => {
+                        handleDemoLogin('sarah');
+                        setTrackingSearchId('GCM-2026-8910');
+                      }}
+                      className="px-4 py-2 bg-emerald-950 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    >
+                      Track Sarah's Express Delivery (GCM-2026-8910)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleDemoLogin('budi');
+                        setTrackingSearchId('GCM-2026-7731');
+                      }}
                       className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                     >
-                      Track as Budi Santoso (Order GCM-2026-7731)
+                      Track Budi's Order (GCM-2026-7731)
                     </button>
                   </div>
                 </div>
@@ -1012,20 +1231,33 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           <Lock className="w-3 h-3 text-emerald-800" />
                           <span>My Verified Orders:</span>
                         </span>
-                        {myUserOrders.map((ord) => (
-                          <button
-                            key={ord.id}
-                            type="button"
-                            onClick={() => setTrackingSearchId(ord.id)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer ${
-                              trackingSearchId.toLowerCase() === ord.id.toLowerCase()
-                                ? 'bg-emerald-800 text-white font-bold shadow-xs'
-                                : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                            }`}
-                          >
-                            {ord.id} ({ord.status})
-                          </button>
-                        ))}
+                        {myUserOrders.map((ord) => {
+                          const isPickup = ord.deliveryMethod === 'pickup';
+                          const isReady = ord.status === 'ready_for_pickup' || (isPickup && ord.status === 'in_transit');
+
+                          return (
+                            <button
+                              key={ord.id}
+                              type="button"
+                              onClick={() => setTrackingSearchId(ord.id)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
+                                trackingSearchId.toLowerCase() === ord.id.toLowerCase()
+                                  ? 'bg-emerald-800 text-white font-bold shadow-xs'
+                                  : isReady
+                                  ? 'bg-emerald-100 text-emerald-900 font-semibold border border-emerald-300'
+                                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                              }`}
+                            >
+                              {isReady && (
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                                </span>
+                              )}
+                              <span>{ord.id} ({ord.status === 'ready_for_pickup' ? 'ready' : ord.status})</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1053,85 +1285,197 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         )}
                       </div>
                     </div>
-                  ) : activeTrackedOrder ? (
-                <div className="space-y-6">
-                  <div className="p-5 bg-stone-50 rounded-2xl border border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2 text-xs font-mono text-stone-500 mb-1">
-                        <span>Order {activeTrackedOrder.id}</span>
-                        <span>•</span>
-                        <span>{new Date(activeTrackedOrder.createdAt).toLocaleDateString()}</span>
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                          Verified Owner
-                        </span>
-                      </div>
-                      <h3 className="text-lg font-bold text-stone-900 font-display">
-                        Live Status: <span className="text-emerald-800 capitalize font-mono">{activeTrackedOrder.status}</span>
-                      </h3>
-                      <p className="text-xs text-stone-600 mt-0.5">
-                        Recipient: {activeTrackedOrder.customerName} ({activeTrackedOrder.customerPhone})
-                      </p>
-                    </div>
+                  ) : activeTrackedOrder ? (() => {
+                    const isPickupOrder = activeTrackedOrder.deliveryMethod === 'pickup';
+                    const isOrderReadyForPickup =
+                      activeTrackedOrder.status === 'ready_for_pickup' ||
+                      (isPickupOrder && activeTrackedOrder.status === 'in_transit');
 
-                    <div className="flex items-center gap-2 self-start md:self-auto">
-                      {activeTrackedOrder.status !== 'delivered' && (
-                        <button
-                          type="button"
-                          onClick={() => handleSimulateNextStep(activeTrackedOrder.id, activeTrackedOrder.status)}
-                          className="py-2 px-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    return (
+                      <div className="space-y-6">
+                        {/* Order Header Card - Pulses vibrantly if Ready for Pickup */}
+                        <div
+                          className={`p-5 rounded-2xl transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                            isOrderReadyForPickup
+                              ? 'border-2 border-emerald-500 bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/40 ring-4 ring-emerald-500/20 shadow-md animate-pulse'
+                              : 'bg-stone-50 border border-stone-200'
+                          }`}
                         >
-                          Simulate Dispatch Step →
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                          <div>
+                            <div className="flex items-center gap-2 text-xs font-mono text-stone-500 mb-1">
+                              <span>Order {activeTrackedOrder.id}</span>
+                              <span>•</span>
+                              <span>{new Date(activeTrackedOrder.createdAt).toLocaleDateString()}</span>
+                              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                Verified Owner
+                              </span>
+                              {isPickupOrder && (
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-900">
+                                  Store Pickup
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-lg font-bold text-stone-900 font-display">
+                                Live Status:
+                              </h3>
+                              {isOrderReadyForPickup ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-600 text-white shadow-md ring-4 ring-emerald-400/30 animate-pulse">
+                                  <span className="relative flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+                                  </span>
+                                  READY FOR IN-STORE PICKUP
+                                </span>
+                              ) : (
+                                <span className="text-emerald-800 capitalize font-mono font-bold">
+                                  {activeTrackedOrder.status}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-stone-600 mt-1">
+                              Recipient: {activeTrackedOrder.customerName} ({activeTrackedOrder.customerPhone})
+                            </p>
+                          </div>
 
-                  {/* Courier / Vehicle info if in transit */}
-                  {activeTrackedOrder.courierName && (
-                    <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/80 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-800 text-white flex items-center justify-center">
-                          <Truck className="w-4 h-4" />
+                          <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+                            {activeTrackedOrder.status !== 'delivered' && (
+                              <button
+                                type="button"
+                                onClick={() => handleSimulateNextStep(activeTrackedOrder.id, activeTrackedOrder.status)}
+                                className="py-2 px-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                              >
+                                {activeTrackedOrder.status === 'placed' && 'Simulate: Settle QRIS →'}
+                                {activeTrackedOrder.status === 'paid' && 'Simulate: Start Packing →'}
+                                {activeTrackedOrder.status === 'packing' && (
+                                  isPickupOrder ? 'Simulate: Mark Ready for Pickup 🛍️ →' : 'Simulate: Dispatch Courier 🚚 →'
+                                )}
+                                {(activeTrackedOrder.status === 'ready_for_pickup' || (isPickupOrder && activeTrackedOrder.status === 'in_transit')) && (
+                                  'Simulate: Hand Over to Customer ✓ →'
+                                )}
+                                {(!isPickupOrder && activeTrackedOrder.status === 'in_transit') && 'Simulate: Mark Delivered ✓ →'}
+                              </button>
+                            )}
+                            {isPickupOrder && !isOrderReadyForPickup && activeTrackedOrder.status !== 'delivered' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onUpdateOrderStatus(activeTrackedOrder.id, 'ready_for_pickup');
+                                }}
+                                className="py-2 px-3 bg-amber-500 hover:bg-amber-600 text-stone-900 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                                title="Instantly jump status to Ready for Pickup to test notification & pulse"
+                              >
+                                <BellRing className="w-3.5 h-3.5 text-stone-900" />
+                                <span>Jump to Ready</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-emerald-950">{activeTrackedOrder.courierName}</p>
-                          <p className="text-[11px] text-emerald-800 font-mono">{activeTrackedOrder.vehiclePlate}</p>
+
+                        {/* Real-Time Visual Pulse Animation & Staging Callout for Ready for Pickup */}
+                        {isOrderReadyForPickup && (
+                          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50/90 to-emerald-100/70 border-2 border-emerald-500/80 shadow-md ring-4 ring-emerald-500/20 animate-pulse transition-all">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex items-start gap-3">
+                                <div className="w-11 h-11 rounded-xl bg-emerald-800 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                  <Store className="w-6 h-6 text-amber-300" />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="text-sm sm:text-base font-bold text-stone-900 font-display">
+                                      Fresh Groceries Ready for Pickup!
+                                    </h4>
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-800 text-amber-300 uppercase tracking-wider">
+                                      Click &amp; Collect Staged
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-stone-700 mt-1 leading-relaxed">
+                                    Your items are hand-selected, temperature-packed, and stored in our walk-in chiller at <strong>{activeTrackedOrder.pickupStore?.name || 'GroceMart Senopati Flagship'}</strong> ({activeTrackedOrder.pickupStore?.address || 'Senopati, Kebayoran Baru'}).
+                                  </p>
+                                  <p className="text-xs font-semibold text-emerald-900 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                    <span>Show Order Reference</span>
+                                    <span className="font-mono bg-white px-2 py-0.5 rounded border border-emerald-300 text-emerald-950 font-bold">{activeTrackedOrder.id}</span>
+                                    <span>at the Click &amp; Collect counter to receive your chilled basket.</span>
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                <button
+                                  type="button"
+                                  onClick={() => triggerPickupNotification(activeTrackedOrder)}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-800 flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                                  title="Test browser notification sound and native toast"
+                                >
+                                  <BellRing className="w-3.5 h-3.5 text-emerald-700 animate-bounce" />
+                                  <span>Test Notification</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Courier / Vehicle info if in transit */}
+                        {activeTrackedOrder.courierName && (
+                          <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/80 flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-800 text-white flex items-center justify-center">
+                                <Truck className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-emerald-950">{activeTrackedOrder.courierName}</p>
+                                <p className="text-[11px] text-emerald-800 font-mono">{activeTrackedOrder.vehiclePlate}</p>
+                              </div>
+                            </div>
+                            <span className="text-xs font-bold text-emerald-900 bg-white px-2.5 py-1 rounded-lg border border-emerald-200">
+                              {activeTrackedOrder.estimatedArrival || 'En Route'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Timeline Steps with Pulse Animation on Ready Step */}
+                        <div className="space-y-3 bg-white p-5 rounded-2xl border border-stone-200">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">
+                            Order Journey &amp; Real-Time Milestones
+                          </h4>
+                          <div className="space-y-4">
+                            {activeTrackedOrder.timeline.map((step, idx) => {
+                              const isStepReadyPickup =
+                                step.status === 'ready_for_pickup' ||
+                                (isPickupOrder && step.status === 'in_transit');
+
+                              return (
+                                <div key={idx} className="flex items-start gap-3">
+                                  <div
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5 transition-all ${
+                                      step.completed
+                                        ? isStepReadyPickup
+                                          ? 'bg-emerald-600 text-white ring-4 ring-emerald-400/40 animate-pulse'
+                                          : 'bg-emerald-800 text-white'
+                                        : 'bg-stone-200 text-stone-500'
+                                    }`}
+                                  >
+                                    {step.completed ? '✓' : idx + 1}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className={`text-xs font-bold ${isStepReadyPickup && step.completed ? 'text-emerald-800 flex items-center gap-1.5' : 'text-stone-900'}`}>
+                                      <span>{step.label}</span>
+                                      {isStepReadyPickup && step.completed && (
+                                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 uppercase font-mono">
+                                          Ready
+                                        </span>
+                                      )}
+                                    </p>
+                                    <p className="text-[11px] text-stone-500">{step.description}</p>
+                                    <span className="text-[10px] font-mono text-stone-400">{step.timestamp}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
-                      <span className="text-xs font-bold text-emerald-900 bg-white px-2.5 py-1 rounded-lg border border-emerald-200">
-                        {activeTrackedOrder.estimatedArrival || 'En Route'}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Timeline Steps */}
-                  <div className="space-y-3 bg-white p-5 rounded-2xl border border-stone-200">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">
-                      Order Journey & Real-Time Milestones
-                    </h4>
-                    <div className="space-y-4">
-                      {activeTrackedOrder.timeline.map((step, idx) => (
-                        <div key={idx} className="flex items-start gap-3">
-                          <div
-                            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5 ${
-                              step.completed
-                                ? 'bg-emerald-800 text-white'
-                                : 'bg-stone-200 text-stone-500'
-                            }`}
-                          >
-                            {step.completed ? '✓' : idx + 1}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-stone-900">{step.label}</p>
-                            <p className="text-[11px] text-stone-500">{step.description}</p>
-                            <span className="text-[10px] font-mono text-stone-400">{step.timestamp}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
+                    );
+                  })() : (
                 <div className="text-center py-12 bg-stone-50 rounded-xl border border-stone-200">
                   <Package className="w-8 h-8 text-stone-400 mx-auto mb-2" />
                   <p className="text-stone-900 font-semibold text-sm">No Personal Orders Found</p>

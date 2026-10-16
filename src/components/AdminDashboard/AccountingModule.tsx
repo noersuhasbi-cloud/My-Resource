@@ -5,6 +5,7 @@ import type {
   ProfitAndLossReport,
   BalanceSheetReport,
   CashFlowStatementReport,
+  SupportedCurrency,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import {
@@ -25,8 +26,16 @@ import {
   Sparkles,
   ShieldCheck,
   X,
+  Globe2,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
+
+const FX_RATES: Record<SupportedCurrency, { symbol: string; rate: number; label: string }> = {
+  IDR: { symbol: 'Rp', rate: 1, label: 'IDR (Base)' },
+  USD: { symbol: '$', rate: 16000, label: 'USD ($)' },
+  EUR: { symbol: '€', rate: 17200, label: 'EUR (€)' },
+  AUD: { symbol: 'A$', rate: 10400, label: 'AUD (A$)' },
+};
 
 interface AccountingModuleProps {
   theme: 'light' | 'dark';
@@ -39,6 +48,8 @@ interface AccountingModuleProps {
   cashFlow: CashFlowStatementReport | null;
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
+  activeSubTab?: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa';
+  onSubTabChange?: (subTab: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa') => void;
 }
 
 export const AccountingModule: React.FC<AccountingModuleProps> = ({
@@ -52,11 +63,28 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   cashFlow,
   onRefreshData,
   onShowToast,
+  activeSubTab,
+  onSubTabChange,
 }) => {
   const isLight = theme === 'light';
 
-  // Sub-tabs
-  const [subTab, setSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa'>('pnl');
+  // Multi-Currency Selection (Module 4)
+  const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>('IDR');
+
+  const formatCurrency = (amountIDR: number) => {
+    if (selectedCurrency === 'IDR') return formatIDR(amountIDR);
+    const info = FX_RATES[selectedCurrency];
+    const converted = amountIDR / info.rate;
+    return `${info.symbol}${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Sub-tabs (controlled or internal)
+  const [internalSubTab, setInternalSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa'>('pnl');
+  const subTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
+  const setSubTab = (val: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa') => {
+    setInternalSubTab(val);
+    if (onSubTabChange) onSubTabChange(val);
+  };
   const [glSearch, setGlSearch] = useState<string>('');
   const [glRefFilter, setGlRefFilter] = useState<string>('ALL');
   const [coaCategoryFilter, setCoaCategoryFilter] = useState<string>('ALL');
@@ -231,7 +259,30 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Multi-Currency Selector (Module 4) */}
+                <div className={`flex items-center gap-1 p-1 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-stone-800 border-stone-700'}`}>
+                  <Globe2 className="w-3.5 h-3.5 text-emerald-600 ml-1.5" />
+                  {(['IDR', 'USD', 'EUR', 'AUD'] as SupportedCurrency[]).map((curr) => (
+                    <button
+                      key={curr}
+                      onClick={() => {
+                        setSelectedCurrency(curr);
+                        onShowToast('Reporting Currency Converted', `P&L statement recomputed in ${curr}`);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                        selectedCurrency === curr
+                          ? 'bg-[#0F4C3A] text-white shadow-xs'
+                          : isLight
+                          ? 'text-gray-600 hover:text-gray-900'
+                          : 'text-stone-300 hover:text-white'
+                      }`}
+                    >
+                      {curr}
+                    </button>
+                  ))}
+                </div>
+
                 <div className={`p-2.5 rounded-xl border ${isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-stone-800 border-stone-700'}`}>
                   <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>Gross Margin:</span>
                   <span className="ml-1.5 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400 text-xs">
@@ -255,23 +306,23 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 isLight ? 'border-gray-200 text-gray-800' : 'border-stone-700 text-stone-200'
               }`}>
                 <span>1. Operating Sales Revenue</span>
-                <span>Amount (IDR)</span>
+                <span>Amount ({selectedCurrency})</span>
               </div>
               <div className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-stone-400'}`}>
                 <span>Gross Customer QRIS Checkout Revenue</span>
                 <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-stone-100'}`}>
-                  {formatIDR(pnlReport.grossSalesRevenue)}
+                  {formatCurrency(pnlReport.grossSalesRevenue)}
                 </span>
               </div>
               <div className="flex justify-between pl-4 text-amber-600 dark:text-amber-400">
                 <span>Less: Customer Loyalty Points &amp; Vouchers</span>
-                <span>-{formatIDR(pnlReport.discountsGiven)}</span>
+                <span>-{formatCurrency(pnlReport.discountsGiven)}</span>
               </div>
               <div className={`flex justify-between font-bold pl-4 pt-1.5 border-t ${
                 isLight ? 'border-gray-200 text-gray-900' : 'border-stone-800 text-white'
               }`}>
                 <span>Net Sales Revenue</span>
-                <span className="text-[#0F4C3A] dark:text-emerald-400">{formatIDR(pnlReport.netSalesRevenue)}</span>
+                <span className="text-[#0F4C3A] dark:text-emerald-400">{formatCurrency(pnlReport.netSalesRevenue)}</span>
               </div>
             </div>
 
@@ -281,17 +332,17 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 isLight ? 'border-gray-200 text-gray-800' : 'border-stone-700 text-stone-200'
               }`}>
                 <span>2. Cost of Goods Sold (COGS - Weighted Average Valuation)</span>
-                <span>Amount (IDR)</span>
+                <span>Amount ({selectedCurrency})</span>
               </div>
               <div className={`flex justify-between pl-4 ${isLight ? 'text-rose-600' : 'text-red-400'}`}>
                 <span>Direct Organic Farm Acquisition &amp; Butchery Costs</span>
-                <span>-{formatIDR(pnlReport.costOfGoodsSold)}</span>
+                <span>-{formatCurrency(pnlReport.costOfGoodsSold)}</span>
               </div>
               <div className={`flex justify-between font-bold pl-4 pt-1.5 border-t text-sm ${
                 isLight ? 'border-gray-200 text-[#0F4C3A]' : 'border-stone-800 text-emerald-400'
               }`}>
                 <span>Gross Profit ({pnlReport.grossMarginPercent}% gross margin)</span>
-                <span>{formatIDR(pnlReport.grossProfit)}</span>
+                <span>{formatCurrency(pnlReport.grossProfit)}</span>
               </div>
             </div>
 
@@ -301,13 +352,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 isLight ? 'border-gray-200 text-gray-800' : 'border-stone-700 text-stone-200'
               }`}>
                 <span>3. Operating &amp; Cold-Chain Expenses (OPEX)</span>
-                <span>Amount (IDR)</span>
+                <span>Amount ({selectedCurrency})</span>
               </div>
               {pnlReport.operatingExpenses.map((exp, idx) => (
                 <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-stone-400'}`}>
                   <span>{exp.category}</span>
                   <span className={isLight ? 'text-rose-600' : 'text-red-400'}>
-                    -{formatIDR(exp.amount)}
+                    -{formatCurrency(exp.amount)}
                   </span>
                 </div>
               ))}
@@ -316,7 +367,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               }`}>
                 <span>Total Operating Expenses</span>
                 <span className={isLight ? 'text-rose-600' : 'text-red-400'}>
-                  -{formatIDR(pnlReport.totalOperatingExpenses)}
+                  -{formatCurrency(pnlReport.totalOperatingExpenses)}
                 </span>
               </div>
             </div>
@@ -336,7 +387,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 </p>
               </div>
               <span className="font-mono font-bold text-lg text-[#0F4C3A] dark:text-emerald-400">
-                {formatIDR(pnlReport.netProfit)}
+                {formatCurrency(pnlReport.netProfit)}
               </span>
             </div>
           </div>

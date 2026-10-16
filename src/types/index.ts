@@ -60,7 +60,7 @@ export interface CartItem {
   notes?: string;
 }
 
-export type OrderStatus = 'placed' | 'paid' | 'packing' | 'in_transit' | 'delivered';
+export type OrderStatus = 'placed' | 'paid' | 'packing' | 'in_transit' | 'ready_for_pickup' | 'delivered';
 
 export interface OrderTimelineStep {
   status: OrderStatus;
@@ -133,7 +133,14 @@ export interface CustomerAccount {
 // -------------------------------------------------------------
 // Role-Based Access Control (RBAC) & Operations
 // -------------------------------------------------------------
-export type UserRole = 'admin' | 'customer';
+export type UserRole =
+  | 'admin'
+  | 'customer'
+  | 'cashier'
+  | 'warehouse_picker'
+  | 'receiving_clerk'
+  | 'store_manager'
+  | 'executive';
 
 export interface StoreOperationalStatus {
   isOpen: boolean;
@@ -252,6 +259,7 @@ export interface InventoryItem {
   safetyStockBuffer?: number;
   maxCapacity?: number;
   storageType?: StorageZoneType;
+  weightGrams?: number;
 }
 
 // -------------------------------------------------------------
@@ -669,3 +677,154 @@ export interface QRISStatusResponse {
   paidAt?: string;
   settlementChannel?: string;
 }
+
+// =============================================================
+// MODULE 1: Shrinkage & Natural Weight Loss (Evaporation)
+// =============================================================
+export interface WeightToleranceConfig {
+  category: ProductCategory | string;
+  categoryLabel: string;
+  maxEvaporationTolerancePercent: number; // e.g. 5.0% for produce, 3.0% for meat
+  auditIntervalHours: number;
+  description: string;
+}
+
+export interface NaturalShrinkageAdjustment {
+  id: string; // e.g. EVAP-2026-001
+  timestamp: string;
+  sku: string;
+  productName: string;
+  category: ProductCategory | string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId: string;
+  batchId?: string;
+  lotNumber?: string;
+  recordedGrossWeightGrams: number;
+  actualAuditWeightGrams: number;
+  weightLossGrams: number;
+  weightLossPercent: number;
+  toleranceThresholdPercent: number;
+  isWithinNaturalTolerance: boolean;
+  classification: 'Natural Shrinkage / Evaporation Loss' | 'Anomalous Spoilage Loss';
+  unitCost: number;
+  totalLossCost: number;
+  glEntryId?: string;
+  auditorId: string;
+  auditorName: string;
+  shiftId: string;
+  notes?: string;
+}
+
+// =============================================================
+// MODULE 2: Substitution & Customer WhatsApp/App Prompt Engine
+// =============================================================
+export interface SubstitutionPromptRecord {
+  id: string; // SUB-PRM-2026-001
+  orderId: string;
+  itemId: string;
+  customerName: string;
+  customerPhone: string;
+  originalSku: string;
+  originalProductName: string;
+  originalPrice: number;
+  originalQty: number;
+  originalBatchId?: string;
+  replacementSku: string;
+  replacementProductName: string;
+  replacementPrice: number;
+  replacementBatchId: string;
+  replacementLotNumber: string;
+  replacementExpiryDate: string;
+  priceDelta: number; // positive = customer pays more or store absorbs, negative = refund
+  absorbPriceDifference: boolean;
+  promptStatus: 'pending_customer_approval' | 'approved_by_customer' | 'declined_by_customer' | 'auto_timeout_approved';
+  channel: 'WhatsApp' | 'InAppPush' | 'SMS';
+  simulationMessage: string;
+  timestamp: string;
+  decidedAt?: string;
+  packerId: string;
+  storeId: string;
+  glJournalIds?: string[];
+  fifoAuditLog?: string;
+}
+
+// =============================================================
+// MODULE 3: Granular RBAC by Shift, Physical Zone & Multi-Outlet
+// =============================================================
+
+export interface StaffShiftSession {
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  storeId: string; // Assigned physical store or 'ALL' for executive
+  storeName: string;
+  activeShiftId: string; // e.g. SHIFT-JKT-MORNING-01
+  shiftName: 'Morning Shift' | 'Afternoon Shift' | 'Night Shift';
+  assignedZones: StorageZoneType[]; // e.g. ['cold_chilled', 'ambient']
+  loginTimestamp: string;
+  permissions: {
+    canViewPos: boolean;
+    canViewInventory: boolean;
+    canAdjustInventory: boolean;
+    canPickZone: (zone: StorageZoneType) => boolean;
+    canReceiveGoods: boolean;
+    canApprovePurchaseOrder: boolean;
+    canViewFinancePnL: boolean;
+    canManageOutlets: boolean;
+    canOverrideStoreClosure: boolean;
+  };
+}
+
+export interface SecurityAuditTrailRecord {
+  id: string; // AUD-SEC-2026-0001
+  timestamp: string;
+  actionType:
+    | 'GOODS_RECEIPT_APPROVAL'
+    | 'PURCHASE_ORDER_APPROVAL'
+    | 'PRICE_OVERRIDE'
+    | 'SHRINKAGE_WRITE_OFF'
+    | 'SUBSTITUTION_DISPATCH'
+    | 'STORE_EMERGENCY_OVERRIDE'
+    | 'ZONE_CONFIG_UPDATE';
+  resourceId: string;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  storeId: string;
+  shiftId: string;
+  ipAddress?: string;
+  status: 'AUTHORIZED_EXECUTED' | 'PERMISSION_DENIED';
+  metadata: Record<string, any>;
+}
+
+// =============================================================
+// MODULE 4: Global Scalability (Multi-Currency & Climate Cold-Chain)
+// =============================================================
+export type SupportedCurrency = 'IDR' | 'USD' | 'EUR' | 'AUD';
+
+export interface CurrencyExchangeRate {
+  code: SupportedCurrency;
+  symbol: string;
+  rateToIDR: number; // e.g. 1 USD = 16,000 IDR, 1 EUR = 17,200 IDR, 1 AUD = 10,400 IDR
+  decimalPlaces: number;
+}
+
+export interface ClimateAdaptiveThresholdConfig {
+  warehouseZoneId: string;
+  zoneName: string;
+  storeId: string;
+  regionalClimateProfile: 'Tropical High-Humidity (Jakarta/Bali)' | 'Temperate (Europe)' | 'Extreme Heat Arid (Australia)' | 'Highland Mild (Bandung)';
+  ambientExternalTempCelsius: number;
+  externalHumidityPercent: number;
+  standardTempMinCelsius: number;
+  standardTempMaxCelsius: number;
+  adaptiveOffsetCelsius: number; // Dynamic margin reduction in heatwaves
+  activeAlertThresholdCelsius: number;
+  currentActualTempCelsius: number;
+  coolingCompressorDutyCyclePercent: number;
+  isTempAlertActive: boolean;
+  alertSeverity: 'NORMAL' | 'ELEVATED' | 'CRITICAL_BREACH';
+  lastUpdated: string;
+}
+

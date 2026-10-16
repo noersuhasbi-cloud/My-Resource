@@ -15,6 +15,8 @@ import type {
   CashFlowStatementReport,
   OmzetAnalyticsReport,
   TransactionAuditRecord,
+  StaffShiftSession,
+  ClimateAdaptiveThresholdConfig,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -58,6 +60,15 @@ import {
   Scan,
   Database,
   BookOpen,
+  PanelLeftClose,
+  PanelLeft,
+  Menu,
+  ChevronDown,
+  Settings,
+  Users,
+  Globe2,
+  Droplets,
+  Wind,
 } from 'lucide-react';
 
 import { FefoModule } from './FefoModule';
@@ -66,6 +77,9 @@ import { PickerModule } from './PickerModule';
 import { ErdSpecsModule } from './ErdSpecsModule';
 import { ProcurementModule } from './ProcurementModule';
 import { AccountingModule } from './AccountingModule';
+import { RbacModule } from './RbacModule';
+import { SecurityAuditModule } from './SecurityAuditModule';
+import { AdminSidebar, AdminDashboardTab, AccountingSubTab } from './AdminSidebar';
 
 interface AdminDashboardProps {
   onCloseToStorefront: () => void;
@@ -98,18 +112,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Global Store Outlet Filter Selector
   const [selectedGlobalStore, setSelectedGlobalStore] = useState<string>('CONSOLIDATED');
 
-  const [activeTab, setActiveTab] = useState<
-    | 'overview'
-    | 'operations'
-    | 'inventory'
-    | 'fefo'
-    | 'waste'
-    | 'picker'
-    | 'procurement'
-    | 'accounting'
-    | 'openapi'
-    | 'erd'
-  >('overview');
+  // Sidebar Layout State (Responsive Desktop Collapse & Mobile Drawer)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('grocemart_admin_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [isFinanceMenuOpen, setIsFinanceMenuOpen] = useState<boolean>(true);
+  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState<boolean>(true);
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('grocemart_admin_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const [activeTab, setActiveTab] = useState<AdminDashboardTab>('overview');
+
+  // RBAC Staff Session State (Module 3)
+  const [activeStaffSession, setActiveStaffSession] = useState<StaffShiftSession | null>(null);
+  const [availableStaffProfiles, setAvailableStaffProfiles] = useState<StaffShiftSession[]>([]);
+
+  // Climate-Adaptive Cold Chain State (Module 4)
+  const [climateConfigs, setClimateConfigs] = useState<ClimateAdaptiveThresholdConfig[]>([]);
+
+  // Active sub-item for Accounting deep-linking
+  const [accountingDeepSubTab, setAccountingDeepSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa'>('pnl');
 
   // Loading & refresh
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -207,6 +242,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         bsRes,
         cfRes,
         auditRes,
+        rbacRes,
+        climateRes,
       ] = await Promise.all([
         apiClient.getOmzetAnalytics().catch(() => null),
         apiClient.getStoreStatus(),
@@ -222,7 +259,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         apiClient.getBalanceSheet(selectedFinanceStore).catch(() => null),
         apiClient.getCashFlow(selectedFinanceStore).catch(() => null),
         apiClient.getAuditTrail(),
+        apiClient.getRbacSession().catch(() => null),
+        apiClient.getClimateThresholds().catch(() => []),
       ]);
+
+      if (rbacRes) {
+        setActiveStaffSession(rbacRes.currentSession);
+        setAvailableStaffProfiles(rbacRes.availableProfiles || []);
+      }
+      setClimateConfigs(climateRes || []);
 
       setOmzetData(omzetRes);
       setStoreStatus(statusRes);
@@ -509,299 +554,227 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     ? 'bg-white border border-gray-200 text-gray-900 shadow-2xl rounded-2xl'
     : 'bg-stone-900 border border-stone-700 text-white shadow-2xl rounded-2xl';
 
+  const currentModuleTitle = (() => {
+    switch (activeTab) {
+      case 'overview':
+        return 'Executive Omzet & Key Metrics';
+      case 'operations':
+        return 'Store & Multi-Outlet Operations';
+      case 'inventory':
+        return 'Inventory & Multi-Warehouse Matrix';
+      case 'fefo':
+        return 'FEFO & Batch Expiry Traceability';
+      case 'waste':
+        return 'Waste & Shrinkage Adjustments';
+      case 'picker':
+        return 'Fulfillment & Catch-Weight Terminal';
+      case 'procurement':
+        return 'Procurement & Supply Chain (PR/PO/GR)';
+      case 'accounting':
+        return 'Financial Accounting & Multi-Store COA';
+      case 'openapi':
+        return 'QRIS Bank Indonesia Open API Specs';
+      case 'erd':
+        return 'System Architecture & ERD Specifications';
+      case 'rbac':
+        return 'Roles & Shifts Access Control (RBAC)';
+      case 'audit':
+        return 'Security & Administrative Audit Logs';
+      default:
+        return 'Enterprise Management';
+    }
+  })();
+
   return (
-    <div className={`min-h-screen ${isLight ? 'bg-[#F9FAFB] text-gray-900' : 'bg-stone-950 text-stone-100'} flex flex-col font-sans transition-colors duration-200`}>
-      {/* Top Utility Header */}
-      <header className={`${isLight ? 'bg-white border-gray-200/90 text-gray-900 shadow-2xs' : 'bg-stone-900/95 border-stone-800 text-white'} backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-3 transition-colors duration-200`}>
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#0F4C3A] flex items-center justify-center shadow-md shadow-[#0F4C3A]/20 text-white font-extrabold text-base tracking-wider">
-              GM
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className={`text-base sm:text-lg font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
-                  GroceMart Enterprise ERP
-                </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] border border-[#0F4C3A]/20">
-                  Supply Chain v2.4
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
-                  FEFO &amp; Waste Active
-                </span>
-              </div>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
-                Indonesian Multi-Store Retail Operations, Cold-Chain Inventory, Catch-Weight &amp; Multi-Store COA
-              </p>
-            </div>
-          </div>
+    <div className={`min-h-screen ${isLight ? 'bg-[#F9FAFB] text-gray-900' : 'bg-stone-950 text-stone-100'} flex font-sans transition-colors duration-200 overflow-x-hidden`}>
+      {/* 1. Left Vertical Sidebar Component */}
+      <AdminSidebar
+        theme={theme}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(tab)}
+        accountingSubTab={accountingDeepSubTab}
+        onSelectAccountingSubTab={(sub) => setAccountingDeepSubTab(sub)}
+        isFinanceMenuOpen={isFinanceMenuOpen}
+        onToggleFinanceMenu={() => setIsFinanceMenuOpen((prev) => !prev)}
+        isSettingsMenuOpen={isSettingsMenuOpen}
+        onToggleSettingsMenu={() => setIsSettingsMenuOpen((prev) => !prev)}
+        emergencyClosedCount={storeOutlets.filter((o) => o.isEmergencyClosed).length}
+        lowStockCount={inventoryMetrics.lowStockCount}
+        partialPoCount={purchaseOrders.filter((p) => p.status === 'Partially Received').length}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        onCloseToStorefront={onCloseToStorefront}
+      />
 
-          {/* Right Utility Controls: Store Selector + Dark/Light Toggle + Sync + Back */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Store Outlet Selector Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className={`text-[11px] font-medium hidden sm:inline ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
-                Outlet:
-              </span>
-              <select
-                value={selectedGlobalStore}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setSelectedGlobalStore(val);
-                  setSelectedOutletFilter(val);
-                  setSelectedFinanceStore(val);
-                  onShowToast('Store Filter Applied', val === 'CONSOLIDATED' ? 'Showing Consolidated Network Data' : `Filtered to ${val}`);
-                }}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+      {/* 2. Main Content Wrapper with Dynamic Left Margin corresponding to Sidebar */}
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
+          isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'
+        }`}
+      >
+        {/* Top Utility Header Bar */}
+        <header
+          className={`${
+            isLight ? 'bg-white/95 border-gray-200/90 text-gray-900 shadow-2xs' : 'bg-stone-900/95 border-stone-800 text-white'
+          } backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-2.5 transition-colors duration-200`}
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Left: Mobile Hamburger Toggle + Current Module Breadcrumb */}
+            <div className="flex items-center gap-3">
+              {/* Mobile Hamburger Trigger */}
+              <button
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className={`lg:hidden p-2 rounded-xl border text-xs transition-colors flex items-center justify-center ${
                   isLight
-                    ? 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50 focus:border-[#0F4C3A]'
-                    : 'bg-stone-800 border-stone-700 text-stone-100 hover:bg-stone-700'
+                    ? 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700'
+                    : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200'
                 }`}
+                aria-label="Open navigation sidebar"
               >
-                <option value="CONSOLIDATED">All Outlets (Consolidated)</option>
-                <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
-                <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
-                <option value="store-jkt-menteng">Menteng Heritage (Jakarta)</option>
-                <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
-                <option value="store-sby-gubeng">Gubeng Central Hub (Surabaya)</option>
-                <option value="store-bali-canggu">Batu Bolong Organic (Bali)</option>
-              </select>
+                <Menu className="w-4 h-4" />
+              </button>
+
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-stone-500'}`}>
+                    GroceMart ERP
+                  </span>
+                  <ChevronRight className="w-3 h-3 text-gray-400" />
+                  <h1 className={`text-sm sm:text-base font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                    {currentModuleTitle}
+                  </h1>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5 hidden sm:flex">
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 border border-[#0F4C3A]/20">
+                    Supply Chain v2.4
+                  </span>
+                  <span className="text-[11px] text-gray-400">•</span>
+                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+                    Multi-Warehouse Cold Chain, FEFO &amp; Consolidate COA
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* Dark / Light Mode Instant Toggle Switch */}
-            <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center ${
-                isLight
-                  ? 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700'
-                  : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-amber-400'
-              }`}
-              title={isLight ? 'Switch to Dark Mode' : 'Switch to Clean Light Mode'}
-              aria-label="Toggle theme"
-            >
-              {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-            </button>
+            {/* Right: Active Staff Session + Consolidated Store Selector + Dark/Light Toggle + Sync Button */}
+            <div className="flex items-center gap-2 flex-wrap ml-auto">
+              {/* Active Operator RBAC Badge & Identity Switcher */}
+              {activeStaffSession && (
+                <div
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold ${
+                    isLight ? 'bg-emerald-500/10 border-emerald-500/25 text-[#0F4C3A]' : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                  <span className="hidden xl:inline text-[11px] text-gray-500 dark:text-stone-400 font-normal">Operator:</span>
+                  <span className="font-bold truncate max-w-[120px]">{activeStaffSession.userName}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#0F4C3A]/15 text-[#0F4C3A] dark:text-emerald-300 uppercase font-mono">
+                    {activeStaffSession.userRole.replace(/_/g, ' ')}
+                  </span>
+                  <select
+                    value={activeStaffSession.userId}
+                    onChange={async (e) => {
+                      try {
+                        const res = await apiClient.switchRbacSession(e.target.value);
+                        setActiveStaffSession(res.session);
+                        onShowToast(
+                          'Staff Identity Switched',
+                          `Switched to ${res.session.userName} (${res.session.userRole.replace(/_/g, ' ')})`
+                        );
+                      } catch (err) {
+                        onShowToast('Switch Failed', String(err));
+                      }
+                    }}
+                    className={`text-[11px] font-semibold bg-transparent border-0 cursor-pointer focus:ring-0 p-0 ml-1 ${
+                      isLight ? 'text-gray-700' : 'text-stone-200'
+                    }`}
+                    title="Switch Active Operator Identity"
+                  >
+                    {availableStaffProfiles.map((p) => (
+                      <option
+                        key={p.userId}
+                        value={p.userId}
+                        className={isLight ? 'bg-white text-gray-900' : 'bg-stone-900 text-white'}
+                      >
+                        {p.userName} ({p.userRole.replace(/_/g, ' ')})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-            {/* Refresh Sync Button */}
-            <button
-              onClick={refreshAllData}
-              disabled={isLoading}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-all disabled:opacity-50 ${
-                isLight
-                  ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700 shadow-2xs'
-                  : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-300'
-              }`}
-              title="Refresh Data"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              <span className="hidden lg:inline">Sync Data</span>
-            </button>
+              {/* Global Outlet Selector Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[11px] font-medium hidden md:inline ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+                  Outlet Scope:
+                </span>
+                <select
+                  value={selectedGlobalStore}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedGlobalStore(val);
+                    setSelectedOutletFilter(val);
+                    setSelectedFinanceStore(val);
+                    onShowToast(
+                      'Store Filter Applied',
+                      val === 'CONSOLIDATED' ? 'Showing Consolidated Network Data' : `Filtered to ${val}`
+                    );
+                  }}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                    isLight
+                      ? 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50 focus:border-[#0F4C3A]'
+                      : 'bg-stone-800 border-stone-700 text-stone-100 hover:bg-stone-700'
+                  }`}
+                >
+                  <option value="CONSOLIDATED">All Outlets (Consolidated Network)</option>
+                  <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
+                  <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
+                  <option value="store-jkt-menteng">Menteng Heritage (Jakarta)</option>
+                  <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
+                  <option value="store-sby-gubeng">Gubeng Central Hub (Surabaya)</option>
+                  <option value="store-bali-canggu">Batu Bolong Organic (Bali)</option>
+                </select>
+              </div>
 
-            {/* Storefront Exit Button */}
-            <button
-              onClick={onCloseToStorefront}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all shadow-sm"
-            >
-              <Store className="w-3.5 h-3.5" />
-              <span>Back to Storefront</span>
-            </button>
+              {/* Dark / Light Mode Instant Toggle Switch */}
+              <button
+                onClick={toggleTheme}
+                className={`p-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center ${
+                  isLight
+                    ? 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700 shadow-2xs'
+                    : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-amber-400'
+                }`}
+                title={isLight ? 'Switch to Dark Mode' : 'Switch to Clean Light Mode'}
+                aria-label="Toggle theme"
+              >
+                {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              </button>
+
+              {/* Refresh Sync Button */}
+              <button
+                onClick={refreshAllData}
+                disabled={isLoading}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-all disabled:opacity-50 ${
+                  isLight
+                    ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700 shadow-2xs'
+                    : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-300'
+                }`}
+                title="Refresh Backend Data"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Sync Data</span>
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Tab Navigation Bar */}
-      <div className={`${isLight ? 'bg-white border-b border-gray-200/90 shadow-2xs' : 'bg-stone-900 border-b border-stone-800'} px-4 sm:px-6 transition-colors duration-200`}>
-        <div className="max-w-7xl mx-auto flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none py-2">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'overview'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            Executive Omzet
-          </button>
-
-          <button
-            onClick={() => setActiveTab('operations')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'operations'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <Store className="w-4 h-4" />
-            Store Operations
-            {storeOutlets.some((o) => o.isEmergencyClosed) && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('inventory')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'inventory'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <Boxes className="w-4 h-4" />
-            Inventory
-            {inventoryMetrics.lowStockCount > 0 && (
-              <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                {inventoryMetrics.lowStockCount}
-              </span>
-            )}
-          </button>
-
-          {/* NEW MODULE: FEFO & BATCH */}
-          <button
-            onClick={() => setActiveTab('fefo')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'fefo'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            FEFO &amp; Batch
-            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-              FEFO
-            </span>
-          </button>
-
-          {/* NEW MODULE: SCRAP & WASTE */}
-          <button
-            onClick={() => setActiveTab('waste')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'waste'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <Trash2 className="w-4 h-4" />
-            Scrap &amp; Waste
-            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30">
-              Shrinkage
-            </span>
-          </button>
-
-          {/* NEW MODULE: IN-STORE PICKER & CATCH WEIGHT */}
-          <button
-            onClick={() => setActiveTab('picker')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'picker'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <Scan className="w-4 h-4" />
-            Picker &amp; Catch Weight
-          </button>
-
-          <button
-            onClick={() => setActiveTab('procurement')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'procurement'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <Truck className="w-4 h-4" />
-            Procurement: PR/PO/GR
-            {purchaseOrders.some((p) => p.status === 'Partially Received') && (
-              <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
-                Partial
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('accounting')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'accounting'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <ReceiptText className="w-4 h-4" />
-            Accounting &amp; P&amp;L
-          </button>
-
-          <button
-            onClick={() => setActiveTab('openapi')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'openapi'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <FileCode2 className="w-4 h-4" />
-            QRIS Open API
-          </button>
-
-          {/* NEW MODULE: TECHNICAL ARCHITECTURE & ERD */}
-          <button
-            onClick={() => setActiveTab('erd')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-              activeTab === 'erd'
-                ? isLight
-                  ? 'bg-[#0F4C3A] text-white shadow-xs'
-                  : 'bg-emerald-600 text-white shadow-sm'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            ERD &amp; Specs
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
-        {/* ========================================================================= */}
-        {/* TAB 1: EXECUTIVE OMZET & OVERVIEW */}
-        {/* ========================================================================= */}
+        {/* 3. Main Content Area */}
+        <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* ========================================================================= */}
+          {/* TAB 1: EXECUTIVE OMZET & OVERVIEW */}
+          {/* ========================================================================= */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* KPI Stat Cards */}
@@ -1285,6 +1258,170 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* ========================================================================= */}
         {activeTab === 'inventory' && (
           <div className="space-y-6">
+            {/* MODULE 4: Climate-Adaptive Cold-Chain Monitoring & Dynamic IoT Thresholds */}
+            <div className={`${cardClass} p-5 border transition-all`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-stone-800">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0F4C3A] text-white uppercase tracking-wider">
+                      Module 4 • Global Scalability
+                    </span>
+                    <span className={`text-xs ${textMuted}`}>
+                      Climate-Adaptive IoT Cold-Chain Engine
+                    </span>
+                  </div>
+                  <h3 className={`text-base font-bold ${textTitle}`}>
+                    Climate-Adaptive Chiller &amp; Sub-Zero Storage Thresholds
+                  </h3>
+                  <p className={`text-xs ${textMuted} mt-0.5`}>
+                    Dynamically adjusts IoT alert baselines based on local outdoor heatwaves (e.g. Australia extreme heat vs European temperate) to trigger early cooling alerts before spoilage occurs.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                    <Thermometer className="w-3.5 h-3.5" />
+                    IoT Telemetry Active
+                  </span>
+                </div>
+              </div>
+
+              {/* Climate Zones Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-4">
+                {climateConfigs.map((cfg) => {
+                  const isBreached = cfg.isTempAlertActive;
+                  const isCritical = cfg.alertSeverity === 'CRITICAL_BREACH';
+
+                  return (
+                    <div
+                      key={cfg.warehouseZoneId}
+                      className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                        isCritical
+                          ? 'border-rose-500 bg-rose-500/5 shadow-xs'
+                          : isBreached
+                          ? 'border-amber-500 bg-amber-500/5'
+                          : isLight
+                          ? 'border-gray-200 bg-gray-50/70'
+                          : 'border-stone-800 bg-stone-800/40'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-bold text-xs truncate text-gray-900 dark:text-white">
+                            {cfg.zoneName}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                              isCritical
+                                ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 animate-pulse'
+                                : isBreached
+                                ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                                : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            }`}
+                          >
+                            {cfg.alertSeverity.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+
+                        <div className="text-[11px] text-gray-500 dark:text-stone-400 mb-3 flex items-center gap-1.5">
+                          <Globe2 className="w-3 h-3 text-sky-500" />
+                          <span>{cfg.regionalClimateProfile}</span>
+                        </div>
+
+                        {/* Ambient Weather vs Actual Zone Temp */}
+                        <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                          <div className={`p-2.5 rounded-lg border ${isLight ? 'bg-white border-gray-200' : 'bg-stone-800 border-stone-700'}`}>
+                            <span className="text-[10px] text-gray-400 block">External Weather:</span>
+                            <div className="font-bold mt-0.5 flex items-center gap-1">
+                              <Sun className="w-3 h-3 text-amber-500" />
+                              {cfg.ambientExternalTempCelsius}°C ({cfg.externalHumidityPercent}%)
+                            </div>
+                          </div>
+
+                          <div className={`p-2.5 rounded-lg border ${isLight ? 'bg-white border-gray-200' : 'bg-stone-800 border-stone-700'}`}>
+                            <span className="text-[10px] text-gray-400 block">Current IoT Sensor:</span>
+                            <div className={`font-mono font-bold mt-0.5 ${isBreached ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                              {cfg.currentActualTempCelsius}°C
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5 text-[11px] text-gray-500 dark:text-stone-400">
+                          <div className="flex justify-between">
+                            <span>Standard Safe Range:</span>
+                            <span className="font-mono font-semibold text-gray-700 dark:text-stone-300">
+                              {cfg.standardTempMinCelsius}°C to {cfg.standardTempMaxCelsius}°C
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Adaptive Offset (Heatwave):</span>
+                            <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                              {cfg.adaptiveOffsetCelsius > 0 ? `+${cfg.adaptiveOffsetCelsius}` : cfg.adaptiveOffsetCelsius}°C
+                            </span>
+                          </div>
+                          <div className="flex justify-between font-bold text-gray-800 dark:text-stone-200 pt-1 border-t border-gray-200 dark:border-stone-700">
+                            <span>Active IoT Breach Trigger:</span>
+                            <span className="font-mono text-rose-600 dark:text-rose-400">
+                              &gt; {cfg.activeAlertThresholdCelsius}°C
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interactive Threshold Offset Tweak */}
+                      <div className="mt-3.5 pt-2.5 border-t border-gray-200 dark:border-stone-700 flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-semibold text-gray-400">
+                          Adjust Adaptive Margin:
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={async () => {
+                              const newOffset = Number((cfg.adaptiveOffsetCelsius - 0.5).toFixed(1));
+                              try {
+                                const res = await apiClient.updateClimateThreshold(cfg.warehouseZoneId, {
+                                  adaptiveOffsetCelsius: newOffset,
+                                });
+                                setClimateConfigs((prev) =>
+                                  prev.map((c) => (c.warehouseZoneId === cfg.warehouseZoneId ? res.config : c))
+                                );
+                                onShowToast('Threshold Updated', `Adaptive offset reduced to ${newOffset}°C`);
+                              } catch (e) {
+                                onShowToast('Error', String(e));
+                              }
+                            }}
+                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-stone-700"
+                            title="Tighter threshold (-0.5°C)"
+                          >
+                            -0.5°
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const newOffset = Number((cfg.adaptiveOffsetCelsius + 0.5).toFixed(1));
+                              try {
+                                const res = await apiClient.updateClimateThreshold(cfg.warehouseZoneId, {
+                                  adaptiveOffsetCelsius: newOffset,
+                                });
+                                setClimateConfigs((prev) =>
+                                  prev.map((c) => (c.warehouseZoneId === cfg.warehouseZoneId ? res.config : c))
+                                );
+                                onShowToast('Threshold Updated', `Adaptive offset increased to ${newOffset}°C`);
+                              } catch (e) {
+                                onShowToast('Error', String(e));
+                              }
+                            }}
+                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-stone-700"
+                            title="Looser threshold (+0.5°C)"
+                          >
+                            +0.5°
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Warehouse Storage Zones Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className={`${cardClass} p-4 flex items-center gap-3`}>
@@ -1658,6 +1795,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             cashFlow={cashFlow}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
+            activeSubTab={accountingDeepSubTab}
+            onSubTabChange={(sub) => setAccountingDeepSubTab(sub)}
           />
         )}
 
@@ -1800,6 +1939,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <ErdSpecsModule theme={theme} />
         )}
 
+        {/* ========================================================================= */}
+        {/* TAB: ROLES & SHIFTS ACCESS CONTROL (RBAC) */}
+        {/* ========================================================================= */}
+        {activeTab === 'rbac' && (
+          <RbacModule
+            theme={theme}
+            onShowToast={onShowToast}
+            onSessionUpdated={(s) => setActiveStaffSession(s)}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: SECURITY & ADMINISTRATIVE AUDIT LOGS */}
+        {/* ========================================================================= */}
+        {activeTab === 'audit' && (
+          <SecurityAuditModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            onShowToast={onShowToast}
+          />
+        )}
+
         {/* State Machine Guard Y.4: Active Delivery In-Flight Store Closure Warning Modal */}
         {closureWarningModal && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -1857,7 +2018,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 };

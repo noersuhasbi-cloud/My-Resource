@@ -21,6 +21,13 @@ import type {
   WasteRecord,
   PickerOrder,
   PickerOrderItem,
+  WeightToleranceConfig,
+  NaturalShrinkageAdjustment,
+  SubstitutionPromptRecord,
+  StaffShiftSession,
+  SecurityAuditTrailRecord,
+  ClimateAdaptiveThresholdConfig,
+  SupportedCurrency,
 } from '../types/index.ts';
 
 export const apiClient = {
@@ -521,6 +528,184 @@ export const apiClient = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to record catch weight');
     }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 1: Shrinkage & Natural Weight Loss (Evaporation)
+  // -------------------------------------------------------------
+  async getWeightTolerances(): Promise<WeightToleranceConfig[]> {
+    const res = await fetch('/api/admin/shrinkage/tolerances');
+    return res.json();
+  },
+
+  async updateWeightTolerance(category: string, update: { maxEvaporationTolerancePercent?: number; auditIntervalHours?: number }): Promise<{
+    success: boolean;
+    config: WeightToleranceConfig;
+  }> {
+    const res = await fetch(`/api/admin/shrinkage/tolerances/${encodeURIComponent(category)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(update),
+    });
+    return res.json();
+  },
+
+  async getNaturalShrinkageAdjustments(storeId?: string, category?: string): Promise<NaturalShrinkageAdjustment[]> {
+    const params = new URLSearchParams();
+    if (storeId) params.append('storeId', storeId);
+    if (category) params.append('category', category);
+    const res = await fetch(`/api/admin/shrinkage/adjustments?${params.toString()}`);
+    return res.json();
+  },
+
+  async logNaturalShrinkage(payload: {
+    sku: string;
+    storeId: string;
+    recordedGrossWeightGrams: number;
+    actualAuditWeightGrams: number;
+    batchId?: string;
+    auditorNotes?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    adjustment: NaturalShrinkageAdjustment;
+    journalEntryIds: string[];
+  }> {
+    const res = await fetch('/api/admin/shrinkage/adjust-natural', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to record natural shrinkage adjustment');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 2: Substitution & Customer Prompt Engine
+  // -------------------------------------------------------------
+  async getSubstitutionPrompts(status?: string, storeId?: string): Promise<SubstitutionPromptRecord[]> {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (storeId) params.append('storeId', storeId);
+    const res = await fetch(`/api/admin/substitutions/prompts?${params.toString()}`);
+    return res.json();
+  },
+
+  async requestSubstitutionPrompt(payload: {
+    orderId: string;
+    itemId: string;
+    replacementSku: string;
+    channel?: 'WhatsApp' | 'InAppPush' | 'SMS';
+    absorbPriceDifference?: boolean;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    prompt: SubstitutionPromptRecord;
+  }> {
+    const res = await fetch('/api/admin/substitutions/request-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to dispatch customer substitution prompt');
+    }
+    return res.json();
+  },
+
+  async respondSubstitutionPrompt(promptId: string, action: 'approve' | 'decline'): Promise<{
+    success: boolean;
+    message: string;
+    prompt: SubstitutionPromptRecord;
+  }> {
+    const res = await fetch(`/api/admin/substitutions/${encodeURIComponent(promptId)}/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to process prompt response');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 3: Granular RBAC by Shift, Physical Zone & Multi-Outlet
+  // -------------------------------------------------------------
+  async getRbacSession(): Promise<{
+    currentSession: StaffShiftSession;
+    availableProfiles: StaffShiftSession[];
+  }> {
+    const res = await fetch('/api/admin/rbac/current-session');
+    return res.json();
+  },
+
+  async switchRbacSession(userId: string): Promise<{
+    success: boolean;
+    session: StaffShiftSession;
+  }> {
+    const res = await fetch('/api/admin/rbac/switch-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    return res.json();
+  },
+
+  async getSecurityAuditTrail(storeId?: string, actionType?: string): Promise<SecurityAuditTrailRecord[]> {
+    const params = new URLSearchParams();
+    if (storeId) params.append('storeId', storeId);
+    if (actionType) params.append('actionType', actionType);
+    const res = await fetch(`/api/admin/rbac/security-audit-trail?${params.toString()}`);
+    return res.json();
+  },
+
+  async checkZoneAccess(zoneType: string): Promise<{
+    success: boolean;
+    authorized: boolean;
+    error?: string;
+  }> {
+    const res = await fetch('/api/admin/rbac/check-zone-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zoneType }),
+    });
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 4: Multi-Currency & Climate-Adaptive Cold Chain
+  // -------------------------------------------------------------
+  async getClimateThresholds(storeId?: string): Promise<ClimateAdaptiveThresholdConfig[]> {
+    const params = new URLSearchParams();
+    if (storeId) params.append('storeId', storeId);
+    const res = await fetch(`/api/admin/scalability/climate-thresholds?${params.toString()}`);
+    return res.json();
+  },
+
+  async updateClimateThreshold(zoneId: string, update: Partial<ClimateAdaptiveThresholdConfig>): Promise<{
+    success: boolean;
+    config: ClimateAdaptiveThresholdConfig;
+  }> {
+    const res = await fetch(`/api/admin/scalability/climate-thresholds/${encodeURIComponent(zoneId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(update),
+    });
+    return res.json();
+  },
+
+  async getMultiCurrencyPnL(storeId?: string, currency?: SupportedCurrency): Promise<any> {
+    const params = new URLSearchParams();
+    if (storeId) params.append('storeId', storeId);
+    if (currency) params.append('currency', currency);
+    const res = await fetch(`/api/admin/accounting/pnl-multicurrency?${params.toString()}`);
     return res.json();
   },
 };

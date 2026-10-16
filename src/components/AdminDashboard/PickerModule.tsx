@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import type { PickerOrder, PickerOrderItem, InventoryItem } from '../../types/index.ts';
+import type {
+  PickerOrder,
+  PickerOrderItem,
+  InventoryItem,
+  SubstitutionPromptRecord,
+} from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import {
@@ -22,6 +27,13 @@ import {
   Thermometer,
   ShieldCheck,
   Layers,
+  MessageCircle,
+  Smartphone,
+  Send,
+  ThumbsUp,
+  ThumbsDown,
+  FileCheck2,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface PickerModuleProps {
@@ -37,6 +49,9 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
   inventory,
   onShowToast,
 }) => {
+  // View Switcher: Active Picking Queue vs Real-Time Substitution Prompt Engine (Module 2)
+  const [activeView, setActiveView] = useState<'queue' | 'prompts'>('queue');
+
   const [orders, setOrders] = useState<PickerOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<PickerOrder | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -50,30 +65,44 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
   const [catchWeightItem, setCatchWeightItem] = useState<PickerOrderItem | null>(null);
   const [scaleGramsInput, setScaleGramsInput] = useState<number>(300);
 
-  // Substitution Modal State
+  // =============================================================
+  // MODULE 2: Substitution & Customer Prompt Engine State
+  // =============================================================
+  const [substitutionPrompts, setSubstitutionPrompts] = useState<SubstitutionPromptRecord[]>([]);
   const [subItem, setSubItem] = useState<PickerOrderItem | null>(null);
+  const [subOrder, setSubOrder] = useState<PickerOrder | null>(null);
   const [replacementSku, setReplacementSku] = useState<string>('');
-  const [subReason, setSubReason] = useState<string>('Shelf stock depleted; fresh harvest alternative');
+  const [promptChannel, setPromptChannel] = useState<'WhatsApp' | 'InAppPush' | 'SMS'>('WhatsApp');
+  const [absorbPriceDifference, setAbsorbPriceDifference] = useState<boolean>(true);
   const [isSubmittingSub, setIsSubmittingSub] = useState<boolean>(false);
+  const [isSimulatingCustomerResponse, setIsSimulatingCustomerResponse] = useState<string | null>(null);
 
   const isLight = theme === 'light';
 
-  const loadPickerOrders = async () => {
+  const loadPickerData = async () => {
     setIsLoading(true);
     try {
-      const res = await apiClient.getPickerOrders(
-        selectedStore === 'CONSOLIDATED' ? 'ALL' : selectedStore,
-        statusFilter === 'ALL' ? undefined : statusFilter
-      );
-      setOrders(res);
-      if (res.length > 0) {
-        // Keep selected order updated or pick first
-        setSelectedOrder((prev) => (prev ? res.find((o) => o.orderId === prev.orderId) || res[0] : res[0]));
+      const [ordersRes, promptsRes] = await Promise.all([
+        apiClient.getPickerOrders(
+          selectedStore === 'CONSOLIDATED' ? 'ALL' : selectedStore,
+          statusFilter === 'ALL' ? undefined : statusFilter
+        ),
+        apiClient.getSubstitutionPrompts(
+          undefined,
+          selectedStore === 'CONSOLIDATED' ? undefined : selectedStore
+        ).catch(() => []),
+      ]);
+
+      setOrders(ordersRes);
+      setSubstitutionPrompts(promptsRes);
+
+      if (ordersRes.length > 0) {
+        setSelectedOrder((prev) => (prev ? ordersRes.find((o) => o.orderId === prev.orderId) || ordersRes[0] : ordersRes[0]));
       } else {
         setSelectedOrder(null);
       }
     } catch (e) {
-      console.error('Failed to load picker orders:', e);
+      console.error('Failed to load picker data:', e);
       onShowToast('Error', 'Failed to retrieve picker queue');
     } finally {
       setIsLoading(false);
@@ -81,16 +110,16 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
   };
 
   useEffect(() => {
-    loadPickerOrders();
+    loadPickerData();
   }, [selectedStore, statusFilter]);
 
   // Handle Scan Barcode
   const handleConfirmScan = async (item: PickerOrderItem) => {
     if (!selectedOrder) return;
     try {
-      const res = await apiClient.pickOrderItem(selectedOrder.orderId, item.id, item.barcode);
+      await apiClient.pickOrderItem(selectedOrder.orderId, item.id, item.barcode);
       onShowToast('Item Scanned & Verified', `${item.productName} verified by EAN-13 barcode.`);
-      loadPickerOrders();
+      loadPickerData();
       setActiveItemToScan(null);
       setScannedBarcodeInput('');
     } catch (err) {
@@ -108,33 +137,55 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
         `${catchWeightItem.productName} weighed at ${scaleGramsInput}g. Price adjusted to ${formatIDR(res.item.finalPrice)}.`
       );
       setCatchWeightItem(null);
-      loadPickerOrders();
+      loadPickerData();
     } catch (err) {
       onShowToast('Weight Recording Failed', String(err));
     }
   };
 
-  // Handle Real-Time Substitution
-  const handleConfirmSubstitution = async () => {
-    if (!selectedOrder || !subItem || !replacementSku) return;
+  // MODULE 2: Dispatch Quick Substitution Prompt to Customer
+  const handleDispatchSubstitutionPrompt = async () => {
+    const activeTargetOrder = subOrder || selectedOrder;
+    if (!activeTargetOrder || !subItem || !replacementSku) return;
     setIsSubmittingSub(true);
     try {
-      const res = await apiClient.substituteOrderItem(selectedOrder.orderId, subItem.id, {
+      const res = await apiClient.requestSubstitutionPrompt({
+        orderId: activeTargetOrder.orderId,
+        itemId: subItem.id,
         replacementSku,
-        reason: subReason,
+        channel: promptChannel,
+        absorbPriceDifference,
       });
 
       onShowToast(
-        'Substitution Engine Dispatched',
-        `Item substituted. Customer push notification triggered: "${res.notificationMessage}"`
+        'Customer Prompt Dispatched',
+        `Prompt sent to ${res.prompt.customerName} via ${res.prompt.channel}. Awaiting buyer decision.`
       );
 
       setSubItem(null);
-      loadPickerOrders();
+      setSubOrder(null);
+      loadPickerData();
     } catch (err) {
-      onShowToast('Substitution Failed', String(err));
+      onShowToast('Substitution Prompt Failed', String(err));
     } finally {
       setIsSubmittingSub(false);
+    }
+  };
+
+  // MODULE 2: Simulate Customer Decision (WhatsApp approval / decline)
+  const handleSimulateCustomerResponse = async (promptId: string, action: 'approve' | 'decline') => {
+    setIsSimulatingCustomerResponse(promptId);
+    try {
+      const res = await apiClient.respondSubstitutionPrompt(promptId, action);
+      onShowToast(
+        action === 'approve' ? 'Buyer Approved Substitution!' : 'Buyer Declined Substitution',
+        res.message
+      );
+      loadPickerData();
+    } catch (err) {
+      onShowToast('Response Failed', String(err));
+    } finally {
+      setIsSimulatingCustomerResponse(null);
     }
   };
 
@@ -144,11 +195,17 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
     try {
       const res = await apiClient.completePickerOrder(selectedOrder.orderId);
       onShowToast('Picking Complete', res.message);
-      loadPickerOrders();
+      loadPickerData();
     } catch (err) {
       onShowToast('Failed to Complete Order', String(err));
     }
   };
+
+  // Live price delta calculations for modal
+  const targetReplacementItem = inventory.find((i) => i.sku === replacementSku);
+  const originalItemPrice = subItem?.finalPrice || subItem?.pricePerUnit || 0;
+  const replacementPrice = targetReplacementItem?.sellingPrice || 0;
+  const priceDelta = replacementPrice - originalItemPrice;
 
   return (
     <div className="space-y-6">
@@ -164,33 +221,25 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0F4C3A] text-white tracking-wide uppercase">
-                Picker App &amp; Real-Time Fulfillment
+                Fulfillment Terminal
               </span>
               <span className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
-                Aisle-Optimized Terminal
+                Aisle-Optimized Barcode &amp; Catch-Weight Operations
               </span>
             </div>
-            <h2
-              className={`text-xl sm:text-2xl font-bold tracking-tight ${
-                isLight ? 'text-stone-900' : 'text-white'
-              }`}
-            >
-              In-Store Picker Terminal &amp; Catch Weight
+            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-stone-900' : 'text-white'}`}>
+              In-Store Fulfillment &amp; Quick Substitution
             </h2>
-            <p
-              className={`text-xs sm:text-sm mt-1 max-w-2xl ${
-                isLight ? 'text-stone-600' : 'text-stone-400'
-              }`}
-            >
-              Directs store floor staff through cold-chain and produce aisles with exact bay
-              coordinates, barcode scanning verification, integrated digital scale weigh-in for
-              catch-weight meats/fish, and automated customer substitution workflows.
+            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-stone-600' : 'text-stone-400'}`}>
+              High-velocity picking workflow with EAN-13 barcode verification, digital catch-weight scales,
+              and real-time customer WhatsApp substitution prompts with FIFO batch reconciliation.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={loadPickerOrders}
+              onClick={loadPickerData}
+              disabled={isLoading}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                 isLight
                   ? 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50 shadow-sm'
@@ -198,336 +247,455 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh Orders
+              Refresh Queue
             </button>
           </div>
         </div>
+
+        {/* View Switcher Tabs (Module 2 Integration) */}
+        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200/80 dark:border-stone-800">
+          <button
+            onClick={() => setActiveView('queue')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              activeView === 'queue'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+            }`}
+          >
+            <Scan className="w-3.5 h-3.5" />
+            Active Picking Orders &amp; Scales ({orders.length})
+          </button>
+
+          <button
+            onClick={() => setActiveView('prompts')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              activeView === 'prompts'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+            }`}
+          >
+            <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+            Module 2: Real-Time Substitution &amp; Buyer Prompts ({substitutionPrompts.length})
+          </button>
+        </div>
       </div>
 
-      {/* Main Layout: Orders List (Left) + Order Detail & Picking List (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Order Queue */}
-        <div className="lg:col-span-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className={`text-sm font-bold ${isLight ? 'text-stone-900' : 'text-white'}`}>
-              Assigned Pick Orders ({orders.length})
-            </h3>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className={`px-2 py-1 rounded-lg text-xs border ${
-                isLight ? 'bg-white border-stone-200 text-stone-700' : 'bg-stone-800 border-stone-700 text-white'
-              }`}
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="in_progress">In Progress</option>
-              <option value="assigned">Assigned</option>
-              <option value="ready_for_packing">Ready for Packing</option>
-              <option value="completed">Completed</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            {orders.length === 0 ? (
-              <div
-                className={`p-6 text-center rounded-xl border text-xs text-stone-500 ${
-                  isLight ? 'bg-white border-stone-200' : 'bg-stone-900 border-stone-800'
+      {/* VIEW 1: ACTIVE ORDER QUEUE & CATCH WEIGHT */}
+      {activeView === 'queue' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Order Queue Column */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className={`font-bold text-sm ${isLight ? 'text-stone-900' : 'text-white'}`}>
+                Assigned Orders Queue
+              </h3>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className={`px-2 py-1 rounded-lg text-xs border ${
+                  isLight ? 'bg-white border-stone-200 text-stone-700' : 'bg-stone-800 border-stone-700 text-stone-200'
                 }`}
               >
-                No active orders matching this filter.
-              </div>
-            ) : (
-              orders.map((order) => {
-                const isSelected = selectedOrder?.orderId === order.orderId;
-                const isComplete = order.pickerStatus === 'completed';
-                const isReady = order.pickerStatus === 'ready_for_packing';
+                <option value="ALL">All Statuses</option>
+                <option value="assigned">Assigned</option>
+                <option value="in_progress">In Progress</option>
+                <option value="ready_for_packing">Ready to Pack</option>
+                <option value="dispatched">Dispatched</option>
+              </select>
+            </div>
 
-                return (
-                  <div
-                    key={order.orderId}
-                    onClick={() => setSelectedOrder(order)}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                      isSelected
-                        ? isLight
-                          ? 'bg-emerald-50/70 border-emerald-600 shadow-sm ring-1 ring-emerald-600/20'
-                          : 'bg-emerald-950/30 border-emerald-500 ring-1 ring-emerald-500/20'
-                        : isLight
-                        ? 'bg-white border-stone-200 hover:border-emerald-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)]'
-                        : 'bg-stone-900 border-stone-800 hover:border-stone-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-xs text-stone-900 dark:text-white">
-                        #{order.orderId}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
-                          isComplete
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : isReady
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {order.pickerStatus.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-
-                    <div className="mt-2 text-xs font-medium text-stone-800 dark:text-stone-200">
-                      {order.customerName}
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-stone-500 mt-2">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-stone-400" />
-                        <span>Dispatch by {new Date(order.targetDispatchTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <span className="font-bold text-emerald-700">
-                        {order.pickedItems} / {order.totalItems} picked
-                      </span>
-                    </div>
-
-                    {order.hasCatchWeight && (
-                      <div className="mt-2 flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                        <Scale className="w-3 h-3" />
-                        <span>Contains Catch-Weight Item (Scale Req.)</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Picking Terminal & Interactive Items Queue */}
-        <div className="lg:col-span-8">
-          {selectedOrder ? (
-            <div
-              className={`rounded-2xl border p-5 sm:p-6 transition-all ${
-                isLight
-                  ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-                  : 'bg-stone-900/90 border-stone-800'
-              }`}
-            >
-              {/* Order Terminal Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-stone-200 dark:border-stone-800">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-lg font-bold text-stone-900 dark:text-white">
-                      Order #{selectedOrder.orderId}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-600 text-white">
-                      {selectedOrder.priority.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <div className="text-xs text-stone-500 mt-1 flex items-center gap-3">
-                    <span>Customer: <strong>{selectedOrder.customerName}</strong></span>
-                    <span>Picker: <strong>{selectedOrder.assignedPicker}</strong></span>
-                    <span>Store: <strong>{selectedOrder.storeName}</strong></span>
-                  </div>
+            <div className="space-y-2.5 max-h-[750px] overflow-y-auto pr-1">
+              {orders.length === 0 ? (
+                <div className="p-8 text-center text-xs text-stone-400 border rounded-xl">
+                  No orders found in queue.
                 </div>
-
-                <div className="flex items-center gap-2">
-                  {selectedOrder.pickerStatus === 'ready_for_packing' && (
-                    <button
-                      onClick={handleCompleteOrder}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      Stage for Dispatch
-                    </button>
-                  )}
-                  {selectedOrder.pickerStatus === 'completed' && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      <Check className="w-4 h-4" />
-                      Staged at Cold-Chain Bay
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="py-4">
-                <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
-                  <span>Picking Progress</span>
-                  <span>
-                    {selectedOrder.pickedItems} of {selectedOrder.totalItems} items completed (
-                    {Math.round((selectedOrder.pickedItems / selectedOrder.totalItems) * 100)}%)
-                  </span>
-                </div>
-                <div className="w-full bg-stone-100 dark:bg-stone-800 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="h-full bg-[#0F4C3A] rounded-full transition-all duration-300"
-                    style={{
-                      width: `${(selectedOrder.pickedItems / selectedOrder.totalItems) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Picking Items Queue */}
-              <div className="space-y-3 pt-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">
-                  Floor Navigation &amp; Item Verification
-                </h4>
-
-                {selectedOrder.items.map((item) => {
-                  const isPicked = item.status === 'picked';
-                  const isSubstituted = item.status === 'substituted';
+              ) : (
+                orders.map((order) => {
+                  const isSelected = selectedOrder?.orderId === order.orderId;
+                  const percentPicked = Math.round((order.pickedItems / order.totalItems) * 100);
 
                   return (
                     <div
-                      key={item.id}
-                      className={`p-4 rounded-xl border transition-all ${
-                        isPicked
-                          ? isLight
-                            ? 'bg-emerald-50/40 border-emerald-200/80'
-                            : 'bg-emerald-950/20 border-emerald-800/40'
-                          : isSubstituted
-                          ? isLight
-                            ? 'bg-blue-50/40 border-blue-200/80'
-                            : 'bg-blue-950/20 border-blue-800/40'
+                      key={order.orderId}
+                      onClick={() => setSelectedOrder(order)}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                        isSelected
+                          ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 shadow-sm ring-1 ring-[#0F4C3A]'
                           : isLight
-                          ? 'bg-stone-50/60 border-stone-200 hover:border-emerald-300'
-                          : 'bg-stone-800/50 border-stone-700'
+                          ? 'bg-white border-stone-200/80 hover:bg-stone-50'
+                          : 'bg-stone-900 border-stone-800 hover:bg-stone-800/60'
                       }`}
                     >
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-sm text-stone-900 dark:text-white">
-                              {item.productName}
-                            </span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-200">
-                              {item.sku}
-                            </span>
-                            {item.isCatchWeight && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
-                                <Scale className="w-3 h-3" />
-                                Catch Weight ({item.actualWeighedGrams ? `${item.actualWeighedGrams}g weighed` : `est. ${item.estimatedWeightGrams}g`})
-                              </span>
-                            )}
-                          </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">
+                          {order.orderId}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            order.priority === 'express_30min'
+                              ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                              : 'bg-stone-500/10 text-stone-600'
+                          }`}
+                        >
+                          {order.priority.replace(/_/g, ' ')}
+                        </span>
+                      </div>
 
-                          {/* Aisle & Shelf Wayfinding */}
-                          <div className="flex items-center gap-3 text-xs text-stone-600 dark:text-stone-400">
-                            <span className="flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400">
-                              <MapPin className="w-3.5 h-3.5" />
-                              {item.aisleLocation}
-                            </span>
-                            <span>&bull;</span>
-                            <span>{item.shelfLocation}</span>
-                            <span>&bull;</span>
-                            <span className="font-mono text-stone-500">Barcode: {item.barcode}</span>
-                          </div>
+                      <div className="mt-2 text-xs font-semibold text-stone-900 dark:text-stone-100 truncate">
+                        {order.customerName}
+                      </div>
+                      <div className="text-[11px] text-stone-400 flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3" /> {order.storeName}
+                      </div>
 
-                          {/* Substitution details if applied */}
-                          {item.substitution && (
-                            <div className="mt-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 text-xs text-blue-900 dark:text-blue-200">
-                              <div className="font-semibold flex items-center gap-1">
-                                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                                Real-Time Substitution Approved:
-                              </div>
-                              <div className="text-[11px] mt-0.5">
-                                Replaced with <strong>{item.substitution.replacementName}</strong> ({item.substitution.replacementSku}). Customer notified via SMS.
-                              </div>
-                            </div>
-                          )}
+                      {/* Progress Bar */}
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className="text-stone-500">
+                            {order.pickedItems}/{order.totalItems} Items Picked
+                          </span>
+                          <span className="font-bold text-[#0F4C3A] dark:text-emerald-400">{percentPicked}%</span>
                         </div>
-
-                        {/* Price & Actions */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="text-right mr-2">
-                            <div className="font-bold text-sm text-stone-900 dark:text-white font-mono">
-                              {formatIDR(item.finalPrice)}
-                            </div>
-                            <div className="text-[11px] text-stone-500">
-                              Qty: {item.orderedQty} {item.unit}
-                            </div>
-                          </div>
-
-                          {/* Catch Weight Weigh-in Button */}
-                          {item.isCatchWeight && !isPicked && (
-                            <button
-                              onClick={() => {
-                                setCatchWeightItem(item);
-                                setScaleGramsInput(item.actualWeighedGrams || item.estimatedWeightGrams || 300);
-                              }}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all"
-                            >
-                              <Scale className="w-3.5 h-3.5" />
-                              Weigh on Scale
-                            </button>
-                          )}
-
-                          {/* Barcode Scan Simulator Button */}
-                          {!isPicked && (
-                            <button
-                              onClick={() => handleConfirmScan(item)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs transition-all"
-                            >
-                              <Scan className="w-3.5 h-3.5" />
-                              Scan Barcode
-                            </button>
-                          )}
-
-                          {/* Substitution Button */}
-                          {!isPicked && !isSubstituted && (
-                            <button
-                              onClick={() => {
-                                setSubItem(item);
-                                setReplacementSku(inventory[1]?.sku || 'SKU-PRD-002');
-                              }}
-                              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                                isLight
-                                  ? 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
-                                  : 'bg-stone-800 border-stone-700 text-stone-200'
-                              }`}
-                            >
-                              Out of Stock / Substitute
-                            </button>
-                          )}
-
-                          {/* Picked Status Badge */}
-                          {isPicked && (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-bold bg-emerald-600 text-white shadow-xs">
-                              <Check className="w-3.5 h-3.5" />
-                              Picked
-                            </span>
-                          )}
+                        <div className="w-full bg-stone-100 dark:bg-stone-800 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-[#0F4C3A] h-full rounded-full transition-all duration-300"
+                            style={{ width: `${percentPicked}%` }}
+                          />
                         </div>
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                })
+              )}
             </div>
-          ) : (
-            <div
-              className={`p-12 text-center rounded-2xl border ${
-                isLight ? 'bg-white border-stone-200' : 'bg-stone-900 border-stone-800'
-              }`}
-            >
-              <ShoppingBag className="w-8 h-8 mx-auto text-stone-400 mb-2" />
-              <h3 className="font-bold text-sm text-stone-700">Select an order to start picking</h3>
-              <p className="text-xs text-stone-400 mt-1">
-                Choose an assigned order from the queue on the left to begin digital fulfillment.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* Catch-Weight Digital Scale Modal */}
+          {/* Active Order Items Column */}
+          <div className="lg:col-span-2 space-y-4">
+            {selectedOrder ? (
+              <div
+                className={`p-5 rounded-2xl border transition-all ${
+                  isLight ? 'bg-white border-stone-200/80 shadow-sm' : 'bg-stone-900 border-stone-800'
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-100 dark:border-stone-800">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className={`text-base font-bold ${isLight ? 'text-stone-900' : 'text-white'}`}>
+                        Order #{selectedOrder.orderId}
+                      </h3>
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400">
+                        {selectedOrder.pickerStatus.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <p className="text-xs text-stone-400 mt-0.5">
+                      Customer: {selectedOrder.customerName} ({selectedOrder.customerPhone}) &bull; Target: {selectedOrder.targetDispatchTime}
+                    </p>
+                  </div>
+
+                  {selectedOrder.pickerStatus !== 'ready_for_packing' && selectedOrder.pickerStatus !== 'completed' ? (
+                    <button
+                      onClick={handleCompleteOrder}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-sm transition-all"
+                    >
+                      Complete &amp; Seal Batch
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 text-white">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Ready for Delivery
+                    </span>
+                  )}
+                </div>
+
+                {/* Items List */}
+                <div className="space-y-3 mt-4">
+                  {selectedOrder.items.map((item) => {
+                    const isPicked = item.status === 'picked';
+                    const isSubstituted = item.status === 'substituted';
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`p-3.5 rounded-xl border transition-all ${
+                          isPicked
+                            ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-500/30'
+                            : isSubstituted
+                            ? 'bg-purple-50/40 dark:bg-purple-950/20 border-purple-500/30'
+                            : isLight
+                            ? 'bg-stone-50/60 border-stone-200'
+                            : 'bg-stone-800/40 border-stone-700'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-stone-900 dark:text-white">
+                                {item.productName}
+                              </span>
+                              {item.isCatchWeight && (
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                  Catch-Weight (Scale)
+                                </span>
+                              )}
+                              {isSubstituted && (
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-500/20 text-purple-700 dark:text-purple-300">
+                                  Substituted
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-[11px] text-stone-500 flex items-center gap-3">
+                              <span>SKU: {item.sku}</span>
+                              <span>&bull;</span>
+                              <span>Aisle: {item.aisleLocation}</span>
+                              <span>&bull;</span>
+                              <span>Shelf: {item.shelfLocation}</span>
+                            </div>
+
+                            {item.isCatchWeight && item.actualWeighedGrams && (
+                              <div className="text-[11px] font-mono text-amber-700 dark:text-amber-300 font-semibold">
+                                Certified Scale: {item.actualWeighedGrams}g &bull; Adjusted: {formatIDR(item.finalPrice)}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                            {item.isCatchWeight && !isPicked && (
+                              <button
+                                onClick={() => {
+                                  setCatchWeightItem(item);
+                                  setScaleGramsInput(item.actualWeighedGrams || item.estimatedWeightGrams || 300);
+                                }}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all"
+                              >
+                                <Scale className="w-3.5 h-3.5" />
+                                Weigh Scale
+                              </button>
+                            )}
+
+                            {!isPicked && (
+                              <button
+                                onClick={() => handleConfirmScan(item)}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs transition-all"
+                              >
+                                <Scan className="w-3.5 h-3.5" />
+                                Scan Barcode
+                              </button>
+                            )}
+
+                            {!isPicked && !isSubstituted && (
+                              <button
+                                onClick={() => {
+                                  setSubItem(item);
+                                  setSubOrder(selectedOrder);
+                                  setReplacementSku(inventory.find((i) => i.sku !== item.sku)?.sku || 'SKU-PRD-002');
+                                }}
+                                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                                  isLight
+                                    ? 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
+                                    : 'bg-stone-800 border-stone-700 text-stone-200'
+                                }`}
+                              >
+                                Quick Substitution
+                              </button>
+                            )}
+
+                            {isPicked && (
+                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-bold bg-emerald-600 text-white shadow-xs">
+                                <Check className="w-3.5 h-3.5" /> Picked
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className={`p-12 text-center rounded-2xl border ${isLight ? 'bg-white border-stone-200' : 'bg-stone-900 border-stone-800'}`}>
+                <ShoppingBag className="w-8 h-8 mx-auto text-stone-400 mb-2" />
+                <h3 className="font-bold text-sm text-stone-700">Select an order to start picking</h3>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 2: MODULE 2 REAL-TIME SUBSTITUTION & WHATSAPP PROMPTS */}
+      {activeView === 'prompts' && (
+        <div className="space-y-6">
+          <div
+            className={`p-5 rounded-2xl border ${
+              isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-stone-900 border-stone-800'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                  Real-Time Customer Substitution Queue &amp; Approval Simulator
+                </h3>
+                <p className="text-xs text-gray-400">
+                  When packers encounter an out-of-stock item, the engine sends instant notifications via WhatsApp/App Push.
+                  Simulate buyer acceptance or decline below to verify dynamic basket recomputation and FIFO batch tracking.
+                </p>
+              </div>
+
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                {substitutionPrompts.filter((p) => p.promptStatus === 'pending_customer_approval').length} Pending Buyer Decision
+              </span>
+            </div>
+
+            {/* Prompt Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {substitutionPrompts.length === 0 ? (
+                <div className="col-span-3 py-12 text-center text-gray-400 text-xs border rounded-2xl">
+                  No substitution prompts dispatched yet. Click &ldquo;Quick Substitution&rdquo; on an order item to generate one.
+                </div>
+              ) : (
+                substitutionPrompts.map((prompt) => {
+                  const isPending = prompt.promptStatus === 'pending_customer_approval';
+                  const isApproved = prompt.promptStatus === 'approved_by_customer' || prompt.promptStatus === 'auto_timeout_approved';
+                  const isDeclined = prompt.promptStatus === 'declined_by_customer';
+
+                  return (
+                    <div
+                      key={prompt.id}
+                      className={`p-4 rounded-2xl border flex flex-col justify-between transition-all ${
+                        isPending
+                          ? 'border-amber-400/80 bg-amber-500/5 shadow-xs'
+                          : isApproved
+                          ? 'border-emerald-500/40 bg-emerald-500/5'
+                          : 'border-rose-500/40 bg-rose-500/5'
+                      }`}
+                    >
+                      <div>
+                        {/* Header & Status */}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-mono text-[11px] font-bold text-gray-900 dark:text-white">
+                            {prompt.id}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                              isPending
+                                ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                                : isApproved
+                                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-rose-500/20 text-rose-700 dark:text-rose-300'
+                            }`}
+                          >
+                            {prompt.promptStatus.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+
+                        {/* Customer & Order */}
+                        <div className="text-xs font-bold text-gray-900 dark:text-white">
+                          Order #{prompt.orderId} &bull; {prompt.customerName}
+                        </div>
+                        <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
+                          <MessageCircle className="w-3 h-3 text-emerald-500" />
+                          {prompt.channel} ({prompt.customerPhone})
+                        </div>
+
+                        {/* Substitution Details */}
+                        <div className="mt-3 p-3 rounded-xl bg-white dark:bg-stone-800 border border-gray-100 dark:border-stone-700 space-y-2 text-xs">
+                          <div>
+                            <span className="text-[10px] text-rose-500 font-semibold block uppercase">Out-of-Stock:</span>
+                            <div className="font-medium text-gray-700 dark:text-stone-300">
+                              {prompt.originalProductName} ({prompt.originalSku})
+                            </div>
+                            <div className="text-[11px] text-gray-400 font-mono">
+                              Orig: {formatIDR(prompt.originalPrice)}
+                            </div>
+                          </div>
+
+                          <div className="border-t border-gray-100 dark:border-stone-700 pt-1.5">
+                            <span className="text-[10px] text-emerald-600 font-semibold block uppercase">Suggested Upgrade:</span>
+                            <div className="font-bold text-emerald-700 dark:text-emerald-300">
+                              {prompt.replacementProductName} ({prompt.replacementSku})
+                            </div>
+                            <div className="text-[11px] text-gray-400 font-mono">
+                              New: {formatIDR(prompt.replacementPrice)}{' '}
+                              {prompt.absorbPriceDifference ? (
+                                <span className="text-emerald-600 font-semibold">(Store Absorbed 100%)</span>
+                              ) : (
+                                <span className="text-amber-600 font-semibold">(Delta: {formatIDR(prompt.priceDelta)})</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* WhatsApp Message Preview Quote */}
+                        <div className="mt-2.5 p-2 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/50 text-[11px] text-emerald-900 dark:text-emerald-200 italic">
+                          &ldquo;{prompt.simulationMessage}&rdquo;
+                        </div>
+
+                        {/* FIFO Batch Traceability Info */}
+                        {prompt.fifoAuditLog && (
+                          <div className="mt-2 text-[10px] text-gray-500 font-mono">
+                            📦 {prompt.fifoAuditLog}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Interactive Customer Action Buttons */}
+                      <div className="mt-4 pt-3 border-t border-gray-200 dark:border-stone-700">
+                        {isPending ? (
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] text-gray-400 font-semibold uppercase block">
+                              Simulate Buyer Decision:
+                            </span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={() => handleSimulateCustomerResponse(prompt.id, 'approve')}
+                                disabled={isSimulatingCustomerResponse === prompt.id}
+                                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50"
+                              >
+                                <ThumbsUp className="w-3.5 h-3.5" />
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleSimulateCustomerResponse(prompt.id, 'decline')}
+                                disabled={isSimulatingCustomerResponse === prompt.id}
+                                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all disabled:opacity-50"
+                              >
+                                <ThumbsDown className="w-3.5 h-3.5" />
+                                Decline
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-gray-400">Decided:</span>
+                            <span className="font-bold text-gray-700 dark:text-stone-300">
+                              {prompt.decidedAt ? new Date(prompt.decidedAt).toLocaleTimeString('id-ID') : 'Resolved'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Catch-Weight Scale Modal */}
       {catchWeightItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div
-            className={`w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden transition-all ${
+            className={`w-full max-w-md rounded-2xl border shadow-2xl p-5 ${
               isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-stone-900 border-stone-800 text-white'
             }`}
           >
-            <div className="p-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-amber-500 text-white">
                   <Scale className="w-4 h-4" />
@@ -537,95 +705,47 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                   <p className="text-xs text-stone-500">Variable-Weight Grocery Adjustment</p>
                 </div>
               </div>
-              <button
-                onClick={() => setCatchWeightItem(null)}
-                className="p-1 rounded-lg text-stone-400 hover:text-stone-600"
-              >
+              <button onClick={() => setCatchWeightItem(null)} className="text-stone-400 hover:text-stone-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="space-y-4">
               <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 text-xs">
-                <div className="font-semibold text-stone-900 dark:text-white">
-                  {catchWeightItem.productName}
-                </div>
-                <div className="text-stone-500 mt-0.5">
-                  Base Price: {formatIDR(catchWeightItem.pricePer100g || 40000)} per 100g &bull; Target: {catchWeightItem.estimatedWeightGrams || 300}g
-                </div>
+                <div className="font-semibold">{catchWeightItem.productName}</div>
+                <div className="text-[11px] text-stone-500">Estimated: {catchWeightItem.estimatedWeightGrams || 300}g</div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1.5 text-stone-700 dark:text-stone-300">
-                  Actual Scale Reading (Grams)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={50}
-                    max={2000}
-                    step={5}
-                    value={scaleGramsInput}
-                    onChange={(e) => setScaleGramsInput(Number(e.target.value))}
-                    className={`w-full pl-4 pr-12 py-3 rounded-xl text-lg font-mono font-bold border transition-colors ${
-                      isLight
-                        ? 'bg-stone-50 border-stone-200 text-stone-900 focus:bg-white focus:border-amber-500'
-                        : 'bg-stone-800 border-stone-700 text-white'
-                    }`}
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-stone-400">
-                    grams
-                  </span>
-                </div>
+                <label className="block text-xs font-semibold mb-1">Scale Reading (Grams)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={scaleGramsInput}
+                  onChange={(e) => setScaleGramsInput(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl text-sm border font-mono font-bold"
+                />
               </div>
 
-              {/* Quick weight selector chips */}
-              <div className="flex items-center gap-2">
-                {[280, 300, 315, 330, 350].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setScaleGramsInput(preset)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold border ${
-                      scaleGramsInput === preset
-                        ? 'bg-amber-500 text-white border-amber-600'
-                        : 'bg-stone-100 dark:bg-stone-800 border-stone-200 text-stone-600'
-                    }`}
-                  >
-                    {preset}g
-                  </button>
-                ))}
-              </div>
-
-              {/* Real-Time Price Preview */}
-              <div
-                className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
-                  isLight ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-amber-950/30 border-amber-800 text-amber-200'
-                }`}
-              >
-                <div>
-                  <span className="font-semibold">Recalculated QRIS Charge:</span>
-                  <div className="text-[11px] text-stone-500">
-                    ({scaleGramsInput}g &divide; 100) &times; {formatIDR(catchWeightItem.pricePer100g || 40000)}
-                  </div>
-                </div>
-                <div className="text-base font-bold text-amber-700 font-mono">
+              <div className="p-3 rounded-xl border text-xs flex items-center justify-between bg-amber-50 text-amber-900 border-amber-200">
+                <span>Recalculated Price:</span>
+                <span className="font-mono font-bold text-base">
                   {formatIDR(Math.round((scaleGramsInput / 100) * (catchWeightItem.pricePer100g || 40000)))}
-                </div>
+                </span>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-200 dark:border-stone-800">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setCatchWeightItem(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-stone-200 text-stone-700 dark:text-stone-300"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border text-stone-700"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveCatchWeight}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white"
                 >
                   Capture Scale Weight
                 </button>
@@ -635,51 +755,46 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
         </div>
       )}
 
-      {/* Real-Time Substitution Engine Modal */}
+      {/* MODULE 2: Quick Substitution & Customer Prompt Dispatch Modal */}
       {subItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div
-            className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden transition-all ${
+            className={`w-full max-w-lg rounded-2xl border shadow-2xl p-5 ${
               isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-stone-900 border-stone-800 text-white'
             }`}
           >
-            <div className="p-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-blue-600 text-white">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base">Real-Time Substitution Engine</h3>
-                  <p className="text-xs text-stone-500">Instant Customer Alert &amp; Replacement</p>
+                  <h3 className="font-bold text-base">Module 2: Quick Substitution</h3>
+                  <p className="text-xs text-stone-500">Real-Time Buyer WhatsApp / Push Notification</p>
                 </div>
               </div>
-              <button
-                onClick={() => setSubItem(null)}
-                className="p-1 rounded-lg text-stone-400 hover:text-stone-600"
-              >
+              <button onClick={() => setSubItem(null)} className="text-stone-400 hover:text-stone-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 text-xs">
-                <div className="font-semibold text-rose-900 dark:text-rose-200">
+            <div className="space-y-3.5 text-xs">
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200">
+                <span className="font-bold text-rose-900 dark:text-rose-200">
                   Out of Stock: {subItem.productName} ({subItem.sku})
-                </div>
-                <div className="text-[11px] text-stone-500 mt-0.5">
-                  Aisle {subItem.aisleLocation} has insufficient quality stock to fulfill order.
-                </div>
+                </span>
+                <p className="text-[11px] text-stone-500 mt-0.5">
+                  Ordered: {subItem.orderedQty} units &bull; Unit Price: {formatIDR(originalItemPrice)}
+                </p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
-                  Select Approved Replacement Item
-                </label>
+                <label className="font-semibold block mb-1">Select Replacement Product</label>
                 <select
                   value={replacementSku}
                   onChange={(e) => setReplacementSku(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition-colors ${
-                    isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
+                  className={`w-full p-2.5 rounded-xl border ${
+                    isLight ? 'bg-stone-50 border-stone-200' : 'bg-stone-800 border-stone-700'
                   }`}
                 >
                   {inventory
@@ -692,47 +807,69 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
-                  Reason for Substitution
-                </label>
-                <input
-                  type="text"
-                  value={subReason}
-                  onChange={(e) => setSubReason(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition-colors ${
-                    isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
-                  }`}
-                />
-              </div>
-
-              {/* Customer Notification Preview */}
-              <div className="p-3 rounded-xl bg-stone-100 dark:bg-stone-800 border border-stone-200 text-xs space-y-1">
-                <div className="flex items-center gap-1 font-semibold text-stone-800 dark:text-stone-200">
-                  <Bell className="w-3.5 h-3.5 text-blue-600" />
-                  SMS &amp; App Push Preview to Customer:
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold block mb-1">Push Channel</label>
+                  <select
+                    value={promptChannel}
+                    onChange={(e) => setPromptChannel(e.target.value as any)}
+                    className={`w-full p-2.5 rounded-xl border ${
+                      isLight ? 'bg-stone-50 border-stone-200' : 'bg-stone-800 border-stone-700'
+                    }`}
+                  >
+                    <option value="WhatsApp">WhatsApp Message</option>
+                    <option value="InAppPush">In-App Push Alert</option>
+                    <option value="SMS">SMS Notification</option>
+                  </select>
                 </div>
-                <p className="text-[11px] text-stone-600 dark:text-stone-400 italic">
-                  &ldquo;GroceMart Notice: To maintain 100% farm freshness, we upgraded your {subItem.sku} to {inventory.find((i) => i.sku === replacementSku)?.productName || 'our premium alternative'} at zero price penalty. Tap to review.&rdquo;
-                </p>
+
+                <div className="flex flex-col justify-end">
+                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl border bg-gray-50 dark:bg-stone-800">
+                    <input
+                      type="checkbox"
+                      checked={absorbPriceDifference}
+                      onChange={(e) => setAbsorbPriceDifference(e.target.checked)}
+                      className="rounded text-emerald-600"
+                    />
+                    <span className="font-semibold text-[11px]">Store Absorbs Delta (Free Upgrade)</span>
+                  </label>
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-200 dark:border-stone-800">
+              {/* Price Delta Preview */}
+              <div className="p-3 rounded-xl border bg-gray-50 dark:bg-stone-800/80 flex items-center justify-between">
+                <div>
+                  <span className="font-semibold">Price Delta Calculation:</span>
+                  <div className="text-[11px] text-gray-500">
+                    Original: {formatIDR(originalItemPrice)} &rarr; Replacement: {formatIDR(replacementPrice)}
+                  </div>
+                </div>
+                <div className="font-mono font-bold text-sm text-emerald-600">
+                  {priceDelta >= 0 ? `+${formatIDR(priceDelta)}` : formatIDR(priceDelta)}
+                </div>
+              </div>
+
+              {/* Simulated Notification Message */}
+              <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-[11px] text-emerald-900 italic">
+                &ldquo;GroceMart Notice: We ran out of {subItem.productName}. We suggested upgrading you to {targetReplacementItem?.productName || replacementSku} {absorbPriceDifference ? 'at no additional cost' : `with ${formatIDR(priceDelta)} difference`}. Tap to approve.&rdquo;
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setSubItem(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-stone-200 text-stone-700 dark:text-stone-300"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border text-stone-700"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   disabled={isSubmittingSub}
-                  onClick={handleConfirmSubstitution}
+                  onClick={handleDispatchSubstitutionPrompt}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm disabled:opacity-50"
                 >
-                  {isSubmittingSub ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  Dispatch Substitution
+                  {isSubmittingSub ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Dispatch Prompt to Buyer
                 </button>
               </div>
             </div>

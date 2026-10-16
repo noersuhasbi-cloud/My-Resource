@@ -39,6 +39,16 @@ import type {
   PickerOrder,
   FEFOAllocationResult,
   Order,
+  WeightToleranceConfig,
+  NaturalShrinkageAdjustment,
+  SubstitutionPromptRecord,
+  StaffShiftSession,
+  SecurityAuditTrailRecord,
+  ClimateAdaptiveThresholdConfig,
+  UserRole,
+  SupportedCurrency,
+  StorageZoneType,
+  CurrencyExchangeRate,
 } from './src/types/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -60,6 +70,339 @@ let inventoryBatches: InventoryBatch[] = JSON.parse(JSON.stringify(INITIAL_BATCH
 let wasteRecords: WasteRecord[] = JSON.parse(JSON.stringify(INITIAL_WASTE_RECORDS));
 let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDERS));
 let customerOrders: Order[] = JSON.parse(JSON.stringify(INITIAL_ORDERS));
+
+// -------------------------------------------------------------
+// MODULE 1, 2, 3, 4 IN-MEMORY DATA STORES
+// -------------------------------------------------------------
+// Module 1: Weight Tolerance by Category & Natural Shrinkage adjustments
+let weightToleranceConfigs: WeightToleranceConfig[] = [
+  {
+    category: 'produce',
+    categoryLabel: 'Fresh Organic Produce (Leafy Greens, Berries, Root Vegetables)',
+    maxEvaporationTolerancePercent: 5.0, // 5% expected transpiration loss over 48h
+    auditIntervalHours: 24,
+    description: 'Natural moisture respiration and cell evaporation during ambient/chilled holding',
+  },
+  {
+    category: 'meat_seafood',
+    categoryLabel: 'Artisanal Butchery & Prime Seafood Cuts',
+    maxEvaporationTolerancePercent: 3.0, // 3% dry-aging/drip purge tolerance
+    auditIntervalHours: 12,
+    description: 'Drip purge loss during cold-chain 0-2°C storage',
+  },
+  {
+    category: 'dairy_eggs',
+    categoryLabel: 'Artisan Cheeses & Dairy',
+    maxEvaporationTolerancePercent: 1.5,
+    auditIntervalHours: 48,
+    description: 'Rind moisture loss in European specialty wheels',
+  },
+  {
+    category: 'bakery',
+    categoryLabel: 'Sourdough Loaves & Bakery',
+    maxEvaporationTolerancePercent: 2.0,
+    auditIntervalHours: 24,
+    description: 'Ambient crust crumb water exchange',
+  },
+  {
+    category: 'pantry_coffee',
+    categoryLabel: 'Heritage Dry Pantry & Whole Bean Specialty Coffee',
+    maxEvaporationTolerancePercent: 0.5,
+    auditIntervalHours: 168,
+    description: 'Standard ambient degas tolerance',
+  },
+];
+
+let naturalShrinkageAdjustments: NaturalShrinkageAdjustment[] = [
+  {
+    id: 'EVAP-2026-001',
+    timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
+    sku: 'SKU-PRD-001',
+    productName: 'Organic Hydroponic Butterhead Lettuce',
+    category: 'produce',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    warehouseZoneId: 'WH-JKT-SEN-COLD',
+    batchId: 'BAT-2601-PRD',
+    lotNumber: 'LOT-2601-A1',
+    recordedGrossWeightGrams: 5000,
+    actualAuditWeightGrams: 4820,
+    weightLossGrams: 180,
+    weightLossPercent: 3.6,
+    toleranceThresholdPercent: 5.0,
+    isWithinNaturalTolerance: true,
+    classification: 'Natural Shrinkage / Evaporation Loss',
+    unitCost: 11000,
+    totalLossCost: 39600,
+    glEntryId: 'GLE-2026-0038',
+    auditorId: 'USR-AUD-01',
+    auditorName: 'Siti Rahmawati (Receiving Quality Lead)',
+    shiftId: 'SHIFT-JKT-MORNING-01',
+    notes: '24h Cold Room scale audit verified. Water loss within 5% organic leaf threshold. No rot or bacterial decay.',
+  },
+  {
+    id: 'EVAP-2026-002',
+    timestamp: new Date(Date.now() - 3600000 * 18).toISOString(),
+    sku: 'SKU-MEA-001',
+    productName: 'Grass-Fed Angus Ribeye Steak',
+    category: 'meat_seafood',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    warehouseZoneId: 'WH-JKT-SEN-COLD',
+    batchId: 'BAT-2603-MEA',
+    lotNumber: 'LOT-2603-M1',
+    recordedGrossWeightGrams: 4500,
+    actualAuditWeightGrams: 4390,
+    weightLossGrams: 110,
+    weightLossPercent: 2.44,
+    toleranceThresholdPercent: 3.0,
+    isWithinNaturalTolerance: true,
+    classification: 'Natural Shrinkage / Evaporation Loss',
+    unitCost: 82000,
+    totalLossCost: 90200,
+    glEntryId: 'GLE-2026-0039',
+    auditorId: 'USR-MGR-02',
+    auditorName: 'Budi Santoso (Butchery Supervisor)',
+    shiftId: 'SHIFT-JKT-MORNING-01',
+    notes: 'Natural drip purge in controlled moisture sub-zero packaging. Within 3.0% dry-cut limit.',
+  },
+];
+
+// Module 2: Real-time Substitution records with Buyer Push Prompt Engine
+let substitutionPromptRecords: SubstitutionPromptRecord[] = [
+  {
+    id: 'SUB-PRM-2026-001',
+    orderId: 'ORD-2026-0891',
+    itemId: 'item-0891-2',
+    customerName: 'Alya Widyastuti',
+    customerPhone: '+62 811 9823 441',
+    originalSku: 'SKU-PRD-004',
+    originalProductName: 'Hass Avocados (Size L, Premium 500g)',
+    originalPrice: 42000,
+    originalQty: 1,
+    originalBatchId: 'BAT-2605-AVO',
+    replacementSku: 'SKU-PRD-001',
+    replacementProductName: 'Organic Butterhead Lettuce Pack (Dual Fresh)',
+    replacementPrice: 44000,
+    replacementBatchId: 'BAT-2601-PRD',
+    replacementLotNumber: 'LOT-2601-A1',
+    replacementExpiryDate: '2026-10-18',
+    priceDelta: 2000,
+    absorbPriceDifference: true,
+    promptStatus: 'approved_by_customer',
+    channel: 'WhatsApp',
+    simulationMessage: 'Hi Alya! Your avocados sold out this morning. Packer Rudi selected our fresh organic Butterhead pack (+Rp 2,000 value at NO EXTRA CHARGE). Tap to approve.',
+    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+    decidedAt: new Date(Date.now() - 3600000 * 1.8).toISOString(),
+    packerId: 'USR-PCK-04',
+    storeId: 'store-jkt-senopati',
+    glJournalIds: ['GLE-2026-0040', 'GLE-2026-0041'],
+    fifoAuditLog: 'Substituted SKU-PRD-004 -> SKU-PRD-001. FIFO batch BAT-2601-PRD lot LOT-2601-A1 allocated.',
+  },
+];
+
+// Module 3: Security & RBAC Active Sessions and Audit Log
+let securityAuditTrail: SecurityAuditTrailRecord[] = [
+  {
+    id: 'AUD-SEC-2026-0001',
+    timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
+    actionType: 'GOODS_RECEIPT_APPROVAL',
+    resourceId: 'GR-2026-001',
+    userId: 'USR-MGR-01',
+    userName: 'Dewi Sartika (Store Manager)',
+    userRole: 'store_manager',
+    storeId: 'store-jkt-senopati',
+    shiftId: 'SHIFT-JKT-MORNING-01',
+    status: 'AUTHORIZED_EXECUTED',
+    metadata: { poId: 'PO-2026-001', itemsReceived: 2, temperatureCheck: '3.8°C' },
+  },
+  {
+    id: 'AUD-SEC-2026-0002',
+    timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
+    actionType: 'SHRINKAGE_WRITE_OFF',
+    resourceId: 'WST-2026-001',
+    userId: 'USR-MGR-01',
+    userName: 'Dewi Sartika (Store Manager)',
+    userRole: 'store_manager',
+    storeId: 'store-jkt-senopati',
+    shiftId: 'SHIFT-JKT-MORNING-01',
+    status: 'AUTHORIZED_EXECUTED',
+    metadata: { reason: 'expired', totalLossCost: 55000, sku: 'SKU-PRD-001' },
+  },
+];
+
+// Active staff profiles for testing / switching RBAC
+const AVAILABLE_STAFF_USERS: StaffShiftSession[] = [
+  {
+    userId: 'USR-CASH-01',
+    userName: 'Andi Wijaya (Frontline Cashier)',
+    userRole: 'cashier',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
+    shiftName: 'Morning Shift',
+    assignedZones: ['ambient'],
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: true,
+      canViewInventory: true,
+      canAdjustInventory: false,
+      canPickZone: (zone: StorageZoneType) => false,
+      canReceiveGoods: false,
+      canApprovePurchaseOrder: false,
+      canViewFinancePnL: false,
+      canManageOutlets: false,
+      canOverrideStoreClosure: false,
+    },
+  },
+  {
+    userId: 'USR-PCK-01',
+    userName: 'Rudi Hermawan (Cold-Chain Picker & Receiving Clerk)',
+    userRole: 'warehouse_picker',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
+    shiftName: 'Morning Shift',
+    assignedZones: ['cold_chilled', 'ambient'], // Limited to chilled & ambient; NOT sub-zero
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: false,
+      canViewInventory: true,
+      canAdjustInventory: false,
+      canPickZone: (zone: StorageZoneType) => zone === 'cold_chilled' || zone === 'ambient',
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: false,
+      canViewFinancePnL: false,
+      canManageOutlets: false,
+      canOverrideStoreClosure: false,
+    },
+  },
+  {
+    userId: 'USR-MGR-01',
+    userName: 'Dewi Sartika (Store Operations Manager)',
+    userRole: 'store_manager',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
+    shiftName: 'Morning Shift',
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: true,
+      canViewInventory: true,
+      canAdjustInventory: true,
+      canPickZone: () => true,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: true, // Only for Senopati
+      canManageOutlets: true,
+      canOverrideStoreClosure: true,
+    },
+  },
+  {
+    userId: 'USR-EXEC-01',
+    userName: 'Irfan Hakim (Chief Operations Officer & VP ERP)',
+    userRole: 'executive',
+    storeId: 'ALL',
+    storeName: 'GroceMart Consolidated Group',
+    activeShiftId: 'SHIFT-EXEC-ALL-HOURS',
+    shiftName: 'Morning Shift',
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: true,
+      canViewInventory: true,
+      canAdjustInventory: true,
+      canPickZone: () => true,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: true, // Consolidated company-wide
+      canManageOutlets: true,
+      canOverrideStoreClosure: true,
+    },
+  },
+];
+
+let currentActiveStaffSession: StaffShiftSession = AVAILABLE_STAFF_USERS[3]; // Default to executive for smooth UX, toggleable via admin UI
+
+// Module 4: Climate-Adaptive Cold-Chain Configs & Multi-Currency FX Rates
+const CURRENCY_RATES: Record<SupportedCurrency, CurrencyExchangeRate> = {
+  IDR: { code: 'IDR', symbol: 'Rp', rateToIDR: 1, decimalPlaces: 0 },
+  USD: { code: 'USD', symbol: '$', rateToIDR: 16000, decimalPlaces: 2 },
+  EUR: { code: 'EUR', symbol: '€', rateToIDR: 17200, decimalPlaces: 2 },
+  AUD: { code: 'AUD', symbol: 'A$', rateToIDR: 10400, decimalPlaces: 2 },
+};
+
+let climateAdaptiveConfigs: ClimateAdaptiveThresholdConfig[] = [
+  {
+    warehouseZoneId: 'WH-JKT-SEN-COLD',
+    zoneName: 'Senopati Chilled Walk-In Cold Room',
+    storeId: 'store-jkt-senopati',
+    regionalClimateProfile: 'Tropical High-Humidity (Jakarta/Bali)',
+    ambientExternalTempCelsius: 34.5,
+    externalHumidityPercent: 88,
+    standardTempMinCelsius: 2.0,
+    standardTempMaxCelsius: 4.5,
+    adaptiveOffsetCelsius: -1.0, // Tighter margin under tropical heatwave
+    activeAlertThresholdCelsius: 3.5,
+    currentActualTempCelsius: 3.1,
+    coolingCompressorDutyCyclePercent: 78,
+    isTempAlertActive: false,
+    alertSeverity: 'NORMAL',
+    lastUpdated: new Date().toISOString(),
+  },
+  {
+    warehouseZoneId: 'WH-JKT-SEN-FRZ',
+    zoneName: 'Senopati Deep Freeze Vault',
+    storeId: 'store-jkt-senopati',
+    regionalClimateProfile: 'Tropical High-Humidity (Jakarta/Bali)',
+    ambientExternalTempCelsius: 34.5,
+    externalHumidityPercent: 88,
+    standardTempMinCelsius: -22.0,
+    standardTempMaxCelsius: -18.0,
+    adaptiveOffsetCelsius: -1.5,
+    activeAlertThresholdCelsius: -19.5,
+    currentActualTempCelsius: -20.2,
+    coolingCompressorDutyCyclePercent: 85,
+    isTempAlertActive: false,
+    alertSeverity: 'NORMAL',
+    lastUpdated: new Date().toISOString(),
+  },
+  {
+    warehouseZoneId: 'WH-BDG-DAG-COLD',
+    zoneName: 'Dago Bandung Highland Farm Direct Cold Storage',
+    storeId: 'store-bdg-dago',
+    regionalClimateProfile: 'Highland Mild (Bandung)',
+    ambientExternalTempCelsius: 22.0,
+    externalHumidityPercent: 75,
+    standardTempMinCelsius: 2.0,
+    standardTempMaxCelsius: 5.0,
+    adaptiveOffsetCelsius: 0.0,
+    activeAlertThresholdCelsius: 4.8,
+    currentActualTempCelsius: 3.8,
+    coolingCompressorDutyCyclePercent: 45,
+    isTempAlertActive: false,
+    alertSeverity: 'NORMAL',
+    lastUpdated: new Date().toISOString(),
+  },
+  {
+    warehouseZoneId: 'WH-DPS-CNG-COLD',
+    zoneName: 'Batu Bolong Organic Cold Hub',
+    storeId: 'store-bali-canggu',
+    regionalClimateProfile: 'Tropical High-Humidity (Jakarta/Bali)',
+    ambientExternalTempCelsius: 33.0,
+    externalHumidityPercent: 82,
+    standardTempMinCelsius: 2.0,
+    standardTempMaxCelsius: 4.5,
+    adaptiveOffsetCelsius: -0.8,
+    activeAlertThresholdCelsius: 3.7,
+    currentActualTempCelsius: 3.4,
+    coolingCompressorDutyCyclePercent: 72,
+    isTempAlertActive: false,
+    alertSeverity: 'NORMAL',
+    lastUpdated: new Date().toISOString(),
+  },
+];
 
 // -------------------------------------------------------------
 // GUARD 1: Concurrency & Anti-Overselling Lock Manager
@@ -2055,6 +2398,626 @@ async function startServer() {
 
   app.get('/api/admin/accounting/audit-trail', (_req: Request, res: Response) => {
     res.json(auditTrail);
+  });
+
+  // =============================================================
+  // MODULE 1: SHRINKAGE & NATURAL WEIGHT LOSS (CATCH-WEIGHT TOLERANCE)
+  // Configurable evaporation tolerance + non-red-flag automated GL journal
+  // =============================================================
+  app.get('/api/admin/shrinkage/tolerances', (_req: Request, res: Response) => {
+    res.json(weightToleranceConfigs);
+  });
+
+  app.put('/api/admin/shrinkage/tolerances/:category', (req: Request, res: Response) => {
+    const { category } = req.params;
+    const { maxEvaporationTolerancePercent, auditIntervalHours } = req.body;
+
+    const config = weightToleranceConfigs.find((c) => c.category === category);
+    if (!config) return res.status(404).json({ error: 'Category tolerance config not found' });
+
+    if (maxEvaporationTolerancePercent !== undefined) {
+      config.maxEvaporationTolerancePercent = Math.max(0, Number(maxEvaporationTolerancePercent));
+    }
+    if (auditIntervalHours !== undefined) {
+      config.auditIntervalHours = Math.max(1, Number(auditIntervalHours));
+    }
+
+    res.json({ success: true, message: `Tolerance updated for ${config.categoryLabel}`, config });
+  });
+
+  app.get('/api/admin/shrinkage/adjustments', (req: Request, res: Response) => {
+    const { storeId, category } = req.query;
+    let list = naturalShrinkageAdjustments;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((a) => a.storeId === storeId);
+    }
+    if (category && category !== 'ALL') {
+      list = list.filter((a) => a.category === category);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/admin/shrinkage/adjust-natural', async (req: Request, res: Response) => {
+    const {
+      sku,
+      storeId = 'store-jkt-senopati',
+      recordedGrossWeightGrams,
+      actualAuditWeightGrams,
+      batchId,
+      auditorNotes,
+    } = req.body;
+
+    const initialGrams = Number(recordedGrossWeightGrams);
+    const auditedGrams = Number(actualAuditWeightGrams);
+
+    if (!sku || !initialGrams || !auditedGrams || initialGrams <= 0 || auditedGrams <= 0) {
+      return res.status(400).json({ error: 'Valid sku, recordedGrossWeightGrams, and actualAuditWeightGrams required' });
+    }
+
+    if (auditedGrams > initialGrams) {
+      return res.status(400).json({ error: 'Audit weight exceeds original weight. Mass reduction required for shrinkage calculation.' });
+    }
+
+    const item = inventoryList.find((i) => i.sku === sku);
+    if (!item) return res.status(404).json({ error: 'Inventory item not found' });
+
+    const toleranceConfig = weightToleranceConfigs.find((c) => c.category === item.category) || {
+      category: item.category,
+      categoryLabel: item.category,
+      maxEvaporationTolerancePercent: 3.0,
+      auditIntervalHours: 24,
+      description: 'Default tolerance baseline',
+    };
+
+    const weightLossGrams = initialGrams - auditedGrams;
+    const weightLossPercent = Number(((weightLossGrams / initialGrams) * 100).toFixed(2));
+    const isWithinNaturalTolerance = weightLossPercent <= toleranceConfig.maxEvaporationTolerancePercent;
+
+    // Financial valuation of natural moisture loss
+    // Grams-to-unit ratio
+    const gramsPerUnit = item.weightGrams || 500;
+    const equivalentUnitsLost = Number((weightLossGrams / gramsPerUnit).toFixed(3));
+    const totalLossCost = Math.round(equivalentUnitsLost * item.unitCost);
+
+    const store = storeSchedules.find((s) => s.storeId === storeId);
+    const storeName = store?.storeName || 'GroceMart Senopati Flagship';
+    const warehouseZoneId = store?.activeWarehouses[1] || 'WH-JKT-SEN-COLD';
+
+    // Deduct stock mass from inventory tier
+    const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
+    if (tier && equivalentUnitsLost > 0) {
+      tier.physicalStock = Math.max(0, Number((tier.physicalStock - equivalentUnitsLost).toFixed(2)));
+      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.updatedAt = new Date().toISOString();
+    }
+
+    // Auto-Post Double-Entry Accounting Entry:
+    // Debit 6030: Inventory Shrinkage & Natural Loss Expense
+    // Credit 1040: Merchandise Inventory Asset
+    const timestamp = new Date().toISOString();
+    const evapId = `EVAP-2026-${(naturalShrinkageAdjustments.length + 1).toString().padStart(3, '0')}`;
+    const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+
+    const classification = isWithinNaturalTolerance
+      ? 'Natural Shrinkage / Evaporation Loss'
+      : 'Anomalous Spoilage Loss';
+
+    generalLedger.unshift({
+      id: gleId1,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '6030',
+      accountName: 'Inventory Shrinkage & Spoilage Expense',
+      category: 'Expense',
+      debit: totalLossCost,
+      credit: 0,
+      referenceType: 'INVENTORY_ADJUSTMENT',
+      referenceId: evapId,
+      description: `[${classification}] ${weightLossGrams}g moisture loss on ${item.productName} (${weightLossPercent}% vs ${toleranceConfig.maxEvaporationTolerancePercent}% threshold)`,
+    });
+
+    generalLedger.unshift({
+      id: gleId2,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '1040',
+      accountName: 'Merchandise Inventory Asset',
+      category: 'Asset',
+      debit: 0,
+      credit: totalLossCost,
+      referenceType: 'INVENTORY_ADJUSTMENT',
+      referenceId: evapId,
+      description: `Asset balance adjustment for natural shrinkage audit #${evapId}`,
+    });
+
+    const adjustment: NaturalShrinkageAdjustment = {
+      id: evapId,
+      timestamp,
+      sku,
+      productName: item.productName,
+      category: item.category,
+      storeId,
+      storeName,
+      warehouseZoneId,
+      batchId,
+      recordedGrossWeightGrams: initialGrams,
+      actualAuditWeightGrams: auditedGrams,
+      weightLossGrams,
+      weightLossPercent,
+      toleranceThresholdPercent: toleranceConfig.maxEvaporationTolerancePercent,
+      isWithinNaturalTolerance,
+      classification,
+      unitCost: item.unitCost,
+      totalLossCost,
+      glEntryId: gleId1,
+      auditorId: currentActiveStaffSession.userId,
+      auditorName: currentActiveStaffSession.userName,
+      shiftId: currentActiveStaffSession.activeShiftId,
+      notes: auditorNotes || `Weight reduction of ${weightLossGrams}g (${weightLossPercent}%) confirmed during shift stocktake.`,
+    };
+
+    naturalShrinkageAdjustments.unshift(adjustment);
+
+    // Record in Security & Operational Audit Log
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'SHRINKAGE_WRITE_OFF',
+      resourceId: evapId,
+      userId: currentActiveStaffSession.userId,
+      userName: currentActiveStaffSession.userName,
+      userRole: currentActiveStaffSession.userRole,
+      storeId,
+      shiftId: currentActiveStaffSession.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        sku,
+        classification,
+        isWithinNaturalTolerance,
+        weightLossGrams,
+        weightLossPercent,
+        totalLossCost,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: isWithinNaturalTolerance
+        ? `Logged as Natural Shrinkage (${weightLossPercent}% within ${toleranceConfig.maxEvaporationTolerancePercent}% tolerance). Clean audit record posted.`
+        : `Warning: Moisture loss of ${weightLossPercent}% exceeds natural threshold (${toleranceConfig.maxEvaporationTolerancePercent}%). Flagged as anomalous shrinkage.`,
+      adjustment,
+      journalEntryIds: [gleId1, gleId2],
+    });
+  });
+
+  // =============================================================
+  // MODULE 2: REAL-TIME SUBSTITUTION & BUYER PROMPT ENGINE
+  // Simulated WhatsApp/In-App customer prompt + FIFO batch balance recomputation
+  // =============================================================
+  app.get('/api/admin/substitutions/prompts', (req: Request, res: Response) => {
+    const { status, storeId } = req.query;
+    let list = substitutionPromptRecords;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((p) => p.storeId === storeId);
+    }
+    if (status && status !== 'ALL') {
+      list = list.filter((p) => p.promptStatus === status);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/admin/substitutions/request-prompt', (req: Request, res: Response) => {
+    const {
+      orderId,
+      itemId,
+      replacementSku,
+      channel = 'WhatsApp',
+      absorbPriceDifference = true,
+    } = req.body;
+
+    const order = pickerOrders.find((o) => o.orderId === orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found in picker queue' });
+
+    const item = order.items.find((i) => i.id === itemId);
+    if (!item) return res.status(404).json({ error: 'Item not found in order' });
+
+    const replacement = inventoryList.find((i) => i.sku === replacementSku);
+    if (!replacement) return res.status(404).json({ error: 'Replacement SKU not found' });
+
+    // FIFO allocation check on replacement stock
+    const availableReplacementBatches = inventoryBatches
+      .filter((b) => b.sku === replacementSku && b.storeId === order.storeId && b.currentStock > 0)
+      .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+    const replacementBatch = availableReplacementBatches[0] || {
+      batchId: `BAT-${replacementSku.slice(-3)}-AUTO`,
+      lotNumber: `LOT-${Date.now().toString().slice(-4)}`,
+      expiryDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      currentStock: replacement.currentStock,
+    };
+
+    const priceDelta = (replacement.sellingPrice * item.orderedQty) - item.finalPrice;
+    const promptId = `SUB-PRM-2026-${(substitutionPromptRecords.length + 1).toString().padStart(3, '0')}`;
+    const timestamp = new Date().toISOString();
+
+    const simulationMessage =
+      channel === 'WhatsApp'
+        ? `[GroceMart WhatsApp Official] Hi ${order.customerName}! Due to morning farm freshness harvest checks, your ordered ${item.productName} is currently unavailable. Packer has reserved ${replacement.productName} (Rp ${replacement.sellingPrice.toLocaleString('id-ID')} value${absorbPriceDifference ? ' - Price difference covered by GroceMart!' : ''}). Reply YES to confirm or NO for refund.`
+        : `GroceMart App Alert: Substitution proposed for Order #${orderId}: ${replacement.productName}. Tap to approve within 10 mins.`;
+
+    const promptRecord: SubstitutionPromptRecord = {
+      id: promptId,
+      orderId,
+      itemId,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      originalSku: item.sku,
+      originalProductName: item.productName,
+      originalPrice: item.finalPrice,
+      originalQty: item.orderedQty,
+      replacementSku: replacement.sku,
+      replacementProductName: replacement.productName,
+      replacementPrice: replacement.sellingPrice * item.orderedQty,
+      replacementBatchId: replacementBatch.batchId,
+      replacementLotNumber: replacementBatch.lotNumber,
+      replacementExpiryDate: replacementBatch.expiryDate,
+      priceDelta,
+      absorbPriceDifference: Boolean(absorbPriceDifference),
+      promptStatus: 'pending_customer_approval',
+      channel,
+      simulationMessage,
+      timestamp,
+      packerId: currentActiveStaffSession.userId,
+      storeId: order.storeId,
+    };
+
+    substitutionPromptRecords.unshift(promptRecord);
+
+    res.json({
+      success: true,
+      message: `Customer prompt dispatched via ${channel}. Awaiting customer confirmation.`,
+      prompt: promptRecord,
+    });
+  });
+
+  app.post('/api/admin/substitutions/:promptId/respond', async (req: Request, res: Response) => {
+    const { promptId } = req.params;
+    const { action } = req.body; // 'approve' | 'decline'
+
+    const prompt = substitutionPromptRecords.find((p) => p.id === promptId);
+    if (!prompt) return res.status(404).json({ error: 'Substitution prompt not found' });
+
+    if (prompt.promptStatus !== 'pending_customer_approval') {
+      return res.status(400).json({ error: `Prompt has already been decided: ${prompt.promptStatus}` });
+    }
+
+    const order = pickerOrders.find((o) => o.orderId === prompt.orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const item = order.items.find((i) => i.id === prompt.itemId);
+    if (!item) return res.status(404).json({ error: 'Order item not found' });
+
+    prompt.decidedAt = new Date().toISOString();
+
+    if (action === 'decline') {
+      prompt.promptStatus = 'declined_by_customer';
+      item.status = 'out_of_stock';
+      order.updatedAt = new Date().toISOString();
+      return res.json({
+        success: true,
+        message: 'Customer declined substitution. Item marked Out of Stock; customer balance credited for refund.',
+        prompt,
+      });
+    }
+
+    // Customer Approved: Execute substitution with strict FIFO traceability and GL adjustment
+    prompt.promptStatus = 'approved_by_customer';
+    const replacement = inventoryList.find((i) => i.sku === prompt.replacementSku);
+    const replacementBatch = inventoryBatches.find((b) => b.batchId === prompt.replacementBatchId);
+
+    // Deduct stock from replacement FIFO batch
+    if (replacementBatch) {
+      replacementBatch.currentStock = Math.max(0, replacementBatch.currentStock - item.orderedQty);
+    }
+    if (replacement) {
+      replacement.currentStock = Math.max(0, replacement.currentStock - item.orderedQty);
+    }
+
+    // Update item in picker order
+    item.status = 'substituted';
+    item.substitution = {
+      replacementProductId: replacement?.productId || 'prod-sub',
+      replacementSku: prompt.replacementSku,
+      replacementName: prompt.replacementProductName,
+      replacementBarcode: `899${Date.now().toString().slice(-10)}`,
+      originalPrice: prompt.originalPrice,
+      replacementPrice: prompt.replacementPrice,
+      priceDelta: prompt.priceDelta,
+      reason: 'Customer Approved Real-Time Substitution',
+      customerApprovalStatus: 'auto_approved',
+      suggestedAt: prompt.timestamp,
+    };
+    item.productName = `${prompt.replacementProductName} (Substituted from ${prompt.originalProductName})`;
+    item.finalPrice = prompt.absorbPriceDifference ? prompt.originalPrice : prompt.replacementPrice;
+
+    // Financial Hook: If store absorbed difference, book Promotional Courtesy Expense
+    const journalIds: string[] = [];
+    if (prompt.absorbPriceDifference && prompt.priceDelta > 0) {
+      const timestamp = new Date().toISOString();
+      const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+
+      generalLedger.unshift({
+        id: gleId1,
+        timestamp,
+        storeId: prompt.storeId,
+        storeName: order.storeName,
+        accountCode: '6010',
+        accountName: 'Store Operational Expense',
+        category: 'Expense',
+        debit: prompt.priceDelta,
+        credit: 0,
+        referenceType: 'OPEX',
+        referenceId: prompt.id,
+        description: `Customer courtesy discount for substituted SKU ${prompt.replacementSku} on Order #${prompt.orderId}`,
+      });
+
+      generalLedger.unshift({
+        id: gleId2,
+        timestamp,
+        storeId: prompt.storeId,
+        storeName: order.storeName,
+        accountCode: '4010',
+        accountName: 'Grocery Sales Revenue',
+        category: 'Revenue',
+        debit: 0,
+        credit: prompt.priceDelta,
+        referenceType: 'OPEX',
+        referenceId: prompt.id,
+        description: `Revenue differential offset for order #${prompt.orderId}`,
+      });
+
+      journalIds.push(gleId1, gleId2);
+      prompt.glJournalIds = journalIds;
+    }
+
+    prompt.fifoAuditLog = `FIFO Batch ${prompt.replacementBatchId} (Lot ${prompt.replacementLotNumber}, Expiry ${prompt.replacementExpiryDate}) allocated to Order #${prompt.orderId}.`;
+
+    order.pickedItems = order.items.filter((i) => i.status === 'picked' || i.status === 'substituted').length;
+    if (order.pickedItems === order.totalItems) {
+      order.pickerStatus = 'ready_for_packing';
+    }
+    order.updatedAt = new Date().toISOString();
+
+    // Security & Operational Audit Log
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'SUBSTITUTION_DISPATCH',
+      resourceId: prompt.id,
+      userId: currentActiveStaffSession.userId,
+      userName: currentActiveStaffSession.userName,
+      userRole: currentActiveStaffSession.userRole,
+      storeId: prompt.storeId,
+      shiftId: currentActiveStaffSession.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        orderId: prompt.orderId,
+        originalSku: prompt.originalSku,
+        replacementSku: prompt.replacementSku,
+        priceDelta: prompt.priceDelta,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `Substitution confirmed by buyer! Basket updated with ${prompt.replacementProductName}. FIFO tracking maintained.`,
+      prompt,
+      order,
+    });
+  });
+
+  // =============================================================
+  // MODULE 3: GRANULAR RBAC BY SHIFT, PHYSICAL ZONE & MULTI-OUTLET
+  // Staff switch + zone-authorization checks + audit log
+  // =============================================================
+  app.get('/api/admin/rbac/current-session', (_req: Request, res: Response) => {
+    res.json({
+      currentSession: currentActiveStaffSession,
+      availableProfiles: AVAILABLE_STAFF_USERS,
+    });
+  });
+
+  app.post('/api/admin/rbac/switch-session', (req: Request, res: Response) => {
+    const { userId } = req.body;
+    const target = AVAILABLE_STAFF_USERS.find((u) => u.userId === userId);
+    if (!target) return res.status(404).json({ error: 'Staff profile not found' });
+
+    currentActiveStaffSession = target;
+    res.json({
+      success: true,
+      message: `Active session switched to ${target.userName} (${target.userRole})`,
+      session: currentActiveStaffSession,
+    });
+  });
+
+  app.get('/api/admin/rbac/security-audit-trail', (req: Request, res: Response) => {
+    const { storeId, actionType } = req.query;
+    let list = securityAuditTrail;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((a) => a.storeId === storeId);
+    }
+    if (actionType && actionType !== 'ALL') {
+      list = list.filter((a) => a.actionType === actionType);
+    }
+    res.json(list);
+  });
+
+  // RBAC Zone Access Guard Endpoint (Enforces physical warehouse zone picking authorization)
+  app.post('/api/admin/rbac/check-zone-access', (req: Request, res: Response) => {
+    const { zoneType } = req.body; // 'ambient' | 'cold_chilled' | 'freezer'
+    const allowed = currentActiveStaffSession.permissions.canPickZone(zoneType);
+
+    if (!allowed) {
+      securityAuditTrail.unshift({
+        id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+        timestamp: new Date().toISOString(),
+        actionType: 'ZONE_CONFIG_UPDATE',
+        resourceId: zoneType,
+        userId: currentActiveStaffSession.userId,
+        userName: currentActiveStaffSession.userName,
+        userRole: currentActiveStaffSession.userRole,
+        storeId: currentActiveStaffSession.storeId,
+        shiftId: currentActiveStaffSession.activeShiftId,
+        status: 'PERMISSION_DENIED',
+        metadata: { attemptedZone: zoneType, assignedZones: currentActiveStaffSession.assignedZones },
+      });
+
+      return res.status(403).json({
+        success: false,
+        authorized: false,
+        error: `Access Denied: Staff role '${currentActiveStaffSession.userRole}' with active shift '${currentActiveStaffSession.activeShiftId}' is restricted from accessing physical zone '${zoneType}'. Assigned zones: [${currentActiveStaffSession.assignedZones.join(', ')}].`,
+      });
+    }
+
+    res.json({ success: true, authorized: true, message: `Access granted for zone '${zoneType}'.` });
+  });
+
+  // =============================================================
+  // MODULE 4: GLOBAL SCALABILITY (MULTI-CURRENCY & CLIMATE COLD-CHAIN)
+  // Multi-Currency P&L / GL conversions & Adaptive IoT Chiller Thresholds
+  // =============================================================
+  app.get('/api/admin/scalability/currencies', (_req: Request, res: Response) => {
+    res.json(CURRENCY_RATES);
+  });
+
+  app.get('/api/admin/scalability/climate-thresholds', (req: Request, res: Response) => {
+    const { storeId } = req.query;
+    let list = climateAdaptiveConfigs;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((c) => c.storeId === storeId);
+    }
+    res.json(list);
+  });
+
+  app.put('/api/admin/scalability/climate-thresholds/:zoneId', (req: Request, res: Response) => {
+    const { zoneId } = req.params;
+    const {
+      ambientExternalTempCelsius,
+      externalHumidityPercent,
+      adaptiveOffsetCelsius,
+      currentActualTempCelsius,
+    } = req.body;
+
+    const config = climateAdaptiveConfigs.find((c) => c.warehouseZoneId === zoneId);
+    if (!config) return res.status(404).json({ error: 'Climate config for zone not found' });
+
+    if (ambientExternalTempCelsius !== undefined) config.ambientExternalTempCelsius = Number(ambientExternalTempCelsius);
+    if (externalHumidityPercent !== undefined) config.externalHumidityPercent = Number(externalHumidityPercent);
+    if (adaptiveOffsetCelsius !== undefined) config.adaptiveOffsetCelsius = Number(adaptiveOffsetCelsius);
+    if (currentActualTempCelsius !== undefined) config.currentActualTempCelsius = Number(currentActualTempCelsius);
+
+    // Recompute adaptive alert threshold
+    config.activeAlertThresholdCelsius = Number(
+      (config.standardTempMaxCelsius + config.adaptiveOffsetCelsius).toFixed(2)
+    );
+
+    // Evaluate IoT Breach Condition
+    if (config.currentActualTempCelsius > config.activeAlertThresholdCelsius) {
+      config.isTempAlertActive = true;
+      config.alertSeverity =
+        config.currentActualTempCelsius > config.activeAlertThresholdCelsius + 1.5
+          ? 'CRITICAL_BREACH'
+          : 'ELEVATED';
+    } else {
+      config.isTempAlertActive = false;
+      config.alertSeverity = 'NORMAL';
+    }
+
+    config.lastUpdated = new Date().toISOString();
+
+    res.json({
+      success: true,
+      message: `Zone ${config.zoneName} climate thresholds adapted to local external weather conditions.`,
+      config,
+    });
+  });
+
+  // Multi-Currency Financial Statement API (Converts GL / P&L based on target currency)
+  app.get('/api/admin/accounting/pnl-multicurrency', (req: Request, res: Response) => {
+    const { storeId, currency = 'IDR' } = req.query;
+    const targetCurrency = (String(currency).toUpperCase() as SupportedCurrency) || 'IDR';
+    const rateInfo = CURRENCY_RATES[targetCurrency] || CURRENCY_RATES.IDR;
+
+    let relevantEntries = generalLedger;
+    let storeName = 'Consolidated Company-Wide';
+
+    if (storeId && storeId !== 'CONSOLIDATED') {
+      relevantEntries = generalLedger.filter((e) => e.storeId === storeId);
+      const s = storeSchedules.find((st) => st.storeId === storeId);
+      if (s) storeName = s.storeName;
+    }
+
+    let grossSalesRevenue = 0;
+    let costOfGoodsSold = 0;
+
+    relevantEntries.forEach((entry) => {
+      if (entry.accountCode === '4010') grossSalesRevenue += entry.credit;
+      if (entry.accountCode === '5010') costOfGoodsSold += entry.debit;
+    });
+
+    if (grossSalesRevenue === 0) {
+      grossSalesRevenue = storeId && storeId !== 'CONSOLIDATED' ? 45000000 : 388500000;
+      costOfGoodsSold = Math.round(grossSalesRevenue * 0.62);
+    }
+
+    const discountsGiven = Math.round(grossSalesRevenue * 0.04);
+    const netSalesRevenue = grossSalesRevenue - discountsGiven;
+    const grossProfit = netSalesRevenue - costOfGoodsSold;
+    const grossMarginPercent = netSalesRevenue > 0 ? (grossProfit / netSalesRevenue) * 100 : 0;
+
+    const factor = storeId && storeId !== 'CONSOLIDATED' ? 0.22 : 1.0;
+    const operatingExpenses = [
+      { category: 'Cold-Chain Refrigeration & Store Electricity', amount: Math.round(18500000 * factor) },
+      { category: 'Same-Day Chilled Logistics & Couriers', amount: Math.round(12200000 * factor) },
+      { category: 'Store Storekeeping & Quality Inspection Staff', amount: Math.round(24800000 * factor) },
+      { category: 'Biodegradable Insulated Packaging', amount: Math.round(3500000 * factor) },
+    ];
+
+    const totalOperatingExpenses = operatingExpenses.reduce((sum, o) => sum + o.amount, 0);
+    const netProfit = grossProfit - totalOperatingExpenses;
+    const netMarginPercent = netSalesRevenue > 0 ? (netProfit / netSalesRevenue) * 100 : 0;
+
+    // Convert all IDR values to target currency
+    const fx = (val: number) => {
+      if (targetCurrency === 'IDR') return val;
+      return Number((val / rateInfo.rateToIDR).toFixed(rateInfo.decimalPlaces));
+    };
+
+    res.json({
+      currency: targetCurrency,
+      symbol: rateInfo.symbol,
+      fxRateToIDR: rateInfo.rateToIDR,
+      period: 'October 2026 MTD',
+      storeId: storeId ? String(storeId) : 'CONSOLIDATED',
+      storeName,
+      grossSalesRevenue: fx(grossSalesRevenue),
+      discountsGiven: fx(discountsGiven),
+      netSalesRevenue: fx(netSalesRevenue),
+      costOfGoodsSold: fx(costOfGoodsSold),
+      grossProfit: fx(grossProfit),
+      grossMarginPercent: Number(grossMarginPercent.toFixed(1)),
+      operatingExpenses: operatingExpenses.map((o) => ({
+        category: o.category,
+        amount: fx(o.amount),
+      })),
+      totalOperatingExpenses: fx(totalOperatingExpenses),
+      netProfit: fx(netProfit),
+      netMarginPercent: Number(netMarginPercent.toFixed(1)),
+    });
   });
 
   // -------------------------------------------------------------
