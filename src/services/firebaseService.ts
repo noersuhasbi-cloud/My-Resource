@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { signInWithPopup, signOut, signInAnonymously, User as FirebaseUser } from 'firebase/auth';
 import { db, auth, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
-import { CustomerAccount, Order, SavedAddress, OrderStatus } from '../types';
+import type { CustomerAccount, Order, SavedAddress, OrderStatus } from '../types/index.ts';
 
 export async function loginWithGoogle(): Promise<FirebaseUser> {
   try {

@@ -55,7 +55,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Network Master Switch & Announcement Banner */}
-      <div className={`${cardClass} p-6`}>
+      <div className={`${cardClass} p-4 sm:p-6`}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-stone-200 dark:border-stone-800">
           <div>
             <h2 className={`text-base font-bold ${textTitle} flex items-center gap-2`}>
@@ -140,7 +140,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {storeOutlets.map((outlet) => {
             const isClosed = outlet.isEmergencyClosed || !storeStatus?.isOpen;
             return (
@@ -197,7 +197,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
                 )}
 
                 {/* Action buttons */}
-                <div className="flex items-center justify-between pt-2 border-t border-stone-200 dark:border-stone-800">
+                <div className="flex items-center justify-between pt-2 border-t border-stone-200 dark:border-stone-800 flex-wrap gap-2">
                   <button
                     onClick={() => handleToggleOutletEmergency(outlet)}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
@@ -225,8 +225,8 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
 
       {/* Edit Outlet Modal */}
       {editingOutlet && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className={`${modalClass} max-w-lg w-full p-6 space-y-4`}>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className={`${modalClass} w-full max-w-[95vw] sm:max-w-lg p-4 sm:p-6 space-y-4 my-auto max-h-[90vh] overflow-y-auto`}>
             <div className="flex items-center justify-between border-b pb-3 border-stone-200 dark:border-stone-800">
               <h3 className={`text-base font-bold ${textTitle}`}>Edit Schedule: {editingOutlet.storeName}</h3>
               <button
@@ -237,7 +237,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">Open Time</label>
                 <input

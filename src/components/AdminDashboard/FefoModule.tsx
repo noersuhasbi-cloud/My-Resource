@@ -164,7 +164,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div
           className={`p-4 rounded-xl border ${
             isLight
@@ -442,7 +442,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs min-w-[700px]">
             <thead
               className={`border-b ${
                 isLight ? 'bg-stone-50 border-stone-200 text-stone-500' : 'bg-stone-800/50 border-stone-800 text-stone-400'

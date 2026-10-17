@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { CustomerAccount, Order, OrderStatus, Product } from '../types';
+import type { CustomerAccount, Order, OrderStatus, Product } from '../types/index.ts';
 import { PRODUCTS } from '../data/mockData';
 import { formatIDR } from '../utils/formatters';
 import {

@@ -146,7 +146,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
     <div className="space-y-6">
       {/* Top Banner / Store Segregation Control */}
       <div
-        className={`p-6 rounded-2xl border transition-all ${
+        className={`p-4 sm:p-6 rounded-2xl border transition-all ${
           isLight
             ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
             : 'bg-stone-900/90 border-stone-800'
@@ -858,9 +858,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
       {/* MODAL: POST REVERSING JOURNAL ENTRY */}
       {reversingEntry && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
-            className={`border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl ${
+            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-700 text-white'
             }`}
           >

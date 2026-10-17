@@ -22,6 +22,7 @@ import {
   Sliders,
   ChevronRight,
   UserCheck,
+  X,
 } from 'lucide-react';
 
 interface RbacModuleProps {
@@ -572,9 +573,9 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 
       {/* Shift Handover Sign-Off Modal */}
       {isHandoverModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
-            className={`w-full max-w-md rounded-2xl border shadow-2xl p-5 ${
+            className={`w-full max-w-[95vw] sm:max-w-md rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-800 text-white'
             }`}
           >
@@ -590,9 +591,12 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
               </div>
               <button
                 onClick={() => setIsHandoverModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 text-xs"
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-stone-800 text-stone-400'
+                }`}
+                aria-label="Close modal"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 

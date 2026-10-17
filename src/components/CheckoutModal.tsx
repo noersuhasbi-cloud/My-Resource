@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CartItem, CustomerAccount, Order, StoreLocation, OrderTimelineStep, StoreOperationalStatus } from '../types';
+import type { CartItem, CustomerAccount, Order, StoreLocation, OrderTimelineStep, StoreOperationalStatus } from '../types/index.ts';
 import { formatIDR, generateOrderId, generateQrisReference } from '../utils/formatters';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
@@ -229,8 +229,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-stone-200 overflow-hidden relative animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-2xl w-full max-w-[95vw] sm:max-w-2xl shadow-2xl border border-stone-200 overflow-hidden relative animate-in fade-in zoom-in-95 duration-200 my-auto">
         {/* Modal Close Button */}
         <button
           onClick={onClose}
@@ -241,7 +241,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
         {/* STEP 1: Customer Details & Payment Selection */}
         {step === 'details' && (
-          <form onSubmit={handleProceedToPayment} className="p-6 sm:p-8 space-y-6">
+          <form onSubmit={handleProceedToPayment} className="p-4 sm:p-8 space-y-5 sm:space-y-6">
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800 uppercase tracking-wider mb-1">
                 <span>Checkout</span>
@@ -414,7 +414,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
         {/* STEP 2: Authentic QRIS Payment Screen */}
         {step === 'qris_payment' && (
-          <div className="p-6 sm:p-8 space-y-6">
+          <div className="p-4 sm:p-8 space-y-5 sm:space-y-6">
             {/* Official QRIS Header */}
             <div className="flex items-center justify-between pb-4 border-b border-stone-200">
               <div className="flex items-center gap-3">
@@ -517,7 +517,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
         {/* STEP 3: Order Confirmed & Success View */}
         {step === 'success' && completedOrder && (
-          <div className="p-6 sm:p-8 space-y-6 text-center">
+          <div className="p-4 sm:p-8 space-y-5 sm:space-y-6 text-center">
             <div className="w-16 h-16 bg-emerald-100 text-emerald-800 rounded-full flex items-center justify-center mx-auto shadow-inner">
               <CheckCircle className="w-10 h-10" />
             </div>

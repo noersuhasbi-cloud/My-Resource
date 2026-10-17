@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ShoppingBag, User, Menu, X, ArrowRight, Store, BookOpen, Truck, Sparkles, ShieldCheck, AlertTriangle } from 'lucide-react';
-import { CartItem, StoreOperationalStatus } from '../types';
+import type { CartItem, StoreOperationalStatus } from '../types/index.ts';
 import { formatIDR } from '../utils/formatters';
 
 interface HeaderProps {

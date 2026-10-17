@@ -321,7 +321,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         </div>
 
         {/* Quick KPI stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6">
           <div
             className={`p-3.5 rounded-xl border ${
               isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-stone-800/60 border-stone-700'
@@ -431,7 +431,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[700px] text-left text-xs">
             <thead>
               <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
                 isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-stone-800 bg-stone-800/50 text-stone-400'
@@ -541,7 +541,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap">
               {(['ALL', 'Pending', 'Partially Received', 'Completed'] as const).map((status) => (
                 <button
                   key={status}
@@ -562,7 +562,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[700px] text-left text-xs">
             <thead>
               <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
                 isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-stone-800 bg-stone-800/50 text-stone-400'
@@ -738,7 +738,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[700px] text-left text-xs">
             <thead>
               <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
                 isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-stone-800 bg-stone-800/50 text-stone-400'
@@ -815,9 +815,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       {/* MODAL: INTERACTIVE PARTIAL GOODS RECEIPT */}
       {activeReceivingPO && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
-            className={`border rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto ${
+            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto my-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-700 text-white'
             }`}
           >
@@ -916,7 +916,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                       <div>
                         <label className={`block text-[10px] mb-1 ${isLight ? 'text-gray-600' : 'text-stone-400'}`}>
                           Quantity Received Now
@@ -1078,9 +1078,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       {/* MODAL: CREATE RESTOCK PR */}
       {isCreatingPR && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
-            className={`border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl ${
+            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-700 text-white'
             }`}
           >

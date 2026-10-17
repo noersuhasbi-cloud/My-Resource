@@ -1,4 +1,4 @@
-import { StoreLocation, Milestone, Product, CustomerAccount, Order } from '../types/index.ts';
+import type { StoreLocation, Milestone, Product, CustomerAccount, Order } from '../types/index.ts';
 
 export const heroStoreImg = '/images/hero_grocemart_store_1791623358669.jpg';
 export const heritageFarmImg = '/images/about_heritage_farm_1791623371694.jpg';

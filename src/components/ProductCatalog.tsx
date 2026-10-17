@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PRODUCTS } from '../data/mockData';
-import { Product, ProductCategory, CartItem, StoreLocation } from '../types';
+import type { Product, ProductCategory, CartItem, StoreLocation } from '../types/index.ts';
 import { formatIDR } from '../utils/formatters';
 import { Plus, Minus, Check, Star, Search, Filter, Info, Eye, X, ShoppingBag } from 'lucide-react';
 import { SafeImage } from './SafeImage';

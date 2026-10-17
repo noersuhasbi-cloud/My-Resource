@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { STORE_LOCATIONS } from '../data/mockData';
-import { StoreLocation } from '../types';
+import type { StoreLocation } from '../types/index.ts';
 import { MapPin, Clock, Phone, Navigation, Search, CheckCircle2, Sparkles, X, ExternalLink } from 'lucide-react';
 
 interface StoreLocationsProps {

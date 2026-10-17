@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCategoryFallback, isBase64Image } from '../utils/imageUtils';
-import { ProductCategory } from '../types';
+import type { ProductCategory } from '../types/index.ts';
 import { Leaf, Sparkles, ShoppingBag } from 'lucide-react';
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {

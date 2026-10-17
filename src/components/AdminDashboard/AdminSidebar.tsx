@@ -153,13 +153,17 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {isCollapsed ? <PanelLeft className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
         </button>
 
-        {/* Mobile Close Button */}
+        {/* Mobile Close Button (X) */}
         <button
           onClick={onCloseMobile}
-          className="lg:hidden p-1.5 rounded-lg border text-gray-500 hover:text-gray-900 dark:hover:text-white"
-          aria-label="Close menu"
+          className={`lg:hidden p-2 rounded-xl border text-sm transition-colors flex items-center justify-center ${
+            isLight
+              ? 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700 active:scale-95'
+              : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200 active:scale-95'
+          }`}
+          aria-label="Close navigation sidebar"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
 
@@ -655,7 +659,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
       {/* Mobile Off-Canvas Sidebar Drawer */}
       <div
-        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] transition-transform duration-300 ease-in-out shadow-2xl ${
+        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[90vw] transition-transform duration-300 ease-in-out shadow-2xl ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         } ${
           isLight ? 'bg-white border-r border-gray-200' : 'bg-stone-900 border-r border-stone-800'

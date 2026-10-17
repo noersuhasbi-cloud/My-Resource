@@ -290,7 +290,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
         </div>
 
         {/* View Switcher Tabs (Module 1 Integration) */}
-        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200/80 dark:border-stone-800">
+        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200/80 dark:border-stone-800 flex-wrap">
           <button
             onClick={() => setActiveView('spoilage')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -322,7 +322,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div
           className={`p-4 rounded-xl border ${
             isLight
@@ -710,9 +710,9 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
       {/* MODULE 1: Record Natural Evaporation Modal */}
       {isNaturalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
-            className={`w-full max-w-lg rounded-2xl border shadow-2xl p-5 ${
+            className={`w-full max-w-[95vw] sm:max-w-lg rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto max-h-[90vh] overflow-y-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-800 text-white'
             }`}
           >
@@ -870,9 +870,9 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
       {/* Configure Category Tolerance Modal */}
       {editingCategory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
-            className={`w-full max-w-sm rounded-2xl border shadow-2xl p-5 ${
+            className={`w-full max-w-[95vw] sm:max-w-sm rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-800 text-white'
             }`}
           >
@@ -920,9 +920,9 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
       {/* Log In-Store Scrap Modal (Existing functionality preserved) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
-            className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden transition-all ${
+            className={`w-full max-w-[95vw] sm:max-w-lg rounded-2xl border shadow-2xl overflow-hidden my-auto max-h-[90vh] overflow-y-auto transition-all ${
               isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-stone-900 border-stone-800 text-white'
             }`}
           >

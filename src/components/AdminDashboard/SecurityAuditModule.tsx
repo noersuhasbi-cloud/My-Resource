@@ -139,7 +139,7 @@ export const SecurityAuditModule: React.FC<SecurityAuditModuleProps> = ({
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div
           className={`p-4 rounded-xl border ${
             isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-stone-900 border-stone-800'
@@ -257,7 +257,7 @@ export const SecurityAuditModule: React.FC<SecurityAuditModuleProps> = ({
 
         {/* Responsive Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs min-w-[700px]">
             <thead
               className={`border-b ${
                 isLight ? 'bg-gray-50/70 border-gray-200 text-gray-500' : 'bg-stone-800/50 border-stone-800 text-stone-400'
