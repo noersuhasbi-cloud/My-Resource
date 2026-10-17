@@ -19,6 +19,7 @@ import {
   INITIAL_BATCHES,
   INITIAL_WASTE_RECORDS,
   INITIAL_PICKER_ORDERS,
+} from './src/data/inventoryData.ts';
 import { INITIAL_ORDERS, PRODUCTS } from './src/data/mockData.ts';
 
 import type {
