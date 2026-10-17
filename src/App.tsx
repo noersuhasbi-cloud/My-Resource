@@ -15,7 +15,7 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { Footer } from './components/Footer';
 import { ToastContainer, ToastMessage } from './components/Toast';
 
-import { CartItem, Product, StoreLocation, CustomerAccount, Order, OrderStatus, StoreOperationalStatus, UserRole } from './types';
+import { CartItem, Product, StoreLocation, CustomerAccount, Order, OrderStatus, StoreOperationalStatus, UserRole, StaffShiftSession } from './types';
 import { STORE_LOCATIONS, PRODUCTS, INITIAL_DEMO_ACCOUNT, INITIAL_ORDERS } from './data/mockData';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -27,11 +27,58 @@ import {
   logoutFirebase,
 } from './services/firebaseService';
 import { AdminDashboard } from './components/AdminDashboard/AdminDashboard';
+import { AdminLogin } from './components/AdminLogin';
 import { apiClient } from './services/apiClient';
 
+type PortalView = 'customer' | 'admin_login' | 'admin_erp';
+
 export default function App() {
-  // 0. RBAC Current Active Role ('admin' vs 'customer')
-  const [currentRole, setCurrentRole] = useState<UserRole>('customer');
+  // Portal & Role View Separation ('customer' storefront vs 'admin_login' gate vs 'admin_erp' portal)
+  const [adminSession, setAdminSession] = useState<StaffShiftSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('grocemart_admin_session');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+
+  const [portalView, setPortalView] = useState<PortalView>(() => {
+    try {
+      const hash = window.location.hash;
+      const saved = localStorage.getItem('grocemart_admin_session');
+      if (hash === '#admin' || hash === '#erp' || hash === '#staff') {
+        return saved ? 'admin_erp' : 'admin_login';
+      }
+      if (hash === '#admin-login') return 'admin_login';
+    } catch {}
+    return 'customer';
+  });
+
+  // Keep portal view in sync with URL hash
+  useEffect(() => {
+    const handleHashSync = () => {
+      const hash = window.location.hash;
+      if (hash === '#admin' || hash === '#erp' || hash === '#staff') {
+        const saved = localStorage.getItem('grocemart_admin_session');
+        if (saved) {
+          try {
+            setAdminSession(JSON.parse(saved));
+          } catch {}
+          setPortalView('admin_erp');
+        } else {
+          setPortalView('admin_login');
+        }
+      } else if (hash === '#admin-login') {
+        setPortalView('admin_login');
+      } else if (!hash || hash === '#storefront' || hash === '#home') {
+        setPortalView('customer');
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashSync);
+    return () => window.removeEventListener('hashchange', handleHashSync);
+  }, []);
+
   const [storeStatus, setStoreStatus] = useState<StoreOperationalStatus | null>(null);
 
   // Sync store operational status from backend
@@ -311,7 +358,7 @@ export default function App() {
     // Update in Firestore
     const changed = updatedOrders.find((o) => o.id === orderId);
     if (changed) {
-      updateOrderStatusInFirestore(orderId, nextStatus, changed.timeline).catch((e) => {
+      updateOrderStatusInFirestore(orderId, nextStatus, changed.timeline, changed).catch((e) => {
         console.warn('Could not sync status to Firestore (local state updated):', e);
       });
     }
@@ -330,11 +377,38 @@ export default function App() {
     }
   };
 
-  if (currentRole === 'admin') {
+  const handleAdminLoginSuccess = (session: StaffShiftSession) => {
+    setAdminSession(session);
+    try {
+      localStorage.setItem('grocemart_admin_session', JSON.stringify(session));
+    } catch {}
+    window.location.hash = '#admin';
+    setPortalView('admin_erp');
+  };
+
+  const handleAdminLogout = () => {
+    setAdminSession(null);
+    try {
+      localStorage.removeItem('grocemart_admin_session');
+    } catch {}
+    apiClient.adminLogout().catch(() => {});
+    window.location.hash = '#admin-login';
+    setPortalView('admin_login');
+    showToast('ERP Workstation Locked', 'Session ended. Log in to regain access.');
+  };
+
+  const handleExitToStorefront = () => {
+    window.location.hash = '';
+    setPortalView('customer');
+  };
+
+  // 1. DEDICATED ADMIN LOGIN SCREEN (AUTHENTICATION GATE)
+  if (portalView === 'admin_login') {
     return (
-      <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
-        <AdminDashboard
-          onCloseToStorefront={() => setCurrentRole('customer')}
+      <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+        <AdminLogin
+          onLoginSuccess={handleAdminLoginSuccess}
+          onReturnToStorefront={handleExitToStorefront}
           onShowToast={showToast}
         />
         <ToastContainer toasts={toasts} onDismiss={dismissToast} />
@@ -342,14 +416,43 @@ export default function App() {
     );
   }
 
+  // 2. ADMIN ERP PORTAL (LOCKED BEHIND AUTHENTICATION GATE)
+  if (portalView === 'admin_erp') {
+    // If not authenticated, force redirect to Login Gate
+    if (!adminSession) {
+      return (
+        <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+          <AdminLogin
+            onLoginSuccess={handleAdminLoginSuccess}
+            onReturnToStorefront={handleExitToStorefront}
+            onShowToast={showToast}
+          />
+          <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+        <AdminDashboard
+          initialStaffSession={adminSession}
+          onCloseToStorefront={handleExitToStorefront}
+          onLogout={handleAdminLogout}
+          onShowToast={showToast}
+        />
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      </div>
+    );
+  }
+
+  // 3. PUBLIC CUSTOMER STOREFRONT
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans selection:bg-emerald-800 selection:text-white">
-      {/* Top Navigation */}
+      {/* Top Navigation - Customer only, completely removed Admin HQ shortcut */}
       <Header
         cartItems={cartItems}
         onOpenCart={() => setIsCartOpen(true)}
         onOpenPortal={() => setIsPortalOpen(true)}
-        onOpenAdminDashboard={() => setCurrentRole('admin')}
         storeStatus={storeStatus}
         activeSection={activeSection}
         onNavigate={handleNavigate}
@@ -395,6 +498,15 @@ export default function App() {
       <Footer
         onNavigate={handleNavigate}
         onOpenPortal={() => setIsPortalOpen(true)}
+        onOpenAdminLogin={() => {
+          if (adminSession) {
+            window.location.hash = '#admin';
+            setPortalView('admin_erp');
+          } else {
+            window.location.hash = '#admin-login';
+            setPortalView('admin_login');
+          }
+        }}
       />
 
       {/* Toast Feedback Notifications */}

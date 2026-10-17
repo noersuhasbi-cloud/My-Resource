@@ -786,7 +786,9 @@ export interface SecurityAuditTrailRecord {
     | 'SHRINKAGE_WRITE_OFF'
     | 'SUBSTITUTION_DISPATCH'
     | 'STORE_EMERGENCY_OVERRIDE'
-    | 'ZONE_CONFIG_UPDATE';
+    | 'ZONE_CONFIG_UPDATE'
+    | 'USER_AUTHENTICATION'
+    | 'USER_LOGOUT';
   resourceId: string;
   userId: string;
   userName: string;
@@ -796,6 +798,14 @@ export interface SecurityAuditTrailRecord {
   ipAddress?: string;
   status: 'AUTHORIZED_EXECUTED' | 'PERMISSION_DENIED';
   metadata: Record<string, any>;
+}
+
+export interface AdminAuthResponse {
+  success: boolean;
+  token?: string;
+  session: StaffShiftSession;
+  availableProfiles?: StaffShiftSession[];
+  message?: string;
 }
 
 // =============================================================
@@ -826,5 +836,105 @@ export interface ClimateAdaptiveThresholdConfig {
   isTempAlertActive: boolean;
   alertSeverity: 'NORMAL' | 'ELEVATED' | 'CRITICAL_BREACH';
   lastUpdated: string;
+}
+
+// =============================================================
+// MODULE 5: POS (Point of Sale) & Cashier Station
+// =============================================================
+export interface POSProductItem {
+  sku: string;
+  productId: string;
+  name: string;
+  category: string;
+  sellingPrice: number; // IDR
+  unitCost: number; // IDR
+  unit: string;
+  barcode: string;
+  image: string;
+  currentStock: number;
+  availableStock: number;
+  isWeighted?: boolean;
+  pricePerKg?: number;
+  // FEFO Batch details
+  nearestBatchId?: string;
+  lotNumber?: string;
+  expiryDate?: string;
+  daysUntilExpiry?: number;
+  batchStatus?: 'fresh' | 'near_expiry' | 'critical';
+}
+
+export interface POSCartItem {
+  id: string; // unique cart line ID
+  sku: string;
+  productId: string;
+  name: string;
+  category: string;
+  unitPrice: number; // in IDR
+  unitCost: number; // in IDR
+  quantity: number; // or kg for weighted items
+  unit: string;
+  isWeighted?: boolean;
+  tareWeightGrams?: number;
+  grossWeightGrams?: number;
+  netWeightGrams?: number;
+  batchId?: string;
+  lotNumber?: string;
+  expiryDate?: string;
+  daysUntilExpiry?: number;
+  lineTotal: number; // in IDR
+  image?: string;
+}
+
+export type POSPaymentMethod = 'cash' | 'qris' | 'debit_card' | 'credit_card';
+
+export interface POSTransactionRequest {
+  storeId: string;
+  storeName: string;
+  cashierId: string;
+  cashierName: string;
+  shiftId: string;
+  items: POSCartItem[];
+  subtotal: number; // in IDR
+  discount: number; // in IDR
+  tax: number; // in IDR (11% VAT / PPN)
+  total: number; // in IDR
+  currency: SupportedCurrency;
+  currencyRateToIDR: number;
+  currencyTotal: number;
+  paymentMethod: POSPaymentMethod;
+  cashTendered?: number;
+  cashChange?: number;
+  customerName?: string;
+  customerPhone?: string;
+  customerMemberId?: string;
+  notes?: string;
+}
+
+export interface POSTransactionReceipt {
+  receiptNumber: string;
+  transactionId: string;
+  orderId: string;
+  timestamp: string;
+  storeId: string;
+  storeName: string;
+  cashierId: string;
+  cashierName: string;
+  shiftId: string;
+  items: POSCartItem[];
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  currency: SupportedCurrency;
+  currencyTotal: number;
+  currencyRateToIDR: number;
+  paymentMethod: POSPaymentMethod;
+  cashTendered?: number;
+  cashChange?: number;
+  qrisRef?: string;
+  cardLast4?: string;
+  journalEntryIds: string[];
+  inventoryDeductedCount: number;
+  totalCogsCost: number;
 }
 

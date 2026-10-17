@@ -69,6 +69,7 @@ import {
   Globe2,
   Droplets,
   Wind,
+  LogOut,
 } from 'lucide-react';
 
 import { FefoModule } from './FefoModule';
@@ -82,12 +83,16 @@ import { SecurityAuditModule } from './SecurityAuditModule';
 import { AdminSidebar, AdminDashboardTab, AccountingSubTab } from './AdminSidebar';
 
 interface AdminDashboardProps {
+  initialStaffSession?: StaffShiftSession | null;
   onCloseToStorefront: () => void;
+  onLogout?: () => void;
   onShowToast: (title: string, message: string) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  initialStaffSession,
   onCloseToStorefront,
+  onLogout,
   onShowToast,
 }) => {
   // Theme Toggle: Clean Light Mode (Default) & Dark Mode
@@ -137,7 +142,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<AdminDashboardTab>('overview');
 
   // RBAC Staff Session State (Module 3)
-  const [activeStaffSession, setActiveStaffSession] = useState<StaffShiftSession | null>(null);
+  const [activeStaffSession, setActiveStaffSession] = useState<StaffShiftSession | null>(
+    initialStaffSession || null
+  );
   const [availableStaffProfiles, setAvailableStaffProfiles] = useState<StaffShiftSession[]>([]);
 
   // Climate-Adaptive Cold Chain State (Module 4)
@@ -264,7 +271,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ]);
 
       if (rbacRes) {
-        setActiveStaffSession(rbacRes.currentSession);
+        if (!initialStaffSession) {
+          setActiveStaffSession(rbacRes.currentSession);
+        }
         setAvailableStaffProfiles(rbacRes.availableProfiles || []);
       }
       setClimateConfigs(climateRes || []);
@@ -607,6 +616,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onCloseToStorefront={onCloseToStorefront}
+        onLogout={onLogout}
       />
 
       {/* 2. Main Content Wrapper with Dynamic Left Margin corresponding to Sidebar */}
@@ -757,7 +767,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 onClick={refreshAllData}
                 disabled={isLoading}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-all disabled:opacity-50 ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-all disabled:opacity-50 cursor-pointer ${
                   isLight
                     ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700 shadow-2xs'
                     : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-300'
@@ -767,6 +777,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">Sync Data</span>
               </button>
+
+              {/* Lock / Sign Out Button */}
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+                    isLight
+                      ? 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700 shadow-2xs'
+                      : 'bg-red-950/40 hover:bg-red-900/50 border-red-800/40 text-red-300'
+                  }`}
+                  title="Lock ERP Workstation & Sign Out"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-red-500" />
+                  <span className="hidden md:inline">Lock ERP</span>
+                </button>
+              )}
             </div>
           </div>
         </header>

@@ -7,7 +7,6 @@ interface HeaderProps {
   cartItems: CartItem[];
   onOpenCart: () => void;
   onOpenPortal: () => void;
-  onOpenAdminDashboard?: () => void;
   storeStatus?: StoreOperationalStatus | null;
   activeSection: string;
   onNavigate: (sectionId: string) => void;
@@ -20,7 +19,6 @@ export const Header: React.FC<HeaderProps> = ({
   cartItems,
   onOpenCart,
   onOpenPortal,
-  onOpenAdminDashboard,
   storeStatus,
   activeSection,
   onNavigate,
@@ -110,19 +108,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Zone 3: Primary Action & Portal Trigger */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Admin Dashboard Switcher Button */}
-            {onOpenAdminDashboard && (
-              <button
-                onClick={onOpenAdminDashboard}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-stone-950 bg-amber-400 hover:bg-amber-300 rounded-xl transition-all shadow-xs cursor-pointer shrink-0"
-                title="Switch to Role A: Administrator Dashboard (Inventory, Procurement, Accounting)"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-stone-950" />
-                <span className="hidden sm:inline">Admin HQ</span>
-                <span className="sm:hidden">Admin</span>
-              </button>
-            )}
-
             {/* Customer Portal Button */}
             <button
               onClick={onOpenPortal}

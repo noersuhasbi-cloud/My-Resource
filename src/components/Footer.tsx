@@ -1,12 +1,13 @@
 import React from 'react';
-import { Store, Phone, Mail, ShieldCheck, MapPin, Heart } from 'lucide-react';
+import { Store, Phone, Mail, ShieldCheck, MapPin, Heart, Lock } from 'lucide-react';
 
 interface FooterProps {
   onNavigate: (sectionId: string) => void;
   onOpenPortal: () => void;
+  onOpenAdminLogin?: () => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenPortal }) => {
+export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenPortal, onOpenAdminLogin }) => {
   return (
     <footer className="bg-stone-900 text-stone-300 border-t border-stone-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-16">
@@ -143,12 +144,25 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenPortal }) => {
         {/* Bottom Bar */}
         <div className="mt-12 pt-8 border-t border-stone-800 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
           <p>© 1998 - 2026 PT Bumi Retail Sejahtera (GroceMart). All rights reserved.</p>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap justify-center sm:justify-end">
             <span className="hover:text-stone-300 cursor-pointer">Privacy Charter</span>
             <span>·</span>
             <span className="hover:text-stone-300 cursor-pointer">Terms of Delivery</span>
             <span>·</span>
             <span className="hover:text-stone-300 cursor-pointer">QRIS Merchant ASPI 2026</span>
+            {onOpenAdminLogin && (
+              <>
+                <span>·</span>
+                <button
+                  onClick={onOpenAdminLogin}
+                  className="inline-flex items-center gap-1.5 text-stone-400 hover:text-amber-300 transition-colors font-medium cursor-pointer"
+                  title="Restricted Staff & ERP Operations Login"
+                >
+                  <Lock className="w-3 h-3 text-amber-400" />
+                  <span>Staff &amp; ERP Portal</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

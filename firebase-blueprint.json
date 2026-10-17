@@ -158,7 +158,7 @@
         },
         "status": {
           "type": "string",
-          "enum": ["placed", "paid", "packing", "in_transit", "delivered"]
+          "enum": ["placed", "paid", "packing", "in_transit", "ready_for_pickup", "delivered", "completed", "cancelled"]
         },
         "qrisRef": {
           "type": "string",

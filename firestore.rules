@@ -46,13 +46,14 @@ service cloud.firestore {
     }
 
     function isValidOrder(data) {
-      return data.keys().hasAll(['orderId', 'customerName', 'customerEmail', 'deliveryMethod', 'total', 'paymentMethod', 'paymentStatus', 'status'])
+      return data.keys().hasAll(['orderId', 'customerName', 'deliveryMethod', 'total', 'paymentMethod', 'paymentStatus', 'status'])
         && data.orderId is string && data.orderId.size() <= 50
         && data.customerName is string && data.customerName.size() <= 100
+        && (!('customerEmail' in data) || (data.customerEmail is string && data.customerEmail.size() <= 100))
         && (data.deliveryMethod in ['instant', 'scheduled', 'pickup'])
         && (data.paymentMethod in ['qris', 'bank_transfer', 'card'])
         && (data.paymentStatus in ['unpaid', 'paid'])
-        && (data.status in ['placed', 'paid', 'packing', 'in_transit', 'delivered'])
+        && (data.status in ['placed', 'paid', 'packing', 'in_transit', 'ready_for_pickup', 'delivered', 'completed', 'cancelled'])
         && data.total is number && data.total >= 0;
     }
 

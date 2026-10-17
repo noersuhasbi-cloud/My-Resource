@@ -19,8 +19,7 @@ import {
   INITIAL_BATCHES,
   INITIAL_WASTE_RECORDS,
   INITIAL_PICKER_ORDERS,
-} from './src/data/inventoryData.ts';
-import { INITIAL_ORDERS } from './src/data/mockData.ts';
+import { INITIAL_ORDERS, PRODUCTS } from './src/data/mockData.ts';
 
 import type {
   InventoryItem,
@@ -49,6 +48,9 @@ import type {
   SupportedCurrency,
   StorageZoneType,
   CurrencyExchangeRate,
+  POSProductItem,
+  POSTransactionRequest,
+  POSTransactionReceipt,
 } from './src/types/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2824,6 +2826,93 @@ async function startServer() {
   // MODULE 3: GRANULAR RBAC BY SHIFT, PHYSICAL ZONE & MULTI-OUTLET
   // Staff switch + zone-authorization checks + audit log
   // =============================================================
+  app.post('/api/admin/auth/login', (req: Request, res: Response) => {
+    const { userId, username, password, pin, shiftName } = req.body || {};
+
+    let target = AVAILABLE_STAFF_USERS.find((u) => u.userId === userId);
+
+    if (!target && username) {
+      const cleanUser = String(username).toLowerCase().trim();
+      target = AVAILABLE_STAFF_USERS.find(
+        (u) =>
+          u.userId.toLowerCase() === cleanUser ||
+          u.userName.toLowerCase().includes(cleanUser) ||
+          u.userRole.toLowerCase() === cleanUser.replace(/\s+/g, '_')
+      );
+    }
+
+    if (!target) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials. Please select an authorized staff profile or enter a valid Employee ID.',
+      });
+    }
+
+    if (
+      password &&
+      password !== 'admin123' &&
+      password !== '8821' &&
+      password !== 'grocemart2026' &&
+      password !== target.userId &&
+      pin !== '8821'
+    ) {
+      return res.status(401).json({
+        success: false,
+        error: 'Incorrect security password or PIN. Hint: use default "admin123" or PIN "8821".',
+      });
+    }
+
+    currentActiveStaffSession = {
+      ...target,
+      loginTimestamp: new Date().toISOString(),
+      shiftName: shiftName || target.shiftName,
+    };
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'USER_AUTHENTICATION',
+      resourceId: `SESSION-${target.userId}`,
+      userId: target.userId,
+      userName: target.userName,
+      userRole: target.userRole,
+      storeId: target.storeId,
+      shiftId: target.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        loginMethod: userId ? 'role_profile_selection' : 'credential_login',
+        clientIp: req.ip || '127.0.0.1',
+        shift: currentActiveStaffSession.shiftName,
+      },
+    });
+
+    res.json({
+      success: true,
+      token: `erp-session-jwt-${Date.now()}-${target.userId}`,
+      session: currentActiveStaffSession,
+      availableProfiles: AVAILABLE_STAFF_USERS,
+      message: `Authentication successful. Logged in as ${target.userName}`,
+    });
+  });
+
+  app.post('/api/admin/auth/logout', (_req: Request, res: Response) => {
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'USER_LOGOUT',
+      resourceId: `LOGOUT-${currentActiveStaffSession.userId}`,
+      userId: currentActiveStaffSession.userId,
+      userName: currentActiveStaffSession.userName,
+      userRole: currentActiveStaffSession.userRole,
+      storeId: currentActiveStaffSession.storeId,
+      shiftId: currentActiveStaffSession.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: { reason: 'User initiated ERP session lock / sign out' },
+    });
+
+    res.json({ success: true, message: 'ERP session locked and logged out.' });
+  });
+
   app.get('/api/admin/rbac/current-session', (_req: Request, res: Response) => {
     res.json({
       currentSession: currentActiveStaffSession,

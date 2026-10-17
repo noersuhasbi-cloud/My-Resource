@@ -9,7 +9,7 @@ import {
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
-import { signInWithPopup, signOut, User as FirebaseUser } from 'firebase/auth';
+import { signInWithPopup, signOut, signInAnonymously, User as FirebaseUser } from 'firebase/auth';
 import { db, auth, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
 import { CustomerAccount, Order, SavedAddress, OrderStatus } from '../types';
 
@@ -17,8 +17,18 @@ export async function loginWithGoogle(): Promise<FirebaseUser> {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-  } catch (error) {
-    console.error('Google Sign-In failed:', error);
+  } catch (error: any) {
+    if (error?.code === 'auth/unauthorized-domain' || error?.message?.includes('unauthorized-domain')) {
+      console.warn('Google Sign-In notice: Current domain is not in Firebase OAuth authorized domains. Attempting anonymous session fallback...');
+      try {
+        const anonResult = await signInAnonymously(auth);
+        return anonResult.user;
+      } catch (anonErr) {
+        console.warn('Anonymous auth fallback notice:', anonErr);
+      }
+    } else {
+      console.warn('Google Sign-In notice:', error);
+    }
     throw error;
   }
 }
@@ -27,8 +37,7 @@ export async function logoutFirebase(): Promise<void> {
   try {
     await signOut(auth);
   } catch (error) {
-    console.error('Sign out failed:', error);
-    throw error;
+    console.warn('Sign out notice:', error);
   }
 }
 
@@ -230,7 +239,7 @@ export async function saveOrderToFirestore(order: Order, userId?: string): Promi
       estimatedArrival: order.estimatedArrival || null,
       timeline: order.timeline,
       createdAt: order.createdAt,
-    });
+    }, { merge: true });
 
     // Update loyalty points in user document if authenticated
     if (auth.currentUser) {
@@ -251,25 +260,49 @@ export async function saveOrderToFirestore(order: Order, userId?: string): Promi
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
-    throw error;
   }
 }
 
 export async function updateOrderStatusInFirestore(
   orderId: string,
   nextStatus: OrderStatus,
-  updatedTimeline: any[]
+  updatedTimeline: any[],
+  fullOrder?: Order
 ): Promise<void> {
   const path = `orders/${orderId}`;
   try {
     const orderDocRef = doc(db, 'orders', orderId);
-    await updateDoc(orderDocRef, {
-      status: nextStatus,
-      timeline: updatedTimeline,
-      updatedAt: new Date().toISOString(),
-    });
+    if (fullOrder) {
+      await setDoc(
+        orderDocRef,
+        {
+          orderId: fullOrder.id,
+          userId: auth.currentUser?.uid || fullOrder.userId || 'guest-user',
+          customerName: fullOrder.customerName,
+          customerEmail: fullOrder.customerEmail,
+          deliveryMethod: fullOrder.deliveryMethod,
+          total: fullOrder.total,
+          paymentMethod: fullOrder.paymentMethod,
+          paymentStatus: fullOrder.paymentStatus,
+          status: nextStatus,
+          timeline: updatedTimeline,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } else {
+      await setDoc(
+        orderDocRef,
+        {
+          orderId,
+          status: nextStatus,
+          timeline: updatedTimeline,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
-    throw error;
   }
 }

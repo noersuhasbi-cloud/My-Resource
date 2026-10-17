@@ -28,6 +28,10 @@ import type {
   SecurityAuditTrailRecord,
   ClimateAdaptiveThresholdConfig,
   SupportedCurrency,
+  AdminAuthResponse,
+  POSProductItem,
+  POSTransactionRequest,
+  POSTransactionReceipt,
 } from '../types/index.ts';
 
 export const apiClient = {
@@ -658,6 +662,30 @@ export const apiClient = {
     return res.json();
   },
 
+  async adminLogin(params: {
+    userId?: string;
+    username?: string;
+    password?: string;
+    pin?: string;
+    shiftName?: string;
+  }): Promise<AdminAuthResponse> {
+    const res = await fetch('/api/admin/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Authentication failed. Please verify credentials or select a valid staff profile.');
+    }
+    return res.json();
+  },
+
+  async adminLogout(): Promise<{ success: boolean; message?: string }> {
+    const res = await fetch('/api/admin/auth/logout', { method: 'POST' });
+    return res.json().catch(() => ({ success: true }));
+  },
+
   async getSecurityAuditTrail(storeId?: string, actionType?: string): Promise<SecurityAuditTrailRecord[]> {
     const params = new URLSearchParams();
     if (storeId) params.append('storeId', storeId);
@@ -706,6 +734,48 @@ export const apiClient = {
     if (storeId) params.append('storeId', storeId);
     if (currency) params.append('currency', currency);
     const res = await fetch(`/api/admin/accounting/pnl-multicurrency?${params.toString()}`);
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 5: POS (Point of Sale) & Cashier Module APIs
+  // -------------------------------------------------------------
+  async getPosProducts(storeId?: string): Promise<POSProductItem[]> {
+    const params = new URLSearchParams();
+    if (storeId) params.append('storeId', storeId);
+    const res = await fetch(`/api/pos/products?${params.toString()}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to fetch POS product catalog');
+    }
+    return res.json();
+  },
+
+  async posCheckout(payload: POSTransactionRequest): Promise<{
+    success: boolean;
+    receipt: POSTransactionReceipt;
+    message: string;
+  }> {
+    const res = await fetch('/api/pos/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'POS Transaction processing failed');
+    }
+    return res.json();
+  },
+
+  async getPosHistory(storeId?: string): Promise<POSTransactionReceipt[]> {
+    const params = new URLSearchParams();
+    if (storeId) params.append('storeId', storeId);
+    const res = await fetch(`/api/pos/history?${params.toString()}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to fetch POS transaction history');
+    }
     return res.json();
   },
 };

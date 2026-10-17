@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Users,
   FileCheck2,
+  LogOut,
 } from 'lucide-react';
 
 export type AdminDashboardTab =
@@ -67,8 +68,9 @@ interface AdminSidebarProps {
   // Mobile drawer controls
   isMobileOpen: boolean;
   onCloseMobile: () => void;
-  // Storefront exit
+  // Storefront exit & logout
   onCloseToStorefront: () => void;
+  onLogout?: () => void;
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -89,6 +91,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   isMobileOpen,
   onCloseMobile,
   onCloseToStorefront,
+  onLogout,
 }) => {
   const isLight = theme === 'light';
 
@@ -593,18 +596,35 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           isLight ? 'border-gray-200/90 bg-gray-50/70' : 'border-stone-800/90 bg-stone-900/60'
         }`}
       >
-        <button
-          onClick={onCloseToStorefront}
-          title={isCollapsed ? 'Back to Customer Storefront' : undefined}
-          className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-            isLight
-              ? 'bg-white hover:bg-gray-100 border border-gray-200 text-gray-800 shadow-2xs'
-              : 'bg-stone-800 hover:bg-stone-700 border border-stone-700 text-white'
-          }`}
-        >
-          <StoreIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-          {!isCollapsed && <span className="truncate">Storefront View</span>}
-        </button>
+        <div className="space-y-1.5">
+          <button
+            onClick={onCloseToStorefront}
+            title={isCollapsed ? 'Back to Customer Storefront' : undefined}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              isLight
+                ? 'bg-white hover:bg-gray-100 border border-gray-200 text-gray-800 shadow-2xs'
+                : 'bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200'
+            }`}
+          >
+            <StoreIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+            {!isCollapsed && <span className="truncate">Storefront View</span>}
+          </button>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title={isCollapsed ? 'Lock ERP / Sign Out' : undefined}
+              className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                isLight
+                  ? 'bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 shadow-2xs'
+                  : 'bg-red-950/40 hover:bg-red-900/50 border border-red-800/40 text-red-300'
+              }`}
+            >
+              <LogOut className="w-4 h-4 text-red-500 shrink-0" />
+              {!isCollapsed && <span className="truncate">Lock / Sign Out</span>}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
