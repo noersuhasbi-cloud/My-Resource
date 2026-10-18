@@ -215,9 +215,9 @@ export async function saveOrderToFirestore(order: Order, userId?: string): Promi
     await setDoc(orderDocRef, {
       orderId: order.id,
       userId: effectiveUserId,
-      customerName: order.customerName,
-      customerEmail: order.customerEmail,
-      customerPhone: order.customerPhone,
+      customerName: order.customerName.slice(0, 100),
+      customerEmail: (order.customerEmail || '').slice(0, 100),
+      customerPhone: (order.customerPhone || '').slice(0, 30),
       deliveryMethod: order.deliveryMethod,
       deliveryAddress: order.deliveryAddress || null,
       pickupStore: order.pickupStore || null,
@@ -259,7 +259,11 @@ export async function saveOrderToFirestore(order: Order, userId?: string): Promi
       }
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    try {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } catch {
+      // Allow local fallback to continue smoothly
+    }
   }
 }
 
@@ -278,8 +282,8 @@ export async function updateOrderStatusInFirestore(
         {
           orderId: fullOrder.id,
           userId: auth.currentUser?.uid || fullOrder.userId || 'guest-user',
-          customerName: fullOrder.customerName,
-          customerEmail: fullOrder.customerEmail,
+          customerName: fullOrder.customerName.slice(0, 100),
+          customerEmail: (fullOrder.customerEmail || '').slice(0, 100),
           deliveryMethod: fullOrder.deliveryMethod,
           total: fullOrder.total,
           paymentMethod: fullOrder.paymentMethod,
@@ -303,6 +307,56 @@ export async function updateOrderStatusInFirestore(
       );
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    try {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    } catch {
+      // Allow local fallback to continue smoothly
+    }
   }
 }
+
+export async function savePosReceiptToFirestore(receipt: {
+  receiptId: string;
+  storeId: string;
+  storeName: string;
+  cashierId: string;
+  cashierName: string;
+  paymentMethod: string;
+  currency: string;
+  grandTotalIDR: number;
+  totalCogsIDR: number;
+  timestamp: string;
+  items?: any[];
+  glEntriesCreated?: any[];
+}): Promise<void> {
+  const safeId = receipt.receiptId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64);
+  const path = `pos_receipts/${safeId}`;
+  try {
+    const docRef = doc(db, 'pos_receipts', safeId);
+    await setDoc(
+      docRef,
+      {
+        receiptId: safeId,
+        storeId: receipt.storeId.slice(0, 64),
+        storeName: (receipt.storeName || '').slice(0, 128),
+        cashierId: receipt.cashierId.slice(0, 64),
+        cashierName: (receipt.cashierName || '').slice(0, 100),
+        paymentMethod: receipt.paymentMethod,
+        currency: receipt.currency,
+        grandTotalIDR: receipt.grandTotalIDR,
+        totalCogsIDR: receipt.totalCogsIDR,
+        timestamp: receipt.timestamp.slice(0, 64),
+        itemsCount: receipt.items?.length || 0,
+        glEntriesCount: receipt.glEntriesCreated?.length || 0,
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    try {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } catch {
+      // Non-blocking cloud backup sync
+    }
+  }
+}
+

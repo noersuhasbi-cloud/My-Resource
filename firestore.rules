@@ -16,6 +16,13 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == "abonglagi@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
     function incoming() {
       return request.resource.data;
     }
@@ -57,34 +64,55 @@ service cloud.firestore {
         && data.total is number && data.total >= 0;
     }
 
+    function isValidPosReceipt(data) {
+      return data.keys().hasAll(['receiptId', 'storeId', 'cashierId', 'paymentMethod', 'currency', 'grandTotalIDR', 'timestamp'])
+        && data.receiptId is string && data.receiptId.size() <= 64
+        && data.storeId is string && data.storeId.size() <= 64
+        && data.cashierId is string && data.cashierId.size() <= 64
+        && (data.paymentMethod in ['CASH', 'QRIS', 'DEBIT_CREDIT', 'BANK_TRANSFER', 'SPLIT'])
+        && (data.currency in ['IDR', 'USD', 'EUR', 'AUD'])
+        && data.grandTotalIDR is number && data.grandTotalIDR >= 0
+        && data.timestamp is string && data.timestamp.size() <= 64;
+    }
+
     // Users Collection & Subcollections
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false; // Disallow user scraping
-      allow create: if isOwner(userId) && isValidUser(incoming());
-      allow update: if isOwner(userId) && isValidUser(incoming());
-      allow delete: if false;
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidUser(incoming());
+      allow update: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidUser(incoming());
+      allow delete: if isAdmin() && isValidId(userId);
 
       match /addresses/{addressId} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidAddress(incoming());
-        allow delete: if isOwner(userId);
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if (isOwner(userId) || isAdmin()) && isValidId(addressId) && isValidAddress(incoming());
+        allow delete: if (isOwner(userId) || isAdmin()) && isValidId(addressId);
       }
     }
 
     // Orders Collection
     match /orders/{orderId} {
-      allow read: if true;
-      allow create: if isValidOrder(incoming());
-      allow update: if isValidOrder(incoming());
-      allow delete: if false;
+      allow get: if true;
+      allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if isValidId(orderId) && isValidOrder(incoming());
+      allow update: if isValidId(orderId) && isValidOrder(incoming());
+      allow delete: if isAdmin() && isValidId(orderId);
+    }
+
+    // POS Receipts Collection
+    match /pos_receipts/{receiptId} {
+      allow get: if true;
+      allow list: if isSignedIn() || isAdmin();
+      allow create: if isValidId(receiptId) && isValidPosReceipt(incoming());
+      allow update: if isAdmin() && isValidId(receiptId) && isValidPosReceipt(incoming());
+      allow delete: if isAdmin() && isValidId(receiptId);
     }
 
     // Products Collection (Allows public reading of catalog and direct Firestore storage of Base64 images)
     match /products/{productId} {
       allow read: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if false;
+      allow create, update: if isSignedIn() || isAdmin();
+      allow delete: if isAdmin() && isValidId(productId);
     }
 
     // Connection Healthcheck Document

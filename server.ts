@@ -61,6 +61,12 @@ import type {
   POSProductItem,
   POSTransactionRequest,
   POSTransactionReceipt,
+  CoaMappingConfig,
+  PosCheckoutConfig,
+  BulkInventoryImportRow,
+  StockOpnameSession,
+  StockOpnameItem,
+  StockTransferRecord,
 } from './src/types/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -416,6 +422,192 @@ let climateAdaptiveConfigs: ClimateAdaptiveThresholdConfig[] = [
   },
 ];
 
+// Module 5: In-Memory POS Receipts History
+let posReceiptsHistory: POSTransactionReceipt[] = [
+  {
+    receiptNumber: 'RCP-POS-2026-0801',
+    transactionId: 'TX-POS-2026-0801',
+    orderId: 'POS-JKT-0801',
+    timestamp: new Date(Date.now() - 3600000 * 1.5).toISOString(),
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    cashierId: 'USR-CASH-01',
+    cashierName: 'Andi Wijaya (Frontline Cashier)',
+    shiftId: 'SHIFT-JKT-SEN-MORNING',
+    items: [
+      {
+        id: 'pos-line-1',
+        sku: 'SKU-PRD-001',
+        productId: 'prod-01',
+        name: 'Organic Hydroponic Butterhead Lettuce',
+        category: 'produce',
+        unitPrice: 18500,
+        unitCost: 11000,
+        quantity: 2,
+        unit: '250g head',
+        batchId: 'BAT-2026-081',
+        lotNumber: 'LOT-LETT-2610-A',
+        expiryDate: '2026-10-18',
+        daysUntilExpiry: 2,
+        lineTotal: 37000,
+      },
+      {
+        id: 'pos-line-2',
+        sku: 'SKU-BAK-001',
+        productId: 'prod-04',
+        name: 'Artisan Country Sourdough Loaf',
+        category: 'bakery',
+        unitPrice: 40000,
+        unitCost: 24000,
+        quantity: 1,
+        unit: '650g loaf',
+        batchId: 'BAT-2026-042',
+        lotNumber: 'LOT-BAK-2610-10',
+        expiryDate: '2026-10-19',
+        daysUntilExpiry: 3,
+        lineTotal: 40000,
+      },
+    ],
+    subtotal: 77000,
+    discount: 0,
+    tax: 8470,
+    total: 85470,
+    currency: 'IDR',
+    currencyTotal: 85470,
+    currencyRateToIDR: 1,
+    paymentMethod: 'qris',
+    qrisRef: 'QRIS-POS-99182A',
+    journalEntryIds: ['GLE-2026-0103', 'GLE-2026-0104', 'GLE-2026-0105', 'GLE-2026-0106'],
+    inventoryDeductedCount: 3,
+    totalCogsCost: 46000,
+  },
+];
+
+// -------------------------------------------------------------
+// MODULE 6: SETTINGS & CONFIGURATION IN-MEMORY STORES
+// -------------------------------------------------------------
+let coaMappingConfig: CoaMappingConfig = {
+  posRevenueAccountCode: '4010',
+  posRevenueAccountName: 'Grocery Sales Revenue - Retail Storefront',
+  inventoryAssetAccountCode: '1040',
+  inventoryAssetAccountName: 'Merchandise Inventory Asset',
+  shrinkageExpenseAccountCode: '5030',
+  shrinkageExpenseAccountName: 'Waste, Spoilage & Shrinkage Expense',
+  cogsAccountCode: '5010',
+  cogsAccountName: 'Cost of Goods Sold (COGS) - FIFO / WAC',
+  cashClearingAccountCode: '1010',
+  cashClearingAccountName: 'Cash & Register Drawer Clearing',
+  qrisClearingAccountCode: '1030',
+  qrisClearingAccountName: 'QRIS Settlement Receivable (ASPI Clearing)',
+  edcClearingAccountCode: '1020',
+  edcClearingAccountName: 'Bank BCA Operational Clearing (EDC Card)',
+  taxPayableAccountCode: '2020',
+  taxPayableAccountName: 'Value-Added Tax (PPN) Output Payable',
+  updatedAt: new Date().toISOString(),
+  updatedBy: 'Siti Rahmawati (Chief Accountant)',
+};
+
+let posCheckoutConfig: PosCheckoutConfig = {
+  roundingRule: 'nearest_100',
+  ppnTaxPercent: 11,
+  isTaxInclusive: false,
+  maxCashierDiscountPercent: 15,
+  enableVivoNearExpiryDiscount: true,
+  vivoNearExpiryDiscountPercent: 25,
+  cashDrawerFloatIDR: 500000,
+  loyaltyPointsPer1000IDR: 1,
+  requireManagerPinForVoid: true,
+  storeReceiptFooterText: 'Thank you for choosing GroceMart. Fresh organic groceries harvested daily!',
+  updatedAt: new Date().toISOString(),
+  updatedBy: 'Budi Santoso (Retail Operations VP)',
+};
+
+let stockOpnameSessions: StockOpnameSession[] = [
+  {
+    id: 'OPN-2026-001',
+    date: '2026-10-14',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    warehouseZoneId: 'WH-JKT-SEN-COLD',
+    auditorId: 'USR-AUD-01',
+    auditorName: 'Siti Rahmawati (Audit Lead)',
+    status: 'completed',
+    items: [
+      {
+        sku: 'SKU-PRD-001',
+        productName: 'Organic Hydroponic Butterhead Lettuce',
+        category: 'produce',
+        storeId: 'store-jkt-senopati',
+        storeName: 'GroceMart Senopati Flagship',
+        warehouseZoneId: 'WH-JKT-SEN-COLD',
+        systemStock: 50,
+        countedStock: 48,
+        varianceQty: -2,
+        unitCost: 11000,
+        financialVarianceIDR: -22000,
+        notes: '2 heads trimmed due to outer leaf bruising',
+        status: 'shortage',
+      },
+      {
+        sku: 'SKU-PRD-002',
+        productName: 'Heirloom Vine-Ripened Sweet Tomatoes',
+        category: 'produce',
+        storeId: 'store-jkt-senopati',
+        storeName: 'GroceMart Senopati Flagship',
+        warehouseZoneId: 'WH-JKT-SEN-COLD',
+        systemStock: 14,
+        countedStock: 14,
+        varianceQty: 0,
+        unitCost: 14500,
+        financialVarianceIDR: 0,
+        notes: 'Perfect count verified',
+        status: 'matched',
+      },
+      {
+        sku: 'SKU-DAI-001',
+        productName: 'Pastured Free-Range Omega-3 Eggs',
+        category: 'dairy_eggs',
+        storeId: 'store-jkt-senopati',
+        storeName: 'GroceMart Senopati Flagship',
+        warehouseZoneId: 'WH-JKT-SEN-COLD',
+        systemStock: 40,
+        countedStock: 41,
+        varianceQty: 1,
+        unitCost: 22000,
+        financialVarianceIDR: 22000,
+        notes: 'Extra carton found from yesterday morning delivery receipt',
+        status: 'surplus',
+      },
+    ],
+    totalSystemUnits: 104,
+    totalCountedUnits: 103,
+    totalVarianceUnits: -1,
+    netFinancialVarianceIDR: 0,
+    glEntryIds: ['GLE-2026-0091', 'GLE-2026-0092'],
+    notes: 'Mid-month chilled room cycle count verified.',
+    completedAt: '2026-10-14T11:30:00Z',
+  },
+];
+
+let stockTransferRecords: StockTransferRecord[] = [
+  {
+    id: 'TRF-2026-001',
+    timestamp: new Date(Date.now() - 86400000 * 2).toISOString(),
+    sku: 'SKU-PRD-001',
+    productName: 'Organic Hydroponic Butterhead Lettuce',
+    sourceStoreId: 'store-jkt-senopati',
+    sourceStoreName: 'GroceMart Senopati Flagship',
+    destinationStoreId: 'store-jkt-pik',
+    destinationStoreName: 'GroceMart PIK 2 The Avenue',
+    quantity: 15,
+    unitCost: 11000,
+    totalTransferValue: 165000,
+    transferredBy: 'Rian Pratama (Logistics Dispatch)',
+    status: 'completed',
+    notes: 'Weekend surge re-allocation via refrigerated sprinter van.',
+  },
+];
+
 // -------------------------------------------------------------
 // GUARD 1: Concurrency & Anti-Overselling Lock Manager
 // Strict transactional isolation & mutex queue for inventory deductions
@@ -712,13 +904,24 @@ async function startServer() {
       return res.status(400).json({ success: false, error: 'Missing orderId or amount' });
     }
 
-    // Check store closure
+    // Check store closure & outlet status
     if (!storeStatus.isOpen) {
       return res.status(403).json({
         success: false,
-        error: 'Store is currently closed or in holiday maintenance. New checkouts are temporarily paused.',
+        error: 'Store network is currently closed or in holiday maintenance. New online orders are temporarily paused.',
         notice: storeStatus.noticeBanner,
       });
+    }
+
+    const { pickupStoreId } = req.body;
+    if (pickupStoreId) {
+      const targetStore = storeSchedules.find((s) => s.storeId === pickupStoreId);
+      if (targetStore?.isEmergencyClosed) {
+        return res.status(403).json({
+          success: false,
+          error: `Selected outlet '${targetStore.storeName}' is currently closed (${targetStore.closureReason || 'Emergency Maintenance'}). Online orders cannot be fulfilled from this branch.`,
+        });
+      }
     }
 
     const qrisRef = `QRIS-GCM-${Date.now().toString().slice(-6)}`;
@@ -861,16 +1064,21 @@ async function startServer() {
             const invItem = inventoryList.find((inv) => inv.productId === prodId || inv.sku === item.sku);
 
             if (invItem) {
-              invItem.currentStock = Math.max(0, invItem.currentStock - qty);
-              invItem.outgoingStock += qty;
-
-              // Also update store warehouse tiers
-              const tier = storeInventoryTiers.find((t) => t.sku === invItem.sku);
+              // Strictly isolate stock deduction to target fulfilling outlet
+              const targetStoreId = req.body.storeId || req.body.pickupStoreId || 'store-jkt-senopati';
+              const tier = storeInventoryTiers.find((t) => t.sku === invItem.sku && t.storeId === targetStoreId);
               if (tier) {
-                tier.physicalStock = Math.max(0, tier.physicalStock - qty);
-                tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+                tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
+                tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
                 tier.updatedAt = new Date().toISOString();
               }
+
+              // Recalculate master inventory currentStock as the exact sum of isolated warehouse tiers
+              const totalAcrossOutlets = storeInventoryTiers
+                .filter((t) => t.sku === invItem.sku)
+                .reduce((sum, t) => sum + t.physicalStock, 0);
+              invItem.currentStock = Number(totalAcrossOutlets.toFixed(2));
+              invItem.outgoingStock = Number((invItem.outgoingStock + qty).toFixed(2));
 
               const itemCogs = invItem.unitCost * qty;
               totalCogs += itemCogs;
@@ -2202,35 +2410,38 @@ async function startServer() {
 
   app.get('/api/admin/accounting/pnl', (req: Request, res: Response) => {
     const { storeId } = req.query;
+    const isSingleStore = Boolean(storeId && storeId !== 'CONSOLIDATED');
     let relevantEntries = generalLedger;
     let storeName = 'Consolidated Company-Wide';
 
-    if (storeId && storeId !== 'CONSOLIDATED') {
+    if (isSingleStore) {
       relevantEntries = generalLedger.filter((e) => e.storeId === storeId);
       const s = storeSchedules.find((st) => st.storeId === storeId);
       if (s) storeName = s.storeName;
     }
 
-    let grossSalesRevenue = 0;
-    let costOfGoodsSold = 0;
+    let dynamicSalesRevenue = 0;
+    let dynamicCogs = 0;
 
     relevantEntries.forEach((entry) => {
-      if (entry.accountCode === '4010') grossSalesRevenue += entry.credit;
-      if (entry.accountCode === '5010') costOfGoodsSold += entry.debit;
+      if (!entry.isReversed) {
+        if (entry.accountCode === '4010') dynamicSalesRevenue += entry.credit - entry.debit;
+        if (entry.accountCode === '5010') dynamicCogs += entry.debit - entry.credit;
+      }
     });
 
-    // Provide realistic baseline if ledger is young
-    if (grossSalesRevenue === 0) {
-      grossSalesRevenue = storeId && storeId !== 'CONSOLIDATED' ? 45000000 : 388500000;
-      costOfGoodsSold = Math.round(grossSalesRevenue * 0.62);
-    }
+    const baselineSales = isSingleStore ? 45000000 : 388500000;
+    const baselineCogs = Math.round(baselineSales * 0.62);
+
+    const grossSalesRevenue = baselineSales + Math.max(0, dynamicSalesRevenue);
+    const costOfGoodsSold = baselineCogs + Math.max(0, dynamicCogs);
 
     const discountsGiven = Math.round(grossSalesRevenue * 0.04);
     const netSalesRevenue = grossSalesRevenue - discountsGiven;
     const grossProfit = netSalesRevenue - costOfGoodsSold;
     const grossMarginPercent = netSalesRevenue > 0 ? (grossProfit / netSalesRevenue) * 100 : 0;
 
-    const factor = storeId && storeId !== 'CONSOLIDATED' ? 0.22 : 1.0;
+    const factor = isSingleStore ? 0.22 : 1.0;
     const operatingExpenses = [
       { category: 'Cold-Chain Refrigeration & Store Electricity', amount: Math.round(18500000 * factor) },
       { category: 'Same-Day Chilled Logistics & Couriers', amount: Math.round(12200000 * factor) },
@@ -2264,11 +2475,27 @@ async function startServer() {
     const isSingleStore = storeId && storeId !== 'CONSOLIDATED';
     const factor = isSingleStore ? 0.25 : 1.0;
 
+    const relevantPos = isSingleStore
+      ? posReceiptsHistory.filter((r) => r.storeId === storeId)
+      : posReceiptsHistory;
+
+    const posCashDelta = relevantPos
+      .filter((r) => r.paymentMethod === 'cash')
+      .reduce((s, r) => s + r.total, 0);
+    const posBankDelta = relevantPos
+      .filter((r) => r.paymentMethod === 'debit_card' || r.paymentMethod === 'credit_card')
+      .reduce((s, r) => s + r.total, 0);
+    const posQrisDelta = relevantPos
+      .filter((r) => r.paymentMethod === 'qris')
+      .reduce((s, r) => s + r.total, 0);
+    const posCogsDelta = relevantPos.reduce((s, r) => s + r.totalCogsCost, 0);
+    const posNetMarginDelta = relevantPos.reduce((s, r) => s + (r.total - r.totalCogsCost), 0);
+
     const currentAssets = [
-      { category: 'Cash on Hand & Register Drawer Float', amount: Math.round(45000000 * factor) },
-      { category: 'Bank BCA Operational Clearing', amount: Math.round(382000000 * factor) },
-      { category: 'QRIS Settlement Receivable (ASPI Clearing)', amount: Math.round(28400000 * factor) },
-      { category: 'Merchandise Inventory Asset (FIFO/WAC Valued)', amount: Math.round(846500000 * factor) },
+      { category: 'Cash on Hand & Register Drawer Float', amount: Math.round(45000000 * factor) + posCashDelta },
+      { category: 'Bank BCA Operational Clearing', amount: Math.round(382000000 * factor) + posBankDelta },
+      { category: 'QRIS Settlement Receivable (ASPI Clearing)', amount: Math.round(28400000 * factor) + posQrisDelta },
+      { category: 'Merchandise Inventory Asset (FIFO/WAC Valued)', amount: Math.max(0, Math.round(846500000 * factor) - posCogsDelta) },
     ];
 
     const nonCurrentAssets = [
@@ -2287,7 +2514,7 @@ async function startServer() {
     const totalLiabilities = currentLiabilities.reduce((s, l) => s + l.amount, 0);
 
     const retainedPrior = Math.round(174900000 * factor);
-    const currentPeriodNet = Math.round(91500000 * factor);
+    const currentPeriodNet = Math.round(91500000 * factor) + posNetMarginDelta;
     const paidInEquity = totalAssets - totalLiabilities - retainedPrior - currentPeriodNet;
 
     const equityItems = [
@@ -2320,10 +2547,16 @@ async function startServer() {
 
   app.get('/api/admin/accounting/cash-flow', (req: Request, res: Response) => {
     const { storeId } = req.query;
-    const factor = storeId && storeId !== 'CONSOLIDATED' ? 0.25 : 1.0;
+    const isSingleStore = storeId && storeId !== 'CONSOLIDATED';
+    const factor = isSingleStore ? 0.25 : 1.0;
+
+    const relevantPos = isSingleStore
+      ? posReceiptsHistory.filter((r) => r.storeId === storeId)
+      : posReceiptsHistory;
+    const posInflowDelta = relevantPos.reduce((s, r) => s + r.total, 0);
 
     const operatingActivities = [
-      { category: 'Cash Receipts from QRIS Online & In-Store Sales', amount: Math.round(365000000 * factor) },
+      { category: 'Cash Receipts from QRIS Online & In-Store POS Sales', amount: Math.round(365000000 * factor) + posInflowDelta },
       { category: 'Payments to Produce & Dairy Suppliers', amount: -Math.round(210000000 * factor) },
       { category: 'Payments for Cold-Chain Refrigeration & Store Utilities', amount: -Math.round(18500000 * factor) },
       { category: 'Salaries Paid to Storekeepers & Couriers', amount: -Math.round(24800000 * factor) },
@@ -2365,8 +2598,11 @@ async function startServer() {
   // MULTI-DIMENSIONAL REVENUE (OMZET) ANALYTICS ENDPOINT
   // -------------------------------------------------------------
   app.get('/api/admin/analytics/omzet', (_req: Request, res: Response) => {
-    const totalRevenueMTD = 388500000;
-    const storeBreakdown = [
+    const posTotalDelta = posReceiptsHistory.reduce((s, r) => s + r.total, 0);
+    const totalRevenueMTD = 388500000 + posTotalDelta;
+    const totalOrders = 1311 + posReceiptsHistory.length;
+
+    const baseStores = [
       { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship', city: 'Jakarta', omzet: 124500000, orderCount: 412, sharePercent: 32.0, status: 'Open' as const },
       { storeId: 'store-jkt-pik', storeName: 'GroceMart PIK 2 The Avenue', city: 'Jakarta', omzet: 98200000, orderCount: 328, sharePercent: 25.3, status: 'Open' as const },
       { storeId: 'store-bdg-dago', storeName: 'GroceMart Dago Green Market', city: 'Bandung', omzet: 64800000, orderCount: 224, sharePercent: 16.7, status: 'Open' as const },
@@ -2374,6 +2610,18 @@ async function startServer() {
       { storeId: 'store-bali-canggu', storeName: 'GroceMart Batu Bolong Organic', city: 'Bali', omzet: 32400000, orderCount: 108, sharePercent: 8.3, status: 'Open' as const },
       { storeId: 'store-sby-gubeng', storeName: 'GroceMart Gubeng Central Hub', city: 'Surabaya', omzet: 20000000, orderCount: 74, sharePercent: 5.2, status: 'Open' as const },
     ];
+
+    const storeBreakdown = baseStores.map((st) => {
+      const storePos = posReceiptsHistory.filter((r) => r.storeId === st.storeId);
+      const addedOmzet = storePos.reduce((sum, r) => sum + r.total, 0);
+      const newOmzet = st.omzet + addedOmzet;
+      return {
+        ...st,
+        omzet: newOmzet,
+        orderCount: st.orderCount + storePos.length,
+        sharePercent: Number(((newOmzet / totalRevenueMTD) * 100).toFixed(1)),
+      };
+    });
 
     const categoryBreakdown = [
       { category: 'produce', label: 'Fresh Organic Produce', omzet: 142000000, unitsSold: 5820, sharePercent: 36.6 },
@@ -2393,14 +2641,14 @@ async function startServer() {
 
     res.json({
       totalRevenueMTD,
-      dodGrowthPercent: 4.8,  // Day-over-Day
-      wowGrowthPercent: 12.4, // Week-over-Week
-      momGrowthPercent: 18.2, // Month-over-Month
-      totalOrders: 1311,
-      averageBasketValue: 296338,
+      dodGrowthPercent: 4.8,
+      wowGrowthPercent: 12.4,
+      momGrowthPercent: 18.2,
+      totalOrders,
+      averageBasketValue: Math.round(totalRevenueMTD / Math.max(1, totalOrders)),
       qrisMetrics: {
-        totalAttempts: 1380,
-        settledCount: 1336,
+        totalAttempts: 1380 + posReceiptsHistory.filter((r) => r.paymentMethod === 'qris').length,
+        settledCount: 1336 + posReceiptsHistory.filter((r) => r.paymentMethod === 'qris').length,
         failedOrExpiredCount: 44,
         conversionRatePercent: 96.8,
         averageSettlementSeconds: 6.2,
@@ -3063,18 +3311,21 @@ async function startServer() {
       if (s) storeName = s.storeName;
     }
 
-    let grossSalesRevenue = 0;
-    let costOfGoodsSold = 0;
+    let dynamicSales = 0;
+    let dynamicCogs = 0;
 
     relevantEntries.forEach((entry) => {
-      if (entry.accountCode === '4010') grossSalesRevenue += entry.credit;
-      if (entry.accountCode === '5010') costOfGoodsSold += entry.debit;
+      if (!entry.isReversed) {
+        if (entry.accountCode === '4010') dynamicSales += entry.credit - entry.debit;
+        if (entry.accountCode === '5010') dynamicCogs += entry.debit - entry.credit;
+      }
     });
 
-    if (grossSalesRevenue === 0) {
-      grossSalesRevenue = storeId && storeId !== 'CONSOLIDATED' ? 45000000 : 388500000;
-      costOfGoodsSold = Math.round(grossSalesRevenue * 0.62);
-    }
+    const isSingleStore = Boolean(storeId && storeId !== 'CONSOLIDATED');
+    const baseSales = isSingleStore ? 45000000 : 388500000;
+    const baseCogs = Math.round(baseSales * 0.62);
+    const grossSalesRevenue = baseSales + Math.max(0, dynamicSales);
+    const costOfGoodsSold = baseCogs + Math.max(0, dynamicCogs);
 
     const discountsGiven = Math.round(grossSalesRevenue * 0.04);
     const netSalesRevenue = grossSalesRevenue - discountsGiven;
@@ -3121,6 +3372,1071 @@ async function startServer() {
       netMarginPercent: Number(netMarginPercent.toFixed(1)),
     });
   });
+
+  // =============================================================
+  // MODULE 5: POS (POINT OF SALE) & CASHIER STATION ENGINE
+  // RBAC Guard + Store Inventory Deduction + FEFO Batch + GL Sync
+  // =============================================================
+  app.get('/api/pos/products', (req: Request, res: Response) => {
+    const rawStoreId = req.query.storeId ? String(req.query.storeId) : 'store-jkt-senopati';
+    const targetStoreId =
+      rawStoreId === 'CONSOLIDATED' || rawStoreId === 'ALL' ? 'store-jkt-senopati' : rawStoreId;
+
+    const posProducts: POSProductItem[] = inventoryList.map((inv, idx) => {
+      const catalogMatch = PRODUCTS.find(
+        (p) => p.id === inv.productId || p.name.toLowerCase() === inv.productName.toLowerCase()
+      );
+      const storeTier = storeInventoryTiers.find(
+        (t) => t.sku === inv.sku && t.storeId === targetStoreId
+      );
+
+      // Find earliest expiring active FEFO batch strictly for target outlet
+      const matchingBatches = inventoryBatches
+        .filter((b) => b.sku === inv.sku && b.currentStock > 0 && b.storeId === targetStoreId)
+        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+      const nearestBatch = matchingBatches[0];
+      const isWeighted =
+        inv.category === 'produce' ||
+        inv.category === 'meat_seafood' ||
+        Boolean(inv.weightGrams && inv.weightGrams >= 250);
+
+      const grams = inv.weightGrams || 500;
+      const pricePerKg = Math.round((inv.sellingPrice / grams) * 1000);
+      const barcode = `899276100${(idx + 101).toString().padStart(3, '0')}${((idx * 7) % 10)}`;
+
+      return {
+        sku: inv.sku,
+        productId: inv.productId,
+        name: inv.productName,
+        category: String(inv.category),
+        sellingPrice: storeTier ? storeTier.sellingPrice : inv.sellingPrice,
+        unitCost: storeTier ? storeTier.unitCost : inv.unitCost,
+        unit: inv.unit,
+        barcode,
+        image: catalogMatch?.image || '/images/category_fresh_produce_1791623385871.jpg',
+        currentStock: storeTier ? storeTier.physicalStock : inv.currentStock,
+        availableStock: storeTier ? storeTier.availableStock : inv.currentStock,
+        isWeighted,
+        pricePerKg,
+        nearestBatchId: nearestBatch?.batchId || `BAT-2610-${inv.sku.slice(-3)}`,
+        lotNumber: nearestBatch?.lotNumber || `LOT-${inv.sku.slice(-3)}-A1`,
+        expiryDate: nearestBatch
+          ? nearestBatch.expiryDate.split('T')[0]
+          : new Date(Date.now() + 9 * 86400000).toISOString().split('T')[0],
+        daysUntilExpiry: nearestBatch?.daysUntilExpiry ?? 9,
+        batchStatus:
+          nearestBatch?.status === 'critical' || nearestBatch?.status === 'expired'
+            ? 'critical'
+            : nearestBatch?.status === 'near_expiry'
+            ? 'near_expiry'
+            : 'fresh',
+      };
+    });
+
+    res.json(posProducts);
+  });
+
+  app.get('/api/pos/history', (req: Request, res: Response) => {
+    const { storeId } = req.query;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      return res.json(posReceiptsHistory.filter((r) => r.storeId === storeId));
+    }
+    res.json(posReceiptsHistory);
+  });
+
+  app.post('/api/pos/checkout', async (req: Request, res: Response) => {
+    const body = req.body as POSTransactionRequest;
+    const {
+      storeId: rawStoreId = 'store-jkt-senopati',
+      storeName: rawStoreName,
+      cashierId,
+      cashierName,
+      shiftId,
+      items = [],
+      subtotal = 0,
+      discount = 0,
+      tax = 0,
+      total = 0,
+      currency = 'IDR',
+      paymentMethod = 'cash',
+      cashTendered,
+      cashChange,
+      customerName = 'Walk-In Customer',
+    } = body;
+
+    const storeId =
+      rawStoreId === 'CONSOLIDATED' || rawStoreId === 'ALL' ? 'store-jkt-senopati' : rawStoreId;
+    const outletSchedule = storeSchedules.find((s) => s.storeId === storeId);
+    const storeName = rawStoreName || outletSchedule?.storeName || 'GroceMart Senopati Flagship';
+
+    // 1. RBAC Guard: Verify cashier/operator has POS permission
+    const operatorProfile =
+      AVAILABLE_STAFF_USERS.find((u) => u.userId === cashierId) || currentActiveStaffSession;
+
+    if (!operatorProfile.permissions.canViewPos) {
+      securityAuditTrail.unshift({
+        id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+        timestamp: new Date().toISOString(),
+        actionType: 'USER_AUTHENTICATION',
+        resourceId: `POS-TERMINAL-${storeId}`,
+        userId: operatorProfile.userId,
+        userName: operatorProfile.userName,
+        userRole: operatorProfile.userRole,
+        storeId,
+        shiftId: operatorProfile.activeShiftId,
+        status: 'PERMISSION_DENIED',
+        metadata: {
+          attemptedAction: 'POS_CHECKOUT',
+          reason: `Role '${operatorProfile.userRole}' is not authorized to operate POS Cashier Register.`,
+        },
+      });
+      return res.status(403).json({
+        success: false,
+        error: `RBAC Access Denied: Operator '${operatorProfile.userName}' (${operatorProfile.userRole}) does not have POS Cashier privileges.`,
+      });
+    }
+
+    // 2. Store Operational Guard (Strict Store Closed Validation)
+    if (!storeStatus.isOpen) {
+      return res.status(403).json({
+        success: false,
+        error: `Company-Wide Storefront Network is CLOSED: Online ordering and in-store POS checkouts are temporarily paused. (${storeStatus.noticeBanner || 'Operating hours paused'})`,
+        notice: storeStatus.noticeBanner,
+      });
+    }
+
+    if (outletSchedule?.isEmergencyClosed) {
+      return res.status(403).json({
+        success: false,
+        error: `Outlet '${storeName}' is currently under Emergency Closure (${outletSchedule.closureReason || 'Maintenance'}). POS cashier checkout is blocked.`,
+      });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'POS Cart is empty. Scan or select at least one grocery item.',
+      });
+    }
+
+    const lockKeys = items.map((it) => `lock_sku_${it.sku}`);
+
+    try {
+      const receipt = await inventoryConcurrencyManager.runWithLock(lockKeys, async () => {
+        // 3. Anti-Overselling Stock Verification (Strictly Per-Store Outlet)
+        for (const line of items) {
+          const invItem = inventoryList.find((i) => i.sku === line.sku);
+          const storeTier = storeInventoryTiers.find(
+            (t) => t.sku === line.sku && t.storeId === storeId
+          );
+          const deductUnits = line.isWeighted ? Math.max(0.1, Number(line.quantity.toFixed(2))) : line.quantity;
+          const avail = storeTier ? storeTier.availableStock : invItem ? invItem.currentStock : 0;
+
+          if (invItem && avail < deductUnits) {
+            const err = new Error(
+              `Insufficient stock at ${storeName} for "${line.name}" (${line.sku}). Available: ${avail}, Requested: ${deductUnits}.`
+            );
+            (err as any).statusCode = 409;
+            throw err;
+          }
+        }
+
+        // 4. Real-Time Inventory & Vivo/FEFO Batch Deduction + Exact COGS Calculation
+        let totalCogsCost = 0;
+        let inventoryDeductedCount = 0;
+        const inventoryDeductedLog: { sku: string; quantity: number; cogsCost: number }[] = [];
+
+        for (const line of items) {
+          const invItem = inventoryList.find((i) => i.sku === line.sku);
+          const storeTier = storeInventoryTiers.find(
+            (t) => t.sku === line.sku && t.storeId === storeId
+          );
+          const deductQty = line.isWeighted
+            ? Math.max(0.1, Number(line.quantity.toFixed(2)))
+            : Math.max(1, Math.round(line.quantity));
+
+          inventoryDeductedCount += Math.ceil(deductQty);
+
+          // Deduct from FEFO batches (strictly from active store outlet batches only)
+          let remainingToDeductFromBatch = deductQty;
+          let lineCogs = 0;
+
+          const activeBatches = inventoryBatches
+            .filter(
+              (b) =>
+                b.sku === line.sku &&
+                b.currentStock > 0 &&
+                b.storeId === storeId
+            )
+            .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+          for (const batch of activeBatches) {
+            if (remainingToDeductFromBatch <= 0) break;
+            const taken = Math.min(batch.currentStock, remainingToDeductFromBatch);
+            batch.currentStock = Number(Math.max(0, batch.currentStock - taken).toFixed(2));
+            remainingToDeductFromBatch = Number((remainingToDeductFromBatch - taken).toFixed(2));
+            lineCogs += Math.round(taken * batch.unitCost);
+            if (!line.batchId) {
+              line.batchId = batch.batchId;
+              line.lotNumber = batch.lotNumber;
+              line.expiryDate = batch.expiryDate.split('T')[0];
+            }
+          }
+
+          if (remainingToDeductFromBatch > 0) {
+            const fallbackUnitCost = storeTier?.unitCost || invItem?.unitCost || line.unitCost || Math.round(line.unitPrice * 0.62);
+            lineCogs += Math.round(remainingToDeductFromBatch * fallbackUnitCost);
+          }
+
+          totalCogsCost += lineCogs;
+
+          // Deduct strictly from store-specific warehouse tier
+          if (storeTier) {
+            storeTier.physicalStock = Number(Math.max(0, storeTier.physicalStock - deductQty).toFixed(2));
+            storeTier.availableStock = Number(
+              Math.max(0, storeTier.physicalStock - storeTier.reservedStock).toFixed(2)
+            );
+            storeTier.updatedAt = new Date().toISOString();
+          } else if (invItem) {
+            // Create store-specific tier dynamically if checkout occurred at an outlet without an explicit row yet
+            const schedule = storeSchedules.find((s) => s.storeId === storeId);
+            storeInventoryTiers.push({
+              id: `STK-${storeId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-3)}`,
+              sku: invItem.sku,
+              productId: invItem.productId,
+              productName: invItem.productName,
+              category: invItem.category,
+              storeId,
+              storeName,
+              warehouseZoneId: schedule?.activeWarehouses[0] || 'WH-JKT-SEN-COLD',
+              storageType: invItem.storageType || 'cold_chilled',
+              physicalStock: Math.max(0, Number((invItem.currentStock - deductQty).toFixed(2))),
+              availableStock: Math.max(0, Number((invItem.currentStock - deductQty).toFixed(2))),
+              reservedStock: 0,
+              incomingStock: invItem.incomingStock || 0,
+              minimumThreshold: invItem.minimumThreshold,
+              safetyStockBuffer: invItem.safetyStockBuffer || 10,
+              maxCapacity: invItem.maxCapacity || 120,
+              reorderQuantity: invItem.reorderQuantity || 50,
+              unitCost: invItem.unitCost,
+              sellingPrice: invItem.sellingPrice,
+              unit: invItem.unit,
+              supplierId: invItem.supplierId,
+              supplierName: invItem.supplierName,
+              lastRestockedAt: invItem.lastRestockedAt,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+
+          // Strictly recalculate global inventory stock as the sum of all location tiers (prevent overlap bleed)
+          if (invItem) {
+            const totalAcrossOutlets = storeInventoryTiers
+              .filter((t) => t.sku === invItem.sku)
+              .reduce((sum, t) => sum + t.physicalStock, 0);
+            invItem.currentStock = Number(totalAcrossOutlets.toFixed(2));
+            invItem.outgoingStock = Number((invItem.outgoingStock + deductQty).toFixed(2));
+
+            if (invItem.currentStock <= invItem.minimumThreshold) {
+              const existingPendingPR = purchaseRequests.find(
+                (pr) => pr.sku === invItem.sku && pr.status === 'pending'
+              );
+              if (!existingPendingPR) {
+                purchaseRequests.unshift({
+                  id: `PR-2026-${(purchaseRequests.length + 1).toString().padStart(3, '0')}`,
+                  createdAt: new Date().toISOString(),
+                  requestedBy: `POS Auto-Replenishment (${storeName})`,
+                  sku: invItem.sku,
+                  productId: invItem.productId,
+                  productName: invItem.productName,
+                  storeId,
+                  storeName,
+                  suggestedQuantity: invItem.reorderQuantity || 50,
+                  estimatedUnitCost: invItem.unitCost,
+                  totalEstimatedCost: (invItem.reorderQuantity || 50) * invItem.unitCost,
+                  status: 'pending',
+                  reason: 'low_stock_auto_trigger',
+                  priority: 'high',
+                });
+              }
+            }
+          }
+
+          inventoryDeductedLog.push({
+            sku: line.sku,
+            quantity: deductQty,
+            cogsCost: lineCogs,
+          });
+        }
+
+        // 5. Multi-Currency Conversion Verification
+        const targetCurrency: SupportedCurrency = CURRENCY_RATES[currency] ? currency : 'IDR';
+        const rateInfo = CURRENCY_RATES[targetCurrency];
+        const finalIdrTotal = Math.round(total || subtotal - discount + tax);
+        const currencyTotal =
+          targetCurrency === 'IDR'
+            ? finalIdrTotal
+            : Number((finalIdrTotal / rateInfo.rateToIDR).toFixed(rateInfo.decimalPlaces));
+
+        // 6. Automatic Double-Entry General Ledger & Dynamic COA Sync
+        const timestamp = new Date().toISOString();
+        const seqNum = (posReceiptsHistory.length + 802).toString().padStart(4, '0');
+        const receiptNumber = `RCP-POS-2026-${seqNum}`;
+        const transactionId = `TX-POS-2026-${seqNum}`;
+        const orderId = `POS-${storeId.split('-')[1]?.toUpperCase() || 'JKT'}-${seqNum}`;
+
+        const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+        const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+        const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
+        const gleId4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
+
+        // Determine Asset Debit Account based on POS payment method & COA mapping
+        const assetAccountCode =
+          paymentMethod === 'cash'
+            ? coaMappingConfig.cashClearingAccountCode
+            : paymentMethod === 'qris'
+            ? coaMappingConfig.qrisClearingAccountCode
+            : coaMappingConfig.edcClearingAccountCode;
+        const assetAccountName =
+          paymentMethod === 'cash'
+            ? coaMappingConfig.cashClearingAccountName
+            : paymentMethod === 'qris'
+            ? coaMappingConfig.qrisClearingAccountName
+            : coaMappingConfig.edcClearingAccountName;
+
+        // A. Debit Cash / Bank / QRIS Asset
+        generalLedger.unshift({
+          id: gleId1,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: assetAccountCode,
+          accountName: assetAccountName,
+          category: 'Asset',
+          debit: finalIdrTotal,
+          credit: 0,
+          referenceType: 'QRIS_SALE',
+          referenceId: receiptNumber,
+          description: `[POS ${paymentMethod.toUpperCase()}] Register Receipt #${receiptNumber} (${
+            targetCurrency !== 'IDR' ? `${rateInfo.symbol}${currencyTotal} @ Rp ${rateInfo.rateToIDR}` : `Rp ${finalIdrTotal.toLocaleString('id-ID')}`
+          }) - Cashier: ${cashierName || operatorProfile.userName}`,
+        });
+
+        // B. Credit Grocery Sales Revenue (dynamic COA mapping)
+        generalLedger.unshift({
+          id: gleId2,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: coaMappingConfig.posRevenueAccountCode,
+          accountName: coaMappingConfig.posRevenueAccountName,
+          category: 'Revenue',
+          debit: 0,
+          credit: finalIdrTotal,
+          referenceType: 'QRIS_SALE',
+          referenceId: receiptNumber,
+          description: `[POS Revenue] In-store checkout #${receiptNumber} at ${storeName} (${items.length} line items)`,
+        });
+
+        // C. Debit Cost of Goods Sold / HPP (dynamic COA mapping)
+        generalLedger.unshift({
+          id: gleId3,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: coaMappingConfig.cogsAccountCode,
+          accountName: coaMappingConfig.cogsAccountName,
+          category: 'Expense',
+          debit: totalCogsCost,
+          credit: 0,
+          referenceType: 'QRIS_SALE',
+          referenceId: receiptNumber,
+          description: `[POS COGS/HPP] FEFO batch cost recognized for Receipt #${receiptNumber}`,
+        });
+
+        // D. Credit Merchandise Inventory Asset (dynamic COA mapping)
+        generalLedger.unshift({
+          id: gleId4,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: coaMappingConfig.inventoryAssetAccountCode,
+          accountName: coaMappingConfig.inventoryAssetAccountName,
+          category: 'Asset',
+          debit: 0,
+          credit: totalCogsCost,
+          referenceType: 'QRIS_SALE',
+          referenceId: receiptNumber,
+          description: `[POS Stock Deduction] Warehouse inventory relieved for Receipt #${receiptNumber}`,
+        });
+
+        // Update Chart of Accounts (COA) live balances
+        chartOfAccounts.forEach((coa) => {
+          if (coa.accountCode === assetAccountCode) coa.balance += finalIdrTotal;
+          if (coa.accountCode === coaMappingConfig.posRevenueAccountCode) coa.balance += finalIdrTotal;
+          if (coa.accountCode === coaMappingConfig.cogsAccountCode) coa.balance += totalCogsCost;
+          if (coa.accountCode === coaMappingConfig.inventoryAssetAccountCode) coa.balance = Math.max(0, coa.balance - totalCogsCost);
+        });
+
+        const qrisRef =
+          paymentMethod === 'qris'
+            ? `QRIS-POS-${Date.now().toString().slice(-6)}`
+            : undefined;
+
+        // Record in Transaction Audit Trail
+        auditTrail.unshift({
+          id: `AUD-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`,
+          qrisReference: qrisRef || `POS-${paymentMethod.toUpperCase()}-${seqNum}`,
+          orderId: receiptNumber,
+          customerName: customerName || 'Walk-In Customer',
+          customerEmail: 'pos-walkin@grocemart.co.id',
+          amount: finalIdrTotal,
+          paymentTimestamp: timestamp,
+          settlementChannel: paymentMethod === 'qris' ? 'BCA QRIS' : ('BCA QRIS' as any),
+          journalEntryIds: [gleId1, gleId2, gleId3, gleId4],
+          inventoryDeducted: inventoryDeductedLog,
+          status: 'SETTLED',
+        });
+
+        // Record in Security & Operational Audit Trail
+        securityAuditTrail.unshift({
+          id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+          timestamp,
+          actionType: 'USER_AUTHENTICATION',
+          resourceId: receiptNumber,
+          userId: cashierId || operatorProfile.userId,
+          userName: cashierName || operatorProfile.userName,
+          userRole: operatorProfile.userRole,
+          storeId,
+          shiftId: shiftId || operatorProfile.activeShiftId,
+          status: 'AUTHORIZED_EXECUTED',
+          metadata: {
+            module: 'POS_CASHIER_CHECKOUT',
+            paymentMethod,
+            currency: targetCurrency,
+            currencyTotal,
+            totalIDR: finalIdrTotal,
+            totalCogsCost,
+            journalEntries: [gleId1, gleId2, gleId3, gleId4],
+          },
+        });
+
+        const newReceipt: POSTransactionReceipt = {
+          receiptNumber,
+          transactionId,
+          orderId,
+          timestamp,
+          storeId,
+          storeName,
+          cashierId: cashierId || operatorProfile.userId,
+          cashierName: cashierName || operatorProfile.userName,
+          shiftId: shiftId || operatorProfile.activeShiftId,
+          items,
+          subtotal: Math.round(subtotal),
+          discount: Math.round(discount),
+          tax: Math.round(tax),
+          total: finalIdrTotal,
+          currency: targetCurrency,
+          currencyTotal,
+          currencyRateToIDR: rateInfo.rateToIDR,
+          paymentMethod,
+          cashTendered,
+          cashChange,
+          qrisRef,
+          cardLast4:
+            paymentMethod === 'debit_card' || paymentMethod === 'credit_card'
+              ? '4829'
+              : undefined,
+          journalEntryIds: [gleId1, gleId2, gleId3, gleId4],
+          inventoryDeductedCount,
+          totalCogsCost,
+        };
+
+        posReceiptsHistory.unshift(newReceipt);
+        return newReceipt;
+      });
+
+      res.json({
+        success: true,
+        receipt,
+        message: `POS Receipt #${receipt.receiptNumber} settled! Stock deducted from ${storeName} & 4 GL entries posted.`,
+      });
+    } catch (err: any) {
+      if (err.statusCode === 409) {
+        return res.status(409).json({
+          success: false,
+          error: err.message,
+        });
+      }
+      res.status(500).json({
+        success: false,
+        error: err.message || 'POS Checkout failed',
+      });
+    }
+  });
+
+  // =============================================================
+  // MODULE 6: SETTINGS, COA MAPPING, POS CONFIG & STOCK OPNAME
+  // =============================================================
+  // 1. Chart of Accounts (COA) Mapping
+  app.get('/api/admin/settings/coa-mapping', (_req: Request, res: Response) => {
+    res.json(coaMappingConfig);
+  });
+
+  app.put('/api/admin/settings/coa-mapping', (req: Request, res: Response) => {
+    const update = req.body as Partial<CoaMappingConfig>;
+    coaMappingConfig = {
+      ...coaMappingConfig,
+      ...update,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentActiveStaffSession?.userName || 'Siti Rahmawati (Chief Accountant)',
+    };
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'COA_MAPPING_UPDATE',
+      resourceId: 'COA-CONFIG-PRIMARY',
+      userId: currentActiveStaffSession?.userId || 'USR-ACC-01',
+      userName: currentActiveStaffSession?.userName || 'Siti Rahmawati',
+      userRole: currentActiveStaffSession?.userRole || 'admin',
+      storeId: 'CONSOLIDATED',
+      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        posRevenueAccount: coaMappingConfig.posRevenueAccountCode,
+        inventoryAssetAccount: coaMappingConfig.inventoryAssetAccountCode,
+        shrinkageAccount: coaMappingConfig.shrinkageExpenseAccountCode,
+        cogsAccount: coaMappingConfig.cogsAccountCode,
+      },
+    });
+
+    res.json({
+      success: true,
+      config: coaMappingConfig,
+      message: 'Chart of Accounts (COA) Mapping updated and synchronized with POS & General Ledger.',
+    });
+  });
+
+  // 2. POS & Checkout Configuration
+  app.get('/api/admin/settings/pos-config', (_req: Request, res: Response) => {
+    res.json(posCheckoutConfig);
+  });
+
+  app.put('/api/admin/settings/pos-config', (req: Request, res: Response) => {
+    const update = req.body as Partial<PosCheckoutConfig>;
+    posCheckoutConfig = {
+      ...posCheckoutConfig,
+      ...update,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentActiveStaffSession?.userName || 'Budi Santoso (Operations VP)',
+    };
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'POS_CONFIG_UPDATE',
+      resourceId: 'POS-CONFIG-GLOBAL',
+      userId: currentActiveStaffSession?.userId || 'USR-ADM-01',
+      userName: currentActiveStaffSession?.userName || 'Budi Santoso',
+      userRole: currentActiveStaffSession?.userRole || 'admin',
+      storeId: 'CONSOLIDATED',
+      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        roundingRule: posCheckoutConfig.roundingRule,
+        ppnTaxPercent: posCheckoutConfig.ppnTaxPercent,
+        maxCashierDiscountPercent: posCheckoutConfig.maxCashierDiscountPercent,
+        enableVivoNearExpiryDiscount: posCheckoutConfig.enableVivoNearExpiryDiscount,
+      },
+    });
+
+    res.json({
+      success: true,
+      config: posCheckoutConfig,
+      message: 'POS & Checkout rules updated and deployed to all frontline registers.',
+    });
+  });
+
+  // 3. Bulk Inventory Import (CSV / Excel format)
+  app.post('/api/admin/inventory/bulk-import', (req: Request, res: Response) => {
+    const { rows = [] } = req.body as { rows: BulkInventoryImportRow[] };
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'Import payload must contain at least 1 valid row.' });
+    }
+
+    let importedCount = 0;
+    let tiersUpdatedCount = 0;
+
+    for (const row of rows) {
+      if (!row.sku || !row.productName || !row.storeId) continue;
+
+      const targetStore = storeSchedules.find((s) => s.storeId === row.storeId);
+      const storeName = row.storeName || targetStore?.storeName || 'GroceMart Senopati Flagship';
+      const whZone = row.warehouseZoneId || targetStore?.activeWarehouses[0] || 'WH-JKT-SEN-AMB';
+
+      // Find or create store inventory tier
+      let existingTier = storeInventoryTiers.find(
+        (t) => t.sku === row.sku && t.storeId === row.storeId
+      );
+
+      const qty = Math.max(0, Number(row.physicalStock) || 0);
+      const cost = Math.max(100, Number(row.unitCost) || 10000);
+      const price = Math.max(cost, Number(row.sellingPrice) || Math.round(cost * 1.4));
+      const minThresh = Math.max(1, Number(row.minimumThreshold) || 10);
+
+      if (existingTier) {
+        existingTier.physicalStock = qty;
+        existingTier.availableStock = Math.max(0, qty - existingTier.reservedStock);
+        existingTier.unitCost = cost;
+        existingTier.sellingPrice = price;
+        existingTier.minimumThreshold = minThresh;
+        existingTier.storageType = row.storageType || existingTier.storageType;
+        existingTier.updatedAt = new Date().toISOString();
+        tiersUpdatedCount++;
+      } else {
+        const newTier: StoreInventoryStock = {
+          id: `STK-${row.storeId.slice(-3).toUpperCase()}-${(storeInventoryTiers.length + 1).toString().padStart(3, '0')}`,
+          sku: row.sku,
+          productId: `prod-${row.sku.slice(-3).toLowerCase()}`,
+          productName: row.productName,
+          category: row.category || 'produce',
+          storeId: row.storeId,
+          storeName,
+          warehouseZoneId: whZone,
+          storageType: row.storageType || 'ambient',
+          physicalStock: qty,
+          availableStock: qty,
+          reservedStock: 0,
+          incomingStock: 0,
+          minimumThreshold: minThresh,
+          safetyStockBuffer: Math.round(minThresh * 0.5),
+          maxCapacity: Math.round(qty * 3) || 150,
+          reorderQuantity: Math.round(minThresh * 2) || 50,
+          unitCost: cost,
+          sellingPrice: price,
+          unit: row.unit || 'piece',
+          supplierId: 'SUP-COOP-01',
+          supplierName: row.supplierName || 'Verified Farm Cooperative',
+          lastRestockedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        storeInventoryTiers.push(newTier);
+        tiersUpdatedCount++;
+      }
+
+      // Sync master catalog inventoryList without location bleeding
+      let masterItem = inventoryList.find((i) => i.sku === row.sku);
+      if (masterItem) {
+        masterItem.unitCost = cost;
+        masterItem.sellingPrice = price;
+        masterItem.minimumThreshold = minThresh;
+        const totalStock = storeInventoryTiers
+          .filter((t) => t.sku === row.sku)
+          .reduce((sum, t) => sum + t.physicalStock, 0);
+        masterItem.currentStock = totalStock;
+      } else {
+        inventoryList.push({
+          sku: row.sku,
+          productId: `prod-${row.sku.slice(-3).toLowerCase()}`,
+          productName: row.productName,
+          category: row.category as any || 'produce',
+          currentStock: qty,
+          incomingStock: 0,
+          outgoingStock: 0,
+          minimumThreshold: minThresh,
+          reorderQuantity: Math.round(minThresh * 2) || 50,
+          unitCost: cost,
+          sellingPrice: price,
+          unit: row.unit || 'unit',
+          supplierId: 'SUP-BULK-01',
+          supplierName: row.supplierName || 'Direct Farm Partner',
+          valuationMethod: 'FIFO',
+          lastRestockedAt: new Date().toISOString(),
+        });
+      }
+
+      importedCount++;
+    }
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'INVENTORY_IMPORT_BULK',
+      resourceId: `BULK-IMPORT-${Date.now()}`,
+      userId: currentActiveStaffSession?.userId || 'USR-ADM-01',
+      userName: currentActiveStaffSession?.userName || 'Warehouse Lead',
+      userRole: currentActiveStaffSession?.userRole || 'admin',
+      storeId: rows[0]?.storeId || 'CONSOLIDATED',
+      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        totalRowsReceived: rows.length,
+        importedCount,
+        tiersUpdatedCount,
+      },
+    });
+
+    res.json({
+      success: true,
+      importedCount,
+      tiersUpdatedCount,
+      message: `Bulk import completed! Successfully updated ${importedCount} SKUs across ${tiersUpdatedCount} warehouse tiers.`,
+    });
+  });
+
+  // 4. Stock Opname (Physical Stocktake & Automatic Variance Adjustments)
+  app.get('/api/admin/inventory/stock-opname', (req: Request, res: Response) => {
+    const { storeId } = req.query;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      return res.json(stockOpnameSessions.filter((s) => s.storeId === storeId));
+    }
+    res.json(stockOpnameSessions);
+  });
+
+  app.post('/api/admin/inventory/stock-opname/reconcile', (req: Request, res: Response) => {
+    const body = req.body as Partial<StockOpnameSession>;
+    const {
+      storeId = 'store-jkt-senopati',
+      storeName: rawStoreName,
+      warehouseZoneId = 'WH-JKT-SEN-COLD',
+      auditorId = currentActiveStaffSession?.userId || 'USR-AUD-01',
+      auditorName = currentActiveStaffSession?.userName || 'Stocktake Auditor Lead',
+      items = [],
+      notes = 'Periodic physical stocktake cycle count',
+    } = body;
+
+    const targetStore = storeSchedules.find((s) => s.storeId === storeId);
+    const storeName = rawStoreName || targetStore?.storeName || 'GroceMart Senopati Flagship';
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'Stock Opname session must include item counts.' });
+    }
+
+    const timestamp = new Date().toISOString();
+    const opnId = `OPN-2026-${(stockOpnameSessions.length + 1).toString().padStart(3, '0')}`;
+    const generatedGleIds: string[] = [];
+
+    let totalSystemUnits = 0;
+    let totalCountedUnits = 0;
+    let totalVarianceUnits = 0;
+    let netFinancialVarianceIDR = 0;
+
+    const reconciledItems: StockOpnameItem[] = items.map((it) => {
+      const counted = Math.max(0, Number(it.countedStock) || 0);
+      const system = Math.max(0, Number(it.systemStock) || 0);
+      const varianceQty = Number((counted - system).toFixed(2));
+      const unitCost = Number(it.unitCost) || 12000;
+      const financialVarianceIDR = Math.round(varianceQty * unitCost);
+
+      totalSystemUnits += system;
+      totalCountedUnits += counted;
+      totalVarianceUnits += varianceQty;
+      netFinancialVarianceIDR += financialVarianceIDR;
+
+      // Update store tier physicalStock strictly at this store
+      const tier = storeInventoryTiers.find((t) => t.sku === it.sku && t.storeId === storeId);
+      if (tier) {
+        tier.physicalStock = counted;
+        tier.availableStock = Math.max(0, Number((counted - tier.reservedStock).toFixed(2)));
+        tier.updatedAt = timestamp;
+      }
+
+      // Recalculate master inventory currentStock without cross-outlet bleeding
+      const invMaster = inventoryList.find((inv) => inv.sku === it.sku);
+      if (invMaster) {
+        const totalLocationStock = storeInventoryTiers
+          .filter((t) => t.sku === it.sku)
+          .reduce((sum, t) => sum + t.physicalStock, 0);
+        invMaster.currentStock = Number(totalLocationStock.toFixed(2));
+      }
+
+      // Post double-entry General Ledger adjustment if variance exists
+      if (varianceQty !== 0) {
+        const gleSeq1 = (generalLedger.length + 1).toString().padStart(4, '0');
+        const gleSeq2 = (generalLedger.length + 2).toString().padStart(4, '0');
+        const gleId1 = `GLE-2026-${gleSeq1}`;
+        const gleId2 = `GLE-2026-${gleSeq2}`;
+        generatedGleIds.push(gleId1, gleId2);
+
+        const absVarianceCost = Math.abs(financialVarianceIDR);
+
+        if (varianceQty < 0) {
+          // Shortage / Shrinkage: Debit Shrinkage Expense, Credit Inventory Asset
+          generalLedger.unshift({
+            id: gleId1,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: coaMappingConfig.shrinkageExpenseAccountCode,
+            accountName: coaMappingConfig.shrinkageExpenseAccountName,
+            category: 'Expense',
+            debit: absVarianceCost,
+            credit: 0,
+            referenceType: 'STOCK_RECONCILIATION',
+            referenceId: opnId,
+            description: `[Stock Opname Shortage] ${it.productName} (${it.sku}): ${varianceQty} units count discrepancy at ${storeName}`,
+          });
+
+          generalLedger.unshift({
+            id: gleId2,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: coaMappingConfig.inventoryAssetAccountCode,
+            accountName: coaMappingConfig.inventoryAssetAccountName,
+            category: 'Asset',
+            debit: 0,
+            credit: absVarianceCost,
+            referenceType: 'STOCK_RECONCILIATION',
+            referenceId: opnId,
+            description: `[Stock Opname Inventory Relief] ${it.productName} (${it.sku}) physical asset reduced to ${counted}`,
+          });
+
+          // Sync COA balance
+          chartOfAccounts.forEach((coa) => {
+            if (coa.accountCode === coaMappingConfig.shrinkageExpenseAccountCode) coa.balance += absVarianceCost;
+            if (coa.accountCode === coaMappingConfig.inventoryAssetAccountCode) coa.balance = Math.max(0, coa.balance - absVarianceCost);
+          });
+        } else {
+          // Surplus: Debit Inventory Asset, Credit Shrinkage / Inventory Variance Offset
+          generalLedger.unshift({
+            id: gleId1,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: coaMappingConfig.inventoryAssetAccountCode,
+            accountName: coaMappingConfig.inventoryAssetAccountName,
+            category: 'Asset',
+            debit: absVarianceCost,
+            credit: 0,
+            referenceType: 'STOCK_RECONCILIATION',
+            referenceId: opnId,
+            description: `[Stock Opname Surplus] ${it.productName} (${it.sku}): +${varianceQty} units unrecorded stock found at ${storeName}`,
+          });
+
+          generalLedger.unshift({
+            id: gleId2,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: coaMappingConfig.shrinkageExpenseAccountCode,
+            accountName: coaMappingConfig.shrinkageExpenseAccountName,
+            category: 'Expense',
+            debit: 0,
+            credit: absVarianceCost,
+            referenceType: 'STOCK_RECONCILIATION',
+            referenceId: opnId,
+            description: `[Stock Opname Surplus Gain] Inventory count increase recognized for ${it.sku}`,
+          });
+
+          chartOfAccounts.forEach((coa) => {
+            if (coa.accountCode === coaMappingConfig.inventoryAssetAccountCode) coa.balance += absVarianceCost;
+            if (coa.accountCode === coaMappingConfig.shrinkageExpenseAccountCode) coa.balance = Math.max(0, coa.balance - absVarianceCost);
+          });
+        }
+      }
+
+      return {
+        sku: it.sku,
+        productName: it.productName,
+        category: it.category || 'produce',
+        storeId,
+        storeName,
+        warehouseZoneId,
+        systemStock: system,
+        countedStock: counted,
+        varianceQty,
+        unitCost,
+        financialVarianceIDR,
+        notes: it.notes || (varianceQty === 0 ? 'Exact match' : varianceQty < 0 ? 'Shortage adjustment' : 'Surplus receipt'),
+        status: varianceQty === 0 ? 'matched' : varianceQty < 0 ? 'shortage' : 'surplus',
+      };
+    });
+
+    const newSession: StockOpnameSession = {
+      id: opnId,
+      date: timestamp.split('T')[0],
+      storeId,
+      storeName,
+      warehouseZoneId,
+      auditorId,
+      auditorName,
+      status: 'completed',
+      items: reconciledItems,
+      totalSystemUnits,
+      totalCountedUnits,
+      totalVarianceUnits,
+      netFinancialVarianceIDR,
+      glEntryIds: generatedGleIds,
+      notes,
+      completedAt: timestamp,
+    };
+
+    stockOpnameSessions.unshift(newSession);
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'STOCK_OPNAME_RECONCILE',
+      resourceId: opnId,
+      userId: auditorId,
+      userName: auditorName,
+      userRole: currentActiveStaffSession?.userRole || 'auditor',
+      storeId,
+      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-AUD-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        totalItemsCounted: items.length,
+        totalVarianceUnits,
+        netFinancialVarianceIDR,
+        glEntriesPosted: generatedGleIds.length,
+      },
+    });
+
+    res.json({
+      success: true,
+      session: newSession,
+      journalEntryIds: generatedGleIds,
+      message: `Stock Opname #${opnId} reconciled! Updated physical counts for ${items.length} items and posted ${generatedGleIds.length} General Ledger adjustment entries.`,
+    });
+  });
+
+  // 5. Inter-Warehouse Stock Transfer (Prevents Global Inventory Bleed)
+  app.get('/api/admin/inventory/transfer', (req: Request, res: Response) => {
+    const { storeId } = req.query;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      return res.json(
+        stockTransferRecords.filter(
+          (t) => t.sourceStoreId === storeId || t.destinationStoreId === storeId
+        )
+      );
+    }
+    res.json(stockTransferRecords);
+  });
+
+  app.post('/api/admin/inventory/transfer', (req: Request, res: Response) => {
+    const { sku, sourceStoreId, destinationStoreId, quantity, notes } = req.body;
+
+    if (!sku || !sourceStoreId || !destinationStoreId || !quantity || quantity <= 0) {
+      return res.status(400).json({ success: false, error: 'Missing required transfer fields or invalid quantity.' });
+    }
+
+    if (sourceStoreId === destinationStoreId) {
+      return res.status(400).json({ success: false, error: 'Source and destination store must be different.' });
+    }
+
+    const sourceTier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === sourceStoreId);
+    if (!sourceTier || sourceTier.availableStock < quantity) {
+      return res.status(409).json({
+        success: false,
+        error: `Insufficient stock at source store. Available: ${sourceTier?.availableStock || 0}, Requested: ${quantity}.`,
+      });
+    }
+
+    const sourceStore = storeSchedules.find((s) => s.storeId === sourceStoreId);
+    const destStore = storeSchedules.find((s) => s.storeId === destinationStoreId);
+
+    // Deduct from source store tier
+    sourceTier.physicalStock = Number((sourceTier.physicalStock - quantity).toFixed(2));
+    sourceTier.availableStock = Number(
+      Math.max(0, sourceTier.physicalStock - sourceTier.reservedStock).toFixed(2)
+    );
+    sourceTier.updatedAt = new Date().toISOString();
+
+    // Add to destination store tier
+    let destTier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === destinationStoreId);
+    if (destTier) {
+      destTier.physicalStock = Number((destTier.physicalStock + quantity).toFixed(2));
+      destTier.availableStock = Number(
+        (destTier.physicalStock - destTier.reservedStock).toFixed(2)
+      );
+      destTier.updatedAt = new Date().toISOString();
+    } else {
+      destTier = {
+        ...JSON.parse(JSON.stringify(sourceTier)),
+        id: `STK-${destinationStoreId.slice(-3).toUpperCase()}-${(storeInventoryTiers.length + 1).toString().padStart(3, '0')}`,
+        storeId: destinationStoreId,
+        storeName: destStore?.storeName || destinationStoreId,
+        warehouseZoneId: destStore?.activeWarehouses[0] || 'WH-JKT-SEN-AMB',
+        physicalStock: quantity,
+        availableStock: quantity,
+        reservedStock: 0,
+        incomingStock: 0,
+        updatedAt: new Date().toISOString(),
+      };
+      storeInventoryTiers.push(destTier!);
+    }
+
+    // Move batches if tracked
+    const sourceBatches = inventoryBatches.filter(
+      (b) => b.sku === sku && b.storeId === sourceStoreId && b.currentStock > 0
+    );
+    let remainingToTransferBatch = quantity;
+    for (const b of sourceBatches) {
+      if (remainingToTransferBatch <= 0) break;
+      const transferFromThisBatch = Math.min(b.currentStock, remainingToTransferBatch);
+      b.currentStock = Number((b.currentStock - transferFromThisBatch).toFixed(2));
+      remainingToTransferBatch = Number((remainingToTransferBatch - transferFromThisBatch).toFixed(2));
+
+      // Create new batch at destination
+      inventoryBatches.push({
+        ...JSON.parse(JSON.stringify(b)),
+        batchId: `BAT-${destinationStoreId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
+        storeId: destinationStoreId,
+        currentStock: transferFromThisBatch,
+        initialStock: transferFromThisBatch,
+      });
+    }
+
+    const trfId = `TRF-2026-${(stockTransferRecords.length + 1).toString().padStart(3, '0')}`;
+    const transferRecord: StockTransferRecord = {
+      id: trfId,
+      timestamp: new Date().toISOString(),
+      sku,
+      productName: sourceTier.productName,
+      sourceStoreId,
+      sourceStoreName: sourceStore?.storeName || sourceStoreId,
+      destinationStoreId,
+      destinationStoreName: destStore?.storeName || destinationStoreId,
+      quantity,
+      unitCost: sourceTier.unitCost,
+      totalTransferValue: Math.round(quantity * sourceTier.unitCost),
+      transferredBy: currentActiveStaffSession?.userName || 'Logistics Coordinator',
+      status: 'completed',
+      notes: notes || 'Official inter-store stock reallocation',
+    };
+
+    stockTransferRecords.unshift(transferRecord);
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'STOCK_TRANSFER_INTER_WAREHOUSE',
+      resourceId: trfId,
+      userId: currentActiveStaffSession?.userId || 'USR-LOG-01',
+      userName: currentActiveStaffSession?.userName || 'Logistics Lead',
+      userRole: currentActiveStaffSession?.userRole || 'manager',
+      storeId: sourceStoreId,
+      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        sku,
+        quantity,
+        sourceStoreId,
+        destinationStoreId,
+        totalTransferValue: transferRecord.totalTransferValue,
+      },
+    });
+
+    res.json({
+      success: true,
+      record: transferRecord,
+      message: `Stock Transfer #${trfId} completed! Moved ${quantity} units of ${sourceTier.productName} from ${transferRecord.sourceStoreName} to ${transferRecord.destinationStoreName}.`,
+    });
+  });
+
 
   // -------------------------------------------------------------
   // VITE OR STATIC CLIENT MOUNT

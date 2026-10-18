@@ -282,13 +282,21 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           {items.length > 0 && (
             <div className="p-4 sm:p-6 border-t border-stone-200 bg-stone-50/70 space-y-3">
               {/* Store Closure Notice Banner */}
-              {storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode) && (
+              {((storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode)) ||
+                (deliveryMethod === 'pickup' && selectedPickupStore?.isEmergencyClosed)) && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5 animate-in fade-in">
                   <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold">Outlet Currently Closed</span>
+                    <span className="font-bold">
+                      {deliveryMethod === 'pickup' && selectedPickupStore?.isEmergencyClosed
+                        ? `Pickup Branch Closed (${selectedPickupStore.name})`
+                        : 'Outlet Network Currently Closed'}
+                    </span>
                     <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                      {storeStatus.noticeBanner || 'This outlet is currently closed. Operating hours resume at 07:00 WIB. Catalog browsing is open, but online checkout is temporarily locked.'}
+                      {deliveryMethod === 'pickup' && selectedPickupStore?.isEmergencyClosed
+                        ? `${selectedPickupStore.name} is currently under emergency closure (${selectedPickupStore.closureReason || 'Maintenance'}). Please select another branch to pick up your order.`
+                        : storeStatus?.noticeBanner ||
+                          'This outlet is currently closed. Operating hours resume at 07:00 WIB. Catalog browsing is open, but online checkout is temporarily locked.'}
                     </p>
                   </div>
                 </div>
@@ -319,12 +327,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
               <button
                 onClick={onProceedToCheckout}
-                disabled={!!(storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode))}
+                disabled={
+                  !!(storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode)) ||
+                  !!(deliveryMethod === 'pickup' && selectedPickupStore?.isEmergencyClosed)
+                }
                 className="w-full py-3.5 px-4 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-stone-400"
               >
                 <span>
                   {storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode)
-                    ? 'Checkout Locked (Outlet Closed)'
+                    ? 'Checkout Locked (Store Closed)'
+                    : deliveryMethod === 'pickup' && selectedPickupStore?.isEmergencyClosed
+                    ? 'Pickup Locked (Branch Closed)'
                     : 'Proceed to QRIS Checkout'}
                 </span>
                 <ArrowRight className="w-4 h-4 text-amber-300" />

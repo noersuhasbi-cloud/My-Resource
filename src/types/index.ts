@@ -16,6 +16,8 @@ export interface StoreLocation {
     lng: number;
   };
   pickupAvailable: boolean;
+  isEmergencyClosed?: boolean;
+  closureReason?: string;
 }
 
 export interface Milestone {
@@ -500,7 +502,7 @@ export interface PickerOrder {
 // -------------------------------------------------------------
 // Accounting & Financial Management (Store-Tagged Multi-COA)
 // -------------------------------------------------------------
-export type AccountCode = '1010' | '1020' | '1030' | '1040' | '2010' | '2020' | '3010' | '3020' | '4010' | '5010' | '6010' | '6020' | '6030';
+export type AccountCode = '1010' | '1020' | '1030' | '1040' | '2010' | '2020' | '3010' | '3020' | '4010' | '5010' | '6010' | '6020' | '6030' | string;
 
 export interface ChartOfAccount {
   accountCode: AccountCode;
@@ -522,7 +524,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -788,7 +790,12 @@ export interface SecurityAuditTrailRecord {
     | 'STORE_EMERGENCY_OVERRIDE'
     | 'ZONE_CONFIG_UPDATE'
     | 'USER_AUTHENTICATION'
-    | 'USER_LOGOUT';
+    | 'USER_LOGOUT'
+    | 'COA_MAPPING_UPDATE'
+    | 'POS_CONFIG_UPDATE'
+    | 'INVENTORY_IMPORT_BULK'
+    | 'STOCK_OPNAME_RECONCILE'
+    | 'STOCK_TRANSFER_INTER_WAREHOUSE';
   resourceId: string;
   userId: string;
   userName: string;
@@ -936,5 +943,120 @@ export interface POSTransactionReceipt {
   journalEntryIds: string[];
   inventoryDeductedCount: number;
   totalCogsCost: number;
+}
+
+// -------------------------------------------------------------
+// SETTINGS & CONFIGURATION SYSTEM TYPES
+// -------------------------------------------------------------
+export interface CoaMappingConfig {
+  posRevenueAccountCode: string;
+  posRevenueAccountName: string;
+  inventoryAssetAccountCode: string;
+  inventoryAssetAccountName: string;
+  shrinkageExpenseAccountCode: string;
+  shrinkageExpenseAccountName: string;
+  cogsAccountCode: string;
+  cogsAccountName: string;
+  cashClearingAccountCode: string;
+  cashClearingAccountName: string;
+  qrisClearingAccountCode: string;
+  qrisClearingAccountName: string;
+  edcClearingAccountCode: string;
+  edcClearingAccountName: string;
+  taxPayableAccountCode: string;
+  taxPayableAccountName: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export type PosRoundingRule =
+  | 'none'
+  | 'nearest_100'
+  | 'nearest_500'
+  | 'nearest_1000'
+  | 'ceil_1000';
+
+export interface PosCheckoutConfig {
+  roundingRule: PosRoundingRule;
+  ppnTaxPercent: number; // e.g. 11%
+  isTaxInclusive: boolean;
+  maxCashierDiscountPercent: number; // e.g. 15%
+  enableVivoNearExpiryDiscount: boolean;
+  vivoNearExpiryDiscountPercent: number; // e.g. 25%
+  cashDrawerFloatIDR: number; // e.g. 500,000 IDR
+  loyaltyPointsPer1000IDR: number; // e.g. 1 point
+  requireManagerPinForVoid: boolean;
+  storeReceiptFooterText: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export interface BulkInventoryImportRow {
+  sku: string;
+  productName: string;
+  category: string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId: string;
+  storageType: StorageZoneType;
+  physicalStock: number;
+  unitCost: number;
+  sellingPrice: number;
+  unit: string;
+  minimumThreshold: number;
+  reorderQuantity?: number;
+  supplierName?: string;
+}
+
+export interface StockOpnameItem {
+  sku: string;
+  productName: string;
+  category: string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId: string;
+  systemStock: number;
+  countedStock: number;
+  varianceQty: number; // countedStock - systemStock
+  unitCost: number;
+  financialVarianceIDR: number; // varianceQty * unitCost
+  notes?: string;
+  status: 'matched' | 'shortage' | 'surplus';
+}
+
+export interface StockOpnameSession {
+  id: string;
+  date: string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId: string;
+  auditorId: string;
+  auditorName: string;
+  status: 'draft' | 'completed' | 'reconciled';
+  items: StockOpnameItem[];
+  totalSystemUnits: number;
+  totalCountedUnits: number;
+  totalVarianceUnits: number;
+  netFinancialVarianceIDR: number;
+  glEntryIds: string[];
+  notes?: string;
+  completedAt?: string;
+}
+
+export interface StockTransferRecord {
+  id: string;
+  timestamp: string;
+  sku: string;
+  productName: string;
+  sourceStoreId: string;
+  sourceStoreName: string;
+  destinationStoreId: string;
+  destinationStoreName: string;
+  quantity: number;
+  unitCost: number;
+  totalTransferValue: number;
+  transferredBy: string;
+  status: 'completed' | 'in_transit';
+  notes?: string;
 }
 

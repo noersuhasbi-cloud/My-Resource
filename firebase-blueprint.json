@@ -238,6 +238,59 @@
         }
       },
       "required": ["id", "name", "category", "price", "image"]
+    },
+    "PosReceipt": {
+      "title": "PosReceipt",
+      "description": "Point of Sale (POS) cashier receipt with FEFO batch and GL sync audit",
+      "type": "object",
+      "properties": {
+        "receiptId": {
+          "type": "string",
+          "description": "POS receipt identifier",
+          "maxLength": 64
+        },
+        "storeId": {
+          "type": "string",
+          "description": "Store outlet ID",
+          "maxLength": 64
+        },
+        "storeName": {
+          "type": "string",
+          "description": "Store outlet display name",
+          "maxLength": 128
+        },
+        "cashierId": {
+          "type": "string",
+          "description": "Cashier operator ID",
+          "maxLength": 64
+        },
+        "cashierName": {
+          "type": "string",
+          "description": "Cashier operator name",
+          "maxLength": 100
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["CASH", "QRIS", "DEBIT_CREDIT", "BANK_TRANSFER", "SPLIT"]
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["IDR", "USD", "EUR", "AUD"]
+        },
+        "grandTotalIDR": {
+          "type": "number",
+          "description": "Final settled amount in IDR"
+        },
+        "totalCogsIDR": {
+          "type": "number",
+          "description": "Total COGS / HPP in IDR"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp of POS checkout"
+        }
+      },
+      "required": ["receiptId", "storeId", "cashierId", "paymentMethod", "currency", "grandTotalIDR", "timestamp"]
     }
   },
   "firestore": {
@@ -264,6 +317,12 @@
         "$ref": "#/entities/Order"
       },
       "description": "Customer orders with QRIS status and tracking"
+    },
+    "/pos_receipts/{receiptId}": {
+      "schema": {
+        "$ref": "#/entities/PosReceipt"
+      },
+      "description": "POS Cashier receipts with FEFO stock deduction and General Ledger entries"
     }
   }
 }

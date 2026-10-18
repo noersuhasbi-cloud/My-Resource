@@ -32,6 +32,11 @@ import type {
   POSProductItem,
   POSTransactionRequest,
   POSTransactionReceipt,
+  CoaMappingConfig,
+  PosCheckoutConfig,
+  BulkInventoryImportRow,
+  StockOpnameSession,
+  StockTransferRecord,
 } from '../types/index.ts';
 
 export const apiClient = {
@@ -777,5 +782,129 @@ export const apiClient = {
       throw new Error(err.error || 'Failed to fetch POS transaction history');
     }
     return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 6: Settings, COA Mapping, POS Config & Stock Opname APIs
+  // -------------------------------------------------------------
+  async getCoaMapping(): Promise<CoaMappingConfig> {
+    const res = await fetch('/api/admin/settings/coa-mapping');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to fetch COA mapping configuration');
+    }
+    return res.json();
+  },
+
+  async updateCoaMapping(config: Partial<CoaMappingConfig>): Promise<{ success: boolean; config: CoaMappingConfig; message?: string }> {
+    const res = await fetch('/api/admin/settings/coa-mapping', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update COA mapping');
+    }
+    return res.json();
+  },
+
+  async getPosConfig(): Promise<PosCheckoutConfig> {
+    const res = await fetch('/api/admin/settings/pos-config');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to fetch POS checkout configuration');
+    }
+    return res.json();
+  },
+
+  async updatePosConfig(config: Partial<PosCheckoutConfig>): Promise<{ success: boolean; config: PosCheckoutConfig; message?: string }> {
+    const res = await fetch('/api/admin/settings/pos-config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update POS checkout configuration');
+    }
+    return res.json();
+  },
+
+  async bulkImportInventory(rows: BulkInventoryImportRow[]): Promise<{
+    success: boolean;
+    importedCount: number;
+    tiersUpdatedCount: number;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/inventory/bulk-import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Bulk inventory import failed');
+    }
+    return res.json();
+  },
+
+  async getStockOpnameSessions(storeId?: string): Promise<StockOpnameSession[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetch(`/api/admin/inventory/stock-opname?${params.toString()}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to fetch Stock Opname sessions');
+    }
+    return res.json();
+  },
+
+  async reconcileStockOpname(session: Partial<StockOpnameSession>): Promise<{
+    success: boolean;
+    session: StockOpnameSession;
+    journalEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/inventory/stock-opname/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(session),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Stock Opname reconciliation failed');
+    }
+    return res.json();
+  },
+
+  async transferStock(payload: {
+    sku: string;
+    sourceStoreId: string;
+    destinationStoreId: string;
+    quantity: number;
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    record: StockTransferRecord;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/inventory/transfer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Inter-warehouse stock transfer failed');
+    }
+    return res.json();
+  },
+
+  async getStockTransfers(storeId?: string): Promise<StockTransferRecord[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetch(`/api/admin/inventory/transfer?${params.toString()}`);
+    return res.json().catch(() => []);
   },
 };

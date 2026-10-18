@@ -46,7 +46,7 @@ export default function App() {
     try {
       const hash = window.location.hash;
       const saved = localStorage.getItem('grocemart_admin_session');
-      if (hash === '#admin' || hash === '#erp' || hash === '#staff') {
+      if (hash === '#admin' || hash === '#erp' || hash === '#staff' || hash === '#pos') {
         return saved ? 'admin_erp' : 'admin_login';
       }
       if (hash === '#admin-login') return 'admin_login';
@@ -58,7 +58,7 @@ export default function App() {
   useEffect(() => {
     const handleHashSync = () => {
       const hash = window.location.hash;
-      if (hash === '#admin' || hash === '#erp' || hash === '#staff') {
+      if (hash === '#admin' || hash === '#erp' || hash === '#staff' || hash === '#pos') {
         const saved = localStorage.getItem('grocemart_admin_session');
         if (saved) {
           try {
@@ -261,6 +261,25 @@ export default function App() {
   };
 
   const handleProceedToCheckout = () => {
+    // Strict Store Closed Validation Check
+    if (storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode)) {
+      showToast(
+        'Storefront Network Closed',
+        storeStatus.noticeBanner || 'Retail network is currently closed. Online checkout is temporarily paused.'
+      );
+      return;
+    }
+
+    if (deliveryMethod === 'pickup' && selectedPickupStore) {
+      if (selectedPickupStore.isEmergencyClosed) {
+        showToast(
+          'Selected Outlet Closed',
+          `${selectedPickupStore.name} is currently under emergency closure. Please select an alternate branch for pickup.`
+        );
+        return;
+      }
+    }
+
     setIsCartOpen(false);
     setIsCheckoutOpen(true);
   };
@@ -382,7 +401,7 @@ export default function App() {
     try {
       localStorage.setItem('grocemart_admin_session', JSON.stringify(session));
     } catch {}
-    window.location.hash = '#admin';
+    window.location.hash = session.userRole === 'cashier' ? '#pos' : '#admin';
     setPortalView('admin_erp');
   };
 
@@ -405,7 +424,7 @@ export default function App() {
   // 1. DEDICATED ADMIN LOGIN SCREEN (AUTHENTICATION GATE)
   if (portalView === 'admin_login') {
     return (
-      <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+      <div className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white">
         <AdminLogin
           onLoginSuccess={handleAdminLoginSuccess}
           onReturnToStorefront={handleExitToStorefront}
@@ -421,7 +440,7 @@ export default function App() {
     // If not authenticated, force redirect to Login Gate
     if (!adminSession) {
       return (
-        <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+        <div className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white">
           <AdminLogin
             onLoginSuccess={handleAdminLoginSuccess}
             onReturnToStorefront={handleExitToStorefront}
@@ -433,7 +452,7 @@ export default function App() {
     }
 
     return (
-      <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col font-sans selection:bg-emerald-700 selection:text-white">
+      <div className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white">
         <AdminDashboard
           initialStaffSession={adminSession}
           onCloseToStorefront={handleExitToStorefront}

@@ -84,7 +84,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const subtotal = items.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
   const deliveryFee = deliveryMethod === 'pickup' ? 0 : deliveryMethod === 'instant' ? 15000 : 10000;
   const total = Math.max(0, subtotal + deliveryFee - appliedDiscount);
-  const isStoreClosed = !!(storeStatus && !storeStatus.isOpen);
+  const isNetworkClosed = !!(storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode));
+  const isPickupOutletClosed = !!(deliveryMethod === 'pickup' && selectedPickupStore?.isEmergencyClosed);
+  const isStoreClosed = isNetworkClosed || isPickupOutletClosed;
+  const storeClosureNotice = isNetworkClosed
+    ? (storeStatus?.noticeBanner || 'GroceMart retail storefront network is currently closed. Online checkouts are temporarily paused.')
+    : isPickupOutletClosed
+    ? `Outlet '${selectedPickupStore?.name}' is under emergency closure (${selectedPickupStore?.closureReason || 'Maintenance'}). Orders cannot be collected from this branch.`
+    : '';
+
+  const [blockedNotice, setBlockedNotice] = useState<string>('');
 
   const formatCountdown = (totalSec: number) => {
     const mins = Math.floor(totalSec / 60);
@@ -94,7 +103,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isStoreClosed) return;
+    if (isStoreClosed) {
+      setBlockedNotice(`Checkout Blocked: ${storeClosureNotice}`);
+      return;
+    }
+    setBlockedNotice('');
 
     const newOrderId = generateOrderId();
     setCurrentOrderId(newOrderId);
@@ -253,6 +266,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </h2>
             </div>
 
+            {/* Store Closed Warning Banner */}
+            {isStoreClosed && (
+              <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-950 flex items-start gap-3 shadow-xs animate-in fade-in">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-sm block">Checkout Blocked: Outlet Currently Closed</span>
+                  <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                    {storeClosureNotice}
+                  </p>
+                  <p className="text-[11px] text-amber-800 mt-1">
+                    Cart items remain preserved. Online ordering will resume once operating hours reopen.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Customer Details */}
             <div className="space-y-4 pt-2 border-t border-stone-200">
               <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700">
@@ -340,13 +369,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             {/* Store Closed Banner Notice */}
-            {isStoreClosed && (
-              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs flex items-start gap-2.5">
+            {(isStoreClosed || blockedNotice) && (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs flex items-start gap-2.5 animate-in fade-in">
                 <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="font-bold text-sm">Storefront Checkout Temporarily Paused</h4>
                   <p className="mt-0.5 leading-relaxed">
-                    {storeStatus?.noticeBanner || 'GroceMart is currently in holiday closure or maintenance. You may browse the catalog, but new order checkouts are paused.'}
+                    {blockedNotice || storeClosureNotice || storeStatus?.noticeBanner || 'GroceMart is currently in holiday closure or maintenance. You may browse the catalog, but new order checkouts are paused.'}
                   </p>
                 </div>
               </div>

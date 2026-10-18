@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingBag, User, Menu, X, ArrowRight, Store, BookOpen, Truck, Sparkles, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { ShoppingBag, User, Menu, X, ArrowRight, Store, BookOpen, Truck, Sparkles, ShieldCheck, AlertTriangle, CreditCard } from 'lucide-react';
 import type { CartItem, StoreOperationalStatus } from '../types/index.ts';
 import { formatIDR } from '../utils/formatters';
 
@@ -108,6 +108,16 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Zone 3: Primary Action & Portal Trigger */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Staff ERP & POS Quick Portal Button */}
+            <a
+              href="#admin-erp"
+              className="hidden md:flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 active:scale-98 rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer min-h-[44px]"
+              title="Open Staff ERP & POS Cashier Portal"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-emerald-800" />
+              <span>ERP &amp; POS</span>
+            </a>
+
             {/* Customer Portal Button */}
             <button
               onClick={onOpenPortal}
@@ -193,7 +203,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          <div className="pt-2 border-t border-stone-100">
+          <div className="pt-2 border-t border-stone-100 space-y-2">
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
@@ -209,6 +219,17 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <ArrowRight className="w-4 h-4 text-stone-400" />
             </button>
+            <a
+              href="#admin-erp"
+              onClick={() => setMobileMenuOpen(false)}
+              className="w-full py-2.5 px-4 bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-xl text-xs font-semibold flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-emerald-800" />
+                <span>Staff ERP &amp; POS Cashier Portal</span>
+              </div>
+              <ArrowRight className="w-4 h-4 text-emerald-700" />
+            </a>
           </div>
         </div>
       )}

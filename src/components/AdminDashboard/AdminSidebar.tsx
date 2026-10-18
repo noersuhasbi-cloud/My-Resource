@@ -16,25 +16,20 @@ import {
   Scale,
   DollarSign,
   Building2,
-  ShieldAlert,
   PanelLeftClose,
   PanelLeft,
   X,
   Store as StoreIcon,
-  Sun,
-  Moon,
-  RefreshCw,
-  ExternalLink,
-  ShieldCheck,
-  CheckCircle2,
-  AlertTriangle,
   Users,
   FileCheck2,
   LogOut,
+  CreditCard,
+  Settings,
 } from 'lucide-react';
 
 export type AdminDashboardTab =
   | 'overview'
+  | 'pos'
   | 'operations'
   | 'inventory'
   | 'fefo'
@@ -45,7 +40,8 @@ export type AdminDashboardTab =
   | 'openapi'
   | 'erd'
   | 'rbac'
-  | 'audit';
+  | 'audit'
+  | 'settings';
 
 export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa';
 
@@ -110,16 +106,25 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     }
   };
 
+  const navItemClass = (isActive: boolean) =>
+    `w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 group relative cursor-pointer ${
+      isActive
+        ? 'bg-[#0F4C3A] text-white shadow-xs font-bold'
+        : isLight
+        ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/90'
+        : 'text-stone-400 hover:text-stone-100 hover:bg-stone-800/80'
+    }`;
+
   const sidebarContent = (
     <div className="flex flex-col h-full select-none">
       {/* Brand Header */}
       <div
         className={`h-16 flex items-center justify-between px-4 border-b flex-shrink-0 transition-colors ${
-          isLight ? 'border-gray-200/90 bg-white' : 'border-stone-800/90 bg-stone-900/95'
+          isLight ? 'border-gray-200/90 bg-white' : 'border-stone-800/90 bg-stone-900'
         }`}
       >
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-9 h-9 rounded-xl bg-[#0F4C3A] flex items-center justify-center shadow-md shadow-[#0F4C3A]/25 text-white font-extrabold text-sm tracking-wider flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[#0F4C3A] flex items-center justify-center shadow-xs text-white font-extrabold text-sm tracking-wider flex-shrink-0">
             GM
           </div>
           {!isCollapsed && (
@@ -128,12 +133,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <span className={`text-sm font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
                   GroceMart
                 </span>
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 border border-[#0F4C3A]/20">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30">
                   ERP
                 </span>
               </div>
               <p className={`text-[11px] truncate ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
-                Enterprise Suite v2.4
+                Enterprise Suite v4.2
               </p>
             </div>
           )}
@@ -143,7 +148,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         <button
           onClick={onToggleCollapse}
           title={isCollapsed ? 'Expand Sidebar (Ctrl+B)' : 'Collapse Sidebar (Ctrl+B)'}
-          className={`hidden lg:flex p-1.5 rounded-lg border text-xs transition-colors items-center justify-center ${
+          className={`hidden lg:flex p-1.5 rounded-lg border text-xs transition-colors items-center justify-center cursor-pointer ${
             isLight
               ? 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-600'
               : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-300'
@@ -156,7 +161,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         {/* Mobile Close Button (X) */}
         <button
           onClick={onCloseMobile}
-          className={`lg:hidden p-2 rounded-xl border text-sm transition-colors flex items-center justify-center ${
+          className={`lg:hidden p-2 rounded-xl border text-sm transition-colors flex items-center justify-center cursor-pointer ${
             isLight
               ? 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700 active:scale-95'
               : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200 active:scale-95'
@@ -168,11 +173,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </div>
 
       {/* Navigation Scrollable Body */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-stone-800">
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
         {/* SECTION 1: CORE OPERATIONS */}
         <div>
           {!isCollapsed && (
-            <div className="px-3 mb-2 flex items-center justify-between">
+            <div className="px-3 mb-1.5 flex items-center justify-between">
               <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-gray-400' : 'text-stone-500'}`}>
                 Core Operations
               </span>
@@ -184,19 +189,45 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('overview')}
               title={isCollapsed ? 'Executive Dashboard' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'overview'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'overview')}
             >
-              <LayoutDashboard className={`w-4 h-4 flex-shrink-0 ${activeTab === 'overview' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
-              {!isCollapsed && (
-                <span className="truncate flex-1 text-left">Executive Dashboard</span>
-              )}
+              <LayoutDashboard
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'overview' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'
+                }`}
+              />
+              {!isCollapsed && <span className="truncate flex-1 text-left">Executive Dashboard</span>}
               {isCollapsed && activeTab === 'overview' && (
+                <span className="absolute right-1 top-2 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              )}
+            </button>
+
+            {/* 1B. POS (Point of Sale) Cashier Station */}
+            <button
+              onClick={() => handleTabClick('pos')}
+              title={isCollapsed ? 'POS Cashier Terminal' : undefined}
+              className={navItemClass(activeTab === 'pos')}
+            >
+              <CreditCard
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'pos' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'
+                }`}
+              />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">POS Cashier Station</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'pos'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-emerald-50 text-[#0F4C3A] border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30'
+                    }`}
+                  >
+                    POS
+                  </span>
+                </>
+              )}
+              {isCollapsed && activeTab === 'pos' && (
                 <span className="absolute right-1 top-2 w-1.5 h-1.5 rounded-full bg-emerald-400" />
               )}
             </button>
@@ -205,20 +236,24 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('operations')}
               title={isCollapsed ? 'Store & Outlet Management' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'operations'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'operations')}
             >
-              <Store className={`w-4 h-4 flex-shrink-0 ${activeTab === 'operations' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
+              <Store
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'operations' ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                }`}
+              />
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Store &amp; Outlets</span>
                   {emergencyClosedCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        activeTab === 'operations'
+                          ? 'bg-white/20 text-white border-white/30'
+                          : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30'
+                      }`}
+                    >
                       {emergencyClosedCount}
                     </span>
                   )}
@@ -233,20 +268,24 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('inventory')}
               title={isCollapsed ? 'Inventory & Multi-Warehouse' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'inventory'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'inventory')}
             >
-              <Boxes className={`w-4 h-4 flex-shrink-0 ${activeTab === 'inventory' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} />
+              <Boxes
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'inventory' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'
+                }`}
+              />
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Multi-Warehouse &amp; Stock</span>
                   {lowStockCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        activeTab === 'inventory'
+                          ? 'bg-white/20 text-white border-white/30'
+                          : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30'
+                      }`}
+                    >
                       {lowStockCount}
                     </span>
                   )}
@@ -262,7 +301,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         {/* SECTION 2: SUPPLY CHAIN & QUALITY */}
         <div>
           {!isCollapsed && (
-            <div className="px-3 mb-2 flex items-center justify-between">
+            <div className="px-3 mb-1.5 flex items-center justify-between">
               <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-gray-400' : 'text-stone-500'}`}>
                 Perishables &amp; Fulfillment
               </span>
@@ -274,19 +313,23 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('fefo')}
               title={isCollapsed ? 'FEFO & Batch Traceability' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'fefo'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'fefo')}
             >
-              <Clock className={`w-4 h-4 flex-shrink-0 ${activeTab === 'fefo' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+              <Clock
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'fefo' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'
+                }`}
+              />
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">FEFO &amp; Expiry Batches</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'fefo'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30'
+                    }`}
+                  >
                     Auto
                   </span>
                 </>
@@ -297,19 +340,23 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('waste')}
               title={isCollapsed ? 'Waste & Shrinkage Management' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'waste'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'waste')}
             >
-              <Trash2 className={`w-4 h-4 flex-shrink-0 ${activeTab === 'waste' ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`} />
+              <Trash2
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'waste' ? 'text-white' : 'text-rose-600 dark:text-rose-400'
+                }`}
+              />
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Waste &amp; Shrinkage</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'waste'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30'
+                    }`}
+                  >
                     Scrap
                   </span>
                 </>
@@ -320,15 +367,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('picker')}
               title={isCollapsed ? 'Fulfillment & Catch Weight' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'picker'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'picker')}
             >
-              <Scan className={`w-4 h-4 flex-shrink-0 ${activeTab === 'picker' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`} />
+              <Scan
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'picker' ? 'text-white' : 'text-amber-600 dark:text-amber-400'
+                }`}
+              />
               {!isCollapsed && (
                 <span className="truncate flex-1 text-left">Fulfillment &amp; Catch Weight</span>
               )}
@@ -338,20 +383,24 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('procurement')}
               title={isCollapsed ? 'Procurement & Supply Chain' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'procurement'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'procurement')}
             >
-              <Truck className={`w-4 h-4 flex-shrink-0 ${activeTab === 'procurement' ? 'text-white' : 'text-sky-600 dark:text-sky-400'}`} />
+              <Truck
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'procurement' ? 'text-white' : 'text-sky-600 dark:text-sky-400'
+                }`}
+              />
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Procurement (PR/PO/GR)</span>
                   {partialPoCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-500/20 text-blue-700 dark:text-blue-300">
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                        activeTab === 'procurement'
+                          ? 'bg-white/20 text-white border-white/30'
+                          : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30'
+                      }`}
+                    >
                       Partial
                     </span>
                   )}
@@ -366,9 +415,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {!isCollapsed ? (
             <div
               onClick={onToggleFinanceMenu}
-              className={`px-3 mb-2 flex items-center justify-between cursor-pointer group`}
+              className="px-3 mb-1.5 flex items-center justify-between cursor-pointer group"
             >
-              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-gray-400 group-hover:text-gray-600' : 'text-stone-500 group-hover:text-stone-300'}`}>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  isLight ? 'text-gray-400 group-hover:text-gray-600' : 'text-stone-500 group-hover:text-stone-300'
+                }`}
+              >
                 Finance &amp; Accounting
               </span>
               <span className="text-gray-400">
@@ -392,95 +445,50 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 if (!isFinanceMenuOpen) onToggleFinanceMenu();
               }}
               title={isCollapsed ? 'Finance & Core Accounting' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'accounting'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'accounting')}
             >
-              <ReceiptText className={`w-4 h-4 flex-shrink-0 ${activeTab === 'accounting' ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
+              <ReceiptText
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'accounting' ? 'text-white' : 'text-teal-600 dark:text-teal-400'
+                }`}
+              />
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Accounting Suite</span>
-                  <span className="text-[10px] opacity-75 font-mono">IDR</span>
+                  <span className="text-[10px] opacity-80 font-mono">IDR</span>
                 </>
               )}
             </button>
 
             {/* Nested Sub-Menu (Desktop & Expanded Drawer) */}
             {!isCollapsed && isFinanceMenuOpen && (
-              <div className="pl-6 pr-1 py-1 space-y-1 border-l-2 border-emerald-900/10 dark:border-emerald-500/20 ml-4 animate-fadeIn">
-                <button
-                  onClick={() => handleAccountingSubClick('pnl')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
-                    activeTab === 'accounting' && accountingSubTab === 'pnl'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
-                      : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
-                  }`}
-                >
-                  <TrendingUp className="w-3 h-3 text-emerald-600" />
-                  <span className="truncate">P&amp;L Statement</span>
-                </button>
-
-                <button
-                  onClick={() => handleAccountingSubClick('balance_sheet')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
-                    activeTab === 'accounting' && accountingSubTab === 'balance_sheet'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
-                      : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
-                  }`}
-                >
-                  <Scale className="w-3 h-3 text-blue-600" />
-                  <span className="truncate">Balance Sheet</span>
-                </button>
-
-                <button
-                  onClick={() => handleAccountingSubClick('cash_flow')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
-                    activeTab === 'accounting' && accountingSubTab === 'cash_flow'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
-                      : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
-                  }`}
-                >
-                  <DollarSign className="w-3 h-3 text-amber-600" />
-                  <span className="truncate">Cash Flow Statement</span>
-                </button>
-
-                <button
-                  onClick={() => handleAccountingSubClick('gl')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
-                    activeTab === 'accounting' && accountingSubTab === 'gl'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
-                      : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
-                  }`}
-                >
-                  <ReceiptText className="w-3 h-3 text-purple-600" />
-                  <span className="truncate">General Ledger (GL)</span>
-                </button>
-
-                <button
-                  onClick={() => handleAccountingSubClick('coa')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
-                    activeTab === 'accounting' && accountingSubTab === 'coa'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
-                      : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
-                  }`}
-                >
-                  <Building2 className="w-3 h-3 text-teal-600" />
-                  <span className="truncate">Chart of Accounts (COA)</span>
-                </button>
+              <div className="pl-6 pr-1 py-1 space-y-1 border-l border-gray-200 dark:border-stone-800 ml-4 animate-fadeIn">
+                {[
+                  { id: 'pnl', label: 'P&L Statement', icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400' },
+                  { id: 'balance_sheet', label: 'Balance Sheet', icon: Scale, color: 'text-blue-600 dark:text-blue-400' },
+                  { id: 'cash_flow', label: 'Cash Flow Statement', icon: DollarSign, color: 'text-amber-600 dark:text-amber-400' },
+                  { id: 'gl', label: 'General Ledger (GL)', icon: ReceiptText, color: 'text-purple-600 dark:text-purple-400' },
+                  { id: 'coa', label: 'Chart of Accounts (COA)', icon: Building2, color: 'text-teal-600 dark:text-teal-400' },
+                ].map((sub) => {
+                  const Icon = sub.icon;
+                  const isSubActive = activeTab === 'accounting' && accountingSubTab === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      onClick={() => handleAccountingSubClick(sub.id as AccountingSubTab)}
+                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left cursor-pointer ${
+                        isSubActive
+                          ? 'bg-emerald-50 text-[#0F4C3A] dark:bg-emerald-500/15 dark:text-emerald-300 font-bold'
+                          : isLight
+                          ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/80'
+                          : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${sub.color}`} />
+                      <span className="truncate">{sub.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -491,9 +499,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {!isCollapsed ? (
             <div
               onClick={onToggleSettingsMenu}
-              className={`px-3 mb-2 flex items-center justify-between cursor-pointer group`}
+              className="px-3 mb-1.5 flex items-center justify-between cursor-pointer group"
             >
-              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-gray-400 group-hover:text-gray-600' : 'text-stone-500 group-hover:text-stone-300'}`}>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  isLight ? 'text-gray-400 group-hover:text-gray-600' : 'text-stone-500 group-hover:text-stone-300'
+                }`}
+              >
                 System &amp; Specifications
               </span>
               <span className="text-gray-400">
@@ -513,19 +525,23 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('rbac')}
               title={isCollapsed ? 'Roles & Shifts (RBAC)' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'rbac'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'rbac')}
             >
-              <Users className={`w-4 h-4 flex-shrink-0 ${activeTab === 'rbac' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+              <Users
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'rbac' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'
+                }`}
+              />
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Roles &amp; Shifts (RBAC)</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'rbac'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-emerald-50 text-[#0F4C3A] border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30'
+                    }`}
+                  >
                     Shift
                   </span>
                 </>
@@ -536,15 +552,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('audit')}
               title={isCollapsed ? 'Security & Audit Logs' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'audit'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'audit')}
             >
-              <FileCheck2 className={`w-4 h-4 flex-shrink-0 ${activeTab === 'audit' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
+              <FileCheck2
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'audit' ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                }`}
+              />
               {!isCollapsed && (
                 <span className="truncate flex-1 text-left">Security &amp; Audit Logs</span>
               )}
@@ -554,15 +568,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('openapi')}
               title={isCollapsed ? 'QRIS Open API Specifications' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'openapi'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'openapi')}
             >
-              <FileCode2 className={`w-4 h-4 flex-shrink-0 ${activeTab === 'openapi' ? 'text-white' : 'text-violet-600 dark:text-violet-400'}`} />
+              <FileCode2
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'openapi' ? 'text-white' : 'text-violet-600 dark:text-violet-400'
+                }`}
+              />
               {!isCollapsed && (
                 <span className="truncate flex-1 text-left">QRIS Open API Specs</span>
               )}
@@ -572,20 +584,51 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('erd')}
               title={isCollapsed ? 'ERD & Technical Specs' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
-                activeTab === 'erd'
-                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
-                  : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
-              }`}
+              className={navItemClass(activeTab === 'erd')}
             >
-              <Database className={`w-4 h-4 flex-shrink-0 ${activeTab === 'erd' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+              <Database
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'erd' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'
+                }`}
+              />
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">ERD &amp; Schema Specs</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'erd'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700'
+                    }`}
+                  >
                     Docs
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* 12. Settings & Configuration Hub */}
+            <button
+              onClick={() => handleTabClick('settings')}
+              title={isCollapsed ? 'Settings & Configuration' : undefined}
+              className={navItemClass(activeTab === 'settings')}
+            >
+              <Settings
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'settings' ? 'text-white' : 'text-amber-600 dark:text-amber-400'
+                }`}
+              />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Settings &amp; Rules</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'settings'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30'
+                    }`}
+                  >
+                    Config
                   </span>
                 </>
               )}
@@ -597,7 +640,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       {/* Footer / Storefront Exit Link */}
       <div
         className={`p-3 border-t flex-shrink-0 transition-colors ${
-          isLight ? 'border-gray-200/90 bg-gray-50/70' : 'border-stone-800/90 bg-stone-900/60'
+          isLight ? 'border-gray-200/90 bg-gray-50/70' : 'border-stone-800/90 bg-stone-900'
         }`}
       >
         <div className="space-y-1.5">
@@ -610,7 +653,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 : 'bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200'
             }`}
           >
-            <StoreIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+            <StoreIcon className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 flex-shrink-0" />
             {!isCollapsed && <span className="truncate">Storefront View</span>}
           </button>
 
@@ -620,11 +663,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               title={isCollapsed ? 'Lock ERP / Sign Out' : undefined}
               className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 isLight
-                  ? 'bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 shadow-2xs'
-                  : 'bg-red-950/40 hover:bg-red-900/50 border border-red-800/40 text-red-300'
+                  ? 'bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700'
+                  : 'bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/50 text-rose-300'
               }`}
             >
-              <LogOut className="w-4 h-4 text-red-500 shrink-0" />
+              <LogOut className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
               {!isCollapsed && <span className="truncate">Lock / Sign Out</span>}
             </button>
           )}
@@ -635,13 +678,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
   return (
     <>
-      {/* Desktop Persistent Sidebar (Collapsible: 64px icon rail vs 260px expanded) */}
+      {/* Desktop Persistent Sidebar */}
       <aside
         className={`hidden lg:block fixed inset-y-0 left-0 z-40 transition-all duration-300 ease-in-out border-r ${
           isCollapsed ? 'w-20' : 'w-64'
         } ${
           isLight
-            ? 'bg-white border-gray-200/90 shadow-[4px_0_24px_rgba(0,0,0,0.02)]'
+            ? 'bg-white border-gray-200/90 shadow-[2px_0_16px_rgba(0,0,0,0.02)]'
             : 'bg-stone-900 border-stone-800/90'
         }`}
       >

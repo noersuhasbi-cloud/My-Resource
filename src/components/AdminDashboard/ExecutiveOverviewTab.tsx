@@ -240,8 +240,8 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-          {(omzetData?.topSkus || []).map((sku) => (
-            <div key={sku.sku} className={`${subCardClass} p-3.5 space-y-1.5`}>
+          {(omzetData?.topSkus || []).map((sku, idx) => (
+            <div key={`${sku.sku}-${idx}`} className={`${subCardClass} p-3.5 space-y-1.5`}>
               <span className={`text-[10px] font-mono ${textMuted}`}>{sku.sku}</span>
               <h3 className={`text-xs font-bold ${textTitle} line-clamp-1`}>{sku.productName}</h3>
               <p className={`text-[11px] ${textMuted}`}>{sku.unitsSold} units sold</p>

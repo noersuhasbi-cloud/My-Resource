@@ -80,6 +80,8 @@ import { ProcurementModule } from './ProcurementModule';
 import { AccountingModule } from './AccountingModule';
 import { RbacModule } from './RbacModule';
 import { SecurityAuditModule } from './SecurityAuditModule';
+import { PosModule } from './PosModule';
+import { SettingsModule } from './SettingsModule';
 import { AdminSidebar, AdminDashboardTab, AccountingSubTab } from './AdminSidebar';
 
 interface AdminDashboardProps {
@@ -112,6 +114,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch {}
   };
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [theme]);
+
   const isLight = theme === 'light';
 
   // Global Store Outlet Filter Selector
@@ -139,7 +148,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
   };
 
-  const [activeTab, setActiveTab] = useState<AdminDashboardTab>('overview');
+  const [activeTab, setActiveTab] = useState<AdminDashboardTab>(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#pos') {
+      return 'pos';
+    }
+    if (initialStaffSession?.userRole === 'cashier') {
+      return 'pos';
+    }
+    return 'overview';
+  });
 
   // RBAC Staff Session State (Module 3)
   const [activeStaffSession, setActiveStaffSession] = useState<StaffShiftSession | null>(
@@ -181,6 +198,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('ALL');
   const [selectedStorageZoneFilter, setSelectedStorageZoneFilter] = useState<string>('ALL');
   const [inventorySearch, setInventorySearch] = useState<string>('');
+  const [lowStockThreshold, setLowStockThreshold] = useState<number>(10);
+  const [stockAlertFilter, setStockAlertFilter] = useState<'ALL' | 'LOW_STOCK' | 'BELOW_MIN_THRESHOLD'>('ALL');
+  const [inventoryViewMode, setInventoryViewMode] = useState<'WAREHOUSE_BINS' | 'PRODUCT_CATALOG'>('WAREHOUSE_BINS');
   const [editingTier, setEditingTier] = useState<StoreInventoryStock | null>(null);
   const [inventoryMetrics, setInventoryMetrics] = useState({
     totalStockCount: 0,
@@ -531,10 +551,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Filtered inventory matrix
+  // Low stock counts based on configurable threshold (default < 10 units)
+  const lowStockTiersBelowThreshold = inventoryTiers.filter(
+    (tier) =>
+      (selectedOutletFilter === 'ALL' || tier.storeId === selectedOutletFilter) &&
+      tier.availableStock < lowStockThreshold
+  );
+  const lowStockCatalogBelowThreshold = inventory.filter((item) => item.currentStock < lowStockThreshold);
+
+  // Filtered inventory matrix (Warehouse Bins view)
   const filteredTiers = inventoryTiers.filter((tier) => {
     if (selectedOutletFilter !== 'ALL' && tier.storeId !== selectedOutletFilter) return false;
     if (selectedStorageZoneFilter !== 'ALL' && tier.storageType !== selectedStorageZoneFilter) return false;
+    if (stockAlertFilter === 'LOW_STOCK' && tier.availableStock >= lowStockThreshold) return false;
+    if (
+      stockAlertFilter === 'BELOW_MIN_THRESHOLD' &&
+      tier.availableStock >= lowStockThreshold &&
+      tier.availableStock > tier.minimumThreshold
+    ) {
+      return false;
+    }
     if (inventorySearch) {
       const q = inventorySearch.toLowerCase();
       return (
@@ -546,20 +582,62 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return true;
   });
 
+  // Filtered Master Product Catalog items
+  const filteredCatalogItems = inventory.filter((item) => {
+    if (stockAlertFilter === 'LOW_STOCK' && item.currentStock >= lowStockThreshold) return false;
+    if (
+      stockAlertFilter === 'BELOW_MIN_THRESHOLD' &&
+      item.currentStock >= lowStockThreshold &&
+      item.currentStock > item.minimumThreshold
+    ) {
+      return false;
+    }
+    if (inventorySearch) {
+      const q = inventorySearch.toLowerCase();
+      return (
+        item.productName.toLowerCase().includes(q) ||
+        item.sku.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q) ||
+        item.supplierName.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  const handleQuickRestockPR = async (sku: string, productName: string, suggestedQty: number, storeId = 'store-jkt-senopati') => {
+    try {
+      const res = await apiClient.createPurchaseRequest({
+        sku,
+        suggestedQuantity: suggestedQty > 0 ? suggestedQty : 40,
+        reason: 'low_stock_threshold',
+        priority: 'high',
+        requestedBy: activeStaffSession?.userName || 'Inventory Alert System',
+        storeId: storeId !== 'ALL' && storeId !== 'CONSOLIDATED' ? storeId : 'store-jkt-senopati',
+      });
+      setPurchaseRequests((prev) => [res.purchaseRequest, ...prev]);
+      onShowToast(
+        'Low Stock Replenish PR Created',
+        `${res.purchaseRequest.id} queued for ${productName} (${suggestedQty || 40} units).`
+      );
+    } catch (err) {
+      onShowToast('PR Creation Failed', String(err));
+    }
+  };
+
   const cardClass = isLight
-    ? 'bg-white border border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 rounded-2xl'
-    : 'bg-stone-900/90 border border-stone-800 text-stone-100 rounded-2xl';
+    ? 'bg-white border border-gray-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03),0_4px_12px_rgba(0,0,0,0.02)] text-gray-900 rounded-2xl'
+    : 'bg-stone-900 border border-stone-800 text-stone-100 rounded-2xl';
   const subCardClass = isLight
-    ? 'bg-white border border-gray-200 text-gray-900 rounded-xl shadow-xs'
-    : 'bg-stone-800/80 border border-stone-700 text-stone-100 rounded-xl';
+    ? 'bg-gray-50/80 border border-gray-200/90 text-gray-900 rounded-xl'
+    : 'bg-stone-800/70 border border-stone-700/80 text-stone-100 rounded-xl';
   const textTitle = isLight ? 'text-gray-900' : 'text-white';
   const textMuted = isLight ? 'text-gray-500' : 'text-stone-400';
   const tableHeaderClass = isLight
-    ? 'border-b border-gray-200 bg-gray-50/70 text-gray-500 font-semibold uppercase text-[10px]'
-    : 'border-b border-stone-800 bg-stone-800/50 text-stone-400 font-semibold uppercase text-[10px]';
+    ? 'border-b border-gray-200 bg-gray-50/90 text-gray-500 font-semibold uppercase tracking-wider text-[10px]'
+    : 'border-b border-stone-800 bg-stone-800/60 text-stone-400 font-semibold uppercase tracking-wider text-[10px]';
   const inputClass = isLight
     ? 'bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-    : 'bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:outline-none focus:border-emerald-500';
+    : 'bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500';
   const modalClass = isLight
     ? 'bg-white border border-gray-200 text-gray-900 shadow-2xl rounded-2xl'
     : 'bg-stone-900 border border-stone-700 text-white shadow-2xl rounded-2xl';
@@ -568,6 +646,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     switch (activeTab) {
       case 'overview':
         return 'Executive Omzet & Key Metrics';
+      case 'pos':
+        return 'POS (Point of Sale) & Cashier Terminal';
       case 'operations':
         return 'Store & Multi-Outlet Operations';
       case 'inventory':
@@ -596,7 +676,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   })();
 
   return (
-    <div className={`min-h-screen ${isLight ? 'bg-[#F9FAFB] text-gray-900' : 'bg-stone-950 text-stone-100'} flex font-sans transition-colors duration-200 overflow-x-hidden`}>
+    <div
+      className={`min-h-screen ${
+        isLight ? 'bg-[#F8FAFC] text-gray-900' : 'dark bg-stone-950 text-stone-100'
+      } flex font-sans transition-colors duration-200 overflow-x-hidden`}
+    >
       {/* 1. Left Vertical Sidebar Component */}
       <AdminSidebar
         theme={theme}
@@ -611,7 +695,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isSettingsMenuOpen={isSettingsMenuOpen}
         onToggleSettingsMenu={() => setIsSettingsMenuOpen((prev) => !prev)}
         emergencyClosedCount={storeOutlets.filter((o) => o.isEmergencyClosed).length}
-        lowStockCount={inventoryMetrics.lowStockCount}
+        lowStockCount={
+          inventoryViewMode === 'WAREHOUSE_BINS'
+            ? lowStockTiersBelowThreshold.length
+            : lowStockCatalogBelowThreshold.length
+        }
         partialPoCount={purchaseOrders.filter((p) => p.status === 'Partially Received').length}
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
@@ -690,6 +778,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       try {
                         const res = await apiClient.switchRbacSession(e.target.value);
                         setActiveStaffSession(res.session);
+                        if (res.session.userRole === 'cashier') {
+                          setActiveTab('pos');
+                        }
                         onShowToast(
                           'Staff Identity Switched',
                           `Switched to ${res.session.userName} (${res.session.userRole.replace(/_/g, ' ')})`
@@ -762,6 +853,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               </button>
+
+              {/* Quick POS Launch Button in Top Bar */}
+              {activeTab !== 'pos' && (
+                <button
+                  onClick={() => setActiveTab('pos')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-[#0F4C3A] hover:bg-[#0F4C3A]/90 text-white shadow-xs transition-all cursor-pointer"
+                  title="Open POS Cashier Register"
+                >
+                  <Scan className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">POS Cashier</span>
+                </button>
+              )}
 
               {/* Refresh Sync Button */}
               <button
@@ -873,12 +976,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className={`mt-3 text-2xl font-bold ${textTitle} tracking-tight`}>
                   {formatIDR(inventoryMetrics.totalValuationWAC || 48200000)}
                 </div>
-                <div className="mt-2 flex items-center gap-2 text-xs">
-                  <span className={`font-semibold ${inventoryMetrics.lowStockCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'}`}>
-                    {inventoryMetrics.lowStockCount} items low stock
-                  </span>
-                  <span className={textMuted}>•</span>
-                  <span className={textMuted}>{inventoryMetrics.totalStockCount} units in bins</span>
+                <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                  <button
+                    onClick={() => {
+                      setStockAlertFilter('LOW_STOCK');
+                      setActiveTab('inventory');
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors cursor-pointer"
+                    title={`View items below ${lowStockThreshold} units`}
+                  >
+                    <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                    {lowStockTiersBelowThreshold.length} Low Stock (&lt;{lowStockThreshold})
+                  </button>
+                  <span className={textMuted}>{inventoryMetrics.totalStockCount} units</span>
                 </div>
               </div>
             </div>
@@ -892,7 +1002,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <h2 className={`text-base font-bold ${textTitle}`}>Omzet per Outlet Store</h2>
                     <p className={`text-xs ${textMuted}`}>Granular performance across Indonesian physical hubs</p>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-500/10 text-emerald-300 rounded-lg border border-emerald-500/20">
+                  <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 rounded-lg">
                     6 Active Outlets
                   </span>
                 </div>
@@ -1005,8 +1115,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-                {(omzetData?.topSkus || []).map((sku) => (
-                  <div key={sku.sku} className={`${subCardClass} p-3.5 space-y-1.5`}>
+                {(omzetData?.topSkus || []).map((sku, idx) => (
+                  <div key={`${sku.sku}-${idx}`} className={`${subCardClass} p-3.5 space-y-1.5`}>
                     <span className={`text-[10px] font-mono ${textMuted}`}>{sku.sku}</span>
                     <h3 className={`text-xs font-bold ${textTitle} line-clamp-1`}>{sku.productName}</h3>
                     <p className={`text-[11px] ${textMuted}`}>{sku.unitsSold} units sold</p>
@@ -1416,7 +1526,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onShowToast('Error', String(e));
                               }
                             }}
-                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-stone-700"
+                            className={`px-2 py-0.5 rounded border text-xs font-bold cursor-pointer transition-colors ${
+                              isLight
+                                ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
+                                : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                            }`}
                             title="Tighter threshold (-0.5°C)"
                           >
                             -0.5°
@@ -1436,7 +1550,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onShowToast('Error', String(e));
                               }
                             }}
-                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-stone-700"
+                            className={`px-2 py-0.5 rounded border text-xs font-bold cursor-pointer transition-colors ${
+                              isLight
+                                ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
+                                : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                            }`}
                             title="Looser threshold (+0.5°C)"
                           >
                             +0.5°
@@ -1485,30 +1603,192 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            {/* Filter Bar */}
-            <div className={`${cardClass} p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3`}>
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={selectedOutletFilter}
-                  onChange={(e) => setSelectedOutletFilter(e.target.value)}
-                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
-                >
-                  <option value="ALL">All Store Outlets</option>
-                  <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
-                  <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
-                  <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
-                </select>
+            {/* Low Stock Alert Banner & Threshold Configuration System */}
+            <div
+              className={`rounded-2xl border p-4 sm:p-5 transition-all ${
+                lowStockTiersBelowThreshold.length > 0 || lowStockCatalogBelowThreshold.length > 0
+                  ? isLight
+                    ? 'bg-gradient-to-r from-amber-50/90 via-white to-rose-50/60 border-amber-300/80 shadow-xs'
+                    : 'bg-gradient-to-r from-amber-950/30 via-stone-900 to-rose-950/20 border-amber-700/50'
+                  : isLight
+                  ? 'bg-emerald-50/50 border-emerald-200/80'
+                  : 'bg-stone-900 border-stone-800'
+              }`}
+            >
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={`p-2.5 rounded-xl border shrink-0 ${
+                      lowStockTiersBelowThreshold.length > 0
+                        ? 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                        : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                    }`}
+                  >
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className={`text-sm sm:text-base font-bold ${textTitle}`}>
+                        Product Low Stock Alert Monitor
+                      </h3>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        Threshold: &lt; {lowStockThreshold} units
+                      </span>
+                      {lowStockTiersBelowThreshold.length > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+                          {lowStockTiersBelowThreshold.length} Outlet Bins &lt; {lowStockThreshold} units
+                        </span>
+                      )}
+                      {lowStockCatalogBelowThreshold.length > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
+                          {lowStockCatalogBelowThreshold.length} Master SKUs &lt; {lowStockThreshold} units
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-xs ${textMuted} mt-1`}>
+                      Items with available quantity below <strong className={textTitle}>{lowStockThreshold} units</strong> are automatically flagged with a <strong className="text-amber-700 dark:text-amber-400">LOW STOCK</strong> or <strong className="text-rose-600 dark:text-rose-400">CRITICAL STOCK</strong> badge for immediate replenishment.
+                    </p>
 
-                <select
-                  value={selectedStorageZoneFilter}
-                  onChange={(e) => setSelectedStorageZoneFilter(e.target.value)}
-                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+                    {/* Quick Preview Chips of Low Stock Items */}
+                    {lowStockTiersBelowThreshold.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
+                        {lowStockTiersBelowThreshold.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setStockAlertFilter('LOW_STOCK');
+                              setInventorySearch(item.sku);
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
+                              item.availableStock <= 5
+                                ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-800 dark:text-rose-300 border-rose-500/30'
+                                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-300 border-amber-500/30'
+                            }`}
+                          >
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            <span className="font-mono font-bold">{item.sku}</span>
+                            <span className="truncate max-w-[140px]">{item.productName}</span>
+                            <span className="px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/10 font-mono font-extrabold">
+                              {item.availableStock} left
+                            </span>
+                          </button>
+                        ))}
+                        {inventorySearch && (
+                          <button
+                            onClick={() => setInventorySearch('')}
+                            className="text-[11px] font-semibold text-[#0F4C3A] dark:text-emerald-400 hover:underline px-1.5 cursor-pointer"
+                          >
+                            Clear SKU filter
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Configurable Threshold Control & View Switcher */}
+                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                  <div
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs ${
+                      isLight ? 'bg-white border-gray-200' : 'bg-stone-800 border-stone-700'
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-500" />
+                    <span className={`font-semibold ${textMuted}`}>Alert Threshold:</span>
+                    {[5, 10, 15, 20].map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => setLowStockThreshold(preset)}
+                        className={`px-2 py-0.5 rounded-md font-mono font-bold text-[11px] transition-all cursor-pointer ${
+                          lowStockThreshold === preset
+                            ? 'bg-[#0F4C3A] text-white shadow-2xs'
+                            : isLight
+                            ? 'text-gray-600 hover:bg-gray-100'
+                            : 'text-stone-300 hover:bg-stone-700'
+                        }`}
+                      >
+                        &lt;{preset}
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={lowStockThreshold}
+                      onChange={(e) => setLowStockThreshold(Math.max(1, Number(e.target.value) || 10))}
+                      className={`w-14 px-2 py-0.5 text-center font-mono font-bold text-xs rounded-md border ${
+                        isLight
+                          ? 'bg-gray-50 border-gray-200 text-gray-900'
+                          : 'bg-stone-900 border-stone-700 text-white'
+                      }`}
+                      title="Custom Low Stock Threshold (units)"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & View Mode Bar */}
+            <div className={`${cardClass} p-4 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3`}>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* View Mode Toggle: Warehouse Bins vs Master Product Catalog */}
+                <div
+                  className={`inline-flex items-center p-1 rounded-xl border ${
+                    isLight ? 'bg-gray-100 border-gray-200' : 'bg-stone-800 border-stone-700'
+                  }`}
                 >
-                  <option value="ALL">All Storage Zones</option>
-                  <option value="cold_chilled">Cold Chilled (4°C)</option>
-                  <option value="freezer">Freezer (-18°C)</option>
-                  <option value="ambient">Ambient Dry</option>
-                </select>
+                  <button
+                    onClick={() => setInventoryViewMode('WAREHOUSE_BINS')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      inventoryViewMode === 'WAREHOUSE_BINS'
+                        ? 'bg-[#0F4C3A] text-white shadow-2xs'
+                        : isLight
+                        ? 'text-gray-600 hover:text-gray-900'
+                        : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    Outlet Warehouse Bins ({inventoryTiers.length})
+                  </button>
+                  <button
+                    onClick={() => setInventoryViewMode('PRODUCT_CATALOG')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      inventoryViewMode === 'PRODUCT_CATALOG'
+                        ? 'bg-[#0F4C3A] text-white shadow-2xs'
+                        : isLight
+                        ? 'text-gray-600 hover:text-gray-900'
+                        : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    Master Product Catalog ({inventory.length})
+                  </button>
+                </div>
+
+                {inventoryViewMode === 'WAREHOUSE_BINS' && (
+                  <>
+                    <select
+                      value={selectedOutletFilter}
+                      onChange={(e) => setSelectedOutletFilter(e.target.value)}
+                      className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+                    >
+                      <option value="ALL">All Store Outlets</option>
+                      <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
+                      <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
+                      <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
+                    </select>
+
+                    <select
+                      value={selectedStorageZoneFilter}
+                      onChange={(e) => setSelectedStorageZoneFilter(e.target.value)}
+                      className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+                    >
+                      <option value="ALL">All Storage Zones</option>
+                      <option value="cold_chilled">Cold Chilled (4°C)</option>
+                      <option value="freezer">Freezer (-18°C)</option>
+                      <option value="ambient">Ambient Dry</option>
+                    </select>
+                  </>
+                )}
 
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
@@ -1516,118 +1796,412 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     type="text"
                     value={inventorySearch}
                     onChange={(e) => setInventorySearch(e.target.value)}
-                    placeholder="Search SKU or item..."
+                    placeholder="Search SKU or product..."
                     className={`pl-8 pr-3 py-1.5 text-xs rounded-xl w-48 ${inputClass}`}
                   />
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className={`text-xs ${textMuted}`}>
-                  Showing <strong className={textTitle}>{filteredTiers.length}</strong> location items
+              {/* Low Stock Filter Pill Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setStockAlertFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                    stockAlertFilter === 'ALL'
+                      ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
+                      : isLight
+                      ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                      : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                  }`}
+                >
+                  All Items
+                </button>
+                <button
+                  onClick={() =>
+                    setStockAlertFilter(stockAlertFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')
+                  }
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    stockAlertFilter === 'LOW_STOCK'
+                      ? 'bg-amber-500 text-stone-950 border-amber-500 shadow-xs'
+                      : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Low Stock (&lt; {lowStockThreshold} units)</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/15 font-mono">
+                    {inventoryViewMode === 'WAREHOUSE_BINS'
+                      ? lowStockTiersBelowThreshold.length
+                      : lowStockCatalogBelowThreshold.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() =>
+                    setStockAlertFilter(
+                      stockAlertFilter === 'BELOW_MIN_THRESHOLD' ? 'ALL' : 'BELOW_MIN_THRESHOLD'
+                    )
+                  }
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                    stockAlertFilter === 'BELOW_MIN_THRESHOLD'
+                      ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                      : isLight
+                      ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                      : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                  }`}
+                >
+                  <span>Below Reorder Point</span>
+                </button>
+
+                <span className={`text-xs ${textMuted} ml-1`}>
+                  Showing{' '}
+                  <strong className={textTitle}>
+                    {inventoryViewMode === 'WAREHOUSE_BINS'
+                      ? filteredTiers.length
+                      : filteredCatalogItems.length}
+                  </strong>{' '}
+                  items
                 </span>
               </div>
             </div>
 
-            {/* Multi-Tier Stock Matrix Table */}
-            <div className={`${cardClass} overflow-hidden shadow-xs`}>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className={tableHeaderClass}>
-                      <th className="py-3 px-3.5">SKU &amp; Item Details</th>
-                      <th className="py-3 px-3.5">Store / Warehouse Hub</th>
-                      <th className="py-3 px-3 text-center">Physical</th>
-                      <th className="py-3 px-3 text-center">Available</th>
-                      <th className="py-3 px-3 text-center">Reserved</th>
-                      <th className="py-3 px-3 text-center">Incoming</th>
-                      <th className="py-3 px-3.5">Threshold / Buffer</th>
-                      <th className="py-3 px-3.5">Handling Instructions</th>
-                      <th className="py-3 px-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
-                    {filteredTiers.map((tier) => {
-                      const isLowStock = tier.availableStock <= tier.minimumThreshold;
-                      return (
-                        <tr key={tier.id} className={`transition-colors ${isLight ? 'hover:bg-stone-50/80' : 'hover:bg-stone-800/40'}`}>
-                          <td className="py-3 px-3.5">
-                            <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">{tier.sku}</span>
-                            <div className={`font-bold ${textTitle} text-xs`}>{tier.productName}</div>
-                            <span className={`text-[11px] ${textMuted}`}>{tier.unit}</span>
-                          </td>
-
-                          <td className="py-3 px-3.5">
-                            <div className={`font-semibold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>{tier.storeName}</div>
-                            <div className={`text-[11px] ${textMuted} font-mono flex items-center gap-1 mt-0.5`}>
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                              {tier.warehouseZoneId}
-                            </div>
-                          </td>
-
-                          <td className={`py-3 px-3 text-center font-mono font-bold ${textTitle}`}>
-                            {tier.physicalStock}
-                          </td>
-
-                          <td className="py-3 px-3 text-center font-mono font-bold">
-                            <span
-                              className={`px-2 py-0.5 rounded-full ${
-                                isLowStock
-                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/30'
-                                  : 'text-emerald-600 dark:text-emerald-400 font-bold'
-                              }`}
-                            >
-                              {tier.availableStock}
-                            </span>
-                          </td>
-
-                          <td className={`py-3 px-3 text-center font-mono ${textMuted}`}>
-                            {tier.reservedStock}
-                          </td>
-
-                          <td className="py-3 px-3 text-center font-mono text-blue-600 dark:text-blue-400 font-semibold">
-                            +{tier.incomingStock}
-                          </td>
-
-                          <td className={`py-3 px-3.5 font-mono ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
-                            <div>Min: {tier.minimumThreshold}</div>
-                            <div className={`text-[10px] ${textMuted}`}>Buffer: {tier.safetyStockBuffer} | Max: {tier.maxCapacity}</div>
-                          </td>
-
-                          <td className={`py-3 px-3.5 text-[11px] max-w-xs ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
-                            <p className="line-clamp-2">
-                              {tier.handlingInstructions || 'Standard cold-chain storage.'}
-                            </p>
-                          </td>
-
-                          <td className="py-3 px-3.5 text-right space-x-1.5 whitespace-nowrap">
-                            <button
-                              onClick={() => {
-                                setAdjustingSku(tier.sku);
-                                setAdjustQty(0);
-                              }}
-                              className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border ${
-                                isLight
-                                  ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
-                                  : 'bg-stone-700 border-stone-600 text-stone-200 hover:bg-stone-600'
-                              }`}
-                            >
-                              Audit Count
-                            </button>
-                            <button
-                              onClick={() => setEditingTier(tier)}
-                              className="px-2.5 py-1 text-[11px] font-semibold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-300 border border-[#0F4C3A]/20 hover:bg-[#0F4C3A]/20 rounded-lg transition-all"
-                            >
-                              Edit Notes
-                            </button>
+            {/* VIEW 1: Multi-Tier Stock Matrix Table */}
+            {inventoryViewMode === 'WAREHOUSE_BINS' ? (
+              <div className={`${cardClass} overflow-hidden shadow-xs`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className={tableHeaderClass}>
+                        <th className="py-3 px-3.5">SKU &amp; Product Details</th>
+                        <th className="py-3 px-3.5">Store / Warehouse Hub</th>
+                        <th className="py-3 px-3 text-center">Physical</th>
+                        <th className="py-3 px-3 text-center">Available &amp; Alert Status</th>
+                        <th className="py-3 px-3 text-center">Reserved</th>
+                        <th className="py-3 px-3 text-center">Incoming</th>
+                        <th className="py-3 px-3.5">Threshold / Buffer</th>
+                        <th className="py-3 px-3.5">Handling Instructions</th>
+                        <th className="py-3 px-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
+                      {filteredTiers.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className={`py-10 text-center ${textMuted}`}>
+                            No product inventory bins match the current filter criteria.
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      ) : (
+                        filteredTiers.map((tier) => {
+                          const isBelowDefinedThreshold = tier.availableStock < lowStockThreshold;
+                          const isCriticalLow = tier.availableStock <= Math.min(5, Math.floor(lowStockThreshold / 2));
+                          const isBelowReorderMin = tier.availableStock <= tier.minimumThreshold;
+                          const fillPercent = Math.min(
+                            100,
+                            Math.max(4, Math.round((tier.availableStock / (tier.maxCapacity || 100)) * 100))
+                          );
+
+                          return (
+                            <tr
+                              key={tier.id}
+                              className={`transition-colors ${
+                                isCriticalLow
+                                  ? isLight
+                                    ? 'bg-rose-50/50 hover:bg-rose-50/80'
+                                    : 'bg-rose-950/20 hover:bg-rose-950/30'
+                                  : isBelowDefinedThreshold
+                                  ? isLight
+                                    ? 'bg-amber-50/45 hover:bg-amber-50/80'
+                                    : 'bg-amber-950/15 hover:bg-amber-950/25'
+                                  : isLight
+                                  ? 'hover:bg-stone-50/80'
+                                  : 'hover:bg-stone-800/40'
+                              }`}
+                            >
+                              <td className="py-3 px-3.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">
+                                    {tier.sku}
+                                  </span>
+                                  {isBelowDefinedThreshold ? (
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
+                                        isCriticalLow
+                                          ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                                          : 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/35'
+                                      }`}
+                                    >
+                                      <AlertTriangle className="w-2.5 h-2.5 shrink-0 animate-pulse" />
+                                      {isCriticalLow ? 'Critical Low Stock' : 'Low Stock'}
+                                    </span>
+                                  ) : isBelowReorderMin ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                                      Reorder Soon
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className={`font-bold ${textTitle} text-xs mt-0.5`}>{tier.productName}</div>
+                                <span className={`text-[11px] ${textMuted}`}>{tier.unit} • {formatIDR(tier.sellingPrice)}</span>
+                              </td>
+
+                              <td className="py-3 px-3.5">
+                                <div className={`font-semibold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>
+                                  {tier.storeName}
+                                </div>
+                                <div className={`text-[11px] ${textMuted} font-mono flex items-center gap-1 mt-0.5`}>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                  {tier.warehouseZoneId}
+                                </div>
+                              </td>
+
+                              <td className={`py-3 px-3 text-center font-mono font-bold ${textTitle}`}>
+                                {tier.physicalStock}
+                              </td>
+
+                              <td className="py-3 px-3 text-center">
+                                <div className="flex flex-col items-center gap-1">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-mono text-xs font-extrabold ${
+                                      isCriticalLow
+                                        ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/35'
+                                        : isBelowDefinedThreshold
+                                        ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/35'
+                                        : isBelowReorderMin
+                                        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25'
+                                        : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
+                                    }`}
+                                  >
+                                    {isBelowDefinedThreshold && <AlertTriangle className="w-3 h-3 shrink-0" />}
+                                    {tier.availableStock} units
+                                  </span>
+                                  <div className="w-20 h-1.5 rounded-full bg-gray-200 dark:bg-stone-700 overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        isCriticalLow
+                                          ? 'bg-rose-500'
+                                          : isBelowDefinedThreshold
+                                          ? 'bg-amber-500'
+                                          : 'bg-emerald-500'
+                                      }`}
+                                      style={{ width: `${fillPercent}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className={`py-3 px-3 text-center font-mono ${textMuted}`}>
+                                {tier.reservedStock}
+                              </td>
+
+                              <td className="py-3 px-3 text-center font-mono text-blue-600 dark:text-blue-400 font-semibold">
+                                +{tier.incomingStock}
+                              </td>
+
+                              <td className={`py-3 px-3.5 font-mono ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
+                                <div>Alert: &lt;{lowStockThreshold} | Min: {tier.minimumThreshold}</div>
+                                <div className={`text-[10px] ${textMuted}`}>
+                                  Buffer: {tier.safetyStockBuffer} | Max: {tier.maxCapacity}
+                                </div>
+                              </td>
+
+                              <td className={`py-3 px-3.5 text-[11px] max-w-xs ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
+                                <p className="line-clamp-2">
+                                  {tier.handlingInstructions || 'Standard cold-chain storage.'}
+                                </p>
+                              </td>
+
+                              <td className="py-3 px-3.5 text-right space-x-1.5 whitespace-nowrap">
+                                {(isBelowDefinedThreshold || isBelowReorderMin) && (
+                                  <button
+                                    onClick={() =>
+                                      handleQuickRestockPR(
+                                        tier.sku,
+                                        tier.productName,
+                                        tier.reorderQuantity,
+                                        tier.storeId
+                                      )
+                                    }
+                                    className="px-2.5 py-1 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-stone-950 rounded-lg transition-all shadow-2xs cursor-pointer"
+                                    title="Generate Purchase Request for Low Stock SKU"
+                                  >
+                                    + Restock PR
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setAdjustingSku(tier.sku);
+                                    setAdjustQty(0);
+                                  }}
+                                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border cursor-pointer ${
+                                    isLight
+                                      ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
+                                      : 'bg-stone-700 border-stone-600 text-stone-200 hover:bg-stone-600'
+                                  }`}
+                                >
+                                  Audit Count
+                                </button>
+                                <button
+                                  onClick={() => setEditingTier(tier)}
+                                  className="px-2.5 py-1 text-[11px] font-semibold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-300 border border-[#0F4C3A]/20 hover:bg-[#0F4C3A]/20 rounded-lg transition-all cursor-pointer"
+                                >
+                                  Edit Notes
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* VIEW 2: Master Product Catalog Management View with Low Stock Alert Badges */
+              <div className={`${cardClass} overflow-hidden shadow-xs`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className={tableHeaderClass}>
+                        <th className="py-3 px-3.5">SKU &amp; Master Product</th>
+                        <th className="py-3 px-3.5">Category &amp; Farm / Supplier</th>
+                        <th className="py-3 px-3 text-right">Unit Cost (WAC)</th>
+                        <th className="py-3 px-3 text-right">Retail Price</th>
+                        <th className="py-3 px-3 text-center">Quantity &amp; Low Stock Badge</th>
+                        <th className="py-3 px-3 text-center">Incoming PO</th>
+                        <th className="py-3 px-3.5">Threshold Policy</th>
+                        <th className="py-3 px-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
+                      {filteredCatalogItems.map((item, idx) => {
+                        const isBelowDefinedThreshold = item.currentStock < lowStockThreshold;
+                        const isCriticalLow = item.currentStock <= Math.min(5, Math.floor(lowStockThreshold / 2));
+                        const isBelowReorderMin = item.currentStock <= item.minimumThreshold;
+
+                        return (
+                          <tr
+                            key={item.sku ? `${item.sku}-${idx}` : `item-${idx}`}
+                            className={`transition-colors ${
+                              isCriticalLow
+                                ? isLight
+                                  ? 'bg-rose-50/50 hover:bg-rose-50/80'
+                                  : 'bg-rose-950/20 hover:bg-rose-950/30'
+                                : isBelowDefinedThreshold
+                                ? isLight
+                                  ? 'bg-amber-50/45 hover:bg-amber-50/80'
+                                  : 'bg-amber-950/15 hover:bg-amber-950/25'
+                                : isLight
+                                ? 'hover:bg-stone-50/80'
+                                : 'hover:bg-stone-800/40'
+                            }`}
+                          >
+                            <td className="py-3 px-3.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">
+                                  {item.sku}
+                                </span>
+                                {isBelowDefinedThreshold ? (
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
+                                      isCriticalLow
+                                        ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                                        : 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/35'
+                                    }`}
+                                  >
+                                    <AlertTriangle className="w-2.5 h-2.5 shrink-0 animate-pulse" />
+                                    Low Stock (&lt;{lowStockThreshold})
+                                  </span>
+                                ) : isBelowReorderMin ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                                    Below Min ({item.minimumThreshold})
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                                    In Stock
+                                  </span>
+                                )}
+                              </div>
+                              <div className={`font-bold ${textTitle} text-xs mt-0.5`}>{item.productName}</div>
+                              <span className={`text-[11px] ${textMuted}`}>{item.unit} • {item.valuationMethod}</span>
+                            </td>
+
+                            <td className="py-3 px-3.5">
+                              <div className="font-semibold capitalize">{item.category.replace(/_/g, ' ')}</div>
+                              <div className={`text-[11px] ${textMuted} truncate max-w-[220px]`}>
+                                {item.supplierName}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3 text-right font-mono font-medium">
+                              {formatIDR(item.unitCost)}
+                            </td>
+
+                            <td className="py-3 px-3 text-right font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
+                              {formatIDR(item.sellingPrice)}
+                            </td>
+
+                            <td className="py-3 px-3 text-center">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-mono text-xs font-extrabold ${
+                                  isCriticalLow
+                                    ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/35'
+                                    : isBelowDefinedThreshold
+                                    ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/35'
+                                    : isBelowReorderMin
+                                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25'
+                                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
+                                }`}
+                              >
+                                {isBelowDefinedThreshold && <AlertTriangle className="w-3 h-3 shrink-0" />}
+                                {item.currentStock} units
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3 text-center font-mono text-blue-600 dark:text-blue-400 font-semibold">
+                              +{item.incomingStock}
+                            </td>
+
+                            <td className="py-3 px-3.5 font-mono text-[11px]">
+                              <div>Low Alert: &lt;{lowStockThreshold} units</div>
+                              <div className={textMuted}>
+                                Reorder Min: {item.minimumThreshold} | EOQ: {item.reorderQuantity}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3.5 text-right space-x-1.5 whitespace-nowrap">
+                              {(isBelowDefinedThreshold || isBelowReorderMin) && (
+                                <button
+                                  onClick={() =>
+                                    handleQuickRestockPR(
+                                      item.sku,
+                                      item.productName,
+                                      item.reorderQuantity
+                                    )
+                                  }
+                                  className="px-2.5 py-1 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-stone-950 rounded-lg transition-all shadow-2xs cursor-pointer"
+                                >
+                                  + Restock PR
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setAdjustingSku(item.sku);
+                                  setAdjustQty(0);
+                                }}
+                                className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border cursor-pointer ${
+                                  isLight
+                                    ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
+                                    : 'bg-stone-700 border-stone-600 text-stone-200 hover:bg-stone-600'
+                                }`}
+                              >
+                                Adjust Stock
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Edit Stock Tier Modal */}
             {editingTier && (
@@ -1978,6 +2552,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* ========================================================================= */}
+        {/* TAB: POS (POINT OF SALE) & CASHIER MODULE */}
+        {/* ========================================================================= */}
+        {activeTab === 'pos' && (
+          <PosModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            activeStaffSession={activeStaffSession}
+            availableStaffProfiles={availableStaffProfiles}
+            storeOutlets={storeOutlets}
+            onSwitchSession={async (userId) => {
+              const res = await apiClient.switchRbacSession(userId);
+              setActiveStaffSession(res.session);
+              onShowToast(
+                'Staff Identity Switched',
+                `Active operator is now ${res.session.userName} (${res.session.userRole.replace(/_/g, ' ')})`
+              );
+            }}
+            onTransactionSynced={refreshAllData}
+            onNavigateToAccounting={(subTab) => {
+              setAccountingDeepSubTab(subTab);
+              setActiveTab('accounting');
+            }}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
         {/* TAB: SECURITY & ADMINISTRATIVE AUDIT LOGS */}
         {/* ========================================================================= */}
         {activeTab === 'audit' && (
@@ -1985,6 +2586,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             selectedStore={selectedGlobalStore}
             onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: SETTINGS & CONFIGURATION HUB */}
+        {/* ========================================================================= */}
+        {activeTab === 'settings' && (
+          <SettingsModule
+            theme={theme}
+            chartOfAccounts={chartOfAccounts}
+            storeOutlets={storeOutlets}
+            warehouseZones={warehouseZones}
+            inventoryTiers={inventoryTiers}
+            onShowToast={onShowToast}
+            onRefreshData={refreshAllData}
           />
         )}
 
