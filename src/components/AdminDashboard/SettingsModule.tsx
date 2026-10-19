@@ -11,6 +11,8 @@ import type {
   StoreOutletSchedule,
   WarehouseZone,
   StoreInventoryStock,
+  ApprovalTierRule,
+  ApprovalRequest,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -19,6 +21,7 @@ import {
   Building2,
   CreditCard,
   Boxes,
+  Truck,
   FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
@@ -40,7 +43,14 @@ import {
   ShieldCheck,
   Check,
   Search,
+  Plus,
+  Trash2,
+  Edit3,
+  X,
+  Printer,
+  FileText,
 } from 'lucide-react';
+import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 
 interface SettingsModuleProps {
   theme: 'light' | 'dark';
@@ -48,6 +58,7 @@ interface SettingsModuleProps {
   storeOutlets: StoreOutletSchedule[];
   warehouseZones: WarehouseZone[];
   inventoryTiers: StoreInventoryStock[];
+  initialSubTab?: 'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix';
   onShowToast: (title: string, message: string) => void;
   onRefreshData?: () => void;
 }
@@ -58,13 +69,22 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   storeOutlets,
   warehouseZones,
   inventoryTiers,
+  initialSubTab,
   onShowToast,
   onRefreshData,
 }) => {
   const isLight = theme === 'light';
 
-  // Sub-tabs: 'coa' | 'pos' | 'import_opname' | 'transfer'
-  const [activeSubTab, setActiveSubTab] = useState<'coa' | 'pos' | 'import_opname' | 'transfer'>('coa');
+  // Sub-tabs: 'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix'
+  const [activeSubTab, setActiveSubTab] = useState<'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix'>(
+    initialSubTab || 'coa'
+  );
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
   const [opnameSubTab, setOpnameSubTab] = useState<'stocktake' | 'bulk_import'>('stocktake');
 
   // Loading states
@@ -75,7 +95,19 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isTransferring, setIsTransferring] = useState<boolean>(false);
 
-  // 1. COA Mapping State
+  // 1. COA Management & Mapping State
+  const [coaViewMode, setCoaViewMode] = useState<'directory' | 'mapping'>('directory');
+  const [isAddingCoa, setIsAddingCoa] = useState<boolean>(false);
+  const [editingCoa, setEditingCoa] = useState<ChartOfAccount | null>(null);
+  const [newCoaCode, setNewCoaCode] = useState<string>('');
+  const [newCoaName, setNewCoaName] = useState<string>('');
+  const [newCoaCategory, setNewCoaCategory] = useState<'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense'>('Asset');
+  const [newCoaNormalBal, setNewCoaNormalBal] = useState<'Debit' | 'Credit'>('Debit');
+  const [newCoaBalance, setNewCoaBalance] = useState<number>(0);
+  const [newCoaStore, setNewCoaStore] = useState<string>('CONSOLIDATED');
+  const [newCoaDesc, setNewCoaDesc] = useState<string>('');
+  const [isSavingAccount, setIsSavingAccount] = useState<boolean>(false);
+
   const [coaConfig, setCoaConfig] = useState<CoaMappingConfig>({
     posRevenueAccountCode: '4010',
     posRevenueAccountName: 'Grocery Sales Revenue - Retail Storefront',
@@ -133,30 +165,40 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [transferDestStore, setTransferDestStore] = useState<string>('store-jkt-pik');
   const [transferQty, setTransferQty] = useState<number>(10);
   const [transferNotes, setTransferNotes] = useState<string>('Weekly stock rebalance');
+  const [transferFilterStatus, setTransferFilterStatus] = useState<string>('ALL');
+
+  // 6. Approval Matrix State
+  const [approvalRules, setApprovalRules] = useState<ApprovalTierRule[]>([]);
+  const [approvalQueue, setApprovalQueue] = useState<ApprovalRequest[]>([]);
 
   // Load configs on mount
-  useEffect(() => {
-    const fetchSettings = async () => {
-      setIsLoading(true);
-      try {
-        const [coaRes, posRes, opnameRes, transferRes] = await Promise.all([
-          apiClient.getCoaMapping().catch(() => null),
-          apiClient.getPosConfig().catch(() => null),
-          apiClient.getStockOpnameSessions().catch(() => []),
-          apiClient.getStockTransfers().catch(() => []),
-        ]);
+  const fetchAllSettings = async () => {
+    setIsLoading(true);
+    try {
+      const [coaRes, posRes, opnameRes, transferRes, rulesRes, queueRes] = await Promise.all([
+        apiClient.getCoaMapping().catch(() => null),
+        apiClient.getPosConfig().catch(() => null),
+        apiClient.getStockOpnameSessions().catch(() => []),
+        apiClient.getStockTransfers().catch(() => []),
+        apiClient.getApprovalRules().catch(() => []),
+        apiClient.getApprovalQueue().catch(() => []),
+      ]);
 
-        if (coaRes) setCoaConfig(coaRes);
-        if (posRes) setPosConfig(posRes);
-        if (opnameRes) setOpnameSessions(opnameRes);
-        if (transferRes) setTransferRecords(transferRes);
-      } catch (err) {
-        console.error('Failed to load Settings & Configuration:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchSettings();
+      if (coaRes) setCoaConfig(coaRes);
+      if (posRes) setPosConfig(posRes);
+      if (opnameRes) setOpnameSessions(opnameRes);
+      if (transferRes) setTransferRecords(transferRes);
+      if (rulesRes) setApprovalRules(rulesRes);
+      if (queueRes) setApprovalQueue(queueRes);
+    } catch (err) {
+      console.error('Failed to load Settings & Configuration:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllSettings();
   }, []);
 
   // Initialize stock opname counted quantities when store changes or tiers change
@@ -190,6 +232,79 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     } finally {
       setIsSavingCoa(false);
     }
+  };
+
+  // Handle Create or Update COA Account (Manual COA Management)
+  const handleSaveCoaAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCoaCode.trim() || !newCoaName.trim()) {
+      onShowToast('Validation Error', 'Account Code and Name are required.');
+      return;
+    }
+    setIsSavingAccount(true);
+    try {
+      if (editingCoa) {
+        const res = await apiClient.updateCoaAccount(editingCoa.accountCode, {
+          accountName: newCoaName,
+          category: newCoaCategory,
+          normalBalance: newCoaNormalBal,
+          description: newCoaDesc,
+          balance: newCoaBalance,
+        });
+        if (res.success) {
+          onShowToast('Account Updated', `Account [${res.account.accountCode}] ${res.account.accountName} updated.`);
+          setEditingCoa(null);
+          setIsAddingCoa(false);
+          if (onRefreshData) onRefreshData();
+        }
+      } else {
+        const res = await apiClient.createCoaAccount({
+          accountCode: newCoaCode.trim(),
+          accountName: newCoaName.trim(),
+          category: newCoaCategory,
+          storeId: newCoaStore,
+          normalBalance: newCoaNormalBal,
+          balance: Number(newCoaBalance) || 0,
+          description: newCoaDesc,
+        });
+        if (res.success) {
+          onShowToast('Account Created', `Created COA account [${res.account.accountCode}] ${res.account.accountName}.`);
+          setIsAddingCoa(false);
+          setNewCoaCode('');
+          setNewCoaName('');
+          setNewCoaDesc('');
+          setNewCoaBalance(0);
+          if (onRefreshData) onRefreshData();
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Error', msg);
+    } finally {
+      setIsSavingAccount(false);
+    }
+  };
+
+  const openCreateAccountModal = () => {
+    setEditingCoa(null);
+    setNewCoaCode('');
+    setNewCoaName('');
+    setNewCoaCategory('Asset');
+    setNewCoaNormalBal('Debit');
+    setNewCoaBalance(0);
+    setNewCoaDesc('');
+    setIsAddingCoa(true);
+  };
+
+  const openEditAccountModal = (account: ChartOfAccount) => {
+    setEditingCoa(account);
+    setNewCoaCode(account.accountCode);
+    setNewCoaName(account.accountName);
+    setNewCoaCategory(account.category);
+    setNewCoaNormalBal(account.normalBalance);
+    setNewCoaBalance(account.balance);
+    setNewCoaDesc(account.description || '');
+    setIsAddingCoa(true);
   };
 
   // Handle Save POS Configuration
@@ -399,7 +514,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
     });
   }, [inventoryTiers]);
 
-  // Calculate live opname variance stats
+  // Calculate live opname variance stats (Dynamic Surplus / Deficit Breakdown)
   const opnameStats = React.useMemo(() => {
     let totalSys = 0;
     let totalCounted = 0;
@@ -408,19 +523,32 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
     let shortageCount = 0;
     let surplusCount = 0;
     let matchedCount = 0;
+    let totalSurplusQty = 0;
+    let totalSurplusIDR = 0;
+    let totalDeficitQty = 0;
+    let totalDeficitIDR = 0;
 
     filteredOpnameTiers.forEach((tier) => {
       const sys = tier.physicalStock;
       const counted = opnameItems[tier.sku] !== undefined ? opnameItems[tier.sku] : sys;
       const diff = counted - sys;
+      const costDiff = Math.round(diff * tier.unitCost);
       totalSys += sys;
       totalCounted += counted;
       netVarianceQty += diff;
-      netFinancialIDR += diff * tier.unitCost;
+      netFinancialIDR += costDiff;
 
-      if (diff === 0) matchedCount++;
-      else if (diff < 0) shortageCount++;
-      else surplusCount++;
+      if (diff === 0) {
+        matchedCount++;
+      } else if (diff < 0) {
+        shortageCount++;
+        totalDeficitQty += Math.abs(diff);
+        totalDeficitIDR += Math.abs(costDiff);
+      } else {
+        surplusCount++;
+        totalSurplusQty += diff;
+        totalSurplusIDR += costDiff;
+      }
     });
 
     return {
@@ -431,6 +559,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       shortageCount,
       surplusCount,
       matchedCount,
+      totalSurplusQty,
+      totalSurplusIDR,
+      totalDeficitQty,
+      totalDeficitIDR,
     };
   }, [filteredOpnameTiers, opnameItems]);
 
@@ -547,38 +679,183 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             <ArrowRightLeft className="w-4 h-4" />
             <span>Inter-Warehouse Transfers</span>
           </button>
+
+          <button
+            onClick={() => setActiveSubTab('approval_matrix')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'approval_matrix'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Approval Rules &amp; Matrix</span>
+          </button>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 1. CHART OF ACCOUNTS (COA) MAPPING TAB */}
+      {/* 1. CHART OF ACCOUNTS (COA) DIRECTORY & MAPPING TAB */}
       {/* ========================================================================= */}
       {activeSubTab === 'coa' && (
         <div className="space-y-6 animate-fadeIn">
-          <div className={`${cardClass} p-5 sm:p-6 space-y-6`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-stone-800">
+          {/* View Mode Switcher Header */}
+          <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-stone-800">
               <div>
                 <h2 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
                   <Building2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                  Dynamic General Ledger &amp; POS Account Mapping
+                  Chart of Accounts (COA) Management &amp; Mapping
                 </h2>
                 <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
-                  Configure which accounts are automatically debited and credited during retail checkout, waste disposals, and physical inventory reconciliations.
+                  Create and manage master ledger accounts, configure standard debit/credit rules, and map automated POS &amp; Inventory accounting linkages.
                 </p>
               </div>
 
-              <button
-                onClick={handleSaveCoa}
-                disabled={isSavingCoa}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer self-start sm:self-auto"
-              >
-                {isSavingCoa ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>Save COA Mapping</span>
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                <div className={`p-1 rounded-xl border flex items-center gap-1 ${isLight ? 'bg-gray-100 border-gray-200' : 'bg-stone-800 border-stone-700'}`}>
+                  <button
+                    onClick={() => setCoaViewMode('directory')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      coaViewMode === 'directory'
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-gray-600 hover:text-gray-900'
+                        : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    COA Directory
+                  </button>
+                  <button
+                    onClick={() => setCoaViewMode('mapping')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      coaViewMode === 'mapping'
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-gray-600 hover:text-gray-900'
+                        : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    Automated Mapping
+                  </button>
+                </div>
+
+                {coaViewMode === 'directory' ? (
+                  <button
+                    onClick={openCreateAccountModal}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Account</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSaveCoa}
+                    disabled={isSavingCoa}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSavingCoa ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>Save COA Mapping</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Core Revenue, Asset & Expense Mapping Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* DIRECTORY VIEW: Manual COA Management */}
+            {coaViewMode === 'directory' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      Master Chart of Accounts ({chartOfAccounts.length} Total Accounts)
+                    </span>
+                  </div>
+                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+                    Indonesian GAAP (PSAK 101) Compliant
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-stone-800">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className={`border-b text-[11px] font-bold tracking-wider uppercase ${
+                        isLight ? 'bg-gray-50/80 text-gray-500 border-gray-200' : 'bg-stone-800/60 text-stone-400 border-stone-800'
+                      }`}>
+                        <th className="py-3 px-3.5">Code</th>
+                        <th className="py-3 px-3.5">Account Name</th>
+                        <th className="py-3 px-3 text-center">Category</th>
+                        <th className="py-3 px-3 text-center">Normal Balance</th>
+                        <th className="py-3 px-3 text-right">Current Balance</th>
+                        <th className="py-3 px-3">Description</th>
+                        <th className="py-3 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-stone-800'}`}>
+                      {chartOfAccounts.map((acc) => (
+                        <tr
+                          key={acc.accountCode}
+                          className={`transition-colors ${
+                            isLight ? 'hover:bg-gray-50/80' : 'hover:bg-stone-800/50'
+                          }`}
+                        >
+                          <td className="py-3 px-3.5 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
+                            {acc.accountCode}
+                          </td>
+                          <td className={`py-3 px-3.5 font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                            {acc.accountName}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
+                              acc.category === 'Asset'
+                                ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                                : acc.category === 'Liability'
+                                ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                                : acc.category === 'Equity'
+                                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300'
+                                : acc.category === 'Revenue'
+                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                            }`}>
+                              {acc.category}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono text-[11px] text-gray-500">
+                            {acc.normalBalance}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-bold">
+                            {formatIDR(acc.balance)}
+                          </td>
+                          <td className={`py-3 px-3 text-[11px] truncate max-w-xs ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+                            {acc.description}
+                          </td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <button
+                              onClick={() => openEditAccountModal(acc)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                                isLight
+                                  ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'
+                                  : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                              }`}
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* MAPPING VIEW: Dynamic Automated Accounting Rules */}
+            {coaViewMode === 'mapping' && (
+              <div className="space-y-6">
+                {/* Core Revenue, Asset & Expense Mapping Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* POS Revenue Account */}
               <div className={subCardClass}>
                 <div className="flex items-center justify-between mb-2">
@@ -833,8 +1110,150 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Manual COA Create / Edit Modal */}
+      {isAddingCoa && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`${cardClass} max-w-lg w-full p-6 space-y-4 shadow-2xl`}>
+            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-stone-800'}`}>
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                  {editingCoa ? 'Edit Chart of Accounts Entry' : 'Create New COA Account'}
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setIsAddingCoa(false);
+                  setEditingCoa(null);
+                }}
+                className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-stone-800 text-stone-400'}`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCoaAccount} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Account Code (4-digit)</label>
+                  <input
+                    type="text"
+                    required
+                    disabled={!!editingCoa}
+                    value={newCoaCode}
+                    onChange={(e) => setNewCoaCode(e.target.value)}
+                    placeholder="e.g. 1050 or 5040"
+                    className={`w-full ${inputClass} font-mono disabled:opacity-60`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Category</label>
+                  <select
+                    value={newCoaCategory}
+                    onChange={(e) => setNewCoaCategory(e.target.value as any)}
+                    className={`w-full ${inputClass}`}
+                  >
+                    <option value="Asset">Asset</option>
+                    <option value="Liability">Liability</option>
+                    <option value="Equity">Equity</option>
+                    <option value="Revenue">Revenue</option>
+                    <option value="Expense">Expense</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className={labelClass}>Account Name</label>
+                <input
+                  type="text"
+                  required
+                  value={newCoaName}
+                  onChange={(e) => setNewCoaName(e.target.value)}
+                  placeholder="e.g. Prepaid Logistics Insurance"
+                  className={`w-full ${inputClass}`}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Normal Balance</label>
+                  <select
+                    value={newCoaNormalBal}
+                    onChange={(e) => setNewCoaNormalBal(e.target.value as any)}
+                    className={`w-full ${inputClass}`}
+                  >
+                    <option value="Debit">Debit</option>
+                    <option value="Credit">Credit</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Initial / Current Balance (IDR)</label>
+                  <input
+                    type="number"
+                    value={newCoaBalance}
+                    onChange={(e) => setNewCoaBalance(Number(e.target.value) || 0)}
+                    className={`w-full ${inputClass} font-mono`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelClass}>Scope / Store Outlet</label>
+                <select
+                  value={newCoaStore}
+                  onChange={(e) => setNewCoaStore(e.target.value)}
+                  className={`w-full ${inputClass}`}
+                >
+                  <option value="CONSOLIDATED">CONSOLIDATED (All Outlets)</option>
+                  {storeOutlets.map((st) => (
+                    <option key={st.storeId} value={st.storeId}>
+                      {st.storeName} ({st.city})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClass}>Description &amp; Operational Directive</label>
+                <textarea
+                  rows={2}
+                  value={newCoaDesc}
+                  onChange={(e) => setNewCoaDesc(e.target.value)}
+                  placeholder="Operational accounting directives for this ledger code..."
+                  className={`w-full ${inputClass}`}
+                />
+              </div>
+
+              <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-stone-800'}`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingCoa(false);
+                    setEditingCoa(null);
+                  }}
+                  className={`px-4 py-2 rounded-xl border text-xs font-semibold cursor-pointer ${
+                    isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100' : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingAccount}
+                  className="px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isSavingAccount ? 'Saving...' : editingCoa ? 'Update Account' : 'Save New Account'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
+    </div>
+  )}
 
       {/* ========================================================================= */}
       {/* 2. POS & CHECKOUT RULES CONFIGURATION TAB */}
@@ -1109,41 +1528,54 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </div>
                 </div>
 
-                {/* Stocktake Metric Stat Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 pt-2">
+                {/* Stocktake Metric Stat Cards (Dynamic Surplus & Deficit Breakdown) */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
                   <div className={subCardClass}>
                     <span className="text-[11px] text-gray-500 font-semibold block">System Book Count</span>
-                    <span className={`text-lg font-bold font-mono mt-1 block ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                    <span className={`text-base sm:text-lg font-bold font-mono mt-1 block ${isLight ? 'text-gray-900' : 'text-white'}`}>
                       {opnameStats.totalSys} units
                     </span>
+                    <span className="text-[10px] text-gray-400">Total registered</span>
                   </div>
 
                   <div className={subCardClass}>
                     <span className="text-[11px] text-gray-500 font-semibold block">Physical Counted</span>
-                    <span className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-1 block">
+                    <span className="text-base sm:text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-1 block">
                       {opnameStats.totalCounted} units
                     </span>
+                    <span className="text-[10px] text-gray-400">Auditor verified</span>
                   </div>
 
-                  <div className={subCardClass}>
-                    <span className="text-[11px] text-gray-500 font-semibold block">Net Variance Units</span>
-                    <span
-                      className={`text-lg font-bold font-mono mt-1 block ${
-                        opnameStats.netVarianceQty < 0
-                          ? 'text-rose-600 dark:text-rose-400'
-                          : opnameStats.netVarianceQty > 0
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-emerald-600 dark:text-emerald-400'
-                      }`}
-                    >
-                      {opnameStats.netVarianceQty > 0 ? `+${opnameStats.netVarianceQty}` : opnameStats.netVarianceQty} units
+                  <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-emerald-50/60 border-emerald-200' : 'bg-emerald-950/20 border-emerald-800/40'}`}>
+                    <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-bold block flex items-center gap-1">
+                      <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                      Surplus (Lebih)
+                    </span>
+                    <span className="text-base sm:text-lg font-bold font-mono text-emerald-700 dark:text-emerald-400 mt-1 block">
+                      +{opnameStats.totalSurplusQty} units
+                    </span>
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium block">
+                      {opnameStats.surplusCount} SKUs (+{formatIDR(opnameStats.totalSurplusIDR)})
+                    </span>
+                  </div>
+
+                  <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-rose-50/60 border-rose-200' : 'bg-rose-950/20 border-rose-800/40'}`}>
+                    <span className="text-[11px] text-rose-800 dark:text-rose-300 font-bold block flex items-center gap-1">
+                      <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+                      Deficit (Kurang)
+                    </span>
+                    <span className="text-base sm:text-lg font-bold font-mono text-rose-600 dark:text-rose-400 mt-1 block">
+                      -{opnameStats.totalDeficitQty} units
+                    </span>
+                    <span className="text-[10px] text-rose-700 dark:text-rose-300 font-medium block">
+                      {opnameStats.shortageCount} SKUs (-{formatIDR(opnameStats.totalDeficitIDR)})
                     </span>
                   </div>
 
                   <div className={subCardClass}>
-                    <span className="text-[11px] text-gray-500 font-semibold block">Financial Impact (IDR)</span>
+                    <span className="text-[11px] text-gray-500 font-semibold block">Net GL Variance</span>
                     <span
-                      className={`text-lg font-bold font-mono mt-1 block ${
+                      className={`text-base sm:text-lg font-bold font-mono mt-1 block ${
                         opnameStats.netFinancialIDR < 0
                           ? 'text-rose-600 dark:text-rose-400'
                           : opnameStats.netFinancialIDR > 0
@@ -1152,6 +1584,9 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       }`}
                     >
                       {formatIDR(opnameStats.netFinancialIDR)}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {opnameStats.netVarianceQty > 0 ? `+${opnameStats.netVarianceQty}` : opnameStats.netVarianceQty} net units
                     </span>
                   </div>
                 </div>
@@ -1214,7 +1649,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </div>
                 </div>
 
-                {/* Stocktake Itemized Table */}
+                {/* Stocktake Itemized Table with Live Surplus/Deficit Calculations */}
                 <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-stone-800">
                   <table className="w-full text-left text-xs">
                     <thead>
@@ -1226,6 +1661,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         <th className="py-3 px-3 text-center">System Book</th>
                         <th className="py-3 px-3 text-center">Physical Count</th>
                         <th className="py-3 px-3 text-center">Variance (Units)</th>
+                        <th className="py-3 px-3 text-center">Surplus / Deficit Status</th>
                         <th className="py-3 px-3 text-right">Cost Variance (IDR)</th>
                         <th className="py-3 px-3">Auditor Notes</th>
                       </tr>
@@ -1235,14 +1671,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         const counted = opnameItems[tier.sku] !== undefined ? opnameItems[tier.sku] : tier.physicalStock;
                         const variance = Number((counted - tier.physicalStock).toFixed(2));
                         const varianceCost = Math.round(variance * tier.unitCost);
+                        const isSurplus = variance > 0;
+                        const isShortage = variance < 0;
 
                         return (
                           <tr
                             key={tier.id || `${tier.storeId}-${tier.sku}`}
                             className={`transition-colors ${
-                              variance < 0
+                              isShortage
                                 ? 'bg-rose-500/5'
-                                : variance > 0
+                                : isSurplus
                                 ? 'bg-blue-500/5'
                                 : isLight
                                 ? 'hover:bg-gray-50/60'
@@ -1277,9 +1715,9 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             <td className="py-3 px-3 text-center">
                               <span
                                 className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
-                                  variance < 0
+                                  isShortage
                                     ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
-                                    : variance > 0
+                                    : isSurplus
                                     ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
                                     : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                                 }`}
@@ -1287,9 +1725,29 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                                 {variance > 0 ? `+${variance}` : variance}
                               </span>
                             </td>
+                            <td className="py-3 px-3 text-center">
+                              {isSurplus && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
+                                  <TrendingUp className="w-3 h-3 text-emerald-600" />
+                                  LEBIH (+{variance} {tier.unit})
+                                </span>
+                              )}
+                              {isShortage && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30">
+                                  <TrendingDown className="w-3 h-3 text-rose-600" />
+                                  KURANG ({variance} {tier.unit})
+                                </span>
+                              )}
+                              {!isSurplus && !isShortage && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700 dark:bg-stone-800 dark:text-stone-300 border border-gray-200 dark:border-stone-700">
+                                  <Check className="w-3 h-3 text-emerald-500" />
+                                  SESUAI (0)
+                                </span>
+                              )}
+                            </td>
                             <td className="py-3 px-3 text-right font-mono font-bold">
-                              <span className={varianceCost < 0 ? 'text-rose-600 dark:text-rose-400' : varianceCost > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}>
-                                {formatIDR(varianceCost)}
+                              <span className={isShortage ? 'text-rose-600 dark:text-rose-400' : isSurplus ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}>
+                                {isSurplus ? `+${formatIDR(varianceCost)} (Lebih)` : isShortage ? `${formatIDR(varianceCost)} (Kurang)` : 'Rp 0'}
                               </span>
                             </td>
                             <td className="py-3 px-3">
@@ -1563,41 +2021,140 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               </div>
             </div>
 
-            {/* Transfer Audit Logs */}
-            <div className="space-y-3 pt-2">
-              <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
-                Inter-Warehouse Stock Transfer Audit Trail
-              </h4>
+            {/* Dedicated Transfer Tracking Report */}
+            <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-stone-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                    <Truck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    Internal Transfer Logistics &amp; Tracking Report
+                  </h4>
+                  <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+                    Formal custody handoff audit trail, delivery documentation &amp; store stock reconciliation
+                  </p>
+                </div>
 
+                <div className="flex items-center gap-2">
+                  <select
+                    value={transferFilterStatus}
+                    onChange={(e) => setTransferFilterStatus(e.target.value)}
+                    className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+                  >
+                    <option value="ALL">All Transfer Statuses</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="IN_TRANSIT">In Transit</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Transfer Metrics Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className={subCardClass}>
+                  <span className="text-[11px] text-gray-500 font-semibold block">Total Reallocations</span>
+                  <span className={`text-base sm:text-lg font-bold font-mono mt-1 block ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                    {transferRecords.length} records
+                  </span>
+                </div>
+                <div className={subCardClass}>
+                  <span className="text-[11px] text-gray-500 font-semibold block">Total Units Moved</span>
+                  <span className="text-base sm:text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-1 block">
+                    {transferRecords.reduce((sum, t) => sum + t.quantity, 0)} units
+                  </span>
+                </div>
+                <div className={subCardClass}>
+                  <span className="text-[11px] text-gray-500 font-semibold block">Reallocated Inventory Value</span>
+                  <span className="text-base sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
+                    {formatIDR(transferRecords.reduce((sum, t) => sum + (t.totalTransferValue || 0), 0))}
+                  </span>
+                </div>
+                <div className={subCardClass}>
+                  <span className="text-[11px] text-gray-500 font-semibold block">Active In-Transit Quota</span>
+                  <span className="text-base sm:text-lg font-bold font-mono text-blue-600 dark:text-blue-400 mt-1 block">
+                    100% On-Schedule
+                  </span>
+                </div>
+              </div>
+
+              {/* Table of Transfers */}
               {transferRecords.length === 0 ? (
-                <p className="text-xs text-stone-500 italic">No transfers executed yet.</p>
+                <p className="text-xs text-stone-500 italic p-4 text-center">No transfers executed yet.</p>
               ) : (
-                transferRecords.map((t) => (
-                  <div key={t.id} className={`${subCardClass} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs">{t.id}</span>
-                        <span className="font-bold text-xs">{t.productName} ({t.sku})</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold uppercase">
-                          {t.quantity} units
-                        </span>
-                      </div>
-                      <p className={`text-[11px] ${isLight ? 'text-gray-600' : 'text-stone-400'}`}>
-                        From: <strong className="text-emerald-700 dark:text-emerald-400">{t.sourceStoreName}</strong> → To: <strong className="text-blue-700 dark:text-blue-400">{t.destinationStoreName}</strong> • Value: {formatIDR(t.totalTransferValue)}
-                      </p>
-                      {t.notes && <p className="text-[11px] text-stone-500 italic">Note: {t.notes}</p>}
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-[10px] text-gray-400 font-mono block">{new Date(t.timestamp).toLocaleString()}</span>
-                      <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">By {t.transferredBy}</span>
-                    </div>
-                  </div>
-                ))
+                <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-stone-800">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className={`border-b text-[11px] font-bold tracking-wider uppercase ${
+                        isLight ? 'bg-gray-50/80 text-gray-500 border-gray-200' : 'bg-stone-800/60 text-stone-400 border-stone-800'
+                      }`}>
+                        <th className="py-3 px-3.5">Transfer Ref</th>
+                        <th className="py-3 px-3">Date &amp; Time</th>
+                        <th className="py-3 px-3">SKU &amp; Product</th>
+                        <th className="py-3 px-3">From Outlet</th>
+                        <th className="py-3 px-3">To Outlet</th>
+                        <th className="py-3 px-3 text-center">Quantity</th>
+                        <th className="py-3 px-3 text-right">Transfer Valuation</th>
+                        <th className="py-3 px-3 text-center">Waybill / Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-stone-800'}`}>
+                      {transferRecords.map((t) => (
+                        <tr
+                          key={t.id}
+                          className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-stone-800/40'}`}
+                        >
+                          <td className="py-3 px-3.5 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            {t.id}
+                          </td>
+                          <td className="py-3 px-3 font-mono text-[11px] text-gray-500">
+                            {new Date(t.timestamp).toLocaleDateString()} {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="font-mono text-[10px] text-gray-400 block">{t.sku}</span>
+                            <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>{t.productName}</span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                              {t.sourceStoreName}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 dark:text-blue-400">
+                              {t.destinationStoreName}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
+                              {t.quantity} units
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-bold">
+                            {formatIDR(t.totalTransferValue)}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              COMPLETED
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 5. APPROVAL WORKFLOW & MATRIX CONFIGURATION TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'approval_matrix' && (
+        <ApprovalMatrixModule
+          theme={theme}
+          onShowToast={onShowToast}
+          onRefreshData={onRefreshData || (() => {})}
+        />
       )}
     </div>
   );

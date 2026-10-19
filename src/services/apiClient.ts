@@ -37,6 +37,13 @@ import type {
   BulkInventoryImportRow,
   StockOpnameSession,
   StockTransferRecord,
+  ApprovalTierRule,
+  ApprovalRequest,
+  SuratJalanDocument,
+  DeliveryOrderDocument,
+  ShipmentQuotaTracking,
+  QCInspectionRecord,
+  GroceryMetricsReport,
 } from '../types/index.ts';
 
 export const apiClient = {
@@ -907,4 +914,208 @@ export const apiClient = {
     const res = await fetch(`/api/admin/inventory/transfer?${params.toString()}`);
     return res.json().catch(() => []);
   },
+
+  // -------------------------------------------------------------
+  // APPROVAL WORKFLOW & MATRIX APIS
+  // -------------------------------------------------------------
+  async getApprovalRules(): Promise<ApprovalTierRule[]> {
+    const res = await fetch('/api/admin/approvals/rules');
+    return res.json().catch(() => []);
+  },
+
+  async updateApprovalRules(rules: ApprovalTierRule[]): Promise<{ success: boolean; rules: ApprovalTierRule[]; message: string }> {
+    const res = await fetch('/api/admin/approvals/rules', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rules }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update approval rules');
+    }
+    return res.json();
+  },
+
+  async getApprovalQueue(storeId?: string, status?: string): Promise<ApprovalRequest[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    if (status && status !== 'ALL') params.append('status', status);
+    const res = await fetch(`/api/admin/approvals/queue?${params.toString()}`);
+    return res.json().catch(() => []);
+  },
+
+  async processApprovalAction(requestId: string, action: 'APPROVED' | 'REJECTED', comments?: string): Promise<{
+    success: boolean;
+    request: ApprovalRequest;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/approvals/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId, action, comments }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Approval action failed');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // LOGISTICS & SHIPPING DOCUMENTS APIS
+  // -------------------------------------------------------------
+  async getSuratJalanList(storeId?: string): Promise<SuratJalanDocument[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetch(`/api/admin/logistics/surat-jalan?${params.toString()}`);
+    return res.json().catch(() => []);
+  },
+
+  async createSuratJalan(doc: Partial<SuratJalanDocument>): Promise<{
+    success: boolean;
+    document: SuratJalanDocument;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/logistics/surat-jalan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(doc),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to issue Surat Jalan');
+    }
+    return res.json();
+  },
+
+  async getDeliveryOrders(): Promise<DeliveryOrderDocument[]> {
+    const res = await fetch('/api/admin/logistics/delivery-orders');
+    return res.json().catch(() => []);
+  },
+
+  async createDeliveryOrder(doc: Partial<DeliveryOrderDocument>): Promise<{
+    success: boolean;
+    document: DeliveryOrderDocument;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/logistics/delivery-orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(doc),
+    });
+    return res.json();
+  },
+
+  async getShipments(): Promise<ShipmentQuotaTracking[]> {
+    const res = await fetch('/api/admin/logistics/shipments');
+    return res.json().catch(() => []);
+  },
+
+  async getShipmentQuotaTracking(): Promise<ShipmentQuotaTracking[]> {
+    return this.getShipments();
+  },
+
+  async createShipment(data: Partial<ShipmentQuotaTracking>): Promise<{
+    success: boolean;
+    shipment: ShipmentQuotaTracking;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/logistics/shipments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // INVENTORY QUALITY CONTROL (QC) APIS
+  // -------------------------------------------------------------
+  async getQCInspections(storeId?: string, disposition?: string): Promise<QCInspectionRecord[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    if (disposition && disposition !== 'ALL') params.append('disposition', disposition);
+    const res = await fetch(`/api/admin/qc/inspections?${params.toString()}`);
+    return res.json().catch(() => []);
+  },
+
+  async submitQCInspection(payload: Partial<QCInspectionRecord>): Promise<{
+    success: boolean;
+    record: QCInspectionRecord;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/qc/inspections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to record QC inspection');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MANUAL COA MANAGEMENT APIS
+  // -------------------------------------------------------------
+  async createCoaAccount(account: Partial<ChartOfAccount>): Promise<{
+    success: boolean;
+    account: ChartOfAccount;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/settings/coa-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(account),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create COA account');
+    }
+    return res.json();
+  },
+
+  async updateCoaAccount(code: string, update: Partial<ChartOfAccount>): Promise<{
+    success: boolean;
+    account: ChartOfAccount;
+    message: string;
+  }> {
+    const res = await fetch(`/api/admin/settings/coa-account/${encodeURIComponent(code)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(update),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update COA account');
+    }
+    return res.json();
+  },
+
+  async deleteCoaAccount(code: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`/api/admin/settings/coa-account/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to delete COA account');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // SPECIALIZED GROCERY METRICS APIS
+  // -------------------------------------------------------------
+  async getGroceryMetrics(storeId?: string): Promise<GroceryMetricsReport> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetch(`/api/admin/reports/grocery-metrics?${params.toString()}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to fetch grocery metrics');
+    }
+    return res.json();
+  },
 };
+

@@ -1058,5 +1058,235 @@ export interface StockTransferRecord {
   transferredBy: string;
   status: 'completed' | 'in_transit';
   notes?: string;
+  suratJalanNumber?: string;
 }
 
+// =============================================================
+// MODULE 6: APPROVAL WORKFLOW & MULTI-TIER MATRIX
+// =============================================================
+export type ApprovalModuleType =
+  | 'procurement_pr'
+  | 'procurement_po'
+  | 'stock_adjustment'
+  | 'waste_write_off';
+
+export interface ApprovalTierRule {
+  id: string;
+  module: ApprovalModuleType;
+  tierLevel: number; // 1, 2, 3
+  tierName: string; // e.g. "Store Supervisor", "Branch Operations Manager", "Director of Supply Chain"
+  minThresholdIDR: number;
+  maxThresholdIDR: number | null; // null = infinity
+  requiredRole: UserRole | string;
+  requiresPin: boolean;
+  autoApproveBelowMin: boolean;
+  slaHours: number;
+  description: string;
+}
+
+export interface ApprovalActionLog {
+  tierLevel: number;
+  tierName: string;
+  approverId: string;
+  approverName: string;
+  approverRole: string;
+  action: 'APPROVED' | 'REJECTED';
+  timestamp: string;
+  comments?: string;
+}
+
+export interface ApprovalRequest {
+  id: string; // e.g. APR-2026-001
+  module: ApprovalModuleType;
+  documentId: string; // e.g. PR-2026-0042, PO-2026-0015, ADJ-SKU-001
+  documentTitle: string;
+  requestedBy: string;
+  requestedAt: string;
+  amountIDR: number;
+  storeId: string;
+  storeName: string;
+  currentTierLevel: number;
+  requiredTierLevel: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  history: ApprovalActionLog[];
+  payloadSummary: {
+    sku?: string;
+    productName?: string;
+    quantity?: number;
+    reason?: string;
+  };
+}
+
+// =============================================================
+// MODULE 7: LOGISTICS & OPERATIONAL SHIPPING DOCUMENTS
+// =============================================================
+export interface SuratJalanItem {
+  sku: string;
+  productName: string;
+  batchNumber: string;
+  quantity: number;
+  unit: string;
+  packagingType: 'Plastic Crate' | 'Corrugated Box' | 'Vacuum Cold Pack' | 'Wooden Pallet';
+  condition: 'Fresh / Intact' | 'Cold-Chilled OK' | 'Frozen Solid';
+  notes?: string;
+}
+
+export interface SuratJalanDocument {
+  id: string; // e.g. SJ-2026-0418
+  documentNumber: string; // SJ/GMRT/JKT/2026/0418
+  issueDate: string;
+  deliveryOrderRef?: string;
+  transferRef?: string;
+  poRef?: string;
+  senderStoreId: string;
+  senderStoreName: string;
+  senderAddress: string;
+  senderPhone: string;
+  recipientName: string;
+  recipientAddress: string;
+  recipientPhone: string;
+  recipientStoreId?: string;
+  carrierName: string;
+  vehiclePlateNumber: string;
+  vehicleType: string;
+  driverName: string;
+  driverPhone: string;
+  coldChainTempCelsius?: number;
+  specialHandlingInstructions: string;
+  items: SuratJalanItem[];
+  totalPackages: number;
+  totalWeightKg: number;
+  status: 'draft' | 'dispatched' | 'in_transit' | 'delivered' | 'signed';
+  senderSignatureName: string;
+  driverSignatureName?: string;
+  recipientSignatureName?: string;
+  signedAt?: string;
+}
+
+export interface DeliveryOrderItem {
+  sku: string;
+  productName: string;
+  orderedQty: number;
+  dispatchedQty: number;
+  unit: string;
+  unitPriceIDR: number;
+  totalPriceIDR: number;
+}
+
+export interface DeliveryOrderDocument {
+  id: string; // e.g. DO-2026-0210
+  doNumber: string; // DO/GMRT/2026/0210
+  issueDate: string;
+  poNumber?: string;
+  customerOrStoreName: string;
+  deliveryAddress: string;
+  deliveryWindow: string; // e.g. "Morning Slot (08:00 - 12:00)"
+  authorizedOfficer: string;
+  items: DeliveryOrderItem[];
+  subtotalIDR: number;
+  taxIDR: number;
+  totalAmountIDR: number;
+  status: 'pending' | 'in_transit' | 'fulfilled' | 'cancelled';
+  notes?: string;
+}
+
+export interface ShipmentQuotaTracking {
+  id: string; // e.g. SHP-2026-001
+  tripId: string;
+  vehicleType: 'Refrigerated Van 1.5T' | 'Chilled Truck 4T' | 'Electric Cargo Trike' | 'Standard Courier';
+  vehiclePlate: string;
+  maxPayloadKg: number;
+  currentPayloadKg: number;
+  quotaUtilizationPercent: number;
+  storageZone: StorageZoneType;
+  currentTempCelsius: number;
+  targetTempCelsius: number;
+  departureHub: string;
+  destinationHub: string;
+  departureTime: string;
+  estimatedArrival: string;
+  actualArrival?: string;
+  driverName: string;
+  driverContact: string;
+  assignedOrdersCount: number;
+  status: 'loading' | 'in_transit' | 'arrived' | 'delayed';
+}
+
+// =============================================================
+// MODULE 8: INVENTORY QUALITY CONTROL (QC) INSPECTION
+// =============================================================
+export type QCDisposition = 'PASSED' | 'QUARANTINED' | 'REJECTED';
+export type QCDispositionAction =
+  | 'RELEASE_TO_SHELF'
+  | 'QUARANTINE_HOLD'
+  | 'RETURN_TO_VENDOR'
+  | 'SCRAP_WASTE';
+
+export interface QCInspectionRecord {
+  id: string; // e.g. QC-2026-0042
+  timestamp: string;
+  referenceType: 'INCOMING_PO' | 'INTER_WAREHOUSE_TRANSFER' | 'PERIODIC_SPOILAGE_CHECK';
+  referenceId: string;
+  sku: string;
+  productName: string;
+  category: string;
+  batchNumber: string;
+  expiryDate: string;
+  sampleQuantity: number;
+  totalBatchQuantity: number;
+  storeId: string;
+  storeName: string;
+  inspectorId: string;
+  inspectorName: string;
+  parameters: {
+    visualFreshness: 'Grade A (Pristine)' | 'Grade B (Acceptable)' | 'Defective (Browning/Bruised)';
+    temperatureCelsius: number;
+    coldChainCompliant: boolean;
+    packagingIntegrity: 'Sealed & Intact' | 'Minor Scuff' | 'Damaged/Leaking';
+    sensoryOdorCheck: 'Normal & Fresh' | 'Off-Odor / Souring';
+    brixSugarContent?: number;
+    weightToleranceCompliant: boolean;
+  };
+  disposition: QCDisposition;
+  actionTaken: QCDispositionAction;
+  notes?: string;
+}
+
+// =============================================================
+// MODULE 9: SPECIALIZED GROCERY METRICS & INTELLIGENCE
+// =============================================================
+export interface GroceryMetricsReport {
+  generatedAt: string;
+  storeId: string;
+  fifoExpiryMetrics: {
+    criticalBatchesCount: number; // < 3 days
+    nearExpiryBatchesCount: number; // 4 - 7 days
+    freshBatchesCount: number; // 8 - 14 days
+    stableBatchesCount: number; // > 15 days
+    atRiskInventoryValueIDR: number;
+    vivoDiscountSoldUnits: number;
+    vivoRevenueRecoveredIDR: number;
+    batchTurnoverRateDays: number;
+    agingBuckets: { bucket: string; units: number; valueIDR: number }[];
+  };
+  wasteShrinkageMetrics: {
+    totalShrinkLossIDR: number;
+    shrinkToSalesRatioPercent: number; // e.g. 1.8% vs benchmark < 2.5%
+    naturalMoistureLossIDR: number;
+    prepAndWashLossIDR: number;
+    handlingDamageLossIDR: number;
+    expiredSpoilageLossIDR: number;
+    departmentBreakdown: {
+      department: string;
+      lossIDR: number;
+      percentage: number;
+    }[];
+  };
+  fulfillmentMetrics: {
+    averagePickTimeMinutes: number;
+    catchWeightAccuracyPercent: number;
+    substitutionsAcceptedPercent: number;
+    onTimeDeliveryPercent: number;
+    clickAndCollectFulfillmentRatePercent: number;
+  };
+}

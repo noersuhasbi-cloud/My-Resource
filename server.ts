@@ -67,6 +67,15 @@ import type {
   StockOpnameSession,
   StockOpnameItem,
   StockTransferRecord,
+  ApprovalTierRule,
+  ApprovalRequest,
+  ApprovalActionLog,
+  SuratJalanDocument,
+  SuratJalanItem,
+  DeliveryOrderDocument,
+  ShipmentQuotaTracking,
+  QCInspectionRecord,
+  GroceryMetricsReport,
 } from './src/types/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -605,8 +614,484 @@ let stockTransferRecords: StockTransferRecord[] = [
     transferredBy: 'Rian Pratama (Logistics Dispatch)',
     status: 'completed',
     notes: 'Weekend surge re-allocation via refrigerated sprinter van.',
+    suratJalanNumber: 'SJ/GMRT/JKT/2026/0104',
   },
 ];
+
+// =============================================================
+// MODULE 6: APPROVAL WORKFLOW & MULTI-TIER MATRIX DATA STORE
+// =============================================================
+let approvalTierRules: ApprovalTierRule[] = [
+  // Procurement Requests (PR)
+  {
+    id: 'RULE-PR-T1',
+    module: 'procurement_pr',
+    tierLevel: 1,
+    tierName: 'Store Shift Supervisor',
+    minThresholdIDR: 0,
+    maxThresholdIDR: 5000000,
+    requiredRole: 'store_manager',
+    requiresPin: false,
+    autoApproveBelowMin: true,
+    slaHours: 12,
+    description: 'Routine shelf restock & threshold trigger approvals under Rp 5,000,000.',
+  },
+  {
+    id: 'RULE-PR-T2',
+    module: 'procurement_pr',
+    tierLevel: 2,
+    tierName: 'Branch General Manager',
+    minThresholdIDR: 5000000,
+    maxThresholdIDR: 25000000,
+    requiredRole: 'store_manager',
+    requiresPin: true,
+    autoApproveBelowMin: false,
+    slaHours: 24,
+    description: 'Bulk multi-day vendor orders between Rp 5M - Rp 25M.',
+  },
+  {
+    id: 'RULE-PR-T3',
+    module: 'procurement_pr',
+    tierLevel: 3,
+    tierName: 'VP / Director of Supply Chain & CFO',
+    minThresholdIDR: 25000000,
+    maxThresholdIDR: null,
+    requiredRole: 'admin',
+    requiresPin: true,
+    autoApproveBelowMin: false,
+    slaHours: 48,
+    description: 'Capital-intensive central warehouse restock exceeding Rp 25,000,000.',
+  },
+
+  // Stock Adjustments
+  {
+    id: 'RULE-ADJ-T1',
+    module: 'stock_adjustment',
+    tierLevel: 1,
+    tierName: 'Shift Inventory Auditor',
+    minThresholdIDR: 0,
+    maxThresholdIDR: 1000000,
+    requiredRole: 'auditor',
+    requiresPin: false,
+    autoApproveBelowMin: false,
+    slaHours: 6,
+    description: 'Minor cycle count physical variance under Rp 1,000,000.',
+  },
+  {
+    id: 'RULE-ADJ-T2',
+    module: 'stock_adjustment',
+    tierLevel: 2,
+    tierName: 'Store Operations Manager',
+    minThresholdIDR: 1000000,
+    maxThresholdIDR: null,
+    requiredRole: 'store_manager',
+    requiresPin: true,
+    autoApproveBelowMin: false,
+    slaHours: 12,
+    description: 'Significant stock variance or cold-chain excursion audit above Rp 1,000,000.',
+  },
+
+  // Waste & Spoilage Write-Offs
+  {
+    id: 'RULE-WST-T1',
+    module: 'waste_write_off',
+    tierLevel: 1,
+    tierName: 'Perishables QA Lead',
+    minThresholdIDR: 0,
+    maxThresholdIDR: 500000,
+    requiredRole: 'auditor',
+    requiresPin: false,
+    autoApproveBelowMin: false,
+    slaHours: 4,
+    description: 'Routine daily produce trim & wash moisture shrinkage write-offs.',
+  },
+  {
+    id: 'RULE-WST-T2',
+    module: 'waste_write_off',
+    tierLevel: 2,
+    tierName: 'Store Branch Manager',
+    minThresholdIDR: 500000,
+    maxThresholdIDR: null,
+    requiredRole: 'store_manager',
+    requiresPin: true,
+    autoApproveBelowMin: false,
+    slaHours: 8,
+    description: 'High-value butcher cut or expired dairy lot disposal over Rp 500,000.',
+  },
+];
+
+let approvalQueue: ApprovalRequest[] = [
+  {
+    id: 'APR-2026-001',
+    module: 'procurement_pr',
+    documentId: 'PR-2026-0042',
+    documentTitle: 'Bulk Produce Replenishment (Organic Butterhead + Vine Tomatoes)',
+    requestedBy: 'Andi Wijaya (Senopati Inventory)',
+    requestedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+    amountIDR: 6250000,
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    currentTierLevel: 2,
+    requiredTierLevel: 2,
+    status: 'PENDING',
+    history: [
+      {
+        tierLevel: 1,
+        tierName: 'Store Shift Supervisor',
+        approverId: 'USR-MGR-01',
+        approverName: 'Dewi Sartika',
+        approverRole: 'Store Supervisor',
+        action: 'APPROVED',
+        timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
+        comments: 'Verified low stock below minimum threshold. Passed to Branch GM for high value approval.',
+      },
+    ],
+    payloadSummary: {
+      sku: 'SKU-PRD-001',
+      productName: 'Organic Hydroponic Butterhead Lettuce',
+      quantity: 150,
+      reason: 'Weekend promotional feature run',
+    },
+  },
+  {
+    id: 'APR-2026-002',
+    module: 'stock_adjustment',
+    documentId: 'ADJ-2026-081',
+    documentTitle: 'Chilled Storage Excursion Physical Variance',
+    requestedBy: 'Siti Rahmawati (Auditor)',
+    requestedAt: new Date(Date.now() - 3600000 * 7).toISOString(),
+    amountIDR: 1250000,
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    currentTierLevel: 2,
+    requiredTierLevel: 2,
+    status: 'PENDING',
+    history: [],
+    payloadSummary: {
+      sku: 'SKU-MEA-001',
+      productName: 'Grass-Fed Angus Ribeye Steak',
+      quantity: 10,
+      reason: 'Physical stocktake shortage requiring manager clearance',
+    },
+  },
+  {
+    id: 'APR-2026-003',
+    module: 'procurement_pr',
+    documentId: 'PR-2026-0039',
+    documentTitle: 'Weekly Sourdough & Egg Standing Order',
+    requestedBy: 'Rudi Hermawan',
+    requestedAt: new Date(Date.now() - 86400000).toISOString(),
+    amountIDR: 2400000,
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    currentTierLevel: 1,
+    requiredTierLevel: 1,
+    status: 'APPROVED',
+    history: [
+      {
+        tierLevel: 1,
+        tierName: 'Store Shift Supervisor',
+        approverId: 'USR-MGR-01',
+        approverName: 'Dewi Sartika',
+        approverRole: 'Store Supervisor',
+        action: 'APPROVED',
+        timestamp: new Date(Date.now() - 86400000 + 3600000).toISOString(),
+        comments: 'Approved and converted to PO-2026-0014.',
+      },
+    ],
+    payloadSummary: {
+      sku: 'SKU-BAK-001',
+      productName: 'Artisan Country Sourdough Loaf',
+      quantity: 60,
+      reason: 'Routine bakery restock',
+    },
+  },
+];
+
+// =============================================================
+// MODULE 7: LOGISTICS & OPERATIONAL SHIPPING DOCUMENTS
+// =============================================================
+let suratJalanRecords: SuratJalanDocument[] = [
+  {
+    id: 'SJ-2026-001',
+    documentNumber: 'SJ/GMRT/JKT/2026/0104',
+    issueDate: '2026-10-18',
+    deliveryOrderRef: 'DO/GMRT/2026/0098',
+    transferRef: 'TRF-2026-001',
+    senderStoreId: 'store-jkt-senopati',
+    senderStoreName: 'GroceMart Senopati Flagship Hub',
+    senderAddress: 'Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan',
+    senderPhone: '+62 21 5790 1234',
+    recipientName: 'GroceMart PIK 2 Fulfillment Hub',
+    recipientAddress: 'The Avenue Blok A1 No. 8, Pantai Indah Kapuk 2, Tangerang',
+    recipientPhone: '+62 21 5900 8899',
+    recipientStoreId: 'store-jkt-pik',
+    carrierName: 'GroceFleet Cold Logistics',
+    vehiclePlateNumber: 'B 9482 SXZ',
+    vehicleType: 'Refrigerated Sprinter Van 1.5T',
+    driverName: 'Bambang Sudirgo',
+    driverPhone: '+62 812-9844-1234',
+    coldChainTempCelsius: 3.4,
+    specialHandlingInstructions: 'Continuous active refrigeration maintained at 2-4°C. Handle fresh leafy greens with care.',
+    items: [
+      {
+        sku: 'SKU-PRD-001',
+        productName: 'Organic Hydroponic Butterhead Lettuce',
+        batchNumber: 'BAT-JKT-SEN-0412',
+        quantity: 15,
+        unit: 'head (250g)',
+        packagingType: 'Plastic Crate',
+        condition: 'Cold-Chilled OK',
+        notes: 'Pre-cooled farm crates',
+      },
+      {
+        sku: 'SKU-PRD-002',
+        productName: 'Heirloom Vine-Ripened Sweet Tomatoes',
+        batchNumber: 'BAT-JKT-SEN-0415',
+        quantity: 20,
+        unit: 'pack (500g)',
+        packagingType: 'Corrugated Box',
+        condition: 'Fresh / Intact',
+        notes: 'Fragile ripe vine tomatoes',
+      },
+    ],
+    totalPackages: 4,
+    totalWeightKg: 13.75,
+    status: 'delivered',
+    senderSignatureName: 'Rian Pratama (Logistics Dispatcher)',
+    driverSignatureName: 'Bambang Sudirgo',
+    recipientSignatureName: 'Ferry Salim (PIK Receiving Lead)',
+    signedAt: '2026-10-18T14:45:00Z',
+  },
+  {
+    id: 'SJ-2026-002',
+    documentNumber: 'SJ/GMRT/JKT/2026/0105',
+    issueDate: '2026-10-19',
+    deliveryOrderRef: 'DO/GMRT/2026/0102',
+    senderStoreId: 'store-jkt-senopati',
+    senderStoreName: 'GroceMart Senopati Flagship Hub',
+    senderAddress: 'Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan',
+    senderPhone: '+62 21 5790 1234',
+    recipientName: 'Executive B2B Client: Grand Hyatt Jakarta',
+    recipientAddress: 'Jl. M.H. Thamrin Kav. 28-30, Menteng, Jakarta Pusat',
+    recipientPhone: '+62 21 2992 1234',
+    carrierName: 'GroceFleet Rapid Courier',
+    vehiclePlateNumber: 'B 4120 KLP',
+    vehicleType: 'Electric Refrigerated Cargo Trike',
+    driverName: 'Dedi Kurniawan',
+    driverPhone: '+62 813-8877-5544',
+    coldChainTempCelsius: 1.8,
+    specialHandlingInstructions: 'VIP Hotel Receiving Loading Dock B. Maintain below 2°C for prime ribeye cuts.',
+    items: [
+      {
+        sku: 'SKU-MEA-001',
+        productName: 'Grass-Fed Angus Ribeye Steak',
+        batchNumber: 'BAT-JKT-SEN-0418',
+        quantity: 12,
+        unit: 'cut (250g)',
+        packagingType: 'Vacuum Cold Pack',
+        condition: 'Cold-Chilled OK',
+        notes: 'Dry-aged prime cuts',
+      },
+    ],
+    totalPackages: 2,
+    totalWeightKg: 3.5,
+    status: 'in_transit',
+    senderSignatureName: 'Rian Pratama (Logistics Dispatcher)',
+    driverSignatureName: 'Dedi Kurniawan',
+  },
+];
+
+let deliveryOrderRecords: DeliveryOrderDocument[] = [
+  {
+    id: 'DO-2026-001',
+    doNumber: 'DO/GMRT/2026/0098',
+    issueDate: '2026-10-18',
+    poNumber: 'PO-2026-001',
+    customerOrStoreName: 'GroceMart PIK 2 Branch',
+    deliveryAddress: 'The Avenue Blok A1 No. 8, Pantai Indah Kapuk 2',
+    deliveryWindow: 'Morning Slot (08:00 - 11:00)',
+    authorizedOfficer: 'Dewi Sartika (Store Manager)',
+    items: [
+      {
+        sku: 'SKU-PRD-001',
+        productName: 'Organic Hydroponic Butterhead Lettuce',
+        orderedQty: 15,
+        dispatchedQty: 15,
+        unit: 'head',
+        unitPriceIDR: 11000,
+        totalPriceIDR: 165000,
+      },
+    ],
+    subtotalIDR: 165000,
+    taxIDR: 0,
+    totalAmountIDR: 165000,
+    status: 'fulfilled',
+    notes: 'Inter-warehouse reallocation completed on schedule.',
+  },
+  {
+    id: 'DO-2026-002',
+    doNumber: 'DO/GMRT/2026/0102',
+    issueDate: '2026-10-19',
+    poNumber: 'PO-CORP-2026-08',
+    customerOrStoreName: 'Grand Hyatt Jakarta Kitchen',
+    deliveryAddress: 'Jl. M.H. Thamrin Kav. 28-30, Jakarta Pusat',
+    deliveryWindow: 'Afternoon Slot (13:00 - 15:00)',
+    authorizedOfficer: 'Budi Santoso (Operations VP)',
+    items: [
+      {
+        sku: 'SKU-MEA-001',
+        productName: 'Grass-Fed Angus Ribeye Steak',
+        orderedQty: 12,
+        dispatchedQty: 12,
+        unit: 'cut',
+        unitPriceIDR: 125000,
+        totalPriceIDR: 1500000,
+      },
+    ],
+    subtotalIDR: 1500000,
+    taxIDR: 165000,
+    totalAmountIDR: 1665000,
+    status: 'in_transit',
+    notes: 'Standing corporate catering delivery with cold-chain cert.',
+  },
+];
+
+let shipmentQuotaTrackers: ShipmentQuotaTracking[] = [
+  {
+    id: 'SHP-2026-001',
+    tripId: 'TRIP-JKT-SEN-01',
+    vehicleType: 'Refrigerated Van 1.5T',
+    vehiclePlate: 'B 9482 SXZ',
+    maxPayloadKg: 1500,
+    currentPayloadKg: 1120,
+    quotaUtilizationPercent: 74.7,
+    storageZone: 'cold_chilled',
+    currentTempCelsius: 3.2,
+    targetTempCelsius: 3.5,
+    departureHub: 'Senopati Central Hub',
+    destinationHub: 'PIK 2 & Menteng Route',
+    departureTime: '2026-10-19T08:30:00Z',
+    estimatedArrival: '2026-10-19T11:45:00Z',
+    driverName: 'Bambang Sudirgo',
+    driverContact: '+62 812-9844-1234',
+    assignedOrdersCount: 8,
+    status: 'in_transit',
+  },
+  {
+    id: 'SHP-2026-002',
+    tripId: 'TRIP-BDG-DAG-01',
+    vehicleType: 'Chilled Truck 4T',
+    vehiclePlate: 'D 8812 BBD',
+    maxPayloadKg: 4000,
+    currentPayloadKg: 3450,
+    quotaUtilizationPercent: 86.3,
+    storageZone: 'cold_chilled',
+    currentTempCelsius: 2.8,
+    targetTempCelsius: 3.0,
+    departureHub: 'Lembang Farm Direct Aggregator',
+    destinationHub: 'Jakarta Central Distribution Vault',
+    departureTime: '2026-10-19T06:00:00Z',
+    estimatedArrival: '2026-10-19T10:15:00Z',
+    driverName: 'Asep Saepulloh',
+    driverContact: '+62 815-7766-9900',
+    assignedOrdersCount: 22,
+    status: 'in_transit',
+  },
+];
+
+// =============================================================
+// MODULE 8: INVENTORY QUALITY CONTROL (QC) INSPECTION
+// =============================================================
+let qcInspectionRecords: QCInspectionRecord[] = [
+  {
+    id: 'QC-2026-001',
+    timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
+    referenceType: 'INCOMING_PO',
+    referenceId: 'PO-2026-001',
+    sku: 'SKU-PRD-001',
+    productName: 'Organic Hydroponic Butterhead Lettuce',
+    category: 'produce',
+    batchNumber: 'BAT-JKT-SEN-0412',
+    expiryDate: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
+    sampleQuantity: 5,
+    totalBatchQuantity: 50,
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    inspectorId: 'USR-QC-01',
+    inspectorName: 'Ratna Kusuma (QC Inspector)',
+    parameters: {
+      visualFreshness: 'Grade A (Pristine)',
+      temperatureCelsius: 3.6,
+      coldChainCompliant: true,
+      packagingIntegrity: 'Sealed & Intact',
+      sensoryOdorCheck: 'Normal & Fresh',
+      brixSugarContent: 4.8,
+      weightToleranceCompliant: true,
+    },
+    disposition: 'PASSED',
+    actionTaken: 'RELEASE_TO_SHELF',
+    notes: 'Crisp vibrant leaves, zero fungal spotting or browning. Immediate transfer to chilled produce bin.',
+  },
+  {
+    id: 'QC-2026-002',
+    timestamp: new Date(Date.now() - 3600000 * 18).toISOString(),
+    referenceType: 'PERIODIC_SPOILAGE_CHECK',
+    referenceId: 'SHELFLIFE-AUD-02',
+    sku: 'SKU-PRD-002',
+    productName: 'Heirloom Vine-Ripened Sweet Tomatoes',
+    category: 'produce',
+    batchNumber: 'BAT-JKT-SEN-0398',
+    expiryDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+    sampleQuantity: 4,
+    totalBatchQuantity: 18,
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    inspectorId: 'USR-QC-01',
+    inspectorName: 'Ratna Kusuma (QC Inspector)',
+    parameters: {
+      visualFreshness: 'Grade B (Acceptable)',
+      temperatureCelsius: 4.1,
+      coldChainCompliant: true,
+      packagingIntegrity: 'Minor Scuff',
+      sensoryOdorCheck: 'Normal & Fresh',
+      brixSugarContent: 6.2,
+      weightToleranceCompliant: true,
+    },
+    disposition: 'QUARANTINED',
+    actionTaken: 'QUARANTINE_HOLD',
+    notes: 'Slight soft spots on 2 samples. Placed in secondary inspection cell for VIVO discount re-sticker.',
+  },
+  {
+    id: 'QC-2026-003',
+    timestamp: new Date(Date.now() - 3600000 * 24).toISOString(),
+    referenceType: 'INCOMING_PO',
+    referenceId: 'PO-2026-0008',
+    sku: 'SKU-MEA-001',
+    productName: 'Grass-Fed Angus Ribeye Steak',
+    category: 'meat_seafood',
+    batchNumber: 'BAT-JKT-SEN-0380',
+    expiryDate: new Date(Date.now() + 86400000 * 12).toISOString().split('T')[0],
+    sampleQuantity: 2,
+    totalBatchQuantity: 20,
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    inspectorId: 'USR-QC-01',
+    inspectorName: 'Ratna Kusuma (QC Inspector)',
+    parameters: {
+      visualFreshness: 'Defective (Browning/Bruised)',
+      temperatureCelsius: 7.8, // Temperature breach!
+      coldChainCompliant: false,
+      packagingIntegrity: 'Damaged/Leaking',
+      sensoryOdorCheck: 'Off-Odor / Souring',
+      weightToleranceCompliant: false,
+    },
+    disposition: 'REJECTED',
+    actionTaken: 'RETURN_TO_VENDOR',
+    notes: 'Cold chain failure during supplier transit (7.8°C vs 2.0°C limit). Seal puncture and early spoilage odor. RTV claim filed.',
+  },
+];
+
 
 // -------------------------------------------------------------
 // GUARD 1: Concurrency & Anti-Overselling Lock Manager
@@ -4437,6 +4922,584 @@ async function startServer() {
     });
   });
 
+  // =============================================================
+  // MODULE 6: APPROVAL WORKFLOW & MULTI-TIER MATRIX ENDPOINTS
+  // =============================================================
+  app.get('/api/admin/approvals/rules', (_req: Request, res: Response) => {
+    res.json(approvalTierRules);
+  });
+
+  app.put('/api/admin/approvals/rules', (req: Request, res: Response) => {
+    const { rules } = req.body as { rules: ApprovalTierRule[] };
+    if (Array.isArray(rules)) {
+      approvalTierRules = rules;
+      securityAuditTrail.unshift({
+        id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+        timestamp: new Date().toISOString(),
+        actionType: 'ZONE_CONFIG_UPDATE',
+        resourceId: 'APPROVAL-MATRIX-GLOBAL',
+        userId: currentActiveStaffSession?.userId || 'USR-ADM-01',
+        userName: currentActiveStaffSession?.userName || 'Operations Lead',
+        userRole: currentActiveStaffSession?.userRole || 'admin',
+        storeId: 'CONSOLIDATED',
+        shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
+        status: 'AUTHORIZED_EXECUTED',
+        metadata: { rulesCount: rules.length },
+      });
+      return res.json({ success: true, rules: approvalTierRules, message: 'Approval workflow matrix updated.' });
+    }
+    res.status(400).json({ success: false, error: 'Invalid rules array payload.' });
+  });
+
+  app.get('/api/admin/approvals/queue', (req: Request, res: Response) => {
+    const { storeId, status } = req.query;
+    let list = [...approvalQueue];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((r) => r.storeId === storeId);
+    }
+    if (status && status !== 'ALL') {
+      list = list.filter((r) => r.status === status);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/admin/approvals/action', (req: Request, res: Response) => {
+    const { requestId, action, comments } = req.body as {
+      requestId: string;
+      action: 'APPROVED' | 'REJECTED';
+      comments?: string;
+    };
+
+    const targetReq = approvalQueue.find((r) => r.id === requestId);
+    if (!targetReq) {
+      return res.status(404).json({ success: false, error: 'Approval request not found.' });
+    }
+
+    if (targetReq.status !== 'PENDING') {
+      return res.status(400).json({ success: false, error: `Request already ${targetReq.status.toLowerCase()}.` });
+    }
+
+    const timestamp = new Date().toISOString();
+    const approverName = currentActiveStaffSession?.userName || 'Store General Manager';
+    const approverRole = currentActiveStaffSession?.userRole || 'store_manager';
+
+    const logEntry: ApprovalActionLog = {
+      tierLevel: targetReq.currentTierLevel,
+      tierName: `Tier ${targetReq.currentTierLevel} Approval`,
+      approverId: currentActiveStaffSession?.userId || 'USR-MGR-01',
+      approverName,
+      approverRole,
+      action,
+      timestamp,
+      comments: comments || `${action} by ${approverName} (${approverRole})`,
+    };
+
+    targetReq.history.push(logEntry);
+
+    if (action === 'REJECTED') {
+      targetReq.status = 'REJECTED';
+      // If PR, update PR status
+      if (targetReq.module === 'procurement_pr') {
+        const pr = purchaseRequests.find((p) => p.id === targetReq.documentId);
+        if (pr) pr.status = 'rejected';
+      }
+    } else {
+      // APPROVED
+      if (targetReq.currentTierLevel >= targetReq.requiredTierLevel) {
+        // Final tier reached
+        targetReq.status = 'APPROVED';
+
+        // If PR is fully approved, auto-generate PO
+        if (targetReq.module === 'procurement_pr') {
+          const pr = purchaseRequests.find((p) => p.id === targetReq.documentId);
+          if (pr) {
+            pr.status = 'approved';
+            // Auto generate PO if not already generated
+            const existingPo = purchaseOrders.find((po) => po.prId === pr.id);
+            if (!existingPo) {
+              const poId = `PO-2026-${(purchaseOrders.length + 1).toString().padStart(3, '0')}`;
+              const item = inventoryList.find((i) => i.sku === pr.sku);
+              const unitCost = item?.unitCost || 12000;
+              const subtotal = pr.suggestedQuantity * unitCost;
+              const tax = Math.round(subtotal * 0.11);
+              const newPo: PurchaseOrder = {
+                id: poId,
+                prId: pr.id,
+                storeId: pr.storeId || 'store-jkt-senopati',
+                storeName: pr.storeName || 'Senopati Flagship',
+                supplierName: item?.supplierName || 'Organic Farm Cooperative',
+                supplierContact: '+62 21 555 0192',
+                items: [
+                  {
+                    sku: pr.sku,
+                    productName: pr.productName,
+                    orderedQuantity: pr.suggestedQuantity,
+                    receivedQuantity: 0,
+                    remainingBackorder: pr.suggestedQuantity,
+                    unitCost,
+                    totalCost: subtotal,
+                  },
+                ],
+                subtotalCost: subtotal,
+                taxPercent: 11,
+                taxAmount: tax,
+                totalCost: subtotal + tax,
+                status: 'Sent',
+                paymentTerms: 'Net 30',
+                createdAt: timestamp,
+                expectedDeliveryDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+                notes: `Auto-generated from Approved PR #${pr.id} (Multi-Tier Approval Verified)`,
+              };
+              purchaseOrders.unshift(newPo);
+            }
+          }
+        }
+      } else {
+        // Advance to next tier
+        targetReq.currentTierLevel += 1;
+      }
+    }
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'PURCHASE_ORDER_APPROVAL',
+      resourceId: targetReq.id,
+      userId: currentActiveStaffSession?.userId || 'USR-MGR-01',
+      userName: approverName,
+      userRole: approverRole as UserRole,
+      storeId: targetReq.storeId,
+      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        documentId: targetReq.documentId,
+        action,
+        status: targetReq.status,
+        amountIDR: targetReq.amountIDR,
+      },
+    });
+
+    res.json({
+      success: true,
+      request: targetReq,
+      message: `Approval Request #${targetReq.id} ${action.toLowerCase()}! Current status: ${targetReq.status}.`,
+    });
+  });
+
+  // =============================================================
+  // MODULE 7: LOGISTICS & OPERATIONAL SHIPPING DOCUMENTS
+  // =============================================================
+  app.get('/api/admin/logistics/surat-jalan', (req: Request, res: Response) => {
+    const { storeId } = req.query;
+    let list = [...suratJalanRecords];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((sj) => sj.senderStoreId === storeId || sj.recipientStoreId === storeId);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/admin/logistics/surat-jalan', (req: Request, res: Response) => {
+    const data = req.body as Partial<SuratJalanDocument>;
+    const seq = (suratJalanRecords.length + 1).toString().padStart(4, '0');
+    const timestamp = new Date().toISOString();
+
+    const newSj: SuratJalanDocument = {
+      id: `SJ-2026-${seq}`,
+      documentNumber: data.documentNumber || `SJ/GMRT/JKT/2026/${seq}`,
+      issueDate: data.issueDate || timestamp.split('T')[0],
+      deliveryOrderRef: data.deliveryOrderRef,
+      transferRef: data.transferRef,
+      poRef: data.poRef,
+      senderStoreId: data.senderStoreId || 'store-jkt-senopati',
+      senderStoreName: data.senderStoreName || 'GroceMart Senopati Flagship Hub',
+      senderAddress: data.senderAddress || 'Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan',
+      senderPhone: data.senderPhone || '+62 21 5790 1234',
+      recipientName: data.recipientName || 'GroceMart Storefront Branch',
+      recipientAddress: data.recipientAddress || 'Jakarta Metropolitan Area',
+      recipientPhone: data.recipientPhone || '+62 21 5000 1234',
+      recipientStoreId: data.recipientStoreId,
+      carrierName: data.carrierName || 'GroceFleet Logistics',
+      vehiclePlateNumber: data.vehiclePlateNumber || 'B 9102 SXX',
+      vehicleType: data.vehicleType || 'Refrigerated Van 1.5T',
+      driverName: data.driverName || 'Agus Setyawan',
+      driverPhone: data.driverPhone || '+62 812-7788-9900',
+      coldChainTempCelsius: data.coldChainTempCelsius ?? 3.4,
+      specialHandlingInstructions: data.specialHandlingInstructions || 'Keep refrigerated at 2-4°C.',
+      items: data.items || [],
+      totalPackages: data.totalPackages || (data.items?.length || 1),
+      totalWeightKg: data.totalWeightKg || 10,
+      status: data.status || 'dispatched',
+      senderSignatureName: currentActiveStaffSession?.userName || 'Logistics Coordinator',
+      driverSignatureName: data.driverName || 'Agus Setyawan',
+    };
+
+    suratJalanRecords.unshift(newSj);
+
+    res.json({
+      success: true,
+      document: newSj,
+      message: `Surat Jalan ${newSj.documentNumber} issued successfully!`,
+    });
+  });
+
+  app.get('/api/admin/logistics/delivery-orders', (_req: Request, res: Response) => {
+    res.json(deliveryOrderRecords);
+  });
+
+  app.post('/api/admin/logistics/delivery-orders', (req: Request, res: Response) => {
+    const data = req.body as Partial<DeliveryOrderDocument>;
+    const seq = (deliveryOrderRecords.length + 1).toString().padStart(4, '0');
+    const newDo: DeliveryOrderDocument = {
+      id: `DO-2026-${seq}`,
+      doNumber: data.doNumber || `DO/GMRT/2026/${seq}`,
+      issueDate: data.issueDate || new Date().toISOString().split('T')[0],
+      poNumber: data.poNumber,
+      customerOrStoreName: data.customerOrStoreName || 'Commercial Partner',
+      deliveryAddress: data.deliveryAddress || 'Greater Jakarta Hub',
+      deliveryWindow: data.deliveryWindow || 'Morning (08:00 - 12:00)',
+      authorizedOfficer: currentActiveStaffSession?.userName || 'Store Manager',
+      items: data.items || [],
+      subtotalIDR: data.subtotalIDR || 0,
+      taxIDR: data.taxIDR || 0,
+      totalAmountIDR: data.totalAmountIDR || 0,
+      status: data.status || 'in_transit',
+      notes: data.notes,
+    };
+    deliveryOrderRecords.unshift(newDo);
+    res.json({ success: true, document: newDo, message: `Delivery Order ${newDo.doNumber} registered.` });
+  });
+
+  app.get('/api/admin/logistics/shipments', (_req: Request, res: Response) => {
+    res.json(shipmentQuotaTrackers);
+  });
+
+  app.post('/api/admin/logistics/shipments', (req: Request, res: Response) => {
+    const data = req.body as Partial<ShipmentQuotaTracking>;
+    const seq = (shipmentQuotaTrackers.length + 1).toString().padStart(3, '0');
+    const newShipment: ShipmentQuotaTracking = {
+      id: `SHP-2026-${seq}`,
+      tripId: data.tripId || `TRIP-JKT-${seq}`,
+      vehicleType: data.vehicleType || 'Refrigerated Van 1.5T',
+      vehiclePlate: data.vehiclePlate || 'B 9200 KLD',
+      maxPayloadKg: data.maxPayloadKg || 1500,
+      currentPayloadKg: data.currentPayloadKg || 800,
+      quotaUtilizationPercent: Number((((data.currentPayloadKg || 800) / (data.maxPayloadKg || 1500)) * 100).toFixed(1)),
+      storageZone: data.storageZone || 'cold_chilled',
+      currentTempCelsius: data.currentTempCelsius ?? 3.2,
+      targetTempCelsius: data.targetTempCelsius ?? 3.5,
+      departureHub: data.departureHub || 'Senopati Hub',
+      destinationHub: data.destinationHub || 'PIK 2 Hub',
+      departureTime: data.departureTime || new Date().toISOString(),
+      estimatedArrival: data.estimatedArrival || new Date(Date.now() + 3600000 * 2).toISOString(),
+      driverName: data.driverName || 'Hendra Setiawan',
+      driverContact: data.driverContact || '+62 812-9988-7766',
+      assignedOrdersCount: data.assignedOrdersCount || 5,
+      status: data.status || 'in_transit',
+    };
+    shipmentQuotaTrackers.unshift(newShipment);
+    res.json({ success: true, shipment: newShipment, message: `Shipment Trip #${newShipment.tripId} dispatched.` });
+  });
+
+  // =============================================================
+  // MODULE 8: INVENTORY QUALITY CONTROL (QC) INSPECTION ENDPOINTS
+  // =============================================================
+  app.get('/api/admin/qc/inspections', (req: Request, res: Response) => {
+    const { storeId, disposition } = req.query;
+    let list = [...qcInspectionRecords];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((q) => q.storeId === storeId);
+    }
+    if (disposition && disposition !== 'ALL') {
+      list = list.filter((q) => q.disposition === disposition);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/admin/qc/inspections', (req: Request, res: Response) => {
+    const data = req.body as Partial<QCInspectionRecord>;
+    const seq = (qcInspectionRecords.length + 1).toString().padStart(3, '0');
+    const timestamp = new Date().toISOString();
+
+    const newQc: QCInspectionRecord = {
+      id: `QC-2026-${seq}`,
+      timestamp,
+      referenceType: data.referenceType || 'INCOMING_PO',
+      referenceId: data.referenceId || 'PO-2026-001',
+      sku: data.sku || 'SKU-PRD-001',
+      productName: data.productName || 'Produce Item',
+      category: data.category || 'produce',
+      batchNumber: data.batchNumber || `BAT-${Date.now().toString().slice(-6)}`,
+      expiryDate: data.expiryDate || new Date(Date.now() + 86400000 * 10).toISOString().split('T')[0],
+      sampleQuantity: data.sampleQuantity || 5,
+      totalBatchQuantity: data.totalBatchQuantity || 50,
+      storeId: data.storeId || 'store-jkt-senopati',
+      storeName: data.storeName || 'GroceMart Senopati Flagship',
+      inspectorId: currentActiveStaffSession?.userId || 'USR-QC-01',
+      inspectorName: currentActiveStaffSession?.userName || 'Ratna Kusuma (QC Inspector)',
+      parameters: data.parameters || {
+        visualFreshness: 'Grade A (Pristine)',
+        temperatureCelsius: 3.5,
+        coldChainCompliant: true,
+        packagingIntegrity: 'Sealed & Intact',
+        sensoryOdorCheck: 'Normal & Fresh',
+        brixSugarContent: 5.0,
+        weightToleranceCompliant: true,
+      },
+      disposition: data.disposition || 'PASSED',
+      actionTaken: data.actionTaken || 'RELEASE_TO_SHELF',
+      notes: data.notes || 'Inspection completed according to food hygiene standard.',
+    };
+
+    qcInspectionRecords.unshift(newQc);
+
+    // If REJECTED and SCRAP_WASTE, auto-log waste record
+    if (newQc.disposition === 'REJECTED' && newQc.actionTaken === 'SCRAP_WASTE') {
+      const invItem = inventoryList.find((i) => i.sku === newQc.sku);
+      const unitCost = invItem?.unitCost || 12000;
+      const wasteLoss = newQc.totalBatchQuantity * unitCost;
+
+      const wasteId = `WST-QC-2026-${(wasteRecords.length + 1).toString().padStart(3, '0')}`;
+      wasteRecords.unshift({
+        id: wasteId,
+        storeId: newQc.storeId,
+        storeName: newQc.storeName,
+        warehouseZoneId: 'WH-JKT-SEN-COLD',
+        sku: newQc.sku,
+        productName: newQc.productName,
+        batchId: newQc.batchNumber,
+        lotNumber: `LOT-${newQc.batchNumber}`,
+        quantityScrapped: newQc.totalBatchQuantity,
+        unit: 'pack',
+        unitCost,
+        totalShrinkageCost: wasteLoss,
+        reason: 'expired',
+        actionTaken: 'safe_disposal',
+        reportedBy: newQc.inspectorName,
+        reportedAt: timestamp,
+        notes: `Auto-scrapped from QC rejection #${newQc.id}: ${newQc.notes}`,
+      });
+    }
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'GOODS_RECEIPT_APPROVAL',
+      resourceId: newQc.id,
+      userId: newQc.inspectorId,
+      userName: newQc.inspectorName,
+      userRole: 'store_manager',
+      storeId: newQc.storeId,
+      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-QC-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        sku: newQc.sku,
+        disposition: newQc.disposition,
+        actionTaken: newQc.actionTaken,
+        batchNumber: newQc.batchNumber,
+      },
+    });
+
+    res.json({
+      success: true,
+      record: newQc,
+      message: `Quality Control inspection #${newQc.id} recorded with disposition: ${newQc.disposition} (${newQc.actionTaken.replace(/_/g, ' ')}).`,
+    });
+  });
+
+  // =============================================================
+  // CHART OF ACCOUNTS (COA) MANUAL CRUD MANAGEMENT
+  // =============================================================
+  app.post('/api/admin/settings/coa-account', (req: Request, res: Response) => {
+    const { accountCode, accountName, category, storeId, normalBalance, balance, description } = req.body;
+
+    if (!accountCode || !accountName || !category) {
+      return res.status(400).json({ success: false, error: 'Account Code, Account Name, and Category are required.' });
+    }
+
+    const existing = chartOfAccounts.find((c) => c.accountCode === accountCode);
+    if (existing) {
+      return res.status(409).json({ success: false, error: `Account code ${accountCode} already exists (${existing.accountName}).` });
+    }
+
+    const newAccount: ChartOfAccount = {
+      accountCode,
+      accountName,
+      category,
+      storeId: storeId || 'CONSOLIDATED',
+      normalBalance: normalBalance || (category === 'Asset' || category === 'Expense' ? 'Debit' : 'Credit'),
+      balance: Number(balance) || 0,
+      description: description || `Manually created general ledger account ${accountCode} - ${accountName}`,
+    };
+
+    chartOfAccounts.push(newAccount);
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'COA_MAPPING_UPDATE',
+      resourceId: accountCode,
+      userId: currentActiveStaffSession?.userId || 'USR-ADM-01',
+      userName: currentActiveStaffSession?.userName || 'Finance Lead',
+      userRole: currentActiveStaffSession?.userRole || 'admin',
+      storeId: newAccount.storeId,
+      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: { accountCode, accountName, category, normalBalance: newAccount.normalBalance },
+    });
+
+    res.json({ success: true, account: newAccount, message: `COA Account ${accountCode} (${accountName}) created successfully.` });
+  });
+
+  app.put('/api/admin/settings/coa-account/:code', (req: Request, res: Response) => {
+    const { code } = req.params;
+    const { accountName, category, normalBalance, description, storeId } = req.body;
+
+    const account = chartOfAccounts.find((c) => c.accountCode === code);
+    if (!account) {
+      return res.status(404).json({ success: false, error: `Account ${code} not found.` });
+    }
+
+    if (accountName) account.accountName = accountName;
+    if (category) account.category = category;
+    if (normalBalance) account.normalBalance = normalBalance;
+    if (description !== undefined) account.description = description;
+    if (storeId) account.storeId = storeId;
+
+    res.json({ success: true, account, message: `COA Account ${code} updated successfully.` });
+  });
+
+  app.delete('/api/admin/settings/coa-account/:code', (req: Request, res: Response) => {
+    const { code } = req.params;
+    // Check if journal entries exist for this account
+    const hasEntries = generalLedger.some((gle) => gle.accountCode === code);
+    if (hasEntries) {
+      return res.status(409).json({
+        success: false,
+        error: `Cannot delete account ${code} because active General Ledger transactions exist under GAAP immutability rules.`,
+      });
+    }
+
+    const idx = chartOfAccounts.findIndex((c) => c.accountCode === code);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: `Account ${code} not found.` });
+    }
+
+    chartOfAccounts.splice(idx, 1);
+    res.json({ success: true, message: `COA Account ${code} deleted.` });
+  });
+
+  // =============================================================
+  // MODULE 9: SPECIALIZED GROCERY METRICS & INTELLIGENCE
+  // =============================================================
+  app.get('/api/admin/reports/grocery-metrics', (req: Request, res: Response) => {
+    const { storeId } = req.query;
+    const now = Date.now();
+
+    // 1. FIFO & Batch Expiry Analytics
+    let relevantBatches = [...inventoryBatches];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      relevantBatches = relevantBatches.filter((b) => b.storeId === storeId);
+    }
+
+    let criticalCount = 0;
+    let nearExpiryCount = 0;
+    let freshCount = 0;
+    let stableCount = 0;
+    let atRiskValue = 0;
+
+    relevantBatches.forEach((b) => {
+      const exp = new Date(b.expiryDate).getTime();
+      const daysLeft = Math.ceil((exp - now) / (1000 * 3600 * 24));
+      const val = b.currentStock * b.unitCost;
+
+      if (daysLeft <= 3) {
+        criticalCount++;
+        atRiskValue += val;
+      } else if (daysLeft <= 7) {
+        nearExpiryCount++;
+        atRiskValue += val;
+      } else if (daysLeft <= 14) {
+        freshCount++;
+      } else {
+        stableCount++;
+      }
+    });
+
+    const agingBuckets = [
+      { bucket: 'Critical (< 3 Days)', units: criticalCount * 12, valueIDR: atRiskValue * 0.4 },
+      { bucket: 'Near Expiry (4 - 7 Days)', units: nearExpiryCount * 18, valueIDR: atRiskValue * 0.6 },
+      { bucket: 'Fresh Harvest (8 - 14 Days)', units: freshCount * 25, valueIDR: freshCount * 450000 },
+      { bucket: 'Stable / Long Shelf (> 15 Days)', units: stableCount * 40, valueIDR: stableCount * 850000 },
+    ];
+
+    // 2. Waste & Shrinkage Breakdown
+    let totalShrinkLoss = 0;
+    let naturalMoistureLoss = 0;
+    let prepAndWashLoss = 0;
+    let handlingDamageLoss = 0;
+    let expiredSpoilageLoss = 0;
+
+    naturalShrinkageAdjustments.forEach((adj) => {
+      naturalMoistureLoss += adj.totalLossCost;
+      totalShrinkLoss += adj.totalLossCost;
+    });
+
+    wasteRecords.forEach((w) => {
+      totalShrinkLoss += w.totalShrinkageCost;
+      if (w.reason === 'expired') expiredSpoilageLoss += w.totalShrinkageCost;
+      else if (w.reason === 'damaged_in_transit') handlingDamageLoss += w.totalShrinkageCost;
+      else if (w.reason === 'chiller_temp_breach') prepAndWashLoss += w.totalShrinkageCost;
+      else prepAndWashLoss += w.totalShrinkageCost;
+    });
+
+    const departmentBreakdown = [
+      { department: 'Organic Fresh Produce', lossIDR: Math.round(totalShrinkLoss * 0.48), percentage: 48 },
+      { department: 'Prime Meat & Seafood', lossIDR: Math.round(totalShrinkLoss * 0.28), percentage: 28 },
+      { department: 'Artisan Dairy & Eggs', lossIDR: Math.round(totalShrinkLoss * 0.14), percentage: 14 },
+      { department: 'Artisan Bakery', lossIDR: Math.round(totalShrinkLoss * 0.10), percentage: 10 },
+    ];
+
+    // 3. Fulfillment Metrics
+    let totalPickMins = 0;
+    pickerOrders.forEach(() => {
+      totalPickMins += 4.5;
+    });
+    const avgPickMins = pickerOrders.length > 0 ? Number((totalPickMins / pickerOrders.length).toFixed(1)) : 4.8;
+
+    const report: GroceryMetricsReport = {
+      generatedAt: new Date().toISOString(),
+      storeId: (storeId as string) || 'CONSOLIDATED',
+      fifoExpiryMetrics: {
+        criticalBatchesCount: criticalCount,
+        nearExpiryBatchesCount: nearExpiryCount,
+        freshBatchesCount: freshCount,
+        stableBatchesCount: stableCount,
+        atRiskInventoryValueIDR: atRiskValue,
+        vivoDiscountSoldUnits: 142,
+        vivoRevenueRecoveredIDR: 2840000,
+        batchTurnoverRateDays: 5.2,
+        agingBuckets,
+      },
+      wasteShrinkageMetrics: {
+        totalShrinkLossIDR: totalShrinkLoss || 345000,
+        shrinkToSalesRatioPercent: 1.65, // well below 2.5% target
+        naturalMoistureLossIDR: naturalMoistureLoss || 65000,
+        prepAndWashLossIDR: prepAndWashLoss || 95000,
+        handlingDamageLossIDR: handlingDamageLoss || 55000,
+        expiredSpoilageLossIDR: expiredSpoilageLoss || 130000,
+        departmentBreakdown,
+      },
+      fulfillmentMetrics: {
+        averagePickTimeMinutes: avgPickMins,
+        catchWeightAccuracyPercent: 98.4,
+        substitutionsAcceptedPercent: 94.2,
+        onTimeDeliveryPercent: 97.8,
+        clickAndCollectFulfillmentRatePercent: 99.1,
+      },
+    };
+
+    res.json(report);
+  });
 
   // -------------------------------------------------------------
   // VITE OR STATIC CLIENT MOUNT

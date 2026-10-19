@@ -82,6 +82,10 @@ import { RbacModule } from './RbacModule';
 import { SecurityAuditModule } from './SecurityAuditModule';
 import { PosModule } from './PosModule';
 import { SettingsModule } from './SettingsModule';
+import { InventoryQCModule } from './InventoryQCModule';
+import { LogisticsDocsModal } from './LogisticsDocsModal';
+import { ApprovalMatrixModule } from './ApprovalMatrixModule';
+import { GroceryReportsModule } from './GroceryReportsModule';
 import { AdminSidebar, AdminDashboardTab, AccountingSubTab } from './AdminSidebar';
 
 interface AdminDashboardProps {
@@ -2379,6 +2383,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* ========================================================================= */}
+        {/* TAB 4B: INVENTORY QUALITY CONTROL (QC) INSPECTION & DISPOSITION */}
+        {/* ========================================================================= */}
+        {activeTab === 'qc' && (
+          <InventoryQCModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            inventory={inventory}
+            onShowToast={onShowToast}
+            onRefreshData={refreshAllData}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4C: LOGISTICS & SHIPPING OPERATIONAL DOCUMENTS (SURAT JALAN & DO) */}
+        {/* ========================================================================= */}
+        {activeTab === 'logistics' && (
+          <LogisticsDocsModal
+            theme={theme}
+            isOpen={true}
+            isStandalonePage={true}
+            onClose={() => setActiveTab('overview')}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4D: INTERNAL WAREHOUSE TRANSFERS & TRACKING REPORT */}
+        {/* ========================================================================= */}
+        {activeTab === 'transfers' && (
+          <SettingsModule
+            theme={theme}
+            chartOfAccounts={chartOfAccounts}
+            storeOutlets={storeOutlets}
+            warehouseZones={warehouseZones}
+            inventoryTiers={inventoryTiers}
+            initialSubTab="transfer"
+            onShowToast={onShowToast}
+            onRefreshData={refreshAllData}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4E: MULTI-TIER APPROVAL WORKFLOW & MATRIX CONFIGURATION */}
+        {/* ========================================================================= */}
+        {activeTab === 'approvals' && (
+          <ApprovalMatrixModule
+            theme={theme}
+            onShowToast={onShowToast}
+            onRefreshData={refreshAllData}
+          />
+        )}
+
+        {/* ========================================================================= */}
         {/* TAB 5: MULTI-STORE CHART OF ACCOUNTS & FINANCIAL ACCOUNTING */}
         {/* ========================================================================= */}
         {activeTab === 'accounting' && (
@@ -2398,6 +2455,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onShowToast={onShowToast}
             activeSubTab={accountingDeepSubTab}
             onSubTabChange={(sub) => setAccountingDeepSubTab(sub)}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 5B: SPECIALIZED GROCERY METRICS & INTELLIGENCE REPORTING */}
+        {/* ========================================================================= */}
+        {activeTab === 'reports' && (
+          <GroceryReportsModule
+            theme={theme}
+            onShowToast={onShowToast}
           />
         )}
 

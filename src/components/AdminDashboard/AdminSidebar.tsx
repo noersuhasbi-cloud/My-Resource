@@ -25,6 +25,10 @@ import {
   LogOut,
   CreditCard,
   Settings,
+  ShieldCheck,
+  BarChart3,
+  ArrowRightLeft,
+  CheckSquare,
 } from 'lucide-react';
 
 export type AdminDashboardTab =
@@ -36,6 +40,11 @@ export type AdminDashboardTab =
   | 'waste'
   | 'picker'
   | 'procurement'
+  | 'qc'
+  | 'logistics'
+  | 'transfers'
+  | 'approvals'
+  | 'reports'
   | 'accounting'
   | 'openapi'
   | 'erd'
@@ -407,6 +416,114 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+
+            {/* 7B. Quality Control (QC) Inspection */}
+            <button
+              onClick={() => handleTabClick('qc')}
+              title={isCollapsed ? 'Inventory Quality Control (QC)' : undefined}
+              className={navItemClass(activeTab === 'qc')}
+            >
+              <ShieldCheck
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'qc' ? 'text-white' : 'text-teal-600 dark:text-teal-400'
+                }`}
+              />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Quality Control (QC)</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'qc'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-teal-50 text-teal-800 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-500/30'
+                    }`}
+                  >
+                    HACCP
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* 7C. Logistics & Shipping Documents */}
+            <button
+              onClick={() => handleTabClick('logistics')}
+              title={isCollapsed ? 'Logistics & Shipping Documents' : undefined}
+              className={navItemClass(activeTab === 'logistics')}
+            >
+              <Truck
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'logistics' ? 'text-white' : 'text-blue-600 dark:text-blue-400'
+                }`}
+              />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Surat Jalan &amp; Logistics</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'logistics'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30'
+                    }`}
+                  >
+                    SJ/DO
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* 7D. Inter-Warehouse Transfers & Tracking */}
+            <button
+              onClick={() => handleTabClick('transfers')}
+              title={isCollapsed ? 'Inter-Warehouse Transfers & Tracking' : undefined}
+              className={navItemClass(activeTab === 'transfers')}
+            >
+              <ArrowRightLeft
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'transfers' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'
+                }`}
+              />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Warehouse Transfers</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'transfers'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/30'
+                    }`}
+                  >
+                    Hub
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* 7E. Approval Workflow & Matrix */}
+            <button
+              onClick={() => handleTabClick('approvals')}
+              title={isCollapsed ? 'Approval Matrix & Workflows' : undefined}
+              className={navItemClass(activeTab === 'approvals')}
+            >
+              <CheckSquare
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'approvals' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'
+                }`}
+              />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Approval Matrix</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'approvals'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30'
+                    }`}
+                  >
+                    Matrix
+                  </span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -491,6 +608,33 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 })}
               </div>
             )}
+
+            {/* Specialized Grocery Metrics & Reports */}
+            <button
+              onClick={() => handleTabClick('reports')}
+              title={isCollapsed ? 'Grocery Intelligence Reports' : undefined}
+              className={navItemClass(activeTab === 'reports')}
+            >
+              <BarChart3
+                className={`w-4 h-4 flex-shrink-0 ${
+                  activeTab === 'reports' ? 'text-white' : 'text-amber-600 dark:text-amber-400'
+                }`}
+              />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Grocery Reports</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      activeTab === 'reports'
+                        ? 'bg-white/20 text-white border-white/30'
+                        : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30'
+                    }`}
+                  >
+                    FIFO/SLA
+                  </span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
