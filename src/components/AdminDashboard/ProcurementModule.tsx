@@ -97,7 +97,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [replenishmentPlan, setReplenishmentPlan] = useState<AutoReplenishmentConsolidatedPlan | null>(null);
   const [isLoadingPlan, setIsLoadingPlan] = useState<boolean>(false);
   const [isGeneratingDraftPOs, setIsGeneratingDraftPOs] = useState<boolean>(false);
-  const [urgencyFilter, setUrgencyFilter] = useState<'ALL' | 'CRITICAL_OUT_OF_STOCK' | 'BELOW_SAFETY_STOCK' | 'REORDER_TRIGGERED' | 'OPTIMAL'>('ALL');
+  const [urgencyFilter, setUrgencyFilter] = useState<'ALL' | 'CRITICAL_OUT_OF_STOCK' | 'BELOW_SAFETY_STOCK' | 'HEALTHY_STOCK' | 'OVERSTOCKED'>('ALL');
   const [selectedReplenishmentSkus, setSelectedReplenishmentSkus] = useState<string[]>([]);
 
   // Filters
@@ -126,7 +126,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const filteredReplenishmentItems = useMemo(() => {
     if (!replenishmentPlan?.items) return [];
     return replenishmentPlan.items.filter((item) => {
-      if (urgencyFilter !== 'ALL' && item.urgency !== urgencyFilter) return false;
+      if (urgencyFilter !== 'ALL' && item.urgencyLevel !== urgencyFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return (
@@ -501,9 +501,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         >
           <Sparkles className="w-4 h-4 text-amber-400" />
           <span>Auto-Replenishment (Min-Max)</span>
-          {replenishmentPlan && replenishmentPlan.reorderTriggeredCount > 0 && (
+          {replenishmentPlan && replenishmentPlan.skusNeedingRestockCount > 0 && (
             <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse">
-              {replenishmentPlan.reorderTriggeredCount}
+              {replenishmentPlan.skusNeedingRestockCount}
             </span>
           )}
         </button>
@@ -623,9 +623,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 <button
                   type="button"
                   onClick={handleGenerateAutoPOs}
-                  disabled={isGeneratingDraftPOs || (replenishmentPlan?.reorderTriggeredCount === 0 && selectedReplenishmentSkus.length === 0)}
+                  disabled={isGeneratingDraftPOs || (replenishmentPlan?.skusNeedingRestockCount === 0 && selectedReplenishmentSkus.length === 0)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-sm ${
-                    isGeneratingDraftPOs || (replenishmentPlan?.reorderTriggeredCount === 0 && selectedReplenishmentSkus.length === 0)
+                    isGeneratingDraftPOs || (replenishmentPlan?.skusNeedingRestockCount === 0 && selectedReplenishmentSkus.length === 0)
                       ? 'bg-stone-400 cursor-not-allowed opacity-60'
                       : 'bg-gradient-to-r from-emerald-700 to-[#0F4C3A] hover:brightness-110 active:scale-98'
                   }`}
@@ -648,7 +648,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 </div>
 
                 <div className={`p-3 rounded-xl border ${
-                  replenishmentPlan.reorderTriggeredCount > 0
+                  replenishmentPlan.skusNeedingRestockCount > 0
                     ? 'bg-rose-500/10 border-rose-500/30'
                     : isLight ? 'bg-white border-gray-200/80' : 'bg-stone-800/50 border-stone-700/60'
                 }`}>
@@ -657,13 +657,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     <AlertTriangle className="w-3 h-3" />
                   </div>
                   <div className="text-lg font-bold text-rose-600 dark:text-rose-300 mt-0.5">
-                    {replenishmentPlan.reorderTriggeredCount} SKUs
+                    {replenishmentPlan.skusNeedingRestockCount} SKUs
                   </div>
                   <div className="text-[10px] text-rose-500">Stock ≤ Reorder Point</div>
                 </div>
 
                 <div className={`p-3 rounded-xl border ${
-                  replenishmentPlan.criticalCount > 0
+                  replenishmentPlan.criticalSkusCount > 0
                     ? 'bg-amber-500/10 border-amber-500/30'
                     : isLight ? 'bg-white border-gray-200/80' : 'bg-stone-800/50 border-stone-700/60'
                 }`}>
@@ -672,7 +672,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     <ShieldAlert className="w-3 h-3" />
                   </div>
                   <div className="text-lg font-bold text-amber-600 dark:text-amber-300 mt-0.5">
-                    {replenishmentPlan.criticalCount} SKUs
+                    {replenishmentPlan.criticalSkusCount} SKUs
                   </div>
                   <div className="text-[10px] text-amber-500">Available stock = 0</div>
                 </div>
@@ -726,8 +726,8 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     { id: 'ALL', label: 'All Items' },
                     { id: 'CRITICAL_OUT_OF_STOCK', label: 'Critical (0 Stock)' },
                     { id: 'BELOW_SAFETY_STOCK', label: 'Below Safety Stock' },
-                    { id: 'REORDER_TRIGGERED', label: 'Reorder Triggered' },
-                    { id: 'OPTIMAL', label: 'Optimal Buffer' },
+                    { id: 'HEALTHY_STOCK', label: 'Healthy Stock' },
+                    { id: 'OVERSTOCKED', label: 'Overstocked' },
                   ] as const
                 ).map((u) => (
                   <button
@@ -837,7 +837,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           <div className="font-mono text-xs font-semibold">
                             {item.dailySalesVelocity} <span className="text-[10px] text-stone-400">units/day</span>
                           </div>
-                          <div className="text-[10px] text-stone-400">Lead: {item.leadTimeDays}d</div>
+                          <div className="text-[10px] text-stone-400">Lead: {item.supplierLeadTimeDays}d</div>
                         </td>
                         <td className="py-3 px-3 text-center">
                           <span className="font-mono font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
@@ -850,30 +850,30 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           </span>
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-stone-900 dark:text-stone-100">
-                          {formatIDR(item.estimatedTotalCostIDR)}
+                          {formatIDR(item.estimatedOrderCostIDR)}
                           <div className="text-[10px] text-stone-400 font-normal">
-                            @{formatIDR(item.estimatedUnitCostIDR)}/unit
+                            @{formatIDR(item.unitCost)}/unit
                           </div>
                         </td>
                         <td className="py-3 px-3 text-center">
-                          {item.urgency === 'CRITICAL_OUT_OF_STOCK' && (
+                          {item.urgencyLevel === 'CRITICAL_OUT_OF_STOCK' && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30">
                               <AlertTriangle className="w-3 h-3" /> Critical 0
                             </span>
                           )}
-                          {item.urgency === 'BELOW_SAFETY_STOCK' && (
+                          {item.urgencyLevel === 'BELOW_SAFETY_STOCK' && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                               <ShieldAlert className="w-3 h-3" /> Below Safety
                             </span>
                           )}
-                          {item.urgency === 'REORDER_TRIGGERED' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
-                              <Clock className="w-3 h-3" /> Reorder Triggered
+                          {item.urgencyLevel === 'HEALTHY_STOCK' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                              <CheckCircle2 className="w-3 h-3" /> Healthy Stock
                             </span>
                           )}
-                          {item.urgency === 'OPTIMAL' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                              <CheckCircle2 className="w-3 h-3" /> Optimal
+                          {item.urgencyLevel === 'OVERSTOCKED' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                              <Clock className="w-3 h-3" /> Overstocked
                             </span>
                           )}
                         </td>

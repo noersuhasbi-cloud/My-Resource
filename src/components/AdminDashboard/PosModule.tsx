@@ -273,7 +273,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
       }
     >
   >({});
-  const [refundChannel, setRefundChannel] = useState<RefundPaymentChannel>('CASH');
+  const [refundChannel, setRefundChannel] = useState<RefundPaymentChannel>('CASH_DRAWER');
   const [returnCustomerName, setReturnCustomerName] = useState<string>('');
   const [returnCustomerPhone, setReturnCustomerPhone] = useState<string>('');
   const [isProcessingReturn, setIsProcessingReturn] = useState<boolean>(false);
@@ -526,18 +526,18 @@ export const PosModule: React.FC<PosModuleProps> = ({
         processedByUserName: activeStaffSession?.userName || 'Frontline Cashier',
         items: itemsPayload,
         refundChannel,
-        customerName: returnCustomerName || searchedReturnReceipt.customerName,
+        customerName: returnCustomerName || (searchedReturnReceipt as any)?.customerName || 'Walk-in Customer',
         customerPhone: returnCustomerPhone,
       });
 
       if (res.success) {
-        if (refundChannel === 'CASH') {
+        if (refundChannel === 'CASH_DRAWER') {
           playCashDrawerChime();
           apiClient.kickCashDrawer(250, activeStaffSession?.userName).catch(() => {});
         }
         setReturnSuccessModal({
           record: res.returnRecord,
-          glVouchers: res.glVouchers,
+          glVouchers: res.glVoucherIds,
           slipText: res.slipText,
         });
         setSearchedReturnReceipt(null);
@@ -547,7 +547,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
         await onTransactionSynced();
         onShowToast(
           'Return & Refund Processed',
-          `Return ${res.returnRecord.returnNumber} posted! GL vouchers created: ${res.glVouchers.join(', ')}`
+          `Return ${res.returnRecord.id} posted! GL vouchers created: ${res.glVoucherIds.join(', ')}`
         );
       }
     } catch (e: any) {

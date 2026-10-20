@@ -153,8 +153,34 @@ export function executeThermalReceiptPrint(payload: ThermalPrintReceiptPayload):
 }
 
 // =============================================================
-// 2. CASH DRAWER KICK PULSE TRIGGER
+// 2. CASH DRAWER KICK PULSE TRIGGER & AUDIO FEEDBACK
 // =============================================================
+
+/**
+ * Synthesize standard retail barcode scanner success beep using Web Audio API
+ */
+export function playBeepSuccess() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(2400, ctx.currentTime);
+
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+  } catch {
+    // Audio context may be restricted before user gesture
+  }
+}
 
 /**
  * Synthesize cash drawer mechanical kick-out chime/click using Web Audio API

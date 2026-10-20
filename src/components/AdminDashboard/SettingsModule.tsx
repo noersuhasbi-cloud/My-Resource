@@ -1674,7 +1674,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               </div>
 
               <div className="relative w-full sm:w-64">
-                <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${textMuted}`} />
+                <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${isLight ? 'text-gray-400' : 'text-stone-500'}`} />
                 <input
                   type="text"
                   value={promoSearch}
@@ -1726,7 +1726,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                                 {rule.name}
                               </div>
                             </div>
-                            <div className={`text-[11px] ${textMuted} mt-0.5`}>
+                            <div className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-stone-400'} mt-0.5`}>
                               {rule.description}
                             </div>
                           </td>
@@ -1818,8 +1818,8 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       <Sparkles className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className={`text-sm font-bold ${textTitle}`}>New Promotion Rule</h3>
-                      <p className={`text-[11px] ${textMuted}`}>GroceMart Retail Discount &amp; Loyalty Engine</p>
+                      <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>New Promotion Rule</h3>
+                      <p className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>GroceMart Retail Discount &amp; Loyalty Engine</p>
                     </div>
                   </div>
                   <button
