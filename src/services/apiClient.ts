@@ -56,6 +56,13 @@ import type {
   AppliedPromotionSummary,
   AutoReplenishmentItemPlan,
   AutoReplenishmentConsolidatedPlan,
+  EnterpriseSettingsConfig,
+  LandedCostRecord,
+  WarehouseBinLocation,
+  WarehouseMultiStepRoute,
+  AnalyticDepartment,
+  ProductMarginRecord,
+  EnterpriseQuotation,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
@@ -1550,6 +1557,215 @@ export const apiClient = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to generate replenishment POs');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 12: ENTERPRISE SETTINGS, VALUATION, ROUTING, & QUOTES
+  // -------------------------------------------------------------
+  async getEnterpriseSettings(): Promise<EnterpriseSettingsConfig> {
+    const res = await fetch('/api/admin/settings/enterprise');
+    if (!res.ok) throw new Error('Failed to fetch enterprise settings');
+    return res.json();
+  },
+
+  async updateEnterpriseSettings(settings: Partial<EnterpriseSettingsConfig>): Promise<{
+    success: boolean;
+    settings: EnterpriseSettingsConfig;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/settings/enterprise', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update enterprise settings');
+    }
+    return res.json();
+  },
+
+  async getLandedCosts(): Promise<LandedCostRecord[]> {
+    const res = await fetch('/api/admin/valuation/landed-costs');
+    return res.json().catch(() => []);
+  },
+
+  async createLandedCost(payload: {
+    description: string;
+    poId?: string;
+    billNumber?: string;
+    receiptNumber?: string;
+    currency?: string;
+    exchangeRate?: number;
+    freightCostIDR: number;
+    customsDutyIDR?: number;
+    handlingCostIDR?: number;
+    insuranceCostIDR?: number;
+    allocationMethod: 'EQUAL' | 'BY_QUANTITY' | 'BY_VALUE' | 'BY_WEIGHT';
+    items: Array<{ sku: string; quantity: number }>;
+  }): Promise<{
+    success: boolean;
+    record: LandedCostRecord;
+    journalEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/valuation/landed-costs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create landed cost record');
+    }
+    return res.json();
+  },
+
+  async getWarehouseBins(storeId?: string, zoneId?: string, status?: string): Promise<WarehouseBinLocation[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    if (zoneId && zoneId !== 'ALL') params.append('zoneId', zoneId);
+    if (status && status !== 'ALL') params.append('status', status);
+    const res = await fetch(`/api/admin/warehouse/bins?${params.toString()}`);
+    return res.json().catch(() => []);
+  },
+
+  async createWarehouseBin(bin: Partial<WarehouseBinLocation>): Promise<{
+    success: boolean;
+    bin: WarehouseBinLocation;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/warehouse/bins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bin),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create warehouse bin');
+    }
+    return res.json();
+  },
+
+  async updateWarehouseBin(id: string, updates: Partial<WarehouseBinLocation>): Promise<{
+    success: boolean;
+    bin: WarehouseBinLocation;
+    message: string;
+  }> {
+    const res = await fetch(`/api/admin/warehouse/bins/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update warehouse bin');
+    }
+    return res.json();
+  },
+
+  async getWarehouseRoutes(): Promise<WarehouseMultiStepRoute[]> {
+    const res = await fetch('/api/admin/warehouse/routes');
+    return res.json().catch(() => []);
+  },
+
+  async updateWarehouseRoute(id: string, updates: Partial<WarehouseMultiStepRoute>): Promise<{
+    success: boolean;
+    route: WarehouseMultiStepRoute;
+    message: string;
+  }> {
+    const res = await fetch(`/api/admin/warehouse/routes/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update warehouse route');
+    }
+    return res.json();
+  },
+
+  async getAnalyticDepartments(): Promise<AnalyticDepartment[]> {
+    const res = await fetch('/api/admin/accounting/analytic-departments');
+    return res.json().catch(() => []);
+  },
+
+  async updateAnalyticDepartment(id: string, updates: Partial<AnalyticDepartment>): Promise<{
+    success: boolean;
+    department: AnalyticDepartment;
+    message: string;
+  }> {
+    const res = await fetch(`/api/admin/accounting/analytic-departments/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update analytic department');
+    }
+    return res.json();
+  },
+
+  async getMarginAnalysis(): Promise<ProductMarginRecord[]> {
+    const res = await fetch('/api/admin/accounting/margin-analysis');
+    return res.json().catch(() => []);
+  },
+
+  async getEnterpriseQuotations(): Promise<EnterpriseQuotation[]> {
+    const res = await fetch('/api/admin/sales/quotations');
+    return res.json().catch(() => []);
+  },
+
+  async createEnterpriseQuotation(payload: Partial<EnterpriseQuotation>): Promise<{
+    success: boolean;
+    quotation: EnterpriseQuotation;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/sales/quotations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create quotation');
+    }
+    return res.json();
+  },
+
+  async signEnterpriseQuotation(id: string, payload: { signedBy: string; signatureDataUrl?: string }): Promise<{
+    success: boolean;
+    quotation: EnterpriseQuotation;
+    message: string;
+  }> {
+    const res = await fetch(`/api/admin/sales/quotations/${encodeURIComponent(id)}/sign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to sign quotation');
+    }
+    return res.json();
+  },
+
+  async convertQuotationToOrder(id: string): Promise<{
+    success: boolean;
+    order: any;
+    quotation: EnterpriseQuotation;
+    message: string;
+  }> {
+    const res = await fetch(`/api/admin/sales/quotations/${encodeURIComponent(id)}/convert-to-order`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to convert quotation to order');
     }
     return res.json();
   },

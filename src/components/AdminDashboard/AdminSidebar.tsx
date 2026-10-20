@@ -49,7 +49,7 @@ export type AdminDashboardTab =
   | 'rbac'
   | 'audit';
 
-export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa';
+export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills';
 
 interface AdminSidebarProps {
   theme: 'light' | 'dark';

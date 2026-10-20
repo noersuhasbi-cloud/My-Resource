@@ -19,6 +19,12 @@ import {
   INITIAL_BATCHES,
   INITIAL_WASTE_RECORDS,
   INITIAL_PICKER_ORDERS,
+  INITIAL_VENDOR_BILLS,
+  INITIAL_ENTERPRISE_SETTINGS,
+  INITIAL_LANDED_COSTS,
+  INITIAL_WAREHOUSE_BINS,
+  INITIAL_WAREHOUSE_ROUTES,
+  INITIAL_QUOTATIONS,
 } from './src/data/inventoryData.ts';
 import { INITIAL_ORDERS, PRODUCTS } from './src/data/mockData.ts';
 
@@ -34,6 +40,7 @@ import type {
   StoreInventoryStock,
   GoodsReceiptRecord,
   ChartOfAccount,
+  AccountCode,
   InventoryBatch,
   WasteRecord,
   PickerOrder,
@@ -52,6 +59,25 @@ import type {
   POSProductItem,
   POSTransactionRequest,
   POSTransactionReceipt,
+  EnterpriseSettingsConfig,
+  LandedCostRecord,
+  WarehouseBinLocation,
+  WarehouseMultiStepRoute,
+  AnalyticDepartment,
+  ProductMarginRecord,
+  EnterpriseQuotation,
+  EnterpriseQuotationItem,
+  VendorBill,
+  VendorBillItem,
+  VendorBillPaymentMethod,
+  PromotionRule,
+  CoaMappingConfig,
+  PosCheckoutConfig,
+  StockOpnameSession,
+  StockTransferRecord,
+  ApprovalTierRule,
+  ApprovalRequest,
+  BulkInventoryImportRow,
 } from './src/types/index.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -73,6 +99,126 @@ let inventoryBatches: InventoryBatch[] = JSON.parse(JSON.stringify(INITIAL_BATCH
 let wasteRecords: WasteRecord[] = JSON.parse(JSON.stringify(INITIAL_WASTE_RECORDS));
 let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDERS));
 let customerOrders: Order[] = JSON.parse(JSON.stringify(INITIAL_ORDERS));
+let enterpriseSettings: EnterpriseSettingsConfig = JSON.parse(JSON.stringify(INITIAL_ENTERPRISE_SETTINGS));
+let landedCostsList: LandedCostRecord[] = JSON.parse(JSON.stringify(INITIAL_LANDED_COSTS));
+let warehouseBins: WarehouseBinLocation[] = JSON.parse(JSON.stringify(INITIAL_WAREHOUSE_BINS));
+let warehouseRoutes: WarehouseMultiStepRoute[] = JSON.parse(JSON.stringify(INITIAL_WAREHOUSE_ROUTES));
+let vendorBillsList: VendorBill[] = JSON.parse(JSON.stringify(INITIAL_VENDOR_BILLS));
+let enterpriseQuotationsList: EnterpriseQuotation[] = JSON.parse(JSON.stringify(INITIAL_QUOTATIONS));
+
+let coaMappingConfig: CoaMappingConfig = {
+  posRevenueAccountCode: '4010',
+  posRevenueAccountName: 'Grocery Sales Revenue - Retail Storefront',
+  inventoryAssetAccountCode: '1040',
+  inventoryAssetAccountName: 'Merchandise Inventory Asset',
+  shrinkageExpenseAccountCode: '5030',
+  shrinkageExpenseAccountName: 'Waste, Spoilage & Shrinkage Expense',
+  cogsAccountCode: '5010',
+  cogsAccountName: 'Cost of Goods Sold (COGS) - FIFO / WAC',
+  cashClearingAccountCode: '1010',
+  cashClearingAccountName: 'Cash & Register Drawer Clearing',
+  qrisClearingAccountCode: '1030',
+  qrisClearingAccountName: 'QRIS Settlement Receivable (ASPI Clearing)',
+  edcClearingAccountCode: '1020',
+  edcClearingAccountName: 'Bank BCA Operational Clearing (EDC Card)',
+  taxPayableAccountCode: '2020',
+  taxPayableAccountName: 'Value-Added Tax (PPN) Output Payable',
+  updatedAt: new Date().toISOString(),
+  updatedBy: 'Siti Rahmawati',
+};
+
+let posCheckoutConfig: PosCheckoutConfig = {
+  roundingRule: 'nearest_100',
+  ppnTaxPercent: 11,
+  isTaxInclusive: false,
+  maxCashierDiscountPercent: 15,
+  enableVivoNearExpiryDiscount: true,
+  vivoNearExpiryDiscountPercent: 25,
+  cashDrawerFloatIDR: 500000,
+  loyaltyPointsPer1000IDR: 1,
+  requireManagerPinForVoid: true,
+  storeReceiptFooterText: 'Thank you for shopping at GroceMart! Fresh harvest daily.',
+  updatedAt: new Date().toISOString(),
+  updatedBy: 'Budi Santoso',
+};
+
+let stockOpnameSessions: StockOpnameSession[] = [];
+let stockTransfersList: StockTransferRecord[] = [];
+let approvalRulesList: ApprovalTierRule[] = [
+  {
+    id: 'RULE-PO-01',
+    ruleName: 'Standard Store Inventory PO (< Rp 10M)',
+    module: 'PROCUREMENT',
+    minAmountIDR: 0,
+    maxAmountIDR: 10000000,
+    requiredRole: 'store_manager',
+    autoApproveBelowMin: false,
+    description: 'Store Managers can approve regular inventory restocks under 10 Million IDR',
+  },
+  {
+    id: 'RULE-PO-02',
+    ruleName: 'Capital & Bulk Fresh Intake (> Rp 10M)',
+    module: 'PROCUREMENT',
+    minAmountIDR: 10000001,
+    maxAmountIDR: 500000000,
+    requiredRole: 'executive',
+    autoApproveBelowMin: false,
+    description: 'Bulk farm intakes and supplier contracts require Executive clearance',
+  },
+  {
+    id: 'RULE-WASTE-01',
+    ruleName: 'Perishable Shrinkage Scrap Approval',
+    module: 'WASTE',
+    minAmountIDR: 0,
+    maxAmountIDR: 50000000,
+    requiredRole: 'store_manager',
+    autoApproveBelowMin: false,
+    description: 'Quality lead scrap disposal verified by Store Manager',
+  },
+];
+let approvalQueueList: ApprovalRequest[] = [];
+let promotionRulesList: PromotionRule[] = [
+  {
+    id: 'PRM-2026-01',
+    name: 'Organic Fresh Produce Welcome',
+    code: 'ORGANIC20',
+    type: 'PERCENTAGE_DISCOUNT',
+    targetType: 'CATEGORY',
+    targetValue: 'produce',
+    discountPercent: 20,
+    minOrderSubtotalIDR: 50000,
+    active: true,
+    description: '20% off all crisp greens and heirloom produce',
+    usageCount: 42,
+  },
+  {
+    id: 'PRM-2026-02',
+    name: 'Gold Member VIP Fresh Bonus',
+    code: 'VIPGOLD10',
+    type: 'MEMBER_TIER',
+    targetType: 'ALL',
+    targetValue: 'ALL',
+    discountPercent: 10,
+    memberTier: 'GOLD',
+    active: true,
+    description: 'Exclusive 10% discount for Gold tier cardholders',
+    usageCount: 88,
+  },
+  {
+    id: 'PRM-2026-03',
+    name: 'Butterhead Lettuce B2G1 Harvest Festival',
+    code: 'B2G1_LETTUCE',
+    type: 'BOGO',
+    targetType: 'SKU',
+    targetValue: 'SKU-PRD-001',
+    buyQty: 2,
+    getQty: 1,
+    getDiscountPercent: 100,
+    active: true,
+    description: 'Buy 2 Butterhead heads, get 1 free',
+    usageCount: 15,
+  },
+];
 let posTransactionsHistory: POSTransactionReceipt[] = [
   {
     receiptNumber: 'RCP-SEN-882104',
@@ -3337,7 +3483,7 @@ async function startServer() {
 
     // 2. Automatic Accounting & General Ledger Double-Entry
     // Asset Account Mapping: Cash: 1010, QRIS: 1030, Card/Bank: 1020
-    let assetAccountCode = '1010';
+    let assetAccountCode: AccountCode = '1010';
     let assetAccountName = 'Cash on Hand & Store Registers';
     if (paymentMethod === 'qris') {
       assetAccountCode = '1030';
@@ -3501,6 +3647,897 @@ async function startServer() {
       return res.json(posTransactionsHistory.filter((r) => r.storeId === storeId));
     }
     res.json(posTransactionsHistory);
+  });
+
+  // =============================================================
+  // MODULE 12: ENTERPRISE SETTINGS & BUSINESS LOGIC SUITE
+  // Valuation Landed Costs, Warehouse Multi-Step Routes & Bins,
+  // 3-Way Matching, Analytic Accounting, and Quotations Engine
+  // =============================================================
+
+  // --- 1. ENTERPRISE SETTINGS MASTER CONFIG ---
+  app.get('/api/admin/settings/enterprise', (_req: Request, res: Response) => {
+    res.json(enterpriseSettings);
+  });
+
+  app.put('/api/admin/settings/enterprise', (req: Request, res: Response) => {
+    const updates = req.body as Partial<EnterpriseSettingsConfig>;
+    enterpriseSettings = {
+      ...enterpriseSettings,
+      ...updates,
+      landedCosts: { ...enterpriseSettings.landedCosts, ...(updates.landedCosts || {}) },
+      invoiceTracking: { ...enterpriseSettings.invoiceTracking, ...(updates.invoiceTracking || {}) },
+      warehouseRouting: { ...enterpriseSettings.warehouseRouting, ...(updates.warehouseRouting || {}) },
+      threeWayMatching: { ...enterpriseSettings.threeWayMatching, ...(updates.threeWayMatching || {}) },
+      analyticAccounting: { ...enterpriseSettings.analyticAccounting, ...(updates.analyticAccounting || {}) },
+      quotationsAndSales: { ...enterpriseSettings.quotationsAndSales, ...(updates.quotationsAndSales || {}) },
+    };
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'POLICY_UPDATE',
+      resourceId: 'ENTERPRISE_SETTINGS',
+      userId: currentActiveStaffSession.userId,
+      userName: currentActiveStaffSession.userName,
+      userRole: currentActiveStaffSession.userRole,
+      storeId: 'ALL',
+      shiftId: currentActiveStaffSession.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: { updatedBy: currentActiveStaffSession.userName },
+    });
+
+    res.json({
+      success: true,
+      settings: enterpriseSettings,
+      message: 'Enterprise configuration saved and synchronized network-wide.',
+    });
+  });
+
+  // --- 2. COA MAPPING & POS CHECKOUT CONFIG ---
+  app.get('/api/admin/settings/coa-mapping', (_req: Request, res: Response) => {
+    res.json(coaMappingConfig);
+  });
+
+  app.put('/api/admin/settings/coa-mapping', (req: Request, res: Response) => {
+    coaMappingConfig = {
+      ...coaMappingConfig,
+      ...req.body,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentActiveStaffSession.userName,
+    };
+    res.json({ success: true, config: coaMappingConfig, message: 'COA mapping updated successfully.' });
+  });
+
+  app.get('/api/admin/settings/pos-config', (_req: Request, res: Response) => {
+    res.json(posCheckoutConfig);
+  });
+
+  app.put('/api/admin/settings/pos-config', (req: Request, res: Response) => {
+    posCheckoutConfig = {
+      ...posCheckoutConfig,
+      ...req.body,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentActiveStaffSession.userName,
+    };
+    res.json({ success: true, config: posCheckoutConfig, message: 'POS configuration updated successfully.' });
+  });
+
+  // --- 3. VALUATION & LANDED COSTS ENGINE ---
+  app.get('/api/admin/valuation/landed-costs', (_req: Request, res: Response) => {
+    res.json(landedCostsList);
+  });
+
+  app.post('/api/admin/valuation/landed-costs', async (req: Request, res: Response) => {
+    const {
+      description = 'Inbound Cold-Chain Freight & Handling',
+      poId,
+      billNumber,
+      receiptNumber,
+      currency = 'IDR',
+      exchangeRate = 1,
+      freightCostIDR = 0,
+      customsDutyIDR = 0,
+      handlingCostIDR = 0,
+      insuranceCostIDR = 0,
+      allocationMethod = 'BY_QUANTITY',
+      items = [], // Array<{ sku: string; quantity: number }>
+    } = req.body;
+
+    const totalLandedCostIDR = freightCostIDR + customsDutyIDR + handlingCostIDR + insuranceCostIDR;
+    if (totalLandedCostIDR <= 0) {
+      return res.status(400).json({ error: 'Total landed cost must be greater than zero.' });
+    }
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'Please specify at least one product SKU to absorb landed cost.' });
+    }
+
+    const timestamp = new Date().toISOString();
+    const id = `LC-2026-${(landedCostsList.length + 1).toString().padStart(3, '0')}`;
+
+    // Calculate allocation
+    const totalQty = items.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 1), 0);
+    const allocatedItems = items.map((it: any) => {
+      const inv = inventoryList.find((i) => i.sku === it.sku);
+      const productName = inv?.productName || `Product ${it.sku}`;
+      const baseCost = inv?.unitCost || 15000;
+      const qty = Number(it.quantity) || 1;
+
+      let lineLandedShare = 0;
+      if (allocationMethod === 'BY_QUANTITY') {
+        lineLandedShare = totalQty > 0 ? Math.round((totalLandedCostIDR * qty) / totalQty) : Math.round(totalLandedCostIDR / items.length);
+      } else if (allocationMethod === 'EQUAL') {
+        lineLandedShare = Math.round(totalLandedCostIDR / items.length);
+      } else {
+        lineLandedShare = Math.round(totalLandedCostIDR / items.length);
+      }
+
+      const allocatedPerUnit = Math.round(lineLandedShare / qty);
+      const newUnitCost = baseCost + allocatedPerUnit;
+
+      if (inv) {
+        inv.unitCost = newUnitCost;
+      }
+      storeInventoryTiers.forEach((tier) => {
+        if (tier.sku === it.sku) {
+          tier.unitCost = newUnitCost;
+          tier.totalValuation = Math.round(tier.physicalStock * newUnitCost);
+        }
+      });
+
+      return {
+        sku: it.sku,
+        productName,
+        quantity: qty,
+        baseUnitCost: baseCost,
+        allocatedCostIDR: allocatedPerUnit,
+        newUnitCost,
+        totalLineLandedCost: lineLandedShare,
+      };
+    });
+
+    const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const glEntryIds = [gleId1, gleId2];
+
+    generalLedger.unshift({
+      id: gleId1,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '1040',
+      accountName: 'Merchandise Inventory Asset',
+      category: 'Asset',
+      debit: totalLandedCostIDR,
+      credit: 0,
+      referenceType: 'LANDED_COST',
+      referenceId: id,
+      description: `Landed Cost Absorption [${id}]: ${description} allocated across ${allocatedItems.length} SKUs`,
+    });
+
+    generalLedger.unshift({
+      id: gleId2,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: enterpriseSettings.landedCosts.clearingAccountCode as AccountCode || '2040',
+      accountName: enterpriseSettings.landedCosts.clearingAccountName || 'Landed Cost Accrual / Clearing',
+      category: 'Liability',
+      debit: 0,
+      credit: totalLandedCostIDR,
+      referenceType: 'LANDED_COST',
+      referenceId: id,
+      description: `Landed Cost Accrual for freight, customs & handling voucher #${id}`,
+    });
+
+    const record: LandedCostRecord = {
+      id,
+      timestamp,
+      poId,
+      billNumber,
+      receiptNumber,
+      description,
+      currency: currency as SupportedCurrency,
+      exchangeRate,
+      freightCostIDR,
+      customsDutyIDR,
+      handlingCostIDR,
+      insuranceCostIDR,
+      totalLandedCostIDR,
+      allocationMethod,
+      allocatedItems,
+      glEntryIds,
+      status: 'POSTED',
+      createdBy: currentActiveStaffSession.userName,
+    };
+
+    landedCostsList.unshift(record);
+
+    res.json({
+      success: true,
+      record,
+      journalEntryIds: glEntryIds,
+      message: `Landed cost ${id} (Rp ${totalLandedCostIDR.toLocaleString('id-ID')}) absorbed into product valuation and posted to General Ledger.`,
+    });
+  });
+
+  // --- 4. WAREHOUSE STORAGE BINS & ADVANCED ROUTING ---
+  app.get('/api/admin/warehouse/bins', (req: Request, res: Response) => {
+    const { storeId, zoneId, status } = req.query;
+    let filtered = warehouseBins;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      filtered = filtered.filter((b) => b.storeId === storeId);
+    }
+    if (zoneId && zoneId !== 'ALL') {
+      filtered = filtered.filter((b) => b.zoneId === zoneId);
+    }
+    if (status && status !== 'ALL') {
+      filtered = filtered.filter((b) => b.status === status);
+    }
+    res.json(filtered);
+  });
+
+  app.post('/api/admin/warehouse/bins', (req: Request, res: Response) => {
+    const {
+      storeId = 'store-jkt-senopati',
+      storeName = 'GroceMart Senopati Flagship',
+      zoneId = 'WH-JKT-SEN-COLD',
+      rack = 'Chilled Rack C',
+      shelf = 'Tier 1',
+      binCode,
+      type = 'COLD_CHUTE',
+      capacityUnits = 60,
+      currentSku,
+    } = req.body;
+
+    if (!binCode) {
+      return res.status(400).json({ error: 'binCode is required.' });
+    }
+
+    const inv = inventoryList.find((i) => i.sku === currentSku);
+    const newBin: WarehouseBinLocation = {
+      id: `BIN-${Date.now().toString().slice(-6)}`,
+      storeId,
+      storeName,
+      zoneId,
+      rack,
+      shelf,
+      binCode,
+      type,
+      currentSku: currentSku || undefined,
+      productName: inv?.productName,
+      capacityUnits: Number(capacityUnits) || 60,
+      occupancyUnits: currentSku ? 10 : 0,
+      status: currentSku ? 'OCCUPIED' : 'AVAILABLE',
+    };
+
+    warehouseBins.push(newBin);
+    res.json({ success: true, bin: newBin, message: `Storage location ${binCode} registered.` });
+  });
+
+  app.put('/api/admin/warehouse/bins/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const bin = warehouseBins.find((b) => b.id === id);
+    if (!bin) return res.status(404).json({ error: 'Bin location not found.' });
+
+    Object.assign(bin, req.body);
+    if (req.body.currentSku) {
+      const inv = inventoryList.find((i) => i.sku === req.body.currentSku);
+      if (inv) bin.productName = inv.productName;
+      bin.status = 'OCCUPIED';
+    } else if (req.body.occupancyUnits === 0) {
+      bin.status = 'AVAILABLE';
+      bin.currentSku = undefined;
+      bin.productName = undefined;
+    }
+    res.json({ success: true, bin, message: `Bin ${bin.binCode} updated.` });
+  });
+
+  app.get('/api/admin/warehouse/routes', (_req: Request, res: Response) => {
+    res.json(warehouseRoutes);
+  });
+
+  app.put('/api/admin/warehouse/routes/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const route = warehouseRoutes.find((r) => r.id === id);
+    if (!route) return res.status(404).json({ error: 'Route not found.' });
+    Object.assign(route, req.body);
+    res.json({ success: true, route, message: `Multi-step warehouse route updated.` });
+  });
+
+  // --- 5. PROCUREMENT 3-WAY MATCHING & VENDOR BILLS ---
+  app.get('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
+    const { storeId, status, currency } = req.query;
+    let filtered = vendorBillsList;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      filtered = filtered.filter((b) => b.storeId === storeId);
+    }
+    if (status && status !== 'ALL') {
+      filtered = filtered.filter((b) => b.status === status);
+    }
+    if (currency && currency !== 'ALL') {
+      filtered = filtered.filter((b) => b.currency === currency);
+    }
+    res.json(filtered);
+  });
+
+  app.post('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
+    const {
+      billNumber,
+      poId,
+      goodsReceiptId,
+      supplierName = 'Farm Partner',
+      supplierContact,
+      storeId = 'store-jkt-senopati',
+      storeName = 'GroceMart Senopati Flagship',
+      deliveryNoteNumber,
+      billDate = new Date().toISOString().split('T')[0],
+      dueDate,
+      paymentTerms = 'Net 30',
+      currency = 'IDR',
+      exchangeRate = 1,
+      items = [],
+      taxPercent = 11,
+      notes,
+      autoApprove = false,
+    } = req.body;
+
+    if (!billNumber || !poId || !goodsReceiptId) {
+      return res.status(400).json({ error: 'billNumber, poId, and goodsReceiptId are required.' });
+    }
+
+    const po = purchaseOrders.find((p) => p.id === poId);
+    const gr = goodsReceipts.find((g) => g.id === goodsReceiptId);
+
+    const qtyTolPercent = enterpriseSettings.threeWayMatching.quantityTolerancePercent || 2.0;
+    const priceTolPercent = enterpriseSettings.threeWayMatching.priceTolerancePercent || 1.0;
+
+    let hasAnyPriceVariance = false;
+    let hasAnyQtyVariance = false;
+
+    const validatedItems: VendorBillItem[] = items.map((it: any) => {
+      const poItem = po?.items.find((p) => p.sku === it.sku);
+      const grItem = gr?.items.find((g) => g.sku === it.sku);
+
+      const poQty = poItem ? poItem.orderedQuantity : it.billedQuantity;
+      const grQty = grItem ? grItem.quantityReceived : poQty;
+      const billedQty = Number(it.billedQuantity) || 0;
+
+      const poPrice = poItem ? (currency === 'IDR' ? poItem.unitCost : poItem.unitCost / exchangeRate) : it.unitCost;
+      const billedPrice = Number(it.unitCost) || 0;
+
+      const qtyDiffPercent = grQty > 0 ? (Math.abs(billedQty - grQty) / grQty) * 100 : 0;
+      const priceDiffPercent = poPrice > 0 ? (Math.abs(billedPrice - poPrice) / poPrice) * 100 : 0;
+
+      const hasQtyVar = qtyDiffPercent > qtyTolPercent;
+      const hasPriceVar = priceDiffPercent > priceTolPercent;
+
+      if (hasQtyVar) hasAnyQtyVariance = true;
+      if (hasPriceVar) hasAnyPriceVariance = true;
+
+      return {
+        sku: it.sku,
+        productName: it.productName || poItem?.productName || `Product ${it.sku}`,
+        poQuantity: poQty,
+        grQuantity: grQty,
+        billedQuantity: billedQty,
+        unitCost: billedPrice,
+        totalCost: Math.round(billedQty * billedPrice),
+        hasQuantityVariance: hasQtyVar,
+        hasPriceVariance: hasPriceVar,
+        notes: it.notes || '',
+      };
+    });
+
+    const subtotal = validatedItems.reduce((sum, it) => sum + it.totalCost, 0);
+    const taxAmount = Math.round(subtotal * ((Number(taxPercent) || 0) / 100));
+    const grandTotal = subtotal + taxAmount;
+    const grandTotalIDR = Math.round(grandTotal * exchangeRate);
+
+    let billStatus: VendorBillStatus = 'MATCHED';
+    if (hasAnyPriceVariance) {
+      billStatus = 'PRICE_VARIANCE';
+    } else if (hasAnyQtyVariance) {
+      billStatus = 'QTY_VARIANCE';
+    }
+
+    const shouldApprove = autoApprove && billStatus === 'MATCHED';
+    if (shouldApprove) {
+      billStatus = 'APPROVED';
+    }
+
+    const timestamp = new Date().toISOString();
+    const id = `VB-2026-${(vendorBillsList.length + 1).toString().padStart(3, '0')}`;
+    const calculatedDueDate = dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+
+    let glEntryIds: string[] = [];
+    if (billStatus === 'APPROVED') {
+      const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      glEntryIds = [gleId1, gleId2];
+
+      generalLedger.unshift({
+        id: gleId1,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '1040',
+        accountName: 'Merchandise Inventory Asset',
+        category: 'Asset',
+        debit: grandTotalIDR,
+        credit: 0,
+        referenceType: 'VENDOR_BILL',
+        referenceId: id,
+        description: `Vendor Bill #${id} approved [${billNumber} - ${supplierName}]`,
+      });
+
+      generalLedger.unshift({
+        id: gleId2,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '2010',
+        accountName: 'Trade Accounts Payable',
+        category: 'Liability',
+        debit: 0,
+        credit: grandTotalIDR,
+        referenceType: 'VENDOR_BILL',
+        referenceId: id,
+        description: `Accounts Payable booked for vendor invoice #${billNumber}`,
+      });
+    }
+
+    const newBill: VendorBill = {
+      id,
+      billNumber,
+      supplierName,
+      supplierContact,
+      storeId,
+      storeName,
+      poId,
+      goodsReceiptId,
+      deliveryNoteNumber,
+      billDate,
+      dueDate: calculatedDueDate,
+      paymentTerms: paymentTerms as any,
+      currency: currency as SupportedCurrency,
+      exchangeRate,
+      items: validatedItems,
+      subtotal,
+      taxPercent: Number(taxPercent) || 0,
+      taxAmount,
+      grandTotal,
+      grandTotalIDR,
+      amountPaid: 0,
+      remainingDue: grandTotal,
+      status: billStatus,
+      paymentStatus: 'UNPAID',
+      notes,
+      glEntryIds: glEntryIds.length > 0 ? glEntryIds : undefined,
+      createdAt: timestamp,
+      approvedBy: shouldApprove ? currentActiveStaffSession.userName : undefined,
+      approvedAt: shouldApprove ? timestamp : undefined,
+    };
+
+    vendorBillsList.unshift(newBill);
+
+    res.json({
+      success: true,
+      vendorBill: newBill,
+      journalEntryIds: glEntryIds,
+      message: `Vendor Bill #${id} created with 3-Way status [${billStatus}].`,
+    });
+  });
+
+  app.post('/api/admin/procurement/vendor-bills/:id/approve', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { approverName = currentActiveStaffSession.userName } = req.body;
+    const bill = vendorBillsList.find((b) => b.id === id);
+    if (!bill) return res.status(404).json({ error: 'Vendor Bill not found.' });
+
+    bill.status = 'APPROVED';
+    bill.approvedBy = approverName;
+    bill.approvedAt = new Date().toISOString();
+
+    if (!bill.glEntryIds || bill.glEntryIds.length === 0) {
+      const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      bill.glEntryIds = [gleId1, gleId2];
+
+      generalLedger.unshift({
+        id: gleId1,
+        timestamp: bill.approvedAt,
+        storeId: bill.storeId,
+        storeName: bill.storeName,
+        accountCode: '1040',
+        accountName: 'Merchandise Inventory Asset',
+        category: 'Asset',
+        debit: bill.grandTotalIDR,
+        credit: 0,
+        referenceType: 'VENDOR_BILL',
+        referenceId: bill.id,
+        description: `Vendor Bill #${bill.id} authorized & approved by ${approverName}`,
+      });
+
+      generalLedger.unshift({
+        id: gleId2,
+        timestamp: bill.approvedAt,
+        storeId: bill.storeId,
+        storeName: bill.storeName,
+        accountCode: '2010',
+        accountName: 'Trade Accounts Payable',
+        category: 'Liability',
+        debit: 0,
+        credit: bill.grandTotalIDR,
+        referenceType: 'VENDOR_BILL',
+        referenceId: bill.id,
+        description: `Trade Accounts Payable confirmed for ${bill.supplierName}`,
+      });
+    }
+
+    res.json({ success: true, vendorBill: bill, message: `Vendor Bill #${id} approved.` });
+  });
+
+  app.post('/api/admin/procurement/vendor-bills/:id/pay', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { amountPaid, paymentMethod = 'BANK_TRANSFER', paymentReference } = req.body;
+    const bill = vendorBillsList.find((b) => b.id === id);
+    if (!bill) return res.status(404).json({ error: 'Vendor Bill not found.' });
+
+    const payAmt = Number(amountPaid) || bill.remainingDue;
+    bill.amountPaid += payAmt;
+    bill.remainingDue = Math.max(0, bill.grandTotal - bill.amountPaid);
+    bill.paymentStatus = bill.remainingDue <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+    if (bill.paymentStatus === 'PAID') bill.status = 'PAID';
+    bill.paymentMethod = paymentMethod as VendorBillPaymentMethod;
+    bill.paymentReference = paymentReference;
+    bill.paidAt = new Date().toISOString();
+
+    const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const payAmountIDR = Math.round(payAmt * bill.exchangeRate);
+
+    generalLedger.unshift({
+      id: gleId1,
+      timestamp: bill.paidAt,
+      storeId: bill.storeId,
+      storeName: bill.storeName,
+      accountCode: '2010',
+      accountName: 'Trade Accounts Payable',
+      category: 'Liability',
+      debit: payAmountIDR,
+      credit: 0,
+      referenceType: 'VENDOR_PAYMENT',
+      referenceId: bill.id,
+      description: `Disbursement: Payment for Bill #${bill.billNumber} (${bill.supplierName})`,
+    });
+
+    generalLedger.unshift({
+      id: gleId2,
+      timestamp: bill.paidAt,
+      storeId: bill.storeId,
+      storeName: bill.storeName,
+      accountCode: '1020',
+      accountName: 'Bank BCA Operational Clearing',
+      category: 'Asset',
+      debit: 0,
+      credit: payAmountIDR,
+      referenceType: 'VENDOR_PAYMENT',
+      referenceId: bill.id,
+      description: `Bank Wire disbursement for bill #${bill.id} via ${paymentMethod}`,
+    });
+
+    res.json({ success: true, vendorBill: bill, message: `Payment of ${payAmt} recorded for Bill #${id}.` });
+  });
+
+  // --- 6. ANALYTIC ACCOUNTING & MARGIN ANALYSIS ---
+  app.get('/api/admin/accounting/analytic-departments', (_req: Request, res: Response) => {
+    const departments = enterpriseSettings.analyticAccounting.departments.map((dept) => {
+      const variance = dept.annualBudgetIDR - dept.actualCostIDR;
+      const utilization = dept.annualBudgetIDR > 0 ? (dept.actualCostIDR / dept.annualBudgetIDR) * 100 : 0;
+      let status: 'ON_TRACK' | 'WARNING' | 'OVER_BUDGET' = 'ON_TRACK';
+      if (utilization > 100) status = 'OVER_BUDGET';
+      else if (utilization > 80) status = 'WARNING';
+
+      return {
+        ...dept,
+        varianceIDR: variance,
+        utilizationPercent: Number(utilization.toFixed(1)),
+        status,
+      };
+    });
+    res.json(departments);
+  });
+
+  app.put('/api/admin/accounting/analytic-departments/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const dept = enterpriseSettings.analyticAccounting.departments.find((d) => d.id === id);
+    if (!dept) return res.status(404).json({ error: 'Department cost center not found.' });
+    Object.assign(dept, req.body);
+    res.json({ success: true, department: dept, message: `Department budget updated.` });
+  });
+
+  app.get('/api/admin/accounting/margin-analysis', (_req: Request, res: Response) => {
+    const warningThreshold = enterpriseSettings.analyticAccounting.marginWarningThresholdPercent || 25.0;
+
+    const margins: ProductMarginRecord[] = PRODUCTS.map((prod) => {
+      const inv = inventoryList.find((i) => i.productId === prod.id || i.productName.toLowerCase() === prod.name.toLowerCase());
+      const sku = inv?.sku || `SKU-${prod.category.slice(0, 3).toUpperCase()}-001`;
+      const sellingPrice = prod.price;
+
+      const baseCost = inv ? inv.unitCost : Math.round(prod.price * 0.62);
+
+      let landedAbsorption = 0;
+      landedCostsList.forEach((lc) => {
+        const match = lc.allocatedItems.find((it) => it.sku === sku);
+        if (match) landedAbsorption += match.allocatedCostIDR;
+      });
+
+      const totalUnitCost = baseCost;
+      const grossProfit = sellingPrice - totalUnitCost;
+      const marginPercent = sellingPrice > 0 ? Number(((grossProfit / sellingPrice) * 100).toFixed(1)) : 0;
+      const unitsSoldMonth = Math.floor(Math.random() * 80) + 40;
+      const totalGrossProfitMonth = grossProfit * unitsSoldMonth;
+
+      return {
+        sku,
+        name: prod.name,
+        category: prod.category,
+        sellingPrice,
+        baseCost: baseCost - landedAbsorption,
+        landedCostAbsorption: landedAbsorption,
+        totalUnitCost,
+        grossProfit,
+        marginPercent,
+        unitsSoldMonth,
+        totalGrossProfitMonth,
+        isLowMarginAlert: marginPercent < warningThreshold,
+      };
+    });
+
+    res.json(margins);
+  });
+
+  // --- 7. QUOTATIONS & SALES RULES ENGINE ---
+  app.get('/api/admin/sales/quotations', (_req: Request, res: Response) => {
+    res.json(enterpriseQuotationsList);
+  });
+
+  app.post('/api/admin/sales/quotations', (req: Request, res: Response) => {
+    const {
+      customerName,
+      customerCompany,
+      customerEmail,
+      customerPhone,
+      items = [],
+      currency = 'IDR',
+      notes,
+      isProForma = false,
+    } = req.body;
+
+    if (!customerName || !items || items.length === 0) {
+      return res.status(400).json({ error: 'Customer name and line items are required.' });
+    }
+
+    let enrichedItems: EnterpriseQuotationItem[] = [...items];
+    if (enterpriseSettings.quotationsAndSales.mandatoryProductsEnabled) {
+      enterpriseSettings.quotationsAndSales.mandatoryRules.forEach((rule) => {
+        const hasTargetCategory = enrichedItems.some((it) => it.category === rule.targetCategory);
+        const alreadyHasMandatory = enrichedItems.some((it) => it.sku === rule.mandatorySku);
+        if (hasTargetCategory && !alreadyHasMandatory) {
+          enrichedItems.push({
+            sku: rule.mandatorySku,
+            productName: `${rule.mandatoryProductName} [MANDATORY RULE]`,
+            category: 'packaging',
+            quantity: 1,
+            unit: 'pack',
+            unitPrice: rule.mandatoryPriceIDR,
+            unitCost: Math.round(rule.mandatoryPriceIDR * 0.4),
+            lineTotal: rule.mandatoryPriceIDR,
+            isMandatoryAddon: true,
+          });
+        }
+      });
+    }
+
+    const subtotal = enrichedItems.reduce((sum, it) => sum + (Number(it.lineTotal) || Number(it.quantity) * Number(it.unitPrice)), 0);
+    const taxAmount = Math.round(subtotal * 0.11);
+    const total = subtotal + taxAmount;
+
+    let depositPercent = 100;
+    if (enterpriseSettings.quotationsAndSales.paymentConfirmationThreshold === 'DEPOSIT_50') {
+      depositPercent = 50;
+    } else if (enterpriseSettings.quotationsAndSales.paymentConfirmationThreshold === 'PAY_ON_DELIVERY') {
+      depositPercent = 0;
+    }
+
+    const depositAmount = Math.round((total * depositPercent) / 100);
+    const validityDays = enterpriseSettings.quotationsAndSales.defaultValidityDays || 14;
+    const validUntil = new Date(Date.now() + validityDays * 86400000).toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+
+    const quotationNumber = `QTN-2026-${(enterpriseQuotationsList.length + 1001).toString()}`;
+    const newQuotation: EnterpriseQuotation = {
+      id: `QUO-2026-${(enterpriseQuotationsList.length + 1).toString().padStart(3, '0')}`,
+      quotationNumber,
+      customerName,
+      customerCompany,
+      customerEmail: customerEmail || 'client@corporate.id',
+      customerPhone: customerPhone || '+62 811 0000 000',
+      date: today,
+      validUntil,
+      items: enrichedItems,
+      subtotal,
+      taxAmount,
+      total,
+      currency: currency as SupportedCurrency,
+      requiredDepositPercent: depositPercent,
+      depositAmount,
+      signatureStatus: 'PENDING',
+      status: 'SENT',
+      notes,
+      isProForma: Boolean(isProForma),
+    };
+
+    enterpriseQuotationsList.unshift(newQuotation);
+    res.json({
+      success: true,
+      quotation: newQuotation,
+      message: `Quotation ${quotationNumber} generated successfully.`,
+    });
+  });
+
+  app.post('/api/admin/sales/quotations/:id/sign', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { signedBy, signatureDataUrl } = req.body;
+    const quo = enterpriseQuotationsList.find((q) => q.id === id);
+    if (!quo) return res.status(404).json({ error: 'Quotation not found.' });
+
+    quo.signatureStatus = 'SIGNED';
+    quo.signedBy = signedBy || quo.customerName;
+    quo.signedAt = new Date().toISOString();
+    quo.signatureDataUrl = signatureDataUrl;
+    quo.status = 'CONFIRMED';
+
+    res.json({ success: true, quotation: quo, message: `Quotation ${quo.quotationNumber} signed and confirmed.` });
+  });
+
+  app.post('/api/admin/sales/quotations/:id/convert-to-order', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const quo = enterpriseQuotationsList.find((q) => q.id === id);
+    if (!quo) return res.status(404).json({ error: 'Quotation not found.' });
+
+    const orderId = `GCM-B2B-${Date.now().toString().slice(-6)}`;
+    quo.status = 'CONVERTED_TO_ORDER';
+    quo.convertedOrderId = orderId;
+
+    const newOrder: Order = {
+      id: orderId,
+      createdAt: new Date().toISOString(),
+      customerName: quo.customerName,
+      customerEmail: quo.customerEmail,
+      customerPhone: quo.customerPhone,
+      deliveryMethod: 'scheduled',
+      deliveryAddress: {
+        label: 'Corporate Delivery Site',
+        recipient: quo.customerName,
+        phone: quo.customerPhone,
+        addressLine: quo.customerCompany || 'Commercial Kitchen / Foodservice Hub',
+        city: 'Jakarta',
+      },
+      items: quo.items.map((it) => {
+        const prod = PRODUCTS.find((p) => p.name.toLowerCase() === it.productName.toLowerCase()) || PRODUCTS[0];
+        return {
+          product: { ...prod, price: it.unitPrice, name: it.productName },
+          quantity: it.quantity,
+          notes: `Converted from Quotation #${quo.quotationNumber}`,
+        };
+      }),
+      subtotal: quo.subtotal,
+      deliveryFee: 0,
+      discount: 0,
+      total: quo.total,
+      paymentMethod: 'bank_transfer',
+      paymentStatus: quo.requiredDepositPercent === 0 ? 'unpaid' : 'paid',
+      status: 'placed',
+      timeline: [
+        {
+          status: 'placed',
+          label: 'Quotation Converted to Order',
+          description: `B2B Order created from signed Quotation #${quo.quotationNumber}`,
+          timestamp: new Date().toISOString(),
+          completed: true,
+        },
+      ],
+    };
+
+    customerOrders.unshift(newOrder);
+
+    res.json({
+      success: true,
+      order: newOrder,
+      quotation: quo,
+      message: `Quotation ${quo.quotationNumber} converted to active Order #${orderId}!`,
+    });
+  });
+
+  // --- 8. PROMOTIONS & OPNAME & TRANSFERS APIS ---
+  app.get('/api/admin/promotions', (_req: Request, res: Response) => {
+    res.json(promotionRulesList);
+  });
+
+  app.post('/api/admin/promotions', (req: Request, res: Response) => {
+    const newRule: PromotionRule = {
+      id: `PRM-2026-${(promotionRulesList.length + 1).toString().padStart(2, '0')}`,
+      usageCount: 0,
+      active: true,
+      ...req.body,
+    };
+    promotionRulesList.unshift(newRule);
+    res.json({ success: true, rule: newRule, message: 'Promotion created.' });
+  });
+
+  app.put('/api/admin/promotions/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const rule = promotionRulesList.find((r) => r.id === id);
+    if (!rule) return res.status(404).json({ error: 'Promotion not found.' });
+    Object.assign(rule, req.body);
+    res.json({ success: true, rule, message: 'Promotion updated.' });
+  });
+
+  app.delete('/api/admin/promotions/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const rule = promotionRulesList.find((r) => r.id === id);
+    if (!rule) return res.status(404).json({ error: 'Promotion not found.' });
+    rule.active = false;
+    res.json({ success: true, message: 'Promotion deactivated.' });
+  });
+
+  app.post('/api/admin/inventory/bulk-import', (req: Request, res: Response) => {
+    const { rows = [] } = req.body as { rows: BulkInventoryImportRow[] };
+    let imported = 0;
+    rows.forEach((r) => {
+      const existing = inventoryList.find((i) => i.sku === r.sku);
+      if (existing) {
+        existing.currentStock += r.stock;
+        existing.unitCost = r.costPrice;
+      }
+      imported++;
+    });
+    res.json({ success: true, importedCount: imported, tiersUpdatedCount: imported, message: `${imported} items imported.` });
+  });
+
+  app.get('/api/admin/inventory/stock-opname', (_req: Request, res: Response) => {
+    res.json(stockOpnameSessions);
+  });
+
+  app.post('/api/admin/inventory/stock-opname/reconcile', (req: Request, res: Response) => {
+    const session = req.body as StockOpnameSession;
+    stockOpnameSessions.unshift(session);
+    res.json({ success: true, session, journalEntryIds: ['GLE-2026-0099'], message: 'Opname reconciled.' });
+  });
+
+  app.get('/api/admin/inventory/transfer', (_req: Request, res: Response) => {
+    res.json(stockTransfersList);
+  });
+
+  app.post('/api/admin/inventory/transfer', (req: Request, res: Response) => {
+    const record: StockTransferRecord = {
+      id: `TRF-2026-${(stockTransfersList.length + 1).toString().padStart(3, '0')}`,
+      timestamp: new Date().toISOString(),
+      status: 'COMPLETED',
+      ...req.body,
+    };
+    stockTransfersList.unshift(record);
+    res.json({ success: true, record, message: 'Stock transferred.' });
+  });
+
+  app.get('/api/admin/approvals/rules', (_req: Request, res: Response) => {
+    res.json(approvalRulesList);
+  });
+
+  app.get('/api/admin/approvals/queue', (_req: Request, res: Response) => {
+    res.json(approvalQueueList);
   });
 
   // -------------------------------------------------------------

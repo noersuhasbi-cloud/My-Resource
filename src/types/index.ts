@@ -411,7 +411,7 @@ export interface VendorBill {
 // -------------------------------------------------------------
 // FEFO (First Expired, First Out) Batch Tracking
 // -------------------------------------------------------------
-export type BatchExpiryStatus = 'fresh' | 'near_expiry' | 'critical' | 'expired';
+export type BatchExpiryStatus = 'fresh' | 'near_expiry' | 'critical' | 'expired' | 'depleted';
 
 export interface InventoryBatch {
   batchId: string; // e.g. BAT-2026-081
@@ -582,7 +582,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -686,13 +686,13 @@ export interface OmzetAnalyticsReport {
 
 export interface TransactionAuditRecord {
   id: string;
-  qrisReference: string;
+  qrisReference?: string;
   orderId: string;
   customerName: string;
   customerEmail: string;
   amount: number;
   paymentTimestamp: string;
-  settlementChannel: 'BCA QRIS' | 'GoPay' | 'OVO' | 'ShopeePay' | 'Dana';
+  settlementChannel: 'BCA QRIS' | 'GoPay' | 'OVO' | 'ShopeePay' | 'Dana' | 'POS Cashier Counter' | string;
   journalEntryIds: string[];
   inventoryDeducted: {
     sku: string;
@@ -1644,4 +1644,207 @@ export interface AutoReplenishmentConsolidatedPlan {
     totalAmountIDR: number;
     suggestedPoId: string;
   }>;
+}
+
+// =============================================================
+// MODULE 12: ENTERPRISE SETTINGS & CONFIGURATION ENGINE
+// Valuation Landed Costs, Warehouse Multi-Step Routes & Bins,
+// 3-Way Matching Controls, Analytic Accounting, and Quotations.
+// =============================================================
+
+export interface EnterpriseSettingsConfig {
+  landedCosts: {
+    enabled: boolean;
+    defaultJournal: string; // e.g. "MISC_OPERATIONS" | "GENERAL_JOURNAL"
+    freightExpenseAccountCode: string; // "5040" Freight & Inbound Shipping
+    freightExpenseAccountName: string;
+    customsDutyAccountCode: string; // "5050" Import Tariffs & Customs
+    customsDutyAccountName: string;
+    handlingAccountCode: string; // "5060" Cold-Chain Handling & Port Fee
+    handlingAccountName: string;
+    clearingAccountCode: string; // "2040" Landed Cost Clearing / Accrual
+    clearingAccountName: string;
+    defaultAllocationMethod: 'EQUAL' | 'BY_QUANTITY' | 'BY_VALUE' | 'BY_WEIGHT';
+  };
+  invoiceTracking: {
+    displayLotsOnInvoices: boolean;
+    displaySerialExpiryOnDeliveryDocs: boolean;
+    requireLotScanOnFulfillment: boolean;
+  };
+  warehouseRouting: {
+    multiStepRoutingEnabled: boolean;
+    defaultRouteSteps: 'DIRECT' | 'TWO_STEP' | 'THREE_STEP';
+    storageBinsEnabled: boolean;
+    autoAssignPutawayBin: boolean;
+    zones: Array<{
+      zoneId: string;
+      zoneName: string;
+      routeType: 'DIRECT' | 'TWO_STEP' | 'THREE_STEP';
+      steps: string[];
+      activeBinsCount: number;
+    }>;
+  };
+  threeWayMatching: {
+    enforcementMode: 'STRICT_3_WAY' | 'TOLERANCE_3_WAY' | 'TWO_WAY';
+    quantityTolerancePercent: number; // e.g. 2.0%
+    priceTolerancePercent: number; // e.g. 1.0%
+    blockPaymentOnMismatch: boolean;
+    requireManagerApprovalForVariance: boolean;
+  };
+  analyticAccounting: {
+    enabled: boolean;
+    defaultDepartment: string;
+    departments: Array<{
+      id: string;
+      name: string;
+      code: string;
+      manager: string;
+      annualBudgetIDR: number;
+      actualCostIDR: number;
+      committedCostIDR: number;
+    }>;
+    marginWarningThresholdPercent: number; // e.g. 25%
+  };
+  quotationsAndSales: {
+    mandatoryProductsEnabled: boolean;
+    mandatoryRules: Array<{
+      id: string;
+      targetCategory: string;
+      mandatorySku: string;
+      mandatoryProductName: string;
+      mandatoryPriceIDR: number;
+      reason: string;
+    }>;
+    onlineSignaturesRequired: boolean;
+    paymentConfirmationThreshold: 'FULL_100' | 'DEPOSIT_50' | 'PAY_ON_DELIVERY';
+    defaultValidityDays: number;
+    allowProFormaInvoice: boolean;
+    autoGeneratePdfQuote: boolean;
+    termsAndConditionsText: string;
+  };
+}
+
+export interface LandedCostRecord {
+  id: string; // e.g. LC-2026-001
+  timestamp: string;
+  poId?: string;
+  billNumber?: string;
+  receiptNumber?: string;
+  description: string;
+  currency: SupportedCurrency;
+  exchangeRate: number;
+  freightCostIDR: number;
+  customsDutyIDR: number;
+  handlingCostIDR: number;
+  insuranceCostIDR: number;
+  totalLandedCostIDR: number;
+  allocationMethod: 'EQUAL' | 'BY_QUANTITY' | 'BY_VALUE' | 'BY_WEIGHT';
+  allocatedItems: Array<{
+    sku: string;
+    productName: string;
+    quantity: number;
+    baseUnitCost: number;
+    allocatedCostIDR: number;
+    newUnitCost: number;
+    totalLineLandedCost: number;
+  }>;
+  glEntryIds: string[];
+  status: 'POSTED' | 'DRAFT';
+  createdBy: string;
+}
+
+export interface WarehouseBinLocation {
+  id: string; // e.g. BIN-SEN-C01
+  storeId: string;
+  storeName: string;
+  zoneId: string;
+  rack: string;
+  shelf: string;
+  binCode: string;
+  type: 'COLD_CHUTE' | 'AMBIENT_SHELF' | 'SECURE_CAGE' | 'RECEIVING_DOCK';
+  currentSku?: string;
+  productName?: string;
+  capacityUnits: number;
+  occupancyUnits: number;
+  status: 'AVAILABLE' | 'OCCUPIED' | 'MAINTENANCE';
+}
+
+export interface WarehouseMultiStepRoute {
+  id: string;
+  name: string;
+  routeType: 'DIRECT' | 'TWO_STEP' | 'THREE_STEP';
+  description: string;
+  steps: Array<{
+    stepNumber: number;
+    stepName: string;
+    locationSource: string;
+    locationDestination: string;
+    action: string;
+  }>;
+}
+
+export interface AnalyticDepartment {
+  id: string;
+  name: string;
+  code: string;
+  manager: string;
+  annualBudgetIDR: number;
+  actualCostIDR: number;
+  committedCostIDR: number;
+  varianceIDR: number;
+  utilizationPercent: number;
+  status: 'ON_TRACK' | 'WARNING' | 'OVER_BUDGET';
+}
+
+export interface ProductMarginRecord {
+  sku: string;
+  name: string;
+  category: string;
+  sellingPrice: number;
+  baseCost: number;
+  landedCostAbsorption: number;
+  totalUnitCost: number;
+  grossProfit: number;
+  marginPercent: number;
+  unitsSoldMonth: number;
+  totalGrossProfitMonth: number;
+  isLowMarginAlert: boolean;
+}
+
+export interface EnterpriseQuotationItem {
+  sku: string;
+  productName: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  unitCost: number;
+  lineTotal: number;
+  isMandatoryAddon?: boolean;
+}
+
+export interface EnterpriseQuotation {
+  id: string; // e.g. QUO-2026-001
+  quotationNumber: string;
+  customerName: string;
+  customerCompany?: string;
+  customerEmail: string;
+  customerPhone: string;
+  date: string;
+  validUntil: string;
+  items: EnterpriseQuotationItem[];
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  currency: SupportedCurrency;
+  requiredDepositPercent: number;
+  depositAmount: number;
+  signatureStatus: 'PENDING' | 'SIGNED';
+  signedBy?: string;
+  signedAt?: string;
+  signatureDataUrl?: string;
+  status: 'DRAFT' | 'SENT' | 'CONFIRMED' | 'CONVERTED_TO_ORDER' | 'EXPIRED';
+  notes?: string;
+  isProForma: boolean;
+  convertedOrderId?: string;
 }

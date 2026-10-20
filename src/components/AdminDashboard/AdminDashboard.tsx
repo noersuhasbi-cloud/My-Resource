@@ -155,7 +155,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [climateConfigs, setClimateConfigs] = useState<ClimateAdaptiveThresholdConfig[]>([]);
 
   // Active sub-item for Accounting deep-linking
-  const [accountingDeepSubTab, setAccountingDeepSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa'>('pnl');
+  const [accountingDeepSubTab, setAccountingDeepSubTab] = useState<AccountingSubTab>('pnl');
 
   // Loading & refresh
   const [isLoading, setIsLoading] = useState<boolean>(true);
