@@ -47,7 +47,16 @@ import type {
   ColdChainLogEntry,
   BatchRecallTraceResult,
   CustomerRecallNotification,
+  POSHardwarePeripheralStatus,
+  ThermalPrintReceiptPayload,
+  POSReturnRecord,
+  PromotionRule,
+  MemberLoyaltyTier,
+  AppliedPromotionSummary,
+  AutoReplenishmentItemPlan,
+  AutoReplenishmentConsolidatedPlan,
 } from '../types/index.ts';
+import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
 export const apiClient = {
   // -------------------------------------------------------------
@@ -1206,6 +1215,227 @@ export const apiClient = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to release quarantined batch');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 1: POS HARDWARE & PERIPHERAL INTEGRATION
+  // -------------------------------------------------------------
+  async getHardwareStatus(): Promise<POSHardwarePeripheralStatus> {
+    const res = await fetch('/api/admin/hardware/status');
+    return res.json();
+  },
+
+  async kickCashDrawer(pulseMs?: number, cashierName?: string): Promise<{
+    success: boolean;
+    message: string;
+    status: POSHardwarePeripheralStatus;
+  }> {
+    const res = await fetch('/api/admin/hardware/kick-drawer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pulseMs, cashierName }),
+    });
+    return res.json();
+  },
+
+  async closeCashDrawer(): Promise<{ success: boolean; status: POSHardwarePeripheralStatus }> {
+    const res = await fetch('/api/admin/hardware/close-drawer', { method: 'POST' });
+    return res.json();
+  },
+
+  async testPrintThermalReceipt(
+    paperWidthMm?: 58 | 80,
+    storeName?: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    slipText: string;
+    status: POSHardwarePeripheralStatus;
+  }> {
+    const res = await fetch('/api/admin/hardware/test-print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paperWidthMm, storeName }),
+    });
+    return res.json();
+  },
+
+  async scaleTare(tareGrams: number): Promise<{ success: boolean; status: POSHardwarePeripheralStatus }> {
+    const res = await fetch('/api/admin/hardware/scale/tare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tareGrams }),
+    });
+    return res.json();
+  },
+
+  async scaleZero(): Promise<{ success: boolean; status: POSHardwarePeripheralStatus }> {
+    const res = await fetch('/api/admin/hardware/scale/zero', { method: 'POST' });
+    return res.json();
+  },
+
+  async scaleWeigh(
+    weightGrams: number,
+    isStable?: boolean
+  ): Promise<{ success: boolean; status: POSHardwarePeripheralStatus }> {
+    const res = await fetch('/api/admin/hardware/scale/weigh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weightGrams, isStable }),
+    });
+    return res.json();
+  },
+
+  async simulateScannerBarcode(barcode: string): Promise<{
+    success: boolean;
+    barcode: string;
+    matchedItem: any;
+    status: POSHardwarePeripheralStatus;
+  }> {
+    const res = await fetch('/api/admin/hardware/scanner/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ barcode }),
+    });
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 2: REVERSE LOGISTICS & RETURNS / REFUNDS / EXCHANGES
+  // -------------------------------------------------------------
+  async getPosReturns(storeId?: string): Promise<POSReturnRecord[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetch(`/api/admin/returns?${params.toString()}`);
+    return res.json().catch(() => []);
+  },
+
+  async lookupReturnReceipt(query: string): Promise<any> {
+    const res = await fetch(`/api/admin/returns/lookup-receipt/${encodeURIComponent(query)}`);
+    return res.json();
+  },
+
+  async processPosReturn(payload: {
+    originalReceiptNumber: string;
+    originalOrderId?: string;
+    storeId?: string;
+    processedByUserId?: string;
+    processedByUserName?: string;
+    items: any[];
+    refundChannel: string;
+    customerName?: string;
+    customerPhone?: string;
+  }): Promise<{
+    success: boolean;
+    returnRecord: POSReturnRecord;
+    glVoucherIds: string[];
+    slipText: string;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/returns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to process return');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 3: ADVANCED PROMOTION & LOYALTY ENGINE
+  // -------------------------------------------------------------
+  async getPromotions(): Promise<PromotionRule[]> {
+    const res = await fetch('/api/admin/promotions');
+    return res.json().catch(() => []);
+  },
+
+  async createPromotion(rule: Partial<PromotionRule>): Promise<{
+    success: boolean;
+    rule: PromotionRule;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/promotions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rule),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create promotion');
+    }
+    return res.json();
+  },
+
+  async updatePromotion(
+    id: string,
+    updates: Partial<PromotionRule>
+  ): Promise<{
+    success: boolean;
+    rule: PromotionRule;
+    message: string;
+  }> {
+    const res = await fetch(`/api/admin/promotions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update promotion');
+    }
+    return res.json();
+  },
+
+  async deletePromotion(id: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`/api/admin/promotions/${id}`, { method: 'DELETE' });
+    return res.json();
+  },
+
+  async evaluatePromotions(payload: {
+    cartItems: any[];
+    couponCode?: string;
+    memberTier?: MemberLoyaltyTier;
+    memberId?: string;
+  }): Promise<PromotionEvaluationResult> {
+    const res = await fetch('/api/admin/promotions/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 4: AUTO-REPLENISHMENT & MIN-MAX PLANNING
+  // -------------------------------------------------------------
+  async getReplenishmentPlan(storeId?: string): Promise<AutoReplenishmentConsolidatedPlan> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetch(`/api/admin/replenishment/plan?${params.toString()}`);
+    return res.json();
+  },
+
+  async generateReplenishmentPO(payload: {
+    storeId: string;
+    selectedSkus?: string[];
+  }): Promise<{
+    success: boolean;
+    generatedOrders: any[];
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/replenishment/generate-po', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to generate replenishment POs');
     }
     return res.json();
   },

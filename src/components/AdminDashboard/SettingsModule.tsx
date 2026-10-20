@@ -13,6 +13,9 @@ import type {
   StoreInventoryStock,
   ApprovalTierRule,
   ApprovalRequest,
+  PromotionRule,
+  PromotionType,
+  MemberLoyaltyTier,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -49,6 +52,9 @@ import {
   X,
   Printer,
   FileText,
+  Tag,
+  Gift,
+  Zap,
 } from 'lucide-react';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 
@@ -58,7 +64,7 @@ interface SettingsModuleProps {
   storeOutlets: StoreOutletSchedule[];
   warehouseZones: WarehouseZone[];
   inventoryTiers: StoreInventoryStock[];
-  initialSubTab?: 'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix';
+  initialSubTab?: 'coa' | 'pos' | 'promotions' | 'import_opname' | 'transfer' | 'approval_matrix';
   onShowToast: (title: string, message: string) => void;
   onRefreshData?: () => void;
 }
@@ -75,8 +81,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 }) => {
   const isLight = theme === 'light';
 
-  // Sub-tabs: 'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix'
-  const [activeSubTab, setActiveSubTab] = useState<'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix'>(
+  // Sub-tabs: 'coa' | 'pos' | 'promotions' | 'import_opname' | 'transfer' | 'approval_matrix'
+  const [activeSubTab, setActiveSubTab] = useState<'coa' | 'pos' | 'promotions' | 'import_opname' | 'transfer' | 'approval_matrix'>(
     initialSubTab || 'coa'
   );
 
@@ -171,17 +177,39 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [approvalRules, setApprovalRules] = useState<ApprovalTierRule[]>([]);
   const [approvalQueue, setApprovalQueue] = useState<ApprovalRequest[]>([]);
 
+  // 7. Promotions & Loyalty Engine State
+  const [promotions, setPromotions] = useState<PromotionRule[]>([]);
+  const [isCreatingPromo, setIsCreatingPromo] = useState<boolean>(false);
+  const [promoTypeFilter, setPromoTypeFilter] = useState<string>('ALL');
+  const [promoSearch, setPromoSearch] = useState<string>('');
+
+  // New Promotion Form Fields
+  const [newPromoName, setNewPromoName] = useState<string>('');
+  const [newPromoCode, setNewPromoCode] = useState<string>('');
+  const [newPromoType, setNewPromoType] = useState<PromotionType>('PERCENTAGE_DISCOUNT');
+  const [newPromoTargetType, setNewPromoTargetType] = useState<'ALL' | 'CATEGORY' | 'SKU'>('CATEGORY');
+  const [newPromoTargetValue, setNewPromoTargetValue] = useState<string>('produce');
+  const [newPromoDiscountPercent, setNewPromoDiscountPercent] = useState<number>(20);
+  const [newPromoDiscountAmount, setNewPromoDiscountAmount] = useState<number>(0);
+  const [newPromoMinSpend, setNewPromoMinSpend] = useState<number>(50000);
+  const [newPromoBuyQty, setNewPromoBuyQty] = useState<number>(2);
+  const [newPromoGetQty, setNewPromoGetQty] = useState<number>(1);
+  const [newPromoMemberTier, setNewPromoMemberTier] = useState<MemberLoyaltyTier>('GOLD');
+  const [newPromoDesc, setNewPromoDesc] = useState<string>('');
+  const [isSavingPromo, setIsSavingPromo] = useState<boolean>(false);
+
   // Load configs on mount
   const fetchAllSettings = async () => {
     setIsLoading(true);
     try {
-      const [coaRes, posRes, opnameRes, transferRes, rulesRes, queueRes] = await Promise.all([
+      const [coaRes, posRes, opnameRes, transferRes, rulesRes, queueRes, promoRes] = await Promise.all([
         apiClient.getCoaMapping().catch(() => null),
         apiClient.getPosConfig().catch(() => null),
         apiClient.getStockOpnameSessions().catch(() => []),
         apiClient.getStockTransfers().catch(() => []),
         apiClient.getApprovalRules().catch(() => []),
         apiClient.getApprovalQueue().catch(() => []),
+        apiClient.getPromotions().catch(() => []),
       ]);
 
       if (coaRes) setCoaConfig(coaRes);
@@ -190,10 +218,76 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       if (transferRes) setTransferRecords(transferRes);
       if (rulesRes) setApprovalRules(rulesRes);
       if (queueRes) setApprovalQueue(queueRes);
+      if (promoRes) setPromotions(promoRes);
     } catch (err) {
       console.error('Failed to load Settings & Configuration:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleTogglePromoActive = async (rule: PromotionRule) => {
+    try {
+      const res = await apiClient.updatePromotion(rule.id, { active: !rule.active });
+      if (res.success) {
+        setPromotions((prev) => prev.map((r) => (r.id === rule.id ? res.rule : r)));
+        onShowToast('Promotion Updated', `[${res.rule.code}] is now ${res.rule.active ? 'ACTIVE' : 'PAUSED'}.`);
+      }
+    } catch (err: any) {
+      onShowToast('Error', err.message || 'Failed to update promotion');
+    }
+  };
+
+  const handleDeletePromo = async (id: string) => {
+    try {
+      const res = await apiClient.deletePromotion(id);
+      if (res.success) {
+        setPromotions((prev) => prev.map((r) => (r.id === id ? { ...r, active: false } : r)));
+        onShowToast('Promotion Deactivated', res.message);
+      }
+    } catch (err: any) {
+      onShowToast('Error', err.message || 'Failed to deactivate promotion');
+    }
+  };
+
+  const handleSavePromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPromoName.trim() || !newPromoCode.trim()) {
+      onShowToast('Validation Error', 'Promotion Name and Promo Code are required.');
+      return;
+    }
+    setIsSavingPromo(true);
+    try {
+      const payload: Partial<PromotionRule> = {
+        name: newPromoName.trim(),
+        code: newPromoCode.trim().toUpperCase(),
+        type: newPromoType,
+        targetType: newPromoTargetType,
+        targetValue: newPromoTargetValue,
+        discountPercent: newPromoType === 'PERCENTAGE_DISCOUNT' || newPromoType === 'MEMBER_TIER' || newPromoType === 'CATEGORY_BUNDLE' ? Number(newPromoDiscountPercent) : undefined,
+        discountAmountIDR: newPromoType === 'FIXED_DISCOUNT' ? Number(newPromoDiscountAmount) : undefined,
+        minOrderSubtotalIDR: Number(newPromoMinSpend) || undefined,
+        buyQty: newPromoType === 'BOGO' ? Number(newPromoBuyQty) : undefined,
+        getQty: newPromoType === 'BOGO' ? Number(newPromoGetQty) : undefined,
+        getDiscountPercent: 100,
+        memberTier: newPromoType === 'MEMBER_TIER' ? newPromoMemberTier : undefined,
+        active: true,
+        description: newPromoDesc.trim() || `${newPromoName} retail promotion`,
+      };
+
+      const res = await apiClient.createPromotion(payload);
+      if (res.success) {
+        setPromotions((prev) => [res.rule, ...prev]);
+        setIsCreatingPromo(false);
+        setNewPromoName('');
+        setNewPromoCode('');
+        setNewPromoDesc('');
+        onShowToast('Promotion Rule Created', `Active coupon [${res.rule.code}] live across POS and Storefront.`);
+      }
+    } catch (err: any) {
+      onShowToast('Error', err.message || 'Failed to create promotion rule');
+    } finally {
+      setIsSavingPromo(false);
     }
   };
 
@@ -650,6 +744,23 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           >
             <CreditCard className="w-4 h-4" />
             <span>POS &amp; Checkout Rules</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('promotions')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'promotions'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>Promotion &amp; Loyalty Engine</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 font-extrabold">
+              {promotions.length}
+            </span>
           </button>
 
           <button
@@ -1455,6 +1566,476 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2B. ADVANCED PROMOTION & LOYALTY ENGINE TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'promotions' && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Header Card */}
+          <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-stone-800">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1.5 uppercase tracking-wide">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Central Rule Engine
+                  </span>
+                  <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+                    Dynamic Cart &amp; POS Evaluation
+                  </span>
+                </div>
+                <h2 className={`text-lg font-bold mt-1.5 ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                  Promotion &amp; Member Loyalty Rule Engine
+                </h2>
+                <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? 'text-gray-600' : 'text-stone-400'}`}>
+                  Manage centralized retail discounts including BOGO (Buy 2 Get 1 Free), seasonal coupons, member tier perks, and category bundles. Rules evaluate dynamically at checkout without altering master inventory prices.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingPromo(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0c3e2f] text-white flex items-center gap-2 cursor-pointer shadow-xs transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Promotion Rule</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick KPI Stat Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-amber-50/40 border-amber-200/80' : 'bg-amber-950/20 border-amber-800/50'}`}>
+                <div className={`text-xs font-medium ${isLight ? 'text-amber-800' : 'text-amber-300'}`}>Active Rules</div>
+                <div className="text-2xl font-black mt-1 text-amber-700 dark:text-amber-300">
+                  {promotions.filter((r) => r.active).length}
+                </div>
+                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-stone-400'} mt-0.5`}>Live across outlets</div>
+              </div>
+
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-emerald-50/40 border-emerald-200/80' : 'bg-emerald-950/20 border-emerald-800/50'}`}>
+                <div className={`text-xs font-medium ${isLight ? 'text-emerald-800' : 'text-emerald-300'}`}>BOGO Deals</div>
+                <div className="text-2xl font-black mt-1 text-emerald-700 dark:text-emerald-300">
+                  {promotions.filter((r) => r.type === 'BOGO' && r.active).length}
+                </div>
+                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-stone-400'} mt-0.5`}>Buy X Get Y Bundles</div>
+              </div>
+
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-blue-50/40 border-blue-200/80' : 'bg-blue-950/20 border-blue-800/50'}`}>
+                <div className={`text-xs font-medium ${isLight ? 'text-blue-800' : 'text-blue-300'}`}>VIP Loyalty Tiers</div>
+                <div className="text-2xl font-black mt-1 text-blue-700 dark:text-blue-300">
+                  {promotions.filter((r) => r.type === 'MEMBER_TIER' && r.active).length}
+                </div>
+                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-stone-400'} mt-0.5`}>Silver, Gold, Platinum</div>
+              </div>
+
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-violet-50/40 border-violet-200/80' : 'bg-violet-950/20 border-violet-800/50'}`}>
+                <div className={`text-xs font-medium ${isLight ? 'text-violet-800' : 'text-violet-300'}`}>Redemptions</div>
+                <div className="text-2xl font-black mt-1 text-violet-700 dark:text-violet-300">
+                  {promotions.reduce((sum, r) => sum + (r.usageCount || 0), 0).toLocaleString('id-ID')}
+                </div>
+                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-stone-400'} mt-0.5`}>Customer claims logged</div>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                {(['ALL', 'BOGO', 'PERCENTAGE_DISCOUNT', 'FIXED_DISCOUNT', 'MEMBER_TIER', 'CATEGORY_BUNDLE'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setPromoTypeFilter(t)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      promoTypeFilter === t
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-gray-600 hover:bg-gray-100'
+                        : 'text-stone-400 hover:bg-stone-800'
+                    }`}
+                  >
+                    {t === 'ALL'
+                      ? 'All Rules'
+                      : t === 'PERCENTAGE_DISCOUNT'
+                      ? 'Coupons (%)'
+                      : t === 'FIXED_DISCOUNT'
+                      ? 'Coupons (IDR)'
+                      : t === 'MEMBER_TIER'
+                      ? 'VIP Loyalty'
+                      : t === 'CATEGORY_BUNDLE'
+                      ? 'Category Bundles'
+                      : 'BOGO'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${textMuted}`} />
+                <input
+                  type="text"
+                  value={promoSearch}
+                  onChange={(e) => setPromoSearch(e.target.value)}
+                  placeholder="Search code, name, SKU..."
+                  className={`w-full pl-9 pr-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Promotion Rules Table */}
+          <div className={`${cardClass} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className={`border-b text-[10px] uppercase font-bold tracking-wider ${
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-stone-800/50 border-stone-800 text-stone-400'
+                  }`}>
+                    <th className="py-3 px-4">Coupon Code &amp; Rule</th>
+                    <th className="py-3 px-4">Rule Type</th>
+                    <th className="py-3 px-4">Target Scope</th>
+                    <th className="py-3 px-4">Benefit / Discount</th>
+                    <th className="py-3 px-4">Spend Condition</th>
+                    <th className="py-3 px-4 text-center">Usage Count</th>
+                    <th className="py-3 px-4 text-center">Live Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-stone-800">
+                  {promotions
+                    .filter((r) => (promoTypeFilter === 'ALL' ? true : r.type === promoTypeFilter))
+                    .filter((r) =>
+                      promoSearch
+                        ? r.name.toLowerCase().includes(promoSearch.toLowerCase()) ||
+                          r.code.toLowerCase().includes(promoSearch.toLowerCase()) ||
+                          r.targetValue.toLowerCase().includes(promoSearch.toLowerCase())
+                        : true
+                    )
+                    .map((rule) => {
+                      return (
+                        <tr key={rule.id} className={`hover:bg-gray-50/50 dark:hover:bg-stone-800/40 transition-colors ${!rule.active ? 'opacity-60' : ''}`}>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-[#0F4C3A] dark:text-emerald-400">
+                                {rule.code}
+                              </span>
+                              <div className="font-semibold text-gray-900 dark:text-white">
+                                {rule.name}
+                              </div>
+                            </div>
+                            <div className={`text-[11px] ${textMuted} mt-0.5`}>
+                              {rule.description}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              rule.type === 'BOGO'
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                                : rule.type === 'MEMBER_TIER'
+                                ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30'
+                                : rule.type === 'CATEGORY_BUNDLE'
+                                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                                : 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30'
+                            }`}>
+                              {rule.type.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="font-mono text-xs text-gray-800 dark:text-stone-200">
+                              {rule.targetType}: <strong className="text-[#0F4C3A] dark:text-emerald-400">{rule.targetValue}</strong>
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                              {rule.type === 'BOGO'
+                                ? `Buy ${rule.buyQty} Get ${rule.getQty} Free`
+                                : rule.discountPercent
+                                ? `${rule.discountPercent}% Off`
+                                : rule.discountAmountIDR
+                                ? `-${formatIDR(rule.discountAmountIDR)}`
+                                : '-'}
+                            </div>
+                            {rule.memberTier && (
+                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                                {rule.memberTier} VIP Tier Only
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4 font-mono text-[11px] text-gray-700 dark:text-stone-300">
+                            {rule.minOrderSubtotalIDR ? `Min ${formatIDR(rule.minOrderSubtotalIDR)}` : 'No Min Spend'}
+                          </td>
+
+                          <td className="py-3.5 px-4 text-center font-bold font-mono text-xs text-gray-900 dark:text-white">
+                            {rule.usageCount || 0}
+                          </td>
+
+                          <td className="py-3.5 px-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePromoActive(rule)}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
+                                rule.active
+                                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                                  : 'bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
+                              }`}
+                            >
+                              {rule.active ? 'ACTIVE' : 'PAUSED'}
+                            </button>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePromo(rule.id)}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                              title="Deactivate rule"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Create Promotion Rule Modal */}
+          {isCreatingPromo && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className={`${cardClass} max-w-xl w-full p-6 space-y-4 shadow-2xl`}>
+                <div className="flex items-center justify-between border-b border-gray-200 dark:border-stone-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className={`text-sm font-bold ${textTitle}`}>New Promotion Rule</h3>
+                      <p className={`text-[11px] ${textMuted}`}>GroceMart Retail Discount &amp; Loyalty Engine</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingPromo(false)}
+                    className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSavePromo} className="space-y-4 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">
+                        Promotion Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={newPromoName}
+                        onChange={(e) => setNewPromoName(e.target.value)}
+                        placeholder="e.g. Organic Salad 25% Off"
+                        required
+                        className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">
+                        Coupon Code *
+                      </label>
+                      <input
+                        type="text"
+                        value={newPromoCode}
+                        onChange={(e) => setNewPromoCode(e.target.value.toUpperCase())}
+                        placeholder="e.g. SALAD25"
+                        required
+                        className={`w-full px-3 py-2 rounded-xl font-mono uppercase ${inputClass}`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">
+                        Rule Type
+                      </label>
+                      <select
+                        value={newPromoType}
+                        onChange={(e) => setNewPromoType(e.target.value as PromotionType)}
+                        className={`w-full px-3 py-2 rounded-xl font-semibold cursor-pointer ${inputClass}`}
+                      >
+                        <option value="PERCENTAGE_DISCOUNT">Percentage Discount (%)</option>
+                        <option value="FIXED_DISCOUNT">Fixed Spend Discount (IDR)</option>
+                        <option value="BOGO">BOGO (Buy X Get Y Free)</option>
+                        <option value="MEMBER_TIER">Member Loyalty Tier Discount</option>
+                        <option value="CATEGORY_BUNDLE">Category Bundle Discount</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">
+                        Target Type
+                      </label>
+                      <select
+                        value={newPromoTargetType}
+                        onChange={(e) => setNewPromoTargetType(e.target.value as any)}
+                        className={`w-full px-3 py-2 rounded-xl font-semibold cursor-pointer ${inputClass}`}
+                      >
+                        <option value="ALL">Entire Basket (ALL)</option>
+                        <option value="CATEGORY">Specific Category</option>
+                        <option value="SKU">Specific Product SKU</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {newPromoTargetType !== 'ALL' && (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">
+                        Target Value ({newPromoTargetType === 'CATEGORY' ? 'Category Name' : 'Product SKU'})
+                      </label>
+                      {newPromoTargetType === 'CATEGORY' ? (
+                        <select
+                          value={newPromoTargetValue}
+                          onChange={(e) => setNewPromoTargetValue(e.target.value)}
+                          className={`w-full px-3 py-2 rounded-xl font-semibold cursor-pointer ${inputClass}`}
+                        >
+                          <option value="produce">produce (Fresh Organic Produce)</option>
+                          <option value="meat_seafood">meat_seafood (Butchery &amp; Prime Seafood)</option>
+                          <option value="dairy_eggs">dairy_eggs (Artisan Dairy &amp; Poultry Eggs)</option>
+                          <option value="bakery">bakery (Fresh Hearth Bakery)</option>
+                          <option value="pantry_coffee">pantry_coffee (Organic Pantry &amp; Coffee)</option>
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={newPromoTargetValue}
+                          onChange={(e) => setNewPromoTargetValue(e.target.value)}
+                          placeholder="e.g. SKU-PRD-002"
+                          className={`w-full px-3 py-2 rounded-xl font-mono ${inputClass}`}
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Dynamic Benefit Fields based on Type */}
+                  {newPromoType === 'PERCENTAGE_DISCOUNT' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">Discount %</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={90}
+                          value={newPromoDiscountPercent}
+                          onChange={(e) => setNewPromoDiscountPercent(Number(e.target.value))}
+                          className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">Min Spend (IDR)</label>
+                        <input
+                          type="number"
+                          step={10000}
+                          value={newPromoMinSpend}
+                          onChange={(e) => setNewPromoMinSpend(Number(e.target.value))}
+                          className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {newPromoType === 'BOGO' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">Buy Quantity</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={newPromoBuyQty}
+                          onChange={(e) => setNewPromoBuyQty(Number(e.target.value))}
+                          className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">Get Free Units</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={newPromoGetQty}
+                          onChange={(e) => setNewPromoGetQty(Number(e.target.value))}
+                          className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {newPromoType === 'MEMBER_TIER' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">Required VIP Tier</label>
+                        <select
+                          value={newPromoMemberTier}
+                          onChange={(e) => setNewPromoMemberTier(e.target.value as MemberLoyaltyTier)}
+                          className={`w-full px-3 py-2 rounded-xl font-semibold cursor-pointer ${inputClass}`}
+                        >
+                          <option value="SILVER">SILVER (5% Default)</option>
+                          <option value="GOLD">GOLD (10% Default)</option>
+                          <option value="PLATINUM">PLATINUM (15% Default)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">Tier Discount %</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={newPromoDiscountPercent}
+                          onChange={(e) => setNewPromoDiscountPercent(Number(e.target.value))}
+                          className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-stone-300 mb-1">Description</label>
+                    <textarea
+                      rows={2}
+                      value={newPromoDesc}
+                      onChange={(e) => setNewPromoDesc(e.target.value)}
+                      placeholder="Public terms or details displayed on receipt/storefront"
+                      className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-stone-800">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingPromo(false)}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingPromo}
+                      className="px-5 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0c3e2f] text-white flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+                    >
+                      {isSavingPromo && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                      <span>Activate Promotion Rule</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -31,6 +31,7 @@ import {
   CheckSquare,
   Calculator,
   FileSpreadsheet,
+  Sparkles,
 } from 'lucide-react';
 
 export type AdminDashboardTab =
@@ -55,7 +56,7 @@ export type AdminDashboardTab =
   | 'settings';
 
 export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa';
-export type SettingsSubTab = 'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix';
+export type SettingsSubTab = 'coa' | 'pos' | 'promotions' | 'import_opname' | 'transfer' | 'approval_matrix';
 
 interface AdminSidebarProps {
   theme: 'light' | 'dark';
@@ -804,6 +805,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                     label: 'POS & Checkout Config',
                     icon: Calculator,
                     badge: 'Rules',
+                  },
+                  {
+                    id: 'promotions',
+                    label: 'Promotion & Loyalty Engine',
+                    icon: Sparkles,
+                    badge: 'Discounts',
                   },
                   {
                     id: 'import_opname',

@@ -524,7 +524,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -795,7 +795,10 @@ export interface SecurityAuditTrailRecord {
     | 'POS_CONFIG_UPDATE'
     | 'INVENTORY_IMPORT_BULK'
     | 'STOCK_OPNAME_RECONCILE'
-    | 'STOCK_TRANSFER_INTER_WAREHOUSE';
+    | 'STOCK_TRANSFER_INTER_WAREHOUSE'
+    | 'HARDWARE_DRAWER_KICK'
+    | 'RETURN_REFUND_PROCESSED'
+    | 'AUTO_REPLENISHMENT_PO_GENERATED';
   resourceId: string;
   userId: string;
   userName: string;
@@ -1390,4 +1393,197 @@ export interface CustomerRecallNotification {
   message: string;
   timestamp: string;
   status: 'SENT' | 'DELIVERED';
+}
+
+// =============================================================
+// MODULE 8: POS HARDWARE & PERIPHERAL INTEGRATION
+// =============================================================
+export interface POSHardwarePeripheralStatus {
+  thermalPrinter: {
+    status: 'connected' | 'disconnected' | 'out_of_paper' | 'simulated';
+    model: string;
+    paperWidthMm: 58 | 80;
+    lastPrintedAt?: string;
+  };
+  cashDrawer: {
+    status: 'closed' | 'open' | 'kick_triggered';
+    kickPulseMs: number;
+    lastKickedAt?: string;
+  };
+  barcodeScanner: {
+    status: 'active_listening' | 'idle' | 'wedge_error';
+    interfaceType: 'USB-HID-Wedge' | 'Serial' | 'Bluetooth';
+    lastScannedBarcode?: string;
+    lastScannedAt?: string;
+  };
+  digitalScale: {
+    status: 'streaming' | 'motion' | 'stable' | 'zeroed';
+    currentWeightGrams: number;
+    tareGrams: number;
+    unit: 'kg' | 'g' | 'lb' | 'oz';
+    isStable: boolean;
+    lastStabilizedAt?: string;
+  };
+}
+
+export interface ThermalPrintReceiptPayload {
+  receiptNumber: string;
+  storeName: string;
+  storeAddress: string;
+  cashierName: string;
+  timestamp: string;
+  items: Array<{
+    name: string;
+    sku: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    lineTotal: number;
+    discount?: number;
+    isWeighted?: boolean;
+    netWeightGrams?: number;
+  }>;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  currency: string;
+  currencyTotal: number;
+  paymentMethod: string;
+  cashTendered?: number;
+  cashChange?: number;
+  qrisRef?: string;
+  footerNotes?: string;
+}
+
+// =============================================================
+// MODULE 9: REVERSE LOGISTICS & RETURNS / REFUNDS / EXCHANGES
+// =============================================================
+export type ReturnCageDisposition = 'RETURN_CAGE_WASTE' | 'RESTOCK_INVENTORY';
+export type RefundPaymentChannel = 'CASH_DRAWER' | 'BANK_EDC_REVERSAL' | 'QRIS_CLEARING_REFUND' | 'STORE_CREDIT_VOUCHER';
+
+export interface POSReturnItemLine {
+  sku: string;
+  productName: string;
+  category: string;
+  originalQuantity: number;
+  returnQuantity: number;
+  unitPrice: number;
+  unitCost: number;
+  refundAmount: number;
+  returnReason: 'PERISHABLE_DEFECT' | 'INCORRECT_ITEM' | 'CUSTOMER_REMORSE_UNOPENED' | 'EXPIRED_ON_SHELF' | 'PACKAGING_DAMAGED';
+  disposition: ReturnCageDisposition;
+  conditionNotes?: string;
+}
+
+export interface POSReturnRecord {
+  id: string; // RET-2026-0001
+  originalReceiptNumber: string;
+  originalOrderId?: string;
+  storeId: string;
+  storeName: string;
+  processedByUserId: string;
+  processedByUserName: string;
+  timestamp: string;
+  items: POSReturnItemLine[];
+  totalRefundAmountIDR: number;
+  refundChannel: RefundPaymentChannel;
+  wasteRecordId?: string;
+  glVoucherIds: string[];
+  status: 'COMPLETED' | 'PENDING_APPROVAL';
+  customerName?: string;
+  customerPhone?: string;
+}
+
+// =============================================================
+// MODULE 10: ADVANCED PROMOTION & LOYALTY ENGINE
+// =============================================================
+export type PromotionType =
+  | 'BOGO'
+  | 'PERCENTAGE_DISCOUNT'
+  | 'FIXED_DISCOUNT'
+  | 'MEMBER_TIER'
+  | 'CATEGORY_BUNDLE';
+
+export type MemberLoyaltyTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+
+export interface PromotionRule {
+  id: string; // PRM-2026-01
+  name: string;
+  code: string; // e.g. ORGANIC20, B2G1_APPLES
+  type: PromotionType;
+  targetType: 'ALL' | 'CATEGORY' | 'SKU';
+  targetValue: string; // e.g. 'produce' or 'SKU-PRD-001'
+  discountPercent?: number; // e.g. 20 for 20%
+  discountAmountIDR?: number; // e.g. 50000
+  minOrderSubtotalIDR?: number; // e.g. 100000
+  buyQty?: number; // e.g. 2 for Buy 2 Get 1 Free
+  getQty?: number; // e.g. 1
+  getDiscountPercent?: number; // 100 for 100% free, 50 for 50% off
+  memberTier?: MemberLoyaltyTier;
+  active: boolean;
+  startDate?: string;
+  endDate?: string;
+  description: string;
+  usageCount: number;
+}
+
+export interface AppliedPromotionSummary {
+  ruleId: string;
+  ruleCode: string;
+  name: string;
+  discountAmountIDR: number;
+  promoType: PromotionType;
+  appliedSku?: string;
+  badgeLabel: string;
+}
+
+// =============================================================
+// MODULE 11: AUTO-REPLENISHMENT & MIN-MAX STOCK PLANNING
+// =============================================================
+export interface AutoReplenishmentItemPlan {
+  sku: string;
+  productName: string;
+  category: string;
+  storeId: string;
+  storeName: string;
+  warehouseZoneId: string;
+  physicalStock: number;
+  availableStock: number;
+  reservedStock: number;
+  incomingStock: number;
+  minimumThreshold: number;
+  safetyStockBuffer: number;
+  maxCapacity: number;
+  reorderQuantity: number;
+  dailySalesVelocity: number; // units sold / day
+  daysOfInventoryLeft: number; // availableStock / dailySalesVelocity
+  supplierLeadTimeDays: number; // default 3 days
+  reorderPoint: number; // safetyStock + (dailySalesVelocity * leadTimeDays)
+  isReorderTriggered: boolean;
+  urgencyLevel: 'CRITICAL_OUT_OF_STOCK' | 'BELOW_SAFETY_STOCK' | 'HEALTHY_STOCK' | 'OVERSTOCKED';
+  suggestedOrderQty: number;
+  unitCost: number;
+  estimatedOrderCostIDR: number;
+  supplierId: string;
+  supplierName: string;
+}
+
+export interface AutoReplenishmentConsolidatedPlan {
+  storeId: string;
+  storeName: string;
+  calculatedAt: string;
+  totalSkusEvaluated: number;
+  skusNeedingRestockCount: number;
+  criticalSkusCount: number;
+  totalSuggestedCostIDR: number;
+  items: AutoReplenishmentItemPlan[];
+  bySupplier: Array<{
+    supplierId: string;
+    supplierName: string;
+    skuCount: number;
+    totalOrderQty: number;
+    totalAmountIDR: number;
+    suggestedPoId: string;
+  }>;
 }

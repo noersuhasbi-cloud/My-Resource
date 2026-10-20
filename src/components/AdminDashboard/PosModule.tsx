@@ -10,6 +10,15 @@ import type {
   StoreOutletSchedule,
   StoreOperationalStatus,
   PosCheckoutConfig,
+  POSHardwarePeripheralStatus,
+  ThermalPrintReceiptPayload,
+  POSReturnRecord,
+  POSReturnItemLine,
+  ReturnCageDisposition,
+  RefundPaymentChannel,
+  PromotionRule,
+  MemberLoyaltyTier,
+  AppliedPromotionSummary,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { savePosReceiptToFirestore } from '../../services/firebaseService';
@@ -25,6 +34,20 @@ import {
   formatDualUnitPrice,
   formatDualWeight,
 } from '../../utils/uomConverter';
+import {
+  generateEscPosReceipt,
+  triggerCashDrawerKick,
+  setupBarcodeScannerListener,
+  createDigitalScaleSession,
+  playBeepSuccess,
+  playCashDrawerChime,
+  DigitalScaleReading,
+} from '../../utils/posHardware';
+import {
+  evaluateCartPromotions,
+  detectMemberTier,
+  INITIAL_PROMOTION_RULES,
+} from '../../utils/promotionEngine';
 import { QRCodeCanvas } from 'qrcode.react';
 import {
   Scan,
@@ -61,6 +84,14 @@ import {
   FileCheck2,
   Globe2,
   Barcode,
+  RotateCcw,
+  Undo2,
+  Cpu,
+  Coins,
+  Eye,
+  Gift,
+  SlidersHorizontal,
+  Volume2,
 } from 'lucide-react';
 
 export interface PosModuleProps {
@@ -168,8 +199,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
     }
   }, [selectedStore]);
 
-  // Sub-view mode: 'register' (active cashier screen) vs 'history' (shift receipts & GL sync log)
-  const [posViewMode, setPosViewMode] = useState<'register' | 'history'>('register');
+  // Sub-view mode: 'register' | 'returns' | 'hardware' | 'history'
+  const [posViewMode, setPosViewMode] = useState<'register' | 'returns' | 'hardware' | 'history'>('register');
 
   // POS Catalog & History State
   const [posProducts, setPosProducts] = useState<POSProductItem[]>([]);
@@ -211,6 +242,55 @@ export const PosModule: React.FC<PosModuleProps> = ({
   // Completed Receipt Modal
   const [activeReceiptModal, setActiveReceiptModal] = useState<POSTransactionReceipt | null>(null);
 
+  // -------------------------------------------------------------
+  // MODULE 1: POS HARDWARE & PERIPHERAL INTEGRATION LAYER STATE
+  // -------------------------------------------------------------
+  const [hardwareStatus, setHardwareStatus] = useState<POSHardwarePeripheralStatus | null>(null);
+  const [isKickingDrawer, setIsKickingDrawer] = useState<boolean>(false);
+  const [isTestingPrinter, setIsTestingPrinter] = useState<boolean>(false);
+  const [printedSlipModal, setPrintedSlipModal] = useState<string | null>(null);
+  const [scannerWedgeActive, setScannerWedgeActive] = useState<boolean>(true);
+  const [lastScannedBarcode, setLastScannedBarcode] = useState<string>('');
+  const [scaleReading, setScaleReading] = useState<DigitalScaleReading | null>(null);
+  const [simulatedScannerInput, setSimulatedScannerInput] = useState<string>('8999999001014');
+
+  // -------------------------------------------------------------
+  // MODULE 2: REVERSE LOGISTICS & RETURNS / REFUNDS / EXCHANGES STATE
+  // -------------------------------------------------------------
+  const [returnsList, setReturnsList] = useState<POSReturnRecord[]>([]);
+  const [isLoadingReturns, setIsLoadingReturns] = useState<boolean>(false);
+  const [returnReceiptQuery, setReturnReceiptQuery] = useState<string>('');
+  const [searchedReturnReceipt, setSearchedReturnReceipt] = useState<POSTransactionReceipt | null>(null);
+  const [isSearchingReceipt, setIsSearchingReceipt] = useState<boolean>(false);
+  const [returnLineSelections, setReturnLineSelections] = useState<
+    Record<
+      string,
+      {
+        selected: boolean;
+        quantity: number;
+        condition: ReturnCageDisposition;
+        reason: string;
+      }
+    >
+  >({});
+  const [refundChannel, setRefundChannel] = useState<RefundPaymentChannel>('CASH');
+  const [returnCustomerName, setReturnCustomerName] = useState<string>('');
+  const [returnCustomerPhone, setReturnCustomerPhone] = useState<string>('');
+  const [isProcessingReturn, setIsProcessingReturn] = useState<boolean>(false);
+  const [returnSuccessModal, setReturnSuccessModal] = useState<{
+    record: POSReturnRecord;
+    glVouchers: string[];
+    slipText: string;
+  } | null>(null);
+
+  // -------------------------------------------------------------
+  // MODULE 3: PROMOTION & LOYALTY ENGINE STATE
+  // -------------------------------------------------------------
+  const [promoRules, setPromoRules] = useState<PromotionRule[]>(INITIAL_PROMOTION_RULES);
+  const [couponCodeInput, setCouponCodeInput] = useState<string>('');
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string>('');
+  const [selectedMemberTier, setSelectedMemberTier] = useState<MemberLoyaltyTier>('BRONZE');
+
   // Format value in active currency
   const formatCurrencyValue = (idrAmount: number): string => {
     if (currency === 'IDR') {
@@ -241,9 +321,241 @@ export const PosModule: React.FC<PosModuleProps> = ({
     }
   };
 
+  // Load hardware status
+  const loadHardwareStatus = async () => {
+    try {
+      const status = await apiClient.getHardwareStatus();
+      setHardwareStatus(status);
+    } catch (e) {
+      console.warn('Could not load hardware status:', e);
+    }
+  };
+
+  // Load returns list
+  const loadReturnsList = async () => {
+    setIsLoadingReturns(true);
+    try {
+      const data = await apiClient.getPosReturns(posStoreId);
+      setReturnsList(data || []);
+    } catch (e) {
+      console.warn('Could not load POS returns:', e);
+    } finally {
+      setIsLoadingReturns(false);
+    }
+  };
+
+  // Load active promotion rules
+  const loadPromotionRules = async () => {
+    try {
+      const data = await apiClient.getPromotions();
+      if (data && data.length > 0) setPromoRules(data);
+    } catch (e) {
+      console.warn('Could not load promotion rules:', e);
+    }
+  };
+
   useEffect(() => {
     loadPosData(posStoreId);
+    loadHardwareStatus();
+    loadPromotionRules();
   }, [posStoreId]);
+
+  useEffect(() => {
+    if (posViewMode === 'returns') {
+      loadReturnsList();
+    }
+  }, [posViewMode, posStoreId]);
+
+  // Global Barcode Scanner Wedge Listener
+  useEffect(() => {
+    if (!scannerWedgeActive) return;
+    const cleanup = setupBarcodeScannerListener({
+      onScan: (scanned) => {
+        playBeepSuccess();
+        setLastScannedBarcode(scanned);
+        if (posViewMode === 'returns') {
+          setReturnReceiptQuery(scanned);
+          handleSearchReturnReceipt(scanned);
+        } else {
+          const matched = posProducts.find(
+            (p) =>
+              p.barcode === scanned ||
+              p.sku.toLowerCase() === scanned.toLowerCase() ||
+              p.name.toLowerCase().includes(scanned.toLowerCase())
+          );
+          if (matched) {
+            handleAddToCart(matched);
+            onShowToast('Barcode Scanned', `${matched.name} added to register cart.`);
+          } else {
+            onShowToast('Barcode Not Found', `Scanned code "${scanned}" not matched to catalog.`);
+          }
+        }
+      },
+    });
+    return cleanup;
+  }, [scannerWedgeActive, posViewMode, posProducts]);
+
+  // Digital Scale Streaming Session
+  useEffect(() => {
+    if (!weighingProduct) {
+      setScaleReading(null);
+      return;
+    }
+    const session = createDigitalScaleSession(grossWeightGrams, tareWeightGrams, (reading) => {
+      setScaleReading(reading);
+    });
+    return () => {
+      session.stop();
+    };
+  }, [weighingProduct, grossWeightGrams, tareWeightGrams]);
+
+  // Hardware Diagnostic Handlers
+  const handleKickDrawer = async () => {
+    setIsKickingDrawer(true);
+    try {
+      playCashDrawerChime();
+      const res = await apiClient.kickCashDrawer(250, activeStaffSession?.userName);
+      if (res.status) setHardwareStatus(res.status);
+      onShowToast('Cash Drawer Triggered', '24V DC solenoid pulse sent (ESC p 0 25 250). Drawer open.');
+    } catch (e: any) {
+      onShowToast('Cash Drawer Error', e.message);
+    } finally {
+      setIsKickingDrawer(false);
+    }
+  };
+
+  const handleTestPrintThermalReceipt = async (widthMm: 58 | 80 = 80) => {
+    setIsTestingPrinter(true);
+    try {
+      const res = await apiClient.testPrintThermalReceipt(widthMm, currentOutlet.storeName);
+      if (res.status) setHardwareStatus(res.status);
+      setPrintedSlipModal(res.slipText);
+      onShowToast('Thermal Receipt Printed', `ESC/POS receipt sent to ${widthMm}mm thermal printer.`);
+    } catch (e: any) {
+      onShowToast('Printer Error', e.message);
+    } finally {
+      setIsTestingPrinter(false);
+    }
+  };
+
+  const handleScaleTare = async () => {
+    try {
+      const res = await apiClient.scaleTare(tareWeightGrams);
+      if (res.status) setHardwareStatus(res.status);
+      onShowToast('Scale Tared', `Container tare set to ${tareWeightGrams}g.`);
+    } catch (e: any) {
+      onShowToast('Scale Error', e.message);
+    }
+  };
+
+  const handleScaleZero = async () => {
+    try {
+      const res = await apiClient.scaleZero();
+      if (res.status) setHardwareStatus(res.status);
+      setGrossWeightGrams(0);
+      onShowToast('Scale Zeroed', 'Digital scale zero calibration complete.');
+    } catch (e: any) {
+      onShowToast('Scale Error', e.message);
+    }
+  };
+
+  // Reverse Logistics Returns Handlers
+  const handleSearchReturnReceipt = async (query?: string) => {
+    const q = (query || returnReceiptQuery).trim();
+    if (!q) {
+      onShowToast('Search Required', 'Enter receipt number or customer order ID.');
+      return;
+    }
+    setIsSearchingReceipt(true);
+    try {
+      const found = await apiClient.lookupReturnReceipt(q);
+      if (found && found.receiptNumber) {
+        setSearchedReturnReceipt(found);
+        const initialSelections: Record<string, any> = {};
+        found.items.forEach((item: any) => {
+          initialSelections[item.sku] = {
+            selected: true,
+            quantity: item.quantity,
+            condition: 'RESTOCK_INVENTORY',
+            reason: 'Customer return (verified unopened)',
+          };
+        });
+        setReturnLineSelections(initialSelections);
+        setReturnCustomerName(found.customerName || 'Walk-In Customer');
+        onShowToast('Receipt Found', `Loaded receipt ${found.receiptNumber} with ${found.items.length} items.`);
+      } else {
+        onShowToast('Receipt Not Found', `No active POS transaction found matching "${q}".`);
+      }
+    } catch (e: any) {
+      onShowToast('Lookup Error', e.message || 'Receipt not found');
+    } finally {
+      setIsSearchingReceipt(false);
+    }
+  };
+
+  const handleProcessReturn = async () => {
+    if (!searchedReturnReceipt) return;
+    const selectedSkus = Object.entries(returnLineSelections).filter(([_, val]) => val.selected && val.quantity > 0);
+    if (selectedSkus.length === 0) {
+      onShowToast('Selection Required', 'Select at least one line item to return.');
+      return;
+    }
+
+    setIsProcessingReturn(true);
+    try {
+      const itemsPayload = selectedSkus.map(([sku, config]) => {
+        const orig = searchedReturnReceipt.items.find((it) => it.sku === sku);
+        return {
+          sku,
+          productName: orig?.name || sku,
+          quantity: config.quantity,
+          unitPrice: orig?.unitPrice || 0,
+          originalLineTotal: (orig?.unitPrice || 0) * config.quantity,
+          refundAmount: (orig?.unitPrice || 0) * config.quantity,
+          returnReason: config.reason || 'Customer request',
+          disposition: config.condition,
+          condition: config.condition === 'RESTOCK_INVENTORY' ? 'GOOD_FOR_RESALE' : 'DAMAGED_EXPIRED',
+        };
+      });
+
+      const res = await apiClient.processPosReturn({
+        originalReceiptNumber: searchedReturnReceipt.receiptNumber,
+        originalOrderId: searchedReturnReceipt.receiptNumber,
+        storeId: posStoreId,
+        processedByUserId: activeStaffSession?.userId || 'USR-CASH-01',
+        processedByUserName: activeStaffSession?.userName || 'Frontline Cashier',
+        items: itemsPayload,
+        refundChannel,
+        customerName: returnCustomerName || searchedReturnReceipt.customerName,
+        customerPhone: returnCustomerPhone,
+      });
+
+      if (res.success) {
+        if (refundChannel === 'CASH') {
+          playCashDrawerChime();
+          apiClient.kickCashDrawer(250, activeStaffSession?.userName).catch(() => {});
+        }
+        setReturnSuccessModal({
+          record: res.returnRecord,
+          glVouchers: res.glVouchers,
+          slipText: res.slipText,
+        });
+        setSearchedReturnReceipt(null);
+        setReturnReceiptQuery('');
+        setReturnLineSelections({});
+        await loadReturnsList();
+        await onTransactionSynced();
+        onShowToast(
+          'Return & Refund Processed',
+          `Return ${res.returnRecord.returnNumber} posted! GL vouchers created: ${res.glVouchers.join(', ')}`
+        );
+      }
+    } catch (e: any) {
+      onShowToast('Return Processing Error', e.message || 'Failed to process return');
+    } finally {
+      setIsProcessingReturn(false);
+    }
+  };
 
   // Active store metadata
   const currentOutlet = useMemo(() => {
@@ -453,12 +765,33 @@ export const PosModule: React.FC<PosModuleProps> = ({
     }, 0);
   }, [cart, applyVivoNearExpiryDiscount]);
 
+  // Dynamic Promotion Engine Evaluation (Buy 2 Get 1, Seasonal Coupons, Member Tier Discounts)
+  const promoEvaluation = useMemo(() => {
+    if (cart.length === 0) {
+      return { totalPromoDiscountIDR: 0, appliedPromotions: [], lineDiscounts: {} };
+    }
+    const evalItems = cart.map((ci) => ({
+      sku: ci.sku,
+      name: ci.name,
+      category: ci.category,
+      unitPrice: ci.unitPrice,
+      quantity: ci.quantity,
+      lineTotal: ci.lineTotal,
+    }));
+    return evaluateCartPromotions(evalItems, promoRules, {
+      couponCode: appliedCouponCode,
+      memberTier: selectedMemberTier,
+      memberId: customerMemberId,
+    });
+  }, [cart, promoRules, appliedCouponCode, selectedMemberTier, customerMemberId]);
+
   const manualDiscountIDR = useMemo(
     () => Math.round((subtotalIDR - vivoNearExpiryMarkdownIDR) * (discountPercent / 100)),
     [subtotalIDR, vivoNearExpiryMarkdownIDR, discountPercent]
   );
 
-  const totalDiscountIDR = vivoNearExpiryMarkdownIDR + manualDiscountIDR;
+  const totalDiscountIDR =
+    vivoNearExpiryMarkdownIDR + manualDiscountIDR + promoEvaluation.totalPromoDiscountIDR;
   const taxableAmountIDR = Math.max(0, subtotalIDR - totalDiscountIDR);
 
   // Dynamic Multi-Region Tax Calculation (US Sales Tax, EU VAT, AU GST, ID PPN)
@@ -552,6 +885,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
       const res = await syncPosCheckoutWithInventoryAndAccounting(payload, onTransactionSynced);
 
       if (res.success && res.receipt) {
+        if (paymentMethod === 'cash') {
+          playCashDrawerChime();
+          apiClient.kickCashDrawer(250, activeStaffSession?.userName).catch(() => {});
+        }
+        apiClient.testPrintThermalReceipt(80, currentOutlet.storeName).catch(() => {});
         setActiveReceiptModal(res.receipt);
         handleClearCart();
         await loadPosData(posStoreId);

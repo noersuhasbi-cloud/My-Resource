@@ -4,6 +4,8 @@ import type {
   PurchaseOrder,
   GoodsReceiptRecord,
   InventoryItem,
+  AutoReplenishmentConsolidatedPlan,
+  AutoReplenishmentItemPlan,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -23,6 +25,13 @@ import {
   Check,
   ChevronRight,
   Package,
+  Sparkles,
+  Zap,
+  BarChart3,
+  Layers,
+  ShieldAlert,
+  ArrowRight,
+  ShoppingCart,
 } from 'lucide-react';
 
 interface ProcurementModuleProps {
@@ -81,10 +90,99 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     >
   >({});
 
+  // Active Module Sub-Tab
+  const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'pr' | 'po' | 'gr'>('auto_replenishment');
+
+  // Auto-Replenishment & Min-Max Stock Planning State
+  const [replenishmentPlan, setReplenishmentPlan] = useState<AutoReplenishmentConsolidatedPlan | null>(null);
+  const [isLoadingPlan, setIsLoadingPlan] = useState<boolean>(false);
+  const [isGeneratingDraftPOs, setIsGeneratingDraftPOs] = useState<boolean>(false);
+  const [urgencyFilter, setUrgencyFilter] = useState<'ALL' | 'CRITICAL_OUT_OF_STOCK' | 'BELOW_SAFETY_STOCK' | 'REORDER_TRIGGERED' | 'OPTIMAL'>('ALL');
+  const [selectedReplenishmentSkus, setSelectedReplenishmentSkus] = useState<string[]>([]);
+
   // Filters
   const [prFilter, setPrFilter] = useState<'ALL' | 'pending' | 'approved'>('ALL');
   const [poFilter, setPoFilter] = useState<'ALL' | 'Pending' | 'Partially Received' | 'Completed'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Fetch Auto-Replenishment Plan
+  const loadReplenishmentPlan = React.useCallback(async () => {
+    setIsLoadingPlan(true);
+    try {
+      const plan = await apiClient.getReplenishmentPlan(selectedStore);
+      setReplenishmentPlan(plan);
+    } catch (e: any) {
+      console.warn('Could not load auto-replenishment plan:', e);
+    } finally {
+      setIsLoadingPlan(false);
+    }
+  }, [selectedStore]);
+
+  React.useEffect(() => {
+    loadReplenishmentPlan();
+  }, [loadReplenishmentPlan]);
+
+  // Filtered Auto-Replenishment Items
+  const filteredReplenishmentItems = useMemo(() => {
+    if (!replenishmentPlan?.items) return [];
+    return replenishmentPlan.items.filter((item) => {
+      if (urgencyFilter !== 'ALL' && item.urgency !== urgencyFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (
+          item.sku.toLowerCase().includes(q) ||
+          item.productName.toLowerCase().includes(q) ||
+          item.supplierName.toLowerCase().includes(q) ||
+          item.category.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [replenishmentPlan, urgencyFilter, searchQuery]);
+
+  // Handler: 1-Click Generate Draft Purchase Orders from Replenishment
+  const handleGenerateAutoPOs = async () => {
+    setIsGeneratingDraftPOs(true);
+    try {
+      const res = await apiClient.generateReplenishmentPO({
+        storeId: selectedStore,
+        selectedSkus: selectedReplenishmentSkus.length > 0 ? selectedReplenishmentSkus : undefined,
+      });
+      if (res.success) {
+        onShowToast(
+          'Draft Purchase Orders Generated',
+          res.message || `Created ${res.generatedOrders?.length || 0} vendor purchase orders.`
+        );
+        onRefreshData();
+        await loadReplenishmentPlan();
+        setSelectedReplenishmentSkus([]);
+        setActiveTab('po');
+      }
+    } catch (e: any) {
+      onShowToast('Error Generating POs', e.message || 'Failed to auto-generate POs');
+    } finally {
+      setIsGeneratingDraftPOs(false);
+    }
+  };
+
+  // Toggle SKU selection
+  const handleToggleSelectSku = (sku: string) => {
+    setSelectedReplenishmentSkus((prev) =>
+      prev.includes(sku) ? prev.filter((s) => s !== sku) : [...prev, sku]
+    );
+  };
+
+  const handleSelectAllReorder = () => {
+    if (!replenishmentPlan?.items) return;
+    const reorderSkus = replenishmentPlan.items
+      .filter((i) => i.isReorderTriggered)
+      .map((i) => i.sku);
+    if (selectedReplenishmentSkus.length === reorderSkus.length) {
+      setSelectedReplenishmentSkus([]);
+    } else {
+      setSelectedReplenishmentSkus(reorderSkus);
+    }
+  };
 
   // Calculations
   const filteredPRs = useMemo(() => {
@@ -388,7 +486,409 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         </div>
       </div>
 
+      {/* SUB-TAB NAVIGATION BAR */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab('auto_replenishment')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'auto_replenishment'
+              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              : isLight
+              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+              : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>Auto-Replenishment (Min-Max)</span>
+          {replenishmentPlan && replenishmentPlan.reorderTriggeredCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse">
+              {replenishmentPlan.reorderTriggeredCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('pr')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'pr'
+              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              : isLight
+              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+              : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+          }`}
+        >
+          <Clock className="w-4 h-4 text-emerald-500" />
+          <span>Purchase Requests (PR)</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-[#0F4C3A] dark:text-emerald-300 font-bold">
+            {pendingPRCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('po')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'po'
+              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              : isLight
+              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+              : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+          }`}
+        >
+          <FileCheck2 className="w-4 h-4 text-blue-500" />
+          <span>Purchase Orders (PO)</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-500/20 text-blue-700 dark:text-blue-300 font-bold">
+            {purchaseOrders.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('gr')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'gr'
+              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              : isLight
+              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+              : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+          }`}
+        >
+          <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+          <span>Goods Receipts (GR)</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 font-bold">
+            {goodsReceipts.length}
+          </span>
+        </button>
+      </div>
+
+      {/* SECTION 0: PREDICTIVE AUTO-REPLENISHMENT & MIN-MAX PLANNING */}
+      {(activeTab === 'auto_replenishment') && (
+        <div
+          className={`rounded-2xl border transition-all overflow-hidden ${
+            isLight
+              ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
+              : 'bg-stone-900/90 border-stone-800'
+          }`}
+        >
+          {/* Header */}
+          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-stone-800 bg-stone-900/50'}`}>
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                    Predictive Inventory Intelligence
+                  </span>
+                  <span className="text-xs text-stone-400 font-mono">
+                    Outlet: {selectedStore === 'CONSOLIDATED' ? 'All Outlets (Network)' : selectedStore}
+                  </span>
+                </div>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2 mt-1`}>
+                  <Sparkles className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                  Auto-Replenishment &amp; Min-Max Stock Planning
+                </h3>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-stone-400'} mt-0.5`}>
+                  Predictive safety stock calculations, dynamic sales velocity (units/day), and automated draft Purchase Order generation
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={loadReplenishmentPlan}
+                  disabled={isLoadingPlan}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                    isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100' : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                  }`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingPlan ? 'animate-spin' : ''}`} />
+                  <span>Recalculate Stock</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSelectAllReorder}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                    isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100' : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                  }`}
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>
+                    {selectedReplenishmentSkus.length > 0 ? `Selected (${selectedReplenishmentSkus.length})` : 'Select All Reorder'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateAutoPOs}
+                  disabled={isGeneratingDraftPOs || (replenishmentPlan?.reorderTriggeredCount === 0 && selectedReplenishmentSkus.length === 0)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-sm ${
+                    isGeneratingDraftPOs || (replenishmentPlan?.reorderTriggeredCount === 0 && selectedReplenishmentSkus.length === 0)
+                      ? 'bg-stone-400 cursor-not-allowed opacity-60'
+                      : 'bg-gradient-to-r from-emerald-700 to-[#0F4C3A] hover:brightness-110 active:scale-98'
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{isGeneratingDraftPOs ? 'Generating Draft POs...' : '⚡ Generate Draft Purchase Orders'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            {replenishmentPlan && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-stone-800">
+                <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-stone-800/50 border-stone-700/60'}`}>
+                  <div className="text-[11px] font-medium text-stone-500">Evaluated Catalog SKUs</div>
+                  <div className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-white'} mt-0.5`}>
+                    {replenishmentPlan.totalSkusEvaluated} Items
+                  </div>
+                  <div className="text-[10px] text-stone-400">Inventory tiers active</div>
+                </div>
+
+                <div className={`p-3 rounded-xl border ${
+                  replenishmentPlan.reorderTriggeredCount > 0
+                    ? 'bg-rose-500/10 border-rose-500/30'
+                    : isLight ? 'bg-white border-gray-200/80' : 'bg-stone-800/50 border-stone-700/60'
+                }`}>
+                  <div className="text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center justify-between">
+                    <span>Reorder Triggered</span>
+                    <AlertTriangle className="w-3 h-3" />
+                  </div>
+                  <div className="text-lg font-bold text-rose-600 dark:text-rose-300 mt-0.5">
+                    {replenishmentPlan.reorderTriggeredCount} SKUs
+                  </div>
+                  <div className="text-[10px] text-rose-500">Stock ≤ Reorder Point</div>
+                </div>
+
+                <div className={`p-3 rounded-xl border ${
+                  replenishmentPlan.criticalCount > 0
+                    ? 'bg-amber-500/10 border-amber-500/30'
+                    : isLight ? 'bg-white border-gray-200/80' : 'bg-stone-800/50 border-stone-700/60'
+                }`}>
+                  <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400 flex items-center justify-between">
+                    <span>Critical Out of Stock</span>
+                    <ShieldAlert className="w-3 h-3" />
+                  </div>
+                  <div className="text-lg font-bold text-amber-600 dark:text-amber-300 mt-0.5">
+                    {replenishmentPlan.criticalCount} SKUs
+                  </div>
+                  <div className="text-[10px] text-amber-500">Available stock = 0</div>
+                </div>
+
+                <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-stone-800/50 border-stone-700/60'}`}>
+                  <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">Total Suggested Restock</div>
+                  <div className={`text-lg font-bold text-[#0F4C3A] dark:text-emerald-400 font-mono mt-0.5`}>
+                    {formatIDR(replenishmentPlan.totalSuggestedCostIDR)}
+                  </div>
+                  <div className="text-[10px] text-stone-400">{replenishmentPlan.bySupplier.length} Supplier batches</div>
+                </div>
+              </div>
+            )}
+
+            {/* Supplier Consolidation Previews */}
+            {replenishmentPlan && replenishmentPlan.bySupplier.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-200/60 dark:border-stone-800/60">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block mb-2">
+                  Draft PO Vendor Grouping Preview ({replenishmentPlan.bySupplier.length} Vendors):
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {replenishmentPlan.bySupplier.map((sup) => (
+                    <div
+                      key={sup.supplierId}
+                      className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${
+                        isLight ? 'bg-white/80 border-gray-200' : 'bg-stone-800/40 border-stone-700'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-stone-800 dark:text-stone-200 truncate max-w-[150px]">
+                          {sup.supplierName}
+                        </div>
+                        <div className="text-[10px] text-stone-400 font-mono">
+                          {sup.suggestedPoId} • {sup.skuCount} SKUs ({sup.totalOrderQty} units)
+                        </div>
+                      </div>
+                      <div className="text-right font-mono font-bold text-[#0F4C3A] dark:text-emerald-400 text-xs">
+                        {formatIDR(sup.totalAmountIDR)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Filter bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-3 border-t border-gray-200 dark:border-stone-800">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {(
+                  [
+                    { id: 'ALL', label: 'All Items' },
+                    { id: 'CRITICAL_OUT_OF_STOCK', label: 'Critical (0 Stock)' },
+                    { id: 'BELOW_SAFETY_STOCK', label: 'Below Safety Stock' },
+                    { id: 'REORDER_TRIGGERED', label: 'Reorder Triggered' },
+                    { id: 'OPTIMAL', label: 'Optimal Buffer' },
+                  ] as const
+                ).map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => setUrgencyFilter(u.id)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                      urgencyFilter === u.id
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-gray-600 hover:bg-gray-100'
+                        : 'text-stone-400 hover:bg-stone-800'
+                    }`}
+                  >
+                    {u.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search SKU, product or vendor..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none ${
+                    isLight
+                      ? 'bg-white border-gray-200 text-gray-900 focus:border-[#0F4C3A]'
+                      : 'bg-stone-800 border-stone-700 text-white focus:border-emerald-500'
+                  }`}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[850px] text-left text-xs">
+              <thead>
+                <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
+                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-stone-800 bg-stone-800/50 text-stone-400'
+                }`}>
+                  <th className="py-3 px-3 text-center w-10">Select</th>
+                  <th className="py-3 px-4">SKU &amp; Product Details</th>
+                  <th className="py-3 px-3">Category / Zone</th>
+                  <th className="py-3 px-3 text-center">Available / Safety</th>
+                  <th className="py-3 px-3 text-center">Velocity &amp; Lead</th>
+                  <th className="py-3 px-3 text-center">Reorder Point</th>
+                  <th className="py-3 px-3 text-center">Suggested PO Qty</th>
+                  <th className="py-3 px-4">Est. Restock Cost</th>
+                  <th className="py-3 px-3 text-center">Urgency</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-stone-800'}`}>
+                {filteredReplenishmentItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-stone-400">
+                      {isLoadingPlan ? 'Calculating replenishment algorithm...' : 'No inventory items match the selected filter.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredReplenishmentItems.map((item) => {
+                    const isSelected = selectedReplenishmentSkus.includes(item.sku);
+                    return (
+                      <tr
+                        key={item.sku}
+                        className={`transition-colors ${
+                          isSelected
+                            ? isLight ? 'bg-emerald-50/70' : 'bg-emerald-950/20'
+                            : item.isReorderTriggered
+                            ? isLight ? 'bg-rose-50/30 hover:bg-rose-50/60' : 'bg-rose-950/10 hover:bg-rose-950/20'
+                            : isLight ? 'hover:bg-gray-50' : 'hover:bg-stone-800/40'
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectSku(item.sku)}
+                            className="rounded border-gray-300 text-[#0F4C3A] focus:ring-[#0F4C3A] cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                            {item.productName}
+                          </div>
+                          <div className="text-[11px] text-stone-400 font-mono">
+                            {item.sku} • {item.supplierName}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className="capitalize font-semibold text-stone-600 dark:text-stone-300">
+                            {item.category.replace('_', ' ')}
+                          </span>
+                          <div className="text-[10px] text-stone-400">Zone {item.warehouseZoneId}</div>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`font-mono font-bold ${
+                            item.availableStock === 0 ? 'text-rose-600 font-black' : item.availableStock < item.safetyStockBuffer ? 'text-amber-600' : ''
+                          }`}>
+                            {item.availableStock}
+                          </span>
+                          <span className="text-stone-400 text-[11px]"> / {item.safetyStockBuffer} min</span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <div className="font-mono text-xs font-semibold">
+                            {item.dailySalesVelocity} <span className="text-[10px] text-stone-400">units/day</span>
+                          </div>
+                          <div className="text-[10px] text-stone-400">Lead: {item.leadTimeDays}d</div>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="font-mono font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
+                            {item.reorderPoint}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`font-mono font-black text-sm ${item.suggestedOrderQty > 0 ? 'text-[#0F4C3A] dark:text-emerald-400' : 'text-stone-400'}`}>
+                            {item.suggestedOrderQty > 0 ? `+${item.suggestedOrderQty}` : '0'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-stone-900 dark:text-stone-100">
+                          {formatIDR(item.estimatedTotalCostIDR)}
+                          <div className="text-[10px] text-stone-400 font-normal">
+                            @{formatIDR(item.estimatedUnitCostIDR)}/unit
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          {item.urgency === 'CRITICAL_OUT_OF_STOCK' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+                              <AlertTriangle className="w-3 h-3" /> Critical 0
+                            </span>
+                          )}
+                          {item.urgency === 'BELOW_SAFETY_STOCK' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                              <ShieldAlert className="w-3 h-3" /> Below Safety
+                            </span>
+                          )}
+                          {item.urgency === 'REORDER_TRIGGERED' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                              <Clock className="w-3 h-3" /> Reorder Triggered
+                            </span>
+                          )}
+                          {item.urgency === 'OPTIMAL' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                              <CheckCircle2 className="w-3 h-3" /> Optimal
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* SECTION 1: PURCHASE REQUESTS (PR) */}
+      {(activeTab === 'pr') && (
       <div
         className={`rounded-2xl border transition-all overflow-hidden ${
           isLight
@@ -520,8 +1020,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           </table>
         </div>
       </div>
+      )}
 
       {/* SECTION 2: PURCHASE ORDERS WITH PARTIAL SHIPMENT SUPPORT */}
+      {(activeTab === 'po') && (
       <div
         className={`rounded-2xl border transition-all overflow-hidden ${
           isLight
@@ -718,8 +1220,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           </table>
         </div>
       </div>
+      )}
 
       {/* SECTION 3: GOODS RECEIPTS (GR) LOG */}
+      {(activeTab === 'gr') && (
       <div
         className={`rounded-2xl border transition-all overflow-hidden ${
           isLight
@@ -812,6 +1316,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           </table>
         </div>
       </div>
+      )}
 
       {/* MODAL: INTERACTIVE PARTIAL GOODS RECEIPT */}
       {activeReceivingPO && (

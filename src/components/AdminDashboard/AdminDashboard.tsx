@@ -88,7 +88,7 @@ import { LogisticsDocsModal } from './LogisticsDocsModal';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { GroceryReportsModule } from './GroceryReportsModule';
 import { StockOpnameView } from './StockOpnameView';
-import { AdminSidebar, AdminDashboardTab, AccountingSubTab } from './AdminSidebar';
+import { AdminSidebar, AdminDashboardTab, AccountingSubTab, SettingsSubTab } from './AdminSidebar';
 
 interface AdminDashboardProps {
   initialStaffSession?: StaffShiftSession | null;
@@ -209,9 +209,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [inventoryViewMode, setInventoryViewMode] = useState<
     'WAREHOUSE_BINS' | 'PRODUCT_CATALOG' | 'STOCK_OPNAME'
   >('WAREHOUSE_BINS');
-  const [settingsDeepSubTab, setSettingsDeepSubTab] = useState<
-    'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix'
-  >('coa');
+  const [settingsDeepSubTab, setSettingsDeepSubTab] = useState<SettingsSubTab>('coa');
   const [editingTier, setEditingTier] = useState<StoreInventoryStock | null>(null);
   const [inventoryMetrics, setInventoryMetrics] = useState({
     totalStockCount: 0,

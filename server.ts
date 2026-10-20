@@ -76,7 +76,22 @@ import type {
   ShipmentQuotaTracking,
   QCInspectionRecord,
   GroceryMetricsReport,
+  POSHardwarePeripheralStatus,
+  ThermalPrintReceiptPayload,
+  POSReturnRecord,
+  POSReturnItemLine,
+  ReturnCageDisposition,
+  RefundPaymentChannel,
+  PromotionRule,
+  MemberLoyaltyTier,
+  AppliedPromotionSummary,
+  AutoReplenishmentItemPlan,
+  AutoReplenishmentConsolidatedPlan,
 } from './src/types/index.ts';
+
+import { INITIAL_PROMOTION_RULES, evaluateCartPromotions } from './src/utils/promotionEngine.ts';
+import { INITIAL_HARDWARE_STATUS, generateThermalReceiptText, generateReturnSlipText } from './src/utils/hardwareBridge.ts';
+import { calculateAutoReplenishmentPlan, generateDraftPOsFromReplenishment } from './src/utils/autoReplenishmentEngine.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,7 +113,43 @@ let wasteRecords: WasteRecord[] = JSON.parse(JSON.stringify(INITIAL_WASTE_RECORD
 let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDERS));
 let customerOrders: Order[] = JSON.parse(JSON.stringify(INITIAL_ORDERS));
 
-// -------------------------------------------------------------
+// Hardware, Reverse Logistics & Returns, Promotions
+let posHardwareStatus: POSHardwarePeripheralStatus = JSON.parse(JSON.stringify(INITIAL_HARDWARE_STATUS));
+let promotionRules: PromotionRule[] = JSON.parse(JSON.stringify(INITIAL_PROMOTION_RULES));
+let posReturnRecords: POSReturnRecord[] = [
+  {
+    id: 'RET-2026-0001',
+    originalReceiptNumber: 'RCP-2026-0001',
+    originalOrderId: 'ORD-2026-001',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship Hub',
+    processedByUserId: 'usr-cashier-01',
+    processedByUserName: 'Rian Hidayat',
+    timestamp: new Date(Date.now() - 86400000).toISOString(),
+    items: [
+      {
+        sku: 'SKU-PRD-004',
+        productName: 'Organic Hass Avocados (Pack of 3)',
+        category: 'produce',
+        originalQuantity: 2,
+        returnQuantity: 1,
+        unitPrice: 58000,
+        unitCost: 38000,
+        refundAmount: 58000,
+        returnReason: 'PERISHABLE_DEFECT',
+        disposition: 'RETURN_CAGE_WASTE',
+        conditionNotes: 'Customer noted over-ripening / internal bruising.',
+      },
+    ],
+    totalRefundAmountIDR: 58000,
+    refundChannel: 'CASH_DRAWER',
+    wasteRecordId: 'WST-2026-002',
+    glVoucherIds: ['GLE-2026-0035', 'GLE-2026-0036'],
+    status: 'COMPLETED',
+    customerName: 'Maya Kusuma',
+    customerPhone: '+62 812-9988-7711',
+  },
+];
 // MODULE 1, 2, 3, 4 IN-MEMORY DATA STORES
 // -------------------------------------------------------------
 // Module 1: Weight Tolerance by Category & Natural Shrinkage adjustments
@@ -5945,6 +5996,618 @@ async function startServer() {
     };
 
     res.json(report);
+  });
+
+  // -------------------------------------------------------------
+  // ENTERPRISE MODULE 1: POS HARDWARE & PERIPHERAL INTEGRATION
+  // -------------------------------------------------------------
+  app.get('/api/admin/hardware/status', (_req: Request, res: Response) => {
+    res.json(posHardwareStatus);
+  });
+
+  app.post('/api/admin/hardware/kick-drawer', (req: Request, res: Response) => {
+    const { pulseMs = 250, cashierName = 'Cashier Station 01' } = req.body;
+    posHardwareStatus.cashDrawer.status = 'open';
+    posHardwareStatus.cashDrawer.kickPulseMs = pulseMs;
+    posHardwareStatus.cashDrawer.lastKickedAt = new Date().toISOString();
+
+    // Security audit trail entry for manual / cashier cash drawer kick
+    const timestamp = new Date().toISOString();
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'HARDWARE_DRAWER_KICK',
+      resourceId: 'CASH-DRAWER-01',
+      userId: 'usr-cashier-01',
+      userName: cashierName,
+      userRole: 'cashier',
+      storeId: 'store-jkt-senopati',
+      shiftId: 'SHIFT-SEN-MORNING-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        pulseMs,
+        interface: 'ESC/POS Solenoid Pin 2',
+      },
+      ipAddress: '192.168.1.105',
+    });
+
+    res.json({
+      success: true,
+      message: 'Electronic solenoid kick pulse (250ms) executed via thermal printer interface',
+      status: posHardwareStatus,
+    });
+  });
+
+  app.post('/api/admin/hardware/close-drawer', (_req: Request, res: Response) => {
+    posHardwareStatus.cashDrawer.status = 'closed';
+    res.json({ success: true, status: posHardwareStatus });
+  });
+
+  app.post('/api/admin/hardware/test-print', (req: Request, res: Response) => {
+    const { paperWidthMm = 80, storeName = 'GroceMart Senopati Flagship' } = req.body;
+    posHardwareStatus.thermalPrinter.paperWidthMm = paperWidthMm === 58 ? 58 : 80;
+    posHardwareStatus.thermalPrinter.lastPrintedAt = new Date().toISOString();
+
+    const sampleReceipt: ThermalPrintReceiptPayload = {
+      receiptNumber: `TEST-${Date.now().toString().slice(-6)}`,
+      storeName,
+      storeAddress: 'Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan',
+      cashierName: 'Hardware Diagnostic Agent',
+      timestamp: new Date().toISOString(),
+      items: [
+        {
+          name: 'Thermal Cutter & Head Diagnostic',
+          sku: 'SYS-DIAG-01',
+          quantity: 1,
+          unit: 'test',
+          unitPrice: 0,
+          lineTotal: 0,
+        },
+      ],
+      subtotal: 0,
+      discount: 0,
+      tax: 0,
+      total: 0,
+      currency: 'IDR',
+      currencyTotal: 0,
+      paymentMethod: 'TEST_DIAGNOSTIC',
+      footerNotes: 'ESC/POS Direct Thermal Diagnostic Print Passed',
+    };
+
+    const slipText = generateThermalReceiptText(sampleReceipt, posHardwareStatus.thermalPrinter.paperWidthMm);
+
+    res.json({
+      success: true,
+      message: `Diagnostic slip printed on ${posHardwareStatus.thermalPrinter.model} (${paperWidthMm}mm)`,
+      slipText,
+      status: posHardwareStatus,
+    });
+  });
+
+  app.post('/api/admin/hardware/scale/tare', (req: Request, res: Response) => {
+    const { tareGrams = 0 } = req.body;
+    posHardwareStatus.digitalScale.tareGrams = Number(tareGrams) || 0;
+    posHardwareStatus.digitalScale.status = 'stable';
+    posHardwareStatus.digitalScale.isStable = true;
+    posHardwareStatus.digitalScale.lastStabilizedAt = new Date().toISOString();
+    res.json({ success: true, status: posHardwareStatus });
+  });
+
+  app.post('/api/admin/hardware/scale/zero', (_req: Request, res: Response) => {
+    posHardwareStatus.digitalScale.currentWeightGrams = 0;
+    posHardwareStatus.digitalScale.tareGrams = 0;
+    posHardwareStatus.digitalScale.status = 'zeroed';
+    posHardwareStatus.digitalScale.isStable = true;
+    posHardwareStatus.digitalScale.lastStabilizedAt = new Date().toISOString();
+    res.json({ success: true, status: posHardwareStatus });
+  });
+
+  app.post('/api/admin/hardware/scale/weigh', (req: Request, res: Response) => {
+    const { weightGrams, isStable = true } = req.body;
+    posHardwareStatus.digitalScale.currentWeightGrams = Number(weightGrams) || 0;
+    posHardwareStatus.digitalScale.isStable = Boolean(isStable);
+    posHardwareStatus.digitalScale.status = isStable ? 'stable' : 'streaming';
+    posHardwareStatus.digitalScale.lastStabilizedAt = new Date().toISOString();
+    res.json({ success: true, status: posHardwareStatus });
+  });
+
+  app.post('/api/admin/hardware/scanner/simulate', (req: Request, res: Response) => {
+    const { barcode } = req.body;
+    if (!barcode) return res.status(400).json({ error: 'Barcode string required' });
+
+    posHardwareStatus.barcodeScanner.lastScannedBarcode = barcode;
+    posHardwareStatus.barcodeScanner.lastScannedAt = new Date().toISOString();
+    posHardwareStatus.barcodeScanner.status = 'active_listening';
+
+    // Find matched item from inventoryList or tiers
+    const matchedItem =
+      inventoryList.find((i) => i.sku.toLowerCase() === barcode.toLowerCase()) ||
+      inventoryList[0];
+
+    res.json({
+      success: true,
+      barcode,
+      matchedItem,
+      status: posHardwareStatus,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // ENTERPRISE MODULE 2: REVERSE LOGISTICS & RETURNS / REFUNDS
+  // -------------------------------------------------------------
+  app.get('/api/admin/returns', (req: Request, res: Response) => {
+    const { storeId } = req.query;
+    let records = posReturnRecords;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      records = records.filter((r) => r.storeId === storeId);
+    }
+    res.json(records);
+  });
+
+  app.get('/api/admin/returns/lookup-receipt/:query', (req: Request, res: Response) => {
+    const q = req.params.query.trim().toLowerCase();
+    const order = customerOrders.find(
+      (o) =>
+        o.id.toLowerCase() === q ||
+        o.customerPhone?.toLowerCase().includes(q) ||
+        o.customerName?.toLowerCase().includes(q)
+    );
+
+    if (order) {
+      return res.json({
+        found: true,
+        orderId: order.id,
+        receiptNumber: `RCP-2026-${order.id.replace(/[^0-9]/g, '').slice(-4) || '1042'}`,
+        storeId: 'store-jkt-senopati',
+        storeName: 'GroceMart Senopati Flagship Hub',
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        totalAmount: order.total,
+        items: order.items.map((it) => {
+          const inv = inventoryList.find((i) => i.productName === it.product?.name) || inventoryList[0];
+          return {
+            sku: inv?.sku || `SKU-PRD-${it.product?.id || '001'}`,
+            productName: it.product?.name || inv?.productName || 'Grocery Item',
+            category: it.product?.category || inv?.category || 'produce',
+            originalQuantity: it.quantity,
+            unitPrice: it.product?.price || inv?.sellingPrice || 15000,
+            unitCost: inv?.unitCost || Math.round((it.product?.price || 15000) * 0.65),
+          };
+        }),
+      });
+    }
+
+    // Fallback simulated order receipt lookup for frontline cashier flexibility
+    const fallbackItem1 = inventoryList[0];
+    const fallbackItem2 = inventoryList[1];
+    res.json({
+      found: true,
+      orderId: `ORD-POS-${q.slice(-4) || '9901'}`,
+      receiptNumber: q.startsWith('rcp') ? q.toUpperCase() : `RCP-2026-${q.slice(-4) || '8812'}`,
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship Hub',
+      customerName: 'Walk-in Retail Customer',
+      customerPhone: '+62 811-2345-6789',
+      totalAmount: fallbackItem1.sellingPrice * 2 + fallbackItem2.sellingPrice,
+      items: [
+        {
+          sku: fallbackItem1.sku,
+          productName: fallbackItem1.productName,
+          category: fallbackItem1.category,
+          originalQuantity: 2,
+          unitPrice: fallbackItem1.sellingPrice,
+          unitCost: fallbackItem1.unitCost,
+        },
+        {
+          sku: fallbackItem2.sku,
+          productName: fallbackItem2.productName,
+          category: fallbackItem2.category,
+          originalQuantity: 1,
+          unitPrice: fallbackItem2.sellingPrice,
+          unitCost: fallbackItem2.unitCost,
+        },
+      ],
+    });
+  });
+
+  app.post('/api/admin/returns', (req: Request, res: Response) => {
+    const {
+      originalReceiptNumber,
+      originalOrderId,
+      storeId = 'store-jkt-senopati',
+      processedByUserId = 'usr-cashier-01',
+      processedByUserName = 'Rian Hidayat',
+      items = [],
+      refundChannel = 'CASH_DRAWER',
+      customerName = 'Retail Customer',
+      customerPhone = '',
+    } = req.body;
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'At least one return item line is required' });
+    }
+
+    const outlet = storeSchedules.find((s) => s.storeId === storeId);
+    const storeName = outlet?.storeName || 'GroceMart Senopati Flagship Hub';
+    const timestamp = new Date().toISOString();
+
+    const returnId = `RET-2026-${(posReturnRecords.length + 1).toString().padStart(4, '0')}`;
+    let totalRefundAmountIDR = 0;
+    const glVoucherIds: string[] = [];
+    let linkedWasteRecordId: string | undefined;
+
+    // 1. Process Inventory Adjustments & Waste Routing
+    items.forEach((item: POSReturnItemLine) => {
+      const lineRefund = item.refundAmount || item.unitPrice * item.returnQuantity;
+      totalRefundAmountIDR += lineRefund;
+
+      const catalogItem = inventoryList.find((i) => i.sku === item.sku);
+      const tier = storeInventoryTiers.find((t) => t.sku === item.sku && t.storeId === storeId);
+      const lineCost = (catalogItem?.unitCost || item.unitCost) * item.returnQuantity;
+
+      if (item.disposition === 'RETURN_CAGE_WASTE') {
+        // Route to Return/Waste Cage: quarantine item, do NOT restock to sellable inventory
+        const wasteId = `WST-2026-${(wasteRecords.length + 1).toString().padStart(3, '0')}`;
+        linkedWasteRecordId = wasteId;
+
+        wasteRecords.unshift({
+          id: wasteId,
+          sku: item.sku,
+          productName: item.productName,
+          storeId,
+          storeName,
+          warehouseZoneId: tier?.warehouseZoneId || 'WH-JKT-SEN-COLD',
+          quantityScrapped: item.returnQuantity,
+          unit: catalogItem?.unit || 'unit',
+          unitCost: catalogItem?.unitCost || item.unitCost,
+          totalShrinkageCost: lineCost,
+          reason: item.returnReason === 'PERISHABLE_DEFECT' ? 'expired' : 'damaged_in_transit',
+          actionTaken: 'bio_compost',
+          reportedBy: `Reverse Logistics: ${processedByUserName}`,
+          reportedAt: timestamp,
+          batchId: 'BAT-RETURN-CAGE',
+          notes: `Defective customer return from receipt #${originalReceiptNumber}. Condition: ${item.conditionNotes || item.returnReason}`,
+        });
+
+        // Double-entry GL for Waste Cage Shrinkage:
+        // Debit 6030: Inventory Shrinkage & Spoilage Expense
+        // Credit 1040: Merchandise Inventory Asset
+        const gleWasteCost = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+        generalLedger.unshift({
+          id: gleWasteCost,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '6030',
+          accountName: 'Inventory Shrinkage & Spoilage Expense',
+          category: 'Expense',
+          debit: lineCost,
+          credit: 0,
+          referenceType: 'WASTE_SHRINKAGE',
+          referenceId: wasteId,
+          description: `Return scrap to waste cage: ${item.returnQuantity}x ${item.productName} (${item.returnReason})`,
+        });
+        glVoucherIds.push(gleWasteCost);
+
+        const gleInventoryWriteOff = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+        generalLedger.unshift({
+          id: gleInventoryWriteOff,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
+          category: 'Asset',
+          debit: 0,
+          credit: lineCost,
+          referenceType: 'WASTE_SHRINKAGE',
+          referenceId: wasteId,
+          description: `Inventory write-down for customer return waste cage: ${item.sku}`,
+        });
+        glVoucherIds.push(gleInventoryWriteOff);
+      } else {
+        // Restock to Sellable Shelf Inventory
+        if (catalogItem) {
+          catalogItem.currentStock += item.returnQuantity;
+        }
+        if (tier) {
+          tier.physicalStock += item.returnQuantity;
+          tier.availableStock += item.returnQuantity;
+          tier.updatedAt = timestamp;
+        }
+
+        // Double-entry GL for Restock Reversal:
+        // Debit 1040: Merchandise Inventory Asset
+        // Credit 5010: Cost of Goods Sold (COGS Reversal)
+        const gleRestockAsset = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+        generalLedger.unshift({
+          id: gleRestockAsset,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
+          category: 'Asset',
+          debit: lineCost,
+          credit: 0,
+          referenceType: 'INVENTORY_ADJUSTMENT',
+          referenceId: returnId,
+          description: `Restock customer return to shelf: ${item.returnQuantity}x ${item.productName}`,
+        });
+        glVoucherIds.push(gleRestockAsset);
+
+        const gleCogsReversal = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+        generalLedger.unshift({
+          id: gleCogsReversal,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '5010',
+          accountName: 'Cost of Goods Sold (COGS)',
+          category: 'Expense',
+          debit: 0,
+          credit: lineCost,
+          referenceType: 'INVENTORY_ADJUSTMENT',
+          referenceId: returnId,
+          description: `COGS credit reversal for restocked return: ${item.sku}`,
+        });
+        glVoucherIds.push(gleCogsReversal);
+      }
+    });
+
+    // 2. Double-entry GL for Customer Sales Refund:
+    // Debit 4020: Sales Returns & Allowances (Revenue Contra Account)
+    // Credit 1010: Cash & Register Drawer Clearing (or EDC/QRIS Settlement)
+    const gleSalesReturn = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    generalLedger.unshift({
+      id: gleSalesReturn,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '4020',
+      accountName: 'Sales Returns & Allowances',
+      category: 'Revenue',
+      debit: totalRefundAmountIDR,
+      credit: 0,
+      referenceType: 'RETURN_REFUND',
+      referenceId: returnId,
+      description: `Customer refund for receipt #${originalReceiptNumber} via ${refundChannel}`,
+    });
+    glVoucherIds.push(gleSalesReturn);
+
+    const refundAccountCode = refundChannel === 'CASH_DRAWER' ? '1010' : refundChannel === 'BANK_EDC_REVERSAL' ? '1020' : '1030';
+    const refundAccountName =
+      refundChannel === 'CASH_DRAWER'
+        ? 'Cash & Register Drawer Clearing'
+        : refundChannel === 'BANK_EDC_REVERSAL'
+        ? 'Bank BCA Operational Clearing (EDC Card)'
+        : 'QRIS Settlement Receivable (ASPI Clearing)';
+
+    const gleRefundPayment = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    generalLedger.unshift({
+      id: gleRefundPayment,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: refundAccountCode,
+      accountName: refundAccountName,
+      category: 'Asset',
+      debit: 0,
+      credit: totalRefundAmountIDR,
+      referenceType: 'RETURN_REFUND',
+      referenceId: returnId,
+      description: `Disbursement of refund for return #${returnId} (${customerName})`,
+    });
+    glVoucherIds.push(gleRefundPayment);
+
+    // 3. Hardware trigger: If Cash Drawer refund, automatically kick drawer
+    if (refundChannel === 'CASH_DRAWER') {
+      posHardwareStatus.cashDrawer.status = 'open';
+      posHardwareStatus.cashDrawer.lastKickedAt = timestamp;
+    }
+
+    // 4. Save Return Record
+    const newReturn: POSReturnRecord = {
+      id: returnId,
+      originalReceiptNumber,
+      originalOrderId,
+      storeId,
+      storeName,
+      processedByUserId,
+      processedByUserName,
+      timestamp,
+      items,
+      totalRefundAmountIDR,
+      refundChannel,
+      wasteRecordId: linkedWasteRecordId,
+      glVoucherIds,
+      status: 'COMPLETED',
+      customerName,
+      customerPhone,
+    };
+
+    posReturnRecords.unshift(newReturn);
+
+    // 5. Generate Return Slip Text for Thermal Printer
+    const slipText = generateReturnSlipText(newReturn, posHardwareStatus.thermalPrinter.paperWidthMm);
+
+    // 6. Security Audit Trail Entry
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'RETURN_REFUND_PROCESSED',
+      resourceId: returnId,
+      userId: processedByUserId,
+      userName: processedByUserName,
+      userRole: 'cashier',
+      storeId,
+      shiftId: 'SHIFT-SEN-MORNING-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        receiptNumber: originalReceiptNumber,
+        refundAmount: totalRefundAmountIDR,
+        channel: refundChannel,
+        itemsCount: items.length,
+      },
+      ipAddress: '192.168.1.105',
+    });
+
+    res.json({
+      success: true,
+      returnRecord: newReturn,
+      glVoucherIds,
+      slipText,
+      message: `Return #${returnId} processed successfully. Refund Rp ${totalRefundAmountIDR.toLocaleString('id-ID')} authorized and General Ledger synced.`,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // ENTERPRISE MODULE 3: ADVANCED PROMOTION & LOYALTY ENGINE
+  // -------------------------------------------------------------
+  app.get('/api/admin/promotions', (_req: Request, res: Response) => {
+    res.json(promotionRules);
+  });
+
+  app.post('/api/admin/promotions', (req: Request, res: Response) => {
+    const {
+      name,
+      code,
+      type = 'PERCENTAGE_DISCOUNT',
+      targetType = 'ALL',
+      targetValue = 'ALL',
+      discountPercent,
+      discountAmountIDR,
+      minOrderSubtotalIDR,
+      buyQty,
+      getQty,
+      getDiscountPercent = 100,
+      memberTier,
+      active = true,
+      startDate,
+      endDate,
+      description = '',
+    } = req.body;
+
+    if (!name || !code) {
+      return res.status(400).json({ error: 'Promotion name and promo code are required' });
+    }
+
+    const newRule: PromotionRule = {
+      id: `PRM-2026-${(promotionRules.length + 1).toString().padStart(2, '0')}`,
+      name,
+      code: code.trim().toUpperCase(),
+      type,
+      targetType,
+      targetValue,
+      discountPercent: discountPercent ? Number(discountPercent) : undefined,
+      discountAmountIDR: discountAmountIDR ? Number(discountAmountIDR) : undefined,
+      minOrderSubtotalIDR: minOrderSubtotalIDR ? Number(minOrderSubtotalIDR) : undefined,
+      buyQty: buyQty ? Number(buyQty) : undefined,
+      getQty: getQty ? Number(getQty) : undefined,
+      getDiscountPercent: getDiscountPercent ? Number(getDiscountPercent) : undefined,
+      memberTier,
+      active: Boolean(active),
+      startDate,
+      endDate,
+      description,
+      usageCount: 0,
+    };
+
+    promotionRules.unshift(newRule);
+    res.json({ success: true, rule: newRule, message: `Promotion rule [${newRule.code}] created successfully` });
+  });
+
+  app.put('/api/admin/promotions/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const ruleIndex = promotionRules.findIndex((r) => r.id === id);
+    if (ruleIndex === -1) {
+      return res.status(404).json({ error: 'Promotion rule not found' });
+    }
+
+    promotionRules[ruleIndex] = {
+      ...promotionRules[ruleIndex],
+      ...req.body,
+      id, // Preserve ID
+    };
+
+    res.json({
+      success: true,
+      rule: promotionRules[ruleIndex],
+      message: `Promotion rule [${promotionRules[ruleIndex].code}] updated successfully`,
+    });
+  });
+
+  app.delete('/api/admin/promotions/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const rule = promotionRules.find((r) => r.id === id);
+    if (!rule) return res.status(404).json({ error: 'Rule not found' });
+
+    rule.active = false;
+    res.json({ success: true, message: `Promotion rule [${rule.code}] deactivated` });
+  });
+
+  app.post('/api/admin/promotions/evaluate', (req: Request, res: Response) => {
+    const { cartItems = [], couponCode, memberTier, memberId } = req.body;
+    const evaluation = evaluateCartPromotions(cartItems, promotionRules, {
+      couponCode,
+      memberTier,
+      memberId,
+    });
+    res.json(evaluation);
+  });
+
+  // -------------------------------------------------------------
+  // ENTERPRISE MODULE 4: AUTO-REPLENISHMENT & MIN-MAX PLANNING
+  // -------------------------------------------------------------
+  app.get('/api/admin/replenishment/plan', (req: Request, res: Response) => {
+    const { storeId = 'CONSOLIDATED' } = req.query;
+    const plan = calculateAutoReplenishmentPlan(storeInventoryTiers, storeId as string);
+    res.json(plan);
+  });
+
+  app.post('/api/admin/replenishment/generate-po', (req: Request, res: Response) => {
+    const { storeId = 'store-jkt-senopati', selectedSkus } = req.body;
+    const plan = calculateAutoReplenishmentPlan(storeInventoryTiers, storeId);
+
+    let itemsToOrder = plan.items.filter((it) => it.isReorderTriggered);
+    if (selectedSkus && Array.isArray(selectedSkus) && selectedSkus.length > 0) {
+      itemsToOrder = itemsToOrder.filter((it) => selectedSkus.includes(it.sku));
+    }
+
+    if (itemsToOrder.length === 0) {
+      return res.status(400).json({
+        error: 'No items currently below safety stock or triggered for replenishment in this outlet.',
+      });
+    }
+
+    const createdPOs = generateDraftPOsFromReplenishment(itemsToOrder, storeId, purchaseOrders.length);
+    purchaseOrders.unshift(...createdPOs);
+
+    // Record in Security Audit Trail
+    const timestamp = new Date().toISOString();
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'AUTO_REPLENISHMENT_PO_GENERATED',
+      resourceId: createdPOs[0]?.id || 'PO-AUTO-BATCH',
+      userId: 'usr-admin-01',
+      userName: 'Auto-Replenishment Engine',
+      userRole: 'admin',
+      storeId,
+      shiftId: 'CRON-AUTO-RESTOCK',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        generatedPoCount: createdPOs.length,
+        totalSkus: itemsToOrder.length,
+      },
+      ipAddress: '127.0.0.1 (System Cron)',
+    });
+
+    res.json({
+      success: true,
+      generatedOrders: createdPOs,
+      message: `Successfully generated ${createdPOs.length} draft Purchase Order(s) for ${itemsToOrder.length} restock-triggered SKUs.`,
+    });
   });
 
   // -------------------------------------------------------------
