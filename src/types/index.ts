@@ -54,6 +54,9 @@ export interface Product {
   fallbackGradient: string;
   storageTip?: string;
   nutritionHighlights?: string[];
+  isWeightBased?: boolean;
+  pricePerKg?: number;
+  storageZone?: StorageZoneType;
 }
 
 export interface CartItem {

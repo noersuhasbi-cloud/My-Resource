@@ -8,7 +8,6 @@ import type {
   PurchaseRequest,
   PurchaseOrder,
   GoodsReceiptRecord,
-  VendorBill,
   ChartOfAccount,
   GeneralLedgerEntry,
   ProfitAndLossReport,
@@ -18,7 +17,6 @@ import type {
   TransactionAuditRecord,
   StaffShiftSession,
   ClimateAdaptiveThresholdConfig,
-  ColdChainLogEntry,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -82,14 +80,8 @@ import { ProcurementModule } from './ProcurementModule';
 import { AccountingModule } from './AccountingModule';
 import { RbacModule } from './RbacModule';
 import { SecurityAuditModule } from './SecurityAuditModule';
+import { AdminSidebar, AdminDashboardTab, AccountingSubTab } from './AdminSidebar';
 import { PosModule } from './PosModule';
-import { SettingsModule } from './SettingsModule';
-import { InventoryQCModule } from './InventoryQCModule';
-import { LogisticsDocsModal } from './LogisticsDocsModal';
-import { ApprovalMatrixModule } from './ApprovalMatrixModule';
-import { GroceryReportsModule } from './GroceryReportsModule';
-import { StockOpnameView } from './StockOpnameView';
-import { AdminSidebar, AdminDashboardTab, AccountingSubTab, SettingsSubTab } from './AdminSidebar';
 
 interface AdminDashboardProps {
   initialStaffSession?: StaffShiftSession | null;
@@ -121,13 +113,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch {}
   };
 
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    return () => {
-      document.documentElement.classList.remove('dark');
-    };
-  }, [theme]);
-
   const isLight = theme === 'light';
 
   // Global Store Outlet Filter Selector
@@ -156,12 +141,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const [activeTab, setActiveTab] = useState<AdminDashboardTab>(() => {
-    if (typeof window !== 'undefined' && window.location.hash === '#pos') {
-      return 'pos';
-    }
-    if (initialStaffSession?.userRole === 'cashier') {
-      return 'pos';
-    }
+    if (initialStaffSession?.userRole === 'cashier') return 'pos';
     return 'overview';
   });
 
@@ -205,12 +185,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('ALL');
   const [selectedStorageZoneFilter, setSelectedStorageZoneFilter] = useState<string>('ALL');
   const [inventorySearch, setInventorySearch] = useState<string>('');
-  const [lowStockThreshold, setLowStockThreshold] = useState<number>(10);
-  const [stockAlertFilter, setStockAlertFilter] = useState<'ALL' | 'LOW_STOCK' | 'BELOW_MIN_THRESHOLD'>('ALL');
-  const [inventoryViewMode, setInventoryViewMode] = useState<
-    'WAREHOUSE_BINS' | 'PRODUCT_CATALOG' | 'STOCK_OPNAME'
-  >('WAREHOUSE_BINS');
-  const [settingsDeepSubTab, setSettingsDeepSubTab] = useState<SettingsSubTab>('coa');
   const [editingTier, setEditingTier] = useState<StoreInventoryStock | null>(null);
   const [inventoryMetrics, setInventoryMetrics] = useState({
     totalStockCount: 0,
@@ -218,18 +192,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     lowStockCount: 0,
     totalSkus: 0,
   });
-
-  // Cold Chain & Sub-Zero Storage Compliance Logging (FDA FSMA 204, EU Reg 852/2004, FSANZ 3.2.2)
-  const [coldChainLogs, setColdChainLogs] = useState<ColdChainLogEntry[]>([]);
-  const [showColdChainTable, setShowColdChainTable] = useState<boolean>(false);
-  const [isLogTelemetryModalOpen, setIsLogTelemetryModalOpen] = useState<boolean>(false);
-  const [newLogZoneId, setNewLogZoneId] = useState<string>('WH-JKT-SEN-FRZ');
-  const [newLogTempC, setNewLogTempC] = useState<number>(-19.2);
-  const [newLogHumidity, setNewLogHumidity] = useState<number>(82);
-  const [newLogStandard, setNewLogStandard] = useState<'FDA FSMA 204' | 'EU Reg 852/2004' | 'FSANZ 3.2.2' | 'HACCP CCP'>('FDA FSMA 204');
-  const [newLogAction, setNewLogAction] = useState<string>('');
-  const [newLogAuditor, setNewLogAuditor] = useState<string>('IoT Compliance Monitor');
-  const [isSubmittingLog, setIsSubmittingLog] = useState<boolean>(false);
 
   // Stock Adjustment Modal
   const [adjustingSku, setAdjustingSku] = useState<string | null>(null);
@@ -240,7 +202,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptRecord[]>([]);
-  const [vendorBills, setVendorBills] = useState<VendorBill[]>([]);
   const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
   const [selectedPrSku, setSelectedPrSku] = useState<string>('');
   const [prQuantity, setPrQuantity] = useState<number>(50);
@@ -294,8 +255,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         auditRes,
         rbacRes,
         climateRes,
-        coldChainRes,
-        vbRes,
       ] = await Promise.all([
         apiClient.getOmzetAnalytics().catch(() => null),
         apiClient.getStoreStatus(),
@@ -313,8 +272,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         apiClient.getAuditTrail(),
         apiClient.getRbacSession().catch(() => null),
         apiClient.getClimateThresholds().catch(() => []),
-        apiClient.getColdChainLogs().catch(() => []),
-        apiClient.getVendorBills().catch(() => []),
       ]);
 
       if (rbacRes) {
@@ -324,7 +281,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setAvailableStaffProfiles(rbacRes.availableProfiles || []);
       }
       setClimateConfigs(climateRes || []);
-      setColdChainLogs(coldChainRes || []);
 
       setOmzetData(omzetRes);
       setStoreStatus(statusRes);
@@ -340,7 +296,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setPurchaseRequests(prRes);
       setPurchaseOrders(poRes);
       setGoodsReceipts(grRes);
-      setVendorBills(vbRes || []);
 
       setChartOfAccounts(coaRes);
       setLedgerEntries(glRes);
@@ -492,33 +447,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Cold Chain & Sub-Zero Storage Compliance Handler
-  const handleRecordColdChain = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmittingLog(true);
-    try {
-      const res = await apiClient.recordColdChainTelemetry({
-        warehouseZoneId: newLogZoneId,
-        temperatureCelsius: Number(newLogTempC),
-        humidityPercent: Number(newLogHumidity),
-        complianceStandard: newLogStandard,
-        correctiveAction: newLogAction || undefined,
-        inspectorName: newLogAuditor,
-        storeId: selectedOutletFilter !== 'ALL' ? selectedOutletFilter : undefined,
-      });
-      setColdChainLogs((prev) => [res.log, ...prev]);
-      setIsLogTelemetryModalOpen(false);
-      setNewLogAction('');
-      onShowToast('Cold Chain Telemetry Logged', res.message);
-      const updatedConfigs = await apiClient.getClimateThresholds().catch(() => []);
-      setClimateConfigs(updatedConfigs);
-    } catch (err) {
-      onShowToast('Logging Error', String(err));
-    } finally {
-      setIsSubmittingLog(false);
-    }
-  };
-
   // Procurement Handlers
   const handleCreatePR = async () => {
     if (!selectedPrSku) return;
@@ -607,26 +535,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Low stock counts based on configurable threshold (default < 10 units)
-  const lowStockTiersBelowThreshold = inventoryTiers.filter(
-    (tier) =>
-      (selectedOutletFilter === 'ALL' || tier.storeId === selectedOutletFilter) &&
-      tier.availableStock < lowStockThreshold
-  );
-  const lowStockCatalogBelowThreshold = inventory.filter((item) => item.currentStock < lowStockThreshold);
-
-  // Filtered inventory matrix (Warehouse Bins view)
+  // Filtered inventory matrix
   const filteredTiers = inventoryTiers.filter((tier) => {
     if (selectedOutletFilter !== 'ALL' && tier.storeId !== selectedOutletFilter) return false;
     if (selectedStorageZoneFilter !== 'ALL' && tier.storageType !== selectedStorageZoneFilter) return false;
-    if (stockAlertFilter === 'LOW_STOCK' && tier.availableStock >= lowStockThreshold) return false;
-    if (
-      stockAlertFilter === 'BELOW_MIN_THRESHOLD' &&
-      tier.availableStock >= lowStockThreshold &&
-      tier.availableStock > tier.minimumThreshold
-    ) {
-      return false;
-    }
     if (inventorySearch) {
       const q = inventorySearch.toLowerCase();
       return (
@@ -638,62 +550,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return true;
   });
 
-  // Filtered Master Product Catalog items
-  const filteredCatalogItems = inventory.filter((item) => {
-    if (stockAlertFilter === 'LOW_STOCK' && item.currentStock >= lowStockThreshold) return false;
-    if (
-      stockAlertFilter === 'BELOW_MIN_THRESHOLD' &&
-      item.currentStock >= lowStockThreshold &&
-      item.currentStock > item.minimumThreshold
-    ) {
-      return false;
-    }
-    if (inventorySearch) {
-      const q = inventorySearch.toLowerCase();
-      return (
-        item.productName.toLowerCase().includes(q) ||
-        item.sku.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q) ||
-        item.supplierName.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
-  const handleQuickRestockPR = async (sku: string, productName: string, suggestedQty: number, storeId = 'store-jkt-senopati') => {
-    try {
-      const res = await apiClient.createPurchaseRequest({
-        sku,
-        suggestedQuantity: suggestedQty > 0 ? suggestedQty : 40,
-        reason: 'low_stock_threshold',
-        priority: 'high',
-        requestedBy: activeStaffSession?.userName || 'Inventory Alert System',
-        storeId: storeId !== 'ALL' && storeId !== 'CONSOLIDATED' ? storeId : 'store-jkt-senopati',
-      });
-      setPurchaseRequests((prev) => [res.purchaseRequest, ...prev]);
-      onShowToast(
-        'Low Stock Replenish PR Created',
-        `${res.purchaseRequest.id} queued for ${productName} (${suggestedQty || 40} units).`
-      );
-    } catch (err) {
-      onShowToast('PR Creation Failed', String(err));
-    }
-  };
-
   const cardClass = isLight
-    ? 'bg-white border border-gray-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03),0_4px_12px_rgba(0,0,0,0.02)] text-gray-900 rounded-2xl'
-    : 'bg-stone-900 border border-stone-800 text-stone-100 rounded-2xl';
+    ? 'bg-white border border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 rounded-2xl'
+    : 'bg-stone-900/90 border border-stone-800 text-stone-100 rounded-2xl';
   const subCardClass = isLight
-    ? 'bg-gray-50/80 border border-gray-200/90 text-gray-900 rounded-xl'
-    : 'bg-stone-800/70 border border-stone-700/80 text-stone-100 rounded-xl';
+    ? 'bg-white border border-gray-200 text-gray-900 rounded-xl shadow-xs'
+    : 'bg-stone-800/80 border border-stone-700 text-stone-100 rounded-xl';
   const textTitle = isLight ? 'text-gray-900' : 'text-white';
   const textMuted = isLight ? 'text-gray-500' : 'text-stone-400';
   const tableHeaderClass = isLight
-    ? 'border-b border-gray-200 bg-gray-50/90 text-gray-500 font-semibold uppercase tracking-wider text-[10px]'
-    : 'border-b border-stone-800 bg-stone-800/60 text-stone-400 font-semibold uppercase tracking-wider text-[10px]';
+    ? 'border-b border-gray-200 bg-gray-50/70 text-gray-500 font-semibold uppercase text-[10px]'
+    : 'border-b border-stone-800 bg-stone-800/50 text-stone-400 font-semibold uppercase text-[10px]';
   const inputClass = isLight
     ? 'bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-    : 'bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500';
+    : 'bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:outline-none focus:border-emerald-500';
   const modalClass = isLight
     ? 'bg-white border border-gray-200 text-gray-900 shadow-2xl rounded-2xl'
     : 'bg-stone-900 border border-stone-700 text-white shadow-2xl rounded-2xl';
@@ -702,8 +572,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     switch (activeTab) {
       case 'overview':
         return 'Executive Omzet & Key Metrics';
-      case 'pos':
-        return 'POS (Point of Sale) & Cashier Terminal';
       case 'operations':
         return 'Store & Multi-Outlet Operations';
       case 'inventory':
@@ -732,11 +600,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   })();
 
   return (
-    <div
-      className={`min-h-screen ${
-        isLight ? 'bg-[#F8FAFC] text-gray-900' : 'dark bg-stone-950 text-stone-100'
-      } flex font-sans transition-colors duration-200 overflow-x-hidden`}
-    >
+    <div className={`min-h-screen ${isLight ? 'bg-[#F9FAFB] text-gray-900' : 'bg-stone-950 text-stone-100'} flex font-sans transition-colors duration-200 overflow-x-hidden`}>
       {/* 1. Left Vertical Sidebar Component */}
       <AdminSidebar
         theme={theme}
@@ -746,21 +610,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         onSelectTab={(tab) => setActiveTab(tab)}
         accountingSubTab={accountingDeepSubTab}
         onSelectAccountingSubTab={(sub) => setAccountingDeepSubTab(sub)}
-        settingsSubTab={settingsDeepSubTab}
-        onSelectSettingsSubTab={(sub) => {
-          setSettingsDeepSubTab(sub);
-          setActiveTab('settings');
-        }}
         isFinanceMenuOpen={isFinanceMenuOpen}
         onToggleFinanceMenu={() => setIsFinanceMenuOpen((prev) => !prev)}
         isSettingsMenuOpen={isSettingsMenuOpen}
         onToggleSettingsMenu={() => setIsSettingsMenuOpen((prev) => !prev)}
         emergencyClosedCount={storeOutlets.filter((o) => o.isEmergencyClosed).length}
-        lowStockCount={
-          inventoryViewMode === 'WAREHOUSE_BINS'
-            ? lowStockTiersBelowThreshold.length
-            : lowStockCatalogBelowThreshold.length
-        }
+        lowStockCount={inventoryMetrics.lowStockCount}
         partialPoCount={purchaseOrders.filter((p) => p.status === 'Partially Received').length}
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
@@ -839,9 +694,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       try {
                         const res = await apiClient.switchRbacSession(e.target.value);
                         setActiveStaffSession(res.session);
-                        if (res.session.userRole === 'cashier') {
-                          setActiveTab('pos');
-                        }
                         onShowToast(
                           'Staff Identity Switched',
                           `Switched to ${res.session.userName} (${res.session.userRole.replace(/_/g, ' ')})`
@@ -915,18 +767,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               </button>
 
-              {/* Quick POS Launch Button in Top Bar */}
-              {activeTab !== 'pos' && (
-                <button
-                  onClick={() => setActiveTab('pos')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-[#0F4C3A] hover:bg-[#0F4C3A]/90 text-white shadow-xs transition-all cursor-pointer"
-                  title="Open POS Cashier Register"
-                >
-                  <Scan className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">POS Cashier</span>
-                </button>
-              )}
-
               {/* Refresh Sync Button */}
               <button
                 onClick={refreshAllData}
@@ -963,6 +803,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* 3. Main Content Area */}
         <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* ========================================================================= */}
+          {/* TAB: POS (POINT OF SALE) / CASHIER STATION */}
+          {/* ========================================================================= */}
+          {activeTab === 'pos' && (
+            <PosModule
+              theme={theme}
+              selectedStore={selectedGlobalStore}
+              storeOutlets={storeOutlets}
+              activeStaffSession={activeStaffSession}
+              onShowToast={onShowToast}
+              onInventoryUpdated={refreshAllData}
+            />
+          )}
+
           {/* ========================================================================= */}
           {/* TAB 1: EXECUTIVE OMZET & OVERVIEW */}
           {/* ========================================================================= */}
@@ -1037,19 +891,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className={`mt-3 text-2xl font-bold ${textTitle} tracking-tight`}>
                   {formatIDR(inventoryMetrics.totalValuationWAC || 48200000)}
                 </div>
-                <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-                  <button
-                    onClick={() => {
-                      setStockAlertFilter('LOW_STOCK');
-                      setActiveTab('inventory');
-                    }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-colors cursor-pointer"
-                    title={`View items below ${lowStockThreshold} units`}
-                  >
-                    <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                    {lowStockTiersBelowThreshold.length} Low Stock (&lt;{lowStockThreshold})
-                  </button>
-                  <span className={textMuted}>{inventoryMetrics.totalStockCount} units</span>
+                <div className="mt-2 flex items-center gap-2 text-xs">
+                  <span className={`font-semibold ${inventoryMetrics.lowStockCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'}`}>
+                    {inventoryMetrics.lowStockCount} items low stock
+                  </span>
+                  <span className={textMuted}>•</span>
+                  <span className={textMuted}>{inventoryMetrics.totalStockCount} units in bins</span>
                 </div>
               </div>
             </div>
@@ -1063,7 +910,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <h2 className={`text-base font-bold ${textTitle}`}>Omzet per Outlet Store</h2>
                     <p className={`text-xs ${textMuted}`}>Granular performance across Indonesian physical hubs</p>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 rounded-lg">
+                  <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-500/10 text-emerald-300 rounded-lg border border-emerald-500/20">
                     6 Active Outlets
                   </span>
                 </div>
@@ -1176,8 +1023,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-                {(omzetData?.topSkus || []).map((sku, idx) => (
-                  <div key={`${sku.sku}-${idx}`} className={`${subCardClass} p-3.5 space-y-1.5`}>
+                {(omzetData?.topSkus || []).map((sku) => (
+                  <div key={sku.sku} className={`${subCardClass} p-3.5 space-y-1.5`}>
                     <span className={`text-[10px] font-mono ${textMuted}`}>{sku.sku}</span>
                     <h3 className={`text-xs font-bold ${textTitle} line-clamp-1`}>{sku.productName}</h3>
                     <p className={`text-[11px] ${textMuted}`}>{sku.unitsSold} units sold</p>
@@ -1481,28 +1328,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <Thermometer className="w-3.5 h-3.5" />
                     IoT Telemetry Active
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowColdChainTable(!showColdChainTable)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      showColdChainTable
-                        ? 'bg-[#0F4C3A] text-white border-[#0F4C3A] shadow-xs'
-                        : isLight
-                        ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                        : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
-                    }`}
-                  >
-                    <FileCheck2 className="w-3.5 h-3.5" />
-                    <span>Cold Chain Audit Logs ({coldChainLogs.length})</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsLogTelemetryModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all cursor-pointer shadow-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Log Sensor Telemetry</span>
-                  </button>
                 </div>
               </div>
 
@@ -1609,11 +1434,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onShowToast('Error', String(e));
                               }
                             }}
-                            className={`px-2 py-0.5 rounded border text-xs font-bold cursor-pointer transition-colors ${
-                              isLight
-                                ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
-                                : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
-                            }`}
+                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-stone-700"
                             title="Tighter threshold (-0.5°C)"
                           >
                             -0.5°
@@ -1633,11 +1454,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onShowToast('Error', String(e));
                               }
                             }}
-                            className={`px-2 py-0.5 rounded border text-xs font-bold cursor-pointer transition-colors ${
-                              isLight
-                                ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
-                                : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
-                            }`}
+                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-stone-700"
                             title="Looser threshold (+0.5°C)"
                           >
                             +0.5°
@@ -1648,90 +1465,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   );
                 })}
               </div>
-
-              {/* Cold Chain & Sub-Zero Storage Compliance Logging Table */}
-              {showColdChainTable && (
-                <div className="mt-5 pt-4 border-t border-gray-200 dark:border-stone-800 space-y-3 animate-fadeIn">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
-                        Cold-Chain Regulatory Compliance Audit Trail
-                      </h4>
-                      <p className="text-[11px] text-gray-500 dark:text-stone-400">
-                        HACCP CCP, US FDA FSMA 204, EU Reg 852/2004, and FSANZ 3.2.2 sub-zero food safety telemetry records
-                      </p>
-                    </div>
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-black/5 dark:bg-white/10">
-                      {coldChainLogs.length} Records
-                    </span>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-stone-800 text-[10px] uppercase font-bold text-gray-400">
-                          <th className="py-2.5 px-3">Log ID &amp; Time</th>
-                          <th className="py-2.5 px-3">Warehouse Zone &amp; Facility</th>
-                          <th className="py-2.5 px-3">Temperature</th>
-                          <th className="py-2.5 px-3">Humidity</th>
-                          <th className="py-2.5 px-3">Compliance Standard</th>
-                          <th className="py-2.5 px-3">Status / Excursion</th>
-                          <th className="py-2.5 px-3">Corrective Protocol</th>
-                          <th className="py-2.5 px-3">Auditor / Sensor</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200/70 dark:divide-stone-800">
-                        {coldChainLogs.map((log) => (
-                          <tr
-                            key={log.id}
-                            className="hover:bg-gray-50/80 dark:hover:bg-stone-800/40 transition-colors"
-                          >
-                            <td className="py-2.5 px-3 font-mono">
-                              <span className="font-bold text-[#0F4C3A] dark:text-emerald-400 block">{log.id}</span>
-                              <span className="text-[10px] text-gray-400">{new Date(log.timestamp).toLocaleString()}</span>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="font-bold">{log.zoneName}</div>
-                              <div className="text-[10px] font-mono text-gray-400">{log.warehouseZoneId} • {log.storeName}</div>
-                            </td>
-                            <td className="py-2.5 px-3 font-mono">
-                              <span className={`font-bold ${log.isExcursion ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                {log.temperatureCelsius}°C
-                              </span>
-                              <span className="text-[10px] text-gray-400 ml-1">({log.temperatureFahrenheit}°F)</span>
-                            </td>
-                            <td className="py-2.5 px-3 font-mono font-semibold">{log.humidityPercent}%</td>
-                            <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300">
-                                {log.complianceStandard}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
-                                  log.severity === 'CRITICAL_SPIKE'
-                                    ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 animate-pulse'
-                                    : log.isExcursion
-                                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-                                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                                }`}
-                              >
-                                {log.severity}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-[11px] max-w-xs truncate text-gray-600 dark:text-stone-300">
-                              {log.correctiveAction || 'None required — Within thermal threshold.'}
-                            </td>
-                            <td className="py-2.5 px-3 text-[10px] font-mono text-gray-500 dark:text-stone-400">
-                              {log.inspectorName} ({log.sensorId})
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Warehouse Storage Zones Summary */}
@@ -1770,205 +1503,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            {/* Low Stock Alert Banner & Threshold Configuration System */}
-            <div
-              className={`rounded-2xl border p-4 sm:p-5 transition-all ${
-                lowStockTiersBelowThreshold.length > 0 || lowStockCatalogBelowThreshold.length > 0
-                  ? isLight
-                    ? 'bg-gradient-to-r from-amber-50/90 via-white to-rose-50/60 border-amber-300/80 shadow-xs'
-                    : 'bg-gradient-to-r from-amber-950/30 via-stone-900 to-rose-950/20 border-amber-700/50'
-                  : isLight
-                  ? 'bg-emerald-50/50 border-emerald-200/80'
-                  : 'bg-stone-900 border-stone-800'
-              }`}
-            >
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="flex items-start gap-3.5">
-                  <div
-                    className={`p-2.5 rounded-xl border shrink-0 ${
-                      lowStockTiersBelowThreshold.length > 0
-                        ? 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
-                        : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-                    }`}
-                  >
-                    <AlertTriangle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className={`text-sm sm:text-base font-bold ${textTitle}`}>
-                        Product Low Stock Alert Monitor
-                      </h3>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                        Threshold: &lt; {lowStockThreshold} units
-                      </span>
-                      {lowStockTiersBelowThreshold.length > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
-                          {lowStockTiersBelowThreshold.length} Outlet Bins &lt; {lowStockThreshold} units
-                        </span>
-                      )}
-                      {lowStockCatalogBelowThreshold.length > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
-                          {lowStockCatalogBelowThreshold.length} Master SKUs &lt; {lowStockThreshold} units
-                        </span>
-                      )}
-                    </div>
-                    <p className={`text-xs ${textMuted} mt-1`}>
-                      Items with available quantity below <strong className={textTitle}>{lowStockThreshold} units</strong> are automatically flagged with a <strong className="text-amber-700 dark:text-amber-400">LOW STOCK</strong> or <strong className="text-rose-600 dark:text-rose-400">CRITICAL STOCK</strong> badge for immediate replenishment.
-                    </p>
-
-                    {/* Quick Preview Chips of Low Stock Items */}
-                    {lowStockTiersBelowThreshold.length > 0 && (
-                      <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
-                        {lowStockTiersBelowThreshold.map((item) => (
-                          <button
-                            key={item.id}
-                            onClick={() => {
-                              setStockAlertFilter('LOW_STOCK');
-                              setInventorySearch(item.sku);
-                            }}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
-                              item.availableStock <= 5
-                                ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-800 dark:text-rose-300 border-rose-500/30'
-                                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-300 border-amber-500/30'
-                            }`}
-                          >
-                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                            <span className="font-mono font-bold">{item.sku}</span>
-                            <span className="truncate max-w-[140px]">{item.productName}</span>
-                            <span className="px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/10 font-mono font-extrabold">
-                              {item.availableStock} left
-                            </span>
-                          </button>
-                        ))}
-                        {inventorySearch && (
-                          <button
-                            onClick={() => setInventorySearch('')}
-                            className="text-[11px] font-semibold text-[#0F4C3A] dark:text-emerald-400 hover:underline px-1.5 cursor-pointer"
-                          >
-                            Clear SKU filter
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Configurable Threshold Control & View Switcher */}
-                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                  <div
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs ${
-                      isLight ? 'bg-white border-gray-200' : 'bg-stone-800 border-stone-700'
-                    }`}
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-500" />
-                    <span className={`font-semibold ${textMuted}`}>Alert Threshold:</span>
-                    {[5, 10, 15, 20].map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => setLowStockThreshold(preset)}
-                        className={`px-2 py-0.5 rounded-md font-mono font-bold text-[11px] transition-all cursor-pointer ${
-                          lowStockThreshold === preset
-                            ? 'bg-[#0F4C3A] text-white shadow-2xs'
-                            : isLight
-                            ? 'text-gray-600 hover:bg-gray-100'
-                            : 'text-stone-300 hover:bg-stone-700'
-                        }`}
-                      >
-                        &lt;{preset}
-                      </button>
-                    ))}
-                    <input
-                      type="number"
-                      min={1}
-                      max={200}
-                      value={lowStockThreshold}
-                      onChange={(e) => setLowStockThreshold(Math.max(1, Number(e.target.value) || 10))}
-                      className={`w-14 px-2 py-0.5 text-center font-mono font-bold text-xs rounded-md border ${
-                        isLight
-                          ? 'bg-gray-50 border-gray-200 text-gray-900'
-                          : 'bg-stone-900 border-stone-700 text-white'
-                      }`}
-                      title="Custom Low Stock Threshold (units)"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Filter & View Mode Bar */}
-            <div className={`${cardClass} p-4 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3`}>
+            {/* Filter Bar */}
+            <div className={`${cardClass} p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3`}>
               <div className="flex flex-wrap items-center gap-2">
-                {/* View Mode Toggle: Warehouse Bins vs Master Product Catalog */}
-                <div
-                  className={`inline-flex items-center p-1 rounded-xl border ${
-                    isLight ? 'bg-gray-100 border-gray-200' : 'bg-stone-800 border-stone-700'
-                  }`}
+                <select
+                  value={selectedOutletFilter}
+                  onChange={(e) => setSelectedOutletFilter(e.target.value)}
+                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
                 >
-                  <button
-                    onClick={() => setInventoryViewMode('WAREHOUSE_BINS')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      inventoryViewMode === 'WAREHOUSE_BINS'
-                        ? 'bg-[#0F4C3A] text-white shadow-2xs'
-                        : isLight
-                        ? 'text-gray-600 hover:text-gray-900'
-                        : 'text-stone-400 hover:text-white'
-                    }`}
-                  >
-                    Outlet Warehouse Bins ({inventoryTiers.length})
-                  </button>
-                  <button
-                    onClick={() => setInventoryViewMode('PRODUCT_CATALOG')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      inventoryViewMode === 'PRODUCT_CATALOG'
-                        ? 'bg-[#0F4C3A] text-white shadow-2xs'
-                        : isLight
-                        ? 'text-gray-600 hover:text-gray-900'
-                        : 'text-stone-400 hover:text-white'
-                    }`}
-                  >
-                    Master Product Catalog ({inventory.length})
-                  </button>
-                  <button
-                    onClick={() => setInventoryViewMode('STOCK_OPNAME')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      inventoryViewMode === 'STOCK_OPNAME'
-                        ? 'bg-[#0F4C3A] text-white shadow-2xs'
-                        : isLight
-                        ? 'text-gray-600 hover:text-gray-900'
-                        : 'text-stone-400 hover:text-white'
-                    }`}
-                  >
-                    <FileCheck2 className="w-3.5 h-3.5" />
-                    <span>Stock Opname &amp; Variance Audit</span>
-                  </button>
-                </div>
+                  <option value="ALL">All Store Outlets</option>
+                  <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
+                  <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
+                  <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
+                </select>
 
-                {inventoryViewMode === 'WAREHOUSE_BINS' && (
-                  <>
-                    <select
-                      value={selectedOutletFilter}
-                      onChange={(e) => setSelectedOutletFilter(e.target.value)}
-                      className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
-                    >
-                      <option value="ALL">All Store Outlets</option>
-                      <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
-                      <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
-                      <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
-                    </select>
-
-                    <select
-                      value={selectedStorageZoneFilter}
-                      onChange={(e) => setSelectedStorageZoneFilter(e.target.value)}
-                      className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
-                    >
-                      <option value="ALL">All Storage Zones</option>
-                      <option value="cold_chilled">Cold Chilled (4°C)</option>
-                      <option value="freezer">Freezer (-18°C)</option>
-                      <option value="ambient">Ambient Dry</option>
-                    </select>
-                  </>
-                )}
+                <select
+                  value={selectedStorageZoneFilter}
+                  onChange={(e) => setSelectedStorageZoneFilter(e.target.value)}
+                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+                >
+                  <option value="ALL">All Storage Zones</option>
+                  <option value="cold_chilled">Cold Chilled (4°C)</option>
+                  <option value="freezer">Freezer (-18°C)</option>
+                  <option value="ambient">Ambient Dry</option>
+                </select>
 
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
@@ -1976,427 +1534,118 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     type="text"
                     value={inventorySearch}
                     onChange={(e) => setInventorySearch(e.target.value)}
-                    placeholder="Search SKU or product..."
+                    placeholder="Search SKU or item..."
                     className={`pl-8 pr-3 py-1.5 text-xs rounded-xl w-48 ${inputClass}`}
                   />
                 </div>
               </div>
 
-              {/* Low Stock Filter Pill Buttons */}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => setStockAlertFilter('ALL')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                    stockAlertFilter === 'ALL'
-                      ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
-                      : isLight
-                      ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                      : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
-                  }`}
-                >
-                  All Items
-                </button>
-                <button
-                  onClick={() =>
-                    setStockAlertFilter(stockAlertFilter === 'LOW_STOCK' ? 'ALL' : 'LOW_STOCK')
-                  }
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    stockAlertFilter === 'LOW_STOCK'
-                      ? 'bg-amber-500 text-stone-950 border-amber-500 shadow-xs'
-                      : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20'
-                  }`}
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Low Stock (&lt; {lowStockThreshold} units)</span>
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/15 font-mono">
-                    {inventoryViewMode === 'WAREHOUSE_BINS'
-                      ? lowStockTiersBelowThreshold.length
-                      : lowStockCatalogBelowThreshold.length}
-                  </span>
-                </button>
-                <button
-                  onClick={() =>
-                    setStockAlertFilter(
-                      stockAlertFilter === 'BELOW_MIN_THRESHOLD' ? 'ALL' : 'BELOW_MIN_THRESHOLD'
-                    )
-                  }
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                    stockAlertFilter === 'BELOW_MIN_THRESHOLD'
-                      ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
-                      : isLight
-                      ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                      : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
-                  }`}
-                >
-                  <span>Below Reorder Point</span>
-                </button>
-
-                <span className={`text-xs ${textMuted} ml-1`}>
-                  Showing{' '}
-                  <strong className={textTitle}>
-                    {inventoryViewMode === 'WAREHOUSE_BINS'
-                      ? filteredTiers.length
-                      : inventoryViewMode === 'PRODUCT_CATALOG'
-                      ? filteredCatalogItems.length
-                      : inventoryTiers.filter(
-                          (t) => selectedOutletFilter === 'ALL' || t.storeId === selectedOutletFilter
-                        ).length}
-                  </strong>{' '}
-                  items
+              <div className="flex items-center gap-2">
+                <span className={`text-xs ${textMuted}`}>
+                  Showing <strong className={textTitle}>{filteredTiers.length}</strong> location items
                 </span>
               </div>
             </div>
 
-            {/* VIEW 0: Dedicated Stock Opname & Variance Audit View */}
-            {inventoryViewMode === 'STOCK_OPNAME' ? (
-              <StockOpnameView
-                theme={theme}
-                storeOutlets={storeOutlets}
-                inventoryTiers={inventoryTiers}
-                initialStoreId={
-                  selectedOutletFilter !== 'ALL' ? selectedOutletFilter : selectedGlobalStore
-                }
-                onRefreshData={refreshAllData}
-                onShowToast={onShowToast}
-              />
-            ) : inventoryViewMode === 'WAREHOUSE_BINS' ? (
-              <div className={`${cardClass} overflow-hidden shadow-xs`}>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className={tableHeaderClass}>
-                        <th className="py-3 px-3.5">SKU &amp; Product Details</th>
-                        <th className="py-3 px-3.5">Store / Warehouse Hub</th>
-                        <th className="py-3 px-3 text-center">Physical</th>
-                        <th className="py-3 px-3 text-center">Available &amp; Alert Status</th>
-                        <th className="py-3 px-3 text-center">Reserved</th>
-                        <th className="py-3 px-3 text-center">Incoming</th>
-                        <th className="py-3 px-3.5">Threshold / Buffer</th>
-                        <th className="py-3 px-3.5">Handling Instructions</th>
-                        <th className="py-3 px-3.5 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
-                      {filteredTiers.length === 0 ? (
-                        <tr>
-                          <td colSpan={9} className={`py-10 text-center ${textMuted}`}>
-                            No product inventory bins match the current filter criteria.
+            {/* Multi-Tier Stock Matrix Table */}
+            <div className={`${cardClass} overflow-hidden shadow-xs`}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className={tableHeaderClass}>
+                      <th className="py-3 px-3.5">SKU &amp; Item Details</th>
+                      <th className="py-3 px-3.5">Store / Warehouse Hub</th>
+                      <th className="py-3 px-3 text-center">Physical</th>
+                      <th className="py-3 px-3 text-center">Available</th>
+                      <th className="py-3 px-3 text-center">Reserved</th>
+                      <th className="py-3 px-3 text-center">Incoming</th>
+                      <th className="py-3 px-3.5">Threshold / Buffer</th>
+                      <th className="py-3 px-3.5">Handling Instructions</th>
+                      <th className="py-3 px-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
+                    {filteredTiers.map((tier) => {
+                      const isLowStock = tier.availableStock <= tier.minimumThreshold;
+                      return (
+                        <tr key={tier.id} className={`transition-colors ${isLight ? 'hover:bg-stone-50/80' : 'hover:bg-stone-800/40'}`}>
+                          <td className="py-3 px-3.5">
+                            <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">{tier.sku}</span>
+                            <div className={`font-bold ${textTitle} text-xs`}>{tier.productName}</div>
+                            <span className={`text-[11px] ${textMuted}`}>{tier.unit}</span>
                           </td>
-                        </tr>
-                      ) : (
-                        filteredTiers.map((tier) => {
-                          const isBelowDefinedThreshold = tier.availableStock < lowStockThreshold;
-                          const isCriticalLow = tier.availableStock <= Math.min(5, Math.floor(lowStockThreshold / 2));
-                          const isBelowReorderMin = tier.availableStock <= tier.minimumThreshold;
-                          const fillPercent = Math.min(
-                            100,
-                            Math.max(4, Math.round((tier.availableStock / (tier.maxCapacity || 100)) * 100))
-                          );
 
-                          return (
-                            <tr
-                              key={tier.id}
-                              className={`transition-colors ${
-                                isCriticalLow
-                                  ? isLight
-                                    ? 'bg-rose-50/50 hover:bg-rose-50/80'
-                                    : 'bg-rose-950/20 hover:bg-rose-950/30'
-                                  : isBelowDefinedThreshold
-                                  ? isLight
-                                    ? 'bg-amber-50/45 hover:bg-amber-50/80'
-                                    : 'bg-amber-950/15 hover:bg-amber-950/25'
-                                  : isLight
-                                  ? 'hover:bg-stone-50/80'
-                                  : 'hover:bg-stone-800/40'
+                          <td className="py-3 px-3.5">
+                            <div className={`font-semibold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>{tier.storeName}</div>
+                            <div className={`text-[11px] ${textMuted} font-mono flex items-center gap-1 mt-0.5`}>
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              {tier.warehouseZoneId}
+                            </div>
+                          </td>
+
+                          <td className={`py-3 px-3 text-center font-mono font-bold ${textTitle}`}>
+                            {tier.physicalStock}
+                          </td>
+
+                          <td className="py-3 px-3 text-center font-mono font-bold">
+                            <span
+                              className={`px-2 py-0.5 rounded-full ${
+                                isLowStock
+                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/30'
+                                  : 'text-emerald-600 dark:text-emerald-400 font-bold'
                               }`}
                             >
-                              <td className="py-3 px-3.5">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">
-                                    {tier.sku}
-                                  </span>
-                                  {isBelowDefinedThreshold ? (
-                                    <span
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
-                                        isCriticalLow
-                                          ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
-                                          : 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/35'
-                                      }`}
-                                    >
-                                      <AlertTriangle className="w-2.5 h-2.5 shrink-0 animate-pulse" />
-                                      {isCriticalLow ? 'Critical Low Stock' : 'Low Stock'}
-                                    </span>
-                                  ) : isBelowReorderMin ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
-                                      Reorder Soon
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <div className={`font-bold ${textTitle} text-xs mt-0.5`}>{tier.productName}</div>
-                                <span className={`text-[11px] ${textMuted}`}>{tier.unit} • {formatIDR(tier.sellingPrice)}</span>
-                              </td>
+                              {tier.availableStock}
+                            </span>
+                          </td>
 
-                              <td className="py-3 px-3.5">
-                                <div className={`font-semibold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>
-                                  {tier.storeName}
-                                </div>
-                                <div className={`text-[11px] ${textMuted} font-mono flex items-center gap-1 mt-0.5`}>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                  {tier.warehouseZoneId}
-                                </div>
-                              </td>
+                          <td className={`py-3 px-3 text-center font-mono ${textMuted}`}>
+                            {tier.reservedStock}
+                          </td>
 
-                              <td className={`py-3 px-3 text-center font-mono font-bold ${textTitle}`}>
-                                {tier.physicalStock}
-                              </td>
+                          <td className="py-3 px-3 text-center font-mono text-blue-600 dark:text-blue-400 font-semibold">
+                            +{tier.incomingStock}
+                          </td>
 
-                              <td className="py-3 px-3 text-center">
-                                <div className="flex flex-col items-center gap-1">
-                                  <span
-                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-mono text-xs font-extrabold ${
-                                      isCriticalLow
-                                        ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/35'
-                                        : isBelowDefinedThreshold
-                                        ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/35'
-                                        : isBelowReorderMin
-                                        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25'
-                                        : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
-                                    }`}
-                                  >
-                                    {isBelowDefinedThreshold && <AlertTriangle className="w-3 h-3 shrink-0" />}
-                                    {tier.availableStock} units
-                                  </span>
-                                  <div className="w-20 h-1.5 rounded-full bg-gray-200 dark:bg-stone-700 overflow-hidden">
-                                    <div
-                                      className={`h-full rounded-full ${
-                                        isCriticalLow
-                                          ? 'bg-rose-500'
-                                          : isBelowDefinedThreshold
-                                          ? 'bg-amber-500'
-                                          : 'bg-emerald-500'
-                                      }`}
-                                      style={{ width: `${fillPercent}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              </td>
+                          <td className={`py-3 px-3.5 font-mono ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
+                            <div>Min: {tier.minimumThreshold}</div>
+                            <div className={`text-[10px] ${textMuted}`}>Buffer: {tier.safetyStockBuffer} | Max: {tier.maxCapacity}</div>
+                          </td>
 
-                              <td className={`py-3 px-3 text-center font-mono ${textMuted}`}>
-                                {tier.reservedStock}
-                              </td>
+                          <td className={`py-3 px-3.5 text-[11px] max-w-xs ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
+                            <p className="line-clamp-2">
+                              {tier.handlingInstructions || 'Standard cold-chain storage.'}
+                            </p>
+                          </td>
 
-                              <td className="py-3 px-3 text-center font-mono text-blue-600 dark:text-blue-400 font-semibold">
-                                +{tier.incomingStock}
-                              </td>
-
-                              <td className={`py-3 px-3.5 font-mono ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
-                                <div>Alert: &lt;{lowStockThreshold} | Min: {tier.minimumThreshold}</div>
-                                <div className={`text-[10px] ${textMuted}`}>
-                                  Buffer: {tier.safetyStockBuffer} | Max: {tier.maxCapacity}
-                                </div>
-                              </td>
-
-                              <td className={`py-3 px-3.5 text-[11px] max-w-xs ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
-                                <p className="line-clamp-2">
-                                  {tier.handlingInstructions || 'Standard cold-chain storage.'}
-                                </p>
-                              </td>
-
-                              <td className="py-3 px-3.5 text-right space-x-1.5 whitespace-nowrap">
-                                {(isBelowDefinedThreshold || isBelowReorderMin) && (
-                                  <button
-                                    onClick={() =>
-                                      handleQuickRestockPR(
-                                        tier.sku,
-                                        tier.productName,
-                                        tier.reorderQuantity,
-                                        tier.storeId
-                                      )
-                                    }
-                                    className="px-2.5 py-1 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-stone-950 rounded-lg transition-all shadow-2xs cursor-pointer"
-                                    title="Generate Purchase Request for Low Stock SKU"
-                                  >
-                                    + Restock PR
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    setAdjustingSku(tier.sku);
-                                    setAdjustQty(0);
-                                  }}
-                                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border cursor-pointer ${
-                                    isLight
-                                      ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
-                                      : 'bg-stone-700 border-stone-600 text-stone-200 hover:bg-stone-600'
-                                  }`}
-                                >
-                                  Audit Count
-                                </button>
-                                <button
-                                  onClick={() => setEditingTier(tier)}
-                                  className="px-2.5 py-1 text-[11px] font-semibold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-300 border border-[#0F4C3A]/20 hover:bg-[#0F4C3A]/20 rounded-lg transition-all cursor-pointer"
-                                >
-                                  Edit Notes
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                          <td className="py-3 px-3.5 text-right space-x-1.5 whitespace-nowrap">
+                            <button
+                              onClick={() => {
+                                setAdjustingSku(tier.sku);
+                                setAdjustQty(0);
+                              }}
+                              className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border ${
+                                isLight
+                                  ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
+                                  : 'bg-stone-700 border-stone-600 text-stone-200 hover:bg-stone-600'
+                              }`}
+                            >
+                              Audit Count
+                            </button>
+                            <button
+                              onClick={() => setEditingTier(tier)}
+                              className="px-2.5 py-1 text-[11px] font-semibold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-300 border border-[#0F4C3A]/20 hover:bg-[#0F4C3A]/20 rounded-lg transition-all"
+                            >
+                              Edit Notes
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              /* VIEW 2: Master Product Catalog Management View with Low Stock Alert Badges */
-              <div className={`${cardClass} overflow-hidden shadow-xs`}>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className={tableHeaderClass}>
-                        <th className="py-3 px-3.5">SKU &amp; Master Product</th>
-                        <th className="py-3 px-3.5">Category &amp; Farm / Supplier</th>
-                        <th className="py-3 px-3 text-right">Unit Cost (WAC)</th>
-                        <th className="py-3 px-3 text-right">Retail Price</th>
-                        <th className="py-3 px-3 text-center">Quantity &amp; Low Stock Badge</th>
-                        <th className="py-3 px-3 text-center">Incoming PO</th>
-                        <th className="py-3 px-3.5">Threshold Policy</th>
-                        <th className="py-3 px-3.5 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
-                      {filteredCatalogItems.map((item, idx) => {
-                        const isBelowDefinedThreshold = item.currentStock < lowStockThreshold;
-                        const isCriticalLow = item.currentStock <= Math.min(5, Math.floor(lowStockThreshold / 2));
-                        const isBelowReorderMin = item.currentStock <= item.minimumThreshold;
-
-                        return (
-                          <tr
-                            key={item.sku ? `${item.sku}-${idx}` : `item-${idx}`}
-                            className={`transition-colors ${
-                              isCriticalLow
-                                ? isLight
-                                  ? 'bg-rose-50/50 hover:bg-rose-50/80'
-                                  : 'bg-rose-950/20 hover:bg-rose-950/30'
-                                : isBelowDefinedThreshold
-                                ? isLight
-                                  ? 'bg-amber-50/45 hover:bg-amber-50/80'
-                                  : 'bg-amber-950/15 hover:bg-amber-950/25'
-                                : isLight
-                                ? 'hover:bg-stone-50/80'
-                                : 'hover:bg-stone-800/40'
-                            }`}
-                          >
-                            <td className="py-3 px-3.5">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">
-                                  {item.sku}
-                                </span>
-                                {isBelowDefinedThreshold ? (
-                                  <span
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
-                                      isCriticalLow
-                                        ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
-                                        : 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/35'
-                                    }`}
-                                  >
-                                    <AlertTriangle className="w-2.5 h-2.5 shrink-0 animate-pulse" />
-                                    Low Stock (&lt;{lowStockThreshold})
-                                  </span>
-                                ) : isBelowReorderMin ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
-                                    Below Min ({item.minimumThreshold})
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-                                    In Stock
-                                  </span>
-                                )}
-                              </div>
-                              <div className={`font-bold ${textTitle} text-xs mt-0.5`}>{item.productName}</div>
-                              <span className={`text-[11px] ${textMuted}`}>{item.unit} • {item.valuationMethod}</span>
-                            </td>
-
-                            <td className="py-3 px-3.5">
-                              <div className="font-semibold capitalize">{item.category.replace(/_/g, ' ')}</div>
-                              <div className={`text-[11px] ${textMuted} truncate max-w-[220px]`}>
-                                {item.supplierName}
-                              </div>
-                            </td>
-
-                            <td className="py-3 px-3 text-right font-mono font-medium">
-                              {formatIDR(item.unitCost)}
-                            </td>
-
-                            <td className="py-3 px-3 text-right font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
-                              {formatIDR(item.sellingPrice)}
-                            </td>
-
-                            <td className="py-3 px-3 text-center">
-                              <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-mono text-xs font-extrabold ${
-                                  isCriticalLow
-                                    ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/35'
-                                    : isBelowDefinedThreshold
-                                    ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/35'
-                                    : isBelowReorderMin
-                                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25'
-                                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
-                                }`}
-                              >
-                                {isBelowDefinedThreshold && <AlertTriangle className="w-3 h-3 shrink-0" />}
-                                {item.currentStock} units
-                              </span>
-                            </td>
-
-                            <td className="py-3 px-3 text-center font-mono text-blue-600 dark:text-blue-400 font-semibold">
-                              +{item.incomingStock}
-                            </td>
-
-                            <td className="py-3 px-3.5 font-mono text-[11px]">
-                              <div>Low Alert: &lt;{lowStockThreshold} units</div>
-                              <div className={textMuted}>
-                                Reorder Min: {item.minimumThreshold} | EOQ: {item.reorderQuantity}
-                              </div>
-                            </td>
-
-                            <td className="py-3 px-3.5 text-right space-x-1.5 whitespace-nowrap">
-                              {(isBelowDefinedThreshold || isBelowReorderMin) && (
-                                <button
-                                  onClick={() =>
-                                    handleQuickRestockPR(
-                                      item.sku,
-                                      item.productName,
-                                      item.reorderQuantity
-                                    )
-                                  }
-                                  className="px-2.5 py-1 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-stone-950 rounded-lg transition-all shadow-2xs cursor-pointer"
-                                >
-                                  + Restock PR
-                                </button>
-                              )}
-                              <button
-                                onClick={() => {
-                                  setAdjustingSku(item.sku);
-                                  setAdjustQty(0);
-                                }}
-                                className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border cursor-pointer ${
-                                  isLight
-                                    ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
-                                    : 'bg-stone-700 border-stone-600 text-stone-200 hover:bg-stone-600'
-                                }`}
-                              >
-                                Adjust Stock
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* Edit Stock Tier Modal */}
             {editingTier && (
@@ -2554,141 +1803,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
             )}
-
-            {/* Modal: Record Cold-Chain Telemetry Reading & Compliance Excursion */}
-            {isLogTelemetryModalOpen && (
-              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4 shadow-2xl`}>
-                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center">
-                        <Thermometer className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className={`text-base font-bold ${textTitle}`}>
-                          Log Cold-Chain Temperature Telemetry
-                        </h3>
-                        <p className={`text-[11px] ${textMuted}`}>
-                          HACCP CCP / FDA FSMA 204 / EU 852 / FSANZ 3.2.2 Compliance Audit
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsLogTelemetryModalOpen(false)}
-                      className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleRecordColdChain} className="space-y-3.5 text-xs">
-                    <div>
-                      <label className="font-bold block mb-1">Target Warehouse Zone</label>
-                      <select
-                        value={newLogZoneId}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setNewLogZoneId(val);
-                          if (val.includes('FRZ')) setNewLogTempC(-19.5);
-                          else setNewLogTempC(2.8);
-                        }}
-                        className={`w-full px-3 py-2 rounded-xl font-bold border ${inputClass}`}
-                      >
-                        <option value="WH-JKT-SEN-FRZ">WH-JKT-SEN-FRZ: Senopati Sub-Zero Deep Freeze Vault (Target -22°C to -18°C)</option>
-                        <option value="WH-JKT-SEN-COLD">WH-JKT-SEN-COLD: Senopati Cold Room Chilled (Target 0°C to 4°C)</option>
-                        <option value="WH-BDG-COLD">WH-BDG-COLD: Bandung Dago Mountain Chiller (Target 0°C to 4°C)</option>
-                        <option value="WH-SBY-COLD">WH-SBY-COLD: Surabaya Gubeng Tropical Cold Vault (Target 0°C to 4°C)</option>
-                        <option value="WH-DPS-COLD">WH-DPS-COLD: Bali Canggu Coastal Chiller (Target 0°C to 4°C)</option>
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="font-bold block mb-1">Temperature (°Celsius)</label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          required
-                          value={newLogTempC}
-                          onChange={(e) => setNewLogTempC(Number(e.target.value))}
-                          className={`w-full px-3 py-2 rounded-xl font-mono font-bold border ${inputClass}`}
-                        />
-                        <span className="text-[10px] text-gray-400 mt-1 block">
-                          Equivalent: <strong>{((Number(newLogTempC) * 9) / 5 + 32).toFixed(1)}°F</strong>
-                        </span>
-                      </div>
-                      <div>
-                        <label className="font-bold block mb-1">Relative Humidity (%)</label>
-                        <input
-                          type="number"
-                          min={20}
-                          max={100}
-                          required
-                          value={newLogHumidity}
-                          onChange={(e) => setNewLogHumidity(Number(e.target.value))}
-                          className={`w-full px-3 py-2 rounded-xl font-mono font-bold border ${inputClass}`}
-                        />
-                        <span className="text-[10px] text-gray-400 mt-1 block">Standard Target: 80% - 90%</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="font-bold block mb-1">Compliance Standard Mandate</label>
-                      <select
-                        value={newLogStandard}
-                        onChange={(e) => setNewLogStandard(e.target.value as any)}
-                        className={`w-full px-3 py-2 rounded-xl font-bold border ${inputClass}`}
-                      >
-                        <option value="FDA FSMA 204">US FDA FSMA Rule 204 (Food Traceability &amp; Cold Chain)</option>
-                        <option value="EU Reg 852/2004">EU Regulation 852/2004 (Hygiene of Foodstuffs &amp; Quick-Frozen)</option>
-                        <option value="FSANZ 3.2.2">FSANZ Standard 3.2.2 (Australia Food Safety Practices)</option>
-                        <option value="HACCP CCP">HACCP Critical Control Point 2 (Perishable Temperature)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="font-bold block mb-1">Inspector / Auditor Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={newLogAuditor}
-                        onChange={(e) => setNewLogAuditor(e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl font-bold border ${inputClass}`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="font-bold block mb-1">Corrective Action Taken (If Excursion)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g., Compressor backup engaged; temperature verified under 4°C within 15 mins"
-                        value={newLogAction}
-                        onChange={(e) => setNewLogAction(e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl border ${inputClass}`}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-200 dark:border-stone-800">
-                      <button
-                        type="button"
-                        onClick={() => setIsLogTelemetryModalOpen(false)}
-                        className="px-4 py-2 rounded-xl border border-gray-200 dark:border-stone-700 text-xs font-semibold cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmittingLog}
-                        className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold cursor-pointer disabled:opacity-50"
-                      >
-                        {isSubmittingLog ? 'Recording Log...' : 'Commit Telemetry to Audit Trail'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -2703,62 +1817,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             purchaseRequests={purchaseRequests}
             purchaseOrders={purchaseOrders}
             goodsReceipts={goodsReceipts}
-            vendorBills={vendorBills}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
-          />
-        )}
-
-        {/* ========================================================================= */}
-        {/* TAB 4B: INVENTORY QUALITY CONTROL (QC) INSPECTION & DISPOSITION */}
-        {/* ========================================================================= */}
-        {activeTab === 'qc' && (
-          <InventoryQCModule
-            theme={theme}
-            selectedStore={selectedGlobalStore}
-            inventory={inventory}
-            onShowToast={onShowToast}
-            onRefreshData={refreshAllData}
-          />
-        )}
-
-        {/* ========================================================================= */}
-        {/* TAB 4C: LOGISTICS & SHIPPING OPERATIONAL DOCUMENTS (SURAT JALAN & DO) */}
-        {/* ========================================================================= */}
-        {activeTab === 'logistics' && (
-          <LogisticsDocsModal
-            theme={theme}
-            isOpen={true}
-            isStandalonePage={true}
-            onClose={() => setActiveTab('overview')}
-            onShowToast={onShowToast}
-          />
-        )}
-
-        {/* ========================================================================= */}
-        {/* TAB 4D: INTERNAL WAREHOUSE TRANSFERS & TRACKING REPORT */}
-        {/* ========================================================================= */}
-        {activeTab === 'transfers' && (
-          <SettingsModule
-            theme={theme}
-            chartOfAccounts={chartOfAccounts}
-            storeOutlets={storeOutlets}
-            warehouseZones={warehouseZones}
-            inventoryTiers={inventoryTiers}
-            initialSubTab="transfer"
-            onShowToast={onShowToast}
-            onRefreshData={refreshAllData}
-          />
-        )}
-
-        {/* ========================================================================= */}
-        {/* TAB 4E: MULTI-TIER APPROVAL WORKFLOW & MATRIX CONFIGURATION */}
-        {/* ========================================================================= */}
-        {activeTab === 'approvals' && (
-          <ApprovalMatrixModule
-            theme={theme}
-            onShowToast={onShowToast}
-            onRefreshData={refreshAllData}
           />
         )}
 
@@ -2778,24 +1838,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             pnlReport={pnlReport}
             balanceSheet={balanceSheet}
             cashFlow={cashFlow}
-            vendorBills={vendorBills}
-            purchaseOrders={purchaseOrders}
-            goodsReceipts={goodsReceipts}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
             activeSubTab={accountingDeepSubTab}
             onSubTabChange={(sub) => setAccountingDeepSubTab(sub)}
-          />
-        )}
-
-        {/* ========================================================================= */}
-        {/* TAB 5B: SPECIALIZED GROCERY METRICS & INTELLIGENCE REPORTING */}
-        {/* ========================================================================= */}
-        {activeTab === 'reports' && (
-          <GroceryReportsModule
-            theme={theme}
-            selectedStore={selectedGlobalStore}
-            onShowToast={onShowToast}
           />
         )}
 
@@ -2950,34 +1996,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* TAB: POS (POINT OF SALE) & CASHIER MODULE */}
-        {/* ========================================================================= */}
-        {activeTab === 'pos' && (
-          <PosModule
-            theme={theme}
-            selectedStore={selectedGlobalStore}
-            activeStaffSession={activeStaffSession}
-            availableStaffProfiles={availableStaffProfiles}
-            storeOutlets={storeOutlets}
-            storeStatus={storeStatus}
-            onSwitchSession={async (userId) => {
-              const res = await apiClient.switchRbacSession(userId);
-              setActiveStaffSession(res.session);
-              onShowToast(
-                'Staff Identity Switched',
-                `Active operator is now ${res.session.userName} (${res.session.userRole.replace(/_/g, ' ')})`
-              );
-            }}
-            onTransactionSynced={refreshAllData}
-            onNavigateToAccounting={(subTab) => {
-              setAccountingDeepSubTab(subTab);
-              setActiveTab('accounting');
-            }}
-            onShowToast={onShowToast}
-          />
-        )}
-
-        {/* ========================================================================= */}
         {/* TAB: SECURITY & ADMINISTRATIVE AUDIT LOGS */}
         {/* ========================================================================= */}
         {activeTab === 'audit' && (
@@ -2985,22 +2003,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             selectedStore={selectedGlobalStore}
             onShowToast={onShowToast}
-          />
-        )}
-
-        {/* ========================================================================= */}
-        {/* TAB: SETTINGS & CONFIGURATION HUB */}
-        {/* ========================================================================= */}
-        {activeTab === 'settings' && (
-          <SettingsModule
-            theme={theme}
-            chartOfAccounts={chartOfAccounts}
-            storeOutlets={storeOutlets}
-            warehouseZones={warehouseZones}
-            inventoryTiers={inventoryTiers}
-            initialSubTab={settingsDeepSubTab}
-            onShowToast={onShowToast}
-            onRefreshData={refreshAllData}
           />
         )}
 

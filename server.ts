@@ -1,17 +1,8 @@
 import express from 'express';
 import type { Request, Response } from 'express';
-import { createServer as createHttpServer } from 'http';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-process.on('uncaughtException', (err) => {
-  console.error('[GroceMart Backend] Uncaught Exception:', err);
-});
-
-process.on('unhandledRejection', (reason) => {
-  console.error('[GroceMart Backend] Unhandled Rejection:', reason);
-});
 
 import {
   INITIAL_STORE_STATUS,
@@ -28,7 +19,6 @@ import {
   INITIAL_BATCHES,
   INITIAL_WASTE_RECORDS,
   INITIAL_PICKER_ORDERS,
-  INITIAL_VENDOR_BILLS,
 } from './src/data/inventoryData.ts';
 import { INITIAL_ORDERS, PRODUCTS } from './src/data/mockData.ts';
 
@@ -62,41 +52,7 @@ import type {
   POSProductItem,
   POSTransactionRequest,
   POSTransactionReceipt,
-  CoaMappingConfig,
-  PosCheckoutConfig,
-  BulkInventoryImportRow,
-  StockOpnameSession,
-  StockOpnameItem,
-  StockTransferRecord,
-  ApprovalTierRule,
-  VendorBill,
-  VendorBillStatus,
-  VendorBillPaymentStatus,
-  VendorBillPaymentMethod,
-  ApprovalRequest,
-  ApprovalActionLog,
-  SuratJalanDocument,
-  SuratJalanItem,
-  DeliveryOrderDocument,
-  ShipmentQuotaTracking,
-  QCInspectionRecord,
-  GroceryMetricsReport,
-  POSHardwarePeripheralStatus,
-  ThermalPrintReceiptPayload,
-  POSReturnRecord,
-  POSReturnItemLine,
-  ReturnCageDisposition,
-  RefundPaymentChannel,
-  PromotionRule,
-  MemberLoyaltyTier,
-  AppliedPromotionSummary,
-  AutoReplenishmentItemPlan,
-  AutoReplenishmentConsolidatedPlan,
 } from './src/types/index.ts';
-
-import { INITIAL_PROMOTION_RULES, evaluateCartPromotions } from './src/utils/promotionEngine.ts';
-import { INITIAL_HARDWARE_STATUS, generateThermalReceiptText, generateReturnSlipText } from './src/utils/hardwareBridge.ts';
-import { calculateAutoReplenishmentPlan, generateDraftPOsFromReplenishment } from './src/utils/autoReplenishmentEngine.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -110,7 +66,6 @@ let inventoryList: InventoryItem[] = JSON.parse(JSON.stringify(INITIAL_INVENTORY
 let purchaseRequests: PurchaseRequest[] = JSON.parse(JSON.stringify(INITIAL_PURCHASE_REQUESTS));
 let purchaseOrders: PurchaseOrder[] = JSON.parse(JSON.stringify(INITIAL_PURCHASE_ORDERS));
 let goodsReceipts: GoodsReceiptRecord[] = JSON.parse(JSON.stringify(INITIAL_GOODS_RECEIPTS));
-let vendorBills: VendorBill[] = JSON.parse(JSON.stringify(INITIAL_VENDOR_BILLS));
 let chartOfAccounts: ChartOfAccount[] = JSON.parse(JSON.stringify(INITIAL_COA));
 let generalLedger: GeneralLedgerEntry[] = JSON.parse(JSON.stringify(INITIAL_GENERAL_LEDGER));
 let auditTrail: TransactionAuditRecord[] = JSON.parse(JSON.stringify(INITIAL_AUDIT_TRAIL));
@@ -118,44 +73,67 @@ let inventoryBatches: InventoryBatch[] = JSON.parse(JSON.stringify(INITIAL_BATCH
 let wasteRecords: WasteRecord[] = JSON.parse(JSON.stringify(INITIAL_WASTE_RECORDS));
 let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDERS));
 let customerOrders: Order[] = JSON.parse(JSON.stringify(INITIAL_ORDERS));
-
-// Hardware, Reverse Logistics & Returns, Promotions
-let posHardwareStatus: POSHardwarePeripheralStatus = JSON.parse(JSON.stringify(INITIAL_HARDWARE_STATUS));
-let promotionRules: PromotionRule[] = JSON.parse(JSON.stringify(INITIAL_PROMOTION_RULES));
-let posReturnRecords: POSReturnRecord[] = [
+let posTransactionsHistory: POSTransactionReceipt[] = [
   {
-    id: 'RET-2026-0001',
-    originalReceiptNumber: 'RCP-2026-0001',
-    originalOrderId: 'ORD-2026-001',
+    receiptNumber: 'RCP-SEN-882104',
+    transactionId: 'TXN-POS-2026-0001',
+    orderId: 'GCM-POS-882104',
+    timestamp: '2026-10-16T14:32:00Z',
     storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship Hub',
-    processedByUserId: 'usr-cashier-01',
-    processedByUserName: 'Rian Hidayat',
-    timestamp: new Date(Date.now() - 86400000).toISOString(),
+    storeName: 'GroceMart Senopati Flagship',
+    cashierId: 'USR-CASH-01',
+    cashierName: 'Andi Wijaya (Frontline Cashier)',
+    shiftId: 'SHIFT-JKT-SEN-MORNING',
     items: [
       {
-        sku: 'SKU-PRD-004',
-        productName: 'Organic Hass Avocados (Pack of 3)',
+        id: 'cart-line-1',
+        sku: 'SKU-PRD-001',
+        productId: 'prod-01',
+        name: 'Organic Hydroponic Butterhead Lettuce',
         category: 'produce',
-        originalQuantity: 2,
-        returnQuantity: 1,
-        unitPrice: 58000,
-        unitCost: 38000,
-        refundAmount: 58000,
-        returnReason: 'PERISHABLE_DEFECT',
-        disposition: 'RETURN_CAGE_WASTE',
-        conditionNotes: 'Customer noted over-ripening / internal bruising.',
+        unitPrice: 18500,
+        unitCost: 11000,
+        quantity: 2,
+        unit: '250g head',
+        lineTotal: 37000,
+        batchId: 'BAT-2026-081',
+        lotNumber: 'LOT-LETT-2610-A',
+        expiryDate: '2026-10-12T23:59:59Z',
+        daysUntilExpiry: 2,
+      },
+      {
+        id: 'cart-line-2',
+        sku: 'SKU-DAI-001',
+        productId: 'prod-04',
+        name: 'Artisanal Pasteurised A2 Fresh Milk',
+        category: 'dairy',
+        unitPrice: 38000,
+        unitCost: 22000,
+        quantity: 1,
+        unit: '1L glass bottle',
+        lineTotal: 38000,
+        batchId: 'BAT-2026-084',
+        lotNumber: 'LOT-MILK-2610-A',
+        expiryDate: '2026-10-16T23:59:59Z',
+        daysUntilExpiry: 6,
       },
     ],
-    totalRefundAmountIDR: 58000,
-    refundChannel: 'CASH_DRAWER',
-    wasteRecordId: 'WST-2026-002',
-    glVoucherIds: ['GLE-2026-0035', 'GLE-2026-0036'],
-    status: 'COMPLETED',
-    customerName: 'Maya Kusuma',
-    customerPhone: '+62 812-9988-7711',
+    subtotal: 75000,
+    discount: 0,
+    tax: 8250,
+    total: 83250,
+    currency: 'IDR',
+    currencyTotal: 83250,
+    currencyRateToIDR: 1,
+    paymentMethod: 'qris',
+    qrisRef: 'QRIS-POS-882104',
+    journalEntryIds: ['GLE-2026-0103', 'GLE-2026-0104', 'GLE-2026-0105', 'GLE-2026-0106'],
+    inventoryDeductedCount: 3,
+    totalCogsCost: 44000,
   },
 ];
+
+// -------------------------------------------------------------
 // MODULE 1, 2, 3, 4 IN-MEMORY DATA STORES
 // -------------------------------------------------------------
 // Module 1: Weight Tolerance by Category & Natural Shrinkage adjustments
@@ -488,779 +466,6 @@ let climateAdaptiveConfigs: ClimateAdaptiveThresholdConfig[] = [
   },
 ];
 
-// Global Compliance: Cold Chain & Sub-Zero Temperature Logs (HACCP / FDA FSMA 204 / EU 852 / FSANZ)
-interface ServerColdChainLogEntry {
-  id: string;
-  warehouseZoneId: string;
-  zoneName: string;
-  storeId: string;
-  storeName: string;
-  sensorId: string;
-  timestamp: string;
-  temperatureCelsius: number;
-  temperatureFahrenheit: number;
-  humidityPercent: number;
-  isExcursion: boolean;
-  severity: 'NORMAL' | 'ELEVATED' | 'CRITICAL_SPIKE';
-  complianceStandard: 'FDA FSMA 204' | 'EU Reg 852/2004' | 'FSANZ 3.2.2' | 'HACCP CCP';
-  correctiveAction?: string;
-  inspectorName: string;
-}
-
-let coldChainLogs: ServerColdChainLogEntry[] = [
-  {
-    id: 'CCL-2026-001',
-    warehouseZoneId: 'WH-JKT-SEN-FRZ',
-    zoneName: 'Senopati Deep Freeze Vault',
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    sensorId: 'IOT-FRZ-01A',
-    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-    temperatureCelsius: -20.2,
-    temperatureFahrenheit: -4.4,
-    humidityPercent: 88,
-    isExcursion: false,
-    severity: 'NORMAL',
-    complianceStandard: 'FDA FSMA 204',
-    inspectorName: 'IoT Auto-Telemetry Sensor',
-  },
-  {
-    id: 'CCL-2026-002',
-    warehouseZoneId: 'WH-JKT-SEN-COLD',
-    zoneName: 'Senopati Chilled Walk-In Cold Room',
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    sensorId: 'IOT-COLD-02',
-    timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-    temperatureCelsius: 3.1,
-    temperatureFahrenheit: 37.6,
-    humidityPercent: 85,
-    isExcursion: false,
-    severity: 'NORMAL',
-    complianceStandard: 'HACCP CCP',
-    inspectorName: 'Siti Rahmawati (QC Inspector)',
-  },
-  {
-    id: 'CCL-2026-003',
-    warehouseZoneId: 'WH-JKT-SEN-COLD',
-    zoneName: 'Senopati Chilled Walk-In Cold Room',
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    sensorId: 'IOT-COLD-02',
-    timestamp: new Date(Date.now() - 3600000 * 14).toISOString(),
-    temperatureCelsius: 6.8,
-    temperatureFahrenheit: 44.2,
-    humidityPercent: 92,
-    isExcursion: true,
-    severity: 'ELEVATED',
-    complianceStandard: 'EU Reg 852/2004',
-    correctiveAction: 'Defrost cycle completed. Secondary chiller fan activated; temp returned to 3.2°C within 18 minutes. Product core temps verified safe.',
-    inspectorName: 'Budi Santoso (HVAC Engineer)',
-  },
-  {
-    id: 'CCL-2026-004',
-    warehouseZoneId: 'WH-BDG-DAG-COLD',
-    zoneName: 'Dago Bandung Highland Farm Direct Cold Storage',
-    storeId: 'store-bdg-dago',
-    storeName: 'GroceMart Dago Bandung',
-    sensorId: 'IOT-BDG-01',
-    timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
-    temperatureCelsius: 3.8,
-    temperatureFahrenheit: 38.8,
-    humidityPercent: 75,
-    isExcursion: false,
-    severity: 'NORMAL',
-    complianceStandard: 'FSANZ 3.2.2',
-    inspectorName: 'Rina Kusuma (Bandung Auditor)',
-  },
-];
-
-let quarantinedBatchesMap: Record<
-  string,
-  {
-    reason: string;
-    quarantinedAt: string;
-    quarantinedBy: string;
-    recallClassification: 'Class I (High Risk / Immediate Hazard)' | 'Class II (Moderate Risk)' | 'Class III (Minor / Technical Defect)';
-    hazardDescription: string;
-  }
-> = {};
-
-let customerRecallAlertsLog: Array<{
-  id: string;
-  recallId: string;
-  batchId: string;
-  channel: 'WhatsApp' | 'SMS' | 'Email';
-  recipientName: string;
-  recipientContact: string;
-  orderId: string;
-  message: string;
-  timestamp: string;
-  status: 'SENT' | 'DELIVERED';
-}> = [];
-
-// Module 5: In-Memory POS Receipts History
-let posReceiptsHistory: POSTransactionReceipt[] = [
-  {
-    receiptNumber: 'RCP-POS-2026-0801',
-    transactionId: 'TX-POS-2026-0801',
-    orderId: 'POS-JKT-0801',
-    timestamp: new Date(Date.now() - 3600000 * 1.5).toISOString(),
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    cashierId: 'USR-CASH-01',
-    cashierName: 'Andi Wijaya (Frontline Cashier)',
-    shiftId: 'SHIFT-JKT-SEN-MORNING',
-    items: [
-      {
-        id: 'pos-line-1',
-        sku: 'SKU-PRD-001',
-        productId: 'prod-01',
-        name: 'Organic Hydroponic Butterhead Lettuce',
-        category: 'produce',
-        unitPrice: 18500,
-        unitCost: 11000,
-        quantity: 2,
-        unit: '250g head',
-        batchId: 'BAT-2026-081',
-        lotNumber: 'LOT-LETT-2610-A',
-        expiryDate: '2026-10-18',
-        daysUntilExpiry: 2,
-        lineTotal: 37000,
-      },
-      {
-        id: 'pos-line-2',
-        sku: 'SKU-BAK-001',
-        productId: 'prod-04',
-        name: 'Artisan Country Sourdough Loaf',
-        category: 'bakery',
-        unitPrice: 40000,
-        unitCost: 24000,
-        quantity: 1,
-        unit: '650g loaf',
-        batchId: 'BAT-2026-042',
-        lotNumber: 'LOT-BAK-2610-10',
-        expiryDate: '2026-10-19',
-        daysUntilExpiry: 3,
-        lineTotal: 40000,
-      },
-    ],
-    subtotal: 77000,
-    discount: 0,
-    tax: 8470,
-    total: 85470,
-    currency: 'IDR',
-    currencyTotal: 85470,
-    currencyRateToIDR: 1,
-    paymentMethod: 'qris',
-    qrisRef: 'QRIS-POS-99182A',
-    journalEntryIds: ['GLE-2026-0103', 'GLE-2026-0104', 'GLE-2026-0105', 'GLE-2026-0106'],
-    inventoryDeductedCount: 3,
-    totalCogsCost: 46000,
-  },
-];
-
-// -------------------------------------------------------------
-// MODULE 6: SETTINGS & CONFIGURATION IN-MEMORY STORES
-// -------------------------------------------------------------
-let coaMappingConfig: CoaMappingConfig = {
-  posRevenueAccountCode: '4010',
-  posRevenueAccountName: 'Grocery Sales Revenue - Retail Storefront',
-  inventoryAssetAccountCode: '1040',
-  inventoryAssetAccountName: 'Merchandise Inventory Asset',
-  shrinkageExpenseAccountCode: '5030',
-  shrinkageExpenseAccountName: 'Waste, Spoilage & Shrinkage Expense',
-  cogsAccountCode: '5010',
-  cogsAccountName: 'Cost of Goods Sold (COGS) - FIFO / WAC',
-  cashClearingAccountCode: '1010',
-  cashClearingAccountName: 'Cash & Register Drawer Clearing',
-  qrisClearingAccountCode: '1030',
-  qrisClearingAccountName: 'QRIS Settlement Receivable (ASPI Clearing)',
-  edcClearingAccountCode: '1020',
-  edcClearingAccountName: 'Bank BCA Operational Clearing (EDC Card)',
-  taxPayableAccountCode: '2020',
-  taxPayableAccountName: 'Value-Added Tax (PPN) Output Payable',
-  updatedAt: new Date().toISOString(),
-  updatedBy: 'Siti Rahmawati (Chief Accountant)',
-};
-
-let posCheckoutConfig: PosCheckoutConfig = {
-  roundingRule: 'nearest_100',
-  ppnTaxPercent: 11,
-  isTaxInclusive: false,
-  maxCashierDiscountPercent: 15,
-  enableVivoNearExpiryDiscount: true,
-  vivoNearExpiryDiscountPercent: 25,
-  cashDrawerFloatIDR: 500000,
-  loyaltyPointsPer1000IDR: 1,
-  requireManagerPinForVoid: true,
-  storeReceiptFooterText: 'Thank you for choosing GroceMart. Fresh organic groceries harvested daily!',
-  updatedAt: new Date().toISOString(),
-  updatedBy: 'Budi Santoso (Retail Operations VP)',
-};
-
-let stockOpnameSessions: StockOpnameSession[] = [
-  {
-    id: 'OPN-2026-001',
-    date: '2026-10-14',
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    warehouseZoneId: 'WH-JKT-SEN-COLD',
-    auditorId: 'USR-AUD-01',
-    auditorName: 'Siti Rahmawati (Audit Lead)',
-    status: 'completed',
-    items: [
-      {
-        sku: 'SKU-PRD-001',
-        productName: 'Organic Hydroponic Butterhead Lettuce',
-        category: 'produce',
-        storeId: 'store-jkt-senopati',
-        storeName: 'GroceMart Senopati Flagship',
-        warehouseZoneId: 'WH-JKT-SEN-COLD',
-        systemStock: 50,
-        countedStock: 48,
-        varianceQty: -2,
-        unitCost: 11000,
-        financialVarianceIDR: -22000,
-        notes: '2 heads trimmed due to outer leaf bruising',
-        status: 'shortage',
-      },
-      {
-        sku: 'SKU-PRD-002',
-        productName: 'Heirloom Vine-Ripened Sweet Tomatoes',
-        category: 'produce',
-        storeId: 'store-jkt-senopati',
-        storeName: 'GroceMart Senopati Flagship',
-        warehouseZoneId: 'WH-JKT-SEN-COLD',
-        systemStock: 14,
-        countedStock: 14,
-        varianceQty: 0,
-        unitCost: 14500,
-        financialVarianceIDR: 0,
-        notes: 'Perfect count verified',
-        status: 'matched',
-      },
-      {
-        sku: 'SKU-DAI-001',
-        productName: 'Pastured Free-Range Omega-3 Eggs',
-        category: 'dairy_eggs',
-        storeId: 'store-jkt-senopati',
-        storeName: 'GroceMart Senopati Flagship',
-        warehouseZoneId: 'WH-JKT-SEN-COLD',
-        systemStock: 40,
-        countedStock: 41,
-        varianceQty: 1,
-        unitCost: 22000,
-        financialVarianceIDR: 22000,
-        notes: 'Extra carton found from yesterday morning delivery receipt',
-        status: 'surplus',
-      },
-    ],
-    totalSystemUnits: 104,
-    totalCountedUnits: 103,
-    totalVarianceUnits: -1,
-    netFinancialVarianceIDR: 0,
-    glEntryIds: ['GLE-2026-0091', 'GLE-2026-0092'],
-    notes: 'Mid-month chilled room cycle count verified.',
-    completedAt: '2026-10-14T11:30:00Z',
-  },
-];
-
-let stockTransferRecords: StockTransferRecord[] = [
-  {
-    id: 'TRF-2026-001',
-    timestamp: new Date(Date.now() - 86400000 * 2).toISOString(),
-    sku: 'SKU-PRD-001',
-    productName: 'Organic Hydroponic Butterhead Lettuce',
-    sourceStoreId: 'store-jkt-senopati',
-    sourceStoreName: 'GroceMart Senopati Flagship',
-    destinationStoreId: 'store-jkt-pik',
-    destinationStoreName: 'GroceMart PIK 2 The Avenue',
-    quantity: 15,
-    unitCost: 11000,
-    totalTransferValue: 165000,
-    transferredBy: 'Rian Pratama (Logistics Dispatch)',
-    status: 'completed',
-    notes: 'Weekend surge re-allocation via refrigerated sprinter van.',
-    suratJalanNumber: 'SJ/GMRT/JKT/2026/0104',
-  },
-];
-
-// =============================================================
-// MODULE 6: APPROVAL WORKFLOW & MULTI-TIER MATRIX DATA STORE
-// =============================================================
-let approvalTierRules: ApprovalTierRule[] = [
-  // Procurement Requests (PR)
-  {
-    id: 'RULE-PR-T1',
-    module: 'procurement_pr',
-    tierLevel: 1,
-    tierName: 'Store Shift Supervisor',
-    minThresholdIDR: 0,
-    maxThresholdIDR: 5000000,
-    requiredRole: 'store_manager',
-    requiresPin: false,
-    autoApproveBelowMin: true,
-    slaHours: 12,
-    description: 'Routine shelf restock & threshold trigger approvals under Rp 5,000,000.',
-  },
-  {
-    id: 'RULE-PR-T2',
-    module: 'procurement_pr',
-    tierLevel: 2,
-    tierName: 'Branch General Manager',
-    minThresholdIDR: 5000000,
-    maxThresholdIDR: 25000000,
-    requiredRole: 'store_manager',
-    requiresPin: true,
-    autoApproveBelowMin: false,
-    slaHours: 24,
-    description: 'Bulk multi-day vendor orders between Rp 5M - Rp 25M.',
-  },
-  {
-    id: 'RULE-PR-T3',
-    module: 'procurement_pr',
-    tierLevel: 3,
-    tierName: 'VP / Director of Supply Chain & CFO',
-    minThresholdIDR: 25000000,
-    maxThresholdIDR: null,
-    requiredRole: 'admin',
-    requiresPin: true,
-    autoApproveBelowMin: false,
-    slaHours: 48,
-    description: 'Capital-intensive central warehouse restock exceeding Rp 25,000,000.',
-  },
-
-  // Stock Adjustments
-  {
-    id: 'RULE-ADJ-T1',
-    module: 'stock_adjustment',
-    tierLevel: 1,
-    tierName: 'Shift Inventory Auditor',
-    minThresholdIDR: 0,
-    maxThresholdIDR: 1000000,
-    requiredRole: 'auditor',
-    requiresPin: false,
-    autoApproveBelowMin: false,
-    slaHours: 6,
-    description: 'Minor cycle count physical variance under Rp 1,000,000.',
-  },
-  {
-    id: 'RULE-ADJ-T2',
-    module: 'stock_adjustment',
-    tierLevel: 2,
-    tierName: 'Store Operations Manager',
-    minThresholdIDR: 1000000,
-    maxThresholdIDR: null,
-    requiredRole: 'store_manager',
-    requiresPin: true,
-    autoApproveBelowMin: false,
-    slaHours: 12,
-    description: 'Significant stock variance or cold-chain excursion audit above Rp 1,000,000.',
-  },
-
-  // Waste & Spoilage Write-Offs
-  {
-    id: 'RULE-WST-T1',
-    module: 'waste_write_off',
-    tierLevel: 1,
-    tierName: 'Perishables QA Lead',
-    minThresholdIDR: 0,
-    maxThresholdIDR: 500000,
-    requiredRole: 'auditor',
-    requiresPin: false,
-    autoApproveBelowMin: false,
-    slaHours: 4,
-    description: 'Routine daily produce trim & wash moisture shrinkage write-offs.',
-  },
-  {
-    id: 'RULE-WST-T2',
-    module: 'waste_write_off',
-    tierLevel: 2,
-    tierName: 'Store Branch Manager',
-    minThresholdIDR: 500000,
-    maxThresholdIDR: null,
-    requiredRole: 'store_manager',
-    requiresPin: true,
-    autoApproveBelowMin: false,
-    slaHours: 8,
-    description: 'High-value butcher cut or expired dairy lot disposal over Rp 500,000.',
-  },
-];
-
-let approvalQueue: ApprovalRequest[] = [
-  {
-    id: 'APR-2026-001',
-    module: 'procurement_pr',
-    documentId: 'PR-2026-0042',
-    documentTitle: 'Bulk Produce Replenishment (Organic Butterhead + Vine Tomatoes)',
-    requestedBy: 'Andi Wijaya (Senopati Inventory)',
-    requestedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-    amountIDR: 6250000,
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    currentTierLevel: 2,
-    requiredTierLevel: 2,
-    status: 'PENDING',
-    history: [
-      {
-        tierLevel: 1,
-        tierName: 'Store Shift Supervisor',
-        approverId: 'USR-MGR-01',
-        approverName: 'Dewi Sartika',
-        approverRole: 'Store Supervisor',
-        action: 'APPROVED',
-        timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
-        comments: 'Verified low stock below minimum threshold. Passed to Branch GM for high value approval.',
-      },
-    ],
-    payloadSummary: {
-      sku: 'SKU-PRD-001',
-      productName: 'Organic Hydroponic Butterhead Lettuce',
-      quantity: 150,
-      reason: 'Weekend promotional feature run',
-    },
-  },
-  {
-    id: 'APR-2026-002',
-    module: 'stock_adjustment',
-    documentId: 'ADJ-2026-081',
-    documentTitle: 'Chilled Storage Excursion Physical Variance',
-    requestedBy: 'Siti Rahmawati (Auditor)',
-    requestedAt: new Date(Date.now() - 3600000 * 7).toISOString(),
-    amountIDR: 1250000,
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    currentTierLevel: 2,
-    requiredTierLevel: 2,
-    status: 'PENDING',
-    history: [],
-    payloadSummary: {
-      sku: 'SKU-MEA-001',
-      productName: 'Grass-Fed Angus Ribeye Steak',
-      quantity: 10,
-      reason: 'Physical stocktake shortage requiring manager clearance',
-    },
-  },
-  {
-    id: 'APR-2026-003',
-    module: 'procurement_pr',
-    documentId: 'PR-2026-0039',
-    documentTitle: 'Weekly Sourdough & Egg Standing Order',
-    requestedBy: 'Rudi Hermawan',
-    requestedAt: new Date(Date.now() - 86400000).toISOString(),
-    amountIDR: 2400000,
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    currentTierLevel: 1,
-    requiredTierLevel: 1,
-    status: 'APPROVED',
-    history: [
-      {
-        tierLevel: 1,
-        tierName: 'Store Shift Supervisor',
-        approverId: 'USR-MGR-01',
-        approverName: 'Dewi Sartika',
-        approverRole: 'Store Supervisor',
-        action: 'APPROVED',
-        timestamp: new Date(Date.now() - 86400000 + 3600000).toISOString(),
-        comments: 'Approved and converted to PO-2026-0014.',
-      },
-    ],
-    payloadSummary: {
-      sku: 'SKU-BAK-001',
-      productName: 'Artisan Country Sourdough Loaf',
-      quantity: 60,
-      reason: 'Routine bakery restock',
-    },
-  },
-];
-
-// =============================================================
-// MODULE 7: LOGISTICS & OPERATIONAL SHIPPING DOCUMENTS
-// =============================================================
-let suratJalanRecords: SuratJalanDocument[] = [
-  {
-    id: 'SJ-2026-001',
-    documentNumber: 'SJ/GMRT/JKT/2026/0104',
-    issueDate: '2026-10-18',
-    deliveryOrderRef: 'DO/GMRT/2026/0098',
-    transferRef: 'TRF-2026-001',
-    senderStoreId: 'store-jkt-senopati',
-    senderStoreName: 'GroceMart Senopati Flagship Hub',
-    senderAddress: 'Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan',
-    senderPhone: '+62 21 5790 1234',
-    recipientName: 'GroceMart PIK 2 Fulfillment Hub',
-    recipientAddress: 'The Avenue Blok A1 No. 8, Pantai Indah Kapuk 2, Tangerang',
-    recipientPhone: '+62 21 5900 8899',
-    recipientStoreId: 'store-jkt-pik',
-    carrierName: 'GroceFleet Cold Logistics',
-    vehiclePlateNumber: 'B 9482 SXZ',
-    vehicleType: 'Refrigerated Sprinter Van 1.5T',
-    driverName: 'Bambang Sudirgo',
-    driverPhone: '+62 812-9844-1234',
-    coldChainTempCelsius: 3.4,
-    specialHandlingInstructions: 'Continuous active refrigeration maintained at 2-4°C. Handle fresh leafy greens with care.',
-    items: [
-      {
-        sku: 'SKU-PRD-001',
-        productName: 'Organic Hydroponic Butterhead Lettuce',
-        batchNumber: 'BAT-JKT-SEN-0412',
-        quantity: 15,
-        unit: 'head (250g)',
-        packagingType: 'Plastic Crate',
-        condition: 'Cold-Chilled OK',
-        notes: 'Pre-cooled farm crates',
-      },
-      {
-        sku: 'SKU-PRD-002',
-        productName: 'Heirloom Vine-Ripened Sweet Tomatoes',
-        batchNumber: 'BAT-JKT-SEN-0415',
-        quantity: 20,
-        unit: 'pack (500g)',
-        packagingType: 'Corrugated Box',
-        condition: 'Fresh / Intact',
-        notes: 'Fragile ripe vine tomatoes',
-      },
-    ],
-    totalPackages: 4,
-    totalWeightKg: 13.75,
-    status: 'delivered',
-    senderSignatureName: 'Rian Pratama (Logistics Dispatcher)',
-    driverSignatureName: 'Bambang Sudirgo',
-    recipientSignatureName: 'Ferry Salim (PIK Receiving Lead)',
-    signedAt: '2026-10-18T14:45:00Z',
-  },
-  {
-    id: 'SJ-2026-002',
-    documentNumber: 'SJ/GMRT/JKT/2026/0105',
-    issueDate: '2026-10-19',
-    deliveryOrderRef: 'DO/GMRT/2026/0102',
-    senderStoreId: 'store-jkt-senopati',
-    senderStoreName: 'GroceMart Senopati Flagship Hub',
-    senderAddress: 'Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan',
-    senderPhone: '+62 21 5790 1234',
-    recipientName: 'Executive B2B Client: Grand Hyatt Jakarta',
-    recipientAddress: 'Jl. M.H. Thamrin Kav. 28-30, Menteng, Jakarta Pusat',
-    recipientPhone: '+62 21 2992 1234',
-    carrierName: 'GroceFleet Rapid Courier',
-    vehiclePlateNumber: 'B 4120 KLP',
-    vehicleType: 'Electric Refrigerated Cargo Trike',
-    driverName: 'Dedi Kurniawan',
-    driverPhone: '+62 813-8877-5544',
-    coldChainTempCelsius: 1.8,
-    specialHandlingInstructions: 'VIP Hotel Receiving Loading Dock B. Maintain below 2°C for prime ribeye cuts.',
-    items: [
-      {
-        sku: 'SKU-MEA-001',
-        productName: 'Grass-Fed Angus Ribeye Steak',
-        batchNumber: 'BAT-JKT-SEN-0418',
-        quantity: 12,
-        unit: 'cut (250g)',
-        packagingType: 'Vacuum Cold Pack',
-        condition: 'Cold-Chilled OK',
-        notes: 'Dry-aged prime cuts',
-      },
-    ],
-    totalPackages: 2,
-    totalWeightKg: 3.5,
-    status: 'in_transit',
-    senderSignatureName: 'Rian Pratama (Logistics Dispatcher)',
-    driverSignatureName: 'Dedi Kurniawan',
-  },
-];
-
-let deliveryOrderRecords: DeliveryOrderDocument[] = [
-  {
-    id: 'DO-2026-001',
-    doNumber: 'DO/GMRT/2026/0098',
-    issueDate: '2026-10-18',
-    poNumber: 'PO-2026-001',
-    customerOrStoreName: 'GroceMart PIK 2 Branch',
-    deliveryAddress: 'The Avenue Blok A1 No. 8, Pantai Indah Kapuk 2',
-    deliveryWindow: 'Morning Slot (08:00 - 11:00)',
-    authorizedOfficer: 'Dewi Sartika (Store Manager)',
-    items: [
-      {
-        sku: 'SKU-PRD-001',
-        productName: 'Organic Hydroponic Butterhead Lettuce',
-        orderedQty: 15,
-        dispatchedQty: 15,
-        unit: 'head',
-        unitPriceIDR: 11000,
-        totalPriceIDR: 165000,
-      },
-    ],
-    subtotalIDR: 165000,
-    taxIDR: 0,
-    totalAmountIDR: 165000,
-    status: 'fulfilled',
-    notes: 'Inter-warehouse reallocation completed on schedule.',
-  },
-  {
-    id: 'DO-2026-002',
-    doNumber: 'DO/GMRT/2026/0102',
-    issueDate: '2026-10-19',
-    poNumber: 'PO-CORP-2026-08',
-    customerOrStoreName: 'Grand Hyatt Jakarta Kitchen',
-    deliveryAddress: 'Jl. M.H. Thamrin Kav. 28-30, Jakarta Pusat',
-    deliveryWindow: 'Afternoon Slot (13:00 - 15:00)',
-    authorizedOfficer: 'Budi Santoso (Operations VP)',
-    items: [
-      {
-        sku: 'SKU-MEA-001',
-        productName: 'Grass-Fed Angus Ribeye Steak',
-        orderedQty: 12,
-        dispatchedQty: 12,
-        unit: 'cut',
-        unitPriceIDR: 125000,
-        totalPriceIDR: 1500000,
-      },
-    ],
-    subtotalIDR: 1500000,
-    taxIDR: 165000,
-    totalAmountIDR: 1665000,
-    status: 'in_transit',
-    notes: 'Standing corporate catering delivery with cold-chain cert.',
-  },
-];
-
-let shipmentQuotaTrackers: ShipmentQuotaTracking[] = [
-  {
-    id: 'SHP-2026-001',
-    tripId: 'TRIP-JKT-SEN-01',
-    vehicleType: 'Refrigerated Van 1.5T',
-    vehiclePlate: 'B 9482 SXZ',
-    maxPayloadKg: 1500,
-    currentPayloadKg: 1120,
-    quotaUtilizationPercent: 74.7,
-    storageZone: 'cold_chilled',
-    currentTempCelsius: 3.2,
-    targetTempCelsius: 3.5,
-    departureHub: 'Senopati Central Hub',
-    destinationHub: 'PIK 2 & Menteng Route',
-    departureTime: '2026-10-19T08:30:00Z',
-    estimatedArrival: '2026-10-19T11:45:00Z',
-    driverName: 'Bambang Sudirgo',
-    driverContact: '+62 812-9844-1234',
-    assignedOrdersCount: 8,
-    status: 'in_transit',
-  },
-  {
-    id: 'SHP-2026-002',
-    tripId: 'TRIP-BDG-DAG-01',
-    vehicleType: 'Chilled Truck 4T',
-    vehiclePlate: 'D 8812 BBD',
-    maxPayloadKg: 4000,
-    currentPayloadKg: 3450,
-    quotaUtilizationPercent: 86.3,
-    storageZone: 'cold_chilled',
-    currentTempCelsius: 2.8,
-    targetTempCelsius: 3.0,
-    departureHub: 'Lembang Farm Direct Aggregator',
-    destinationHub: 'Jakarta Central Distribution Vault',
-    departureTime: '2026-10-19T06:00:00Z',
-    estimatedArrival: '2026-10-19T10:15:00Z',
-    driverName: 'Asep Saepulloh',
-    driverContact: '+62 815-7766-9900',
-    assignedOrdersCount: 22,
-    status: 'in_transit',
-  },
-];
-
-// =============================================================
-// MODULE 8: INVENTORY QUALITY CONTROL (QC) INSPECTION
-// =============================================================
-let qcInspectionRecords: QCInspectionRecord[] = [
-  {
-    id: 'QC-2026-001',
-    timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
-    referenceType: 'INCOMING_PO',
-    referenceId: 'PO-2026-001',
-    sku: 'SKU-PRD-001',
-    productName: 'Organic Hydroponic Butterhead Lettuce',
-    category: 'produce',
-    batchNumber: 'BAT-JKT-SEN-0412',
-    expiryDate: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
-    sampleQuantity: 5,
-    totalBatchQuantity: 50,
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    inspectorId: 'USR-QC-01',
-    inspectorName: 'Ratna Kusuma (QC Inspector)',
-    parameters: {
-      visualFreshness: 'Grade A (Pristine)',
-      temperatureCelsius: 3.6,
-      coldChainCompliant: true,
-      packagingIntegrity: 'Sealed & Intact',
-      sensoryOdorCheck: 'Normal & Fresh',
-      brixSugarContent: 4.8,
-      weightToleranceCompliant: true,
-    },
-    disposition: 'PASSED',
-    actionTaken: 'RELEASE_TO_SHELF',
-    notes: 'Crisp vibrant leaves, zero fungal spotting or browning. Immediate transfer to chilled produce bin.',
-  },
-  {
-    id: 'QC-2026-002',
-    timestamp: new Date(Date.now() - 3600000 * 18).toISOString(),
-    referenceType: 'PERIODIC_SPOILAGE_CHECK',
-    referenceId: 'SHELFLIFE-AUD-02',
-    sku: 'SKU-PRD-002',
-    productName: 'Heirloom Vine-Ripened Sweet Tomatoes',
-    category: 'produce',
-    batchNumber: 'BAT-JKT-SEN-0398',
-    expiryDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
-    sampleQuantity: 4,
-    totalBatchQuantity: 18,
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    inspectorId: 'USR-QC-01',
-    inspectorName: 'Ratna Kusuma (QC Inspector)',
-    parameters: {
-      visualFreshness: 'Grade B (Acceptable)',
-      temperatureCelsius: 4.1,
-      coldChainCompliant: true,
-      packagingIntegrity: 'Minor Scuff',
-      sensoryOdorCheck: 'Normal & Fresh',
-      brixSugarContent: 6.2,
-      weightToleranceCompliant: true,
-    },
-    disposition: 'QUARANTINED',
-    actionTaken: 'QUARANTINE_HOLD',
-    notes: 'Slight soft spots on 2 samples. Placed in secondary inspection cell for VIVO discount re-sticker.',
-  },
-  {
-    id: 'QC-2026-003',
-    timestamp: new Date(Date.now() - 3600000 * 24).toISOString(),
-    referenceType: 'INCOMING_PO',
-    referenceId: 'PO-2026-0008',
-    sku: 'SKU-MEA-001',
-    productName: 'Grass-Fed Angus Ribeye Steak',
-    category: 'meat_seafood',
-    batchNumber: 'BAT-JKT-SEN-0380',
-    expiryDate: new Date(Date.now() + 86400000 * 12).toISOString().split('T')[0],
-    sampleQuantity: 2,
-    totalBatchQuantity: 20,
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    inspectorId: 'USR-QC-01',
-    inspectorName: 'Ratna Kusuma (QC Inspector)',
-    parameters: {
-      visualFreshness: 'Defective (Browning/Bruised)',
-      temperatureCelsius: 7.8, // Temperature breach!
-      coldChainCompliant: false,
-      packagingIntegrity: 'Damaged/Leaking',
-      sensoryOdorCheck: 'Off-Odor / Souring',
-      weightToleranceCompliant: false,
-    },
-    disposition: 'REJECTED',
-    actionTaken: 'RETURN_TO_VENDOR',
-    notes: 'Cold chain failure during supplier transit (7.8°C vs 2.0°C limit). Seal puncture and early spoilage odor. RTV claim filed.',
-  },
-];
-
-
 // -------------------------------------------------------------
 // GUARD 1: Concurrency & Anti-Overselling Lock Manager
 // Strict transactional isolation & mutex queue for inventory deductions
@@ -1428,10 +633,7 @@ function generateQRISPayload(orderId: string, amount: number): string {
 
 async function startServer() {
   const app = express();
-  const httpServer = createHttpServer(app);
-  const portArgIdx = process.argv.indexOf('--port');
-  const cliPort = portArgIdx !== -1 && process.argv[portArgIdx + 1] ? parseInt(process.argv[portArgIdx + 1], 10) : undefined;
-  const PORT = cliPort || (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
   app.use(express.json());
 
@@ -1557,24 +759,13 @@ async function startServer() {
       return res.status(400).json({ success: false, error: 'Missing orderId or amount' });
     }
 
-    // Check store closure & outlet status
+    // Check store closure
     if (!storeStatus.isOpen) {
       return res.status(403).json({
         success: false,
-        error: 'Store network is currently closed or in holiday maintenance. New online orders are temporarily paused.',
+        error: 'Store is currently closed or in holiday maintenance. New checkouts are temporarily paused.',
         notice: storeStatus.noticeBanner,
       });
-    }
-
-    const { pickupStoreId } = req.body;
-    if (pickupStoreId) {
-      const targetStore = storeSchedules.find((s) => s.storeId === pickupStoreId);
-      if (targetStore?.isEmergencyClosed) {
-        return res.status(403).json({
-          success: false,
-          error: `Selected outlet '${targetStore.storeName}' is currently closed (${targetStore.closureReason || 'Emergency Maintenance'}). Online orders cannot be fulfilled from this branch.`,
-        });
-      }
     }
 
     const qrisRef = `QRIS-GCM-${Date.now().toString().slice(-6)}`;
@@ -1717,21 +908,16 @@ async function startServer() {
             const invItem = inventoryList.find((inv) => inv.productId === prodId || inv.sku === item.sku);
 
             if (invItem) {
-              // Strictly isolate stock deduction to target fulfilling outlet
-              const targetStoreId = req.body.storeId || req.body.pickupStoreId || 'store-jkt-senopati';
-              const tier = storeInventoryTiers.find((t) => t.sku === invItem.sku && t.storeId === targetStoreId);
+              invItem.currentStock = Math.max(0, invItem.currentStock - qty);
+              invItem.outgoingStock += qty;
+
+              // Also update store warehouse tiers
+              const tier = storeInventoryTiers.find((t) => t.sku === invItem.sku);
               if (tier) {
-                tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
-                tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+                tier.physicalStock = Math.max(0, tier.physicalStock - qty);
+                tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
                 tier.updatedAt = new Date().toISOString();
               }
-
-              // Recalculate master inventory currentStock as the exact sum of isolated warehouse tiers
-              const totalAcrossOutlets = storeInventoryTiers
-                .filter((t) => t.sku === invItem.sku)
-                .reduce((sum, t) => sum + t.physicalStock, 0);
-              invItem.currentStock = Number(totalAcrossOutlets.toFixed(2));
-              invItem.outgoingStock = Number((invItem.outgoingStock + qty).toFixed(2));
 
               const itemCogs = invItem.unitCost * qty;
               totalCogs += itemCogs;
@@ -2238,76 +1424,31 @@ async function startServer() {
   });
 
   app.post('/api/admin/inventory/adjust', (req: Request, res: Response) => {
-    const { sku, adjustmentQty, reason = 'Inventory Stocktake Variance', storeId } = req.body;
-    
-    // Strict warehouse check: Require specific warehouse/outlet context
-    if (!storeId || typeof storeId !== 'string' || storeId.trim() === '' || storeId === 'ALL') {
-      return res.status(400).json({
-        error: 'Strict Warehouse Check Failed: A specific warehouse/outlet ID (storeId) is strictly required to adjust inventory and prevent cross-location stock bleeding.',
-      });
-    }
-
+    const { sku, adjustmentQty, reason = 'Inventory Stocktake Variance', storeId = 'store-jkt-senopati' } = req.body;
     const item = inventoryList.find((i) => i.sku === sku);
     if (!item) {
       return res.status(404).json({ error: 'SKU not found' });
     }
 
-    // Locate store-specific tier
-    let tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
-    if (!tier) {
-      // Find outlet info to initialize tier strictly for this location if authorized
-      const outletSchedule = storeSchedules.find((s) => s.storeId === storeId);
-      const newTierId = `STK-${storeId.replace(/[^a-zA-Z0-9]/g, '').slice(-3).toUpperCase()}-${Date.now().toString().slice(-4)}`;
-      tier = {
-        id: newTierId,
-        sku: item.sku,
-        productId: item.productId,
-        productName: item.productName,
-        category: item.category,
-        storeId,
-        storeName: outletSchedule?.storeName || storeId,
-        warehouseZoneId: outletSchedule?.activeWarehouses[0] || 'WH-JKT-SEN-COLD',
-        storageType: item.storageType || 'cold_chilled',
-        physicalStock: 0,
-        availableStock: 0,
-        reservedStock: 0,
-        incomingStock: 0,
-        minimumThreshold: item.minimumThreshold,
-        safetyStockBuffer: item.safetyStockBuffer || 10,
-        maxCapacity: item.maxCapacity || 120,
-        reorderQuantity: item.reorderQuantity || 50,
-        unitCost: item.unitCost,
-        sellingPrice: item.sellingPrice,
-        unit: item.unit,
-        supplierId: item.supplierId,
-        supplierName: item.supplierName,
-        lastRestockedAt: item.lastRestockedAt,
-        updatedAt: new Date().toISOString(),
-      };
-      storeInventoryTiers.push(tier);
+    const previousStock = item.currentStock;
+    item.currentStock = Math.max(0, item.currentStock + Number(adjustmentQty));
+    const delta = item.currentStock - previousStock;
+    const costDelta = Math.abs(delta) * item.unitCost;
+
+    // Also update multi-tier item if present
+    const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
+    if (tier) {
+      tier.physicalStock = Math.max(0, tier.physicalStock + Number(adjustmentQty));
+      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
     }
 
-    const previousTierStock = tier.physicalStock;
-    tier.physicalStock = Math.max(0, Number((tier.physicalStock + Number(adjustmentQty)).toFixed(2)));
-    tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
-    tier.updatedAt = new Date().toISOString();
-
-    const delta = tier.physicalStock - previousTierStock;
-    const costDelta = Math.abs(delta) * (tier.unitCost || item.unitCost);
-
-    // Strictly recalculate global master catalog stock from the sum of all location tiers (prevent cross-location overlap)
-    const totalAcrossOutlets = storeInventoryTiers
-      .filter((t) => t.sku === sku)
-      .reduce((sum, t) => sum + t.physicalStock, 0);
-    item.currentStock = Number(totalAcrossOutlets.toFixed(2));
-
-    // Log GL adjustment strictly mapped to this store
+    // Log GL adjustment
     const gleId = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     generalLedger.unshift({
       id: gleId,
       timestamp: new Date().toISOString(),
       storeId,
-      storeName: tier.storeName,
+      storeName: tier?.storeName || 'GroceMart Retail Hub',
       accountCode: '1040',
       accountName: 'Merchandise Inventory Asset',
       category: 'Asset',
@@ -2315,10 +1456,10 @@ async function startServer() {
       credit: delta < 0 ? costDelta : 0,
       referenceType: 'INVENTORY_ADJUSTMENT',
       referenceId: sku,
-      description: `Stock adjustment for ${sku} at ${tier.storeName} (${delta > 0 ? '+' : ''}${delta} units): ${reason}`,
+      description: `Stock adjustment for ${sku} (${delta > 0 ? '+' : ''}${delta} units): ${reason}`,
     });
 
-    res.json({ success: true, item, tier, delta, costDelta, gleId });
+    res.json({ success: true, item, delta, costDelta, gleId });
   });
 
   // -------------------------------------------------------------
@@ -3019,349 +2160,6 @@ async function startServer() {
   });
 
   // -------------------------------------------------------------
-  // VENDOR BILLS, 3-WAY MATCHING & ACCOUNTS PAYABLE (AP)
-  // -------------------------------------------------------------
-  app.get('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
-    const { storeId, status, currency } = req.query;
-    let result = [...vendorBills];
-    if (storeId && storeId !== 'CONSOLIDATED') {
-      result = result.filter((b) => b.storeId === storeId);
-    }
-    if (status && status !== 'ALL') {
-      result = result.filter((b) => b.status === status || b.paymentStatus === status);
-    }
-    if (currency && currency !== 'ALL') {
-      result = result.filter((b) => b.currency === currency);
-    }
-    res.json(result);
-  });
-
-  app.post('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
-    const {
-      billNumber,
-      poId,
-      goodsReceiptId,
-      supplierName,
-      supplierContact,
-      storeId,
-      storeName,
-      deliveryNoteNumber,
-      billDate = new Date().toISOString().split('T')[0],
-      dueDate,
-      paymentTerms = 'Net 30',
-      currency = 'IDR',
-      exchangeRate = 1,
-      items = [],
-      taxPercent = 11,
-      notes = '',
-      autoApprove = false,
-    } = req.body;
-
-    if (!billNumber || !poId || !goodsReceiptId) {
-      return res.status(400).json({ error: 'billNumber, poId, and goodsReceiptId are required' });
-    }
-
-    const po = purchaseOrders.find((p) => p.id === poId);
-    const gr = goodsReceipts.find((g) => g.id === goodsReceiptId);
-
-    let hasQtyVariance = false;
-    let hasPriceVariance = false;
-
-    const processedItems = items.map((it: any) => {
-      const poItem = po?.items.find((p) => p.sku === it.sku);
-      const grItem = gr?.items.find((g) => g.sku === it.sku);
-      const poQty = poItem?.orderedQuantity || 0;
-      const grQty = grItem?.quantityReceived || 0;
-      const billedQty = Number(it.billedQuantity) || 0;
-      const unitCost = Number(it.unitCost) || 0;
-      const poUnitCost = poItem ? (currency === 'IDR' ? poItem.unitCost : poItem.unitCost / Number(exchangeRate || 1)) : unitCost;
-
-      const qtyVar = billedQty !== grQty;
-      const priceVar = Math.abs(unitCost - poUnitCost) > 0.01;
-
-      if (qtyVar) hasQtyVariance = true;
-      if (priceVar) hasPriceVariance = true;
-
-      return {
-        sku: it.sku,
-        productName: it.productName || poItem?.productName || grItem?.productName || 'Grocery Item',
-        poQuantity: poQty,
-        grQuantity: grQty,
-        billedQuantity: billedQty,
-        unitCost,
-        totalCost: Math.round(billedQty * unitCost * 100) / 100,
-        hasQuantityVariance: qtyVar,
-        hasPriceVariance: priceVar,
-        notes: it.notes || '',
-      };
-    });
-
-    const subtotal = processedItems.reduce((acc: number, item: any) => acc + item.totalCost, 0);
-    const taxAmount = Math.round(((subtotal * Number(taxPercent || 0)) / 100) * 100) / 100;
-    const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
-    const grandTotalIDR = Math.round(grandTotal * Number(exchangeRate || 1));
-
-    let status: VendorBillStatus = 'MATCHED';
-    if (hasQtyVariance && hasPriceVariance) status = 'QTY_VARIANCE';
-    else if (hasQtyVariance) status = 'QTY_VARIANCE';
-    else if (hasPriceVariance) status = 'PRICE_VARIANCE';
-
-    if (autoApprove && (status === 'MATCHED' || status === 'DRAFT')) {
-      status = 'APPROVED';
-    }
-
-    const billId = `VB-2026-${(vendorBills.length + 1).toString().padStart(3, '0')}`;
-
-    let computedDueDate = dueDate;
-    if (!computedDueDate) {
-      const d = new Date(billDate);
-      const termDays = paymentTerms === 'COD' ? 0 : paymentTerms === 'Net 7' ? 7 : paymentTerms === 'Net 14' ? 14 : paymentTerms === 'Net 60' ? 60 : 30;
-      d.setDate(d.getDate() + termDays);
-      computedDueDate = d.toISOString().split('T')[0];
-    }
-
-    const newBill: VendorBill = {
-      id: billId,
-      billNumber,
-      supplierName: supplierName || po?.supplierName || gr?.vendorName || 'Vendor Supplier',
-      supplierContact: supplierContact || po?.supplierContact || '',
-      storeId: storeId || po?.storeId || 'store-jkt-senopati',
-      storeName: storeName || po?.storeName || 'GroceMart Senopati Flagship',
-      poId,
-      goodsReceiptId,
-      deliveryNoteNumber: deliveryNoteNumber || gr?.deliveryNoteNumber || '',
-      billDate,
-      dueDate: computedDueDate,
-      paymentTerms,
-      currency,
-      exchangeRate: Number(exchangeRate) || 1,
-      items: processedItems,
-      subtotal,
-      taxPercent: Number(taxPercent) || 0,
-      taxAmount,
-      grandTotal,
-      grandTotalIDR,
-      amountPaid: 0,
-      remainingDue: grandTotal,
-      status,
-      paymentStatus: 'UNPAID',
-      notes,
-      createdAt: new Date().toISOString(),
-      glEntryIds: [],
-    };
-
-    if (status === 'APPROVED') {
-      const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-      const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
-      const subtotalIDR = Math.round(subtotal * Number(exchangeRate || 1));
-
-      generalLedger.unshift({
-        id: gle1,
-        timestamp: new Date().toISOString(),
-        storeId: newBill.storeId,
-        storeName: newBill.storeName,
-        accountCode: '1040',
-        accountName: 'Merchandise Inventory Asset',
-        category: 'Asset',
-        debit: subtotalIDR,
-        credit: 0,
-        referenceType: 'VENDOR_BILL',
-        referenceId: newBill.id,
-        description: `${newBill.id} (${newBill.billNumber}): Merchandise asset recognized from ${newBill.supplierName} on PO #${newBill.poId}`,
-      });
-
-      generalLedger.unshift({
-        id: gle2,
-        timestamp: new Date().toISOString(),
-        storeId: newBill.storeId,
-        storeName: newBill.storeName,
-        accountCode: '2010',
-        accountName: 'Trade Accounts Payable (Vendors)',
-        category: 'Liability',
-        debit: 0,
-        credit: grandTotalIDR,
-        referenceType: 'VENDOR_BILL',
-        referenceId: newBill.id,
-        description: `${newBill.id} (${newBill.billNumber}): Trade liability recognized for vendor settlement`,
-      });
-
-      const apCoa = chartOfAccounts.find((c) => c.accountCode === '2010');
-      if (apCoa) apCoa.balance += grandTotalIDR;
-
-      newBill.glEntryIds = [gle1, gle2];
-      newBill.approvedBy = 'Auditor / Finance Lead';
-      newBill.approvedAt = new Date().toISOString();
-    }
-
-    vendorBills.unshift(newBill);
-
-    res.json({
-      success: true,
-      vendorBill: newBill,
-      journalEntryIds: newBill.glEntryIds,
-      message: `Vendor Bill #${newBill.id} (${newBill.billNumber}) created successfully${status === 'APPROVED' ? ' & posted to Accounts Payable' : ''}.`,
-    });
-  });
-
-  app.post('/api/admin/procurement/vendor-bills/:id/approve', (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { approverName = 'Finance Controller' } = req.body;
-    const bill = vendorBills.find((b) => b.id === id);
-    if (!bill) return res.status(404).json({ error: 'Vendor Bill not found' });
-
-    if (bill.status === 'APPROVED' || bill.status === 'PAID') {
-      return res.json({ success: true, vendorBill: bill, message: 'Vendor Bill is already approved.' });
-    }
-
-    bill.status = 'APPROVED';
-    bill.approvedBy = approverName;
-    bill.approvedAt = new Date().toISOString();
-
-    const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-    const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
-    const subtotalIDR = Math.round(bill.subtotal * bill.exchangeRate);
-
-    generalLedger.unshift({
-      id: gle1,
-      timestamp: new Date().toISOString(),
-      storeId: bill.storeId,
-      storeName: bill.storeName,
-      accountCode: '1040',
-      accountName: 'Merchandise Inventory Asset',
-      category: 'Asset',
-      debit: subtotalIDR,
-      credit: 0,
-      referenceType: 'VENDOR_BILL',
-      referenceId: bill.id,
-      description: `${bill.id} (${bill.billNumber}): Formally approved vendor bill for ${bill.supplierName}`,
-    });
-
-    generalLedger.unshift({
-      id: gle2,
-      timestamp: new Date().toISOString(),
-      storeId: bill.storeId,
-      storeName: bill.storeName,
-      accountCode: '2010',
-      accountName: 'Trade Accounts Payable (Vendors)',
-      category: 'Liability',
-      debit: 0,
-      credit: bill.grandTotalIDR,
-      referenceType: 'VENDOR_BILL',
-      referenceId: bill.id,
-      description: `${bill.id} (${bill.billNumber}): Trade payable liability to ${bill.supplierName} posted to AP`,
-    });
-
-    const apCoa = chartOfAccounts.find((c) => c.accountCode === '2010');
-    if (apCoa) apCoa.balance += bill.grandTotalIDR;
-
-    bill.glEntryIds = [gle1, gle2];
-
-    res.json({
-      success: true,
-      vendorBill: bill,
-      journalEntryIds: bill.glEntryIds,
-      message: `Vendor Bill #${bill.id} approved and posted to General Ledger (GL #${gle1}, #${gle2}).`,
-    });
-  });
-
-  app.post('/api/admin/procurement/vendor-bills/:id/pay', (req: Request, res: Response) => {
-    const { id } = req.params;
-    const {
-      amountPaid = 0,
-      paymentMethod = 'BANK_TRANSFER',
-      paymentReference = `TRF-BCA-${Date.now().toString().slice(-6)}`,
-      notes = '',
-    } = req.body;
-
-    const bill = vendorBills.find((b) => b.id === id);
-    if (!bill) return res.status(404).json({ error: 'Vendor Bill not found' });
-
-    const payAmt = Number(amountPaid);
-    if (payAmt <= 0) {
-      return res.status(400).json({ error: 'Payment amount must be greater than zero' });
-    }
-
-    bill.amountPaid = Math.round((bill.amountPaid + payAmt) * 100) / 100;
-    bill.remainingDue = Math.max(0, Math.round((bill.grandTotal - bill.amountPaid) * 100) / 100);
-    bill.paymentStatus = bill.remainingDue <= 0.01 ? 'PAID' : 'PARTIALLY_PAID';
-    if (bill.remainingDue <= 0.01) {
-      bill.status = 'PAID';
-    }
-    bill.paymentMethod = paymentMethod;
-    bill.paymentReference = paymentReference;
-    bill.paidAt = new Date().toISOString();
-    if (notes) bill.notes = (bill.notes ? `${bill.notes} • ` : '') + notes;
-
-    const paymentAmountIDR = Math.round(payAmt * bill.exchangeRate);
-    const glePay1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-    const glePay2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
-
-    // Debit 2010 Trade Accounts Payable (reduces liability)
-    generalLedger.unshift({
-      id: glePay1,
-      timestamp: new Date().toISOString(),
-      storeId: bill.storeId,
-      storeName: bill.storeName,
-      accountCode: '2010',
-      accountName: 'Trade Accounts Payable (Vendors)',
-      category: 'Liability',
-      debit: paymentAmountIDR,
-      credit: 0,
-      referenceType: 'VENDOR_PAYMENT',
-      referenceId: bill.id,
-      description: `${bill.id}: Vendor settlement payment to ${bill.supplierName} (${paymentReference})`,
-    });
-
-    // Credit 1020 Bank BCA Clearing or 1010 Cash
-    const targetAccountCode = paymentMethod === 'CASH' ? '1010' : '1020';
-    const targetAccountName = paymentMethod === 'CASH' ? 'Cash on Hand & Store Registers' : 'Bank BCA Operational Clearing';
-
-    generalLedger.unshift({
-      id: glePay2,
-      timestamp: new Date().toISOString(),
-      storeId: bill.storeId,
-      storeName: bill.storeName,
-      accountCode: targetAccountCode,
-      accountName: targetAccountName,
-      category: 'Asset',
-      debit: 0,
-      credit: paymentAmountIDR,
-      referenceType: 'VENDOR_PAYMENT',
-      referenceId: bill.id,
-      description: `${bill.id}: Disbursement via ${targetAccountName} ref ${paymentReference}`,
-    });
-
-    // Update COA balances
-    const apCoa = chartOfAccounts.find((c) => c.accountCode === '2010');
-    if (apCoa) apCoa.balance = Math.max(0, apCoa.balance - paymentAmountIDR);
-
-    const bankCoa = chartOfAccounts.find((c) => c.accountCode === targetAccountCode);
-    if (bankCoa) bankCoa.balance = Math.max(0, bankCoa.balance - paymentAmountIDR);
-
-    bill.glEntryIds = bill.glEntryIds || [];
-    bill.glEntryIds.push(glePay1, glePay2);
-
-    res.json({
-      success: true,
-      vendorBill: bill,
-      journalEntryIds: [glePay1, glePay2],
-      message: `Payment of ${bill.currency} ${payAmt.toLocaleString()} recorded. Accounts Payable liability reduced by IDR ${paymentAmountIDR.toLocaleString()}.`,
-    });
-  });
-
-  app.post('/api/admin/procurement/vendor-bills/:id/void', (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { reason = 'Cancelled by purchasing manager' } = req.body;
-    const bill = vendorBills.find((b) => b.id === id);
-    if (!bill) return res.status(404).json({ error: 'Vendor Bill not found' });
-
-    bill.status = 'VOID';
-    bill.notes = (bill.notes ? `${bill.notes} • ` : '') + `VOIDED: ${reason}`;
-
-    res.json({ success: true, vendorBill: bill, message: `Vendor Bill #${bill.id} voided.` });
-  });
-
-  // -------------------------------------------------------------
   // STORE-SPECIFIC CHART OF ACCOUNTS & FINANCIAL ACCOUNTING
   // -------------------------------------------------------------
   app.get('/api/admin/accounting/coa', (_req: Request, res: Response) => {
@@ -3451,38 +2249,35 @@ async function startServer() {
 
   app.get('/api/admin/accounting/pnl', (req: Request, res: Response) => {
     const { storeId } = req.query;
-    const isSingleStore = Boolean(storeId && storeId !== 'CONSOLIDATED');
     let relevantEntries = generalLedger;
     let storeName = 'Consolidated Company-Wide';
 
-    if (isSingleStore) {
+    if (storeId && storeId !== 'CONSOLIDATED') {
       relevantEntries = generalLedger.filter((e) => e.storeId === storeId);
       const s = storeSchedules.find((st) => st.storeId === storeId);
       if (s) storeName = s.storeName;
     }
 
-    let dynamicSalesRevenue = 0;
-    let dynamicCogs = 0;
+    let grossSalesRevenue = 0;
+    let costOfGoodsSold = 0;
 
     relevantEntries.forEach((entry) => {
-      if (!entry.isReversed) {
-        if (entry.accountCode === '4010') dynamicSalesRevenue += entry.credit - entry.debit;
-        if (entry.accountCode === '5010') dynamicCogs += entry.debit - entry.credit;
-      }
+      if (entry.accountCode === '4010') grossSalesRevenue += entry.credit;
+      if (entry.accountCode === '5010') costOfGoodsSold += entry.debit;
     });
 
-    const baselineSales = isSingleStore ? 45000000 : 388500000;
-    const baselineCogs = Math.round(baselineSales * 0.62);
-
-    const grossSalesRevenue = baselineSales + Math.max(0, dynamicSalesRevenue);
-    const costOfGoodsSold = baselineCogs + Math.max(0, dynamicCogs);
+    // Provide realistic baseline if ledger is young
+    if (grossSalesRevenue === 0) {
+      grossSalesRevenue = storeId && storeId !== 'CONSOLIDATED' ? 45000000 : 388500000;
+      costOfGoodsSold = Math.round(grossSalesRevenue * 0.62);
+    }
 
     const discountsGiven = Math.round(grossSalesRevenue * 0.04);
     const netSalesRevenue = grossSalesRevenue - discountsGiven;
     const grossProfit = netSalesRevenue - costOfGoodsSold;
     const grossMarginPercent = netSalesRevenue > 0 ? (grossProfit / netSalesRevenue) * 100 : 0;
 
-    const factor = isSingleStore ? 0.22 : 1.0;
+    const factor = storeId && storeId !== 'CONSOLIDATED' ? 0.22 : 1.0;
     const operatingExpenses = [
       { category: 'Cold-Chain Refrigeration & Store Electricity', amount: Math.round(18500000 * factor) },
       { category: 'Same-Day Chilled Logistics & Couriers', amount: Math.round(12200000 * factor) },
@@ -3516,27 +2311,11 @@ async function startServer() {
     const isSingleStore = storeId && storeId !== 'CONSOLIDATED';
     const factor = isSingleStore ? 0.25 : 1.0;
 
-    const relevantPos = isSingleStore
-      ? posReceiptsHistory.filter((r) => r.storeId === storeId)
-      : posReceiptsHistory;
-
-    const posCashDelta = relevantPos
-      .filter((r) => r.paymentMethod === 'cash')
-      .reduce((s, r) => s + r.total, 0);
-    const posBankDelta = relevantPos
-      .filter((r) => r.paymentMethod === 'debit_card' || r.paymentMethod === 'credit_card')
-      .reduce((s, r) => s + r.total, 0);
-    const posQrisDelta = relevantPos
-      .filter((r) => r.paymentMethod === 'qris')
-      .reduce((s, r) => s + r.total, 0);
-    const posCogsDelta = relevantPos.reduce((s, r) => s + r.totalCogsCost, 0);
-    const posNetMarginDelta = relevantPos.reduce((s, r) => s + (r.total - r.totalCogsCost), 0);
-
     const currentAssets = [
-      { category: 'Cash on Hand & Register Drawer Float', amount: Math.round(45000000 * factor) + posCashDelta },
-      { category: 'Bank BCA Operational Clearing', amount: Math.round(382000000 * factor) + posBankDelta },
-      { category: 'QRIS Settlement Receivable (ASPI Clearing)', amount: Math.round(28400000 * factor) + posQrisDelta },
-      { category: 'Merchandise Inventory Asset (FIFO/WAC Valued)', amount: Math.max(0, Math.round(846500000 * factor) - posCogsDelta) },
+      { category: 'Cash on Hand & Register Drawer Float', amount: Math.round(45000000 * factor) },
+      { category: 'Bank BCA Operational Clearing', amount: Math.round(382000000 * factor) },
+      { category: 'QRIS Settlement Receivable (ASPI Clearing)', amount: Math.round(28400000 * factor) },
+      { category: 'Merchandise Inventory Asset (FIFO/WAC Valued)', amount: Math.round(846500000 * factor) },
     ];
 
     const nonCurrentAssets = [
@@ -3555,7 +2334,7 @@ async function startServer() {
     const totalLiabilities = currentLiabilities.reduce((s, l) => s + l.amount, 0);
 
     const retainedPrior = Math.round(174900000 * factor);
-    const currentPeriodNet = Math.round(91500000 * factor) + posNetMarginDelta;
+    const currentPeriodNet = Math.round(91500000 * factor);
     const paidInEquity = totalAssets - totalLiabilities - retainedPrior - currentPeriodNet;
 
     const equityItems = [
@@ -3588,16 +2367,10 @@ async function startServer() {
 
   app.get('/api/admin/accounting/cash-flow', (req: Request, res: Response) => {
     const { storeId } = req.query;
-    const isSingleStore = storeId && storeId !== 'CONSOLIDATED';
-    const factor = isSingleStore ? 0.25 : 1.0;
-
-    const relevantPos = isSingleStore
-      ? posReceiptsHistory.filter((r) => r.storeId === storeId)
-      : posReceiptsHistory;
-    const posInflowDelta = relevantPos.reduce((s, r) => s + r.total, 0);
+    const factor = storeId && storeId !== 'CONSOLIDATED' ? 0.25 : 1.0;
 
     const operatingActivities = [
-      { category: 'Cash Receipts from QRIS Online & In-Store POS Sales', amount: Math.round(365000000 * factor) + posInflowDelta },
+      { category: 'Cash Receipts from QRIS Online & In-Store Sales', amount: Math.round(365000000 * factor) },
       { category: 'Payments to Produce & Dairy Suppliers', amount: -Math.round(210000000 * factor) },
       { category: 'Payments for Cold-Chain Refrigeration & Store Utilities', amount: -Math.round(18500000 * factor) },
       { category: 'Salaries Paid to Storekeepers & Couriers', amount: -Math.round(24800000 * factor) },
@@ -3639,11 +2412,8 @@ async function startServer() {
   // MULTI-DIMENSIONAL REVENUE (OMZET) ANALYTICS ENDPOINT
   // -------------------------------------------------------------
   app.get('/api/admin/analytics/omzet', (_req: Request, res: Response) => {
-    const posTotalDelta = posReceiptsHistory.reduce((s, r) => s + r.total, 0);
-    const totalRevenueMTD = 388500000 + posTotalDelta;
-    const totalOrders = 1311 + posReceiptsHistory.length;
-
-    const baseStores = [
+    const totalRevenueMTD = 388500000;
+    const storeBreakdown = [
       { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship', city: 'Jakarta', omzet: 124500000, orderCount: 412, sharePercent: 32.0, status: 'Open' as const },
       { storeId: 'store-jkt-pik', storeName: 'GroceMart PIK 2 The Avenue', city: 'Jakarta', omzet: 98200000, orderCount: 328, sharePercent: 25.3, status: 'Open' as const },
       { storeId: 'store-bdg-dago', storeName: 'GroceMart Dago Green Market', city: 'Bandung', omzet: 64800000, orderCount: 224, sharePercent: 16.7, status: 'Open' as const },
@@ -3651,18 +2421,6 @@ async function startServer() {
       { storeId: 'store-bali-canggu', storeName: 'GroceMart Batu Bolong Organic', city: 'Bali', omzet: 32400000, orderCount: 108, sharePercent: 8.3, status: 'Open' as const },
       { storeId: 'store-sby-gubeng', storeName: 'GroceMart Gubeng Central Hub', city: 'Surabaya', omzet: 20000000, orderCount: 74, sharePercent: 5.2, status: 'Open' as const },
     ];
-
-    const storeBreakdown = baseStores.map((st) => {
-      const storePos = posReceiptsHistory.filter((r) => r.storeId === st.storeId);
-      const addedOmzet = storePos.reduce((sum, r) => sum + r.total, 0);
-      const newOmzet = st.omzet + addedOmzet;
-      return {
-        ...st,
-        omzet: newOmzet,
-        orderCount: st.orderCount + storePos.length,
-        sharePercent: Number(((newOmzet / totalRevenueMTD) * 100).toFixed(1)),
-      };
-    });
 
     const categoryBreakdown = [
       { category: 'produce', label: 'Fresh Organic Produce', omzet: 142000000, unitsSold: 5820, sharePercent: 36.6 },
@@ -3682,14 +2440,14 @@ async function startServer() {
 
     res.json({
       totalRevenueMTD,
-      dodGrowthPercent: 4.8,
-      wowGrowthPercent: 12.4,
-      momGrowthPercent: 18.2,
-      totalOrders,
-      averageBasketValue: Math.round(totalRevenueMTD / Math.max(1, totalOrders)),
+      dodGrowthPercent: 4.8,  // Day-over-Day
+      wowGrowthPercent: 12.4, // Week-over-Week
+      momGrowthPercent: 18.2, // Month-over-Month
+      totalOrders: 1311,
+      averageBasketValue: 296338,
       qrisMetrics: {
-        totalAttempts: 1380 + posReceiptsHistory.filter((r) => r.paymentMethod === 'qris').length,
-        settledCount: 1336 + posReceiptsHistory.filter((r) => r.paymentMethod === 'qris').length,
+        totalAttempts: 1380,
+        settledCount: 1336,
         failedOrExpiredCount: 44,
         conversionRatePercent: 96.8,
         averageSettlementSeconds: 6.2,
@@ -4337,325 +3095,6 @@ async function startServer() {
     });
   });
 
-  // -------------------------------------------------------------
-  // GLOBAL COMPLIANCE: Cold Chain & Sub-Zero Storage Logs
-  // (US FDA FSMA 204, EU Reg 852/2004, FSANZ 3.2.2, HACCP CCP)
-  // -------------------------------------------------------------
-  app.get('/api/admin/cold-chain/logs', (req: Request, res: Response) => {
-    const { zoneId, storeId } = req.query;
-    let list = [...coldChainLogs];
-    if (zoneId && zoneId !== 'ALL') {
-      list = list.filter((l) => l.warehouseZoneId === zoneId);
-    }
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      list = list.filter((l) => l.storeId === storeId);
-    }
-    res.json(list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-  });
-
-  app.post('/api/admin/cold-chain/logs', (req: Request, res: Response) => {
-    const {
-      warehouseZoneId,
-      temperatureCelsius,
-      humidityPercent = 85,
-      sensorId,
-      complianceStandard = 'HACCP CCP',
-      correctiveAction,
-      inspectorName = 'IoT Telemetry Monitor',
-      storeId,
-    } = req.body;
-
-    if (!warehouseZoneId || temperatureCelsius === undefined) {
-      return res.status(400).json({ error: 'warehouseZoneId and temperatureCelsius are required' });
-    }
-
-    const tempC = Number(Number(temperatureCelsius).toFixed(1));
-    const tempF = Number(((tempC * 9) / 5 + 32).toFixed(1));
-    const isFreezer = String(warehouseZoneId).includes('FRZ');
-    const thresholdMax = isFreezer ? -18.0 : 4.5;
-    const isExcursion = tempC > thresholdMax;
-    const severity = tempC > thresholdMax + 2.0 ? 'CRITICAL_SPIKE' : isExcursion ? 'ELEVATED' : 'NORMAL';
-
-    const cfg = climateAdaptiveConfigs.find((c) => c.warehouseZoneId === warehouseZoneId);
-    const store = storeSchedules.find((s) => s.storeId === (storeId || cfg?.storeId));
-
-    const newLog: ServerColdChainLogEntry = {
-      id: `CCL-2026-${(coldChainLogs.length + 1).toString().padStart(3, '0')}`,
-      warehouseZoneId,
-      zoneName: cfg?.zoneName || (isFreezer ? 'Sub-Zero Deep Freeze' : 'Chilled Cold Room'),
-      storeId: store?.storeId || cfg?.storeId || 'store-jkt-senopati',
-      storeName: store?.storeName || 'GroceMart Senopati Flagship',
-      sensorId: sensorId || `IOT-SENS-${warehouseZoneId.slice(-4)}`,
-      timestamp: new Date().toISOString(),
-      temperatureCelsius: tempC,
-      temperatureFahrenheit: tempF,
-      humidityPercent: Number(humidityPercent),
-      isExcursion,
-      severity,
-      complianceStandard,
-      correctiveAction: correctiveAction || (isExcursion ? 'Excursion logged; auto-cooling compressor triggered.' : undefined),
-      inspectorName,
-    };
-
-    coldChainLogs.unshift(newLog);
-
-    if (cfg) {
-      cfg.currentActualTempCelsius = tempC;
-      cfg.isTempAlertActive = isExcursion;
-      cfg.alertSeverity = severity === 'CRITICAL_SPIKE' ? 'CRITICAL_BREACH' : severity;
-    }
-
-    res.json({ success: true, log: newLog, message: 'Cold-chain telemetry audit log recorded successfully.' });
-  });
-
-  // -------------------------------------------------------------
-  // GLOBAL COMPLIANCE: FDA / EU Food Safety Recall & Batch Traceability
-  // -------------------------------------------------------------
-  app.get('/api/admin/batch-recall/trace/:query', (req: Request, res: Response) => {
-    const query = req.params.query.trim().toLowerCase();
-    
-    // Find matching batch
-    const matchedBatch = inventoryBatches.find(
-      (b) =>
-        b.batchId.toLowerCase() === query ||
-        b.lotNumber.toLowerCase() === query ||
-        b.sku.toLowerCase() === query
-    ) || inventoryBatches[0];
-
-    if (!matchedBatch) {
-      return res.status(404).json({ error: `No inventory lot found matching query '${req.params.query}'.` });
-    }
-
-    // Upstream Supplier PO & Goods Receipt
-    const poMatch = purchaseOrders.find((po) =>
-      po.items.some((it) => it.sku === matchedBatch.sku)
-    );
-
-    // Warehouse stock positions
-    const warehouseLocations = storeInventoryTiers
-      .filter((t) => t.sku === matchedBatch.sku)
-      .map((tier) => ({
-        storeId: tier.storeId,
-        storeName: tier.storeName,
-        warehouseZoneId: tier.warehouseZoneId,
-        storageType: tier.storageType,
-        physicalStock: tier.physicalStock,
-        availableStock: tier.availableStock,
-        isQuarantined: Boolean(quarantinedBatchesMap[matchedBatch.batchId]),
-      }));
-
-    // Downstream POS Sales
-    const posSales = posReceiptsHistory
-      .filter((rcp) =>
-        rcp.items.some(
-          (it) =>
-            it.batchId === matchedBatch.batchId ||
-            it.lotNumber === matchedBatch.lotNumber ||
-            it.sku === matchedBatch.sku
-        )
-      )
-      .map((rcp) => {
-        const itemLine = rcp.items.find(
-          (it) =>
-            it.batchId === matchedBatch.batchId ||
-            it.lotNumber === matchedBatch.lotNumber ||
-            it.sku === matchedBatch.sku
-        );
-        return {
-          receiptNumber: rcp.receiptNumber,
-          transactionId: rcp.transactionId,
-          orderId: rcp.orderId,
-          timestamp: rcp.timestamp,
-          storeName: rcp.storeName,
-          cashierName: rcp.cashierName,
-          customerName: 'Storefront Retail Customer',
-          quantitySold: itemLine?.quantity || 1,
-          lineTotal: itemLine ? itemLine.quantity * itemLine.unitPrice : 0,
-        };
-      });
-
-    // Downstream Online Orders
-    const onlineOrders = customerOrders
-      .filter((o: Order) =>
-        o.items.some(
-          (it: any) =>
-            it.batchId === matchedBatch.batchId ||
-            it.product?.sku === matchedBatch.sku
-        )
-      )
-      .map((o: Order) => {
-        const item = o.items.find(
-          (it: any) =>
-            it.batchId === matchedBatch.batchId ||
-            it.product?.sku === matchedBatch.sku
-        );
-        return {
-          orderId: o.id,
-          customerName: o.customerName || 'Verified Online Customer',
-          customerEmail: o.customerEmail || 'customer@grocemart.co.id',
-          customerPhone: o.customerPhone || '+62 812-9988-7711',
-          orderDate: o.createdAt,
-          status: o.status,
-          quantity: item?.quantity || 1,
-          deliveryAddress: o.deliveryAddress ? `${o.deliveryAddress.addressLine}, ${o.deliveryAddress.city}` : 'Senopati Storefront Pickup',
-        };
-      });
-
-    const isQuarantined = Boolean(quarantinedBatchesMap[matchedBatch.batchId]);
-    const quarantineInfo = quarantinedBatchesMap[matchedBatch.batchId];
-
-    const result = {
-      batchId: matchedBatch.batchId,
-      lotNumber: matchedBatch.lotNumber,
-      sku: matchedBatch.sku,
-      productName: matchedBatch.productName,
-      category: 'Fresh Organic Produce',
-      supplierName: matchedBatch.supplierName,
-      receivedDate: matchedBatch.receivedDate,
-      expiryDate: matchedBatch.expiryDate,
-      currentWarehouseStock: matchedBatch.currentStock,
-      quarantinedStock: isQuarantined ? matchedBatch.currentStock : 0,
-      recallStatus: isQuarantined ? 'quarantined' : 'none',
-      quarantineReason: quarantineInfo?.reason,
-      quarantinedAt: quarantineInfo?.quarantinedAt,
-      upstreamOrigin: {
-        poId: poMatch?.id || 'PO-2026-081',
-        supplierId: (poMatch as any)?.supplierId || 'SUP-LEMBANG-01',
-        supplierName: matchedBatch.supplierName,
-        deliveryNoteNumber: `SJ-SUP-${matchedBatch.batchId.slice(-4)}`,
-        intakeTempCelsius: 3.4,
-        intakeQualityStatus: 'Grade A - Certified Cold-Chain',
-        receivedDate: matchedBatch.receivedDate,
-      },
-      warehouseLocations,
-      posSales,
-      onlineOrders,
-      regulatoryNotice: {
-        recallClassification: quarantineInfo?.recallClassification || 'Class I (High Risk / Immediate Hazard)',
-        fdaReportableFoodRegistryId: `FDA-RFR-2026-${matchedBatch.batchId.slice(-4)}`,
-        euRasffReferenceNumber: `RASFF-2026-EU-${matchedBatch.batchId.slice(-4)}`,
-        fsanzAlertId: `FSANZ-REC-2026-${matchedBatch.batchId.slice(-4)}`,
-        hazardDescription:
-          quarantineInfo?.hazardDescription ||
-          'Potential microbial / pathogen contamination precaution or labeling allergen undeclared.',
-        recommendedAction:
-          'Immediately quarantine on-hand inventory. Block register scans. Broadcast emergency notice to downstream consumers.',
-      },
-    };
-
-    res.json(result);
-  });
-
-  app.post('/api/admin/batch-recall/quarantine', (req: Request, res: Response) => {
-    const { batchId, reason, recallClassification = 'Class I (High Risk / Immediate Hazard)', hazardDescription, auditorName = 'Safety Officer' } = req.body;
-    
-    const batch = inventoryBatches.find((b) => b.batchId === batchId);
-    if (!batch) {
-      return res.status(404).json({ error: `Batch ID '${batchId}' not found in registry.` });
-    }
-
-    batch.status = 'critical';
-    quarantinedBatchesMap[batchId] = {
-      reason: reason || 'FDA FSMA / EU RASFF Food Safety Precautionary Hold',
-      quarantinedAt: new Date().toISOString(),
-      quarantinedBy: auditorName,
-      recallClassification,
-      hazardDescription: hazardDescription || 'Microbial / cold-chain excursion safety hold.',
-    };
-
-    // Freeze warehouse tiers
-    storeInventoryTiers.forEach((tier) => {
-      if (tier.sku === batch.sku) {
-        tier.reservedStock = tier.physicalStock;
-        tier.availableStock = 0;
-      }
-    });
-
-    securityAuditTrail.unshift({
-      id: `AUD-REC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp: new Date().toISOString(),
-      actionType: 'STOCK_OPNAME_RECONCILE',
-      resourceId: `LOT-${batch.lotNumber}`,
-      userId: 'USR-SAFETY-01',
-      userName: auditorName,
-      userRole: 'admin',
-      storeId: batch.storeId,
-      shiftId: 'SHF-RECALL-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        action: 'FOOD_SAFETY_LOT_QUARANTINE',
-        batchId: batch.batchId,
-        lotNumber: batch.lotNumber,
-        classification: recallClassification,
-        reason,
-      },
-    });
-
-    res.json({
-      success: true,
-      message: `Batch ${batch.batchId} (Lot #${batch.lotNumber}) quarantined successfully. On-hand units frozen across warehouses. Register POS checkouts locked.`,
-      quarantinedUnits: batch.currentStock,
-    });
-  });
-
-  app.post('/api/admin/batch-recall/notify-customers', (req: Request, res: Response) => {
-    const { batchId, message, channel = 'WhatsApp' } = req.body;
-    const batch = inventoryBatches.find((b) => b.batchId === batchId);
-
-    // Collect affected orders
-    const affectedOrders = customerOrders.filter((o: Order) =>
-      o.items.some((it: any) => it.batchId === batchId || it.product?.sku === batch?.sku)
-    );
-
-    const notifications: typeof customerRecallAlertsLog = [];
-    const timestamp = new Date().toISOString();
-
-    affectedOrders.forEach((o: Order, idx: number) => {
-      const notif = {
-        id: `NOTIF-REC-${Date.now().toString().slice(-4)}-${idx}`,
-        recallId: `REC-${batchId}`,
-        batchId,
-        channel: channel as any,
-        recipientName: o.customerName || 'Customer',
-        recipientContact: o.customerPhone || o.customerEmail || '+62 812-9988-7711',
-        orderId: o.id,
-        message: message || `URGENT FOOD SAFETY ADVISORY: Order #${o.id} contains lot #${batch?.lotNumber || batchId}. Please do not consume. Return for 100% immediate refund.`,
-        timestamp,
-        status: 'DELIVERED' as const,
-      };
-      customerRecallAlertsLog.unshift(notif);
-      notifications.push(notif);
-    });
-
-    res.json({
-      success: true,
-      message: `Emergency safety alert successfully dispatched to ${notifications.length} customers via ${channel}.`,
-      notifications,
-    });
-  });
-
-  app.post('/api/admin/batch-recall/release', (req: Request, res: Response) => {
-    const { batchId } = req.body;
-    const batch = inventoryBatches.find((b) => b.batchId === batchId);
-    if (!batch) return res.status(404).json({ error: 'Batch not found' });
-
-    delete quarantinedBatchesMap[batchId];
-    batch.status = batch.daysUntilExpiry > 5 ? 'fresh' : 'near_expiry';
-
-    // Restore available stock
-    storeInventoryTiers.forEach((tier) => {
-      if (tier.sku === batch.sku) {
-        tier.reservedStock = 0;
-        tier.availableStock = tier.physicalStock;
-      }
-    });
-
-    res.json({
-      success: true,
-      message: `Batch ${batchId} released from quarantine. Stock restored to active shelves.`,
-    });
-  });
-
   // Multi-Currency Financial Statement API (Converts GL / P&L based on target currency)
   app.get('/api/admin/accounting/pnl-multicurrency', (req: Request, res: Response) => {
     const { storeId, currency = 'IDR' } = req.query;
@@ -4671,21 +3110,18 @@ async function startServer() {
       if (s) storeName = s.storeName;
     }
 
-    let dynamicSales = 0;
-    let dynamicCogs = 0;
+    let grossSalesRevenue = 0;
+    let costOfGoodsSold = 0;
 
     relevantEntries.forEach((entry) => {
-      if (!entry.isReversed) {
-        if (entry.accountCode === '4010') dynamicSales += entry.credit - entry.debit;
-        if (entry.accountCode === '5010') dynamicCogs += entry.debit - entry.credit;
-      }
+      if (entry.accountCode === '4010') grossSalesRevenue += entry.credit;
+      if (entry.accountCode === '5010') costOfGoodsSold += entry.debit;
     });
 
-    const isSingleStore = Boolean(storeId && storeId !== 'CONSOLIDATED');
-    const baseSales = isSingleStore ? 45000000 : 388500000;
-    const baseCogs = Math.round(baseSales * 0.62);
-    const grossSalesRevenue = baseSales + Math.max(0, dynamicSales);
-    const costOfGoodsSold = baseCogs + Math.max(0, dynamicCogs);
+    if (grossSalesRevenue === 0) {
+      grossSalesRevenue = storeId && storeId !== 'CONSOLIDATED' ? 45000000 : 388500000;
+      costOfGoodsSold = Math.round(grossSalesRevenue * 0.62);
+    }
 
     const discountsGiven = Math.round(grossSalesRevenue * 0.04);
     const netSalesRevenue = grossSalesRevenue - discountsGiven;
@@ -4735,2228 +3171,336 @@ async function startServer() {
 
   // =============================================================
   // MODULE 5: POS (POINT OF SALE) & CASHIER STATION ENGINE
-  // RBAC Guard + Store Inventory Deduction + FEFO Batch + GL Sync
+  // Real-time stock deduction, FEFO batch reduction, General Ledger,
+  // multi-currency tender, and audit logging.
   // =============================================================
   app.get('/api/pos/products', (req: Request, res: Response) => {
-    const rawStoreId = req.query.storeId ? String(req.query.storeId) : 'store-jkt-senopati';
-    const targetStoreId =
-      rawStoreId === 'CONSOLIDATED' || rawStoreId === 'ALL' ? 'store-jkt-senopati' : rawStoreId;
+    const { storeId = 'store-jkt-senopati', search = '', category = 'ALL' } = req.query;
+    const cleanSearch = String(search).toLowerCase().trim();
+    const cleanCategory = String(category).toLowerCase().trim();
 
-    const posProducts: POSProductItem[] = inventoryList.map((inv, idx) => {
-      const catalogMatch = PRODUCTS.find(
-        (p) => p.id === inv.productId || p.name.toLowerCase() === inv.productName.toLowerCase()
-      );
-      const storeTier = storeInventoryTiers.find(
-        (t) => t.sku === inv.sku && t.storeId === targetStoreId
-      );
+    const posCatalog: POSProductItem[] = PRODUCTS.map((prod) => {
+      // Find SKU in inventoryList
+      const inv = inventoryList.find((i) => i.productId === prod.id || i.productName.toLowerCase() === prod.name.toLowerCase());
+      const sku = inv?.sku || `SKU-${prod.category.slice(0, 3).toUpperCase()}-${prod.id.replace(/\D/g, '').padStart(3, '0')}`;
 
-      // Find earliest expiring active FEFO batch strictly for target outlet
-      const matchingBatches = inventoryBatches
-        .filter((b) => b.sku === inv.sku && b.currentStock > 0 && b.storeId === targetStoreId)
+      // Find store stock tier
+      const tier = storeInventoryTiers.find(
+        (t) => t.sku === sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
+      );
+      const currentStock = tier ? tier.physicalStock : (inv ? inv.currentStock : 24);
+      const availableStock = tier ? tier.availableStock : Math.max(0, currentStock - 2);
+
+      // Find nearest FEFO batch for this SKU
+      const batchesForSku = inventoryBatches
+        .filter((b) => b.sku === sku && (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati'))
         .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
 
-      const nearestBatch = matchingBatches[0];
-      const isWeighted =
-        inv.category === 'produce' ||
-        inv.category === 'meat_seafood' ||
-        Boolean(inv.weightGrams && inv.weightGrams >= 250);
-
-      const grams = inv.weightGrams || 500;
-      const pricePerKg = Math.round((inv.sellingPrice / grams) * 1000);
-      const barcode = `899276100${(idx + 101).toString().padStart(3, '0')}${((idx * 7) % 10)}`;
+      const nearestBatch = batchesForSku[0];
 
       return {
-        sku: inv.sku,
-        productId: inv.productId,
-        name: inv.productName,
-        category: String(inv.category),
-        sellingPrice: storeTier ? storeTier.sellingPrice : inv.sellingPrice,
-        unitCost: storeTier ? storeTier.unitCost : inv.unitCost,
-        unit: inv.unit,
-        barcode,
-        image: catalogMatch?.image || '/images/category_fresh_produce_1791623385871.jpg',
-        currentStock: storeTier ? storeTier.physicalStock : 0,
-        availableStock: storeTier ? storeTier.availableStock : 0,
-        isWeighted,
-        pricePerKg,
-        nearestBatchId: nearestBatch?.batchId || `BAT-2610-${inv.sku.slice(-3)}`,
-        lotNumber: nearestBatch?.lotNumber || `LOT-${inv.sku.slice(-3)}-A1`,
-        expiryDate: nearestBatch
-          ? nearestBatch.expiryDate.split('T')[0]
-          : new Date(Date.now() + 9 * 86400000).toISOString().split('T')[0],
-        daysUntilExpiry: nearestBatch?.daysUntilExpiry ?? 9,
-        batchStatus:
-          nearestBatch?.status === 'critical' || nearestBatch?.status === 'expired'
+        sku,
+        productId: prod.id,
+        name: prod.name,
+        category: prod.category,
+        sellingPrice: prod.price,
+        unitCost: inv?.unitCost || Math.round(prod.price * 0.62),
+        unit: prod.unit,
+        barcode: sku, // SKU is barcode identifier
+        image: prod.image,
+        currentStock,
+        availableStock,
+        isWeighted: Boolean(prod.isWeightBased || prod.category === 'produce' || prod.category === 'meat_seafood'),
+        pricePerKg: prod.pricePerKg || (prod.unit.includes('kg') ? prod.price : prod.price * 4),
+        nearestBatchId: nearestBatch?.batchId,
+        lotNumber: nearestBatch?.lotNumber,
+        expiryDate: nearestBatch?.expiryDate,
+        daysUntilExpiry: nearestBatch?.daysUntilExpiry,
+        batchStatus: nearestBatch
+          ? nearestBatch.daysUntilExpiry <= 2
             ? 'critical'
-            : nearestBatch?.status === 'near_expiry'
+            : nearestBatch.daysUntilExpiry <= 5
             ? 'near_expiry'
-            : 'fresh',
+            : 'fresh'
+          : 'fresh',
       };
     });
 
-    res.json(posProducts);
-  });
-
-  app.get('/api/pos/history', (req: Request, res: Response) => {
-    const { storeId } = req.query;
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      return res.json(posReceiptsHistory.filter((r) => r.storeId === storeId));
+    let filtered = posCatalog;
+    if (cleanCategory !== 'all') {
+      filtered = filtered.filter((p) => p.category.toLowerCase() === cleanCategory);
     }
-    res.json(posReceiptsHistory);
+    if (cleanSearch) {
+      filtered = filtered.filter(
+        (p) =>
+          p.name.toLowerCase().includes(cleanSearch) ||
+          p.sku.toLowerCase().includes(cleanSearch) ||
+          p.barcode.toLowerCase().includes(cleanSearch) ||
+          p.category.toLowerCase().includes(cleanSearch)
+      );
+    }
+
+    res.json(filtered);
   });
 
-  app.post('/api/pos/checkout', async (req: Request, res: Response) => {
-    const body = req.body as POSTransactionRequest;
+  app.post('/api/pos/checkout', (req: Request, res: Response) => {
     const {
-      storeId: rawStoreId = 'store-jkt-senopati',
-      storeName: rawStoreName,
-      cashierId,
-      cashierName,
-      shiftId,
+      storeId = 'store-jkt-senopati',
+      storeName = 'GroceMart Senopati Flagship',
+      cashierId = currentActiveStaffSession.userId,
+      cashierName = currentActiveStaffSession.userName,
+      shiftId = currentActiveStaffSession.activeShiftId,
       items = [],
       subtotal = 0,
       discount = 0,
       tax = 0,
       total = 0,
       currency = 'IDR',
+      currencyTotal = total,
+      currencyRateToIDR = 1,
       paymentMethod = 'cash',
       cashTendered,
       cashChange,
-      customerName = 'Walk-In Customer',
-    } = body;
+      customerName = 'Walk-in Retail Shopper',
+      customerPhone,
+      customerMemberId,
+      notes,
+    } = req.body as POSTransactionRequest;
 
-    const storeId =
-      rawStoreId === 'CONSOLIDATED' || rawStoreId === 'ALL' ? 'store-jkt-senopati' : rawStoreId;
-    const outletSchedule = storeSchedules.find((s) => s.storeId === storeId);
-    const storeName = rawStoreName || outletSchedule?.storeName || 'GroceMart Senopati Flagship';
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'Cannot process POS checkout with an empty cart.' });
+    }
 
-    // 1. RBAC Guard: Verify cashier/operator has POS permission
-    const operatorProfile =
-      AVAILABLE_STAFF_USERS.find((u) => u.userId === cashierId) || currentActiveStaffSession;
+    // Role-Based Access Control Verification
+    const isAuthorized =
+      currentActiveStaffSession.permissions.canViewPos ||
+      currentActiveStaffSession.userRole === 'cashier' ||
+      currentActiveStaffSession.userRole === 'store_manager' ||
+      currentActiveStaffSession.userRole === 'executive' ||
+      currentActiveStaffSession.userRole === 'admin';
 
-    if (!operatorProfile.permissions.canViewPos) {
-      securityAuditTrail.unshift({
-        id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-        timestamp: new Date().toISOString(),
-        actionType: 'USER_AUTHENTICATION',
-        resourceId: `POS-TERMINAL-${storeId}`,
-        userId: operatorProfile.userId,
-        userName: operatorProfile.userName,
-        userRole: operatorProfile.userRole,
-        storeId,
-        shiftId: operatorProfile.activeShiftId,
-        status: 'PERMISSION_DENIED',
-        metadata: {
-          attemptedAction: 'POS_CHECKOUT',
-          reason: `Role '${operatorProfile.userRole}' is not authorized to operate POS Cashier Register.`,
-        },
-      });
+    if (!isAuthorized) {
       return res.status(403).json({
-        success: false,
-        error: `RBAC Access Denied: Operator '${operatorProfile.userName}' (${operatorProfile.userRole}) does not have POS Cashier privileges.`,
+        error: `Permission Denied: User ${currentActiveStaffSession.userName} (${currentActiveStaffSession.userRole}) is not authorized for Frontline POS register checkouts.`,
       });
-    }
-
-    // 2. Store Operational Guard (Strict Store Closed Validation)
-    if (!storeStatus.isOpen) {
-      return res.status(403).json({
-        success: false,
-        error: `Company-Wide Storefront Network is CLOSED: Online ordering and in-store POS checkouts are temporarily paused. (${storeStatus.noticeBanner || 'Operating hours paused'})`,
-        notice: storeStatus.noticeBanner,
-      });
-    }
-
-    if (outletSchedule?.isEmergencyClosed) {
-      return res.status(403).json({
-        success: false,
-        error: `Outlet '${storeName}' is currently under Emergency Closure (${outletSchedule.closureReason || 'Maintenance'}). POS cashier checkout is blocked.`,
-      });
-    }
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'POS Cart is empty. Scan or select at least one grocery item.',
-      });
-    }
-
-    const lockKeys = items.map((it) => `lock_sku_${it.sku}`);
-
-    try {
-      const receipt = await inventoryConcurrencyManager.runWithLock(lockKeys, async () => {
-        // 3. Anti-Overselling Stock Verification (Strictly Per-Store Outlet)
-        for (const line of items) {
-          const invItem = inventoryList.find((i) => i.sku === line.sku);
-          const storeTier = storeInventoryTiers.find(
-            (t) => t.sku === line.sku && t.storeId === storeId
-          );
-          const deductUnits = line.isWeighted ? Math.max(0.1, Number(line.quantity.toFixed(2))) : line.quantity;
-          const avail = storeTier ? storeTier.availableStock : 0;
-
-          if (!storeTier || avail < deductUnits) {
-            const err = new Error(
-              `Insufficient stock at ${storeName} for "${line.name}" (${line.sku}). Available: ${avail}, Requested: ${deductUnits}. Multi-warehouse stock isolation strictly enforced.`
-            );
-            (err as any).statusCode = 409;
-            throw err;
-          }
-        }
-
-        // 4. Real-Time Inventory & Vivo/FEFO Batch Deduction + Exact COGS Calculation
-        let totalCogsCost = 0;
-        let inventoryDeductedCount = 0;
-        const inventoryDeductedLog: { sku: string; quantity: number; cogsCost: number }[] = [];
-
-        for (const line of items) {
-          const invItem = inventoryList.find((i) => i.sku === line.sku);
-          const storeTier = storeInventoryTiers.find(
-            (t) => t.sku === line.sku && t.storeId === storeId
-          );
-          const deductQty = line.isWeighted
-            ? Math.max(0.1, Number(line.quantity.toFixed(2)))
-            : Math.max(1, Math.round(line.quantity));
-
-          inventoryDeductedCount += Math.ceil(deductQty);
-
-          // Deduct from FEFO batches (strictly from active store outlet batches only)
-          let remainingToDeductFromBatch = deductQty;
-          let lineCogs = 0;
-
-          const activeBatches = inventoryBatches
-            .filter(
-              (b) =>
-                b.sku === line.sku &&
-                b.currentStock > 0 &&
-                b.storeId === storeId
-            )
-            .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
-
-          for (const batch of activeBatches) {
-            if (remainingToDeductFromBatch <= 0) break;
-            const taken = Math.min(batch.currentStock, remainingToDeductFromBatch);
-            batch.currentStock = Number(Math.max(0, batch.currentStock - taken).toFixed(2));
-            remainingToDeductFromBatch = Number((remainingToDeductFromBatch - taken).toFixed(2));
-            lineCogs += Math.round(taken * batch.unitCost);
-            if (!line.batchId) {
-              line.batchId = batch.batchId;
-              line.lotNumber = batch.lotNumber;
-              line.expiryDate = batch.expiryDate.split('T')[0];
-            }
-          }
-
-          if (remainingToDeductFromBatch > 0) {
-            const fallbackUnitCost = storeTier?.unitCost || invItem?.unitCost || line.unitCost || Math.round(line.unitPrice * 0.62);
-            lineCogs += Math.round(remainingToDeductFromBatch * fallbackUnitCost);
-          }
-
-          totalCogsCost += lineCogs;
-
-          // Deduct strictly from store-specific warehouse tier
-          if (storeTier) {
-            storeTier.physicalStock = Number(Math.max(0, storeTier.physicalStock - deductQty).toFixed(2));
-            storeTier.availableStock = Number(
-              Math.max(0, storeTier.physicalStock - storeTier.reservedStock).toFixed(2)
-            );
-            storeTier.updatedAt = new Date().toISOString();
-          }
-
-          // Strictly recalculate global inventory stock as the sum of all location tiers (prevent overlap bleed)
-          if (invItem) {
-            const totalAcrossOutlets = storeInventoryTiers
-              .filter((t) => t.sku === invItem.sku)
-              .reduce((sum, t) => sum + t.physicalStock, 0);
-            invItem.currentStock = Number(totalAcrossOutlets.toFixed(2));
-            invItem.outgoingStock = Number((invItem.outgoingStock + deductQty).toFixed(2));
-
-            if (invItem.currentStock <= invItem.minimumThreshold) {
-              const existingPendingPR = purchaseRequests.find(
-                (pr) => pr.sku === invItem.sku && pr.status === 'pending'
-              );
-              if (!existingPendingPR) {
-                purchaseRequests.unshift({
-                  id: `PR-2026-${(purchaseRequests.length + 1).toString().padStart(3, '0')}`,
-                  createdAt: new Date().toISOString(),
-                  requestedBy: `POS Auto-Replenishment (${storeName})`,
-                  sku: invItem.sku,
-                  productId: invItem.productId,
-                  productName: invItem.productName,
-                  storeId,
-                  storeName,
-                  suggestedQuantity: invItem.reorderQuantity || 50,
-                  estimatedUnitCost: invItem.unitCost,
-                  totalEstimatedCost: (invItem.reorderQuantity || 50) * invItem.unitCost,
-                  status: 'pending',
-                  reason: 'low_stock_auto_trigger',
-                  priority: 'high',
-                });
-              }
-            }
-          }
-
-          inventoryDeductedLog.push({
-            sku: line.sku,
-            quantity: deductQty,
-            cogsCost: lineCogs,
-          });
-        }
-
-        // 5. Multi-Currency Conversion Verification
-        const targetCurrency: SupportedCurrency = CURRENCY_RATES[currency] ? currency : 'IDR';
-        const rateInfo = CURRENCY_RATES[targetCurrency];
-        const finalIdrTotal = Math.round(total || subtotal - discount + tax);
-        const currencyTotal =
-          targetCurrency === 'IDR'
-            ? finalIdrTotal
-            : Number((finalIdrTotal / rateInfo.rateToIDR).toFixed(rateInfo.decimalPlaces));
-
-        // 6. Automatic Double-Entry General Ledger & Dynamic COA Sync
-        const timestamp = new Date().toISOString();
-        const seqNum = (posReceiptsHistory.length + 802).toString().padStart(4, '0');
-        const receiptNumber = `RCP-POS-2026-${seqNum}`;
-        const transactionId = `TX-POS-2026-${seqNum}`;
-        const orderId = `POS-${storeId.split('-')[1]?.toUpperCase() || 'JKT'}-${seqNum}`;
-
-        const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-        const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
-        const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
-        const gleId4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
-
-        // Determine Asset Debit Account based on POS payment method & COA mapping
-        const assetAccountCode =
-          paymentMethod === 'cash'
-            ? coaMappingConfig.cashClearingAccountCode
-            : paymentMethod === 'qris'
-            ? coaMappingConfig.qrisClearingAccountCode
-            : coaMappingConfig.edcClearingAccountCode;
-        const assetAccountName =
-          paymentMethod === 'cash'
-            ? coaMappingConfig.cashClearingAccountName
-            : paymentMethod === 'qris'
-            ? coaMappingConfig.qrisClearingAccountName
-            : coaMappingConfig.edcClearingAccountName;
-
-        // A. Debit Cash / Bank / QRIS Asset
-        generalLedger.unshift({
-          id: gleId1,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: assetAccountCode,
-          accountName: assetAccountName,
-          category: 'Asset',
-          debit: finalIdrTotal,
-          credit: 0,
-          referenceType: 'QRIS_SALE',
-          referenceId: receiptNumber,
-          description: `[POS ${paymentMethod.toUpperCase()}] Register Receipt #${receiptNumber} (${
-            targetCurrency !== 'IDR' ? `${rateInfo.symbol}${currencyTotal} @ Rp ${rateInfo.rateToIDR}` : `Rp ${finalIdrTotal.toLocaleString('id-ID')}`
-          }) - Cashier: ${cashierName || operatorProfile.userName}`,
-        });
-
-        // B. Credit Grocery Sales Revenue (dynamic COA mapping)
-        generalLedger.unshift({
-          id: gleId2,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: coaMappingConfig.posRevenueAccountCode,
-          accountName: coaMappingConfig.posRevenueAccountName,
-          category: 'Revenue',
-          debit: 0,
-          credit: finalIdrTotal,
-          referenceType: 'QRIS_SALE',
-          referenceId: receiptNumber,
-          description: `[POS Revenue] In-store checkout #${receiptNumber} at ${storeName} (${items.length} line items)`,
-        });
-
-        // C. Debit Cost of Goods Sold / HPP (dynamic COA mapping)
-        generalLedger.unshift({
-          id: gleId3,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: coaMappingConfig.cogsAccountCode,
-          accountName: coaMappingConfig.cogsAccountName,
-          category: 'Expense',
-          debit: totalCogsCost,
-          credit: 0,
-          referenceType: 'QRIS_SALE',
-          referenceId: receiptNumber,
-          description: `[POS COGS/HPP] FEFO batch cost recognized for Receipt #${receiptNumber}`,
-        });
-
-        // D. Credit Merchandise Inventory Asset (dynamic COA mapping)
-        generalLedger.unshift({
-          id: gleId4,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: coaMappingConfig.inventoryAssetAccountCode,
-          accountName: coaMappingConfig.inventoryAssetAccountName,
-          category: 'Asset',
-          debit: 0,
-          credit: totalCogsCost,
-          referenceType: 'QRIS_SALE',
-          referenceId: receiptNumber,
-          description: `[POS Stock Deduction] Warehouse inventory relieved for Receipt #${receiptNumber}`,
-        });
-
-        // Update Chart of Accounts (COA) live balances
-        chartOfAccounts.forEach((coa) => {
-          if (coa.accountCode === assetAccountCode) coa.balance += finalIdrTotal;
-          if (coa.accountCode === coaMappingConfig.posRevenueAccountCode) coa.balance += finalIdrTotal;
-          if (coa.accountCode === coaMappingConfig.cogsAccountCode) coa.balance += totalCogsCost;
-          if (coa.accountCode === coaMappingConfig.inventoryAssetAccountCode) coa.balance = Math.max(0, coa.balance - totalCogsCost);
-        });
-
-        const qrisRef =
-          paymentMethod === 'qris'
-            ? `QRIS-POS-${Date.now().toString().slice(-6)}`
-            : undefined;
-
-        // Record in Transaction Audit Trail
-        auditTrail.unshift({
-          id: `AUD-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`,
-          qrisReference: qrisRef || `POS-${paymentMethod.toUpperCase()}-${seqNum}`,
-          orderId: receiptNumber,
-          customerName: customerName || 'Walk-In Customer',
-          customerEmail: 'pos-walkin@grocemart.co.id',
-          amount: finalIdrTotal,
-          paymentTimestamp: timestamp,
-          settlementChannel: paymentMethod === 'qris' ? 'BCA QRIS' : ('BCA QRIS' as any),
-          journalEntryIds: [gleId1, gleId2, gleId3, gleId4],
-          inventoryDeducted: inventoryDeductedLog,
-          status: 'SETTLED',
-        });
-
-        // Record in Security & Operational Audit Trail
-        securityAuditTrail.unshift({
-          id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-          timestamp,
-          actionType: 'USER_AUTHENTICATION',
-          resourceId: receiptNumber,
-          userId: cashierId || operatorProfile.userId,
-          userName: cashierName || operatorProfile.userName,
-          userRole: operatorProfile.userRole,
-          storeId,
-          shiftId: shiftId || operatorProfile.activeShiftId,
-          status: 'AUTHORIZED_EXECUTED',
-          metadata: {
-            module: 'POS_CASHIER_CHECKOUT',
-            paymentMethod,
-            currency: targetCurrency,
-            currencyTotal,
-            totalIDR: finalIdrTotal,
-            totalCogsCost,
-            journalEntries: [gleId1, gleId2, gleId3, gleId4],
-          },
-        });
-
-        const newReceipt: POSTransactionReceipt = {
-          receiptNumber,
-          transactionId,
-          orderId,
-          timestamp,
-          storeId,
-          storeName,
-          cashierId: cashierId || operatorProfile.userId,
-          cashierName: cashierName || operatorProfile.userName,
-          shiftId: shiftId || operatorProfile.activeShiftId,
-          items,
-          subtotal: Math.round(subtotal),
-          discount: Math.round(discount),
-          tax: Math.round(tax),
-          total: finalIdrTotal,
-          currency: targetCurrency,
-          currencyTotal,
-          currencyRateToIDR: rateInfo.rateToIDR,
-          paymentMethod,
-          cashTendered,
-          cashChange,
-          qrisRef,
-          cardLast4:
-            paymentMethod === 'debit_card' || paymentMethod === 'credit_card'
-              ? '4829'
-              : undefined,
-          journalEntryIds: [gleId1, gleId2, gleId3, gleId4],
-          inventoryDeductedCount,
-          totalCogsCost,
-        };
-
-        posReceiptsHistory.unshift(newReceipt);
-        return newReceipt;
-      });
-
-      res.json({
-        success: true,
-        receipt,
-        message: `POS Receipt #${receipt.receiptNumber} settled! Stock deducted from ${storeName} & 4 GL entries posted.`,
-      });
-    } catch (err: any) {
-      if (err.statusCode === 409) {
-        return res.status(409).json({
-          success: false,
-          error: err.message,
-        });
-      }
-      res.status(500).json({
-        success: false,
-        error: err.message || 'POS Checkout failed',
-      });
-    }
-  });
-
-  // =============================================================
-  // MODULE 6: SETTINGS, COA MAPPING, POS CONFIG & STOCK OPNAME
-  // =============================================================
-  // 1. Chart of Accounts (COA) Mapping
-  app.get('/api/admin/settings/coa-mapping', (_req: Request, res: Response) => {
-    res.json(coaMappingConfig);
-  });
-
-  app.put('/api/admin/settings/coa-mapping', (req: Request, res: Response) => {
-    const update = req.body as Partial<CoaMappingConfig>;
-    coaMappingConfig = {
-      ...coaMappingConfig,
-      ...update,
-      updatedAt: new Date().toISOString(),
-      updatedBy: currentActiveStaffSession?.userName || 'Siti Rahmawati (Chief Accountant)',
-    };
-
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp: new Date().toISOString(),
-      actionType: 'COA_MAPPING_UPDATE',
-      resourceId: 'COA-CONFIG-PRIMARY',
-      userId: currentActiveStaffSession?.userId || 'USR-ACC-01',
-      userName: currentActiveStaffSession?.userName || 'Siti Rahmawati',
-      userRole: currentActiveStaffSession?.userRole || 'admin',
-      storeId: 'CONSOLIDATED',
-      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        posRevenueAccount: coaMappingConfig.posRevenueAccountCode,
-        inventoryAssetAccount: coaMappingConfig.inventoryAssetAccountCode,
-        shrinkageAccount: coaMappingConfig.shrinkageExpenseAccountCode,
-        cogsAccount: coaMappingConfig.cogsAccountCode,
-      },
-    });
-
-    res.json({
-      success: true,
-      config: coaMappingConfig,
-      message: 'Chart of Accounts (COA) Mapping updated and synchronized with POS & General Ledger.',
-    });
-  });
-
-  // 2. POS & Checkout Configuration
-  app.get('/api/admin/settings/pos-config', (_req: Request, res: Response) => {
-    res.json(posCheckoutConfig);
-  });
-
-  app.put('/api/admin/settings/pos-config', (req: Request, res: Response) => {
-    const update = req.body as Partial<PosCheckoutConfig>;
-    posCheckoutConfig = {
-      ...posCheckoutConfig,
-      ...update,
-      updatedAt: new Date().toISOString(),
-      updatedBy: currentActiveStaffSession?.userName || 'Budi Santoso (Operations VP)',
-    };
-
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp: new Date().toISOString(),
-      actionType: 'POS_CONFIG_UPDATE',
-      resourceId: 'POS-CONFIG-GLOBAL',
-      userId: currentActiveStaffSession?.userId || 'USR-ADM-01',
-      userName: currentActiveStaffSession?.userName || 'Budi Santoso',
-      userRole: currentActiveStaffSession?.userRole || 'admin',
-      storeId: 'CONSOLIDATED',
-      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        roundingRule: posCheckoutConfig.roundingRule,
-        ppnTaxPercent: posCheckoutConfig.ppnTaxPercent,
-        maxCashierDiscountPercent: posCheckoutConfig.maxCashierDiscountPercent,
-        enableVivoNearExpiryDiscount: posCheckoutConfig.enableVivoNearExpiryDiscount,
-      },
-    });
-
-    res.json({
-      success: true,
-      config: posCheckoutConfig,
-      message: 'POS & Checkout rules updated and deployed to all frontline registers.',
-    });
-  });
-
-  // 3. Bulk Inventory Import (CSV / Excel format)
-  app.post('/api/admin/inventory/bulk-import', (req: Request, res: Response) => {
-    const { rows = [] } = req.body as { rows: BulkInventoryImportRow[] };
-
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ success: false, error: 'Import payload must contain at least 1 valid row.' });
-    }
-
-    let importedCount = 0;
-    let tiersUpdatedCount = 0;
-
-    for (const row of rows) {
-      if (!row.sku || !row.productName || !row.storeId) continue;
-
-      const targetStore = storeSchedules.find((s) => s.storeId === row.storeId);
-      const storeName = row.storeName || targetStore?.storeName || 'GroceMart Senopati Flagship';
-      const whZone = row.warehouseZoneId || targetStore?.activeWarehouses[0] || 'WH-JKT-SEN-AMB';
-
-      // Find or create store inventory tier
-      let existingTier = storeInventoryTiers.find(
-        (t) => t.sku === row.sku && t.storeId === row.storeId
-      );
-
-      const qty = Math.max(0, Number(row.physicalStock) || 0);
-      const cost = Math.max(100, Number(row.unitCost) || 10000);
-      const price = Math.max(cost, Number(row.sellingPrice) || Math.round(cost * 1.4));
-      const minThresh = Math.max(1, Number(row.minimumThreshold) || 10);
-
-      if (existingTier) {
-        existingTier.physicalStock = qty;
-        existingTier.availableStock = Math.max(0, qty - existingTier.reservedStock);
-        existingTier.unitCost = cost;
-        existingTier.sellingPrice = price;
-        existingTier.minimumThreshold = minThresh;
-        existingTier.storageType = row.storageType || existingTier.storageType;
-        existingTier.updatedAt = new Date().toISOString();
-        tiersUpdatedCount++;
-      } else {
-        const newTier: StoreInventoryStock = {
-          id: `STK-${row.storeId.slice(-3).toUpperCase()}-${(storeInventoryTiers.length + 1).toString().padStart(3, '0')}`,
-          sku: row.sku,
-          productId: `prod-${row.sku.slice(-3).toLowerCase()}`,
-          productName: row.productName,
-          category: row.category || 'produce',
-          storeId: row.storeId,
-          storeName,
-          warehouseZoneId: whZone,
-          storageType: row.storageType || 'ambient',
-          physicalStock: qty,
-          availableStock: qty,
-          reservedStock: 0,
-          incomingStock: 0,
-          minimumThreshold: minThresh,
-          safetyStockBuffer: Math.round(minThresh * 0.5),
-          maxCapacity: Math.round(qty * 3) || 150,
-          reorderQuantity: Math.round(minThresh * 2) || 50,
-          unitCost: cost,
-          sellingPrice: price,
-          unit: row.unit || 'piece',
-          supplierId: 'SUP-COOP-01',
-          supplierName: row.supplierName || 'Verified Farm Cooperative',
-          lastRestockedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        storeInventoryTiers.push(newTier);
-        tiersUpdatedCount++;
-      }
-
-      // Sync master catalog inventoryList without location bleeding
-      let masterItem = inventoryList.find((i) => i.sku === row.sku);
-      if (masterItem) {
-        masterItem.unitCost = cost;
-        masterItem.sellingPrice = price;
-        masterItem.minimumThreshold = minThresh;
-        const totalStock = storeInventoryTiers
-          .filter((t) => t.sku === row.sku)
-          .reduce((sum, t) => sum + t.physicalStock, 0);
-        masterItem.currentStock = totalStock;
-      } else {
-        inventoryList.push({
-          sku: row.sku,
-          productId: `prod-${row.sku.slice(-3).toLowerCase()}`,
-          productName: row.productName,
-          category: row.category as any || 'produce',
-          currentStock: qty,
-          incomingStock: 0,
-          outgoingStock: 0,
-          minimumThreshold: minThresh,
-          reorderQuantity: Math.round(minThresh * 2) || 50,
-          unitCost: cost,
-          sellingPrice: price,
-          unit: row.unit || 'unit',
-          supplierId: 'SUP-BULK-01',
-          supplierName: row.supplierName || 'Direct Farm Partner',
-          valuationMethod: 'FIFO',
-          lastRestockedAt: new Date().toISOString(),
-        });
-      }
-
-      importedCount++;
-    }
-
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp: new Date().toISOString(),
-      actionType: 'INVENTORY_IMPORT_BULK',
-      resourceId: `BULK-IMPORT-${Date.now()}`,
-      userId: currentActiveStaffSession?.userId || 'USR-ADM-01',
-      userName: currentActiveStaffSession?.userName || 'Warehouse Lead',
-      userRole: currentActiveStaffSession?.userRole || 'admin',
-      storeId: rows[0]?.storeId || 'CONSOLIDATED',
-      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        totalRowsReceived: rows.length,
-        importedCount,
-        tiersUpdatedCount,
-      },
-    });
-
-    res.json({
-      success: true,
-      importedCount,
-      tiersUpdatedCount,
-      message: `Bulk import completed! Successfully updated ${importedCount} SKUs across ${tiersUpdatedCount} warehouse tiers.`,
-    });
-  });
-
-  // 4. Stock Opname (Physical Stocktake & Automatic Variance Adjustments)
-  app.get('/api/admin/inventory/stock-opname', (req: Request, res: Response) => {
-    const { storeId } = req.query;
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      return res.json(stockOpnameSessions.filter((s) => s.storeId === storeId));
-    }
-    res.json(stockOpnameSessions);
-  });
-
-  app.post('/api/admin/inventory/stock-opname/reconcile', (req: Request, res: Response) => {
-    const body = req.body as Partial<StockOpnameSession>;
-    const {
-      storeId = 'store-jkt-senopati',
-      storeName: rawStoreName,
-      warehouseZoneId = 'WH-JKT-SEN-COLD',
-      auditorId = currentActiveStaffSession?.userId || 'USR-AUD-01',
-      auditorName = currentActiveStaffSession?.userName || 'Stocktake Auditor Lead',
-      items = [],
-      notes = 'Periodic physical stocktake cycle count',
-    } = body;
-
-    const targetStore = storeSchedules.find((s) => s.storeId === storeId);
-    const storeName = rawStoreName || targetStore?.storeName || 'GroceMart Senopati Flagship';
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, error: 'Stock Opname session must include item counts.' });
     }
 
     const timestamp = new Date().toISOString();
-    const opnId = `OPN-2026-${(stockOpnameSessions.length + 1).toString().padStart(3, '0')}`;
-    const generatedGleIds: string[] = [];
+    const shortCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const cleanStoreCode = storeId.replace('store-', '').substring(0, 3).toUpperCase();
+    const receiptNumber = `RCP-${cleanStoreCode}-${Date.now().toString().slice(-6)}`;
+    const transactionId = `TXN-POS-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`;
+    const orderId = `GCM-POS-${Date.now().toString().slice(-6)}`;
 
-    let totalSystemUnits = 0;
-    let totalCountedUnits = 0;
-    let totalVarianceUnits = 0;
-    let netFinancialVarianceIDR = 0;
+    // 1. Real-time Inventory & FEFO Batch Deduction
+    let totalCogsCost = 0;
+    let inventoryDeductedCount = 0;
 
-    const reconciledItems: StockOpnameItem[] = items.map((it) => {
-      const counted = Math.max(0, Number(it.countedStock) || 0);
-      const system = Math.max(0, Number(it.systemStock) || 0);
-      const varianceQty = Number((counted - system).toFixed(2));
-      const unitCost = Number(it.unitCost) || 12000;
-      const financialVarianceIDR = Math.round(varianceQty * unitCost);
+    items.forEach((item) => {
+      const qty = item.quantity;
+      const cogsLine = Math.round((item.unitCost || Math.round(item.unitPrice * 0.62)) * qty);
+      totalCogsCost += cogsLine;
+      inventoryDeductedCount += qty;
 
-      totalSystemUnits += system;
-      totalCountedUnits += counted;
-      totalVarianceUnits += varianceQty;
-      netFinancialVarianceIDR += financialVarianceIDR;
-
-      // Update store tier physicalStock strictly at this store
-      const tier = storeInventoryTiers.find((t) => t.sku === it.sku && t.storeId === storeId);
+      // A. Store Inventory Tiers
+      const tier = storeInventoryTiers.find(
+        (t) => t.sku === item.sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
+      );
       if (tier) {
-        tier.physicalStock = counted;
-        tier.availableStock = Math.max(0, Number((counted - tier.reservedStock).toFixed(2)));
+        tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
+        tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
         tier.updatedAt = timestamp;
       }
 
-      // Recalculate master inventory currentStock without cross-outlet bleeding
-      const invMaster = inventoryList.find((inv) => inv.sku === it.sku);
-      if (invMaster) {
-        const totalLocationStock = storeInventoryTiers
-          .filter((t) => t.sku === it.sku)
-          .reduce((sum, t) => sum + t.physicalStock, 0);
-        invMaster.currentStock = Number(totalLocationStock.toFixed(2));
+      // B. Global Inventory List
+      const inv = inventoryList.find((i) => i.sku === item.sku);
+      if (inv) {
+        inv.currentStock = Math.max(0, Number((inv.currentStock - qty).toFixed(2)));
       }
 
-      // Post double-entry General Ledger adjustment if variance exists
-      if (varianceQty !== 0) {
-        const gleSeq1 = (generalLedger.length + 1).toString().padStart(4, '0');
-        const gleSeq2 = (generalLedger.length + 2).toString().padStart(4, '0');
-        const gleId1 = `GLE-2026-${gleSeq1}`;
-        const gleId2 = `GLE-2026-${gleSeq2}`;
-        generatedGleIds.push(gleId1, gleId2);
+      // C. FEFO Batch Deduction (First Expired, First Out)
+      let remainingToDeduct = qty;
+      const batches = inventoryBatches
+        .filter((b) => b.sku === item.sku && (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati'))
+        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
 
-        const absVarianceCost = Math.abs(financialVarianceIDR);
-
-        if (varianceQty < 0) {
-          // Shortage / Shrinkage: Debit Shrinkage Expense, Credit Inventory Asset
-          generalLedger.unshift({
-            id: gleId1,
-            timestamp,
-            storeId,
-            storeName,
-            accountCode: coaMappingConfig.shrinkageExpenseAccountCode,
-            accountName: coaMappingConfig.shrinkageExpenseAccountName,
-            category: 'Expense',
-            debit: absVarianceCost,
-            credit: 0,
-            referenceType: 'STOCK_RECONCILIATION',
-            referenceId: opnId,
-            description: `[Stock Opname Shortage] ${it.productName} (${it.sku}): ${varianceQty} units count discrepancy at ${storeName}`,
-          });
-
-          generalLedger.unshift({
-            id: gleId2,
-            timestamp,
-            storeId,
-            storeName,
-            accountCode: coaMappingConfig.inventoryAssetAccountCode,
-            accountName: coaMappingConfig.inventoryAssetAccountName,
-            category: 'Asset',
-            debit: 0,
-            credit: absVarianceCost,
-            referenceType: 'STOCK_RECONCILIATION',
-            referenceId: opnId,
-            description: `[Stock Opname Inventory Relief] ${it.productName} (${it.sku}) physical asset reduced to ${counted}`,
-          });
-
-          // Sync COA balance
-          chartOfAccounts.forEach((coa) => {
-            if (coa.accountCode === coaMappingConfig.shrinkageExpenseAccountCode) coa.balance += absVarianceCost;
-            if (coa.accountCode === coaMappingConfig.inventoryAssetAccountCode) coa.balance = Math.max(0, coa.balance - absVarianceCost);
-          });
-        } else {
-          // Surplus: Debit Inventory Asset, Credit Shrinkage / Inventory Variance Offset
-          generalLedger.unshift({
-            id: gleId1,
-            timestamp,
-            storeId,
-            storeName,
-            accountCode: coaMappingConfig.inventoryAssetAccountCode,
-            accountName: coaMappingConfig.inventoryAssetAccountName,
-            category: 'Asset',
-            debit: absVarianceCost,
-            credit: 0,
-            referenceType: 'STOCK_RECONCILIATION',
-            referenceId: opnId,
-            description: `[Stock Opname Surplus] ${it.productName} (${it.sku}): +${varianceQty} units unrecorded stock found at ${storeName}`,
-          });
-
-          generalLedger.unshift({
-            id: gleId2,
-            timestamp,
-            storeId,
-            storeName,
-            accountCode: coaMappingConfig.shrinkageExpenseAccountCode,
-            accountName: coaMappingConfig.shrinkageExpenseAccountName,
-            category: 'Expense',
-            debit: 0,
-            credit: absVarianceCost,
-            referenceType: 'STOCK_RECONCILIATION',
-            referenceId: opnId,
-            description: `[Stock Opname Surplus Gain] Inventory count increase recognized for ${it.sku}`,
-          });
-
-          chartOfAccounts.forEach((coa) => {
-            if (coa.accountCode === coaMappingConfig.inventoryAssetAccountCode) coa.balance += absVarianceCost;
-            if (coa.accountCode === coaMappingConfig.shrinkageExpenseAccountCode) coa.balance = Math.max(0, coa.balance - absVarianceCost);
-          });
+      for (const batch of batches) {
+        if (remainingToDeduct <= 0) break;
+        const take = Math.min(batch.currentStock, remainingToDeduct);
+        batch.currentStock = Math.max(0, Number((batch.currentStock - take).toFixed(2)));
+        if (batch.currentStock === 0) {
+          batch.status = 'depleted';
         }
-      }
-
-      return {
-        sku: it.sku,
-        productName: it.productName,
-        category: it.category || 'produce',
-        storeId,
-        storeName,
-        warehouseZoneId,
-        systemStock: system,
-        countedStock: counted,
-        varianceQty,
-        unitCost,
-        financialVarianceIDR,
-        notes: it.notes || (varianceQty === 0 ? 'Exact match' : varianceQty < 0 ? 'Shortage adjustment' : 'Surplus receipt'),
-        status: varianceQty === 0 ? 'matched' : varianceQty < 0 ? 'shortage' : 'surplus',
-      };
-    });
-
-    const newSession: StockOpnameSession = {
-      id: opnId,
-      date: timestamp.split('T')[0],
-      storeId,
-      storeName,
-      warehouseZoneId,
-      auditorId,
-      auditorName,
-      status: 'completed',
-      items: reconciledItems,
-      totalSystemUnits,
-      totalCountedUnits,
-      totalVarianceUnits,
-      netFinancialVarianceIDR,
-      glEntryIds: generatedGleIds,
-      notes,
-      completedAt: timestamp,
-    };
-
-    stockOpnameSessions.unshift(newSession);
-
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp,
-      actionType: 'STOCK_OPNAME_RECONCILE',
-      resourceId: opnId,
-      userId: auditorId,
-      userName: auditorName,
-      userRole: currentActiveStaffSession?.userRole || 'auditor',
-      storeId,
-      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-AUD-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        totalItemsCounted: items.length,
-        totalVarianceUnits,
-        netFinancialVarianceIDR,
-        glEntriesPosted: generatedGleIds.length,
-      },
-    });
-
-    res.json({
-      success: true,
-      session: newSession,
-      journalEntryIds: generatedGleIds,
-      message: `Stock Opname #${opnId} reconciled! Updated physical counts for ${items.length} items and posted ${generatedGleIds.length} General Ledger adjustment entries.`,
-    });
-  });
-
-  // 5. Inter-Warehouse Stock Transfer (Prevents Global Inventory Bleed)
-  app.get('/api/admin/inventory/transfer', (req: Request, res: Response) => {
-    const { storeId } = req.query;
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      return res.json(
-        stockTransferRecords.filter(
-          (t) => t.sourceStoreId === storeId || t.destinationStoreId === storeId
-        )
-      );
-    }
-    res.json(stockTransferRecords);
-  });
-
-  app.post('/api/admin/inventory/transfer', (req: Request, res: Response) => {
-    const { sku, sourceStoreId, destinationStoreId, quantity, notes } = req.body;
-
-    if (!sku || !sourceStoreId || !destinationStoreId || !quantity || quantity <= 0) {
-      return res.status(400).json({ success: false, error: 'Missing required transfer fields or invalid quantity.' });
-    }
-
-    if (sourceStoreId === destinationStoreId) {
-      return res.status(400).json({ success: false, error: 'Source and destination store must be different.' });
-    }
-
-    const sourceTier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === sourceStoreId);
-    if (!sourceTier || sourceTier.availableStock < quantity) {
-      return res.status(409).json({
-        success: false,
-        error: `Insufficient stock at source store. Available: ${sourceTier?.availableStock || 0}, Requested: ${quantity}.`,
-      });
-    }
-
-    const sourceStore = storeSchedules.find((s) => s.storeId === sourceStoreId);
-    const destStore = storeSchedules.find((s) => s.storeId === destinationStoreId);
-
-    // Deduct from source store tier
-    sourceTier.physicalStock = Number((sourceTier.physicalStock - quantity).toFixed(2));
-    sourceTier.availableStock = Number(
-      Math.max(0, sourceTier.physicalStock - sourceTier.reservedStock).toFixed(2)
-    );
-    sourceTier.updatedAt = new Date().toISOString();
-
-    // Add to destination store tier
-    let destTier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === destinationStoreId);
-    if (destTier) {
-      destTier.physicalStock = Number((destTier.physicalStock + quantity).toFixed(2));
-      destTier.availableStock = Number(
-        (destTier.physicalStock - destTier.reservedStock).toFixed(2)
-      );
-      destTier.updatedAt = new Date().toISOString();
-    } else {
-      destTier = {
-        ...JSON.parse(JSON.stringify(sourceTier)),
-        id: `STK-${destinationStoreId.slice(-3).toUpperCase()}-${(storeInventoryTiers.length + 1).toString().padStart(3, '0')}`,
-        storeId: destinationStoreId,
-        storeName: destStore?.storeName || destinationStoreId,
-        warehouseZoneId: destStore?.activeWarehouses[0] || 'WH-JKT-SEN-AMB',
-        physicalStock: quantity,
-        availableStock: quantity,
-        reservedStock: 0,
-        incomingStock: 0,
-        updatedAt: new Date().toISOString(),
-      };
-      storeInventoryTiers.push(destTier!);
-    }
-
-    // Move batches if tracked
-    const sourceBatches = inventoryBatches.filter(
-      (b) => b.sku === sku && b.storeId === sourceStoreId && b.currentStock > 0
-    );
-    let remainingToTransferBatch = quantity;
-    for (const b of sourceBatches) {
-      if (remainingToTransferBatch <= 0) break;
-      const transferFromThisBatch = Math.min(b.currentStock, remainingToTransferBatch);
-      b.currentStock = Number((b.currentStock - transferFromThisBatch).toFixed(2));
-      remainingToTransferBatch = Number((remainingToTransferBatch - transferFromThisBatch).toFixed(2));
-
-      // Create new batch at destination
-      inventoryBatches.push({
-        ...JSON.parse(JSON.stringify(b)),
-        batchId: `BAT-${destinationStoreId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
-        storeId: destinationStoreId,
-        currentStock: transferFromThisBatch,
-        initialStock: transferFromThisBatch,
-      });
-    }
-
-    const trfId = `TRF-2026-${(stockTransferRecords.length + 1).toString().padStart(3, '0')}`;
-    const transferRecord: StockTransferRecord = {
-      id: trfId,
-      timestamp: new Date().toISOString(),
-      sku,
-      productName: sourceTier.productName,
-      sourceStoreId,
-      sourceStoreName: sourceStore?.storeName || sourceStoreId,
-      destinationStoreId,
-      destinationStoreName: destStore?.storeName || destinationStoreId,
-      quantity,
-      unitCost: sourceTier.unitCost,
-      totalTransferValue: Math.round(quantity * sourceTier.unitCost),
-      transferredBy: currentActiveStaffSession?.userName || 'Logistics Coordinator',
-      status: 'completed',
-      notes: notes || 'Official inter-store stock reallocation',
-    };
-
-    stockTransferRecords.unshift(transferRecord);
-
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp: new Date().toISOString(),
-      actionType: 'STOCK_TRANSFER_INTER_WAREHOUSE',
-      resourceId: trfId,
-      userId: currentActiveStaffSession?.userId || 'USR-LOG-01',
-      userName: currentActiveStaffSession?.userName || 'Logistics Lead',
-      userRole: currentActiveStaffSession?.userRole || 'manager',
-      storeId: sourceStoreId,
-      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        sku,
-        quantity,
-        sourceStoreId,
-        destinationStoreId,
-        totalTransferValue: transferRecord.totalTransferValue,
-      },
-    });
-
-    res.json({
-      success: true,
-      record: transferRecord,
-      message: `Stock Transfer #${trfId} completed! Moved ${quantity} units of ${sourceTier.productName} from ${transferRecord.sourceStoreName} to ${transferRecord.destinationStoreName}.`,
-    });
-  });
-
-  // =============================================================
-  // MODULE 6: APPROVAL WORKFLOW & MULTI-TIER MATRIX ENDPOINTS
-  // =============================================================
-  app.get('/api/admin/approvals/rules', (_req: Request, res: Response) => {
-    res.json(approvalTierRules);
-  });
-
-  app.put('/api/admin/approvals/rules', (req: Request, res: Response) => {
-    const { rules } = req.body as { rules: ApprovalTierRule[] };
-    if (Array.isArray(rules)) {
-      approvalTierRules = rules;
-      securityAuditTrail.unshift({
-        id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-        timestamp: new Date().toISOString(),
-        actionType: 'ZONE_CONFIG_UPDATE',
-        resourceId: 'APPROVAL-MATRIX-GLOBAL',
-        userId: currentActiveStaffSession?.userId || 'USR-ADM-01',
-        userName: currentActiveStaffSession?.userName || 'Operations Lead',
-        userRole: currentActiveStaffSession?.userRole || 'admin',
-        storeId: 'CONSOLIDATED',
-        shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
-        status: 'AUTHORIZED_EXECUTED',
-        metadata: { rulesCount: rules.length },
-      });
-      return res.json({ success: true, rules: approvalTierRules, message: 'Approval workflow matrix updated.' });
-    }
-    res.status(400).json({ success: false, error: 'Invalid rules array payload.' });
-  });
-
-  app.get('/api/admin/approvals/queue', (req: Request, res: Response) => {
-    const { storeId, status } = req.query;
-    let list = [...approvalQueue];
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      list = list.filter((r) => r.storeId === storeId);
-    }
-    if (status && status !== 'ALL') {
-      list = list.filter((r) => r.status === status);
-    }
-    res.json(list);
-  });
-
-  app.post('/api/admin/approvals/action', (req: Request, res: Response) => {
-    const { requestId, action, comments } = req.body as {
-      requestId: string;
-      action: 'APPROVED' | 'REJECTED';
-      comments?: string;
-    };
-
-    const targetReq = approvalQueue.find((r) => r.id === requestId);
-    if (!targetReq) {
-      return res.status(404).json({ success: false, error: 'Approval request not found.' });
-    }
-
-    if (targetReq.status !== 'PENDING') {
-      return res.status(400).json({ success: false, error: `Request already ${targetReq.status.toLowerCase()}.` });
-    }
-
-    const timestamp = new Date().toISOString();
-    const approverName = currentActiveStaffSession?.userName || 'Store General Manager';
-    const approverRole = currentActiveStaffSession?.userRole || 'store_manager';
-
-    const logEntry: ApprovalActionLog = {
-      tierLevel: targetReq.currentTierLevel,
-      tierName: `Tier ${targetReq.currentTierLevel} Approval`,
-      approverId: currentActiveStaffSession?.userId || 'USR-MGR-01',
-      approverName,
-      approverRole,
-      action,
-      timestamp,
-      comments: comments || `${action} by ${approverName} (${approverRole})`,
-    };
-
-    targetReq.history.push(logEntry);
-
-    if (action === 'REJECTED') {
-      targetReq.status = 'REJECTED';
-      // If PR, update PR status
-      if (targetReq.module === 'procurement_pr') {
-        const pr = purchaseRequests.find((p) => p.id === targetReq.documentId);
-        if (pr) pr.status = 'rejected';
-      }
-    } else {
-      // APPROVED
-      if (targetReq.currentTierLevel >= targetReq.requiredTierLevel) {
-        // Final tier reached
-        targetReq.status = 'APPROVED';
-
-        // If PR is fully approved, auto-generate PO
-        if (targetReq.module === 'procurement_pr') {
-          const pr = purchaseRequests.find((p) => p.id === targetReq.documentId);
-          if (pr) {
-            pr.status = 'approved';
-            // Auto generate PO if not already generated
-            const existingPo = purchaseOrders.find((po) => po.prId === pr.id);
-            if (!existingPo) {
-              const poId = `PO-2026-${(purchaseOrders.length + 1).toString().padStart(3, '0')}`;
-              const item = inventoryList.find((i) => i.sku === pr.sku);
-              const unitCost = item?.unitCost || 12000;
-              const subtotal = pr.suggestedQuantity * unitCost;
-              const tax = Math.round(subtotal * 0.11);
-              const newPo: PurchaseOrder = {
-                id: poId,
-                prId: pr.id,
-                storeId: pr.storeId || 'store-jkt-senopati',
-                storeName: pr.storeName || 'Senopati Flagship',
-                supplierName: item?.supplierName || 'Organic Farm Cooperative',
-                supplierContact: '+62 21 555 0192',
-                items: [
-                  {
-                    sku: pr.sku,
-                    productName: pr.productName,
-                    orderedQuantity: pr.suggestedQuantity,
-                    receivedQuantity: 0,
-                    remainingBackorder: pr.suggestedQuantity,
-                    unitCost,
-                    totalCost: subtotal,
-                  },
-                ],
-                subtotalCost: subtotal,
-                taxPercent: 11,
-                taxAmount: tax,
-                totalCost: subtotal + tax,
-                status: 'Sent',
-                paymentTerms: 'Net 30',
-                createdAt: timestamp,
-                expectedDeliveryDate: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
-                notes: `Auto-generated from Approved PR #${pr.id} (Multi-Tier Approval Verified)`,
-              };
-              purchaseOrders.unshift(newPo);
-            }
-          }
-        }
-      } else {
-        // Advance to next tier
-        targetReq.currentTierLevel += 1;
-      }
-    }
-
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp,
-      actionType: 'PURCHASE_ORDER_APPROVAL',
-      resourceId: targetReq.id,
-      userId: currentActiveStaffSession?.userId || 'USR-MGR-01',
-      userName: approverName,
-      userRole: approverRole as UserRole,
-      storeId: targetReq.storeId,
-      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        documentId: targetReq.documentId,
-        action,
-        status: targetReq.status,
-        amountIDR: targetReq.amountIDR,
-      },
-    });
-
-    res.json({
-      success: true,
-      request: targetReq,
-      message: `Approval Request #${targetReq.id} ${action.toLowerCase()}! Current status: ${targetReq.status}.`,
-    });
-  });
-
-  // =============================================================
-  // MODULE 7: LOGISTICS & OPERATIONAL SHIPPING DOCUMENTS
-  // =============================================================
-  app.get('/api/admin/logistics/surat-jalan', (req: Request, res: Response) => {
-    const { storeId } = req.query;
-    let list = [...suratJalanRecords];
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      list = list.filter((sj) => sj.senderStoreId === storeId || sj.recipientStoreId === storeId);
-    }
-    res.json(list);
-  });
-
-  app.post('/api/admin/logistics/surat-jalan', (req: Request, res: Response) => {
-    const data = req.body as Partial<SuratJalanDocument>;
-    const seq = (suratJalanRecords.length + 1).toString().padStart(4, '0');
-    const timestamp = new Date().toISOString();
-
-    const newSj: SuratJalanDocument = {
-      id: `SJ-2026-${seq}`,
-      documentNumber: data.documentNumber || `SJ/GMRT/JKT/2026/${seq}`,
-      issueDate: data.issueDate || timestamp.split('T')[0],
-      deliveryOrderRef: data.deliveryOrderRef,
-      transferRef: data.transferRef,
-      poRef: data.poRef,
-      senderStoreId: data.senderStoreId || 'store-jkt-senopati',
-      senderStoreName: data.senderStoreName || 'GroceMart Senopati Flagship Hub',
-      senderAddress: data.senderAddress || 'Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan',
-      senderPhone: data.senderPhone || '+62 21 5790 1234',
-      recipientName: data.recipientName || 'GroceMart Storefront Branch',
-      recipientAddress: data.recipientAddress || 'Jakarta Metropolitan Area',
-      recipientPhone: data.recipientPhone || '+62 21 5000 1234',
-      recipientStoreId: data.recipientStoreId,
-      carrierName: data.carrierName || 'GroceFleet Logistics',
-      vehiclePlateNumber: data.vehiclePlateNumber || 'B 9102 SXX',
-      vehicleType: data.vehicleType || 'Refrigerated Van 1.5T',
-      driverName: data.driverName || 'Agus Setyawan',
-      driverPhone: data.driverPhone || '+62 812-7788-9900',
-      coldChainTempCelsius: data.coldChainTempCelsius ?? 3.4,
-      specialHandlingInstructions: data.specialHandlingInstructions || 'Keep refrigerated at 2-4°C.',
-      items: data.items || [],
-      totalPackages: data.totalPackages || (data.items?.length || 1),
-      totalWeightKg: data.totalWeightKg || 10,
-      status: data.status || 'dispatched',
-      senderSignatureName: currentActiveStaffSession?.userName || 'Logistics Coordinator',
-      driverSignatureName: data.driverName || 'Agus Setyawan',
-    };
-
-    suratJalanRecords.unshift(newSj);
-
-    res.json({
-      success: true,
-      document: newSj,
-      message: `Surat Jalan ${newSj.documentNumber} issued successfully!`,
-    });
-  });
-
-  app.get('/api/admin/logistics/delivery-orders', (_req: Request, res: Response) => {
-    res.json(deliveryOrderRecords);
-  });
-
-  app.post('/api/admin/logistics/delivery-orders', (req: Request, res: Response) => {
-    const data = req.body as Partial<DeliveryOrderDocument>;
-    const seq = (deliveryOrderRecords.length + 1).toString().padStart(4, '0');
-    const newDo: DeliveryOrderDocument = {
-      id: `DO-2026-${seq}`,
-      doNumber: data.doNumber || `DO/GMRT/2026/${seq}`,
-      issueDate: data.issueDate || new Date().toISOString().split('T')[0],
-      poNumber: data.poNumber,
-      customerOrStoreName: data.customerOrStoreName || 'Commercial Partner',
-      deliveryAddress: data.deliveryAddress || 'Greater Jakarta Hub',
-      deliveryWindow: data.deliveryWindow || 'Morning (08:00 - 12:00)',
-      authorizedOfficer: currentActiveStaffSession?.userName || 'Store Manager',
-      items: data.items || [],
-      subtotalIDR: data.subtotalIDR || 0,
-      taxIDR: data.taxIDR || 0,
-      totalAmountIDR: data.totalAmountIDR || 0,
-      status: data.status || 'in_transit',
-      notes: data.notes,
-    };
-    deliveryOrderRecords.unshift(newDo);
-    res.json({ success: true, document: newDo, message: `Delivery Order ${newDo.doNumber} registered.` });
-  });
-
-  app.get('/api/admin/logistics/shipments', (_req: Request, res: Response) => {
-    res.json(shipmentQuotaTrackers);
-  });
-
-  app.post('/api/admin/logistics/shipments', (req: Request, res: Response) => {
-    const data = req.body as Partial<ShipmentQuotaTracking>;
-    const seq = (shipmentQuotaTrackers.length + 1).toString().padStart(3, '0');
-    const newShipment: ShipmentQuotaTracking = {
-      id: `SHP-2026-${seq}`,
-      tripId: data.tripId || `TRIP-JKT-${seq}`,
-      vehicleType: data.vehicleType || 'Refrigerated Van 1.5T',
-      vehiclePlate: data.vehiclePlate || 'B 9200 KLD',
-      maxPayloadKg: data.maxPayloadKg || 1500,
-      currentPayloadKg: data.currentPayloadKg || 800,
-      quotaUtilizationPercent: Number((((data.currentPayloadKg || 800) / (data.maxPayloadKg || 1500)) * 100).toFixed(1)),
-      storageZone: data.storageZone || 'cold_chilled',
-      currentTempCelsius: data.currentTempCelsius ?? 3.2,
-      targetTempCelsius: data.targetTempCelsius ?? 3.5,
-      departureHub: data.departureHub || 'Senopati Hub',
-      destinationHub: data.destinationHub || 'PIK 2 Hub',
-      departureTime: data.departureTime || new Date().toISOString(),
-      estimatedArrival: data.estimatedArrival || new Date(Date.now() + 3600000 * 2).toISOString(),
-      driverName: data.driverName || 'Hendra Setiawan',
-      driverContact: data.driverContact || '+62 812-9988-7766',
-      assignedOrdersCount: data.assignedOrdersCount || 5,
-      status: data.status || 'in_transit',
-    };
-    shipmentQuotaTrackers.unshift(newShipment);
-    res.json({ success: true, shipment: newShipment, message: `Shipment Trip #${newShipment.tripId} dispatched.` });
-  });
-
-  // =============================================================
-  // MODULE 8: INVENTORY QUALITY CONTROL (QC) INSPECTION ENDPOINTS
-  // =============================================================
-  app.get('/api/admin/qc/inspections', (req: Request, res: Response) => {
-    const { storeId, disposition } = req.query;
-    let list = [...qcInspectionRecords];
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      list = list.filter((q) => q.storeId === storeId);
-    }
-    if (disposition && disposition !== 'ALL') {
-      list = list.filter((q) => q.disposition === disposition);
-    }
-    res.json(list);
-  });
-
-  app.post('/api/admin/qc/inspections', (req: Request, res: Response) => {
-    const data = req.body as Partial<QCInspectionRecord>;
-    const seq = (qcInspectionRecords.length + 1).toString().padStart(3, '0');
-    const timestamp = new Date().toISOString();
-
-    const newQc: QCInspectionRecord = {
-      id: `QC-2026-${seq}`,
-      timestamp,
-      referenceType: data.referenceType || 'INCOMING_PO',
-      referenceId: data.referenceId || 'PO-2026-001',
-      sku: data.sku || 'SKU-PRD-001',
-      productName: data.productName || 'Produce Item',
-      category: data.category || 'produce',
-      batchNumber: data.batchNumber || `BAT-${Date.now().toString().slice(-6)}`,
-      expiryDate: data.expiryDate || new Date(Date.now() + 86400000 * 10).toISOString().split('T')[0],
-      sampleQuantity: data.sampleQuantity || 5,
-      totalBatchQuantity: data.totalBatchQuantity || 50,
-      storeId: data.storeId || 'store-jkt-senopati',
-      storeName: data.storeName || 'GroceMart Senopati Flagship',
-      inspectorId: currentActiveStaffSession?.userId || 'USR-QC-01',
-      inspectorName: currentActiveStaffSession?.userName || 'Ratna Kusuma (QC Inspector)',
-      parameters: data.parameters || {
-        visualFreshness: 'Grade A (Pristine)',
-        temperatureCelsius: 3.5,
-        coldChainCompliant: true,
-        packagingIntegrity: 'Sealed & Intact',
-        sensoryOdorCheck: 'Normal & Fresh',
-        brixSugarContent: 5.0,
-        weightToleranceCompliant: true,
-      },
-      disposition: data.disposition || 'PASSED',
-      actionTaken: data.actionTaken || 'RELEASE_TO_SHELF',
-      notes: data.notes || 'Inspection completed according to food hygiene standard.',
-    };
-
-    qcInspectionRecords.unshift(newQc);
-
-    // If REJECTED and SCRAP_WASTE, auto-log waste record
-    if (newQc.disposition === 'REJECTED' && newQc.actionTaken === 'SCRAP_WASTE') {
-      const invItem = inventoryList.find((i) => i.sku === newQc.sku);
-      const unitCost = invItem?.unitCost || 12000;
-      const wasteLoss = newQc.totalBatchQuantity * unitCost;
-
-      const wasteId = `WST-QC-2026-${(wasteRecords.length + 1).toString().padStart(3, '0')}`;
-      wasteRecords.unshift({
-        id: wasteId,
-        storeId: newQc.storeId,
-        storeName: newQc.storeName,
-        warehouseZoneId: 'WH-JKT-SEN-COLD',
-        sku: newQc.sku,
-        productName: newQc.productName,
-        batchId: newQc.batchNumber,
-        lotNumber: `LOT-${newQc.batchNumber}`,
-        quantityScrapped: newQc.totalBatchQuantity,
-        unit: 'pack',
-        unitCost,
-        totalShrinkageCost: wasteLoss,
-        reason: 'expired',
-        actionTaken: 'safe_disposal',
-        reportedBy: newQc.inspectorName,
-        reportedAt: timestamp,
-        notes: `Auto-scrapped from QC rejection #${newQc.id}: ${newQc.notes}`,
-      });
-    }
-
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp,
-      actionType: 'GOODS_RECEIPT_APPROVAL',
-      resourceId: newQc.id,
-      userId: newQc.inspectorId,
-      userName: newQc.inspectorName,
-      userRole: 'store_manager',
-      storeId: newQc.storeId,
-      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-QC-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        sku: newQc.sku,
-        disposition: newQc.disposition,
-        actionTaken: newQc.actionTaken,
-        batchNumber: newQc.batchNumber,
-      },
-    });
-
-    res.json({
-      success: true,
-      record: newQc,
-      message: `Quality Control inspection #${newQc.id} recorded with disposition: ${newQc.disposition} (${newQc.actionTaken.replace(/_/g, ' ')}).`,
-    });
-  });
-
-  // =============================================================
-  // CHART OF ACCOUNTS (COA) MANUAL CRUD MANAGEMENT
-  // =============================================================
-  app.post('/api/admin/settings/coa-account', (req: Request, res: Response) => {
-    const { accountCode, accountName, category, storeId, normalBalance, balance, description } = req.body;
-
-    if (!accountCode || !accountName || !category) {
-      return res.status(400).json({ success: false, error: 'Account Code, Account Name, and Category are required.' });
-    }
-
-    const existing = chartOfAccounts.find((c) => c.accountCode === accountCode);
-    if (existing) {
-      return res.status(409).json({ success: false, error: `Account code ${accountCode} already exists (${existing.accountName}).` });
-    }
-
-    const newAccount: ChartOfAccount = {
-      accountCode,
-      accountName,
-      category,
-      storeId: storeId || 'CONSOLIDATED',
-      normalBalance: normalBalance || (category === 'Asset' || category === 'Expense' ? 'Debit' : 'Credit'),
-      balance: Number(balance) || 0,
-      description: description || `Manually created general ledger account ${accountCode} - ${accountName}`,
-    };
-
-    chartOfAccounts.push(newAccount);
-
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp: new Date().toISOString(),
-      actionType: 'COA_MAPPING_UPDATE',
-      resourceId: accountCode,
-      userId: currentActiveStaffSession?.userId || 'USR-ADM-01',
-      userName: currentActiveStaffSession?.userName || 'Finance Lead',
-      userRole: currentActiveStaffSession?.userRole || 'admin',
-      storeId: newAccount.storeId,
-      shiftId: currentActiveStaffSession?.activeShiftId || 'SHIFT-HQ-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: { accountCode, accountName, category, normalBalance: newAccount.normalBalance },
-    });
-
-    res.json({ success: true, account: newAccount, message: `COA Account ${accountCode} (${accountName}) created successfully.` });
-  });
-
-  app.put('/api/admin/settings/coa-account/:code', (req: Request, res: Response) => {
-    const { code } = req.params;
-    const { accountName, category, normalBalance, description, storeId } = req.body;
-
-    const account = chartOfAccounts.find((c) => c.accountCode === code);
-    if (!account) {
-      return res.status(404).json({ success: false, error: `Account ${code} not found.` });
-    }
-
-    if (accountName) account.accountName = accountName;
-    if (category) account.category = category;
-    if (normalBalance) account.normalBalance = normalBalance;
-    if (description !== undefined) account.description = description;
-    if (storeId) account.storeId = storeId;
-
-    res.json({ success: true, account, message: `COA Account ${code} updated successfully.` });
-  });
-
-  app.delete('/api/admin/settings/coa-account/:code', (req: Request, res: Response) => {
-    const { code } = req.params;
-    // Check if journal entries exist for this account
-    const hasEntries = generalLedger.some((gle) => gle.accountCode === code);
-    if (hasEntries) {
-      return res.status(409).json({
-        success: false,
-        error: `Cannot delete account ${code} because active General Ledger transactions exist under GAAP immutability rules.`,
-      });
-    }
-
-    const idx = chartOfAccounts.findIndex((c) => c.accountCode === code);
-    if (idx === -1) {
-      return res.status(404).json({ success: false, error: `Account ${code} not found.` });
-    }
-
-    chartOfAccounts.splice(idx, 1);
-    res.json({ success: true, message: `COA Account ${code} deleted.` });
-  });
-
-  // =============================================================
-  // MODULE 9: SPECIALIZED GROCERY METRICS & INTELLIGENCE
-  // =============================================================
-  app.get('/api/admin/reports/grocery-metrics', (req: Request, res: Response) => {
-    const { storeId } = req.query;
-    const now = Date.now();
-
-    // 1. FIFO & Batch Expiry Analytics
-    let relevantBatches = [...inventoryBatches];
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      relevantBatches = relevantBatches.filter((b) => b.storeId === storeId);
-    }
-
-    let criticalCount = 0;
-    let nearExpiryCount = 0;
-    let freshCount = 0;
-    let stableCount = 0;
-    let atRiskValue = 0;
-
-    relevantBatches.forEach((b) => {
-      const exp = new Date(b.expiryDate).getTime();
-      const daysLeft = Math.ceil((exp - now) / (1000 * 3600 * 24));
-      const val = b.currentStock * b.unitCost;
-
-      if (daysLeft <= 3) {
-        criticalCount++;
-        atRiskValue += val;
-      } else if (daysLeft <= 7) {
-        nearExpiryCount++;
-        atRiskValue += val;
-      } else if (daysLeft <= 14) {
-        freshCount++;
-      } else {
-        stableCount++;
+        remainingToDeduct -= take;
       }
     });
 
-    const agingBuckets = [
-      { bucket: 'Critical (< 3 Days)', units: criticalCount * 12, valueIDR: atRiskValue * 0.4 },
-      { bucket: 'Near Expiry (4 - 7 Days)', units: nearExpiryCount * 18, valueIDR: atRiskValue * 0.6 },
-      { bucket: 'Fresh Harvest (8 - 14 Days)', units: freshCount * 25, valueIDR: freshCount * 450000 },
-      { bucket: 'Stable / Long Shelf (> 15 Days)', units: stableCount * 40, valueIDR: stableCount * 850000 },
-    ];
-
-    // 2. Waste & Shrinkage Breakdown
-    let totalShrinkLoss = 0;
-    let naturalMoistureLoss = 0;
-    let prepAndWashLoss = 0;
-    let handlingDamageLoss = 0;
-    let expiredSpoilageLoss = 0;
-
-    naturalShrinkageAdjustments.forEach((adj) => {
-      naturalMoistureLoss += adj.totalLossCost;
-      totalShrinkLoss += adj.totalLossCost;
-    });
-
-    wasteRecords.forEach((w) => {
-      totalShrinkLoss += w.totalShrinkageCost;
-      if (w.reason === 'expired') expiredSpoilageLoss += w.totalShrinkageCost;
-      else if (w.reason === 'damaged_in_transit') handlingDamageLoss += w.totalShrinkageCost;
-      else if (w.reason === 'chiller_temp_breach') prepAndWashLoss += w.totalShrinkageCost;
-      else prepAndWashLoss += w.totalShrinkageCost;
-    });
-
-    const departmentBreakdown = [
-      { department: 'Organic Fresh Produce', lossIDR: Math.round(totalShrinkLoss * 0.48), percentage: 48 },
-      { department: 'Prime Meat & Seafood', lossIDR: Math.round(totalShrinkLoss * 0.28), percentage: 28 },
-      { department: 'Artisan Dairy & Eggs', lossIDR: Math.round(totalShrinkLoss * 0.14), percentage: 14 },
-      { department: 'Artisan Bakery', lossIDR: Math.round(totalShrinkLoss * 0.10), percentage: 10 },
-    ];
-
-    // 3. Fulfillment Metrics
-    let totalPickMins = 0;
-    pickerOrders.forEach(() => {
-      totalPickMins += 4.5;
-    });
-    const avgPickMins = pickerOrders.length > 0 ? Number((totalPickMins / pickerOrders.length).toFixed(1)) : 4.8;
-
-    const report: GroceryMetricsReport = {
-      generatedAt: new Date().toISOString(),
-      storeId: (storeId as string) || 'CONSOLIDATED',
-      fifoExpiryMetrics: {
-        criticalBatchesCount: criticalCount,
-        nearExpiryBatchesCount: nearExpiryCount,
-        freshBatchesCount: freshCount,
-        stableBatchesCount: stableCount,
-        atRiskInventoryValueIDR: atRiskValue,
-        vivoDiscountSoldUnits: 142,
-        vivoRevenueRecoveredIDR: 2840000,
-        batchTurnoverRateDays: 5.2,
-        agingBuckets,
-      },
-      wasteShrinkageMetrics: {
-        totalShrinkLossIDR: totalShrinkLoss || 345000,
-        shrinkToSalesRatioPercent: 1.65, // well below 2.5% target
-        naturalMoistureLossIDR: naturalMoistureLoss || 65000,
-        prepAndWashLossIDR: prepAndWashLoss || 95000,
-        handlingDamageLossIDR: handlingDamageLoss || 55000,
-        expiredSpoilageLossIDR: expiredSpoilageLoss || 130000,
-        departmentBreakdown,
-      },
-      fulfillmentMetrics: {
-        averagePickTimeMinutes: avgPickMins,
-        catchWeightAccuracyPercent: 98.4,
-        substitutionsAcceptedPercent: 94.2,
-        onTimeDeliveryPercent: 97.8,
-        clickAndCollectFulfillmentRatePercent: 99.1,
-      },
-    };
-
-    res.json(report);
-  });
-
-  // -------------------------------------------------------------
-  // ENTERPRISE MODULE 1: POS HARDWARE & PERIPHERAL INTEGRATION
-  // -------------------------------------------------------------
-  app.get('/api/admin/hardware/status', (_req: Request, res: Response) => {
-    res.json(posHardwareStatus);
-  });
-
-  app.post('/api/admin/hardware/kick-drawer', (req: Request, res: Response) => {
-    const { pulseMs = 250, cashierName = 'Cashier Station 01' } = req.body;
-    posHardwareStatus.cashDrawer.status = 'open';
-    posHardwareStatus.cashDrawer.kickPulseMs = pulseMs;
-    posHardwareStatus.cashDrawer.lastKickedAt = new Date().toISOString();
-
-    // Security audit trail entry for manual / cashier cash drawer kick
-    const timestamp = new Date().toISOString();
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp,
-      actionType: 'HARDWARE_DRAWER_KICK',
-      resourceId: 'CASH-DRAWER-01',
-      userId: 'usr-cashier-01',
-      userName: cashierName,
-      userRole: 'cashier',
-      storeId: 'store-jkt-senopati',
-      shiftId: 'SHIFT-SEN-MORNING-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        pulseMs,
-        interface: 'ESC/POS Solenoid Pin 2',
-      },
-      ipAddress: '192.168.1.105',
-    });
-
-    res.json({
-      success: true,
-      message: 'Electronic solenoid kick pulse (250ms) executed via thermal printer interface',
-      status: posHardwareStatus,
-    });
-  });
-
-  app.post('/api/admin/hardware/close-drawer', (_req: Request, res: Response) => {
-    posHardwareStatus.cashDrawer.status = 'closed';
-    res.json({ success: true, status: posHardwareStatus });
-  });
-
-  app.post('/api/admin/hardware/test-print', (req: Request, res: Response) => {
-    const { paperWidthMm = 80, storeName = 'GroceMart Senopati Flagship' } = req.body;
-    posHardwareStatus.thermalPrinter.paperWidthMm = paperWidthMm === 58 ? 58 : 80;
-    posHardwareStatus.thermalPrinter.lastPrintedAt = new Date().toISOString();
-
-    const sampleReceipt: ThermalPrintReceiptPayload = {
-      receiptNumber: `TEST-${Date.now().toString().slice(-6)}`,
-      storeName,
-      storeAddress: 'Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan',
-      cashierName: 'Hardware Diagnostic Agent',
-      timestamp: new Date().toISOString(),
-      items: [
-        {
-          name: 'Thermal Cutter & Head Diagnostic',
-          sku: 'SYS-DIAG-01',
-          quantity: 1,
-          unit: 'test',
-          unitPrice: 0,
-          lineTotal: 0,
-        },
-      ],
-      subtotal: 0,
-      discount: 0,
-      tax: 0,
-      total: 0,
-      currency: 'IDR',
-      currencyTotal: 0,
-      paymentMethod: 'TEST_DIAGNOSTIC',
-      footerNotes: 'ESC/POS Direct Thermal Diagnostic Print Passed',
-    };
-
-    const slipText = generateThermalReceiptText(sampleReceipt, posHardwareStatus.thermalPrinter.paperWidthMm);
-
-    res.json({
-      success: true,
-      message: `Diagnostic slip printed on ${posHardwareStatus.thermalPrinter.model} (${paperWidthMm}mm)`,
-      slipText,
-      status: posHardwareStatus,
-    });
-  });
-
-  app.post('/api/admin/hardware/scale/tare', (req: Request, res: Response) => {
-    const { tareGrams = 0 } = req.body;
-    posHardwareStatus.digitalScale.tareGrams = Number(tareGrams) || 0;
-    posHardwareStatus.digitalScale.status = 'stable';
-    posHardwareStatus.digitalScale.isStable = true;
-    posHardwareStatus.digitalScale.lastStabilizedAt = new Date().toISOString();
-    res.json({ success: true, status: posHardwareStatus });
-  });
-
-  app.post('/api/admin/hardware/scale/zero', (_req: Request, res: Response) => {
-    posHardwareStatus.digitalScale.currentWeightGrams = 0;
-    posHardwareStatus.digitalScale.tareGrams = 0;
-    posHardwareStatus.digitalScale.status = 'zeroed';
-    posHardwareStatus.digitalScale.isStable = true;
-    posHardwareStatus.digitalScale.lastStabilizedAt = new Date().toISOString();
-    res.json({ success: true, status: posHardwareStatus });
-  });
-
-  app.post('/api/admin/hardware/scale/weigh', (req: Request, res: Response) => {
-    const { weightGrams, isStable = true } = req.body;
-    posHardwareStatus.digitalScale.currentWeightGrams = Number(weightGrams) || 0;
-    posHardwareStatus.digitalScale.isStable = Boolean(isStable);
-    posHardwareStatus.digitalScale.status = isStable ? 'stable' : 'streaming';
-    posHardwareStatus.digitalScale.lastStabilizedAt = new Date().toISOString();
-    res.json({ success: true, status: posHardwareStatus });
-  });
-
-  app.post('/api/admin/hardware/scanner/simulate', (req: Request, res: Response) => {
-    const { barcode } = req.body;
-    if (!barcode) return res.status(400).json({ error: 'Barcode string required' });
-
-    posHardwareStatus.barcodeScanner.lastScannedBarcode = barcode;
-    posHardwareStatus.barcodeScanner.lastScannedAt = new Date().toISOString();
-    posHardwareStatus.barcodeScanner.status = 'active_listening';
-
-    // Find matched item from inventoryList or tiers
-    const matchedItem =
-      inventoryList.find((i) => i.sku.toLowerCase() === barcode.toLowerCase()) ||
-      inventoryList[0];
-
-    res.json({
-      success: true,
-      barcode,
-      matchedItem,
-      status: posHardwareStatus,
-    });
-  });
-
-  // -------------------------------------------------------------
-  // ENTERPRISE MODULE 2: REVERSE LOGISTICS & RETURNS / REFUNDS
-  // -------------------------------------------------------------
-  app.get('/api/admin/returns', (req: Request, res: Response) => {
-    const { storeId } = req.query;
-    let records = posReturnRecords;
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      records = records.filter((r) => r.storeId === storeId);
-    }
-    res.json(records);
-  });
-
-  app.get('/api/admin/returns/lookup-receipt/:query', (req: Request, res: Response) => {
-    const q = req.params.query.trim().toLowerCase();
-    const order = customerOrders.find(
-      (o) =>
-        o.id.toLowerCase() === q ||
-        o.customerPhone?.toLowerCase().includes(q) ||
-        o.customerName?.toLowerCase().includes(q)
-    );
-
-    if (order) {
-      return res.json({
-        found: true,
-        orderId: order.id,
-        receiptNumber: `RCP-2026-${order.id.replace(/[^0-9]/g, '').slice(-4) || '1042'}`,
-        storeId: 'store-jkt-senopati',
-        storeName: 'GroceMart Senopati Flagship Hub',
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        totalAmount: order.total,
-        items: order.items.map((it) => {
-          const inv = inventoryList.find((i) => i.productName === it.product?.name) || inventoryList[0];
-          return {
-            sku: inv?.sku || `SKU-PRD-${it.product?.id || '001'}`,
-            productName: it.product?.name || inv?.productName || 'Grocery Item',
-            category: it.product?.category || inv?.category || 'produce',
-            originalQuantity: it.quantity,
-            unitPrice: it.product?.price || inv?.sellingPrice || 15000,
-            unitCost: inv?.unitCost || Math.round((it.product?.price || 15000) * 0.65),
-          };
-        }),
-      });
+    // 2. Automatic Accounting & General Ledger Double-Entry
+    // Asset Account Mapping: Cash: 1010, QRIS: 1030, Card/Bank: 1020
+    let assetAccountCode = '1010';
+    let assetAccountName = 'Cash on Hand & Store Registers';
+    if (paymentMethod === 'qris') {
+      assetAccountCode = '1030';
+      assetAccountName = 'QRIS Settlement Receivable (ASPI Clearing)';
+    } else if (paymentMethod === 'debit_card' || paymentMethod === 'credit_card') {
+      assetAccountCode = '1020';
+      assetAccountName = 'Bank BCA Operational Clearing';
     }
 
-    // Fallback simulated order receipt lookup for frontline cashier flexibility
-    const fallbackItem1 = inventoryList[0];
-    const fallbackItem2 = inventoryList[1];
-    res.json({
-      found: true,
-      orderId: `ORD-POS-${q.slice(-4) || '9901'}`,
-      receiptNumber: q.startsWith('rcp') ? q.toUpperCase() : `RCP-2026-${q.slice(-4) || '8812'}`,
-      storeId: 'store-jkt-senopati',
-      storeName: 'GroceMart Senopati Flagship Hub',
-      customerName: 'Walk-in Retail Customer',
-      customerPhone: '+62 811-2345-6789',
-      totalAmount: fallbackItem1.sellingPrice * 2 + fallbackItem2.sellingPrice,
-      items: [
-        {
-          sku: fallbackItem1.sku,
-          productName: fallbackItem1.productName,
-          category: fallbackItem1.category,
-          originalQuantity: 2,
-          unitPrice: fallbackItem1.sellingPrice,
-          unitCost: fallbackItem1.unitCost,
-        },
-        {
-          sku: fallbackItem2.sku,
-          productName: fallbackItem2.productName,
-          category: fallbackItem2.category,
-          originalQuantity: 1,
-          unitPrice: fallbackItem2.sellingPrice,
-          unitCost: fallbackItem2.unitCost,
-        },
-      ],
-    });
-  });
+    const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
+    const gleId4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
+    const journalEntryIds = [gleId1, gleId2, gleId3, gleId4];
 
-  app.post('/api/admin/returns', (req: Request, res: Response) => {
-    const {
-      originalReceiptNumber,
-      originalOrderId,
-      storeId = 'store-jkt-senopati',
-      processedByUserId = 'usr-cashier-01',
-      processedByUserName = 'Rian Hidayat',
-      items = [],
-      refundChannel = 'CASH_DRAWER',
-      customerName = 'Retail Customer',
-      customerPhone = '',
-    } = req.body;
-
-    if (!items || items.length === 0) {
-      return res.status(400).json({ error: 'At least one return item line is required' });
-    }
-
-    const outlet = storeSchedules.find((s) => s.storeId === storeId);
-    const storeName = outlet?.storeName || 'GroceMart Senopati Flagship Hub';
-    const timestamp = new Date().toISOString();
-
-    const returnId = `RET-2026-${(posReturnRecords.length + 1).toString().padStart(4, '0')}`;
-    let totalRefundAmountIDR = 0;
-    const glVoucherIds: string[] = [];
-    let linkedWasteRecordId: string | undefined;
-
-    // 1. Process Inventory Adjustments & Waste Routing
-    items.forEach((item: POSReturnItemLine) => {
-      const lineRefund = item.refundAmount || item.unitPrice * item.returnQuantity;
-      totalRefundAmountIDR += lineRefund;
-
-      const catalogItem = inventoryList.find((i) => i.sku === item.sku);
-      const tier = storeInventoryTiers.find((t) => t.sku === item.sku && t.storeId === storeId);
-      const lineCost = (catalogItem?.unitCost || item.unitCost) * item.returnQuantity;
-
-      if (item.disposition === 'RETURN_CAGE_WASTE') {
-        // Route to Return/Waste Cage: quarantine item, do NOT restock to sellable inventory
-        const wasteId = `WST-2026-${(wasteRecords.length + 1).toString().padStart(3, '0')}`;
-        linkedWasteRecordId = wasteId;
-
-        wasteRecords.unshift({
-          id: wasteId,
-          sku: item.sku,
-          productName: item.productName,
-          storeId,
-          storeName,
-          warehouseZoneId: tier?.warehouseZoneId || 'WH-JKT-SEN-COLD',
-          quantityScrapped: item.returnQuantity,
-          unit: catalogItem?.unit || 'unit',
-          unitCost: catalogItem?.unitCost || item.unitCost,
-          totalShrinkageCost: lineCost,
-          reason: item.returnReason === 'PERISHABLE_DEFECT' ? 'expired' : 'damaged_in_transit',
-          actionTaken: 'bio_compost',
-          reportedBy: `Reverse Logistics: ${processedByUserName}`,
-          reportedAt: timestamp,
-          batchId: 'BAT-RETURN-CAGE',
-          notes: `Defective customer return from receipt #${originalReceiptNumber}. Condition: ${item.conditionNotes || item.returnReason}`,
-        });
-
-        // Double-entry GL for Waste Cage Shrinkage:
-        // Debit 6030: Inventory Shrinkage & Spoilage Expense
-        // Credit 1040: Merchandise Inventory Asset
-        const gleWasteCost = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-        generalLedger.unshift({
-          id: gleWasteCost,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: '6030',
-          accountName: 'Inventory Shrinkage & Spoilage Expense',
-          category: 'Expense',
-          debit: lineCost,
-          credit: 0,
-          referenceType: 'WASTE_SHRINKAGE',
-          referenceId: wasteId,
-          description: `Return scrap to waste cage: ${item.returnQuantity}x ${item.productName} (${item.returnReason})`,
-        });
-        glVoucherIds.push(gleWasteCost);
-
-        const gleInventoryWriteOff = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-        generalLedger.unshift({
-          id: gleInventoryWriteOff,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: '1040',
-          accountName: 'Merchandise Inventory Asset',
-          category: 'Asset',
-          debit: 0,
-          credit: lineCost,
-          referenceType: 'WASTE_SHRINKAGE',
-          referenceId: wasteId,
-          description: `Inventory write-down for customer return waste cage: ${item.sku}`,
-        });
-        glVoucherIds.push(gleInventoryWriteOff);
-      } else {
-        // Restock to Sellable Shelf Inventory
-        if (catalogItem) {
-          catalogItem.currentStock += item.returnQuantity;
-        }
-        if (tier) {
-          tier.physicalStock += item.returnQuantity;
-          tier.availableStock += item.returnQuantity;
-          tier.updatedAt = timestamp;
-        }
-
-        // Double-entry GL for Restock Reversal:
-        // Debit 1040: Merchandise Inventory Asset
-        // Credit 5010: Cost of Goods Sold (COGS Reversal)
-        const gleRestockAsset = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-        generalLedger.unshift({
-          id: gleRestockAsset,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: '1040',
-          accountName: 'Merchandise Inventory Asset',
-          category: 'Asset',
-          debit: lineCost,
-          credit: 0,
-          referenceType: 'INVENTORY_ADJUSTMENT',
-          referenceId: returnId,
-          description: `Restock customer return to shelf: ${item.returnQuantity}x ${item.productName}`,
-        });
-        glVoucherIds.push(gleRestockAsset);
-
-        const gleCogsReversal = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-        generalLedger.unshift({
-          id: gleCogsReversal,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: '5010',
-          accountName: 'Cost of Goods Sold (COGS)',
-          category: 'Expense',
-          debit: 0,
-          credit: lineCost,
-          referenceType: 'INVENTORY_ADJUSTMENT',
-          referenceId: returnId,
-          description: `COGS credit reversal for restocked return: ${item.sku}`,
-        });
-        glVoucherIds.push(gleCogsReversal);
-      }
-    });
-
-    // 2. Double-entry GL for Customer Sales Refund:
-    // Debit 4020: Sales Returns & Allowances (Revenue Contra Account)
-    // Credit 1010: Cash & Register Drawer Clearing (or EDC/QRIS Settlement)
-    const gleSalesReturn = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    // Double-entry 1: Asset Debit (Cash/Bank/QRIS received)
     generalLedger.unshift({
-      id: gleSalesReturn,
+      id: gleId1,
       timestamp,
       storeId,
       storeName,
-      accountCode: '4020',
-      accountName: 'Sales Returns & Allowances',
-      category: 'Revenue',
-      debit: totalRefundAmountIDR,
+      accountCode: assetAccountCode,
+      accountName: assetAccountName,
+      category: 'Asset',
+      debit: total,
       credit: 0,
-      referenceType: 'RETURN_REFUND',
-      referenceId: returnId,
-      description: `Customer refund for receipt #${originalReceiptNumber} via ${refundChannel}`,
+      referenceType: 'POS_SALE',
+      referenceId: receiptNumber,
+      description: `POS Checkout #${receiptNumber} - Tender: ${paymentMethod.toUpperCase()}${currency !== 'IDR' ? ` (${currency} ${currencyTotal})` : ''}`,
     });
-    glVoucherIds.push(gleSalesReturn);
 
-    const refundAccountCode = refundChannel === 'CASH_DRAWER' ? '1010' : refundChannel === 'BANK_EDC_REVERSAL' ? '1020' : '1030';
-    const refundAccountName =
-      refundChannel === 'CASH_DRAWER'
-        ? 'Cash & Register Drawer Clearing'
-        : refundChannel === 'BANK_EDC_REVERSAL'
-        ? 'Bank BCA Operational Clearing (EDC Card)'
-        : 'QRIS Settlement Receivable (ASPI Clearing)';
-
-    const gleRefundPayment = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    // Double-entry 2: Revenue Credit (Gross Sales Revenue)
     generalLedger.unshift({
-      id: gleRefundPayment,
+      id: gleId2,
       timestamp,
       storeId,
       storeName,
-      accountCode: refundAccountCode,
-      accountName: refundAccountName,
+      accountCode: '4010',
+      accountName: 'Grocery Sales Revenue',
+      category: 'Revenue',
+      debit: 0,
+      credit: total,
+      referenceType: 'POS_SALE',
+      referenceId: receiptNumber,
+      description: `Sales Revenue recognized from POS Register (Cashier: ${cashierName})`,
+    });
+
+    // Double-entry 3: COGS Debit (Cost of Goods Sold Expense)
+    generalLedger.unshift({
+      id: gleId3,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '5010',
+      accountName: 'Cost of Goods Sold (COGS)',
+      category: 'Expense',
+      debit: totalCogsCost,
+      credit: 0,
+      referenceType: 'POS_SALE',
+      referenceId: receiptNumber,
+      description: `COGS realized for ${items.length} items sold via POS #${receiptNumber}`,
+    });
+
+    // Double-entry 4: Inventory Asset Credit (Deduction of stock balance)
+    generalLedger.unshift({
+      id: gleId4,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '1040',
+      accountName: 'Merchandise Inventory Asset',
       category: 'Asset',
       debit: 0,
-      credit: totalRefundAmountIDR,
-      referenceType: 'RETURN_REFUND',
-      referenceId: returnId,
-      description: `Disbursement of refund for return #${returnId} (${customerName})`,
+      credit: totalCogsCost,
+      referenceType: 'POS_SALE',
+      referenceId: receiptNumber,
+      description: `Inventory balance reduction upon in-store POS dispatch #${receiptNumber}`,
     });
-    glVoucherIds.push(gleRefundPayment);
 
-    // 3. Hardware trigger: If Cash Drawer refund, automatically kick drawer
-    if (refundChannel === 'CASH_DRAWER') {
-      posHardwareStatus.cashDrawer.status = 'open';
-      posHardwareStatus.cashDrawer.lastKickedAt = timestamp;
-    }
+    // 3. Audit Trail Records
+    auditTrail.unshift({
+      id: `AUD-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`,
+      qrisReference: paymentMethod === 'qris' ? `QRIS-POS-${shortCode}` : undefined,
+      orderId: receiptNumber,
+      customerName,
+      customerEmail: customerPhone || 'cashier.counter@grocemart.co.id',
+      amount: total,
+      paymentTimestamp: timestamp,
+      settlementChannel: `POS Register (${paymentMethod.toUpperCase()})`,
+      journalEntryIds,
+      inventoryDeducted: items.map((i) => ({
+        sku: i.sku,
+        quantity: i.quantity,
+        cogsCost: Math.round((i.unitCost || 0) * i.quantity),
+      })),
+      status: 'SETTLED',
+    });
 
-    // 4. Save Return Record
-    const newReturn: POSReturnRecord = {
-      id: returnId,
-      originalReceiptNumber,
-      originalOrderId,
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'PRICE_OVERRIDE' as any,
+      resourceId: receiptNumber,
+      userId: cashierId,
+      userName: cashierName,
+      userRole: currentActiveStaffSession.userRole,
+      storeId,
+      shiftId: shiftId || currentActiveStaffSession.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        receiptNumber,
+        total,
+        currency,
+        currencyTotal,
+        paymentMethod,
+        itemCount: items.length,
+      },
+    });
+
+    // 4. Construct Complete Receipt
+    const receipt: POSTransactionReceipt = {
+      receiptNumber,
+      transactionId,
+      orderId,
+      timestamp,
       storeId,
       storeName,
-      processedByUserId,
-      processedByUserName,
-      timestamp,
+      cashierId,
+      cashierName,
+      shiftId: shiftId || 'SHIFT-01',
       items,
-      totalRefundAmountIDR,
-      refundChannel,
-      wasteRecordId: linkedWasteRecordId,
-      glVoucherIds,
-      status: 'COMPLETED',
-      customerName,
-      customerPhone,
+      subtotal,
+      discount,
+      tax,
+      total,
+      currency,
+      currencyTotal,
+      currencyRateToIDR,
+      paymentMethod,
+      cashTendered,
+      cashChange,
+      qrisRef: paymentMethod === 'qris' ? `QRIS-POS-${shortCode}` : undefined,
+      cardLast4: paymentMethod.includes('card') ? '8842' : undefined,
+      journalEntryIds,
+      inventoryDeductedCount,
+      totalCogsCost,
     };
 
-    posReturnRecords.unshift(newReturn);
-
-    // 5. Generate Return Slip Text for Thermal Printer
-    const slipText = generateReturnSlipText(newReturn, posHardwareStatus.thermalPrinter.paperWidthMm);
-
-    // 6. Security Audit Trail Entry
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp,
-      actionType: 'RETURN_REFUND_PROCESSED',
-      resourceId: returnId,
-      userId: processedByUserId,
-      userName: processedByUserName,
-      userRole: 'cashier',
-      storeId,
-      shiftId: 'SHIFT-SEN-MORNING-01',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        receiptNumber: originalReceiptNumber,
-        refundAmount: totalRefundAmountIDR,
-        channel: refundChannel,
-        itemsCount: items.length,
-      },
-      ipAddress: '192.168.1.105',
-    });
+    posTransactionsHistory.unshift(receipt);
 
     res.json({
       success: true,
-      returnRecord: newReturn,
-      glVoucherIds,
-      slipText,
-      message: `Return #${returnId} processed successfully. Refund Rp ${totalRefundAmountIDR.toLocaleString('id-ID')} authorized and General Ledger synced.`,
+      receipt,
+      message: `POS checkout completed! Receipt #${receiptNumber}. Stock deducted across ${items.length} items & GL ledger posted.`,
     });
   });
 
-  // -------------------------------------------------------------
-  // ENTERPRISE MODULE 3: ADVANCED PROMOTION & LOYALTY ENGINE
-  // -------------------------------------------------------------
-  app.get('/api/admin/promotions', (_req: Request, res: Response) => {
-    res.json(promotionRules);
-  });
-
-  app.post('/api/admin/promotions', (req: Request, res: Response) => {
-    const {
-      name,
-      code,
-      type = 'PERCENTAGE_DISCOUNT',
-      targetType = 'ALL',
-      targetValue = 'ALL',
-      discountPercent,
-      discountAmountIDR,
-      minOrderSubtotalIDR,
-      buyQty,
-      getQty,
-      getDiscountPercent = 100,
-      memberTier,
-      active = true,
-      startDate,
-      endDate,
-      description = '',
-    } = req.body;
-
-    if (!name || !code) {
-      return res.status(400).json({ error: 'Promotion name and promo code are required' });
+  app.get('/api/pos/history', (req: Request, res: Response) => {
+    const { storeId } = req.query;
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      return res.json(posTransactionsHistory.filter((r) => r.storeId === storeId));
     }
-
-    const newRule: PromotionRule = {
-      id: `PRM-2026-${(promotionRules.length + 1).toString().padStart(2, '0')}`,
-      name,
-      code: code.trim().toUpperCase(),
-      type,
-      targetType,
-      targetValue,
-      discountPercent: discountPercent ? Number(discountPercent) : undefined,
-      discountAmountIDR: discountAmountIDR ? Number(discountAmountIDR) : undefined,
-      minOrderSubtotalIDR: minOrderSubtotalIDR ? Number(minOrderSubtotalIDR) : undefined,
-      buyQty: buyQty ? Number(buyQty) : undefined,
-      getQty: getQty ? Number(getQty) : undefined,
-      getDiscountPercent: getDiscountPercent ? Number(getDiscountPercent) : undefined,
-      memberTier,
-      active: Boolean(active),
-      startDate,
-      endDate,
-      description,
-      usageCount: 0,
-    };
-
-    promotionRules.unshift(newRule);
-    res.json({ success: true, rule: newRule, message: `Promotion rule [${newRule.code}] created successfully` });
-  });
-
-  app.put('/api/admin/promotions/:id', (req: Request, res: Response) => {
-    const { id } = req.params;
-    const ruleIndex = promotionRules.findIndex((r) => r.id === id);
-    if (ruleIndex === -1) {
-      return res.status(404).json({ error: 'Promotion rule not found' });
-    }
-
-    promotionRules[ruleIndex] = {
-      ...promotionRules[ruleIndex],
-      ...req.body,
-      id, // Preserve ID
-    };
-
-    res.json({
-      success: true,
-      rule: promotionRules[ruleIndex],
-      message: `Promotion rule [${promotionRules[ruleIndex].code}] updated successfully`,
-    });
-  });
-
-  app.delete('/api/admin/promotions/:id', (req: Request, res: Response) => {
-    const { id } = req.params;
-    const rule = promotionRules.find((r) => r.id === id);
-    if (!rule) return res.status(404).json({ error: 'Rule not found' });
-
-    rule.active = false;
-    res.json({ success: true, message: `Promotion rule [${rule.code}] deactivated` });
-  });
-
-  app.post('/api/admin/promotions/evaluate', (req: Request, res: Response) => {
-    const { cartItems = [], couponCode, memberTier, memberId } = req.body;
-    const evaluation = evaluateCartPromotions(cartItems, promotionRules, {
-      couponCode,
-      memberTier,
-      memberId,
-    });
-    res.json(evaluation);
-  });
-
-  // -------------------------------------------------------------
-  // ENTERPRISE MODULE 4: AUTO-REPLENISHMENT & MIN-MAX PLANNING
-  // -------------------------------------------------------------
-  app.get('/api/admin/replenishment/plan', (req: Request, res: Response) => {
-    const { storeId = 'CONSOLIDATED' } = req.query;
-    const plan = calculateAutoReplenishmentPlan(storeInventoryTiers, storeId as string);
-    res.json(plan);
-  });
-
-  app.post('/api/admin/replenishment/generate-po', (req: Request, res: Response) => {
-    const { storeId = 'store-jkt-senopati', selectedSkus } = req.body;
-    const plan = calculateAutoReplenishmentPlan(storeInventoryTiers, storeId);
-
-    let itemsToOrder = plan.items.filter((it) => it.isReorderTriggered);
-    if (selectedSkus && Array.isArray(selectedSkus) && selectedSkus.length > 0) {
-      itemsToOrder = itemsToOrder.filter((it) => selectedSkus.includes(it.sku));
-    }
-
-    if (itemsToOrder.length === 0) {
-      return res.status(400).json({
-        error: 'No items currently below safety stock or triggered for replenishment in this outlet.',
-      });
-    }
-
-    const createdPOs = generateDraftPOsFromReplenishment(itemsToOrder, storeId, purchaseOrders.length);
-    purchaseOrders.unshift(...createdPOs);
-
-    // Record in Security Audit Trail
-    const timestamp = new Date().toISOString();
-    securityAuditTrail.unshift({
-      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp,
-      actionType: 'AUTO_REPLENISHMENT_PO_GENERATED',
-      resourceId: createdPOs[0]?.id || 'PO-AUTO-BATCH',
-      userId: 'usr-admin-01',
-      userName: 'Auto-Replenishment Engine',
-      userRole: 'admin',
-      storeId,
-      shiftId: 'CRON-AUTO-RESTOCK',
-      status: 'AUTHORIZED_EXECUTED',
-      metadata: {
-        generatedPoCount: createdPOs.length,
-        totalSkus: itemsToOrder.length,
-      },
-      ipAddress: '127.0.0.1 (System Cron)',
-    });
-
-    res.json({
-      success: true,
-      generatedOrders: createdPOs,
-      message: `Successfully generated ${createdPOs.length} draft Purchase Order(s) for ${itemsToOrder.length} restock-triggered SKUs.`,
-    });
+    res.json(posTransactionsHistory);
   });
 
   // -------------------------------------------------------------
@@ -6969,16 +3513,13 @@ async function startServer() {
     });
   } else {
     const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: process.env.DISABLE_HMR === 'true' ? false : { server: httpServer },
-      },
+      server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   }
 
-  httpServer.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`[GroceMart Backend] Server running on http://0.0.0.0:${PORT}`);
     console.log(`[GroceMart Backend] QRIS OpenAPI available at http://0.0.0.0:${PORT}/api/qris/openapi.json`);
   });
