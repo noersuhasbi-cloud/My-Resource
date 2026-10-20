@@ -8,6 +8,7 @@ import type {
   PurchaseRequest,
   PurchaseOrder,
   GoodsReceiptRecord,
+  VendorBill,
   ChartOfAccount,
   GeneralLedgerEntry,
   ProfitAndLossReport,
@@ -239,6 +240,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptRecord[]>([]);
+  const [vendorBills, setVendorBills] = useState<VendorBill[]>([]);
   const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
   const [selectedPrSku, setSelectedPrSku] = useState<string>('');
   const [prQuantity, setPrQuantity] = useState<number>(50);
@@ -293,6 +295,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         rbacRes,
         climateRes,
         coldChainRes,
+        vbRes,
       ] = await Promise.all([
         apiClient.getOmzetAnalytics().catch(() => null),
         apiClient.getStoreStatus(),
@@ -311,6 +314,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         apiClient.getRbacSession().catch(() => null),
         apiClient.getClimateThresholds().catch(() => []),
         apiClient.getColdChainLogs().catch(() => []),
+        apiClient.getVendorBills().catch(() => []),
       ]);
 
       if (rbacRes) {
@@ -336,6 +340,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setPurchaseRequests(prRes);
       setPurchaseOrders(poRes);
       setGoodsReceipts(grRes);
+      setVendorBills(vbRes || []);
 
       setChartOfAccounts(coaRes);
       setLedgerEntries(glRes);
@@ -2698,6 +2703,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             purchaseRequests={purchaseRequests}
             purchaseOrders={purchaseOrders}
             goodsReceipts={goodsReceipts}
+            vendorBills={vendorBills}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
           />
@@ -2772,6 +2778,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             pnlReport={pnlReport}
             balanceSheet={balanceSheet}
             cashFlow={cashFlow}
+            vendorBills={vendorBills}
+            purchaseOrders={purchaseOrders}
+            goodsReceipts={goodsReceipts}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
             activeSubTab={accountingDeepSubTab}

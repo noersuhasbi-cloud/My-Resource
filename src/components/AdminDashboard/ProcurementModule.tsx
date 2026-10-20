@@ -6,6 +6,7 @@ import type {
   InventoryItem,
   AutoReplenishmentConsolidatedPlan,
   AutoReplenishmentItemPlan,
+  VendorBill,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -32,7 +33,10 @@ import {
   ShieldAlert,
   ArrowRight,
   ShoppingCart,
+  Receipt,
+  FileCheck,
 } from 'lucide-react';
+import { VendorBillModule } from './VendorBillModule';
 
 interface ProcurementModuleProps {
   theme: 'light' | 'dark';
@@ -41,6 +45,7 @@ interface ProcurementModuleProps {
   purchaseRequests: PurchaseRequest[];
   purchaseOrders: PurchaseOrder[];
   goodsReceipts: GoodsReceiptRecord[];
+  vendorBills?: VendorBill[];
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -52,6 +57,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   purchaseRequests,
   purchaseOrders,
   goodsReceipts,
+  vendorBills = [],
   onRefreshData,
   onShowToast,
 }) => {
@@ -91,7 +97,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   >({});
 
   // Active Module Sub-Tab
-  const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'pr' | 'po' | 'gr'>('auto_replenishment');
+  const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'pr' | 'po' | 'gr' | 'vendor_bills'>('auto_replenishment');
+  const [preselectedPoId, setPreselectedPoId] = useState<string>('');
+  const [preselectedGrId, setPreselectedGrId] = useState<string>('');
 
   // Auto-Replenishment & Min-Max Stock Planning State
   const [replenishmentPlan, setReplenishmentPlan] = useState<AutoReplenishmentConsolidatedPlan | null>(null);
@@ -560,6 +568,30 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 font-bold">
             {goodsReceipts.length}
           </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setPreselectedPoId('');
+            setPreselectedGrId('');
+            setActiveTab('vendor_bills');
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'vendor_bills'
+              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              : isLight
+              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+              : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+          }`}
+        >
+          <Receipt className="w-4 h-4 text-indigo-500" />
+          <span>Vendor Bills (3-Way Match)</span>
+          {vendorBills.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-bold">
+              {vendorBills.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -1182,6 +1214,19 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             >
                               Receive GR
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPreselectedPoId(po.id);
+                                const gr = goodsReceipts.find((g) => g.poId === po.id);
+                                if (gr) setPreselectedGrId(gr.id);
+                                setActiveTab('vendor_bills');
+                              }}
+                              className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
+                              title="Create or match Vendor Bill against this PO"
+                            >
+                              Match Bill
+                            </button>
                             {totalBackorder > 0 && (
                               <button
                                 onClick={() => {
@@ -1200,15 +1245,30 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             )}
                           </div>
                         ) : (
-                          <div>
-                            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block">
-                              Completed
-                            </span>
-                            {po.closureNotes && (
-                              <span className="text-[10px] text-amber-600 dark:text-amber-400 block max-w-xs truncate" title={po.closureNotes}>
-                                Note: {po.closureNotes}
+                          <div className="flex items-center justify-end gap-2">
+                            <div>
+                              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block">
+                                Completed
                               </span>
-                            )}
+                              {po.closureNotes && (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 block max-w-xs truncate" title={po.closureNotes}>
+                                  Note: {po.closureNotes}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPreselectedPoId(po.id);
+                                const gr = goodsReceipts.find((g) => g.poId === po.id);
+                                if (gr) setPreselectedGrId(gr.id);
+                                setActiveTab('vendor_bills');
+                              }}
+                              className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
+                              title="View or match Vendor Bill"
+                            >
+                              Vendor Bill
+                            </button>
                           </div>
                         )}
                       </td>

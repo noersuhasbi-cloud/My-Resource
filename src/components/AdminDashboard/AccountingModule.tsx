@@ -6,6 +6,9 @@ import type {
   BalanceSheetReport,
   CashFlowStatementReport,
   SupportedCurrency,
+  VendorBill,
+  PurchaseOrder,
+  GoodsReceiptRecord,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import {
@@ -22,6 +25,7 @@ import {
   ArrowUpRight,
   RefreshCw,
   FileText,
+  FileCheck,
   SlidersHorizontal,
   Sparkles,
   ShieldCheck,
@@ -29,6 +33,7 @@ import {
   Globe2,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
+import { VendorBillModule } from './VendorBillModule';
 
 const FX_RATES: Record<SupportedCurrency, { symbol: string; rate: number; label: string }> = {
   IDR: { symbol: 'Rp', rate: 1, label: 'IDR (Base)' },
@@ -46,10 +51,13 @@ interface AccountingModuleProps {
   pnlReport: ProfitAndLossReport | null;
   balanceSheet: BalanceSheetReport | null;
   cashFlow: CashFlowStatementReport | null;
+  vendorBills?: VendorBill[];
+  purchaseOrders?: PurchaseOrder[];
+  goodsReceipts?: GoodsReceiptRecord[];
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
-  activeSubTab?: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa';
-  onSubTabChange?: (subTab: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa') => void;
+  activeSubTab?: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills';
+  onSubTabChange?: (subTab: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills') => void;
 }
 
 export const AccountingModule: React.FC<AccountingModuleProps> = ({
@@ -61,6 +69,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   pnlReport,
   balanceSheet,
   cashFlow,
+  vendorBills = [],
+  purchaseOrders = [],
+  goodsReceipts = [],
   onRefreshData,
   onShowToast,
   activeSubTab,
@@ -79,9 +90,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   };
 
   // Sub-tabs (controlled or internal)
-  const [internalSubTab, setInternalSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa'>('pnl');
+  const [internalSubTab, setInternalSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills'>('pnl');
   const subTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
-  const setSubTab = (val: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa') => {
+  const setSubTab = (val: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills') => {
     setInternalSubTab(val);
     if (onSubTabChange) onSubTabChange(val);
   };
@@ -221,6 +232,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             { id: 'cash_flow', label: 'Cash Flow Statement', icon: DollarSign },
             { id: 'gl', label: 'General Ledger Drill-Down', icon: ReceiptText },
             { id: 'coa', label: 'Chart of Accounts (COA)', icon: Building2 },
+            { id: 'vendor_bills', label: 'Vendor Bills & AP', icon: FileCheck },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = subTab === tab.id;
@@ -854,6 +866,19 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             </table>
           </div>
         </div>
+      )}
+
+      {/* SUB-TAB 6: VENDOR BILLS & ACCOUNTS PAYABLE (3-WAY MATCHING) */}
+      {subTab === 'vendor_bills' && (
+        <VendorBillModule
+          theme={theme}
+          selectedStore={selectedStore}
+          vendorBills={vendorBills}
+          purchaseOrders={purchaseOrders}
+          goodsReceipts={goodsReceipts}
+          onRefreshData={onRefreshData}
+          onShowToast={onShowToast}
+        />
       )}
 
       {/* MODAL: POST REVERSING JOURNAL ENTRY */}

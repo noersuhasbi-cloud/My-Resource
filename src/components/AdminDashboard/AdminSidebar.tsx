@@ -55,7 +55,7 @@ export type AdminDashboardTab =
   | 'audit'
   | 'settings';
 
-export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa';
+export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills';
 export type SettingsSubTab = 'coa' | 'pos' | 'promotions' | 'import_opname' | 'transfer' | 'approval_matrix';
 
 interface AdminSidebarProps {
@@ -594,6 +594,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   { id: 'cash_flow', label: 'Cash Flow Statement', icon: DollarSign, color: 'text-amber-600 dark:text-amber-400' },
                   { id: 'gl', label: 'General Ledger (GL)', icon: ReceiptText, color: 'text-purple-600 dark:text-purple-400' },
                   { id: 'coa', label: 'Chart of Accounts (COA)', icon: Building2, color: 'text-teal-600 dark:text-teal-400' },
+                  { id: 'vendor_bills', label: 'Vendor Bills & AP', icon: FileCheck2, color: 'text-indigo-600 dark:text-indigo-400' },
                 ].map((sub) => {
                   const Icon = sub.icon;
                   const isSubActive = activeTab === 'accounting' && accountingSubTab === sub.id;

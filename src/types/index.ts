@@ -351,6 +351,61 @@ export interface GoodsReceiptRecord {
 }
 
 // -------------------------------------------------------------
+// Vendor Bills, 3-Way Matching & Accounts Payable (AP)
+// -------------------------------------------------------------
+export type VendorBillStatus = 'DRAFT' | 'MATCHED' | 'PRICE_VARIANCE' | 'QTY_VARIANCE' | 'APPROVED' | 'PAID' | 'PARTIALLY_PAID' | 'VOID';
+export type VendorBillPaymentStatus = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE';
+export type VendorBillPaymentMethod = 'BANK_TRANSFER' | 'GIRO' | 'CASH';
+
+export interface VendorBillItem {
+  sku: string;
+  productName: string;
+  poQuantity: number;
+  grQuantity: number;
+  billedQuantity: number;
+  unitCost: number;       // In bill currency
+  totalCost: number;      // In bill currency
+  hasQuantityVariance?: boolean;
+  hasPriceVariance?: boolean;
+  notes?: string;
+}
+
+export interface VendorBill {
+  id: string; // e.g. VB-2026-001
+  billNumber: string; // Supplier's official invoice number (e.g. INV-KSB-2026-088)
+  supplierName: string;
+  supplierContact?: string;
+  storeId: string;
+  storeName: string;
+  poId: string; // Purchase Order reference
+  goodsReceiptId: string; // Goods Receipt reference
+  deliveryNoteNumber?: string; // Surat Jalan vendor reference
+  billDate: string; // YYYY-MM-DD
+  dueDate: string; // YYYY-MM-DD
+  paymentTerms: 'COD' | 'Net 7' | 'Net 14' | 'Net 30' | 'Net 60';
+  currency: SupportedCurrency; // 'IDR' | 'USD' | 'EUR' | 'AUD'
+  exchangeRate: number; // e.g. 1 for IDR, 16000 for USD, 17200 for EUR
+  items: VendorBillItem[];
+  subtotal: number; // In bill currency
+  taxPercent: number; // e.g. 11% PPN, or 0% for tax-exempt farm produce
+  taxAmount: number; // In bill currency
+  grandTotal: number; // In bill currency
+  grandTotalIDR: number; // Statutory base currency amount
+  amountPaid: number; // In bill currency
+  remainingDue: number; // In bill currency
+  status: VendorBillStatus;
+  paymentStatus: VendorBillPaymentStatus;
+  paymentMethod?: VendorBillPaymentMethod;
+  paymentReference?: string;
+  paidAt?: string;
+  notes?: string;
+  glEntryIds?: string[]; // Mapped General Ledger journal voucher IDs
+  createdAt: string;
+  approvedBy?: string;
+  approvedAt?: string;
+}
+
+// -------------------------------------------------------------
 // FEFO (First Expired, First Out) Batch Tracking
 // -------------------------------------------------------------
 export type BatchExpiryStatus = 'fresh' | 'near_expiry' | 'critical' | 'expired';
@@ -524,7 +579,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;

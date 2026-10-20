@@ -28,6 +28,7 @@ import {
   INITIAL_BATCHES,
   INITIAL_WASTE_RECORDS,
   INITIAL_PICKER_ORDERS,
+  INITIAL_VENDOR_BILLS,
 } from './src/data/inventoryData.ts';
 import { INITIAL_ORDERS, PRODUCTS } from './src/data/mockData.ts';
 
@@ -68,6 +69,10 @@ import type {
   StockOpnameItem,
   StockTransferRecord,
   ApprovalTierRule,
+  VendorBill,
+  VendorBillStatus,
+  VendorBillPaymentStatus,
+  VendorBillPaymentMethod,
   ApprovalRequest,
   ApprovalActionLog,
   SuratJalanDocument,
@@ -105,6 +110,7 @@ let inventoryList: InventoryItem[] = JSON.parse(JSON.stringify(INITIAL_INVENTORY
 let purchaseRequests: PurchaseRequest[] = JSON.parse(JSON.stringify(INITIAL_PURCHASE_REQUESTS));
 let purchaseOrders: PurchaseOrder[] = JSON.parse(JSON.stringify(INITIAL_PURCHASE_ORDERS));
 let goodsReceipts: GoodsReceiptRecord[] = JSON.parse(JSON.stringify(INITIAL_GOODS_RECEIPTS));
+let vendorBills: VendorBill[] = JSON.parse(JSON.stringify(INITIAL_VENDOR_BILLS));
 let chartOfAccounts: ChartOfAccount[] = JSON.parse(JSON.stringify(INITIAL_COA));
 let generalLedger: GeneralLedgerEntry[] = JSON.parse(JSON.stringify(INITIAL_GENERAL_LEDGER));
 let auditTrail: TransactionAuditRecord[] = JSON.parse(JSON.stringify(INITIAL_AUDIT_TRAIL));
@@ -3010,6 +3016,349 @@ async function startServer() {
       remainingBackorder: totalRemaining,
       journalEntryIds: [gleId1, gleId2],
     });
+  });
+
+  // -------------------------------------------------------------
+  // VENDOR BILLS, 3-WAY MATCHING & ACCOUNTS PAYABLE (AP)
+  // -------------------------------------------------------------
+  app.get('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
+    const { storeId, status, currency } = req.query;
+    let result = [...vendorBills];
+    if (storeId && storeId !== 'CONSOLIDATED') {
+      result = result.filter((b) => b.storeId === storeId);
+    }
+    if (status && status !== 'ALL') {
+      result = result.filter((b) => b.status === status || b.paymentStatus === status);
+    }
+    if (currency && currency !== 'ALL') {
+      result = result.filter((b) => b.currency === currency);
+    }
+    res.json(result);
+  });
+
+  app.post('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
+    const {
+      billNumber,
+      poId,
+      goodsReceiptId,
+      supplierName,
+      supplierContact,
+      storeId,
+      storeName,
+      deliveryNoteNumber,
+      billDate = new Date().toISOString().split('T')[0],
+      dueDate,
+      paymentTerms = 'Net 30',
+      currency = 'IDR',
+      exchangeRate = 1,
+      items = [],
+      taxPercent = 11,
+      notes = '',
+      autoApprove = false,
+    } = req.body;
+
+    if (!billNumber || !poId || !goodsReceiptId) {
+      return res.status(400).json({ error: 'billNumber, poId, and goodsReceiptId are required' });
+    }
+
+    const po = purchaseOrders.find((p) => p.id === poId);
+    const gr = goodsReceipts.find((g) => g.id === goodsReceiptId);
+
+    let hasQtyVariance = false;
+    let hasPriceVariance = false;
+
+    const processedItems = items.map((it: any) => {
+      const poItem = po?.items.find((p) => p.sku === it.sku);
+      const grItem = gr?.items.find((g) => g.sku === it.sku);
+      const poQty = poItem?.orderedQuantity || 0;
+      const grQty = grItem?.quantityReceived || 0;
+      const billedQty = Number(it.billedQuantity) || 0;
+      const unitCost = Number(it.unitCost) || 0;
+      const poUnitCost = poItem ? (currency === 'IDR' ? poItem.unitCost : poItem.unitCost / Number(exchangeRate || 1)) : unitCost;
+
+      const qtyVar = billedQty !== grQty;
+      const priceVar = Math.abs(unitCost - poUnitCost) > 0.01;
+
+      if (qtyVar) hasQtyVariance = true;
+      if (priceVar) hasPriceVariance = true;
+
+      return {
+        sku: it.sku,
+        productName: it.productName || poItem?.productName || grItem?.productName || 'Grocery Item',
+        poQuantity: poQty,
+        grQuantity: grQty,
+        billedQuantity: billedQty,
+        unitCost,
+        totalCost: Math.round(billedQty * unitCost * 100) / 100,
+        hasQuantityVariance: qtyVar,
+        hasPriceVariance: priceVar,
+        notes: it.notes || '',
+      };
+    });
+
+    const subtotal = processedItems.reduce((acc: number, item: any) => acc + item.totalCost, 0);
+    const taxAmount = Math.round(((subtotal * Number(taxPercent || 0)) / 100) * 100) / 100;
+    const grandTotal = Math.round((subtotal + taxAmount) * 100) / 100;
+    const grandTotalIDR = Math.round(grandTotal * Number(exchangeRate || 1));
+
+    let status: VendorBillStatus = 'MATCHED';
+    if (hasQtyVariance && hasPriceVariance) status = 'QTY_VARIANCE';
+    else if (hasQtyVariance) status = 'QTY_VARIANCE';
+    else if (hasPriceVariance) status = 'PRICE_VARIANCE';
+
+    if (autoApprove && (status === 'MATCHED' || status === 'DRAFT')) {
+      status = 'APPROVED';
+    }
+
+    const billId = `VB-2026-${(vendorBills.length + 1).toString().padStart(3, '0')}`;
+
+    let computedDueDate = dueDate;
+    if (!computedDueDate) {
+      const d = new Date(billDate);
+      const termDays = paymentTerms === 'COD' ? 0 : paymentTerms === 'Net 7' ? 7 : paymentTerms === 'Net 14' ? 14 : paymentTerms === 'Net 60' ? 60 : 30;
+      d.setDate(d.getDate() + termDays);
+      computedDueDate = d.toISOString().split('T')[0];
+    }
+
+    const newBill: VendorBill = {
+      id: billId,
+      billNumber,
+      supplierName: supplierName || po?.supplierName || gr?.vendorName || 'Vendor Supplier',
+      supplierContact: supplierContact || po?.supplierContact || '',
+      storeId: storeId || po?.storeId || 'store-jkt-senopati',
+      storeName: storeName || po?.storeName || 'GroceMart Senopati Flagship',
+      poId,
+      goodsReceiptId,
+      deliveryNoteNumber: deliveryNoteNumber || gr?.deliveryNoteNumber || '',
+      billDate,
+      dueDate: computedDueDate,
+      paymentTerms,
+      currency,
+      exchangeRate: Number(exchangeRate) || 1,
+      items: processedItems,
+      subtotal,
+      taxPercent: Number(taxPercent) || 0,
+      taxAmount,
+      grandTotal,
+      grandTotalIDR,
+      amountPaid: 0,
+      remainingDue: grandTotal,
+      status,
+      paymentStatus: 'UNPAID',
+      notes,
+      createdAt: new Date().toISOString(),
+      glEntryIds: [],
+    };
+
+    if (status === 'APPROVED') {
+      const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      const subtotalIDR = Math.round(subtotal * Number(exchangeRate || 1));
+
+      generalLedger.unshift({
+        id: gle1,
+        timestamp: new Date().toISOString(),
+        storeId: newBill.storeId,
+        storeName: newBill.storeName,
+        accountCode: '1040',
+        accountName: 'Merchandise Inventory Asset',
+        category: 'Asset',
+        debit: subtotalIDR,
+        credit: 0,
+        referenceType: 'VENDOR_BILL',
+        referenceId: newBill.id,
+        description: `${newBill.id} (${newBill.billNumber}): Merchandise asset recognized from ${newBill.supplierName} on PO #${newBill.poId}`,
+      });
+
+      generalLedger.unshift({
+        id: gle2,
+        timestamp: new Date().toISOString(),
+        storeId: newBill.storeId,
+        storeName: newBill.storeName,
+        accountCode: '2010',
+        accountName: 'Trade Accounts Payable (Vendors)',
+        category: 'Liability',
+        debit: 0,
+        credit: grandTotalIDR,
+        referenceType: 'VENDOR_BILL',
+        referenceId: newBill.id,
+        description: `${newBill.id} (${newBill.billNumber}): Trade liability recognized for vendor settlement`,
+      });
+
+      const apCoa = chartOfAccounts.find((c) => c.accountCode === '2010');
+      if (apCoa) apCoa.balance += grandTotalIDR;
+
+      newBill.glEntryIds = [gle1, gle2];
+      newBill.approvedBy = 'Auditor / Finance Lead';
+      newBill.approvedAt = new Date().toISOString();
+    }
+
+    vendorBills.unshift(newBill);
+
+    res.json({
+      success: true,
+      vendorBill: newBill,
+      journalEntryIds: newBill.glEntryIds,
+      message: `Vendor Bill #${newBill.id} (${newBill.billNumber}) created successfully${status === 'APPROVED' ? ' & posted to Accounts Payable' : ''}.`,
+    });
+  });
+
+  app.post('/api/admin/procurement/vendor-bills/:id/approve', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { approverName = 'Finance Controller' } = req.body;
+    const bill = vendorBills.find((b) => b.id === id);
+    if (!bill) return res.status(404).json({ error: 'Vendor Bill not found' });
+
+    if (bill.status === 'APPROVED' || bill.status === 'PAID') {
+      return res.json({ success: true, vendorBill: bill, message: 'Vendor Bill is already approved.' });
+    }
+
+    bill.status = 'APPROVED';
+    bill.approvedBy = approverName;
+    bill.approvedAt = new Date().toISOString();
+
+    const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const subtotalIDR = Math.round(bill.subtotal * bill.exchangeRate);
+
+    generalLedger.unshift({
+      id: gle1,
+      timestamp: new Date().toISOString(),
+      storeId: bill.storeId,
+      storeName: bill.storeName,
+      accountCode: '1040',
+      accountName: 'Merchandise Inventory Asset',
+      category: 'Asset',
+      debit: subtotalIDR,
+      credit: 0,
+      referenceType: 'VENDOR_BILL',
+      referenceId: bill.id,
+      description: `${bill.id} (${bill.billNumber}): Formally approved vendor bill for ${bill.supplierName}`,
+    });
+
+    generalLedger.unshift({
+      id: gle2,
+      timestamp: new Date().toISOString(),
+      storeId: bill.storeId,
+      storeName: bill.storeName,
+      accountCode: '2010',
+      accountName: 'Trade Accounts Payable (Vendors)',
+      category: 'Liability',
+      debit: 0,
+      credit: bill.grandTotalIDR,
+      referenceType: 'VENDOR_BILL',
+      referenceId: bill.id,
+      description: `${bill.id} (${bill.billNumber}): Trade payable liability to ${bill.supplierName} posted to AP`,
+    });
+
+    const apCoa = chartOfAccounts.find((c) => c.accountCode === '2010');
+    if (apCoa) apCoa.balance += bill.grandTotalIDR;
+
+    bill.glEntryIds = [gle1, gle2];
+
+    res.json({
+      success: true,
+      vendorBill: bill,
+      journalEntryIds: bill.glEntryIds,
+      message: `Vendor Bill #${bill.id} approved and posted to General Ledger (GL #${gle1}, #${gle2}).`,
+    });
+  });
+
+  app.post('/api/admin/procurement/vendor-bills/:id/pay', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const {
+      amountPaid = 0,
+      paymentMethod = 'BANK_TRANSFER',
+      paymentReference = `TRF-BCA-${Date.now().toString().slice(-6)}`,
+      notes = '',
+    } = req.body;
+
+    const bill = vendorBills.find((b) => b.id === id);
+    if (!bill) return res.status(404).json({ error: 'Vendor Bill not found' });
+
+    const payAmt = Number(amountPaid);
+    if (payAmt <= 0) {
+      return res.status(400).json({ error: 'Payment amount must be greater than zero' });
+    }
+
+    bill.amountPaid = Math.round((bill.amountPaid + payAmt) * 100) / 100;
+    bill.remainingDue = Math.max(0, Math.round((bill.grandTotal - bill.amountPaid) * 100) / 100);
+    bill.paymentStatus = bill.remainingDue <= 0.01 ? 'PAID' : 'PARTIALLY_PAID';
+    if (bill.remainingDue <= 0.01) {
+      bill.status = 'PAID';
+    }
+    bill.paymentMethod = paymentMethod;
+    bill.paymentReference = paymentReference;
+    bill.paidAt = new Date().toISOString();
+    if (notes) bill.notes = (bill.notes ? `${bill.notes} • ` : '') + notes;
+
+    const paymentAmountIDR = Math.round(payAmt * bill.exchangeRate);
+    const glePay1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const glePay2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+
+    // Debit 2010 Trade Accounts Payable (reduces liability)
+    generalLedger.unshift({
+      id: glePay1,
+      timestamp: new Date().toISOString(),
+      storeId: bill.storeId,
+      storeName: bill.storeName,
+      accountCode: '2010',
+      accountName: 'Trade Accounts Payable (Vendors)',
+      category: 'Liability',
+      debit: paymentAmountIDR,
+      credit: 0,
+      referenceType: 'VENDOR_PAYMENT',
+      referenceId: bill.id,
+      description: `${bill.id}: Vendor settlement payment to ${bill.supplierName} (${paymentReference})`,
+    });
+
+    // Credit 1020 Bank BCA Clearing or 1010 Cash
+    const targetAccountCode = paymentMethod === 'CASH' ? '1010' : '1020';
+    const targetAccountName = paymentMethod === 'CASH' ? 'Cash on Hand & Store Registers' : 'Bank BCA Operational Clearing';
+
+    generalLedger.unshift({
+      id: glePay2,
+      timestamp: new Date().toISOString(),
+      storeId: bill.storeId,
+      storeName: bill.storeName,
+      accountCode: targetAccountCode,
+      accountName: targetAccountName,
+      category: 'Asset',
+      debit: 0,
+      credit: paymentAmountIDR,
+      referenceType: 'VENDOR_PAYMENT',
+      referenceId: bill.id,
+      description: `${bill.id}: Disbursement via ${targetAccountName} ref ${paymentReference}`,
+    });
+
+    // Update COA balances
+    const apCoa = chartOfAccounts.find((c) => c.accountCode === '2010');
+    if (apCoa) apCoa.balance = Math.max(0, apCoa.balance - paymentAmountIDR);
+
+    const bankCoa = chartOfAccounts.find((c) => c.accountCode === targetAccountCode);
+    if (bankCoa) bankCoa.balance = Math.max(0, bankCoa.balance - paymentAmountIDR);
+
+    bill.glEntryIds = bill.glEntryIds || [];
+    bill.glEntryIds.push(glePay1, glePay2);
+
+    res.json({
+      success: true,
+      vendorBill: bill,
+      journalEntryIds: [glePay1, glePay2],
+      message: `Payment of ${bill.currency} ${payAmt.toLocaleString()} recorded. Accounts Payable liability reduced by IDR ${paymentAmountIDR.toLocaleString()}.`,
+    });
+  });
+
+  app.post('/api/admin/procurement/vendor-bills/:id/void', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { reason = 'Cancelled by purchasing manager' } = req.body;
+    const bill = vendorBills.find((b) => b.id === id);
+    if (!bill) return res.status(404).json({ error: 'Vendor Bill not found' });
+
+    bill.status = 'VOID';
+    bill.notes = (bill.notes ? `${bill.notes} • ` : '') + `VOIDED: ${reason}`;
+
+    res.json({ success: true, vendorBill: bill, message: `Vendor Bill #${bill.id} voided.` });
   });
 
   // -------------------------------------------------------------

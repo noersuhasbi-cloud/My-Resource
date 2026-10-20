@@ -7,6 +7,7 @@ import type {
   PurchaseRequest,
   PurchaseOrder,
   GoodsReceiptRecord,
+  VendorBill,
   ChartOfAccount,
   GeneralLedgerEntry,
   ProfitAndLossReport,
@@ -311,8 +312,121 @@ export const apiClient = {
   },
 
   // -------------------------------------------------------------
-  // Accounting & Multi-Store Financials APIs
+  // Vendor Bills, 3-Way Matching & Accounts Payable (AP)
   // -------------------------------------------------------------
+  async getVendorBills(storeId?: string, status?: string, currency?: string): Promise<VendorBill[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    if (status && status !== 'ALL') params.append('status', status);
+    if (currency && currency !== 'ALL') params.append('currency', currency);
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/admin/procurement/vendor-bills${qs}`);
+    return res.json();
+  },
+
+  async createVendorBill(payload: {
+    billNumber: string;
+    poId: string;
+    goodsReceiptId: string;
+    supplierName?: string;
+    supplierContact?: string;
+    storeId?: string;
+    storeName?: string;
+    deliveryNoteNumber?: string;
+    billDate?: string;
+    dueDate?: string;
+    paymentTerms?: string;
+    currency?: string;
+    exchangeRate?: number;
+    items: {
+      sku: string;
+      productName?: string;
+      billedQuantity: number;
+      unitCost: number;
+      notes?: string;
+    }[];
+    taxPercent?: number;
+    notes?: string;
+    autoApprove?: boolean;
+  }): Promise<{
+    success: boolean;
+    vendorBill: VendorBill;
+    journalEntryIds?: string[];
+    message?: string;
+  }> {
+    const res = await fetch('/api/admin/procurement/vendor-bills', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create Vendor Bill');
+    }
+    return res.json();
+  },
+
+  async approveVendorBill(id: string, approverName?: string): Promise<{
+    success: boolean;
+    vendorBill: VendorBill;
+    journalEntryIds?: string[];
+    message?: string;
+  }> {
+    const res = await fetch(`/api/admin/procurement/vendor-bills/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approverName }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to approve Vendor Bill');
+    }
+    return res.json();
+  },
+
+  async payVendorBill(
+    id: string,
+    payload: {
+      amountPaid: number;
+      paymentMethod?: string;
+      paymentReference?: string;
+      notes?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    vendorBill: VendorBill;
+    journalEntryIds?: string[];
+    message?: string;
+  }> {
+    const res = await fetch(`/api/admin/procurement/vendor-bills/${encodeURIComponent(id)}/pay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to record payment');
+    }
+    return res.json();
+  },
+
+  async voidVendorBill(id: string, reason?: string): Promise<{
+    success: boolean;
+    vendorBill: VendorBill;
+    message?: string;
+  }> {
+    const res = await fetch(`/api/admin/procurement/vendor-bills/${encodeURIComponent(id)}/void`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to void Vendor Bill');
+    }
+    return res.json();
+  },
   async getChartOfAccounts(): Promise<ChartOfAccount[]> {
     const res = await fetch('/api/admin/accounting/coa');
     return res.json();
