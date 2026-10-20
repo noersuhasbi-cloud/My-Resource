@@ -221,6 +221,7 @@ export interface StoreInventoryStock {
   // Cost & Valuation
   unitCost: number;        // WAC or FIFO cost
   sellingPrice: number;
+  totalValuation?: number;
   unit: string;
   
   // Handling & Notes
@@ -856,7 +857,11 @@ export interface SecurityAuditTrailRecord {
     | 'STOCK_TRANSFER_INTER_WAREHOUSE'
     | 'HARDWARE_DRAWER_KICK'
     | 'RETURN_REFUND_PROCESSED'
-    | 'AUTO_REPLENISHMENT_PO_GENERATED';
+    | 'AUTO_REPLENISHMENT_PO_GENERATED'
+    | 'POLICY_UPDATE'
+    | 'APPROVAL_MATRIX_UPDATE'
+    | 'QC_INSPECTION_LOGGED'
+    | 'LOGISTICS_DOCUMENT_ISSUED';
   resourceId: string;
   userId: string;
   userName: string;
@@ -1067,6 +1072,8 @@ export interface BulkInventoryImportRow {
   minimumThreshold: number;
   reorderQuantity?: number;
   supplierName?: string;
+  stock?: number;
+  costPrice?: number;
 }
 
 export interface StockOpnameItem {

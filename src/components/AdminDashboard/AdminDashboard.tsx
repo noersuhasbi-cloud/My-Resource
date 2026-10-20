@@ -82,6 +82,11 @@ import { RbacModule } from './RbacModule';
 import { SecurityAuditModule } from './SecurityAuditModule';
 import { AdminSidebar, AdminDashboardTab, AccountingSubTab } from './AdminSidebar';
 import { PosModule } from './PosModule';
+import { InventoryQCModule } from './InventoryQCModule';
+import { LogisticsDocsModal } from './LogisticsDocsModal';
+import { ApprovalMatrixModule } from './ApprovalMatrixModule';
+import { GroceryReportsModule } from './GroceryReportsModule';
+import { SettingsModule } from './SettingsModule';
 
 interface AdminDashboardProps {
   initialStaffSession?: StaffShiftSession | null;
@@ -2002,6 +2007,86 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <SecurityAuditModule
             theme={theme}
             selectedStore={selectedGlobalStore}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: INVENTORY QUALITY CONTROL (QC) & SPOILAGE INSPECTIONS */}
+        {/* ========================================================================= */}
+        {activeTab === 'qc' && (
+          <InventoryQCModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            inventory={inventory}
+            onRefreshData={refreshAllData}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: LOGISTICS & SHIPPING DOCUMENTS (SURAT JALAN / DO) */}
+        {/* ========================================================================= */}
+        {activeTab === 'logistics' && (
+          <LogisticsDocsModal
+            theme={theme}
+            isOpen={true}
+            isStandalonePage={true}
+            onClose={() => {}}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: INTER-WAREHOUSE STOCK TRANSFERS & TRACKING */}
+        {/* ========================================================================= */}
+        {activeTab === 'transfers' && (
+          <SettingsModule
+            theme={theme}
+            chartOfAccounts={chartOfAccounts}
+            storeOutlets={storeOutlets}
+            warehouseZones={warehouseZones}
+            inventoryTiers={inventoryTiers}
+            initialSubTab="transfer"
+            onRefreshData={refreshAllData}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: APPROVAL MATRIX & MULTI-TIER CLEARANCE QUEUE */}
+        {/* ========================================================================= */}
+        {activeTab === 'approvals' && (
+          <ApprovalMatrixModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            onRefreshData={refreshAllData}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: SPECIALIZED GROCERY ANALYTICS & FIFO AGING REPORTS */}
+        {/* ========================================================================= */}
+        {activeTab === 'reports' && (
+          <GroceryReportsModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: ENTERPRISE SETTINGS HUB */}
+        {/* ========================================================================= */}
+        {activeTab === 'settings' && (
+          <SettingsModule
+            theme={theme}
+            chartOfAccounts={chartOfAccounts}
+            storeOutlets={storeOutlets}
+            warehouseZones={warehouseZones}
+            inventoryTiers={inventoryTiers}
+            onRefreshData={refreshAllData}
             onShowToast={onShowToast}
           />
         )}

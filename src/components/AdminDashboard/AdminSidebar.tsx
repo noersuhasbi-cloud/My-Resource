@@ -32,6 +32,12 @@ import {
   FileCheck2,
   LogOut,
   CreditCard,
+  CheckSquare,
+  ArrowRightLeft,
+  BarChart3,
+  FileText,
+  Sliders,
+  Settings,
 } from 'lucide-react';
 
 export type AdminDashboardTab =
@@ -43,6 +49,12 @@ export type AdminDashboardTab =
   | 'waste'
   | 'picker'
   | 'procurement'
+  | 'qc'
+  | 'logistics'
+  | 'transfers'
+  | 'approvals'
+  | 'reports'
+  | 'settings'
   | 'accounting'
   | 'openapi'
   | 'erd'
@@ -379,6 +391,139 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                       Partial
                     </span>
                   )}
+                </>
+              )}
+            </button>
+
+            {/* 7A. Inventory QC & Spoilage Inspections */}
+            <button
+              onClick={() => handleTabClick('qc')}
+              title={isCollapsed ? 'Quality Control (QC) & Spoilage Inspections' : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+                activeTab === 'qc'
+                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
+                  : isLight
+                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
+                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+              }`}
+            >
+              <CheckSquare className={`w-4 h-4 flex-shrink-0 ${activeTab === 'qc' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Quality Control (QC)</span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                    HACCP
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* 7B. Logistics & Shipping Documents */}
+            <button
+              onClick={() => handleTabClick('logistics')}
+              title={isCollapsed ? 'Logistics & Shipping Documents (Surat Jalan)' : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+                activeTab === 'logistics'
+                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
+                  : isLight
+                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
+                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+              }`}
+            >
+              <FileText className={`w-4 h-4 flex-shrink-0 ${activeTab === 'logistics' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Logistics &amp; Surat Jalan</span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-700 dark:text-indigo-300">
+                    Fleet
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* 7C. Inter-Warehouse Transfers */}
+            <button
+              onClick={() => handleTabClick('transfers')}
+              title={isCollapsed ? 'Inter-Warehouse Stock Transfers' : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+                activeTab === 'transfers'
+                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
+                  : isLight
+                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
+                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+              }`}
+            >
+              <ArrowRightLeft className={`w-4 h-4 flex-shrink-0 ${activeTab === 'transfers' ? 'text-white' : 'text-cyan-600 dark:text-cyan-400'}`} />
+              {!isCollapsed && (
+                <span className="truncate flex-1 text-left">Warehouse Transfers</span>
+              )}
+            </button>
+
+            {/* 7D. Approval Matrix & Authorization Queue */}
+            <button
+              onClick={() => handleTabClick('approvals')}
+              title={isCollapsed ? 'Approval Matrix & Authorization Queue' : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+                activeTab === 'approvals'
+                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
+                  : isLight
+                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
+                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+              }`}
+            >
+              <ShieldCheck className={`w-4 h-4 flex-shrink-0 ${activeTab === 'approvals' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`} />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Approval Matrix</span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                    Tiered
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* 7E. Specialized Grocery Intelligence & Reports */}
+            <button
+              onClick={() => handleTabClick('reports')}
+              title={isCollapsed ? 'Grocery Analytics & FIFO Aging Reports' : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+                activeTab === 'reports'
+                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
+                  : isLight
+                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
+                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+              }`}
+            >
+              <BarChart3 className={`w-4 h-4 flex-shrink-0 ${activeTab === 'reports' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Grocery Analytics</span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                    FIFO
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* 7F. Enterprise Settings Hub */}
+            <button
+              onClick={() => handleTabClick('settings')}
+              title={isCollapsed ? 'Enterprise Settings Hub' : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+                activeTab === 'settings'
+                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
+                  : isLight
+                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
+                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+              }`}
+            >
+              <Settings className={`w-4 h-4 flex-shrink-0 ${activeTab === 'settings' ? 'text-white' : 'text-stone-600 dark:text-stone-400'}`} />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Enterprise Settings Hub</span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-500/20 text-purple-700 dark:text-purple-300">
+                    Config
+                  </span>
                 </>
               )}
             </button>

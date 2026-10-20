@@ -16,7 +16,20 @@ import type {
   PromotionRule,
   PromotionType,
   MemberLoyaltyTier,
+  EnterpriseSettingsConfig,
+  LandedCostRecord,
+  WarehouseBinLocation,
+  WarehouseMultiStepRoute,
+  VendorBill,
+  PurchaseOrder,
+  GoodsReceiptRecord,
 } from '../../types/index.ts';
+import {
+  INITIAL_ENTERPRISE_SETTINGS,
+  INITIAL_LANDED_COSTS,
+  INITIAL_WAREHOUSE_BINS,
+  INITIAL_WAREHOUSE_ROUTES,
+} from '../../data/inventoryData';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import {
@@ -55,8 +68,28 @@ import {
   Tag,
   Gift,
   Zap,
+  Scale,
+  Warehouse,
+  Layers,
+  BarChart3,
+  Lock,
 } from 'lucide-react';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
+import { ValuationCostingSettingsTab } from './ValuationCostingSettingsTab';
+import { WarehouseRoutingSettingsTab } from './WarehouseRoutingSettingsTab';
+import { ThreeWayMatchingSettingsTab } from './ThreeWayMatchingSettingsTab';
+
+export type SettingsSubTab =
+  | 'enterprise'
+  | 'valuation'
+  | 'warehouse'
+  | 'matching'
+  | 'coa'
+  | 'pos'
+  | 'promotions'
+  | 'import_opname'
+  | 'transfer'
+  | 'approval_matrix';
 
 interface SettingsModuleProps {
   theme: 'light' | 'dark';
@@ -64,7 +97,7 @@ interface SettingsModuleProps {
   storeOutlets: StoreOutletSchedule[];
   warehouseZones: WarehouseZone[];
   inventoryTiers: StoreInventoryStock[];
-  initialSubTab?: 'coa' | 'pos' | 'promotions' | 'import_opname' | 'transfer' | 'approval_matrix';
+  initialSubTab?: SettingsSubTab;
   onShowToast: (title: string, message: string) => void;
   onRefreshData?: () => void;
 }
@@ -81,9 +114,9 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 }) => {
   const isLight = theme === 'light';
 
-  // Sub-tabs: 'coa' | 'pos' | 'promotions' | 'import_opname' | 'transfer' | 'approval_matrix'
-  const [activeSubTab, setActiveSubTab] = useState<'coa' | 'pos' | 'promotions' | 'import_opname' | 'transfer' | 'approval_matrix'>(
-    initialSubTab || 'coa'
+  // Active Sub-Tab
+  const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(
+    initialSubTab || 'enterprise'
   );
 
   useEffect(() => {
@@ -91,7 +124,19 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       setActiveSubTab(initialSubTab);
     }
   }, [initialSubTab]);
+
   const [opnameSubTab, setOpnameSubTab] = useState<'stocktake' | 'bulk_import'>('stocktake');
+
+  // Enterprise Settings & Related Logistics State
+  const [enterpriseSettings, setEnterpriseSettings] = useState<EnterpriseSettingsConfig>(INITIAL_ENTERPRISE_SETTINGS);
+  const [landedCosts, setLandedCosts] = useState<LandedCostRecord[]>(INITIAL_LANDED_COSTS);
+  const [warehouseBins, setWarehouseBins] = useState<WarehouseBinLocation[]>(INITIAL_WAREHOUSE_BINS);
+  const [warehouseRoutes, setWarehouseRoutes] = useState<WarehouseMultiStepRoute[]>(INITIAL_WAREHOUSE_ROUTES);
+  const [vendorBills, setVendorBills] = useState<VendorBill[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptRecord[]>([]);
+  const [isSavingEnterprise, setIsSavingEnterprise] = useState<boolean>(false);
+  const [enterpriseQuickFilter, setEnterpriseQuickFilter] = useState<'ALL' | 'VALUATION' | 'WAREHOUSE' | 'ANALYTICS' | 'QUOTATIONS' | 'MATCHING'>('ALL');
 
   // Loading states
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -202,7 +247,22 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const fetchAllSettings = async () => {
     setIsLoading(true);
     try {
-      const [coaRes, posRes, opnameRes, transferRes, rulesRes, queueRes, promoRes] = await Promise.all([
+      const [
+        coaRes,
+        posRes,
+        opnameRes,
+        transferRes,
+        rulesRes,
+        queueRes,
+        promoRes,
+        entRes,
+        lcRes,
+        binsRes,
+        routesRes,
+        billsRes,
+        poRes,
+        grRes,
+      ] = await Promise.all([
         apiClient.getCoaMapping().catch(() => null),
         apiClient.getPosConfig().catch(() => null),
         apiClient.getStockOpnameSessions().catch(() => []),
@@ -210,6 +270,13 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         apiClient.getApprovalRules().catch(() => []),
         apiClient.getApprovalQueue().catch(() => []),
         apiClient.getPromotions().catch(() => []),
+        apiClient.getEnterpriseSettings().catch(() => INITIAL_ENTERPRISE_SETTINGS),
+        apiClient.getLandedCosts().catch(() => INITIAL_LANDED_COSTS),
+        apiClient.getWarehouseBins().catch(() => INITIAL_WAREHOUSE_BINS),
+        apiClient.getWarehouseRoutes().catch(() => INITIAL_WAREHOUSE_ROUTES),
+        apiClient.getVendorBills().catch(() => []),
+        apiClient.getPurchaseOrders().catch(() => []),
+        apiClient.getGoodsReceipts().catch(() => []),
       ]);
 
       if (coaRes) setCoaConfig(coaRes);
@@ -219,10 +286,51 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       if (rulesRes) setApprovalRules(rulesRes);
       if (queueRes) setApprovalQueue(queueRes);
       if (promoRes) setPromotions(promoRes);
+      if (entRes) setEnterpriseSettings(entRes);
+      if (lcRes) setLandedCosts(lcRes);
+      if (binsRes) setWarehouseBins(binsRes);
+      if (routesRes) setWarehouseRoutes(routesRes);
+      if (billsRes) setVendorBills(billsRes);
+      if (poRes) setPurchaseOrders(poRes);
+      if (grRes) setGoodsReceipts(grRes);
     } catch (err) {
       console.error('Failed to load Settings & Configuration:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUpdateEnterpriseSettings = async (updated: Partial<EnterpriseSettingsConfig>) => {
+    setIsSavingEnterprise(true);
+    try {
+      const res = await apiClient.updateEnterpriseSettings(updated);
+      if (res.success && res.settings) {
+        setEnterpriseSettings(res.settings);
+        onShowToast('Enterprise Settings Updated', 'System configurations synchronized across all modules.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Error', msg);
+    } finally {
+      setIsSavingEnterprise(false);
+    }
+  };
+
+  const handleRefreshLandedCosts = async () => {
+    try {
+      const res = await apiClient.getLandedCosts();
+      setLandedCosts(res);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleRefreshBins = async () => {
+    try {
+      const res = await apiClient.getWarehouseBins();
+      setWarehouseBins(res);
+    } catch {
+      // ignore
     }
   };
 
@@ -661,23 +769,21 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
   }, [filteredOpnameTiers, opnameItems]);
 
   // Card styling tokens
-  const cardClass = `rounded-2xl border transition-all ${
+  const cardClass = `rounded-xl border transition-all ${
     isLight
-      ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.03)]'
-      : 'bg-stone-900/90 border-stone-800 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
+      ? 'bg-white border-gray-200 shadow-xs hover:border-gray-300'
+      : 'bg-stone-900 border-stone-800 shadow-xs hover:border-stone-700'
   }`;
 
   const subCardClass = `rounded-xl border p-4 transition-all ${
-    isLight ? 'bg-gray-50/80 border-gray-200 text-gray-900' : 'bg-stone-800/60 border-stone-700/80 text-stone-100'
-  }`;
-
-  const inputClass = `px-3.5 py-2 text-xs rounded-xl font-medium transition-all ${
     isLight
-      ? 'bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-      : 'bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+      ? 'bg-gray-50/70 border-gray-200 text-gray-900'
+      : 'bg-stone-800/40 border-stone-700/80 text-stone-100'
   }`;
 
-  const labelClass = `block text-xs font-semibold mb-1.5 ${isLight ? 'text-gray-700' : 'text-stone-300'}`;
+  const inputClass = `w-full px-3.5 py-2 text-xs rounded-xl font-medium transition-all bg-white dark:bg-stone-900 border border-gray-200 dark:border-stone-700 text-gray-900 dark:text-stone-100 placeholder:text-gray-400 dark:placeholder:text-stone-500 focus:outline-hidden focus:border-[#0F4C3A] dark:focus:border-emerald-500 focus:ring-1 focus:ring-[#0F4C3A] dark:focus:ring-emerald-500`;
+
+  const labelClass = `block text-xs font-semibold mb-1.5 text-gray-700 dark:text-stone-300`;
 
   return (
     <div className="space-y-6">
@@ -686,27 +792,27 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
             <div className="p-3 rounded-xl bg-[#0F4C3A] text-white shadow-xs shrink-0">
-              <Settings className="w-6 h-6" />
+              <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30 uppercase tracking-wider">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30 uppercase tracking-wider">
                   ERP Hub
                 </span>
-                <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
-                  System Architecture v4.2
+                <span className="text-xs text-gray-500 dark:text-stone-400 font-medium">
+                  Enterprise System Architecture v4.2
                 </span>
               </div>
-              <h1 className={`text-lg sm:text-xl font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+              <h1 className="text-lg sm:text-xl font-bold mt-1 text-gray-900 dark:text-stone-100">
                 Settings &amp; Configuration Hub
               </h1>
-              <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? 'text-gray-600' : 'text-stone-400'}`}>
-                Manage dynamic Chart of Accounts (COA) mapping, frontline POS checkout rules (cash rounding, VAT, discounts), and execute periodic physical stocktakes with automatic General Ledger variance adjustments.
+              <p className="text-xs mt-0.5 max-w-2xl text-gray-500 dark:text-stone-400 leading-relaxed">
+                Centralized enterprise administration: configure product valuation, multi-step warehouse routes, department cost centers, quotation rules, frontline POS controls, dynamic COA mappings, and periodic physical stocktakes.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className={`text-[11px] font-mono px-3 py-1.5 rounded-xl border flex items-center gap-1.5 ${
               isLight ? 'bg-gray-50 border-gray-200 text-gray-700' : 'bg-stone-800 border-stone-700 text-stone-300'
             }`}>
@@ -719,8 +825,67 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
         {/* Primary Sub-Tab Navigation Bar */}
         <div className="flex items-center gap-2 mt-6 pt-5 border-t border-gray-100 dark:border-stone-800 overflow-x-auto pb-1">
           <button
+            onClick={() => setActiveSubTab('enterprise')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'enterprise'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <span>Enterprise SaaS Config</span>
+            <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">
+              Hub
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('valuation')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'valuation'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800'
+            }`}
+          >
+            <Scale className="w-4 h-4" />
+            <span>Valuation &amp; Costing</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('warehouse')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'warehouse'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800'
+            }`}
+          >
+            <Warehouse className="w-4 h-4" />
+            <span>Warehouse Routing</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('matching')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'matching'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-blue-400" />
+            <span>3-Way Matching AP</span>
+          </button>
+
+          <button
             onClick={() => setActiveSubTab('coa')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'coa'
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
@@ -729,12 +894,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span>Chart of Accounts (COA) Mapping</span>
+            <span>Chart of Accounts</span>
           </button>
 
           <button
             onClick={() => setActiveSubTab('pos')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'pos'
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
@@ -748,7 +913,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
           <button
             onClick={() => setActiveSubTab('promotions')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'promotions'
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
@@ -757,7 +922,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             }`}
           >
             <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>Promotion &amp; Loyalty Engine</span>
+            <span>Promotions &amp; Loyalty</span>
             <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 font-extrabold">
               {promotions.length}
             </span>
@@ -765,7 +930,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
           <button
             onClick={() => setActiveSubTab('import_opname')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'import_opname'
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
@@ -774,12 +939,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             }`}
           >
             <Boxes className="w-4 h-4" />
-            <span>Inventory Import &amp; Stock Opname</span>
+            <span>Stocktake &amp; Import</span>
           </button>
 
           <button
             onClick={() => setActiveSubTab('transfer')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'transfer'
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
@@ -788,12 +953,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             }`}
           >
             <ArrowRightLeft className="w-4 h-4" />
-            <span>Inter-Warehouse Transfers</span>
+            <span>Transfers</span>
           </button>
 
           <button
             onClick={() => setActiveSubTab('approval_matrix')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'approval_matrix'
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
@@ -802,10 +967,609 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>Approval Rules &amp; Matrix</span>
+            <span>Approval Matrix</span>
           </button>
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 0. ENTERPRISE CONFIGURATION HUB (GRID-ALIGNED SECTIONS) */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'enterprise' && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Quick Filter Pill Bar */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-stone-400 uppercase tracking-wider shrink-0 mr-1">
+              Filter Sections:
+            </span>
+            {(
+              [
+                { id: 'ALL', label: 'All Enterprise Panels' },
+                { id: 'VALUATION', label: 'Valuation & Costing' },
+                { id: 'WAREHOUSE', label: 'Warehouse & Routes' },
+                { id: 'ANALYTICS', label: 'Analytic Cost Centers' },
+                { id: 'QUOTATIONS', label: 'Quotations & Policies' },
+                { id: 'MATCHING', label: '3-Way Matching' },
+              ] as const
+            ).map((filter) => (
+              <button
+                key={filter.id}
+                onClick={() => setEnterpriseQuickFilter(filter.id)}
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  enterpriseQuickFilter === filter.id
+                    ? 'bg-[#0F4C3A] text-white shadow-xs'
+                    : isLight
+                    ? 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                    : 'bg-stone-800 border border-stone-700 text-stone-300 hover:bg-stone-700'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* SECTION 1: VALUATION & LANDED COST */}
+            {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'VALUATION') && (
+              <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-stone-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                      <Scale className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-stone-100">
+                        Product Valuation &amp; Landed Costs
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-stone-400">
+                        Absorb freight, customs &amp; handling into stock assets
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={enterpriseSettings.landedCosts.enabled}
+                      onChange={(e) =>
+                        handleUpdateEnterpriseSettings({
+                          landedCosts: { ...enterpriseSettings.landedCosts, enabled: e.target.checked },
+                        })
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-stone-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelClass}>Default Allocation Method</label>
+                      <select
+                        value={enterpriseSettings.landedCosts.defaultAllocationMethod}
+                        onChange={(e) =>
+                          handleUpdateEnterpriseSettings({
+                            landedCosts: {
+                              ...enterpriseSettings.landedCosts,
+                              defaultAllocationMethod: e.target.value as any,
+                            },
+                          })
+                        }
+                        className={inputClass}
+                      >
+                        <option value="BY_QUANTITY" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">By Quantity (Per piece)</option>
+                        <option value="BY_VALUE" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">By Value (Invoice proportion)</option>
+                        <option value="EQUAL" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Equal Line Split</option>
+                        <option value="BY_WEIGHT" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">By Weight (Kilograms)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Accounting Journal</label>
+                      <select
+                        value={enterpriseSettings.landedCosts.defaultJournal}
+                        onChange={(e) =>
+                          handleUpdateEnterpriseSettings({
+                            landedCosts: {
+                              ...enterpriseSettings.landedCosts,
+                              defaultJournal: e.target.value,
+                            },
+                          })
+                        }
+                        className={inputClass}
+                      >
+                        <option value="MISC_OPERATIONS" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Operations &amp; Landed Costs</option>
+                        <option value="GENERAL_JOURNAL" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">General Standard Journal</option>
+                        <option value="PURCHASE_JOURNAL" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Vendor Procurement Journal</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-gray-50/70 dark:bg-stone-800/40 border border-gray-200 dark:border-stone-800 text-xs space-y-2">
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-gray-500 dark:text-stone-400">Inbound Freight Account:</span>
+                      <span className="font-mono font-bold text-gray-900 dark:text-stone-100">
+                        [{enterpriseSettings.landedCosts.freightExpenseAccountCode}] {enterpriseSettings.landedCosts.freightExpenseAccountName}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-gray-500 dark:text-stone-400">Clearing / Accrual Account:</span>
+                      <span className="font-mono font-bold text-gray-900 dark:text-stone-100">
+                        [{enterpriseSettings.landedCosts.clearingAccountCode}] {enterpriseSettings.landedCosts.clearingAccountName}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-gray-500 dark:text-stone-400">
+                      {landedCosts.length} historical entries applied
+                    </span>
+                    <button
+                      onClick={() => setActiveSubTab('valuation')}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+                    >
+                      <span>Open Full Valuation Panel</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SECTION 2: WAREHOUSE MULTI-STEP LOGISTICS */}
+            {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'WAREHOUSE') && (
+              <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-stone-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400">
+                      <Warehouse className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-stone-100">
+                        Warehouse Advanced Routing &amp; Bins
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-stone-400">
+                        Multi-step staging, catch-weight pack, and shelf bins
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={enterpriseSettings.warehouseRouting.multiStepRoutingEnabled}
+                      onChange={(e) =>
+                        handleUpdateEnterpriseSettings({
+                          warehouseRouting: {
+                            ...enterpriseSettings.warehouseRouting,
+                            multiStepRoutingEnabled: e.target.checked,
+                          },
+                        })
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-stone-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelClass}>Default Fulfillment Route</label>
+                      <select
+                        value={enterpriseSettings.warehouseRouting.defaultRouteSteps}
+                        onChange={(e) =>
+                          handleUpdateEnterpriseSettings({
+                            warehouseRouting: {
+                              ...enterpriseSettings.warehouseRouting,
+                              defaultRouteSteps: e.target.value as any,
+                            },
+                          })
+                        }
+                        className={inputClass}
+                      >
+                        <option value="THREE_STEP" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">3-Step (Intake &rarr; QC &rarr; Chilled Putaway)</option>
+                        <option value="TWO_STEP" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">2-Step (Pallet Scan &rarr; Shelf Putaway)</option>
+                        <option value="DIRECT" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">1-Step Direct Dock-to-Shelf</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-gray-200 dark:border-stone-800 bg-gray-50/50 dark:bg-stone-800/40">
+                        <span className="text-xs font-semibold text-gray-700 dark:text-stone-300">Auto Putaway Bins</span>
+                        <input
+                          type="checkbox"
+                          checked={enterpriseSettings.warehouseRouting.autoAssignPutawayBin}
+                          onChange={(e) =>
+                            handleUpdateEnterpriseSettings({
+                              warehouseRouting: {
+                                ...enterpriseSettings.warehouseRouting,
+                                autoAssignPutawayBin: e.target.checked,
+                              },
+                            })
+                          }
+                          className="w-4 h-4 text-[#0F4C3A] rounded"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    {enterpriseSettings.warehouseRouting.zones.map((z) => (
+                      <div key={z.zoneId} className="p-2.5 rounded-xl bg-gray-50/70 dark:bg-stone-800/40 border border-gray-200 dark:border-stone-800">
+                        <span className="text-[10px] text-gray-500 dark:text-stone-400 block font-mono">{z.routeType}</span>
+                        <span className="font-bold text-xs text-gray-900 dark:text-stone-100 block mt-0.5 truncate">{z.zoneName.split(' ')[0]}</span>
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">{z.activeBinsCount} Bins Active</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-gray-500 dark:text-stone-400">
+                      {warehouseBins.length} Storage Bins Mapped
+                    </span>
+                    <button
+                      onClick={() => setActiveSubTab('warehouse')}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-700 dark:text-cyan-400 hover:underline cursor-pointer"
+                    >
+                      <span>Open Storage Bins &amp; Routes</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SECTION 3: COST CENTERS & ANALYTIC ACCOUNTING */}
+            {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'ANALYTICS') && (
+              <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-stone-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
+                      <BarChart3 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-stone-100">
+                        Cost Centers &amp; Analytic Accounting
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-stone-400">
+                        Departmental budget consumption and margin warning guards
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={enterpriseSettings.analyticAccounting.enabled}
+                      onChange={(e) =>
+                        handleUpdateEnterpriseSettings({
+                          analyticAccounting: {
+                            ...enterpriseSettings.analyticAccounting,
+                            enabled: e.target.checked,
+                          },
+                        })
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-stone-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1">
+                      <label className={labelClass}>Default Department</label>
+                      <select
+                        value={enterpriseSettings.analyticAccounting.defaultDepartment}
+                        onChange={(e) =>
+                          handleUpdateEnterpriseSettings({
+                            analyticAccounting: {
+                              ...enterpriseSettings.analyticAccounting,
+                              defaultDepartment: e.target.value,
+                            },
+                          })
+                        }
+                        className={inputClass}
+                      >
+                        {enterpriseSettings.analyticAccounting.departments.map((dept) => (
+                          <option key={dept.id} value={dept.id} className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">
+                            {dept.code} - {dept.name} ({dept.manager})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="w-36">
+                      <label className={labelClass}>Margin Warning (%)</label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="5"
+                          max="50"
+                          value={enterpriseSettings.analyticAccounting.marginWarningThresholdPercent}
+                          onChange={(e) =>
+                            handleUpdateEnterpriseSettings({
+                              analyticAccounting: {
+                                ...enterpriseSettings.analyticAccounting,
+                                marginWarningThresholdPercent: Number(e.target.value) || 25,
+                              },
+                            })
+                          }
+                          className={`font-mono font-bold ${inputClass}`}
+                        />
+                        <span className="text-xs font-bold text-gray-500 dark:text-stone-400">%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Department Budgets List */}
+                  <div className="space-y-2 border border-gray-200 dark:border-stone-800 rounded-xl p-3 bg-gray-50/50 dark:bg-stone-800/30 text-xs">
+                    {enterpriseSettings.analyticAccounting.departments.map((dept) => {
+                      const utilPct = dept.annualBudgetIDR > 0 ? Math.round((dept.actualCostIDR / dept.annualBudgetIDR) * 100) : 0;
+                      return (
+                        <div key={dept.id} className="space-y-1 pb-1.5 border-b border-gray-100 dark:border-stone-800/80 last:border-b-0 last:pb-0">
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-900 dark:text-stone-100">{dept.name}</span>
+                            <span className="font-mono text-[11px] text-gray-500 dark:text-stone-400">
+                              {formatIDR(dept.actualCostIDR)} / {formatIDR(dept.annualBudgetIDR)} ({utilPct}%)
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-stone-700 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                utilPct > 85 ? 'bg-rose-500' : 'bg-purple-600 dark:bg-purple-500'
+                              }`}
+                              style={{ width: `${Math.min(100, utilPct)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SECTION 4: QUOTATIONS & SALES POLICIES */}
+            {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'QUOTATIONS') && (
+              <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-stone-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                      <FileSpreadsheet className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-stone-100">
+                        Quotations &amp; Sales Policies
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-stone-400">
+                        Mandatory perishable packaging and payment terms
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={enterpriseSettings.quotationsAndSales.mandatoryProductsEnabled}
+                      onChange={(e) =>
+                        handleUpdateEnterpriseSettings({
+                          quotationsAndSales: {
+                            ...enterpriseSettings.quotationsAndSales,
+                            mandatoryProductsEnabled: e.target.checked,
+                          },
+                        })
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-stone-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelClass}>Payment Confirmation Threshold</label>
+                      <select
+                        value={enterpriseSettings.quotationsAndSales.paymentConfirmationThreshold}
+                        onChange={(e) =>
+                          handleUpdateEnterpriseSettings({
+                            quotationsAndSales: {
+                              ...enterpriseSettings.quotationsAndSales,
+                              paymentConfirmationThreshold: e.target.value as any,
+                            },
+                          })
+                        }
+                        className={inputClass}
+                      >
+                        <option value="DEPOSIT_50" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">50% Deposit Required</option>
+                        <option value="FULL_100" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">100% Full Payment Upfront</option>
+                        <option value="PAY_ON_DELIVERY" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Pay on Delivery (COD / Net 7)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Quote Validity (Days)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={enterpriseSettings.quotationsAndSales.defaultValidityDays}
+                        onChange={(e) =>
+                          handleUpdateEnterpriseSettings({
+                            quotationsAndSales: {
+                              ...enterpriseSettings.quotationsAndSales,
+                              defaultValidityDays: Number(e.target.value) || 14,
+                            },
+                          })
+                        }
+                        className={`font-mono font-bold ${inputClass}`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mandatory Packaging Rules */}
+                  <div className="space-y-2 p-3.5 rounded-xl border border-gray-200 dark:border-stone-800 bg-gray-50/50 dark:bg-stone-800/30 text-xs">
+                    <span className="font-semibold text-gray-900 dark:text-stone-100 block text-[11px]">
+                      Mandatory HACCP Packaging Add-Ons:
+                    </span>
+                    {enterpriseSettings.quotationsAndSales.mandatoryRules.map((rule) => (
+                      <div key={rule.id} className="flex justify-between items-start gap-2 pt-1 border-t border-gray-100 dark:border-stone-800/80">
+                        <div>
+                          <span className="font-bold text-gray-900 dark:text-stone-100">{rule.mandatoryProductName}</span>
+                          <span className="text-[10px] text-gray-500 dark:text-stone-400 block">{rule.reason}</span>
+                        </div>
+                        <span className="font-mono font-bold text-amber-700 dark:text-amber-400 shrink-0">
+                          +{formatIDR(rule.mandatoryPriceIDR)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enterpriseSettings.quotationsAndSales.onlineSignaturesRequired}
+                        onChange={(e) =>
+                          handleUpdateEnterpriseSettings({
+                            quotationsAndSales: {
+                              ...enterpriseSettings.quotationsAndSales,
+                              onlineSignaturesRequired: e.target.checked,
+                            },
+                          })
+                        }
+                        className="w-4 h-4 text-[#0F4C3A] rounded"
+                      />
+                      <span className="text-gray-700 dark:text-stone-300">Digital Signatures</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enterpriseSettings.quotationsAndSales.autoGeneratePdfQuote}
+                        onChange={(e) =>
+                          handleUpdateEnterpriseSettings({
+                            quotationsAndSales: {
+                              ...enterpriseSettings.quotationsAndSales,
+                              autoGeneratePdfQuote: e.target.checked,
+                            },
+                          })
+                        }
+                        className="w-4 h-4 text-[#0F4C3A] rounded"
+                      />
+                      <span className="text-gray-700 dark:text-stone-300">Auto PDF Generation</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SECTION 5: 3-WAY MATCHING CONTROLS */}
+            {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'MATCHING') && (
+              <div className={`${cardClass} p-5 sm:p-6 space-y-4 lg:col-span-2`}>
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-stone-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-stone-100">
+                        Procurement 3-Way Matching AP Controls
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-stone-400">
+                        Cross-validation of Purchase Orders, Dock Goods Receipts, and Invoices
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 font-mono">
+                    {enterpriseSettings.threeWayMatching.enforcementMode}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div className="space-y-1">
+                    <span className="text-gray-500 dark:text-stone-400">Quantity Discrepancy Buffer:</span>
+                    <div className="font-mono font-bold text-base text-gray-900 dark:text-stone-100">
+                      &plusmn;{enterpriseSettings.threeWayMatching.quantityTolerancePercent}%
+                    </div>
+                    <span className="text-[10px] text-gray-500 dark:text-stone-400">Moisture transpiration &amp; scales</span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-gray-500 dark:text-stone-400">Price Variance Discrepancy:</span>
+                    <div className="font-mono font-bold text-base text-gray-900 dark:text-stone-100">
+                      &plusmn;{enterpriseSettings.threeWayMatching.priceTolerancePercent}%
+                    </div>
+                    <span className="text-[10px] text-gray-500 dark:text-stone-400">Unit rate deviation limit</span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-gray-500 dark:text-stone-400">Payment Freezes:</span>
+                    <div className="font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mt-0.5">
+                      <Lock className="w-4 h-4" />
+                      <span>{enterpriseSettings.threeWayMatching.blockPaymentOnMismatch ? 'Automatic Block Active' : 'Unblocked'}</span>
+                    </div>
+                    <span className="text-[10px] text-gray-500 dark:text-stone-400">Treasury wire lock on variance</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-stone-800">
+                  <span className="text-xs text-gray-500 dark:text-stone-400">
+                    {vendorBills.length} AP Bills evaluated
+                  </span>
+                  <button
+                    onClick={() => setActiveSubTab('matching')}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    <span>Launch Live 3-Way Matching Simulator</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 0B. DEDICATED VALUATION & COSTING TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'valuation' && (
+        <ValuationCostingSettingsTab
+          theme={theme}
+          settings={enterpriseSettings}
+          landedCosts={landedCosts}
+          inventoryTiers={inventoryTiers}
+          chartOfAccounts={chartOfAccounts}
+          onUpdateSettings={handleUpdateEnterpriseSettings}
+          onRefreshLandedCosts={handleRefreshLandedCosts}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* 0C. DEDICATED WAREHOUSE ROUTING & BINS TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'warehouse' && (
+        <WarehouseRoutingSettingsTab
+          theme={theme}
+          settings={enterpriseSettings}
+          bins={warehouseBins}
+          routes={warehouseRoutes}
+          inventoryTiers={inventoryTiers}
+          onUpdateSettings={handleUpdateEnterpriseSettings}
+          onRefreshBins={handleRefreshBins}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* 0D. DEDICATED 3-WAY MATCHING AP CONTROLS TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'matching' && (
+        <ThreeWayMatchingSettingsTab
+          theme={theme}
+          settings={enterpriseSettings}
+          vendorBills={vendorBills}
+          purchaseOrders={purchaseOrders}
+          goodsReceipts={goodsReceipts}
+          onUpdateSettings={handleUpdateEnterpriseSettings}
+          onRefreshData={fetchAllSettings}
+          onShowToast={onShowToast}
+        />
+      )}
 
       {/* ========================================================================= */}
       {/* 1. CHART OF ACCOUNTS (COA) DIRECTORY & MAPPING TAB */}
