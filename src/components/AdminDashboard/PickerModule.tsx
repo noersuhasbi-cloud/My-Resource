@@ -799,8 +799,8 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 >
                   {inventory
                     .filter((i) => i.sku !== subItem.sku)
-                    .map((item) => (
-                      <option key={item.sku} value={item.sku}>
+                    .map((item, idx) => (
+                      <option key={`${item.sku}-${idx}`} value={item.sku}>
                         {item.productName} - {formatIDR(item.sellingPrice)} (Stock: {item.currentStock})
                       </option>
                     ))}

@@ -431,6 +431,117 @@ let climateAdaptiveConfigs: ClimateAdaptiveThresholdConfig[] = [
   },
 ];
 
+// Global Compliance: Cold Chain & Sub-Zero Temperature Logs (HACCP / FDA FSMA 204 / EU 852 / FSANZ)
+interface ServerColdChainLogEntry {
+  id: string;
+  warehouseZoneId: string;
+  zoneName: string;
+  storeId: string;
+  storeName: string;
+  sensorId: string;
+  timestamp: string;
+  temperatureCelsius: number;
+  temperatureFahrenheit: number;
+  humidityPercent: number;
+  isExcursion: boolean;
+  severity: 'NORMAL' | 'ELEVATED' | 'CRITICAL_SPIKE';
+  complianceStandard: 'FDA FSMA 204' | 'EU Reg 852/2004' | 'FSANZ 3.2.2' | 'HACCP CCP';
+  correctiveAction?: string;
+  inspectorName: string;
+}
+
+let coldChainLogs: ServerColdChainLogEntry[] = [
+  {
+    id: 'CCL-2026-001',
+    warehouseZoneId: 'WH-JKT-SEN-FRZ',
+    zoneName: 'Senopati Deep Freeze Vault',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    sensorId: 'IOT-FRZ-01A',
+    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+    temperatureCelsius: -20.2,
+    temperatureFahrenheit: -4.4,
+    humidityPercent: 88,
+    isExcursion: false,
+    severity: 'NORMAL',
+    complianceStandard: 'FDA FSMA 204',
+    inspectorName: 'IoT Auto-Telemetry Sensor',
+  },
+  {
+    id: 'CCL-2026-002',
+    warehouseZoneId: 'WH-JKT-SEN-COLD',
+    zoneName: 'Senopati Chilled Walk-In Cold Room',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    sensorId: 'IOT-COLD-02',
+    timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
+    temperatureCelsius: 3.1,
+    temperatureFahrenheit: 37.6,
+    humidityPercent: 85,
+    isExcursion: false,
+    severity: 'NORMAL',
+    complianceStandard: 'HACCP CCP',
+    inspectorName: 'Siti Rahmawati (QC Inspector)',
+  },
+  {
+    id: 'CCL-2026-003',
+    warehouseZoneId: 'WH-JKT-SEN-COLD',
+    zoneName: 'Senopati Chilled Walk-In Cold Room',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    sensorId: 'IOT-COLD-02',
+    timestamp: new Date(Date.now() - 3600000 * 14).toISOString(),
+    temperatureCelsius: 6.8,
+    temperatureFahrenheit: 44.2,
+    humidityPercent: 92,
+    isExcursion: true,
+    severity: 'ELEVATED',
+    complianceStandard: 'EU Reg 852/2004',
+    correctiveAction: 'Defrost cycle completed. Secondary chiller fan activated; temp returned to 3.2°C within 18 minutes. Product core temps verified safe.',
+    inspectorName: 'Budi Santoso (HVAC Engineer)',
+  },
+  {
+    id: 'CCL-2026-004',
+    warehouseZoneId: 'WH-BDG-DAG-COLD',
+    zoneName: 'Dago Bandung Highland Farm Direct Cold Storage',
+    storeId: 'store-bdg-dago',
+    storeName: 'GroceMart Dago Bandung',
+    sensorId: 'IOT-BDG-01',
+    timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
+    temperatureCelsius: 3.8,
+    temperatureFahrenheit: 38.8,
+    humidityPercent: 75,
+    isExcursion: false,
+    severity: 'NORMAL',
+    complianceStandard: 'FSANZ 3.2.2',
+    inspectorName: 'Rina Kusuma (Bandung Auditor)',
+  },
+];
+
+let quarantinedBatchesMap: Record<
+  string,
+  {
+    reason: string;
+    quarantinedAt: string;
+    quarantinedBy: string;
+    recallClassification: 'Class I (High Risk / Immediate Hazard)' | 'Class II (Moderate Risk)' | 'Class III (Minor / Technical Defect)';
+    hazardDescription: string;
+  }
+> = {};
+
+let customerRecallAlertsLog: Array<{
+  id: string;
+  recallId: string;
+  batchId: string;
+  channel: 'WhatsApp' | 'SMS' | 'Email';
+  recipientName: string;
+  recipientContact: string;
+  orderId: string;
+  message: string;
+  timestamp: string;
+  status: 'SENT' | 'DELIVERED';
+}> = [];
+
 // Module 5: In-Memory POS Receipts History
 let posReceiptsHistory: POSTransactionReceipt[] = [
   {
@@ -2070,31 +2181,76 @@ async function startServer() {
   });
 
   app.post('/api/admin/inventory/adjust', (req: Request, res: Response) => {
-    const { sku, adjustmentQty, reason = 'Inventory Stocktake Variance', storeId = 'store-jkt-senopati' } = req.body;
+    const { sku, adjustmentQty, reason = 'Inventory Stocktake Variance', storeId } = req.body;
+    
+    // Strict warehouse check: Require specific warehouse/outlet context
+    if (!storeId || typeof storeId !== 'string' || storeId.trim() === '' || storeId === 'ALL') {
+      return res.status(400).json({
+        error: 'Strict Warehouse Check Failed: A specific warehouse/outlet ID (storeId) is strictly required to adjust inventory and prevent cross-location stock bleeding.',
+      });
+    }
+
     const item = inventoryList.find((i) => i.sku === sku);
     if (!item) {
       return res.status(404).json({ error: 'SKU not found' });
     }
 
-    const previousStock = item.currentStock;
-    item.currentStock = Math.max(0, item.currentStock + Number(adjustmentQty));
-    const delta = item.currentStock - previousStock;
-    const costDelta = Math.abs(delta) * item.unitCost;
-
-    // Also update multi-tier item if present
-    const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
-    if (tier) {
-      tier.physicalStock = Math.max(0, tier.physicalStock + Number(adjustmentQty));
-      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+    // Locate store-specific tier
+    let tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
+    if (!tier) {
+      // Find outlet info to initialize tier strictly for this location if authorized
+      const outletSchedule = storeSchedules.find((s) => s.storeId === storeId);
+      const newTierId = `STK-${storeId.replace(/[^a-zA-Z0-9]/g, '').slice(-3).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+      tier = {
+        id: newTierId,
+        sku: item.sku,
+        productId: item.productId,
+        productName: item.productName,
+        category: item.category,
+        storeId,
+        storeName: outletSchedule?.storeName || storeId,
+        warehouseZoneId: outletSchedule?.activeWarehouses[0] || 'WH-JKT-SEN-COLD',
+        storageType: item.storageType || 'cold_chilled',
+        physicalStock: 0,
+        availableStock: 0,
+        reservedStock: 0,
+        incomingStock: 0,
+        minimumThreshold: item.minimumThreshold,
+        safetyStockBuffer: item.safetyStockBuffer || 10,
+        maxCapacity: item.maxCapacity || 120,
+        reorderQuantity: item.reorderQuantity || 50,
+        unitCost: item.unitCost,
+        sellingPrice: item.sellingPrice,
+        unit: item.unit,
+        supplierId: item.supplierId,
+        supplierName: item.supplierName,
+        lastRestockedAt: item.lastRestockedAt,
+        updatedAt: new Date().toISOString(),
+      };
+      storeInventoryTiers.push(tier);
     }
 
-    // Log GL adjustment
+    const previousTierStock = tier.physicalStock;
+    tier.physicalStock = Math.max(0, Number((tier.physicalStock + Number(adjustmentQty)).toFixed(2)));
+    tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+    tier.updatedAt = new Date().toISOString();
+
+    const delta = tier.physicalStock - previousTierStock;
+    const costDelta = Math.abs(delta) * (tier.unitCost || item.unitCost);
+
+    // Strictly recalculate global master catalog stock from the sum of all location tiers (prevent cross-location overlap)
+    const totalAcrossOutlets = storeInventoryTiers
+      .filter((t) => t.sku === sku)
+      .reduce((sum, t) => sum + t.physicalStock, 0);
+    item.currentStock = Number(totalAcrossOutlets.toFixed(2));
+
+    // Log GL adjustment strictly mapped to this store
     const gleId = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     generalLedger.unshift({
       id: gleId,
       timestamp: new Date().toISOString(),
       storeId,
-      storeName: tier?.storeName || 'GroceMart Retail Hub',
+      storeName: tier.storeName,
       accountCode: '1040',
       accountName: 'Merchandise Inventory Asset',
       category: 'Asset',
@@ -2102,10 +2258,10 @@ async function startServer() {
       credit: delta < 0 ? costDelta : 0,
       referenceType: 'INVENTORY_ADJUSTMENT',
       referenceId: sku,
-      description: `Stock adjustment for ${sku} (${delta > 0 ? '+' : ''}${delta} units): ${reason}`,
+      description: `Stock adjustment for ${sku} at ${tier.storeName} (${delta > 0 ? '+' : ''}${delta} units): ${reason}`,
     });
 
-    res.json({ success: true, item, delta, costDelta, gleId });
+    res.json({ success: true, item, tier, delta, costDelta, gleId });
   });
 
   // -------------------------------------------------------------
@@ -3781,6 +3937,325 @@ async function startServer() {
     });
   });
 
+  // -------------------------------------------------------------
+  // GLOBAL COMPLIANCE: Cold Chain & Sub-Zero Storage Logs
+  // (US FDA FSMA 204, EU Reg 852/2004, FSANZ 3.2.2, HACCP CCP)
+  // -------------------------------------------------------------
+  app.get('/api/admin/cold-chain/logs', (req: Request, res: Response) => {
+    const { zoneId, storeId } = req.query;
+    let list = [...coldChainLogs];
+    if (zoneId && zoneId !== 'ALL') {
+      list = list.filter((l) => l.warehouseZoneId === zoneId);
+    }
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((l) => l.storeId === storeId);
+    }
+    res.json(list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+  });
+
+  app.post('/api/admin/cold-chain/logs', (req: Request, res: Response) => {
+    const {
+      warehouseZoneId,
+      temperatureCelsius,
+      humidityPercent = 85,
+      sensorId,
+      complianceStandard = 'HACCP CCP',
+      correctiveAction,
+      inspectorName = 'IoT Telemetry Monitor',
+      storeId,
+    } = req.body;
+
+    if (!warehouseZoneId || temperatureCelsius === undefined) {
+      return res.status(400).json({ error: 'warehouseZoneId and temperatureCelsius are required' });
+    }
+
+    const tempC = Number(Number(temperatureCelsius).toFixed(1));
+    const tempF = Number(((tempC * 9) / 5 + 32).toFixed(1));
+    const isFreezer = String(warehouseZoneId).includes('FRZ');
+    const thresholdMax = isFreezer ? -18.0 : 4.5;
+    const isExcursion = tempC > thresholdMax;
+    const severity = tempC > thresholdMax + 2.0 ? 'CRITICAL_SPIKE' : isExcursion ? 'ELEVATED' : 'NORMAL';
+
+    const cfg = climateAdaptiveConfigs.find((c) => c.warehouseZoneId === warehouseZoneId);
+    const store = storeSchedules.find((s) => s.storeId === (storeId || cfg?.storeId));
+
+    const newLog: ServerColdChainLogEntry = {
+      id: `CCL-2026-${(coldChainLogs.length + 1).toString().padStart(3, '0')}`,
+      warehouseZoneId,
+      zoneName: cfg?.zoneName || (isFreezer ? 'Sub-Zero Deep Freeze' : 'Chilled Cold Room'),
+      storeId: store?.storeId || cfg?.storeId || 'store-jkt-senopati',
+      storeName: store?.storeName || 'GroceMart Senopati Flagship',
+      sensorId: sensorId || `IOT-SENS-${warehouseZoneId.slice(-4)}`,
+      timestamp: new Date().toISOString(),
+      temperatureCelsius: tempC,
+      temperatureFahrenheit: tempF,
+      humidityPercent: Number(humidityPercent),
+      isExcursion,
+      severity,
+      complianceStandard,
+      correctiveAction: correctiveAction || (isExcursion ? 'Excursion logged; auto-cooling compressor triggered.' : undefined),
+      inspectorName,
+    };
+
+    coldChainLogs.unshift(newLog);
+
+    if (cfg) {
+      cfg.currentActualTempCelsius = tempC;
+      cfg.isTempAlertActive = isExcursion;
+      cfg.alertSeverity = severity === 'CRITICAL_SPIKE' ? 'CRITICAL_BREACH' : severity;
+    }
+
+    res.json({ success: true, log: newLog, message: 'Cold-chain telemetry audit log recorded successfully.' });
+  });
+
+  // -------------------------------------------------------------
+  // GLOBAL COMPLIANCE: FDA / EU Food Safety Recall & Batch Traceability
+  // -------------------------------------------------------------
+  app.get('/api/admin/batch-recall/trace/:query', (req: Request, res: Response) => {
+    const query = req.params.query.trim().toLowerCase();
+    
+    // Find matching batch
+    const matchedBatch = inventoryBatches.find(
+      (b) =>
+        b.batchId.toLowerCase() === query ||
+        b.lotNumber.toLowerCase() === query ||
+        b.sku.toLowerCase() === query
+    ) || inventoryBatches[0];
+
+    if (!matchedBatch) {
+      return res.status(404).json({ error: `No inventory lot found matching query '${req.params.query}'.` });
+    }
+
+    // Upstream Supplier PO & Goods Receipt
+    const poMatch = purchaseOrders.find((po) =>
+      po.items.some((it) => it.sku === matchedBatch.sku)
+    );
+
+    // Warehouse stock positions
+    const warehouseLocations = storeInventoryTiers
+      .filter((t) => t.sku === matchedBatch.sku)
+      .map((tier) => ({
+        storeId: tier.storeId,
+        storeName: tier.storeName,
+        warehouseZoneId: tier.warehouseZoneId,
+        storageType: tier.storageType,
+        physicalStock: tier.physicalStock,
+        availableStock: tier.availableStock,
+        isQuarantined: Boolean(quarantinedBatchesMap[matchedBatch.batchId]),
+      }));
+
+    // Downstream POS Sales
+    const posSales = posReceiptsHistory
+      .filter((rcp) =>
+        rcp.items.some(
+          (it) =>
+            it.batchId === matchedBatch.batchId ||
+            it.lotNumber === matchedBatch.lotNumber ||
+            it.sku === matchedBatch.sku
+        )
+      )
+      .map((rcp) => {
+        const itemLine = rcp.items.find(
+          (it) =>
+            it.batchId === matchedBatch.batchId ||
+            it.lotNumber === matchedBatch.lotNumber ||
+            it.sku === matchedBatch.sku
+        );
+        return {
+          receiptNumber: rcp.receiptNumber,
+          transactionId: rcp.transactionId,
+          orderId: rcp.orderId,
+          timestamp: rcp.timestamp,
+          storeName: rcp.storeName,
+          cashierName: rcp.cashierName,
+          customerName: 'Storefront Retail Customer',
+          quantitySold: itemLine?.quantity || 1,
+          lineTotal: itemLine ? itemLine.quantity * itemLine.unitPrice : 0,
+        };
+      });
+
+    // Downstream Online Orders
+    const onlineOrders = customerOrders
+      .filter((o: Order) =>
+        o.items.some(
+          (it: any) =>
+            it.batchId === matchedBatch.batchId ||
+            it.product?.sku === matchedBatch.sku
+        )
+      )
+      .map((o: Order) => {
+        const item = o.items.find(
+          (it: any) =>
+            it.batchId === matchedBatch.batchId ||
+            it.product?.sku === matchedBatch.sku
+        );
+        return {
+          orderId: o.id,
+          customerName: o.customerName || 'Verified Online Customer',
+          customerEmail: o.customerEmail || 'customer@grocemart.co.id',
+          customerPhone: o.customerPhone || '+62 812-9988-7711',
+          orderDate: o.createdAt,
+          status: o.status,
+          quantity: item?.quantity || 1,
+          deliveryAddress: o.deliveryAddress ? `${o.deliveryAddress.addressLine}, ${o.deliveryAddress.city}` : 'Senopati Storefront Pickup',
+        };
+      });
+
+    const isQuarantined = Boolean(quarantinedBatchesMap[matchedBatch.batchId]);
+    const quarantineInfo = quarantinedBatchesMap[matchedBatch.batchId];
+
+    const result = {
+      batchId: matchedBatch.batchId,
+      lotNumber: matchedBatch.lotNumber,
+      sku: matchedBatch.sku,
+      productName: matchedBatch.productName,
+      category: 'Fresh Organic Produce',
+      supplierName: matchedBatch.supplierName,
+      receivedDate: matchedBatch.receivedDate,
+      expiryDate: matchedBatch.expiryDate,
+      currentWarehouseStock: matchedBatch.currentStock,
+      quarantinedStock: isQuarantined ? matchedBatch.currentStock : 0,
+      recallStatus: isQuarantined ? 'quarantined' : 'none',
+      quarantineReason: quarantineInfo?.reason,
+      quarantinedAt: quarantineInfo?.quarantinedAt,
+      upstreamOrigin: {
+        poId: poMatch?.id || 'PO-2026-081',
+        supplierId: (poMatch as any)?.supplierId || 'SUP-LEMBANG-01',
+        supplierName: matchedBatch.supplierName,
+        deliveryNoteNumber: `SJ-SUP-${matchedBatch.batchId.slice(-4)}`,
+        intakeTempCelsius: 3.4,
+        intakeQualityStatus: 'Grade A - Certified Cold-Chain',
+        receivedDate: matchedBatch.receivedDate,
+      },
+      warehouseLocations,
+      posSales,
+      onlineOrders,
+      regulatoryNotice: {
+        recallClassification: quarantineInfo?.recallClassification || 'Class I (High Risk / Immediate Hazard)',
+        fdaReportableFoodRegistryId: `FDA-RFR-2026-${matchedBatch.batchId.slice(-4)}`,
+        euRasffReferenceNumber: `RASFF-2026-EU-${matchedBatch.batchId.slice(-4)}`,
+        fsanzAlertId: `FSANZ-REC-2026-${matchedBatch.batchId.slice(-4)}`,
+        hazardDescription:
+          quarantineInfo?.hazardDescription ||
+          'Potential microbial / pathogen contamination precaution or labeling allergen undeclared.',
+        recommendedAction:
+          'Immediately quarantine on-hand inventory. Block register scans. Broadcast emergency notice to downstream consumers.',
+      },
+    };
+
+    res.json(result);
+  });
+
+  app.post('/api/admin/batch-recall/quarantine', (req: Request, res: Response) => {
+    const { batchId, reason, recallClassification = 'Class I (High Risk / Immediate Hazard)', hazardDescription, auditorName = 'Safety Officer' } = req.body;
+    
+    const batch = inventoryBatches.find((b) => b.batchId === batchId);
+    if (!batch) {
+      return res.status(404).json({ error: `Batch ID '${batchId}' not found in registry.` });
+    }
+
+    batch.status = 'critical';
+    quarantinedBatchesMap[batchId] = {
+      reason: reason || 'FDA FSMA / EU RASFF Food Safety Precautionary Hold',
+      quarantinedAt: new Date().toISOString(),
+      quarantinedBy: auditorName,
+      recallClassification,
+      hazardDescription: hazardDescription || 'Microbial / cold-chain excursion safety hold.',
+    };
+
+    // Freeze warehouse tiers
+    storeInventoryTiers.forEach((tier) => {
+      if (tier.sku === batch.sku) {
+        tier.reservedStock = tier.physicalStock;
+        tier.availableStock = 0;
+      }
+    });
+
+    securityAuditTrail.unshift({
+      id: `AUD-REC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'STOCK_OPNAME_RECONCILE',
+      resourceId: `LOT-${batch.lotNumber}`,
+      userId: 'USR-SAFETY-01',
+      userName: auditorName,
+      userRole: 'admin',
+      storeId: batch.storeId,
+      shiftId: 'SHF-RECALL-01',
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        action: 'FOOD_SAFETY_LOT_QUARANTINE',
+        batchId: batch.batchId,
+        lotNumber: batch.lotNumber,
+        classification: recallClassification,
+        reason,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `Batch ${batch.batchId} (Lot #${batch.lotNumber}) quarantined successfully. On-hand units frozen across warehouses. Register POS checkouts locked.`,
+      quarantinedUnits: batch.currentStock,
+    });
+  });
+
+  app.post('/api/admin/batch-recall/notify-customers', (req: Request, res: Response) => {
+    const { batchId, message, channel = 'WhatsApp' } = req.body;
+    const batch = inventoryBatches.find((b) => b.batchId === batchId);
+
+    // Collect affected orders
+    const affectedOrders = customerOrders.filter((o: Order) =>
+      o.items.some((it: any) => it.batchId === batchId || it.product?.sku === batch?.sku)
+    );
+
+    const notifications: typeof customerRecallAlertsLog = [];
+    const timestamp = new Date().toISOString();
+
+    affectedOrders.forEach((o: Order, idx: number) => {
+      const notif = {
+        id: `NOTIF-REC-${Date.now().toString().slice(-4)}-${idx}`,
+        recallId: `REC-${batchId}`,
+        batchId,
+        channel: channel as any,
+        recipientName: o.customerName || 'Customer',
+        recipientContact: o.customerPhone || o.customerEmail || '+62 812-9988-7711',
+        orderId: o.id,
+        message: message || `URGENT FOOD SAFETY ADVISORY: Order #${o.id} contains lot #${batch?.lotNumber || batchId}. Please do not consume. Return for 100% immediate refund.`,
+        timestamp,
+        status: 'DELIVERED' as const,
+      };
+      customerRecallAlertsLog.unshift(notif);
+      notifications.push(notif);
+    });
+
+    res.json({
+      success: true,
+      message: `Emergency safety alert successfully dispatched to ${notifications.length} customers via ${channel}.`,
+      notifications,
+    });
+  });
+
+  app.post('/api/admin/batch-recall/release', (req: Request, res: Response) => {
+    const { batchId } = req.body;
+    const batch = inventoryBatches.find((b) => b.batchId === batchId);
+    if (!batch) return res.status(404).json({ error: 'Batch not found' });
+
+    delete quarantinedBatchesMap[batchId];
+    batch.status = batch.daysUntilExpiry > 5 ? 'fresh' : 'near_expiry';
+
+    // Restore available stock
+    storeInventoryTiers.forEach((tier) => {
+      if (tier.sku === batch.sku) {
+        tier.reservedStock = 0;
+        tier.availableStock = tier.physicalStock;
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Batch ${batchId} released from quarantine. Stock restored to active shelves.`,
+    });
+  });
+
   // Multi-Currency Financial Statement API (Converts GL / P&L based on target currency)
   app.get('/api/admin/accounting/pnl-multicurrency', (req: Request, res: Response) => {
     const { storeId, currency = 'IDR' } = req.query;
@@ -3900,8 +4375,8 @@ async function startServer() {
         unit: inv.unit,
         barcode,
         image: catalogMatch?.image || '/images/category_fresh_produce_1791623385871.jpg',
-        currentStock: storeTier ? storeTier.physicalStock : inv.currentStock,
-        availableStock: storeTier ? storeTier.availableStock : inv.currentStock,
+        currentStock: storeTier ? storeTier.physicalStock : 0,
+        availableStock: storeTier ? storeTier.availableStock : 0,
         isWeighted,
         pricePerKg,
         nearestBatchId: nearestBatch?.batchId || `BAT-2610-${inv.sku.slice(-3)}`,
@@ -4016,11 +4491,11 @@ async function startServer() {
             (t) => t.sku === line.sku && t.storeId === storeId
           );
           const deductUnits = line.isWeighted ? Math.max(0.1, Number(line.quantity.toFixed(2))) : line.quantity;
-          const avail = storeTier ? storeTier.availableStock : invItem ? invItem.currentStock : 0;
+          const avail = storeTier ? storeTier.availableStock : 0;
 
-          if (invItem && avail < deductUnits) {
+          if (!storeTier || avail < deductUnits) {
             const err = new Error(
-              `Insufficient stock at ${storeName} for "${line.name}" (${line.sku}). Available: ${avail}, Requested: ${deductUnits}.`
+              `Insufficient stock at ${storeName} for "${line.name}" (${line.sku}). Available: ${avail}, Requested: ${deductUnits}. Multi-warehouse stock isolation strictly enforced.`
             );
             (err as any).statusCode = 409;
             throw err;
@@ -4083,35 +4558,6 @@ async function startServer() {
               Math.max(0, storeTier.physicalStock - storeTier.reservedStock).toFixed(2)
             );
             storeTier.updatedAt = new Date().toISOString();
-          } else if (invItem) {
-            // Create store-specific tier dynamically if checkout occurred at an outlet without an explicit row yet
-            const schedule = storeSchedules.find((s) => s.storeId === storeId);
-            storeInventoryTiers.push({
-              id: `STK-${storeId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-3)}`,
-              sku: invItem.sku,
-              productId: invItem.productId,
-              productName: invItem.productName,
-              category: invItem.category,
-              storeId,
-              storeName,
-              warehouseZoneId: schedule?.activeWarehouses[0] || 'WH-JKT-SEN-COLD',
-              storageType: invItem.storageType || 'cold_chilled',
-              physicalStock: Math.max(0, Number((invItem.currentStock - deductQty).toFixed(2))),
-              availableStock: Math.max(0, Number((invItem.currentStock - deductQty).toFixed(2))),
-              reservedStock: 0,
-              incomingStock: invItem.incomingStock || 0,
-              minimumThreshold: invItem.minimumThreshold,
-              safetyStockBuffer: invItem.safetyStockBuffer || 10,
-              maxCapacity: invItem.maxCapacity || 120,
-              reorderQuantity: invItem.reorderQuantity || 50,
-              unitCost: invItem.unitCost,
-              sellingPrice: invItem.sellingPrice,
-              unit: invItem.unit,
-              supplierId: invItem.supplierId,
-              supplierName: invItem.supplierName,
-              lastRestockedAt: invItem.lastRestockedAt,
-              updatedAt: new Date().toISOString(),
-            });
           }
 
           // Strictly recalculate global inventory stock as the sum of all location tiers (prevent overlap bleed)

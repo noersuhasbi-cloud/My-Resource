@@ -29,6 +29,8 @@ import {
   BarChart3,
   ArrowRightLeft,
   CheckSquare,
+  Calculator,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export type AdminDashboardTab =
@@ -53,6 +55,7 @@ export type AdminDashboardTab =
   | 'settings';
 
 export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa';
+export type SettingsSubTab = 'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix';
 
 interface AdminSidebarProps {
   theme: 'light' | 'dark';
@@ -62,6 +65,8 @@ interface AdminSidebarProps {
   onSelectTab: (tab: AdminDashboardTab) => void;
   accountingSubTab: AccountingSubTab;
   onSelectAccountingSubTab: (sub: AccountingSubTab) => void;
+  settingsSubTab?: SettingsSubTab;
+  onSelectSettingsSubTab?: (sub: SettingsSubTab) => void;
   isFinanceMenuOpen: boolean;
   onToggleFinanceMenu: () => void;
   isSettingsMenuOpen: boolean;
@@ -86,6 +91,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onSelectTab,
   accountingSubTab,
   onSelectAccountingSubTab,
+  settingsSubTab,
+  onSelectSettingsSubTab,
   isFinanceMenuOpen,
   onToggleFinanceMenu,
   isSettingsMenuOpen,
@@ -753,7 +760,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
             {/* 12. Settings & Configuration Hub */}
             <button
-              onClick={() => handleTabClick('settings')}
+              onClick={() => {
+                handleTabClick('settings');
+                if (isCollapsed) return;
+                if (!isSettingsMenuOpen) onToggleSettingsMenu();
+              }}
               title={isCollapsed ? 'Settings & Configuration' : undefined}
               className={navItemClass(activeTab === 'settings')}
             >
@@ -777,6 +788,73 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+
+            {/* Nested Sub-Menu for Settings & Configuration */}
+            {!isCollapsed && (activeTab === 'settings' || isSettingsMenuOpen) && (
+              <div className="pl-6 pr-1 py-1 space-y-1 border-l border-gray-200 dark:border-stone-800 ml-4 animate-fadeIn">
+                {[
+                  {
+                    id: 'coa',
+                    label: 'COA Account Mapping',
+                    icon: Building2,
+                    badge: 'GL Map',
+                  },
+                  {
+                    id: 'pos',
+                    label: 'POS & Checkout Config',
+                    icon: Calculator,
+                    badge: 'Rules',
+                  },
+                  {
+                    id: 'import_opname',
+                    label: 'Inventory Import & Stock Opname',
+                    icon: FileSpreadsheet,
+                    badge: 'Audit',
+                  },
+                  {
+                    id: 'approval_matrix',
+                    label: 'Approval Matrix & Limits',
+                    icon: CheckSquare,
+                    badge: 'Matrix',
+                  },
+                  {
+                    id: 'transfer',
+                    label: 'Inter-Branch Stock Transfers',
+                    icon: ArrowRightLeft,
+                    badge: 'Transfer',
+                  },
+                ].map((sub) => {
+                  const Icon = sub.icon;
+                  const isSubActive = activeTab === 'settings' && settingsSubTab === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      onClick={() => {
+                        handleTabClick('settings');
+                        if (onSelectSettingsSubTab) {
+                          onSelectSettingsSubTab(sub.id as SettingsSubTab);
+                        }
+                      }}
+                      className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left cursor-pointer ${
+                        isSubActive
+                          ? 'bg-amber-50 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300 font-bold'
+                          : isLight
+                          ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/80'
+                          : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <Icon className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <span className="truncate">{sub.label}</span>
+                      </div>
+                      <span className="text-[9px] px-1 py-0.2 rounded border bg-black/5 dark:bg-white/5 font-mono text-gray-500 dark:text-stone-400 shrink-0">
+                        {sub.badge}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </nav>

@@ -8,11 +8,23 @@ import type {
   SupportedCurrency,
   StaffShiftSession,
   StoreOutletSchedule,
+  StoreOperationalStatus,
   PosCheckoutConfig,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { savePosReceiptToFirestore } from '../../services/firebaseService';
 import { formatIDR } from '../../utils/formatters';
+import {
+  TaxRegionCode,
+  TAX_REGIONS,
+  calculateCartTax,
+  getDefaultTaxRegionForCurrency,
+} from '../../utils/taxEngine';
+import {
+  UOMSystem,
+  formatDualUnitPrice,
+  formatDualWeight,
+} from '../../utils/uomConverter';
 import { QRCodeCanvas } from 'qrcode.react';
 import {
   Scan,
@@ -57,6 +69,7 @@ export interface PosModuleProps {
   activeStaffSession: StaffShiftSession | null;
   availableStaffProfiles: StaffShiftSession[];
   storeOutlets: StoreOutletSchedule[];
+  storeStatus?: StoreOperationalStatus | null;
   onSwitchSession: (userId: string) => Promise<void>;
   onTransactionSynced: () => Promise<void>;
   onNavigateToAccounting?: (subTab: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa') => void;
@@ -125,12 +138,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
   activeStaffSession,
   availableStaffProfiles,
   storeOutlets,
+  storeStatus,
   onSwitchSession,
   onTransactionSynced,
   onNavigateToAccounting,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const isNetworkClosed = Boolean(storeStatus && (!storeStatus.isOpen || storeStatus.isHolidayMode));
 
   // Active Store Outlet for POS Terminal (defaults to selectedStore or cashier's store or Senopati Flagship)
   const [posStoreId, setPosStoreId] = useState<string>(() => {
@@ -167,9 +182,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [barcodeInput, setBarcodeInput] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
-  // Multi-Currency Selector
+  // Multi-Currency Selector & Global Compliance Tax / UOM Engine
   const [currency, setCurrency] = useState<SupportedCurrency>('IDR');
   const currencyConfig = POS_CURRENCIES[currency];
+  const [taxRegion, setTaxRegion] = useState<TaxRegionCode>('ID_PPN_11');
+  const [uomSystem, setUomSystem] = useState<UOMSystem>('metric');
 
   // POS Cart State
   const [cart, setCart] = useState<POSCartItem[]>([]);
@@ -443,7 +460,19 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
   const totalDiscountIDR = vivoNearExpiryMarkdownIDR + manualDiscountIDR;
   const taxableAmountIDR = Math.max(0, subtotalIDR - totalDiscountIDR);
-  const taxIDR = Math.round(taxableAmountIDR * 0.11); // 11% Indonesian PPN / VAT
+
+  // Dynamic Multi-Region Tax Calculation (US Sales Tax, EU VAT, AU GST, ID PPN)
+  const cartTaxCalculation = useMemo(() => {
+    const discountRatio = subtotalIDR > 0 ? Math.max(0, taxableAmountIDR / subtotalIDR) : 1;
+    const taxItems = cart.map((item) => ({
+      lineTotal: Math.round(item.lineTotal * discountRatio),
+      category: item.category,
+      name: item.name,
+    }));
+    return calculateCartTax(taxItems, taxRegion);
+  }, [cart, subtotalIDR, taxableAmountIDR, taxRegion]);
+
+  const taxIDR = cartTaxCalculation.totalTax;
   const grandTotalIDR = taxableAmountIDR + taxIDR;
 
   const estimatedCogsIDR = useMemo(
@@ -464,6 +493,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const handleCompletePosCheckout = async () => {
     if (cart.length === 0) {
       onShowToast('Empty Register Cart', 'Scan or select at least one grocery item.');
+      return;
+    }
+
+    if (isNetworkClosed) {
+      onShowToast(
+        'Store Network Closed',
+        storeStatus?.noticeBanner || 'Company storefront network is currently closed. POS register checkout is blocked.'
+      );
       return;
     }
 
@@ -654,6 +691,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/30">
                 FEFO Vivo Batch &amp; Double-Entry GL Auto-Sync
               </span>
+              {isNetworkClosed && (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> Network Closed
+                </span>
+              )}
               {currentOutlet.isEmergencyClosed && (
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/30 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" /> Outlet Emergency Closed
@@ -691,33 +733,81 @@ export const PosModule: React.FC<PosModuleProps> = ({
               </select>
             </div>
 
-            {/* Multi-Currency Selector */}
-            <div className="flex items-center gap-1 bg-gray-100 dark:bg-stone-800 p-1 rounded-xl border border-gray-200 dark:border-stone-700">
-              <Globe2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ml-1.5 mr-0.5" />
-              {(['IDR', 'USD', 'EUR', 'AUD'] as SupportedCurrency[]).map((cur) => (
-                <button
-                  key={cur}
-                  type="button"
-                  onClick={() => {
-                    setCurrency(cur);
-                    onShowToast(
-                      `POS Currency: ${cur}`,
-                      cur === 'IDR'
-                        ? 'Displaying base Indonesian Rupiah (IDR)'
-                        : `1 ${cur} = Rp ${POS_CURRENCIES[cur].rateToIDR.toLocaleString('id-ID')} (GL auto-settled in IDR)`
-                    );
+            {/* Multi-Currency & Global Tax / UOM Selectors */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-stone-800 p-1 rounded-xl border border-gray-200 dark:border-stone-700">
+                <Globe2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ml-1.5 mr-0.5" />
+                {(['IDR', 'USD', 'EUR', 'AUD'] as SupportedCurrency[]).map((cur) => (
+                  <button
+                    key={cur}
+                    type="button"
+                    onClick={() => {
+                      setCurrency(cur);
+                      const defTax = getDefaultTaxRegionForCurrency(cur);
+                      setTaxRegion(defTax);
+                      setUomSystem(cur === 'USD' ? 'imperial' : 'metric');
+                      onShowToast(
+                        `POS Multi-Currency & Tax: ${cur}`,
+                        cur === 'IDR'
+                          ? 'Base Indonesian Rupiah (IDR) with 11% PPN'
+                          : `1 ${cur} = Rp ${POS_CURRENCIES[cur].rateToIDR.toLocaleString('id-ID')} (Tax: ${TAX_REGIONS[defTax].shortLabel})`
+                      );
+                    }}
+                    className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      currency === cur
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-gray-600 hover:text-gray-900'
+                        : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    {cur}
+                  </button>
+                ))}
+              </div>
+
+              {/* Dynamic Tax Jurisdiction Selector */}
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-stone-800 px-2 py-1 rounded-xl border border-gray-200 dark:border-stone-700 text-xs">
+                <Percent className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <select
+                  value={taxRegion}
+                  onChange={(e) => {
+                    const reg = e.target.value as TaxRegionCode;
+                    setTaxRegion(reg);
+                    onShowToast('Tax Jurisdiction Updated', TAX_REGIONS[reg].name);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    currency === cur
-                      ? 'bg-[#0F4C3A] text-white shadow-xs'
-                      : isLight
-                      ? 'text-gray-600 hover:text-gray-900'
-                      : 'text-stone-400 hover:text-white'
-                  }`}
+                  className="bg-transparent font-bold text-xs cursor-pointer focus:outline-none dark:text-stone-200"
+                  title="Dynamic Multi-Region Tax Engine (US Sales Tax, EU VAT, AU GST, ID PPN)"
                 >
-                  {cur}
-                </button>
-              ))}
+                  <option value="ID_PPN_11" className="dark:bg-stone-900">ID PPN (11% VAT)</option>
+                  <option value="US_CA_725" className="dark:bg-stone-900">US-CA (7.25% / 0% Food)</option>
+                  <option value="US_NY_8875" className="dark:bg-stone-900">US-NYC (8.875% / 0% Food)</option>
+                  <option value="US_TX_825" className="dark:bg-stone-900">US-TX (8.25% / 0% Food)</option>
+                  <option value="EU_DE_70" className="dark:bg-stone-900">EU-DE (7% Food VAT)</option>
+                  <option value="EU_FR_55" className="dark:bg-stone-900">EU-FR (5.5% Food TVA)</option>
+                  <option value="UK_VAT_0" className="dark:bg-stone-900">UK (0% Zero-Rated Food)</option>
+                  <option value="AU_GST_10" className="dark:bg-stone-900">AU (10% GST / 0% Food)</option>
+                </select>
+              </div>
+
+              {/* UOM Dual-Unit Measurement Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextUom = uomSystem === 'metric' ? 'imperial' : 'metric';
+                  setUomSystem(nextUom);
+                  onShowToast('UOM Engine', `Switched primary measurement system to ${nextUom.toUpperCase()}`);
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                  uomSystem === 'imperial'
+                    ? 'bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-300'
+                    : 'bg-emerald-500/10 border-emerald-500/25 text-[#0F4C3A] dark:text-emerald-300'
+                }`}
+                title="Toggle Unit of Measurement: Metric (kg/g) vs Imperial (lb/oz)"
+              >
+                <Scale className="w-3.5 h-3.5" />
+                <span>{uomSystem === 'metric' ? 'Metric (kg)' : 'Imperial (lb)'}</span>
+              </button>
             </div>
 
             {/* View Switcher: Active Register vs Shift Receipts & GL Log */}
@@ -831,9 +921,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
                 <div className="flex items-center gap-1.5 text-[11px]">
                   <span className={`${textMuted} font-medium`}>Quick Scan:</span>
-                  {posProducts.slice(0, 3).map((sample) => (
+                  {posProducts.slice(0, 3).map((sample, idx) => (
                     <button
-                      key={`${sample.sku}-${sample.barcode}`}
+                      key={`${sample.sku}-${sample.barcode || idx}`}
                       type="button"
                       onClick={() => {
                         handleAddToCart(sample);
@@ -893,7 +983,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
-                {filteredProducts.map((product) => {
+                {filteredProducts.map((product, pIdx) => {
                   const isOut = product.availableStock <= 0;
                   const isLow = product.availableStock > 0 && product.availableStock <= 12;
                   const isNearExpiry =
@@ -903,7 +993,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
                   return (
                     <div
-                      key={product.sku}
+                      key={`${product.sku}-${product.barcode || pIdx}`}
                       className={`${cardClass} p-3.5 flex flex-col justify-between transition-all ${
                         isOut
                           ? 'opacity-60'
@@ -945,7 +1035,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
                             <div className="text-sm font-extrabold text-[#0F4C3A] dark:text-emerald-400">
                               {formatCurrencyValue(product.sellingPrice)}
                             </div>
-                            <div className={`text-[10px] ${textMuted}`}>per {product.unit}</div>
+                            <div className={`text-[10px] ${textMuted}`}>
+                              per {product.unit}
+                              {(product.isWeighted || product.unit === 'kg') && (
+                                <span className="block text-[9px] font-mono font-semibold text-emerald-700 dark:text-emerald-400">
+                                  {formatDualUnitPrice(product.pricePerKg || product.sellingPrice, currencyConfig.rateToIDR, currencyConfig.symbol, currency).imperialLabel}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -1096,9 +1193,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     </p>
                   </div>
                 ) : (
-                  cart.map((item) => (
+                  cart.map((item, idx) => (
                     <div
-                      key={item.id}
+                      key={item.id ? `${item.id}-${idx}` : `cart-${item.sku}-${idx}`}
                       className={`${subCardClass} p-2.5 flex flex-col gap-1.5`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -1114,7 +1211,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                           </div>
                           {item.netWeightGrams && (
                             <div className="text-[10px] text-amber-600 dark:text-amber-400 font-mono">
-                              Scale Net: {item.netWeightGrams}g (Tare: {item.tareWeightGrams}g)
+                              Scale Net: {formatDualWeight(item.netWeightGrams, uomSystem).fullBadge} (Tare: {item.tareWeightGrams}g)
                             </div>
                           )}
                         </div>
@@ -1133,6 +1230,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       <div className="flex items-center justify-between pt-1 border-t border-gray-200/60 dark:border-stone-700/60">
                         <span className={`text-[10px] ${textMuted}`}>
                           {formatCurrencyValue(item.unitPrice)} / {item.unit}
+                          {(item.unit === 'kg' || item.isWeighted) && (
+                            <span className="ml-1 text-[9px] font-mono text-emerald-700 dark:text-emerald-400">
+                              ({formatDualUnitPrice(item.unitPrice, currencyConfig.rateToIDR, currencyConfig.symbol, currency).imperialLabel})
+                            </span>
+                          )}
                         </span>
                         <div className="flex items-center gap-1.5">
                           <button
@@ -1226,9 +1328,22 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     <span className="font-semibold">-{formatCurrencyValue(totalDiscountIDR)}</span>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className={textMuted}>VAT / PPN (11% Included/Added)</span>
-                  <span className="font-semibold">{formatCurrencyValue(taxIDR)}</span>
+                <div className="space-y-0.5">
+                  <div className="flex justify-between items-center">
+                    <span className={textMuted}>
+                      {cartTaxCalculation.region.shortLabel}
+                    </span>
+                    <span className="font-semibold">{formatCurrencyValue(taxIDR)}</span>
+                  </div>
+                  {cartTaxCalculation.itemsTaxSummary.exemptItemCount > 0 && (
+                    <div className="flex items-center justify-between text-[10px] text-emerald-700 dark:text-emerald-400">
+                      <span>✓ {cartTaxCalculation.itemsTaxSummary.exemptItemCount} Basic Staple Groceries 100% Tax-Exempt</span>
+                      <span>{cartTaxCalculation.effectiveTaxRatePercent}% eff. rate</span>
+                    </div>
+                  )}
+                  <div className="text-[9px] text-gray-400 italic">
+                    {cartTaxCalculation.region.legalNotice}
+                  </div>
                 </div>
                 <div className="pt-2 border-t border-gray-200 dark:border-stone-700 flex items-baseline justify-between">
                   <div>
@@ -1339,14 +1454,18 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 )}
               </div>
 
-              {/* Emergency Closure Warning */}
-              {currentOutlet.isEmergencyClosed && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5 animate-in fade-in">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              {/* Closure Warning (Strict Store Closed Validation) */}
+              {(isNetworkClosed || currentOutlet.isEmergencyClosed) && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2.5 animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold">Outlet Register Locked (Store Closed)</span>
+                    <span className="font-bold">
+                      {isNetworkClosed ? 'Store Network Closed' : 'Outlet Register Locked (Emergency Closed)'}
+                    </span>
                     <p className="text-[11px] mt-0.5 leading-relaxed">
-                      {currentOutlet.storeName} is under emergency closure ({currentOutlet.closureReason || 'Maintenance'}). Cashier checkout is blocked.
+                      {isNetworkClosed
+                        ? storeStatus?.noticeBanner || 'Store network is currently closed. Register checkout is blocked.'
+                        : `${currentOutlet.storeName} is under emergency closure (${currentOutlet.closureReason || 'Maintenance'}). Cashier checkout is blocked.`}
                     </p>
                   </div>
                 </div>
@@ -1355,7 +1474,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
               {/* Complete POS Sale CTA */}
               <button
                 type="button"
-                disabled={cart.length === 0 || isProcessingCheckout || currentOutlet.isEmergencyClosed}
+                disabled={cart.length === 0 || isProcessingCheckout || currentOutlet.isEmergencyClosed || isNetworkClosed}
                 onClick={handleCompletePosCheckout}
                 className="w-full py-3 px-4 rounded-xl bg-[#0F4C3A] hover:bg-[#0F4C3A]/95 disabled:opacity-50 text-white font-bold text-sm shadow-lg shadow-[#0F4C3A]/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
               >
@@ -1557,14 +1676,18 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <div className={`${subCardClass} p-3.5 space-y-1.5 font-mono`}>
                 <div className="flex justify-between">
                   <span>Net Billable Weight:</span>
-                  <span className="font-bold">
-                    {Math.max(50, grossWeightGrams - tareWeightGrams)}g (
-                    {(Math.max(50, grossWeightGrams - tareWeightGrams) / 1000).toFixed(3)} kg)
+                  <span className="font-bold text-[#0F4C3A] dark:text-emerald-400">
+                    {formatDualWeight(Math.max(50, grossWeightGrams - tareWeightGrams), uomSystem).fullBadge}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Rate per Kg:</span>
-                  <span>{formatCurrencyValue(weighingProduct.pricePerKg || weighingProduct.sellingPrice)}</span>
+                <div className="flex justify-between items-center">
+                  <span>Rate per Unit:</span>
+                  <div className="text-right">
+                    <div>{formatCurrencyValue(weighingProduct.pricePerKg || weighingProduct.sellingPrice)}/kg</div>
+                    <div className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                      {formatDualUnitPrice(weighingProduct.pricePerKg || weighingProduct.sellingPrice, currencyConfig.rateToIDR, currencyConfig.symbol, currency).imperialLabel}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex justify-between text-sm font-extrabold text-[#0F4C3A] dark:text-emerald-400 pt-1 border-t border-gray-200 dark:border-stone-700">
                   <span>Computed Line Total:</span>

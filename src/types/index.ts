@@ -1290,3 +1290,104 @@ export interface GroceryMetricsReport {
     clickAndCollectFulfillmentRatePercent: number;
   };
 }
+
+// =============================================================
+// GLOBAL COMPLIANCE: Cold Chain Monitoring & Food Safety Logs
+// (US FDA FSMA 204, EU Regulation 852/2004, FSANZ 3.2.2, HACCP CCP)
+// =============================================================
+export interface ColdChainLogEntry {
+  id: string; // CCL-2026-001
+  warehouseZoneId: string;
+  zoneName: string;
+  storeId: string;
+  storeName: string;
+  sensorId: string;
+  timestamp: string;
+  temperatureCelsius: number;
+  temperatureFahrenheit: number;
+  humidityPercent: number;
+  isExcursion: boolean;
+  severity: 'NORMAL' | 'ELEVATED' | 'CRITICAL_SPIKE';
+  complianceStandard: 'FDA FSMA 204' | 'EU Reg 852/2004' | 'FSANZ 3.2.2' | 'HACCP CCP';
+  correctiveAction?: string;
+  inspectorName: string;
+}
+
+// =============================================================
+// GLOBAL COMPLIANCE: FDA / EU Food Safety Lot Recall & Traceability
+// =============================================================
+export interface BatchRecallTraceResult {
+  batchId: string;
+  lotNumber: string;
+  sku: string;
+  productName: string;
+  category: string;
+  supplierName: string;
+  receivedDate: string;
+  expiryDate: string;
+  currentWarehouseStock: number;
+  quarantinedStock: number;
+  recallStatus: 'none' | 'quarantined' | 'fda_class_1_active' | 'eu_rasff_active' | 'fsanz_active';
+  quarantineReason?: string;
+  quarantinedAt?: string;
+  upstreamOrigin: {
+    poId?: string;
+    supplierId?: string;
+    supplierName: string;
+    deliveryNoteNumber?: string;
+    intakeTempCelsius?: number;
+    intakeQualityStatus?: string;
+    receivedDate: string;
+  };
+  warehouseLocations: Array<{
+    storeId: string;
+    storeName: string;
+    warehouseZoneId: string;
+    storageType: string;
+    physicalStock: number;
+    availableStock: number;
+    isQuarantined: boolean;
+  }>;
+  posSales: Array<{
+    receiptNumber: string;
+    transactionId: string;
+    orderId: string;
+    timestamp: string;
+    storeName: string;
+    cashierName: string;
+    customerName: string;
+    quantitySold: number;
+    lineTotal: number;
+  }>;
+  onlineOrders: Array<{
+    orderId: string;
+    customerName: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    orderDate: string;
+    status: string;
+    quantity: number;
+    deliveryAddress?: string;
+  }>;
+  regulatoryNotice?: {
+    recallClassification: 'Class I (High Risk / Immediate Hazard)' | 'Class II (Moderate Risk)' | 'Class III (Minor / Technical Defect)';
+    fdaReportableFoodRegistryId: string;
+    euRasffReferenceNumber: string;
+    fsanzAlertId: string;
+    hazardDescription: string;
+    recommendedAction: string;
+  };
+}
+
+export interface CustomerRecallNotification {
+  id: string;
+  recallId: string;
+  batchId: string;
+  channel: 'WhatsApp' | 'SMS' | 'Email';
+  recipientName: string;
+  recipientContact: string;
+  orderId: string;
+  message: string;
+  timestamp: string;
+  status: 'SENT' | 'DELIVERED';
+}

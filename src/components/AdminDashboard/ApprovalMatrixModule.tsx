@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type {
   ApprovalTierRule,
   ApprovalRequest,
@@ -26,16 +26,16 @@ import {
 
 interface ApprovalMatrixModuleProps {
   theme: 'light' | 'dark';
-  selectedStore: string;
-  approvalRules: ApprovalTierRule[];
-  approvalQueue: ApprovalRequest[];
-  onRefreshData: () => void;
+  selectedStore?: string;
+  approvalRules?: ApprovalTierRule[];
+  approvalQueue?: ApprovalRequest[];
+  onRefreshData?: () => void;
   onShowToast: (title: string, message: string) => void;
 }
 
 export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
   theme,
-  selectedStore,
+  selectedStore = 'CONSOLIDATED',
   approvalRules,
   approvalQueue,
   onRefreshData,
@@ -48,6 +48,46 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
   const [selectedModule, setSelectedModule] = useState<'ALL' | ApprovalModuleType>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
 
+  // Internal data loading if not supplied by parent
+  const [internalRules, setInternalRules] = useState<ApprovalTierRule[]>(approvalRules || []);
+  const [internalQueue, setInternalQueue] = useState<ApprovalRequest[]>(approvalQueue || []);
+
+  const loadApprovalData = async () => {
+    try {
+      if (!approvalRules) {
+        const rules = await apiClient.getApprovalRules();
+        setInternalRules(rules);
+        setRulesState(rules);
+      }
+      if (!approvalQueue) {
+        const queue = await apiClient.getApprovalQueue(selectedStore);
+        setInternalQueue(queue);
+      }
+    } catch (err) {
+      console.error('Failed to load approval data:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadApprovalData();
+  }, [selectedStore]);
+
+  useEffect(() => {
+    if (approvalRules) {
+      setInternalRules(approvalRules);
+      setRulesState(approvalRules);
+    }
+  }, [approvalRules]);
+
+  useEffect(() => {
+    if (approvalQueue) {
+      setInternalQueue(approvalQueue);
+    }
+  }, [approvalQueue]);
+
+  const activeRules = approvalRules || internalRules;
+  const activeQueue = approvalQueue || internalQueue;
+
   // Action Modal State
   const [activeActionRequest, setActiveActionRequest] = useState<ApprovalRequest | null>(null);
   const [actionType, setActionType] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
@@ -55,7 +95,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   // Editable rules state
-  const [rulesState, setRulesState] = useState<ApprovalTierRule[]>(approvalRules);
+  const [rulesState, setRulesState] = useState<ApprovalTierRule[]>(approvalRules || []);
   const [isSavingRules, setIsSavingRules] = useState<boolean>(false);
 
   const handleOpenAction = (req: ApprovalRequest, type: 'APPROVED' | 'REJECTED') => {
@@ -75,7 +115,8 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
       );
       onShowToast('Approval Action Executed', res.message);
       setActiveActionRequest(null);
-      onRefreshData();
+      if (onRefreshData) onRefreshData();
+      else loadApprovalData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       onShowToast('Action Failed', msg);
@@ -89,7 +130,8 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
     try {
       const res = await apiClient.updateApprovalRules(rulesState);
       onShowToast('Approval Rules Saved', res.message);
-      onRefreshData();
+      if (onRefreshData) onRefreshData();
+      else loadApprovalData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       onShowToast('Save Failed', msg);
@@ -99,14 +141,14 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
   };
 
   // Filtered queue
-  const filteredQueue = approvalQueue.filter((req) => {
+  const filteredQueue = activeQueue.filter((req) => {
     if (statusFilter !== 'ALL' && req.status !== statusFilter) return false;
     if (selectedModule !== 'ALL' && req.module !== selectedModule) return false;
     if (selectedStore !== 'ALL' && selectedStore !== 'CONSOLIDATED' && req.storeId !== selectedStore) return false;
     return true;
   });
 
-  const pendingCount = approvalQueue.filter((r) => r.status === 'PENDING').length;
+  const pendingCount = activeQueue.filter((r) => r.status === 'PENDING').length;
 
   const cardClass = `rounded-2xl border transition-all ${
     isLight

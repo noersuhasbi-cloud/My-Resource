@@ -17,6 +17,7 @@ import type {
   TransactionAuditRecord,
   StaffShiftSession,
   ClimateAdaptiveThresholdConfig,
+  ColdChainLogEntry,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -86,6 +87,7 @@ import { InventoryQCModule } from './InventoryQCModule';
 import { LogisticsDocsModal } from './LogisticsDocsModal';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { GroceryReportsModule } from './GroceryReportsModule';
+import { StockOpnameView } from './StockOpnameView';
 import { AdminSidebar, AdminDashboardTab, AccountingSubTab } from './AdminSidebar';
 
 interface AdminDashboardProps {
@@ -204,7 +206,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [inventorySearch, setInventorySearch] = useState<string>('');
   const [lowStockThreshold, setLowStockThreshold] = useState<number>(10);
   const [stockAlertFilter, setStockAlertFilter] = useState<'ALL' | 'LOW_STOCK' | 'BELOW_MIN_THRESHOLD'>('ALL');
-  const [inventoryViewMode, setInventoryViewMode] = useState<'WAREHOUSE_BINS' | 'PRODUCT_CATALOG'>('WAREHOUSE_BINS');
+  const [inventoryViewMode, setInventoryViewMode] = useState<
+    'WAREHOUSE_BINS' | 'PRODUCT_CATALOG' | 'STOCK_OPNAME'
+  >('WAREHOUSE_BINS');
+  const [settingsDeepSubTab, setSettingsDeepSubTab] = useState<
+    'coa' | 'pos' | 'import_opname' | 'transfer' | 'approval_matrix'
+  >('coa');
   const [editingTier, setEditingTier] = useState<StoreInventoryStock | null>(null);
   const [inventoryMetrics, setInventoryMetrics] = useState({
     totalStockCount: 0,
@@ -212,6 +219,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     lowStockCount: 0,
     totalSkus: 0,
   });
+
+  // Cold Chain & Sub-Zero Storage Compliance Logging (FDA FSMA 204, EU Reg 852/2004, FSANZ 3.2.2)
+  const [coldChainLogs, setColdChainLogs] = useState<ColdChainLogEntry[]>([]);
+  const [showColdChainTable, setShowColdChainTable] = useState<boolean>(false);
+  const [isLogTelemetryModalOpen, setIsLogTelemetryModalOpen] = useState<boolean>(false);
+  const [newLogZoneId, setNewLogZoneId] = useState<string>('WH-JKT-SEN-FRZ');
+  const [newLogTempC, setNewLogTempC] = useState<number>(-19.2);
+  const [newLogHumidity, setNewLogHumidity] = useState<number>(82);
+  const [newLogStandard, setNewLogStandard] = useState<'FDA FSMA 204' | 'EU Reg 852/2004' | 'FSANZ 3.2.2' | 'HACCP CCP'>('FDA FSMA 204');
+  const [newLogAction, setNewLogAction] = useState<string>('');
+  const [newLogAuditor, setNewLogAuditor] = useState<string>('IoT Compliance Monitor');
+  const [isSubmittingLog, setIsSubmittingLog] = useState<boolean>(false);
 
   // Stock Adjustment Modal
   const [adjustingSku, setAdjustingSku] = useState<string | null>(null);
@@ -275,6 +294,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         auditRes,
         rbacRes,
         climateRes,
+        coldChainRes,
       ] = await Promise.all([
         apiClient.getOmzetAnalytics().catch(() => null),
         apiClient.getStoreStatus(),
@@ -292,6 +312,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         apiClient.getAuditTrail(),
         apiClient.getRbacSession().catch(() => null),
         apiClient.getClimateThresholds().catch(() => []),
+        apiClient.getColdChainLogs().catch(() => []),
       ]);
 
       if (rbacRes) {
@@ -301,6 +322,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setAvailableStaffProfiles(rbacRes.availableProfiles || []);
       }
       setClimateConfigs(climateRes || []);
+      setColdChainLogs(coldChainRes || []);
 
       setOmzetData(omzetRes);
       setStoreStatus(statusRes);
@@ -464,6 +486,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       refreshAllData();
     } catch (err) {
       onShowToast('Adjustment Error', String(err));
+    }
+  };
+
+  // Cold Chain & Sub-Zero Storage Compliance Handler
+  const handleRecordColdChain = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingLog(true);
+    try {
+      const res = await apiClient.recordColdChainTelemetry({
+        warehouseZoneId: newLogZoneId,
+        temperatureCelsius: Number(newLogTempC),
+        humidityPercent: Number(newLogHumidity),
+        complianceStandard: newLogStandard,
+        correctiveAction: newLogAction || undefined,
+        inspectorName: newLogAuditor,
+        storeId: selectedOutletFilter !== 'ALL' ? selectedOutletFilter : undefined,
+      });
+      setColdChainLogs((prev) => [res.log, ...prev]);
+      setIsLogTelemetryModalOpen(false);
+      setNewLogAction('');
+      onShowToast('Cold Chain Telemetry Logged', res.message);
+      const updatedConfigs = await apiClient.getClimateThresholds().catch(() => []);
+      setClimateConfigs(updatedConfigs);
+    } catch (err) {
+      onShowToast('Logging Error', String(err));
+    } finally {
+      setIsSubmittingLog(false);
     }
   };
 
@@ -694,6 +743,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         onSelectTab={(tab) => setActiveTab(tab)}
         accountingSubTab={accountingDeepSubTab}
         onSelectAccountingSubTab={(sub) => setAccountingDeepSubTab(sub)}
+        settingsSubTab={settingsDeepSubTab}
+        onSelectSettingsSubTab={(sub) => {
+          setSettingsDeepSubTab(sub);
+          setActiveTab('settings');
+        }}
         isFinanceMenuOpen={isFinanceMenuOpen}
         onToggleFinanceMenu={() => setIsFinanceMenuOpen((prev) => !prev)}
         isSettingsMenuOpen={isSettingsMenuOpen}
@@ -1424,6 +1478,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <Thermometer className="w-3.5 h-3.5" />
                     IoT Telemetry Active
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowColdChainTable(!showColdChainTable)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      showColdChainTable
+                        ? 'bg-[#0F4C3A] text-white border-[#0F4C3A] shadow-xs'
+                        : isLight
+                        ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                        : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                    }`}
+                  >
+                    <FileCheck2 className="w-3.5 h-3.5" />
+                    <span>Cold Chain Audit Logs ({coldChainLogs.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsLogTelemetryModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all cursor-pointer shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Log Sensor Telemetry</span>
+                  </button>
                 </div>
               </div>
 
@@ -1569,6 +1645,90 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   );
                 })}
               </div>
+
+              {/* Cold Chain & Sub-Zero Storage Compliance Logging Table */}
+              {showColdChainTable && (
+                <div className="mt-5 pt-4 border-t border-gray-200 dark:border-stone-800 space-y-3 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
+                        Cold-Chain Regulatory Compliance Audit Trail
+                      </h4>
+                      <p className="text-[11px] text-gray-500 dark:text-stone-400">
+                        HACCP CCP, US FDA FSMA 204, EU Reg 852/2004, and FSANZ 3.2.2 sub-zero food safety telemetry records
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-black/5 dark:bg-white/10">
+                      {coldChainLogs.length} Records
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-stone-800 text-[10px] uppercase font-bold text-gray-400">
+                          <th className="py-2.5 px-3">Log ID &amp; Time</th>
+                          <th className="py-2.5 px-3">Warehouse Zone &amp; Facility</th>
+                          <th className="py-2.5 px-3">Temperature</th>
+                          <th className="py-2.5 px-3">Humidity</th>
+                          <th className="py-2.5 px-3">Compliance Standard</th>
+                          <th className="py-2.5 px-3">Status / Excursion</th>
+                          <th className="py-2.5 px-3">Corrective Protocol</th>
+                          <th className="py-2.5 px-3">Auditor / Sensor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200/70 dark:divide-stone-800">
+                        {coldChainLogs.map((log) => (
+                          <tr
+                            key={log.id}
+                            className="hover:bg-gray-50/80 dark:hover:bg-stone-800/40 transition-colors"
+                          >
+                            <td className="py-2.5 px-3 font-mono">
+                              <span className="font-bold text-[#0F4C3A] dark:text-emerald-400 block">{log.id}</span>
+                              <span className="text-[10px] text-gray-400">{new Date(log.timestamp).toLocaleString()}</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="font-bold">{log.zoneName}</div>
+                              <div className="text-[10px] font-mono text-gray-400">{log.warehouseZoneId} • {log.storeName}</div>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono">
+                              <span className={`font-bold ${log.isExcursion ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                {log.temperatureCelsius}°C
+                              </span>
+                              <span className="text-[10px] text-gray-400 ml-1">({log.temperatureFahrenheit}°F)</span>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-semibold">{log.humidityPercent}%</td>
+                            <td className="py-2.5 px-3">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300">
+                                {log.complianceStandard}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                                  log.severity === 'CRITICAL_SPIKE'
+                                    ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 animate-pulse'
+                                    : log.isExcursion
+                                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                }`}
+                              >
+                                {log.severity}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-[11px] max-w-xs truncate text-gray-600 dark:text-stone-300">
+                              {log.correctiveAction || 'None required — Within thermal threshold.'}
+                            </td>
+                            <td className="py-2.5 px-3 text-[10px] font-mono text-gray-500 dark:text-stone-400">
+                              {log.inspectorName} ({log.sensorId})
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Warehouse Storage Zones Summary */}
@@ -1766,6 +1926,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     Master Product Catalog ({inventory.length})
                   </button>
+                  <button
+                    onClick={() => setInventoryViewMode('STOCK_OPNAME')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      inventoryViewMode === 'STOCK_OPNAME'
+                        ? 'bg-[#0F4C3A] text-white shadow-2xs'
+                        : isLight
+                        ? 'text-gray-600 hover:text-gray-900'
+                        : 'text-stone-400 hover:text-white'
+                    }`}
+                  >
+                    <FileCheck2 className="w-3.5 h-3.5" />
+                    <span>Stock Opname &amp; Variance Audit</span>
+                  </button>
                 </div>
 
                 {inventoryViewMode === 'WAREHOUSE_BINS' && (
@@ -1860,15 +2033,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <strong className={textTitle}>
                     {inventoryViewMode === 'WAREHOUSE_BINS'
                       ? filteredTiers.length
-                      : filteredCatalogItems.length}
+                      : inventoryViewMode === 'PRODUCT_CATALOG'
+                      ? filteredCatalogItems.length
+                      : inventoryTiers.filter(
+                          (t) => selectedOutletFilter === 'ALL' || t.storeId === selectedOutletFilter
+                        ).length}
                   </strong>{' '}
                   items
                 </span>
               </div>
             </div>
 
-            {/* VIEW 1: Multi-Tier Stock Matrix Table */}
-            {inventoryViewMode === 'WAREHOUSE_BINS' ? (
+            {/* VIEW 0: Dedicated Stock Opname & Variance Audit View */}
+            {inventoryViewMode === 'STOCK_OPNAME' ? (
+              <StockOpnameView
+                theme={theme}
+                storeOutlets={storeOutlets}
+                inventoryTiers={inventoryTiers}
+                initialStoreId={
+                  selectedOutletFilter !== 'ALL' ? selectedOutletFilter : selectedGlobalStore
+                }
+                onRefreshData={refreshAllData}
+                onShowToast={onShowToast}
+              />
+            ) : inventoryViewMode === 'WAREHOUSE_BINS' ? (
               <div className={`${cardClass} overflow-hidden shadow-xs`}>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -2363,6 +2551,141 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Modal: Record Cold-Chain Telemetry Reading & Compliance Excursion */}
+            {isLogTelemetryModalOpen && (
+              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4 shadow-2xl`}>
+                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+                        <Thermometer className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className={`text-base font-bold ${textTitle}`}>
+                          Log Cold-Chain Temperature Telemetry
+                        </h3>
+                        <p className={`text-[11px] ${textMuted}`}>
+                          HACCP CCP / FDA FSMA 204 / EU 852 / FSANZ 3.2.2 Compliance Audit
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsLogTelemetryModalOpen(false)}
+                      className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleRecordColdChain} className="space-y-3.5 text-xs">
+                    <div>
+                      <label className="font-bold block mb-1">Target Warehouse Zone</label>
+                      <select
+                        value={newLogZoneId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewLogZoneId(val);
+                          if (val.includes('FRZ')) setNewLogTempC(-19.5);
+                          else setNewLogTempC(2.8);
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl font-bold border ${inputClass}`}
+                      >
+                        <option value="WH-JKT-SEN-FRZ">WH-JKT-SEN-FRZ: Senopati Sub-Zero Deep Freeze Vault (Target -22°C to -18°C)</option>
+                        <option value="WH-JKT-SEN-COLD">WH-JKT-SEN-COLD: Senopati Cold Room Chilled (Target 0°C to 4°C)</option>
+                        <option value="WH-BDG-COLD">WH-BDG-COLD: Bandung Dago Mountain Chiller (Target 0°C to 4°C)</option>
+                        <option value="WH-SBY-COLD">WH-SBY-COLD: Surabaya Gubeng Tropical Cold Vault (Target 0°C to 4°C)</option>
+                        <option value="WH-DPS-COLD">WH-DPS-COLD: Bali Canggu Coastal Chiller (Target 0°C to 4°C)</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-bold block mb-1">Temperature (°Celsius)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          required
+                          value={newLogTempC}
+                          onChange={(e) => setNewLogTempC(Number(e.target.value))}
+                          className={`w-full px-3 py-2 rounded-xl font-mono font-bold border ${inputClass}`}
+                        />
+                        <span className="text-[10px] text-gray-400 mt-1 block">
+                          Equivalent: <strong>{((Number(newLogTempC) * 9) / 5 + 32).toFixed(1)}°F</strong>
+                        </span>
+                      </div>
+                      <div>
+                        <label className="font-bold block mb-1">Relative Humidity (%)</label>
+                        <input
+                          type="number"
+                          min={20}
+                          max={100}
+                          required
+                          value={newLogHumidity}
+                          onChange={(e) => setNewLogHumidity(Number(e.target.value))}
+                          className={`w-full px-3 py-2 rounded-xl font-mono font-bold border ${inputClass}`}
+                        />
+                        <span className="text-[10px] text-gray-400 mt-1 block">Standard Target: 80% - 90%</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="font-bold block mb-1">Compliance Standard Mandate</label>
+                      <select
+                        value={newLogStandard}
+                        onChange={(e) => setNewLogStandard(e.target.value as any)}
+                        className={`w-full px-3 py-2 rounded-xl font-bold border ${inputClass}`}
+                      >
+                        <option value="FDA FSMA 204">US FDA FSMA Rule 204 (Food Traceability &amp; Cold Chain)</option>
+                        <option value="EU Reg 852/2004">EU Regulation 852/2004 (Hygiene of Foodstuffs &amp; Quick-Frozen)</option>
+                        <option value="FSANZ 3.2.2">FSANZ Standard 3.2.2 (Australia Food Safety Practices)</option>
+                        <option value="HACCP CCP">HACCP Critical Control Point 2 (Perishable Temperature)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold block mb-1">Inspector / Auditor Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={newLogAuditor}
+                        onChange={(e) => setNewLogAuditor(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl font-bold border ${inputClass}`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold block mb-1">Corrective Action Taken (If Excursion)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Compressor backup engaged; temperature verified under 4°C within 15 mins"
+                        value={newLogAction}
+                        onChange={(e) => setNewLogAction(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl border ${inputClass}`}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-200 dark:border-stone-800">
+                      <button
+                        type="button"
+                        onClick={() => setIsLogTelemetryModalOpen(false)}
+                        className="px-4 py-2 rounded-xl border border-gray-200 dark:border-stone-700 text-xs font-semibold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSubmittingLog}
+                        className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+                      >
+                        {isSubmittingLog ? 'Recording Log...' : 'Commit Telemetry to Audit Trail'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -2464,6 +2787,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'reports' && (
           <GroceryReportsModule
             theme={theme}
+            selectedStore={selectedGlobalStore}
             onShowToast={onShowToast}
           />
         )}
@@ -2628,6 +2952,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             activeStaffSession={activeStaffSession}
             availableStaffProfiles={availableStaffProfiles}
             storeOutlets={storeOutlets}
+            storeStatus={storeStatus}
             onSwitchSession={async (userId) => {
               const res = await apiClient.switchRbacSession(userId);
               setActiveStaffSession(res.session);
@@ -2666,6 +2991,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             storeOutlets={storeOutlets}
             warehouseZones={warehouseZones}
             inventoryTiers={inventoryTiers}
+            initialSubTab={settingsDeepSubTab}
             onShowToast={onShowToast}
             onRefreshData={refreshAllData}
           />

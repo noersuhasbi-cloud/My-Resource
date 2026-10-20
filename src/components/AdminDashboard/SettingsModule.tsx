@@ -1950,8 +1950,8 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     onChange={(e) => setTransferSku(e.target.value)}
                     className={`w-full ${inputClass}`}
                   >
-                    {uniqueTransferSkuTiers.map((t) => (
-                      <option key={t.sku} value={t.sku}>
+                    {uniqueTransferSkuTiers.map((t, idx) => (
+                      <option key={`${t.sku}-${idx}`} value={t.sku}>
                         {t.sku} - {t.productName} ({t.category})
                       </option>
                     ))}
@@ -2152,6 +2152,9 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {activeSubTab === 'approval_matrix' && (
         <ApprovalMatrixModule
           theme={theme}
+          selectedStore="CONSOLIDATED"
+          approvalRules={approvalRules}
+          approvalQueue={approvalQueue}
           onShowToast={onShowToast}
           onRefreshData={onRefreshData || (() => {})}
         />

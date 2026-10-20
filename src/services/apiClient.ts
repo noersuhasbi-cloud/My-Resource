@@ -44,6 +44,9 @@ import type {
   ShipmentQuotaTracking,
   QCInspectionRecord,
   GroceryMetricsReport,
+  ColdChainLogEntry,
+  BatchRecallTraceResult,
+  CustomerRecallNotification,
 } from '../types/index.ts';
 
 export const apiClient = {
@@ -1114,6 +1117,95 @@ export const apiClient = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to fetch grocery metrics');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // GLOBAL COMPLIANCE: COLD CHAIN TELEMETRY LOGS
+  // -------------------------------------------------------------
+  async getColdChainLogs(zoneId?: string, storeId?: string): Promise<ColdChainLogEntry[]> {
+    const params = new URLSearchParams();
+    if (zoneId && zoneId !== 'ALL') params.append('zoneId', zoneId);
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetch(`/api/admin/cold-chain/logs?${params.toString()}`);
+    return res.json().catch(() => []);
+  },
+
+  async recordColdChainTelemetry(payload: Partial<ColdChainLogEntry>): Promise<{
+    success: boolean;
+    log: ColdChainLogEntry;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/cold-chain/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to record cold chain log');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // GLOBAL COMPLIANCE: BATCH RECALL & FDA/EU TRACEABILITY APIS
+  // -------------------------------------------------------------
+  async traceBatchRecall(query: string): Promise<BatchRecallTraceResult> {
+    const res = await fetch(`/api/admin/batch-recall/trace/${encodeURIComponent(query)}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `No batch found matching query '${query}'`);
+    }
+    return res.json();
+  },
+
+  async quarantineBatch(payload: {
+    batchId: string;
+    reason?: string;
+    recallClassification?: string;
+    hazardDescription?: string;
+    auditorName?: string;
+  }): Promise<{ success: boolean; message: string; quarantinedUnits: number }> {
+    const res = await fetch('/api/admin/batch-recall/quarantine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to quarantine batch');
+    }
+    return res.json();
+  },
+
+  async notifyRecallCustomers(payload: {
+    batchId: string;
+    message?: string;
+    channel?: 'WhatsApp' | 'SMS' | 'Email';
+  }): Promise<{ success: boolean; message: string; notifications: CustomerRecallNotification[] }> {
+    const res = await fetch('/api/admin/batch-recall/notify-customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to send recall notifications');
+    }
+    return res.json();
+  },
+
+  async releaseBatchRecall(batchId: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetch('/api/admin/batch-recall/release', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batchId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to release quarantined batch');
     }
     return res.json();
   },

@@ -28,7 +28,7 @@ interface InventoryQCModuleProps {
   theme: 'light' | 'dark';
   selectedStore: string;
   inventory: InventoryItem[];
-  qcRecords: QCInspectionRecord[];
+  qcRecords?: QCInspectionRecord[];
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -42,6 +42,32 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+
+  // Internal QC records if not provided by parent
+  const [internalQcRecords, setInternalQcRecords] = useState<QCInspectionRecord[]>(qcRecords || []);
+
+  const loadQcData = async () => {
+    try {
+      if (!qcRecords) {
+        const records = await apiClient.getQCInspections(selectedStore);
+        setInternalQcRecords(records);
+      }
+    } catch (err) {
+      console.error('Failed to load QC inspections:', err);
+    }
+  };
+
+  React.useEffect(() => {
+    loadQcData();
+  }, [selectedStore]);
+
+  React.useEffect(() => {
+    if (qcRecords) {
+      setInternalQcRecords(qcRecords);
+    }
+  }, [qcRecords]);
+
+  const activeQcRecords = qcRecords || internalQcRecords;
 
   // Filters
   const [filterDisposition, setFilterDisposition] = useState<'ALL' | QCDisposition>('ALL');
@@ -124,7 +150,8 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
         `Batch ${batchNumber} dispositioned as ${disposition} (${actionTaken.replace(/_/g, ' ')}).`
       );
       setIsModalOpen(false);
-      onRefreshData();
+      if (onRefreshData) onRefreshData();
+      loadQcData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       onShowToast('QC Submission Failed', msg);
@@ -134,7 +161,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   };
 
   // Filtered records
-  const filteredRecords = qcRecords.filter((rec) => {
+  const filteredRecords = activeQcRecords.filter((rec) => {
     if (filterDisposition !== 'ALL' && rec.disposition !== filterDisposition) return false;
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
@@ -148,10 +175,10 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
     return true;
   });
 
-  const passedCount = qcRecords.filter((r) => r.disposition === 'PASSED').length;
-  const quarantinedCount = qcRecords.filter((r) => r.disposition === 'QUARANTINED').length;
-  const rejectedCount = qcRecords.filter((r) => r.disposition === 'REJECTED').length;
-  const passRate = qcRecords.length > 0 ? Math.round((passedCount / qcRecords.length) * 100) : 100;
+  const passedCount = activeQcRecords.filter((r) => r.disposition === 'PASSED').length;
+  const quarantinedCount = activeQcRecords.filter((r) => r.disposition === 'QUARANTINED').length;
+  const rejectedCount = activeQcRecords.filter((r) => r.disposition === 'REJECTED').length;
+  const passRate = activeQcRecords.length > 0 ? Math.round((passedCount / activeQcRecords.length) * 100) : 100;
 
   // Card classes
   const cardClass = `rounded-2xl border transition-all ${
@@ -210,7 +237,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
               {passRate}%
             </div>
             <div className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
-              {passedCount} of {qcRecords.length} lots passed Grade A/B
+              {passedCount} of {activeQcRecords.length} lots passed Grade A/B
             </div>
           </div>
 
@@ -433,8 +460,8 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                       isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-stone-800 border-stone-700 text-white'
                     }`}
                   >
-                    {inventory.map((i) => (
-                      <option key={i.sku} value={i.sku}>
+                    {inventory.map((i, idx) => (
+                      <option key={`${i.sku}-${idx}`} value={i.sku}>
                         {i.sku} - {i.productName}
                       </option>
                     ))}

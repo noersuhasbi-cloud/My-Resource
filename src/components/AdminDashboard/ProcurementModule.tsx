@@ -882,7 +882,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 Specify Received Items (Partial Fulfillment Supported)
               </h4>
 
-              {activeReceivingPO.items.map((item) => {
+              {activeReceivingPO.items.map((item, idx) => {
                 const itemState = receivingItemsState[item.sku] || {
                   quantityReceived: item.remainingBackorder,
                   batchNumber: 'BAT-NEW',
@@ -895,7 +895,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
                 return (
                   <div
-                    key={item.sku}
+                    key={`${item.sku}-${idx}`}
                     className={`border p-4 rounded-xl space-y-3 ${
                       isLight
                         ? 'bg-white border-gray-200 shadow-2xs'
@@ -1133,8 +1133,8 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 }`}
               >
                 <option value="">-- Choose Item from Inventory --</option>
-                {inventory.map((item) => (
-                  <option key={item.sku} value={item.sku}>
+                {inventory.map((item, idx) => (
+                  <option key={`${item.sku}-${idx}`} value={item.sku}>
                     {item.productName} ({item.sku}) - Stock: {item.currentStock}
                   </option>
                 ))}

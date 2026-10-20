@@ -741,8 +741,8 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                     isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800 border-stone-700'
                   }`}
                 >
-                  {inventory.map((item) => (
-                    <option key={item.sku} value={item.sku}>
+                  {inventory.map((item, idx) => (
+                    <option key={`${item.sku}-${idx}`} value={item.sku}>
                       {item.sku} - {item.productName} ({item.category})
                     </option>
                   ))}
@@ -958,8 +958,8 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                     isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
                   }`}
                 >
-                  {inventory.map((item) => (
-                    <option key={item.sku} value={item.sku}>
+                  {inventory.map((item, idx) => (
+                    <option key={`${item.sku}-${idx}`} value={item.sku}>
                       {item.sku} - {item.productName} ({formatIDR(item.unitCost)} / {item.unit})
                     </option>
                   ))}
