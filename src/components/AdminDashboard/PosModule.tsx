@@ -18,6 +18,10 @@ import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import { QRCodeSVG } from 'qrcode.react';
 import {
+  parseVariableWeightBarcode,
+  SAMPLE_SCALE_BARCODES,
+} from '../../utils/groceryEngine.ts';
+import {
   Scan,
   ShoppingCart,
   Plus,
@@ -277,12 +281,34 @@ export const PosModule: React.FC<PosModuleProps> = ({
     setCustomerMemberId('');
   };
 
-  // Barcode search and instant add
-  const handleBarcodeSubmit = (e?: React.FormEvent) => {
+  // Barcode search and instant add (including Variable-Weight embedded scale barcodes)
+  const handleBarcodeSubmit = (e?: React.FormEvent, directBarcodeInput?: string) => {
     if (e) e.preventDefault();
-    if (!barcodeInput.trim()) return;
+    const rawCode = (directBarcodeInput || barcodeInput).trim();
+    if (!rawCode) return;
 
-    const query = barcodeInput.trim().toLowerCase();
+    // 1. Check for Variable-Weight embedded scale barcode (EAN-13 GS1 prefix 20-29 / 02)
+    const scaleBarcode = parseVariableWeightBarcode(rawCode, products);
+    if (scaleBarcode && scaleBarcode.isVariableWeight) {
+      const targetProduct =
+        products.find((p) => p.sku === scaleBarcode.matchedSku) ||
+        products.find((p) => p.isWeighted) ||
+        products[0];
+
+      if (targetProduct) {
+        addToCart(targetProduct, 1, true, scaleBarcode.netWeightGrams);
+        onShowToast(
+          'Catch-Weight Scale Barcode Parsed',
+          `GS1 Scale Barcode (${rawCode}): ${targetProduct.name} @ ${scaleBarcode.netWeightGrams}g (${scaleBarcode.netWeightKg}kg). Added to cart for ${formatIDR(
+            Math.round((targetProduct.pricePerKg || targetProduct.sellingPrice) * scaleBarcode.netWeightKg)
+          )}.`
+        );
+        setBarcodeInput('');
+        return;
+      }
+    }
+
+    const query = rawCode.toLowerCase();
     const matched = products.find(
       (p) =>
         p.barcode.toLowerCase() === query ||
@@ -299,7 +325,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
       }
       setBarcodeInput('');
     } else {
-      onShowToast('Not Found', `No product found matching barcode "${barcodeInput}"`);
+      onShowToast('Not Found', `No product found matching barcode "${rawCode}"`);
     }
   };
 
@@ -499,6 +525,29 @@ export const PosModule: React.FC<PosModuleProps> = ({
             <span>Scan / Add</span>
           </button>
         </form>
+
+        {/* Quick Scale Variable-Weight Barcode Test Buttons */}
+        <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[11px]">
+          <span className="text-slate-600 dark:text-zinc-300 font-bold flex items-center gap-1">
+            <Scale className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            Variable Scale Barcode Tests:
+          </span>
+          {SAMPLE_SCALE_BARCODES.map((s) => (
+            <button
+              key={s.barcode}
+              type="button"
+              onClick={() => {
+                setBarcodeInput(s.barcode);
+                handleBarcodeSubmit(undefined, s.barcode);
+              }}
+              className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 font-mono transition-all flex items-center gap-1"
+              title={`Simulate scanning scale tag: ${s.barcode}`}
+            >
+              <span>{s.label}</span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">({s.weightGrams}g)</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 2. Main POS Workspace: Product Grid (60%) + Cart Ticket (40%) */}

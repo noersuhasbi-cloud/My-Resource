@@ -63,6 +63,10 @@ import type {
   AnalyticDepartment,
   ProductMarginRecord,
   EnterpriseQuotation,
+  VendorCreditNote,
+  DynamicMarkdownConfig,
+  BatchMarkdownCandidate,
+  WasteDisposition,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
@@ -1766,6 +1770,100 @@ export const apiClient = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to convert quotation to order');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // GROCERY MODULE: Return-to-Vendor (RTV) & Vendor Credit Notes
+  // -------------------------------------------------------------
+  async getVendorCreditNotes(storeId?: string): Promise<VendorCreditNote[]> {
+    try {
+      const res = await fetch(`/api/admin/vendor-credit-notes${storeId && storeId !== 'ALL' ? `?storeId=${encodeURIComponent(storeId)}` : ''}`);
+      if (res.ok) return await res.json();
+    } catch {}
+    const { MOCK_VENDOR_CREDIT_NOTES } = await import('../utils/groceryEngine.ts');
+    return MOCK_VENDOR_CREDIT_NOTES;
+  },
+
+  async createVendorCreditNote(payload: Partial<VendorCreditNote>): Promise<{
+    success: boolean;
+    creditNote: VendorCreditNote;
+    journalEntryId: string;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/vendor-credit-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to generate Return-to-Vendor credit note');
+    }
+    return res.json();
+  },
+
+  async applyCreditNoteToBill(creditNoteId: string, vendorBillId: string): Promise<{
+    success: boolean;
+    creditNote: VendorCreditNote;
+    vendorBill: any;
+    message: string;
+  }> {
+    const res = await fetch(`/api/admin/vendor-credit-notes/${encodeURIComponent(creditNoteId)}/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendorBillId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to apply vendor credit note to bill');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // GROCERY MODULE: Dynamic Markdown Engine
+  // -------------------------------------------------------------
+  async getDynamicMarkdownConfig(): Promise<DynamicMarkdownConfig> {
+    try {
+      const res = await fetch('/api/admin/markdown-rules');
+      if (res.ok) return await res.json();
+    } catch {}
+    const { DEFAULT_MARKDOWN_CONFIG } = await import('../utils/groceryEngine.ts');
+    return DEFAULT_MARKDOWN_CONFIG;
+  },
+
+  async saveDynamicMarkdownConfig(config: DynamicMarkdownConfig): Promise<{
+    success: boolean;
+    config: DynamicMarkdownConfig;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/markdown-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to save dynamic markdown rules');
+    }
+    return res.json();
+  },
+
+  async applyDynamicBatchMarkdowns(batchIds: string[]): Promise<{
+    success: boolean;
+    appliedCount: number;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/markdown-rules/apply-batches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batchIds }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to apply markdown prices to POS & Storefront');
     }
     return res.json();
   },

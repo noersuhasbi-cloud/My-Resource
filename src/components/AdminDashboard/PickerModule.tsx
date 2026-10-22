@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type {
   PickerOrder,
   PickerOrderItem,
   InventoryItem,
   SubstitutionPromptRecord,
+  StorageZoneType,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import {
+  organizePickListByZone,
+  detectCrossContaminationRisks,
+} from '../../utils/groceryEngine.ts';
 import {
   Scan,
   Scale,
@@ -34,6 +39,10 @@ import {
   ThumbsDown,
   FileCheck2,
   AlertTriangle,
+  Package,
+  Snowflake,
+  Sun,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface PickerModuleProps {
@@ -76,6 +85,12 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
   const [absorbPriceDifference, setAbsorbPriceDifference] = useState<boolean>(true);
   const [isSubmittingSub, setIsSubmittingSub] = useState<boolean>(false);
   const [isSimulatingCustomerResponse, setIsSimulatingCustomerResponse] = useState<string | null>(null);
+
+  // =============================================================
+  // GROCERY MODULE: Zone-Based Picking & HACCP Cross-Contamination
+  // =============================================================
+  const [selectedZoneFilter, setSelectedZoneFilter] = useState<'ALL' | StorageZoneType>('ALL');
+  const [barrierBaggingVerifiedOrders, setBarrierBaggingVerifiedOrders] = useState<Record<string, boolean>>({});
 
   const isLight = theme === 'light';
 
@@ -206,6 +221,26 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
   const originalItemPrice = subItem?.finalPrice || subItem?.pricePerUnit || 0;
   const replacementPrice = targetReplacementItem?.sellingPrice || 0;
   const priceDelta = replacementPrice - originalItemPrice;
+
+  // GROCERY MODULE: Zone grouping & HACCP cross-contamination check
+  const zoneGroups = useMemo(() => {
+    if (!selectedOrder) return [];
+    return organizePickListByZone(selectedOrder.items);
+  }, [selectedOrder]);
+
+  const haccpAlert = useMemo(() => {
+    if (!selectedOrder) return { hasRisk: false, rawProteinItems: [], readyToEatItems: [], advisory: '' };
+    return detectCrossContaminationRisks(selectedOrder.items);
+  }, [selectedOrder]);
+
+  const isBarrierVerified = selectedOrder ? Boolean(barrierBaggingVerifiedOrders[selectedOrder.orderId]) : false;
+
+  const filteredOrderItems = useMemo(() => {
+    if (!selectedOrder) return [];
+    if (selectedZoneFilter === 'ALL') return selectedOrder.items;
+    const group = zoneGroups.find((g) => g.zone === selectedZoneFilter);
+    return group ? group.items : [];
+  }, [selectedOrder, selectedZoneFilter, zoneGroups]);
 
   return (
     <div className="space-y-6">
@@ -407,9 +442,176 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                   )}
                 </div>
 
+                {/* GROCERY MODULE: COLD CHAIN ROUTE SEQUENCER */}
+                <div className="mt-4 p-3.5 rounded-xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/50 dark:bg-sky-950/20 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Thermometer className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                      <span className="text-xs font-bold text-slate-900 dark:text-zinc-100">
+                        Cold-Chain Preserved Route Sequence
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono text-sky-700 dark:text-sky-300 font-semibold bg-sky-100 dark:bg-sky-900/40 px-2 py-0.5 rounded-md">
+                      Ambient &rarr; Chilled &rarr; Frozen (Minimizes Shelf-to-Chill Loss)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="p-2 rounded-lg bg-white/80 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
+                      <div className="text-[10px] text-zinc-400 uppercase font-bold flex items-center justify-center gap-1">
+                        <Sun className="w-3 h-3 text-amber-500" /> Stage 1: Ambient
+                      </div>
+                      <div className="font-bold text-slate-800 dark:text-zinc-200 text-xs mt-0.5">Pantry &amp; Bakery</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/80 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
+                      <div className="text-[10px] text-zinc-400 uppercase font-bold flex items-center justify-center gap-1">
+                        <Thermometer className="w-3 h-3 text-emerald-500" /> Stage 2: Chilled
+                      </div>
+                      <div className="font-bold text-slate-800 dark:text-zinc-200 text-xs mt-0.5">Dairy &amp; Meats (2&ndash;4&deg;C)</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/80 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
+                      <div className="text-[10px] text-zinc-400 uppercase font-bold flex items-center justify-center gap-1">
+                        <Snowflake className="w-3 h-3 text-blue-500" /> Stage 3: Frozen
+                      </div>
+                      <div className="font-bold text-slate-800 dark:text-zinc-200 text-xs mt-0.5">Ice Cream &amp; IQF (&minus;18&deg;C)</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* HACCP CROSS-CONTAMINATION HAZARD ALERT */}
+                {haccpAlert.hasRisk && (
+                  <div className="mt-3 p-3.5 rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2">
+                        <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+                        <div>
+                          <div className="text-xs font-bold text-rose-900 dark:text-rose-200">
+                            HACCP Cross-Contamination Alert: Raw Proteins vs Ready-to-Eat Items
+                          </div>
+                          <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-0.5">
+                            {haccpAlert.advisory}
+                          </p>
+                          <div className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 flex flex-wrap gap-1">
+                            <span>Raw items: <strong>{haccpAlert.rawProteinItems.join(', ')}</strong></span>
+                            <span>&bull;</span>
+                            <span>Produce/Bakery: <strong>{haccpAlert.readyToEatItems.join(', ')}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBarrierBaggingVerifiedOrders((prev) => ({
+                            ...prev,
+                            [selectedOrder.orderId]: !prev[selectedOrder.orderId],
+                          }));
+                          onShowToast(
+                            isBarrierVerified ? 'Barrier Bagging Unchecked' : 'HACCP Protocol Verified',
+                            isBarrierVerified
+                              ? 'Secondary bio-barrier status cleared.'
+                              : 'Confirmed: Raw proteins sealed in secondary protective bio-barrier liners.'
+                          );
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 ${
+                          isBarrierVerified
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs'
+                        }`}
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>{isBarrierVerified ? 'Barrier Bagging Verified' : 'Verify Barrier Bagging'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* MULTI-TOTE BAGGING ASSIGNMENT BAR */}
+                <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-zinc-400 shrink-0">
+                    Tote Packing Stations:
+                  </span>
+                  {zoneGroups.map((zg) => (
+                    <div
+                      key={zg.zone}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-[11px] flex items-center gap-2 shrink-0"
+                    >
+                      <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">
+                        {zg.tote?.toteBarcode || `TOTE-${zg.zone.toUpperCase()}`}
+                      </span>
+                      <span className="text-slate-500 dark:text-zinc-400">
+                        ({zg.items.length} items &bull; {zg.tote?.zoneLabel || zg.zoneName})
+                      </span>
+                      {zg.tote?.gelPackVerified && (
+                        <span className="px-1 py-0.2 rounded bg-sky-500/20 text-sky-700 dark:text-sky-300 text-[9px] font-bold">
+                          Ice Pack
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* ZONE FILTER TABS */}
+                <div className="mt-4 flex items-center gap-2 border-b border-slate-200 dark:border-zinc-800 pb-2 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Filter by Zone:
+                  </span>
+                  <button
+                    onClick={() => setSelectedZoneFilter('ALL')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      selectedZoneFilter === 'ALL'
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    All Zones ({selectedOrder.items.length})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedZoneFilter('ambient')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      selectedZoneFilter === 'ambient'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : isLight
+                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    Ambient Pantry ({zoneGroups.find((g) => g.zone === 'ambient')?.items.length || 0})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedZoneFilter('cold_chilled')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      selectedZoneFilter === 'cold_chilled'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : isLight
+                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    Chilled 2-4&deg;C ({zoneGroups.find((g) => g.zone === 'cold_chilled')?.items.length || 0})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedZoneFilter('freezer')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      selectedZoneFilter === 'freezer'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : isLight
+                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    Deep Freeze -18&deg;C ({zoneGroups.find((g) => g.zone === 'freezer')?.items.length || 0})
+                  </button>
+                </div>
+
                 {/* Items List */}
                 <div className="space-y-3 mt-4">
-                  {selectedOrder.items.map((item) => {
+                  {filteredOrderItems.map((item) => {
                     const isPicked = item.status === 'picked';
                     const isSubstituted = item.status === 'substituted';
 
@@ -440,6 +642,19 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                               {isSubstituted && (
                                 <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-500/20 text-purple-700 dark:text-purple-300">
                                   Substituted
+                                </span>
+                              )}
+                              {item.storageZone && (
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[10px] font-bold uppercase ${
+                                    item.storageZone === 'freezer'
+                                      ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
+                                      : item.storageZone === 'cold_chilled'
+                                      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                                      : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                                  }`}
+                                >
+                                  {item.storageZone.replace(/_/g, ' ')}
                                 </span>
                               )}
                             </div>

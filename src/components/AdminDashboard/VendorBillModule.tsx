@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type {
   VendorBill,
   VendorBillStatus,
@@ -7,6 +7,7 @@ import type {
   PurchaseOrder,
   GoodsReceiptRecord,
   SupportedCurrency,
+  VendorCreditNote,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { apiClient } from '../../services/apiClient';
@@ -36,6 +37,7 @@ import {
   Receipt,
   Truck,
   ExternalLink,
+  RotateCcw,
 } from 'lucide-react';
 
 const FX_RATES: Record<SupportedCurrency, { symbol: string; rate: number; label: string }> = {
@@ -80,6 +82,58 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(Boolean(initialPreselectedPoId || initialPreselectedGrId));
   const [selectedBillForDetail, setSelectedBillForDetail] = useState<VendorBill | null>(null);
   const [billToPay, setBillToPay] = useState<VendorBill | null>(null);
+
+  // Return-to-Vendor (RTV) Credit Notes state
+  const [vendorCreditNotes, setVendorCreditNotes] = useState<VendorCreditNote[]>([]);
+  const [isApplyingCreditNote, setIsApplyingCreditNote] = useState<string | null>(null);
+
+  const loadCreditNotes = async () => {
+    try {
+      const data = await apiClient.getVendorCreditNotes();
+      setVendorCreditNotes(data);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadCreditNotes();
+  }, []);
+
+  const handleApplyCreditNote = async (creditNoteId: string, billId: string) => {
+    setIsApplyingCreditNote(creditNoteId);
+    try {
+      await apiClient.applyCreditNoteToBill(creditNoteId, billId);
+      const targetNote = vendorCreditNotes.find((c) => c.creditNoteId === creditNoteId);
+      const creditAmt = targetNote ? targetNote.totalCreditIDR : 0;
+
+      onShowToast(
+        'RTV Credit Note Applied',
+        `Successfully applied ${creditNoteId} (${formatIDR(creditAmt)}) deduction to bill. Remaining balance reduced.`
+      );
+
+      setVendorCreditNotes((prev) =>
+        prev.map((cn) =>
+          cn.creditNoteId === creditNoteId
+            ? { ...cn, status: 'applied_to_bill', appliedToBillId: billId }
+            : cn
+        )
+      );
+
+      if (billToPay && billToPay.id === billId) {
+        const newDue = Math.max(0, billToPay.remainingDue - creditAmt);
+        setBillToPay({
+          ...billToPay,
+          remainingDue: newDue,
+          amountPaid: billToPay.amountPaid + creditAmt,
+        });
+        setPayAmountInput(newDue);
+      }
+      onRefreshData();
+    } catch (err) {
+      onShowToast('Offset Failed', String(err));
+    } finally {
+      setIsApplyingCreditNote(null);
+    }
+  };
 
   // Form State for Creating Vendor Bill
   const [selectedPoId, setSelectedPoId] = useState<string>(initialPreselectedPoId || '');
@@ -1098,6 +1152,54 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* AVAILABLE RTV CREDIT NOTES TO OFFSET VENDOR BILL */}
+              {(() => {
+                const availableRtv = vendorCreditNotes.filter(
+                  (c) =>
+                    c.status !== 'applied_to_bill' &&
+                    c.supplierName.toLowerCase() === billToPay.supplierName.toLowerCase()
+                );
+                if (availableRtv.length === 0) return null;
+
+                return (
+                  <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Available Return-to-Vendor (RTV) Credit Notes ({availableRtv.length})
+                      </span>
+                      <span className="text-[10px] text-zinc-400">Offset against AP invoice</span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                      {availableRtv.map((cn) => (
+                        <div
+                          key={cn.creditNoteId}
+                          className="flex items-center justify-between p-2 rounded-lg bg-white/80 dark:bg-zinc-900 border border-amber-200 dark:border-amber-900/50"
+                        >
+                          <div>
+                            <div className="font-bold text-slate-800 dark:text-zinc-200 font-mono">
+                              {cn.creditNoteId} &bull; {cn.productName}
+                            </div>
+                            <div className="text-[10px] text-zinc-400">
+                              RMA: {cn.rmaNumber} &bull; Credit: {formatIDR(cn.totalCreditIDR)}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isApplyingCreditNote === cn.creditNoteId}
+                            onClick={() => handleApplyCreditNote(cn.creditNoteId, billToPay.id)}
+                            className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all disabled:opacity-50"
+                          >
+                            {isApplyingCreditNote === cn.creditNoteId ? 'Applying...' : 'Apply Offset'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Settlement Payment Amount ({billToPay.currency}) *</label>

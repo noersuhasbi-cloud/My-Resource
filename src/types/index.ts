@@ -455,20 +455,91 @@ export interface FEFOAllocationResult {
 }
 
 // -------------------------------------------------------------
-// Scrap & Waste Management Module
+// Dynamic Markdown & Expiry-Based Clearance Engine
+// -------------------------------------------------------------
+export interface MarkdownRuleTier {
+  id: string;
+  maxHoursUntilExpiry: number; // e.g. 48, 24, 12 hours
+  discountPercent: number; // e.g. 25, 50, 70%
+  label: string; // e.g. "Early Yellow Tag (25%)", "Clearance Red Tag (50%)", "Emergency Same-Day (70%)"
+  colorCode: 'amber' | 'rose' | 'purple';
+  autoApplyAtPos: boolean;
+}
+
+export interface DynamicMarkdownConfig {
+  enabled: boolean;
+  minGrossMarginFloorPercent: number;
+  tiers: MarkdownRuleTier[];
+  targetCategories: ProductCategory[];
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export interface BatchMarkdownCandidate {
+  batchId: string;
+  sku: string;
+  productName: string;
+  category: ProductCategory;
+  currentStock: number;
+  unitCost: number;
+  originalPrice: number;
+  markdownPrice: number;
+  discountPercent: number;
+  hoursRemaining: number;
+  appliedTier: MarkdownRuleTier;
+  isMarkdownActive: boolean;
+  markdownBarcode: string;
+  salvageRecoveryIDR: number;
+  fullWasteLossIDR: number;
+}
+
+// -------------------------------------------------------------
+// Scrap, Waste, Return-to-Vendor (RTV) & Vendor Credit Notes
 // -------------------------------------------------------------
 export type WasteReason =
   | 'expired'
   | 'damaged_in_transit'
   | 'chiller_temp_breach'
   | 'pest_spoilage'
-  | 'trimming_loss';
+  | 'trimming_loss'
+  | 'customer_return_opened'
+  | 'supplier_defect';
 
 export type WasteAction =
   | 'bio_compost'
   | 'safe_disposal'
   | 'supplier_claim'
-  | 'donated_animal_feed';
+  | 'donated_animal_feed'
+  | 'restocked_to_inventory'
+  | 'vendor_credit_note_issued';
+
+export type WasteDisposition =
+  | 'unsalvageable_scrap'      // Routed to waste cage / disposal / bio-compost (Debit #6030)
+  | 'customer_return_restock'   // Restocked back to store inventory (Debit #1040)
+  | 'vendor_rtv_claim';        // Defective items returned to vendor for Credit Note (Debit #2010 AP Offset)
+
+export interface VendorCreditNote {
+  creditNoteId: string; // e.g. VCN-2026-001
+  rmaNumber: string; // e.g. RMA-SUPP-8921
+  supplierId: string;
+  supplierName: string;
+  storeId: string;
+  storeName: string;
+  sku: string;
+  productName: string;
+  lotNumber?: string;
+  quantityReturned: number;
+  unit: string;
+  unitCost: number;
+  totalCreditIDR: number;
+  reason: 'spoiled_on_delivery' | 'broken_seal' | 'cold_chain_breach' | 'pest_defect' | 'wrong_grade';
+  status: 'pending_pickup' | 'verified_by_vendor' | 'applied_to_bill';
+  appliedToBillId?: string;
+  createdAt: string;
+  approvedBy: string;
+  journalEntryId?: string;
+  notes?: string;
+}
 
 export interface WasteRecord {
   id: string; // e.g. WST-2026-001
@@ -485,10 +556,53 @@ export interface WasteRecord {
   totalShrinkageCost: number;
   reason: WasteReason;
   actionTaken: WasteAction;
+  disposition?: WasteDisposition;
+  vendorCreditNoteId?: string;
+  rmaNumber?: string;
+  supplierName?: string;
   reportedBy: string;
   reportedAt: string;
   glEntryId?: string;
   notes?: string;
+}
+
+// -------------------------------------------------------------
+// Variable-Weight Barcodes & Catch-Weight Scanner
+// -------------------------------------------------------------
+export interface VariableWeightBarcodeInfo {
+  rawBarcode: string;
+  isVariableWeight: boolean;
+  prefix: string;
+  skuOrPlu: string;
+  netWeightGrams: number;
+  netWeightKg: number;
+  embeddedPriceIDR?: number;
+  matchedSku?: string;
+  calculatedLineTotal: number;
+}
+
+// -------------------------------------------------------------
+// Zone-Based Picking & Cold Chain Preservation
+// -------------------------------------------------------------
+export interface ZonePickTote {
+  toteId: string;
+  zone: StorageZoneType;
+  zoneLabel: string;
+  toteBarcode: string;
+  colorBadge: string;
+  gelPackVerified?: boolean;
+  haccpBarrierBagApplied?: boolean;
+  itemCount: number;
+}
+
+export interface PickListZoneGroup {
+  zone: StorageZoneType;
+  zoneName: string;
+  zoneTempDesc: string;
+  sequenceOrder: number; // 1: Ambient, 2: Chilled, 3: Frozen
+  items: PickerOrderItem[];
+  isZoneComplete: boolean;
+  tote?: ZonePickTote;
 }
 
 // -------------------------------------------------------------
