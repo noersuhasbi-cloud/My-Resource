@@ -233,8 +233,8 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
       <div
         className={`p-5 sm:p-6 rounded-2xl border transition-colors ${
           isLight
-            ? 'bg-gradient-to-r from-rose-50 via-white to-stone-50 border-rose-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-            : 'bg-stone-900/80 border-stone-800'
+            ? 'bg-gradient-to-r from-rose-50 via-white to-slate-50 border-rose-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+            : 'bg-zinc-900/80 border-zinc-800'
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -243,14 +243,14 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-600 text-white tracking-wide uppercase">
                 Shrinkage Accounting
               </span>
-              <span className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+              <span className={`text-xs ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
                 Audit-Compliant Waste &amp; Natural Moisture Loss
               </span>
             </div>
-            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-stone-900' : 'text-white'}`}>
+            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
               Waste &amp; Shrinkage Management
             </h2>
-            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-stone-600' : 'text-stone-400'}`}>
+            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
               Manage physical product write-offs and physiological moisture transpiration loss.
               Automatic GL postings debit Account #6030 (Inventory Shrinkage Expense) and credit Account #1030 (Inventory Asset)
               without triggering anomalous theft auditing red flags.
@@ -279,8 +279,8 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
               onClick={loadWasteData}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                 isLight
-                  ? 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50 shadow-sm'
-                  : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                  ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -290,7 +290,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
         </div>
 
         {/* View Switcher Tabs (Module 1 Integration) */}
-        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200/80 dark:border-stone-800 flex-wrap">
+        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200/80 dark:border-zinc-800 flex-wrap">
           <button
             onClick={() => setActiveView('spoilage')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -298,7 +298,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                 ? 'bg-rose-600 text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
             }`}
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -312,7 +312,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
             }`}
           >
             <Droplets className="w-3.5 h-3.5 text-sky-400" />
@@ -326,12 +326,12 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
         <div
           className={`p-4 rounded-xl border ${
             isLight
-              ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
-              : 'bg-stone-900/90 border-stone-800'
+              ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-medium ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+            <span className={`text-xs font-medium ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
               Total Shrinkage Expense MTD
             </span>
             <div className="p-2 rounded-lg bg-rose-500/10 text-rose-600">
@@ -341,60 +341,60 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
           <div className="text-xl sm:text-2xl font-bold mt-2 text-rose-600">
             {formatIDR(metrics.totalShrinkageCost)}
           </div>
-          <p className="text-[11px] text-stone-500 mt-1">Debited to GL Account #6030</p>
+          <p className="text-[11px] text-slate-600 dark:text-zinc-300 mt-1 font-medium">Debited to GL Account #6030</p>
         </div>
 
         <div
           className={`p-4 rounded-xl border ${
             isLight
-              ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
-              : 'bg-stone-900/90 border-stone-800'
+              ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-medium ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+            <span className={`text-xs font-medium ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
               Scrap Incident Count
             </span>
             <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600">
               <AlertOctagon className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-xl sm:text-2xl font-bold mt-2 ${isLight ? 'text-stone-900' : 'text-white'}`}>
+          <div className={`text-xl sm:text-2xl font-bold mt-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
             {metrics.count} events
           </div>
-          <p className="text-[11px] text-stone-500 mt-1">Verified by Quality Inspectors</p>
+          <p className="text-[11px] text-slate-600 dark:text-zinc-300 mt-1 font-medium">Verified by Quality Inspectors</p>
         </div>
 
         <div
           className={`p-4 rounded-xl border ${
             isLight
-              ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
-              : 'bg-stone-900/90 border-stone-800'
+              ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-medium ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+            <span className={`text-xs font-medium ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
               Natural Evaporation Audits
             </span>
             <div className="p-2 rounded-lg bg-sky-500/10 text-sky-600">
               <Droplets className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-xl sm:text-2xl font-bold mt-2 ${isLight ? 'text-stone-900' : 'text-white'}`}>
+          <div className={`text-xl sm:text-2xl font-bold mt-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
             {naturalAdjustments.length} audited
           </div>
-          <p className="text-[11px] text-stone-500 mt-1">100% within tolerance thresholds</p>
+          <p className="text-[11px] text-slate-600 dark:text-zinc-300 mt-1 font-medium">100% within tolerance thresholds</p>
         </div>
 
         <div
           className={`p-4 rounded-xl border ${
             isLight
-              ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
-              : 'bg-stone-900/90 border-stone-800'
+              ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-medium ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+            <span className={`text-xs font-medium ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
               Compost &amp; Bio-Recycle Rate
             </span>
             <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
@@ -408,7 +408,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                 )}%`
               : '100%'}
           </div>
-          <p className="text-[11px] text-stone-500 mt-1">Zero-landfill organic diversion</p>
+          <p className="text-[11px] text-slate-600 dark:text-zinc-300 mt-1 font-medium">Zero-landfill organic diversion</p>
         </div>
       </div>
 
@@ -417,23 +417,23 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
         <div
           className={`rounded-2xl border overflow-hidden transition-all ${
             isLight
-              ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-              : 'bg-stone-900/90 border-stone-800'
+              ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
-          <div className="p-4 sm:p-5 border-b border-stone-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className={`text-base font-bold ${isLight ? 'text-stone-900' : 'text-white'}`}>
+              <h3 className={`text-base font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>
                 Waste &amp; Shrinkage Log Book
               </h3>
-              <p className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+              <p className={`text-xs ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
                 Chronological log of discarded stock with linked General Ledger journal references
               </p>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input
                   type="text"
                   placeholder="Search SKU, inspector..."
@@ -441,8 +441,8 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className={`pl-8 pr-3 py-1.5 rounded-xl text-xs border transition-colors ${
                     isLight
-                      ? 'bg-stone-50 border-stone-200 text-stone-900 focus:bg-white'
-                      : 'bg-stone-800 border-stone-700 text-stone-100'
+                      ? 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-100'
                   }`}
                 />
               </div>
@@ -451,7 +451,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                 value={reasonFilter}
                 onChange={(e) => setReasonFilter(e.target.value)}
                 className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${
-                  isLight ? 'bg-stone-50 border-stone-200 text-stone-700' : 'bg-stone-800 border-stone-700 text-stone-200'
+                  isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
                 }`}
               >
                 <option value="ALL">All Loss Reasons</option>
@@ -468,7 +468,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
             <table className="w-full text-left text-xs">
               <thead
                 className={`border-b ${
-                  isLight ? 'bg-stone-50 border-stone-200 text-stone-500' : 'bg-stone-800/50 border-stone-800 text-stone-400'
+                  isLight ? 'bg-slate-50 border-slate-200 text-zinc-500' : 'bg-zinc-800/50 border-zinc-800 text-zinc-300'
                 }`}
               >
                 <tr>
@@ -483,25 +483,25 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                   <th className="py-3 px-4 font-semibold">Reporter</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-stone-100' : 'divide-stone-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
                 {filteredRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-stone-500">
+                    <td colSpan={9} className="py-8 text-center text-slate-600 dark:text-zinc-300 font-medium">
                       No waste records logged for this filter.
                     </td>
                   </tr>
                 ) : (
                   filteredRecords.map((r) => (
-                    <tr key={r.id} className="hover:bg-stone-500/5 transition-colors">
+                    <tr key={r.id} className="hover:bg-zinc-500/5 transition-colors">
                       <td className="py-3 px-4 font-semibold text-rose-600 font-mono">{r.id}</td>
                       <td className="py-3 px-4">
-                        <div className="font-medium text-stone-900 dark:text-stone-100">{r.productName}</div>
-                        <div className="text-[11px] text-stone-500">{r.sku}</div>
+                        <div className="font-medium text-slate-900 dark:text-zinc-100">{r.productName}</div>
+                        <div className="text-[11px] text-slate-600 dark:text-zinc-300 font-mono">{r.sku}</div>
                       </td>
-                      <td className="py-3 px-4 text-stone-700 dark:text-stone-300">{r.storeName}</td>
+                      <td className="py-3 px-4 text-slate-700 dark:text-zinc-300">{r.storeName}</td>
                       <td className="py-3 px-4">
-                        <span className="font-bold text-stone-900 dark:text-stone-100">{r.quantityScrapped}</span>{' '}
-                        <span className="text-stone-500">{r.unit}</span>
+                        <span className="font-bold text-slate-900 dark:text-zinc-100">{r.quantityScrapped}</span>{' '}
+                        <span className="text-slate-600 dark:text-zinc-300">{r.unit}</span>
                       </td>
                       <td className="py-3 px-4 font-mono font-bold text-rose-600">{formatIDR(r.totalShrinkageCost)}</td>
                       <td className="py-3 px-4">
@@ -516,17 +516,17 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                       </td>
                       <td className="py-3 px-4">
                         {r.glEntryId ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 text-stone-800 border border-stone-200">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-800 border border-slate-200">
                             <FileCheck2 className="w-3 h-3 text-emerald-600" />
                             {r.glEntryId}
                           </span>
                         ) : (
-                          <span className="text-stone-400">-</span>
+                          <span className="text-zinc-400">-</span>
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="text-stone-800 dark:text-stone-200">{r.reportedBy}</div>
-                        <div className="text-[10px] text-stone-400">
+                        <div className="text-slate-800 dark:text-zinc-200">{r.reportedBy}</div>
+                        <div className="text-[10px] text-zinc-400">
                           {new Date(r.reportedAt).toLocaleDateString('id-ID')}
                         </div>
                       </td>
@@ -545,7 +545,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
           {/* Configurable Category Tolerances Grid */}
           <div
             className={`p-5 rounded-2xl border ${
-              isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-stone-900 border-stone-800'
+              isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-zinc-900 border-zinc-800'
             }`}
           >
             <div className="flex items-center justify-between mb-4">
@@ -565,7 +565,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                 <div
                   key={tol.category}
                   className={`p-3.5 rounded-xl border flex flex-col justify-between ${
-                    isLight ? 'bg-gray-50/80 border-gray-200' : 'bg-stone-800/60 border-stone-700'
+                    isLight ? 'bg-gray-50/80 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'
                   }`}
                 >
                   <div>
@@ -577,12 +577,12 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                         &le; {tol.maxEvaporationTolerancePercent}%
                       </span>
                     </div>
-                    <p className="text-[11px] text-gray-500 dark:text-stone-400 line-clamp-2">
+                    <p className="text-[11px] text-gray-500 dark:text-zinc-300 line-clamp-2">
                       {tol.description}
                     </p>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-gray-200 dark:border-stone-700 flex items-center justify-between text-[10px]">
+                  <div className="mt-3 pt-2 border-t border-gray-200 dark:border-zinc-700 flex items-center justify-between text-[10px]">
                     <span className="text-gray-400">Audit: Every {tol.auditIntervalHours}h</span>
                     <button
                       onClick={() => {
@@ -602,10 +602,10 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
           {/* Natural Shrinkage Adjustments Ledger Table */}
           <div
             className={`rounded-2xl border overflow-hidden ${
-              isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-stone-900 border-stone-800'
+              isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-zinc-900 border-zinc-800'
             }`}
           >
-            <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-stone-800 flex items-center justify-between">
+            <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between">
               <div>
                 <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
                   Natural Shrinkage / Evaporation Loss Audit Ledger
@@ -628,7 +628,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
               <table className="w-full text-left text-xs">
                 <thead
                   className={`border-b ${
-                    isLight ? 'bg-gray-50/70 border-gray-200 text-gray-500' : 'bg-stone-800/50 border-stone-800 text-stone-400'
+                    isLight ? 'bg-gray-50/70 border-gray-200 text-gray-500' : 'bg-zinc-800/50 border-zinc-800 text-zinc-300'
                   }`}
                 >
                   <tr>
@@ -643,7 +643,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                     <th className="py-3 px-4 font-semibold">Auditor &amp; Shift</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-stone-800'}`}>
+                <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
                   {filteredNaturalAdjustments.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="py-8 text-center text-gray-400">
@@ -652,13 +652,13 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                     </tr>
                   ) : (
                     filteredNaturalAdjustments.map((adj) => (
-                      <tr key={adj.id} className="hover:bg-gray-50/50 dark:hover:bg-stone-800/40">
+                      <tr key={adj.id} className="hover:bg-gray-50/50 dark:hover:bg-zinc-800/40">
                         <td className="py-3 px-4 font-mono font-bold text-sky-600">{adj.id}</td>
                         <td className="py-3 px-4">
                           <div className="font-semibold text-gray-900 dark:text-white">{adj.productName}</div>
                           <div className="text-[11px] text-gray-400">{adj.sku}</div>
                         </td>
-                        <td className="py-3 px-4 font-mono text-[11px] text-gray-600 dark:text-stone-300">
+                        <td className="py-3 px-4 font-mono text-[11px] text-gray-600 dark:text-zinc-300">
                           {adj.batchId || '-'}
                         </td>
                         <td className="py-3 px-4">
@@ -686,7 +686,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                         </td>
                         <td className="py-3 px-4">
                           {adj.glEntryId ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-stone-100 text-stone-800 border border-stone-200">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-800 border border-slate-200">
                               <FileCheck2 className="w-3 h-3 text-emerald-600" />
                               {adj.glEntryId}
                             </span>
@@ -695,7 +695,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                           )}
                         </td>
                         <td className="py-3 px-4">
-                          <div className="font-medium text-gray-800 dark:text-stone-200">{adj.auditorName}</div>
+                          <div className="font-medium text-gray-800 dark:text-zinc-200">{adj.auditorName}</div>
                           <div className="text-[10px] text-gray-400">{adj.shiftId}</div>
                         </td>
                       </tr>
@@ -713,10 +713,10 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-lg rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto max-h-[90vh] overflow-y-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-800 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-stone-800 mb-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-zinc-800 mb-4">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-[#0F4C3A] text-white">
                   <Scale className="w-4 h-4" />
@@ -733,12 +733,12 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
             <form onSubmit={handleCreateNaturalShrinkage} className="space-y-3.5 text-xs">
               <div>
-                <label className="font-semibold block mb-1">Select Product SKU</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Select Product SKU</label>
                 <select
                   value={naturalSku}
                   onChange={(e) => setNaturalSku(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border ${
-                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800 border-stone-700'
+                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                   }`}
                 >
                   {inventory.map((item, idx) => (
@@ -751,27 +751,27 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold block mb-1">Original Gross Weight (Grams)</label>
+                  <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Original Gross Weight (Grams)</label>
                   <input
                     type="number"
                     min={1}
                     value={recordedGrossWeight}
                     onChange={(e) => setRecordedGrossWeight(Number(e.target.value))}
                     className={`w-full p-2.5 rounded-xl border ${
-                      isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800 border-stone-700'
+                      isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                     }`}
                   />
                 </div>
 
                 <div>
-                  <label className="font-semibold block mb-1">Actual Scale Weight (Grams)</label>
+                  <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Actual Scale Weight (Grams)</label>
                   <input
                     type="number"
                     min={1}
                     value={actualScaleWeight}
                     onChange={(e) => setActualScaleWeight(Number(e.target.value))}
                     className={`w-full p-2.5 rounded-xl border ${
-                      isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800 border-stone-700'
+                      isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                     }`}
                   />
                 </div>
@@ -779,12 +779,12 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold block mb-1">Store Outlet</label>
+                  <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Store Outlet</label>
                   <select
                     value={naturalStoreId}
                     onChange={(e) => setNaturalStoreId(e.target.value)}
                     className={`w-full p-2.5 rounded-xl border ${
-                      isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800 border-stone-700'
+                      isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                     }`}
                   >
                     <option value="store-jkt-senopati">Senopati Flagship</option>
@@ -795,13 +795,13 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-semibold block mb-1">Batch / Lot Identifier</label>
+                  <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Batch / Lot Identifier</label>
                   <input
                     type="text"
                     value={naturalBatchId}
                     onChange={(e) => setNaturalBatchId(e.target.value)}
                     className={`w-full p-2.5 rounded-xl border ${
-                      isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800 border-stone-700'
+                      isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                     }`}
                   />
                 </div>
@@ -835,13 +835,13 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold block mb-1">Auditor Notes</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Auditor Notes</label>
                 <textarea
                   rows={2}
                   value={naturalNotes}
                   onChange={(e) => setNaturalNotes(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border ${
-                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800 border-stone-700'
+                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                   }`}
                 />
               </div>
@@ -873,7 +873,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-sm rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-800 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
             <h3 className="font-bold text-sm mb-1">
@@ -883,7 +883,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold block mb-1">Max Transpiration / Moisture Tolerance (%)</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Max Transpiration / Moisture Tolerance (%)</label>
                 <input
                   type="number"
                   step="0.1"
@@ -892,7 +892,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                   value={editTolerancePercent}
                   onChange={(e) => setEditTolerancePercent(Number(e.target.value))}
                   className={`w-full p-2.5 rounded-xl border ${
-                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800 border-stone-700'
+                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                   }`}
                 />
               </div>
@@ -923,24 +923,24 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-lg rounded-2xl border shadow-2xl overflow-hidden my-auto max-h-[90vh] overflow-y-auto transition-all ${
-              isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-stone-900 border-stone-800 text-white'
+              isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
-            <div className="p-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+            <div className="p-5 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-rose-600 text-white">
                   <Trash2 className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-base">Log In-Store Waste &amp; Shrinkage</h3>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-slate-600 dark:text-zinc-300">
                     Immediately credits inventory asset &amp; debits GL shrinkage expense #6030
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-100 dark:hover:bg-stone-800"
+                className="p-1 rounded-lg text-zinc-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-zinc-800"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -948,14 +948,14 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
             <form onSubmit={handleCreateWaste} className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
+                <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">
                   Select Product SKU
                 </label>
                 <select
                   value={modalSku}
                   onChange={(e) => setModalSku(e.target.value)}
                   className={`w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition-colors ${
-                    isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
+                    isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-zinc-800 border-zinc-700 text-white'
                   }`}
                 >
                   {inventory.map((item, idx) => (
@@ -968,7 +968,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
+                  <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">
                     Quantity to Scrap
                   </label>
                   <input
@@ -978,20 +978,20 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                     value={modalQty}
                     onChange={(e) => setModalQty(Number(e.target.value))}
                     className={`w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition-colors ${
-                      isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
+                  <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">
                     Store Outlet
                   </label>
                   <select
                     value={modalStoreId}
                     onChange={(e) => setModalStoreId(e.target.value)}
                     className={`w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition-colors ${
-                      isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   >
                     <option value="store-jkt-senopati">Senopati Flagship</option>
@@ -1004,14 +1004,14 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
+                  <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">
                     Loss Reason
                   </label>
                   <select
                     value={modalReason}
                     onChange={(e) => setModalReason(e.target.value as WasteReason)}
                     className={`w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition-colors ${
-                      isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   >
                     <option value="expired">Expired (FEFO past due)</option>
@@ -1023,14 +1023,14 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
+                  <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">
                     Action Taken
                   </label>
                   <select
                     value={modalAction}
                     onChange={(e) => setModalAction(e.target.value as WasteAction)}
                     className={`w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition-colors ${
-                      isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   >
                     <option value="bio_compost">Organic Bio-Compost</option>
@@ -1042,7 +1042,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
+                <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">
                   Inspector / Reporter Name
                 </label>
                 <input
@@ -1050,13 +1050,13 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                   value={modalReporter}
                   onChange={(e) => setModalReporter(e.target.value)}
                   className={`w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition-colors ${
-                    isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
+                    isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-zinc-800 border-zinc-700 text-white'
                   }`}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
+                <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">
                   Audit Notes / Root Cause
                 </label>
                 <textarea
@@ -1065,7 +1065,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                   onChange={(e) => setModalNotes(e.target.value)}
                   placeholder="e.g. Visual inspection found softness past quality threshold."
                   className={`w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition-colors ${
-                    isLight ? 'bg-stone-50 border-stone-200 text-stone-900' : 'bg-stone-800 border-stone-700 text-white'
+                    isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-zinc-800 border-zinc-700 text-white'
                   }`}
                 />
               </div>
@@ -1077,19 +1077,19 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
               >
                 <div>
                   <span className="font-semibold">Calculated Financial Shrinkage:</span>
-                  <div className="text-[11px] text-stone-500">
+                  <div className="text-[11px] text-slate-600 dark:text-zinc-300 font-medium">
                     {modalQty} units &times; {formatIDR(selectedItem?.unitCost || 0)}
                   </div>
                 </div>
                 <div className="text-base font-bold text-rose-600 font-mono">{formatIDR(calculatedLoss)}</div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-200 dark:border-stone-800">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   className={`px-4 py-2 rounded-xl text-xs font-semibold border ${
-                    isLight ? 'bg-white border-stone-200 text-stone-700' : 'bg-stone-800 border-stone-700 text-white'
+                    isLight ? 'bg-white border-slate-200 text-slate-700' : 'bg-zinc-800 border-zinc-700 text-white'
                   }`}
                 >
                   Cancel

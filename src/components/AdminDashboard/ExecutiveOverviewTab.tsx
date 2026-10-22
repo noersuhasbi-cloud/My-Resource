@@ -27,13 +27,13 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
   onNavigateToInventory,
 }) => {
   const cardClass =
-    'bg-white dark:bg-stone-900/90 border border-gray-200/90 dark:border-stone-800 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 dark:text-stone-100 rounded-2xl';
+    'bg-white dark:bg-zinc-900/90 border border-gray-200/90 dark:border-zinc-800 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 dark:text-zinc-100 rounded-2xl';
   const subCardClass =
-    'bg-white dark:bg-stone-800/80 border border-gray-200 dark:border-stone-700 text-gray-900 dark:text-stone-100 rounded-xl shadow-xs';
+    'bg-white dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-zinc-100 rounded-xl shadow-xs';
   const textTitle = 'text-gray-900 dark:text-white';
-  const textMuted = 'text-gray-500 dark:text-stone-400';
+  const textMuted = 'text-gray-500 dark:text-zinc-300';
   const tableHeaderClass =
-    'border-b border-gray-200 dark:border-stone-800 bg-gray-50/70 dark:bg-stone-800/50 text-gray-500 dark:text-stone-400 font-semibold uppercase text-[10px]';
+    'border-b border-gray-200 dark:border-zinc-800 bg-gray-50/70 dark:bg-zinc-800/50 text-gray-500 dark:text-zinc-300 font-semibold uppercase text-[10px]';
 
   return (
     <div className="space-y-6">
@@ -142,20 +142,20 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
                   <th className="py-2.5 px-3 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
+              <tbody className="divide-y divide-slate-200 dark:divide-zinc-800">
                 {(omzetData?.storeBreakdown || []).map((store) => (
-                  <tr key={store.storeId} className="transition-colors hover:bg-stone-50/80 dark:hover:bg-stone-800/40">
+                  <tr key={store.storeId} className="transition-colors hover:bg-slate-50/80 dark:hover:bg-zinc-800/40">
                     <td className={`py-3 px-3 font-semibold ${textTitle}`}>
                       {store.storeName}
                     </td>
-                    <td className="py-3 px-3 text-stone-600 dark:text-stone-300">{store.city}</td>
-                    <td className="py-3 px-3 text-stone-600 dark:text-stone-300">{store.orderCount}</td>
+                    <td className="py-3 px-3 text-slate-600 dark:text-zinc-300">{store.city}</td>
+                    <td className="py-3 px-3 text-slate-600 dark:text-zinc-300">{store.orderCount}</td>
                     <td className="py-3 px-3 font-mono font-semibold text-[#0F4C3A] dark:text-emerald-400">
                       {formatIDR(store.omzet)}
                     </td>
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-16 bg-stone-200 dark:bg-stone-700 h-1.5 rounded-full overflow-hidden">
+                        <div className="w-16 bg-slate-200 dark:bg-zinc-700 h-1.5 rounded-full overflow-hidden">
                           <div
                             className="bg-[#0F4C3A] dark:bg-emerald-500 h-full rounded-full"
                             style={{ width: `${store.sharePercent}%` }}
@@ -193,7 +193,7 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
                   <span className={`${textTitle} font-medium`}>{cat.label}</span>
                   <span className="text-[#0F4C3A] dark:text-emerald-400 font-mono font-semibold">{cat.sharePercent}%</span>
                 </div>
-                <div className="w-full bg-stone-200 dark:bg-stone-700 h-2 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-200 dark:bg-zinc-700 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-[#0F4C3A] dark:bg-emerald-500 h-full rounded-full"
                     style={{ width: `${cat.sharePercent}%` }}
@@ -207,8 +207,8 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
             ))}
           </div>
 
-          <div className="pt-2 border-t border-stone-200 dark:border-stone-700/60">
-            <div className="p-3 bg-emerald-50/80 dark:bg-stone-800/80 border border-emerald-200 dark:border-stone-700 text-stone-800 dark:text-stone-300 rounded-xl text-xs flex items-start gap-2.5">
+          <div className="pt-2 border-t border-slate-200 dark:border-zinc-700/60">
+            <div className="p-3 bg-emerald-50/80 dark:bg-zinc-800/80 border border-emerald-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-300 rounded-xl text-xs flex items-start gap-2.5">
               <Sparkles className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 shrink-0 mt-0.5" />
               <div>
                 <p className={`font-semibold ${textTitle}`}>Cold-Chain Priority</p>

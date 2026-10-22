@@ -147,8 +147,8 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
       <div
         className={`p-5 sm:p-6 rounded-2xl border transition-colors ${
           isLight
-            ? 'bg-gradient-to-r from-emerald-50 via-white to-stone-50 border-emerald-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-            : 'bg-stone-900/80 border-stone-800'
+            ? 'bg-gradient-to-r from-emerald-50 via-white to-slate-50 border-emerald-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+            : 'bg-zinc-900/80 border-zinc-800'
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -157,14 +157,14 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0F4C3A] text-white tracking-wide uppercase">
                 Module 3 • Security &amp; Compliance
               </span>
-              <span className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+              <span className={`text-xs ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
                 Granular Shift, Zone &amp; Outlet Authorization Matrix
               </span>
             </div>
-            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-stone-900' : 'text-white'}`}>
+            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
               Role-Based Access Control (RBAC) &amp; Shift Management
             </h2>
-            <p className={`text-xs sm:text-sm mt-1 max-w-3xl ${isLight ? 'text-stone-600' : 'text-stone-400'}`}>
+            <p className={`text-xs sm:text-sm mt-1 max-w-3xl ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
               Enforce least-privilege administrative governance. Cashiers and Pickers are bounded by physical warehouse zones
               (Ambient, Cold Chilled, Freezer) and active shifts, while Store Managers and Company Executives hold cryptographic override
               and consolidated financial audit signing keys.
@@ -184,8 +184,8 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
               disabled={isLoading}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                 isLight
-                  ? 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50 shadow-sm'
-                  : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                  ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -202,12 +202,12 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           className={`lg:col-span-1 p-5 rounded-2xl border flex flex-col justify-between ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.02)]'
-              : 'bg-stone-900/90 border-stone-800'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-stone-500'}`}>
+              <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-zinc-300'}`}>
                 Active Signed-In Operator
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
@@ -237,7 +237,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                   </div>
                 </div>
 
-                <div className={`p-3 rounded-xl border space-y-1.5 text-xs ${isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-stone-800/60 border-stone-700'}`}>
+                <div className={`p-3 rounded-xl border space-y-1.5 text-xs ${isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 flex items-center gap-1.5">
                       <Building2 className="w-3.5 h-3.5" /> Outlet Scope:
@@ -273,7 +273,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
             )}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-stone-800 text-[11px] text-gray-400">
+          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-zinc-800 text-[11px] text-gray-400">
             🔒 All mutations are digitally watermarked with this operator ID and timestamp.
           </div>
         </div>
@@ -283,7 +283,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           className={`lg:col-span-2 p-5 rounded-2xl border flex flex-col justify-between ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.02)]'
-              : 'bg-stone-900/90 border-stone-800'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
           <div>
@@ -314,7 +314,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                         ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 shadow-xs ring-1 ring-[#0F4C3A]'
                         : isLight
                         ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
-                        : 'border-stone-800 hover:border-stone-700 hover:bg-stone-800/50 bg-stone-900/50'
+                        : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50 bg-zinc-900/50'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -325,7 +325,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                             <span className="w-2 h-2 rounded-full bg-emerald-500" />
                           )}
                         </div>
-                        <div className="text-[11px] text-gray-500 dark:text-stone-400 mt-0.5">
+                        <div className="text-[11px] text-gray-500 dark:text-zinc-300 mt-0.5">
                           {profile.storeName}
                         </div>
                       </div>
@@ -334,7 +334,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                       </span>
                     </div>
 
-                    <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-stone-800 flex items-center justify-between text-[10px] text-gray-400">
+                    <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between text-[10px] text-gray-400">
                       <span>Shift: {profile.shiftName}</span>
                       <span className="font-mono">Zones: [{profile.assignedZones.join(', ')}]</span>
                     </div>
@@ -357,7 +357,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           className={`lg:col-span-2 p-5 rounded-2xl border ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.02)]'
-              : 'bg-stone-900/90 border-stone-800'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
           <div className="flex items-center justify-between mb-4">
@@ -373,7 +373,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 
           {currentSession && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800/50 border-stone-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
                 <div>
                   <span className="font-semibold block">Store Point-of-Sale (POS) Terminal</span>
                   <span className="text-[11px] text-gray-400">Process checkout &amp; QRIS settlements</span>
@@ -389,7 +389,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800/50 border-stone-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
                 <div>
                   <span className="font-semibold block">Goods Receipt (GR) &amp; Dock Inwarding</span>
                   <span className="text-[11px] text-gray-400">Perform partial receipt &amp; lot logging</span>
@@ -405,7 +405,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800/50 border-stone-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
                 <div>
                   <span className="font-semibold block">Purchase Order (PO) Final Approval</span>
                   <span className="text-[11px] text-gray-400">Authorize binding vendor orders &amp; AP balance</span>
@@ -421,7 +421,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800/50 border-stone-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
                 <div>
                   <span className="font-semibold block">Financial P&amp;L &amp; Balance Sheet Access</span>
                   <span className="text-[11px] text-gray-400">Inspect gross margins &amp; net profitability</span>
@@ -437,7 +437,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800/50 border-stone-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
                 <div>
                   <span className="font-semibold block">Inventory Adjustments &amp; Stocktake</span>
                   <span className="text-[11px] text-gray-400">Modify physical stock count without GR</span>
@@ -453,7 +453,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-stone-800/50 border-stone-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
                 <div>
                   <span className="font-semibold block">Store Emergency Closure Override</span>
                   <span className="text-[11px] text-gray-400">Halt online routing &amp; trigger customer broadcast</span>
@@ -477,7 +477,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           className={`p-5 rounded-2xl border flex flex-col justify-between ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.02)]'
-              : 'bg-stone-900/90 border-stone-800'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
           <div>
@@ -510,7 +510,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                           : 'border-rose-500 bg-rose-500/10'
                         : isLight
                         ? 'border-gray-200 hover:bg-gray-50'
-                        : 'border-stone-800 hover:bg-stone-800/50'
+                        : 'border-zinc-800 hover:bg-zinc-800/50'
                     }`}
                   >
                     <div className="text-left">
@@ -528,7 +528,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                           Assigned
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-stone-500/20 text-stone-600 dark:text-stone-400">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-500/20 text-slate-600 dark:text-zinc-300">
                           Restricted
                         </span>
                       )}
@@ -576,10 +576,10 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-md rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-800 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-stone-800 mb-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-zinc-800 mb-4">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-[#0F4C3A] text-white">
                   <BadgeCheck className="w-4 h-4" />
@@ -592,7 +592,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
               <button
                 onClick={() => setIsHandoverModalOpen(false)}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-stone-800 text-stone-400'
+                  isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'
                 }`}
                 aria-label="Close modal"
               >
@@ -602,19 +602,19 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold block mb-1">Outgoing Shift Leader</label>
-                <div className="p-2.5 rounded-xl border bg-gray-50 dark:bg-stone-800 border-gray-200 dark:border-stone-700 font-bold">
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Outgoing Shift Leader</label>
+                <div className="p-2.5 rounded-xl border bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 font-bold">
                   {currentSession?.userName} ({currentSession?.shiftName} - {currentSession?.activeShiftId})
                 </div>
               </div>
 
               <div>
-                <label className="font-semibold block mb-1">Receiving Shift</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Receiving Shift</label>
                 <select
                   value={handoverNextShift}
                   onChange={(e) => setHandoverNextShift(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border ${
-                    isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'
+                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                   }`}
                 >
                   <option value="Afternoon Shift">Afternoon Shift (14:00 - 22:00)</option>
@@ -624,14 +624,14 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold block mb-1">Handover Observations &amp; Chiller Status</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Handover Observations &amp; Chiller Status</label>
                 <textarea
                   rows={3}
                   value={handoverNotes}
                   onChange={(e) => setHandoverNotes(e.target.value)}
                   placeholder="e.g. All cold-chain chillers within 1.5°C tolerance. 2 pending express fulfillment orders handed over to incoming team."
                   className={`w-full p-2.5 rounded-xl border ${
-                    isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'
+                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                   }`}
                 />
               </div>

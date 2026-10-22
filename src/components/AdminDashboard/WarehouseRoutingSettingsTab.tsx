@@ -67,13 +67,17 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
 
   const cardClass = `rounded-xl border transition-all ${
     isLight
-      ? 'bg-white border-gray-200 shadow-xs hover:border-gray-300'
-      : 'bg-stone-900 border-stone-800 shadow-xs hover:border-stone-700'
+      ? 'bg-white border-slate-200 shadow-xs hover:border-slate-300 text-slate-900'
+      : 'bg-zinc-900 border-zinc-800 shadow-xs hover:border-zinc-700 text-zinc-100'
   }`;
 
-  const inputClass = `w-full px-3.5 py-2 text-xs rounded-xl font-medium transition-all bg-white dark:bg-stone-900 border border-gray-200 dark:border-stone-700 text-gray-900 dark:text-stone-100 placeholder:text-gray-400 dark:placeholder:text-stone-500 focus:outline-hidden focus:border-[#0F4C3A] dark:focus:border-emerald-500 focus:ring-1 focus:ring-[#0F4C3A] dark:focus:ring-emerald-500`;
+  const inputClass = `w-full px-3.5 py-2 text-xs rounded-xl font-medium transition-all ${
+    isLight
+      ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600'
+      : 'bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+  } focus:outline-hidden`;
 
-  const labelClass = `block text-xs font-semibold mb-1.5 text-gray-700 dark:text-stone-300`;
+  const labelClass = `block text-xs font-bold mb-1.5 ${isLight ? 'text-slate-800' : 'text-zinc-100'} dark:text-zinc-100`;
 
   const handleSaveSettings = async () => {
     setIsSavingConfig(true);
@@ -151,14 +155,14 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30 uppercase tracking-wider">
                   Logistics &amp; Routing
                 </span>
-                <span className="text-xs text-gray-500 dark:text-stone-400 font-medium">
+                <span className="text-xs text-gray-500 dark:text-zinc-300 font-medium">
                   Multi-Step Fulfillment
                 </span>
               </div>
-              <h2 className="text-base sm:text-lg font-bold mt-1 text-gray-900 dark:text-stone-100">
+              <h2 className="text-base sm:text-lg font-bold mt-1 text-gray-900 dark:text-zinc-100">
                 Warehouse Advanced Routing &amp; Storage Locations
               </h2>
-              <p className="text-xs mt-0.5 max-w-2xl text-gray-500 dark:text-stone-400 leading-relaxed">
+              <p className="text-xs mt-0.5 max-w-2xl text-gray-500 dark:text-zinc-300 leading-relaxed">
                 Configure multi-step warehouse logistics routes (Pick &rarr; Catch-Weight Pack &rarr; Ship) and manage granular bin/rack product storage allocations without disrupting existing store inventories.
               </p>
             </div>
@@ -186,16 +190,16 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
 
       {/* Multi-Step Route Configurations */}
       <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-        <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-stone-800">
+        <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
               <Layers className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-stone-100">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100">
                 Multi-Step Warehouse Routes Definition
               </h3>
-              <p className="text-[11px] text-gray-500 dark:text-stone-400">
+              <p className="text-[11px] text-gray-500 dark:text-zinc-300">
                 Controls whether stock moves directly from dock to shelf, or follows mandatory Quality Hold &amp; Catch-Weight packaging stages.
               </p>
             </div>
@@ -208,7 +212,7 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
               onChange={(e) => setConfig({ ...config, multiStepRoutingEnabled: e.target.checked })}
               className="sr-only peer"
             />
-            <div className="w-10 h-5.5 bg-gray-200 dark:bg-stone-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+            <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
           </label>
         </div>
 
@@ -217,7 +221,7 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
             <div
               key={rt.id}
               className={`p-4 rounded-xl border space-y-3 transition-all ${
-                isLight ? 'bg-gray-50/70 border-gray-200 hover:border-gray-300' : 'bg-stone-800/40 border-stone-800 hover:border-stone-700'
+                isLight ? 'bg-gray-50/70 border-gray-200 hover:border-gray-300' : 'bg-zinc-800/40 border-zinc-800 hover:border-zinc-700'
               }`}
             >
               <div className="flex items-center justify-between">
@@ -225,25 +229,25 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                   <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:bg-emerald-500/15 dark:text-emerald-400 border border-[#0F4C3A]/20 dark:border-emerald-500/30">
                     {rt.routeType}
                   </span>
-                  <h4 className="text-xs font-bold text-gray-900 dark:text-stone-100">{rt.name}</h4>
+                  <h4 className="text-xs font-bold text-gray-900 dark:text-zinc-100">{rt.name}</h4>
                 </div>
-                <span className="text-[10px] font-bold text-gray-500 dark:text-stone-400 font-mono">{rt.steps.length} Steps</span>
+                <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-300 font-mono">{rt.steps.length} Steps</span>
               </div>
 
-              <p className="text-[11px] text-gray-500 dark:text-stone-400 leading-relaxed">{rt.description}</p>
+              <p className="text-[11px] text-gray-500 dark:text-zinc-300 leading-relaxed">{rt.description}</p>
 
               <div className="space-y-1.5 pt-1">
                 {rt.steps.map((st) => (
                   <div
                     key={st.stepNumber}
-                    className="flex items-center gap-2 text-[11px] p-2 rounded-lg bg-white dark:bg-stone-900 border border-gray-200/80 dark:border-stone-700/80"
+                    className="flex items-center gap-2 text-[11px] p-2 rounded-lg bg-white dark:bg-zinc-900 border border-gray-200/80 dark:border-zinc-700/80"
                   >
                     <span className="w-4.5 h-4.5 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center font-bold text-[10px] shrink-0">
                       {st.stepNumber}
                     </span>
                     <div className="flex-1 truncate">
-                      <strong className="text-gray-900 dark:text-stone-100">{st.stepName}:</strong>{' '}
-                      <span className="text-gray-500 dark:text-stone-400 font-mono text-[10px]">
+                      <strong className="text-gray-900 dark:text-zinc-100">{st.stepName}:</strong>{' '}
+                      <span className="text-gray-500 dark:text-zinc-300 font-mono text-[10px]">
                         {st.locationSource} &rarr; {st.locationDestination}
                       </span>
                     </div>
@@ -257,20 +261,20 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
 
       {/* Storage Bins & Racks Management */}
       <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3.5 border-b border-gray-100 dark:border-stone-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3.5 border-b border-gray-100 dark:border-zinc-800">
           <div>
-            <h3 className="text-sm font-bold flex items-center gap-2 text-gray-900 dark:text-stone-100">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-gray-900 dark:text-zinc-100">
               <MapPin className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>Granular Storage Bins &amp; Shelf Allocations ({filteredBins.length} Bins)</span>
             </h3>
-            <p className="text-xs mt-0.5 text-gray-500 dark:text-stone-400">
+            <p className="text-xs mt-0.5 text-gray-500 dark:text-zinc-300">
               Bin locations mapped to cold chutes, ambient shelves, and QA quarantine docks.
             </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-gray-400 dark:text-stone-500" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-gray-400 dark:text-zinc-300" />
               <input
                 type="text"
                 placeholder="Search Bin or SKU..."
@@ -285,9 +289,9 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
               onChange={(e) => setZoneFilter(e.target.value)}
               className={`py-1.5 px-3 text-xs rounded-xl ${inputClass} w-auto`}
             >
-              <option value="ALL" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">All Warehouse Zones</option>
-              <option value="WH-JKT-SEN-COLD" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Chilled Cold Room</option>
-              <option value="WH-JKT-SEN-DRY" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Ambient Dry Shelf</option>
+              <option value="ALL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">All Warehouse Zones</option>
+              <option value="WH-JKT-SEN-COLD" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Chilled Cold Room</option>
+              <option value="WH-JKT-SEN-DRY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Ambient Dry Shelf</option>
             </select>
 
             <select
@@ -295,22 +299,22 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
               onChange={(e) => setStatusFilter(e.target.value)}
               className={`py-1.5 px-3 text-xs rounded-xl ${inputClass} w-auto`}
             >
-              <option value="ALL" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">All Statuses</option>
-              <option value="AVAILABLE" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Available</option>
-              <option value="OCCUPIED" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Occupied</option>
-              <option value="MAINTENANCE" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Maintenance</option>
+              <option value="ALL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">All Statuses</option>
+              <option value="AVAILABLE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Available</option>
+              <option value="OCCUPIED" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Occupied</option>
+              <option value="MAINTENANCE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Maintenance</option>
             </select>
           </div>
         </div>
 
         {filteredBins.length === 0 ? (
-          <div className="py-12 text-center text-xs text-gray-500 dark:text-stone-400">
+          <div className="py-12 text-center text-xs text-gray-500 dark:text-zinc-300">
             No bin locations match your filter. Click &quot;Add Storage Bin&quot; to configure a new rack location.
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-stone-800">
+          <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-zinc-800">
             <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50/70 dark:bg-stone-800/60 border-b border-gray-200 dark:border-stone-800 text-gray-600 dark:text-stone-300 uppercase text-[10px] font-bold">
+              <thead className="bg-gray-50/70 dark:bg-zinc-800/60 border-b border-gray-200 dark:border-zinc-800 text-gray-600 dark:text-zinc-300 uppercase text-[10px] font-bold">
                 <tr>
                   <th className="py-3 px-3.5">Bin Code</th>
                   <th className="py-3 px-3.5">Zone &amp; Storage Type</th>
@@ -320,41 +324,41 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                   <th className="py-3 px-3.5">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-stone-800 font-medium">
+              <tbody className="divide-y divide-gray-100 dark:divide-zinc-800 font-medium">
                 {filteredBins.map((bin) => {
                   const pct = bin.capacityUnits > 0 ? Math.round((bin.occupancyUnits / bin.capacityUnits) * 100) : 0;
                   return (
-                    <tr key={bin.id} className="hover:bg-gray-50/60 dark:hover:bg-stone-800/40 transition-colors">
+                    <tr key={bin.id} className="hover:bg-gray-50/60 dark:hover:bg-zinc-800/40 transition-colors">
                       <td className="py-3.5 px-3.5">
                         <span className="font-mono font-bold text-xs text-[#0F4C3A] dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
                           {bin.binCode}
                         </span>
                       </td>
                       <td className="py-3.5 px-3.5">
-                        <div className="font-semibold text-gray-900 dark:text-stone-100">{bin.zoneId}</div>
-                        <div className="text-[10px] text-gray-500 dark:text-stone-400 mt-0.5">{bin.type.replace(/_/g, ' ')}</div>
+                        <div className="font-semibold text-gray-900 dark:text-zinc-100">{bin.zoneId}</div>
+                        <div className="text-[10px] text-gray-500 dark:text-zinc-300 mt-0.5">{bin.type.replace(/_/g, ' ')}</div>
                       </td>
                       <td className="py-3.5 px-3.5">
-                        <div className="font-semibold text-gray-900 dark:text-stone-100">{bin.rack}</div>
-                        <div className="text-[10px] text-gray-500 dark:text-stone-400 mt-0.5">{bin.shelf}</div>
+                        <div className="font-semibold text-gray-900 dark:text-zinc-100">{bin.rack}</div>
+                        <div className="text-[10px] text-gray-500 dark:text-zinc-300 mt-0.5">{bin.shelf}</div>
                       </td>
                       <td className="py-3.5 px-3.5">
                         {bin.currentSku ? (
                           <div>
                             <span className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{bin.currentSku}</span>
-                            <div className="text-[11px] text-gray-600 dark:text-stone-300 truncate max-w-xs">{bin.productName}</div>
+                            <div className="text-[11px] text-gray-600 dark:text-zinc-300 truncate max-w-xs">{bin.productName}</div>
                           </div>
                         ) : (
-                          <span className="text-gray-400 dark:text-stone-500 italic text-[11px]">Unassigned (Empty Bin)</span>
+                          <span className="text-gray-400 dark:text-zinc-300 italic text-[11px]">Unassigned (Empty Bin)</span>
                         )}
                       </td>
                       <td className="py-3.5 px-3.5">
                         <div className="w-36 space-y-1">
-                          <div className="flex justify-between text-[10px] font-mono text-gray-600 dark:text-stone-300">
+                          <div className="flex justify-between text-[10px] font-mono text-gray-600 dark:text-zinc-300">
                             <span>{bin.occupancyUnits} / {bin.capacityUnits} u</span>
                             <span className="font-bold">{pct}%</span>
                           </div>
-                          <div className="w-full bg-gray-200 dark:bg-stone-700 h-1.5 rounded-full overflow-hidden">
+                          <div className="w-full bg-gray-200 dark:bg-zinc-700 h-1.5 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all ${
                                 pct > 85 ? 'bg-amber-500' : 'bg-emerald-600 dark:bg-emerald-500'
@@ -388,21 +392,21 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
       {isAddBinModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className={`w-full max-w-md p-6 rounded-2xl border shadow-2xl space-y-4 ${
-            isLight ? 'bg-white border-gray-300' : 'bg-stone-900 border-stone-800 text-white'
+            isLight ? 'bg-white border-gray-300' : 'bg-zinc-900 border-zinc-800 text-white'
           }`}>
-            <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-stone-800">
+            <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-stone-100">Add Warehouse Storage Location</h3>
-                  <p className="text-xs text-gray-500 dark:text-stone-400">Assign racks, shelves, and cold chute capacities</p>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">Add Warehouse Storage Location</h3>
+                  <p className="text-xs text-gray-500 dark:text-zinc-300">Assign racks, shelves, and cold chute capacities</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsAddBinModalOpen(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-stone-200 hover:bg-gray-100 dark:hover:bg-stone-800 text-sm font-bold transition-all"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 text-sm font-bold transition-all"
               >
                 ✕
               </button>
@@ -429,8 +433,8 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                     onChange={(e) => setNewZoneId(e.target.value)}
                     className={inputClass}
                   >
-                    <option value="WH-JKT-SEN-COLD" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Chilled Cold Room</option>
-                    <option value="WH-JKT-SEN-DRY" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Ambient Dry Room</option>
+                    <option value="WH-JKT-SEN-COLD" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Chilled Cold Room</option>
+                    <option value="WH-JKT-SEN-DRY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Ambient Dry Room</option>
                   </select>
                 </div>
                 <div>
@@ -440,10 +444,10 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                     onChange={(e) => setNewBinType(e.target.value as any)}
                     className={inputClass}
                   >
-                    <option value="COLD_CHUTE" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Cold Chute</option>
-                    <option value="AMBIENT_SHELF" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Ambient Shelf</option>
-                    <option value="RECEIVING_DOCK" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">QA Staging Dock</option>
-                    <option value="SECURE_CAGE" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">Secure Cage</option>
+                    <option value="COLD_CHUTE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Cold Chute</option>
+                    <option value="AMBIENT_SHELF" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Ambient Shelf</option>
+                    <option value="RECEIVING_DOCK" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">QA Staging Dock</option>
+                    <option value="SECURE_CAGE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Secure Cage</option>
                   </select>
                 </div>
               </div>
@@ -489,9 +493,9 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                     onChange={(e) => setNewSku(e.target.value)}
                     className={`font-mono ${inputClass}`}
                   >
-                    <option value="" className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">-- None (Empty) --</option>
+                    <option value="" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">-- None (Empty) --</option>
                     {inventoryTiers.slice(0, 10).map((t) => (
-                      <option key={t.sku} value={t.sku} className="bg-white dark:bg-stone-900 text-gray-900 dark:text-stone-100">
+                      <option key={t.sku} value={t.sku} className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">
                         {t.sku} ({t.productName.slice(0, 20)})
                       </option>
                     ))}
@@ -499,11 +503,11 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3.5 border-t border-gray-100 dark:border-stone-800">
+              <div className="flex justify-end gap-2.5 pt-3.5 border-t border-gray-100 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setIsAddBinModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-stone-300 dark:hover:bg-stone-800 transition-all"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-all"
                 >
                   Cancel
                 </button>

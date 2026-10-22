@@ -213,8 +213,8 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
       <div
         className={`p-5 sm:p-6 rounded-2xl border transition-colors ${
           isLight
-            ? 'bg-gradient-to-r from-emerald-50 via-white to-stone-50 border-emerald-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-            : 'bg-stone-900/80 border-stone-800'
+            ? 'bg-gradient-to-r from-emerald-50 via-white to-slate-50 border-emerald-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+            : 'bg-zinc-900/80 border-zinc-800'
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -223,14 +223,14 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0F4C3A] text-white tracking-wide uppercase">
                 Fulfillment Terminal
               </span>
-              <span className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+              <span className={`text-xs ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
                 Aisle-Optimized Barcode &amp; Catch-Weight Operations
               </span>
             </div>
-            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-stone-900' : 'text-white'}`}>
+            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
               In-Store Fulfillment &amp; Quick Substitution
             </h2>
-            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-stone-600' : 'text-stone-400'}`}>
+            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
               High-velocity picking workflow with EAN-13 barcode verification, digital catch-weight scales,
               and real-time customer WhatsApp substitution prompts with FIFO batch reconciliation.
             </p>
@@ -242,8 +242,8 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               disabled={isLoading}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                 isLight
-                  ? 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50 shadow-sm'
-                  : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                  ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -253,7 +253,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
         </div>
 
         {/* View Switcher Tabs (Module 2 Integration) */}
-        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200/80 dark:border-stone-800 flex-wrap">
+        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200/80 dark:border-zinc-800 flex-wrap">
           <button
             onClick={() => setActiveView('queue')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -261,7 +261,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
             }`}
           >
             <Scan className="w-3.5 h-3.5" />
@@ -275,7 +275,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-stone-700'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
             }`}
           >
             <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
@@ -290,14 +290,14 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
           {/* Order Queue Column */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className={`font-bold text-sm ${isLight ? 'text-stone-900' : 'text-white'}`}>
+              <h3 className={`font-bold text-sm ${isLight ? 'text-slate-900' : 'text-white'}`}>
                 Assigned Orders Queue
               </h3>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className={`px-2 py-1 rounded-lg text-xs border ${
-                  isLight ? 'bg-white border-stone-200 text-stone-700' : 'bg-stone-800 border-stone-700 text-stone-200'
+                  isLight ? 'bg-white border-slate-200 text-slate-700' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
                 }`}
               >
                 <option value="ALL">All Statuses</option>
@@ -310,7 +310,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
 
             <div className="space-y-2.5 max-h-[750px] overflow-y-auto pr-1">
               {orders.length === 0 ? (
-                <div className="p-8 text-center text-xs text-stone-400 border rounded-xl">
+                <div className="p-8 text-center text-xs text-zinc-400 border rounded-xl">
                   No orders found in queue.
                 </div>
               ) : (
@@ -326,8 +326,8 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         isSelected
                           ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 shadow-sm ring-1 ring-[#0F4C3A]'
                           : isLight
-                          ? 'bg-white border-stone-200/80 hover:bg-stone-50'
-                          : 'bg-stone-900 border-stone-800 hover:bg-stone-800/60'
+                          ? 'bg-white border-slate-200/80 hover:bg-slate-50'
+                          : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800/60'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -338,29 +338,27 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                             order.priority === 'express_30min'
                               ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
-                              : 'bg-stone-500/10 text-stone-600'
+                              : 'bg-zinc-500/10 text-slate-600'
                           }`}
                         >
                           {order.priority.replace(/_/g, ' ')}
                         </span>
                       </div>
 
-                      <div className="mt-2 text-xs font-semibold text-stone-900 dark:text-stone-100 truncate">
+                      <div className="mt-2 text-xs font-semibold text-slate-900 dark:text-zinc-100 truncate">
                         {order.customerName}
                       </div>
-                      <div className="text-[11px] text-stone-400 flex items-center gap-1 mt-0.5">
+                      <div className="text-[11px] text-slate-500 dark:text-zinc-300 flex items-center gap-1 mt-0.5">
                         <MapPin className="w-3 h-3" /> {order.storeName}
                       </div>
 
                       {/* Progress Bar */}
                       <div className="mt-3">
                         <div className="flex items-center justify-between text-[11px] mb-1">
-                          <span className="text-stone-500">
-                            {order.pickedItems}/{order.totalItems} Items Picked
-                          </span>
+                          <span className="text-slate-600 dark:text-zinc-300 font-semibold">{order.pickedItems}/{order.totalItems} Items Picked</span>
                           <span className="font-bold text-[#0F4C3A] dark:text-emerald-400">{percentPicked}%</span>
                         </div>
-                        <div className="w-full bg-stone-100 dark:bg-stone-800 h-1.5 rounded-full overflow-hidden">
+                        <div className="w-full bg-slate-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
                           <div
                             className="bg-[#0F4C3A] h-full rounded-full transition-all duration-300"
                             style={{ width: `${percentPicked}%` }}
@@ -379,22 +377,20 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
             {selectedOrder ? (
               <div
                 className={`p-5 rounded-2xl border transition-all ${
-                  isLight ? 'bg-white border-stone-200/80 shadow-sm' : 'bg-stone-900 border-stone-800'
+                  isLight ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-zinc-900 border-zinc-800'
                 }`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-100 dark:border-stone-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-zinc-800">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className={`text-base font-bold ${isLight ? 'text-stone-900' : 'text-white'}`}>
+                      <h3 className={`text-base font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>
                         Order #{selectedOrder.orderId}
                       </h3>
                       <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400">
                         {selectedOrder.pickerStatus.replace(/_/g, ' ')}
                       </span>
                     </div>
-                    <p className="text-xs text-stone-400 mt-0.5">
-                      Customer: {selectedOrder.customerName} ({selectedOrder.customerPhone}) &bull; Target: {selectedOrder.targetDispatchTime}
-                    </p>
+                    <p className="text-xs text-slate-600 dark:text-zinc-300 mt-0.5">Customer: <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{selectedOrder.customerName}</strong> ({selectedOrder.customerPhone}) &bull; Target: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{selectedOrder.targetDispatchTime}</span></p>
                   </div>
 
                   {selectedOrder.pickerStatus !== 'ready_for_packing' && selectedOrder.pickerStatus !== 'completed' ? (
@@ -426,14 +422,14 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                             : isSubstituted
                             ? 'bg-purple-50/40 dark:bg-purple-950/20 border-purple-500/30'
                             : isLight
-                            ? 'bg-stone-50/60 border-stone-200'
-                            : 'bg-stone-800/40 border-stone-700'
+                            ? 'bg-slate-50/60 border-slate-200'
+                            : 'bg-zinc-800/40 border-zinc-700'
                         }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs text-stone-900 dark:text-white">
+                              <span className="font-bold text-xs text-slate-900 dark:text-white">
                                 {item.productName}
                               </span>
                               {item.isCatchWeight && (
@@ -448,7 +444,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                               )}
                             </div>
 
-                            <div className="text-[11px] text-stone-500 flex items-center gap-3">
+                            <div className="text-[11px] text-slate-600 dark:text-zinc-300 flex items-center gap-3 font-medium">
                               <span>SKU: {item.sku}</span>
                               <span>&bull;</span>
                               <span>Aisle: {item.aisleLocation}</span>
@@ -497,8 +493,8 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                                 }}
                                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                                   isLight
-                                    ? 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
-                                    : 'bg-stone-800 border-stone-700 text-stone-200'
+                                    ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                                    : 'bg-zinc-800 border-zinc-700 text-zinc-200'
                                 }`}
                               >
                                 Quick Substitution
@@ -518,9 +514,9 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 </div>
               </div>
             ) : (
-              <div className={`p-12 text-center rounded-2xl border ${isLight ? 'bg-white border-stone-200' : 'bg-stone-900 border-stone-800'}`}>
-                <ShoppingBag className="w-8 h-8 mx-auto text-stone-400 mb-2" />
-                <h3 className="font-bold text-sm text-stone-700">Select an order to start picking</h3>
+              <div className={`p-12 text-center rounded-2xl border ${isLight ? 'bg-white border-slate-200' : 'bg-zinc-900 border-zinc-800'}`}>
+                <ShoppingBag className="w-8 h-8 mx-auto text-zinc-400 mb-2" />
+                <h3 className="font-bold text-sm text-slate-700">Select an order to start picking</h3>
               </div>
             )}
           </div>
@@ -532,7 +528,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
         <div className="space-y-6">
           <div
             className={`p-5 rounded-2xl border ${
-              isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-stone-900 border-stone-800'
+              isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-zinc-900 border-zinc-800'
             }`}
           >
             <div className="flex items-center justify-between mb-4">
@@ -603,10 +599,10 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         </div>
 
                         {/* Substitution Details */}
-                        <div className="mt-3 p-3 rounded-xl bg-white dark:bg-stone-800 border border-gray-100 dark:border-stone-700 space-y-2 text-xs">
+                        <div className="mt-3 p-3 rounded-xl bg-white dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700 space-y-2 text-xs">
                           <div>
                             <span className="text-[10px] text-rose-500 font-semibold block uppercase">Out-of-Stock:</span>
-                            <div className="font-medium text-gray-700 dark:text-stone-300">
+                            <div className="font-medium text-gray-700 dark:text-zinc-300">
                               {prompt.originalProductName} ({prompt.originalSku})
                             </div>
                             <div className="text-[11px] text-gray-400 font-mono">
@@ -614,7 +610,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                             </div>
                           </div>
 
-                          <div className="border-t border-gray-100 dark:border-stone-700 pt-1.5">
+                          <div className="border-t border-gray-100 dark:border-zinc-700 pt-1.5">
                             <span className="text-[10px] text-emerald-600 font-semibold block uppercase">Suggested Upgrade:</span>
                             <div className="font-bold text-emerald-700 dark:text-emerald-300">
                               {prompt.replacementProductName} ({prompt.replacementSku})
@@ -644,7 +640,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                       </div>
 
                       {/* Interactive Customer Action Buttons */}
-                      <div className="mt-4 pt-3 border-t border-gray-200 dark:border-stone-700">
+                      <div className="mt-4 pt-3 border-t border-gray-200 dark:border-zinc-700">
                         {isPending ? (
                           <div className="space-y-1.5">
                             <span className="text-[10px] text-gray-400 font-semibold uppercase block">
@@ -672,7 +668,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         ) : (
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-gray-400">Decided:</span>
-                            <span className="font-bold text-gray-700 dark:text-stone-300">
+                            <span className="font-bold text-gray-700 dark:text-zinc-300">
                               {prompt.decidedAt ? new Date(prompt.decidedAt).toLocaleTimeString('id-ID') : 'Resolved'}
                             </span>
                           </div>
@@ -692,38 +688,38 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-md rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto ${
-              isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-stone-900 border-stone-800 text-white'
+              isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-3">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800 mb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-amber-500 text-white">
                   <Scale className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-base">Digital Scale Weigh-In</h3>
-                  <p className="text-xs text-stone-500">Variable-Weight Grocery Adjustment</p>
+                  <p className="text-xs text-zinc-500">Variable-Weight Grocery Adjustment</p>
                 </div>
               </div>
-              <button onClick={() => setCatchWeightItem(null)} className="text-stone-400 hover:text-stone-600">
+              <button onClick={() => setCatchWeightItem(null)} className="text-zinc-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 text-xs">
                 <div className="font-semibold">{catchWeightItem.productName}</div>
-                <div className="text-[11px] text-stone-500">Estimated: {catchWeightItem.estimatedWeightGrams || 300}g</div>
+                <div className="text-[11px] text-zinc-500">Estimated: {catchWeightItem.estimatedWeightGrams || 300}g</div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1">Scale Reading (Grams)</label>
+                <label className="block text-xs font-bold mb-1 text-slate-800 dark:text-zinc-200">Scale Reading (Grams)</label>
                 <input
                   type="number"
                   min={1}
                   value={scaleGramsInput}
                   onChange={(e) => setScaleGramsInput(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl text-sm border font-mono font-bold"
+                  className={`w-full px-3 py-2 rounded-xl text-sm border font-mono font-bold ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
                 />
               </div>
 
@@ -738,7 +734,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setCatchWeightItem(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold border text-stone-700"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border text-slate-700"
                 >
                   Cancel
                 </button>
@@ -760,20 +756,20 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-lg rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto max-h-[90vh] overflow-y-auto ${
-              isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-stone-900 border-stone-800 text-white'
+              isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800 mb-3">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800 mb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-blue-600 text-white">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-base">Module 2: Quick Substitution</h3>
-                  <p className="text-xs text-stone-500">Real-Time Buyer WhatsApp / Push Notification</p>
+                  <p className="text-xs text-zinc-500">Real-Time Buyer WhatsApp / Push Notification</p>
                 </div>
               </div>
-              <button onClick={() => setSubItem(null)} className="text-stone-400 hover:text-stone-600">
+              <button onClick={() => setSubItem(null)} className="text-zinc-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -783,18 +779,18 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 <span className="font-bold text-rose-900 dark:text-rose-200">
                   Out of Stock: {subItem.productName} ({subItem.sku})
                 </span>
-                <p className="text-[11px] text-stone-500 mt-0.5">
+                <p className="text-[11px] text-zinc-500 mt-0.5">
                   Ordered: {subItem.orderedQty} units &bull; Unit Price: {formatIDR(originalItemPrice)}
                 </p>
               </div>
 
               <div>
-                <label className="font-semibold block mb-1">Select Replacement Product</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Select Replacement Product</label>
                 <select
                   value={replacementSku}
                   onChange={(e) => setReplacementSku(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border ${
-                    isLight ? 'bg-stone-50 border-stone-200' : 'bg-stone-800 border-stone-700'
+                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                   }`}
                 >
                   {inventory
@@ -809,12 +805,12 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold block mb-1">Push Channel</label>
+                  <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Push Channel</label>
                   <select
                     value={promptChannel}
                     onChange={(e) => setPromptChannel(e.target.value as any)}
                     className={`w-full p-2.5 rounded-xl border ${
-                      isLight ? 'bg-stone-50 border-stone-200' : 'bg-stone-800 border-stone-700'
+                      isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                     }`}
                   >
                     <option value="WhatsApp">WhatsApp Message</option>
@@ -824,7 +820,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 </div>
 
                 <div className="flex flex-col justify-end">
-                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl border bg-gray-50 dark:bg-stone-800">
+                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl border bg-gray-50 dark:bg-zinc-800">
                     <input
                       type="checkbox"
                       checked={absorbPriceDifference}
@@ -837,7 +833,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               </div>
 
               {/* Price Delta Preview */}
-              <div className="p-3 rounded-xl border bg-gray-50 dark:bg-stone-800/80 flex items-center justify-between">
+              <div className="p-3 rounded-xl border bg-gray-50 dark:bg-zinc-800/80 flex items-center justify-between">
                 <div>
                   <span className="font-semibold">Price Delta Calculation:</span>
                   <div className="text-[11px] text-gray-500">
@@ -858,7 +854,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setSubItem(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold border text-stone-700"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border text-slate-700"
                 >
                   Cancel
                 </button>

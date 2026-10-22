@@ -42,21 +42,21 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
   handleSaveOutletHours,
 }) => {
   const cardClass =
-    'bg-white dark:bg-stone-900/90 border border-gray-200/90 dark:border-stone-800 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 dark:text-stone-100 rounded-2xl';
+    'bg-white dark:bg-zinc-900/90 border border-gray-200/90 dark:border-zinc-800 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 dark:text-zinc-100 rounded-2xl';
   const subCardClass =
-    'bg-white dark:bg-stone-800/80 border border-gray-200 dark:border-stone-700 text-gray-900 dark:text-stone-100 rounded-xl shadow-xs';
+    'bg-white dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-zinc-100 rounded-xl shadow-xs';
   const textTitle = 'text-gray-900 dark:text-white';
-  const textMuted = 'text-gray-500 dark:text-stone-400';
+  const textMuted = 'text-gray-500 dark:text-zinc-300';
   const inputClass =
-    'bg-white dark:bg-stone-800 border border-gray-300 dark:border-stone-700 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#0F4C3A] dark:focus:border-emerald-500 focus:ring-1 focus:ring-[#0F4C3A]';
+    'bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-400 focus:outline-none focus:border-[#0F4C3A] dark:focus:border-emerald-500 focus:ring-1 focus:ring-[#0F4C3A]';
   const modalClass =
-    'bg-white dark:bg-stone-900 border border-gray-200 dark:border-stone-700 text-gray-900 dark:text-white shadow-2xl rounded-2xl';
+    'bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white shadow-2xl rounded-2xl';
 
   return (
     <div className="space-y-6">
       {/* Network Master Switch & Announcement Banner */}
       <div className={`${cardClass} p-4 sm:p-6`}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-stone-200 dark:border-stone-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-slate-200 dark:border-zinc-800">
           <div>
             <h2 className={`text-base font-bold ${textTitle} flex items-center gap-2`}>
               <Store className="w-5 h-5 text-[#0F4C3A] dark:text-emerald-400" />
@@ -69,7 +69,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
 
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-stone-700 dark:text-stone-300">
+              <span className="text-xs font-medium text-slate-700 dark:text-zinc-300">
                 {storeStatus?.isOpen ? 'Network Online' : 'Network Closed'}
               </span>
               <button
@@ -93,7 +93,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
         <div className="mt-5 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
+              <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">
                 Customer Notice Banner (Displayed on Storefront Header)
               </label>
               <input
@@ -106,7 +106,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">
+              <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">
                 Estimated Operating Window
               </label>
               <input
@@ -148,7 +148,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
                 key={outlet.storeId}
                 className={`border rounded-2xl p-5 transition-all space-y-4 ${
                   isClosed
-                    ? 'border-rose-200 dark:border-red-900/50 bg-rose-50/40 dark:bg-red-950/10 text-stone-900 dark:text-white'
+                    ? 'border-rose-200 dark:border-red-900/50 bg-rose-50/40 dark:bg-red-950/10 text-slate-900 dark:text-white'
                     : cardClass
                 }`}
               >
@@ -156,7 +156,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className={`font-bold ${textTitle} text-sm`}>{outlet.storeName}</span>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700">
                         {outlet.timezone}
                       </span>
                     </div>
@@ -181,11 +181,11 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span className={textMuted}>Days Active:</span>
-                    <span className="text-stone-700 dark:text-stone-300">{outlet.daysOpen}</span>
+                    <span className="text-slate-700 dark:text-zinc-300">{outlet.daysOpen}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className={textMuted}>Contact:</span>
-                    <span className="font-mono text-stone-700 dark:text-stone-400">{outlet.contactPhone}</span>
+                    <span className="font-mono text-slate-700 dark:text-zinc-300">{outlet.contactPhone}</span>
                   </div>
                 </div>
 
@@ -197,7 +197,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
                 )}
 
                 {/* Action buttons */}
-                <div className="flex items-center justify-between pt-2 border-t border-stone-200 dark:border-stone-800 flex-wrap gap-2">
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-zinc-800 flex-wrap gap-2">
                   <button
                     onClick={() => handleToggleOutletEmergency(outlet)}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
@@ -211,7 +211,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
 
                   <button
                     onClick={() => setEditingOutlet(outlet)}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 border bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-700 cursor-pointer"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 border bg-slate-50 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700 cursor-pointer"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     Edit Schedule
@@ -227,11 +227,11 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
       {editingOutlet && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className={`${modalClass} w-full max-w-[95vw] sm:max-w-lg p-4 sm:p-6 space-y-4 my-auto max-h-[90vh] overflow-y-auto`}>
-            <div className="flex items-center justify-between border-b pb-3 border-stone-200 dark:border-stone-800">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-zinc-800">
               <h3 className={`text-base font-bold ${textTitle}`}>Edit Schedule: {editingOutlet.storeName}</h3>
               <button
                 onClick={() => setEditingOutlet(null)}
-                className="p-1.5 rounded-lg transition-colors hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-500 dark:text-stone-400 cursor-pointer"
+                className="p-1.5 rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-300 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -239,7 +239,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">Open Time</label>
+                <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">Open Time</label>
                 <input
                   type="time"
                   value={editingOutlet.openTime}
@@ -248,7 +248,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">Close Time</label>
+                <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">Close Time</label>
                 <input
                   type="time"
                   value={editingOutlet.closeTime}
@@ -259,7 +259,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">Days Open</label>
+              <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">Days Open</label>
               <input
                 type="text"
                 value={editingOutlet.daysOpen}
@@ -269,7 +269,7 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold mb-1 text-stone-700 dark:text-stone-300">Emergency Closure Reason (Optional)</label>
+              <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-zinc-300">Emergency Closure Reason (Optional)</label>
               <input
                 type="text"
                 value={editingOutlet.closureReason || ''}
@@ -279,10 +279,10 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-stone-200 dark:border-stone-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-zinc-800">
               <button
                 onClick={() => setEditingOutlet(null)}
-                className="px-4 py-2 text-xs font-semibold rounded-xl border transition-colors bg-white dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold rounded-xl border transition-colors bg-white dark:bg-zinc-800 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-700 cursor-pointer"
               >
                 Cancel
               </button>

@@ -36,8 +36,8 @@ export const ErdSpecsModule: React.FC<ErdSpecsModuleProps> = ({ theme }) => {
       <div
         className={`p-5 sm:p-6 rounded-2xl border transition-colors ${
           isLight
-            ? 'bg-gradient-to-r from-emerald-50 via-white to-stone-50 border-emerald-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-            : 'bg-stone-900/80 border-stone-800'
+            ? 'bg-gradient-to-r from-emerald-50 via-white to-slate-50 border-emerald-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+            : 'bg-zinc-900/80 border-zinc-800'
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -46,20 +46,20 @@ export const ErdSpecsModule: React.FC<ErdSpecsModuleProps> = ({ theme }) => {
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0F4C3A] text-white tracking-wide uppercase">
                 Technical Specifications &amp; Architecture
               </span>
-              <span className={`text-xs ${isLight ? 'text-stone-500' : 'text-stone-400'}`}>
+              <span className={`text-xs ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
                 Production ERP Blueprint
               </span>
             </div>
             <h2
               className={`text-xl sm:text-2xl font-bold tracking-tight ${
-                isLight ? 'text-stone-900' : 'text-white'
+                isLight ? 'text-slate-900' : 'text-white'
               }`}
             >
               System Architecture, ERD Schema &amp; Algorithms
             </h2>
             <p
               className={`text-xs sm:text-sm mt-1 max-w-2xl ${
-                isLight ? 'text-stone-600' : 'text-stone-400'
+                isLight ? 'text-slate-600' : 'text-zinc-300'
               }`}
             >
               Complete enterprise documentation covering normalized PostgreSQL/Firestore schemas,
@@ -69,13 +69,13 @@ export const ErdSpecsModule: React.FC<ErdSpecsModuleProps> = ({ theme }) => {
           </div>
 
           {/* Subtabs */}
-          <div className="flex items-center gap-1.5 bg-stone-100 dark:bg-stone-800 p-1 rounded-xl">
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-800 p-1 rounded-xl">
             <button
               onClick={() => setActiveTab('erd')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'erd'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400'
+                  ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-600 dark:text-zinc-300'
               }`}
             >
               Database ERD
@@ -84,8 +84,8 @@ export const ErdSpecsModule: React.FC<ErdSpecsModuleProps> = ({ theme }) => {
               onClick={() => setActiveTab('tokens')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'tokens'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400'
+                  ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-600 dark:text-zinc-300'
               }`}
             >
               Design Tokens
@@ -94,8 +94,8 @@ export const ErdSpecsModule: React.FC<ErdSpecsModuleProps> = ({ theme }) => {
               onClick={() => setActiveTab('algorithms')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'algorithms'
-                  ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-white shadow-xs'
-                  : 'text-stone-600 dark:text-stone-400'
+                  ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-600 dark:text-zinc-300'
               }`}
             >
               Core Algorithms
@@ -110,14 +110,14 @@ export const ErdSpecsModule: React.FC<ErdSpecsModuleProps> = ({ theme }) => {
           <div
             className={`rounded-2xl border p-5 sm:p-6 transition-all ${
               isLight
-                ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-                : 'bg-stone-900/90 border-stone-800'
+                ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+                : 'bg-zinc-900/90 border-zinc-800'
             }`}
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Database className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-base text-stone-900 dark:text-white">
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">
                   Entity-Relationship Data Model (ERD)
                 </h3>
               </div>
@@ -196,14 +196,14 @@ CREATE TABLE general_ledger_entries (
                     'sql'
                   )
                 }
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300"
               >
                 <Copy className="w-3.5 h-3.5" />
                 {copiedSection === 'sql' ? 'Copied!' : 'Copy DDL'}
               </button>
             </div>
 
-            <p className="text-xs text-stone-600 dark:text-stone-400 mb-4">
+            <p className="text-xs text-slate-600 dark:text-zinc-300 mb-4">
               Normalized relational schema architected for PostgreSQL / Cloud SQL and mapped into
               Firestore document collections. Supports isolated multi-store accounting, batch
               expiration tracking (FEFO), and atomic Goods Receipt backorders.
@@ -211,12 +211,12 @@ CREATE TABLE general_ledger_entries (
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Table 1: Store Outlets */}
-              <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 text-xs space-y-2">
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-xs space-y-2">
                 <div className="font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-600" />
                   store_outlets
                 </div>
-                <div className="space-y-1 font-mono text-[11px] text-stone-600 dark:text-stone-400">
+                <div className="space-y-1 font-mono text-[11px] text-slate-600 dark:text-zinc-300">
                   <div>&bull; store_id (PK, varchar)</div>
                   <div>&bull; store_name (varchar)</div>
                   <div>&bull; city (varchar)</div>
@@ -227,12 +227,12 @@ CREATE TABLE general_ledger_entries (
               </div>
 
               {/* Table 2: Warehouse Zones */}
-              <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 text-xs space-y-2">
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-xs space-y-2">
                 <div className="font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-600" />
                   warehouse_zones
                 </div>
-                <div className="space-y-1 font-mono text-[11px] text-stone-600 dark:text-stone-400">
+                <div className="space-y-1 font-mono text-[11px] text-slate-600 dark:text-zinc-300">
                   <div>&bull; zone_id (PK, varchar)</div>
                   <div>&bull; store_id (FK &rarr; store_outlets)</div>
                   <div>&bull; storage_type (ambient | chilled | freezer)</div>
@@ -242,12 +242,12 @@ CREATE TABLE general_ledger_entries (
               </div>
 
               {/* Table 3: Inventory Batches (FEFO) */}
-              <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 text-xs space-y-2">
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-xs space-y-2">
                 <div className="font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-600" />
                   inventory_batches (FEFO)
                 </div>
-                <div className="space-y-1 font-mono text-[11px] text-stone-600 dark:text-stone-400">
+                <div className="space-y-1 font-mono text-[11px] text-slate-600 dark:text-zinc-300">
                   <div>&bull; batch_id (PK, varchar)</div>
                   <div>&bull; sku (varchar, indexed)</div>
                   <div>&bull; store_id (FK &rarr; store_outlets)</div>
@@ -258,12 +258,12 @@ CREATE TABLE general_ledger_entries (
               </div>
 
               {/* Table 4: Waste Records */}
-              <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 text-xs space-y-2">
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-xs space-y-2">
                 <div className="font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-600" />
                   waste_records (Shrinkage)
                 </div>
-                <div className="space-y-1 font-mono text-[11px] text-stone-600 dark:text-stone-400">
+                <div className="space-y-1 font-mono text-[11px] text-slate-600 dark:text-zinc-300">
                   <div>&bull; waste_id (PK, varchar)</div>
                   <div>&bull; sku (varchar)</div>
                   <div>&bull; store_id (FK &rarr; store_outlets)</div>
@@ -274,12 +274,12 @@ CREATE TABLE general_ledger_entries (
               </div>
 
               {/* Table 5: Purchase Orders & Partial GR */}
-              <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 text-xs space-y-2">
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-xs space-y-2">
                 <div className="font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-600" />
                   purchase_orders &amp; GR
                 </div>
-                <div className="space-y-1 font-mono text-[11px] text-stone-600 dark:text-stone-400">
+                <div className="space-y-1 font-mono text-[11px] text-slate-600 dark:text-zinc-300">
                   <div>&bull; po_id (PK, varchar)</div>
                   <div>&bull; ordered_quantity, received_qty</div>
                   <div>&bull; remaining_backorder (numeric)</div>
@@ -289,12 +289,12 @@ CREATE TABLE general_ledger_entries (
               </div>
 
               {/* Table 6: Multi-Store General Ledger */}
-              <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 text-xs space-y-2">
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-xs space-y-2">
                 <div className="font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-600" />
                   general_ledger_entries
                 </div>
-                <div className="space-y-1 font-mono text-[11px] text-stone-600 dark:text-stone-400">
+                <div className="space-y-1 font-mono text-[11px] text-slate-600 dark:text-zinc-300">
                   <div>&bull; entry_id (PK, varchar)</div>
                   <div>&bull; store_id (Tag for per-store P&amp;L)</div>
                   <div>&bull; account_code (1010, 1040, 2010, 6030)</div>
@@ -312,78 +312,78 @@ CREATE TABLE general_ledger_entries (
         <div
           className={`rounded-2xl border p-5 sm:p-6 transition-all ${
             isLight
-              ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-              : 'bg-stone-900/90 border-stone-800'
+              ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+              : 'bg-zinc-900/90 border-zinc-800'
           }`}
         >
           <div className="flex items-center gap-2 mb-3">
             <Palette className="w-5 h-5 text-emerald-600" />
-            <h3 className="font-bold text-base text-stone-900 dark:text-white">
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">
               UI/UX Design Tokens &amp; Theme Matrix
             </h3>
           </div>
 
-          <p className="text-xs text-stone-600 dark:text-stone-400 mb-6">
+          <p className="text-xs text-slate-600 dark:text-zinc-300 mb-6">
             Engineered with a default clean, whitespace-dominant Light Mode using subtle borders,
             soft elevated shadows, and deep forest green accents matching GroceMart&apos;s brand.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 space-y-3">
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 space-y-3">
               <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
                 Light Mode (Default Theme)
               </h4>
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between items-center py-1 border-b border-stone-200/60 dark:border-stone-800">
-                  <span className="text-stone-500">Page Background</span>
-                  <code className="font-mono font-semibold">#F8F9FA / bg-stone-50</code>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-zinc-800">
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Page Background</span>
+                  <code className="font-mono font-semibold">#F8F9FA / bg-slate-50</code>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-stone-200/60 dark:border-stone-800">
-                  <span className="text-stone-500">Card Background</span>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-zinc-800">
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Card Background</span>
                   <code className="font-mono font-semibold">#FFFFFF / bg-white</code>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-stone-200/60 dark:border-stone-800">
-                  <span className="text-stone-500">Subtle Card Border</span>
-                  <code className="font-mono font-semibold">#E5E7EB / border-stone-200</code>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-zinc-800">
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Subtle Card Border</span>
+                  <code className="font-mono font-semibold">#E5E7EB / border-slate-200</code>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-stone-200/60 dark:border-stone-800">
-                  <span className="text-stone-500">Primary Brand Accent</span>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-zinc-800">
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Primary Brand Accent</span>
                   <code className="font-mono font-semibold text-emerald-800">#0F4C3A (Forest Green)</code>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-stone-200/60 dark:border-stone-800">
-                  <span className="text-stone-500">Elevation Shadow</span>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-zinc-800">
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Elevation Shadow</span>
                   <code className="font-mono text-[11px]">box-shadow: 0 4px 20px rgba(0,0,0,0.03)</code>
                 </div>
                 <div className="flex justify-between items-center py-1">
-                  <span className="text-stone-500">Border Radius</span>
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Border Radius</span>
                   <code className="font-mono font-semibold">rounded-xl / rounded-2xl (12-16px)</code>
                 </div>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 space-y-3">
+            <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 space-y-3">
               <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-800 dark:text-emerald-400">
                 Alerts &amp; Semantic Colors
               </h4>
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between items-center py-1 border-b border-stone-200/60 dark:border-stone-800">
-                  <span className="text-stone-500">Critical Expiry &amp; Waste</span>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-zinc-800">
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Critical Expiry &amp; Waste</span>
                   <code className="font-mono font-semibold text-rose-600">#E11D48 / text-rose-600</code>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-stone-200/60 dark:border-stone-800">
-                  <span className="text-stone-500">Near-Expiry &amp; Scale Alert</span>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-zinc-800">
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Near-Expiry &amp; Scale Alert</span>
                   <code className="font-mono font-semibold text-amber-600">#D99B00 / text-amber-600</code>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-stone-200/60 dark:border-stone-800">
-                  <span className="text-stone-500">Settled QRIS &amp; Fresh</span>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-zinc-800">
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Settled QRIS &amp; Fresh</span>
                   <code className="font-mono font-semibold text-emerald-600">#059669 / text-emerald-600</code>
                 </div>
-                <div className="flex justify-between items-center py-1 border-b border-stone-200/60 dark:border-stone-800">
-                  <span className="text-stone-500">Catch-Weight Precision</span>
+                <div className="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-zinc-800">
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Catch-Weight Precision</span>
                   <code className="font-mono font-semibold text-indigo-600">#4F46E5 / text-indigo-600</code>
                 </div>
                 <div className="flex justify-between items-center py-1">
-                  <span className="text-stone-500">Typography Family</span>
+                  <span className="text-slate-600 dark:text-zinc-300 font-medium">Typography Family</span>
                   <code className="font-mono font-semibold">Plus Jakarta Sans / Inter</code>
                 </div>
               </div>
@@ -399,21 +399,21 @@ CREATE TABLE general_ledger_entries (
           <div
             className={`rounded-2xl border p-5 sm:p-6 transition-all ${
               isLight
-                ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-                : 'bg-stone-900/90 border-stone-800'
+                ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+                : 'bg-zinc-900/90 border-zinc-800'
             }`}
           >
             <div className="flex items-center gap-2 mb-2">
               <Terminal className="w-5 h-5 text-emerald-600" />
-              <h3 className="font-bold text-base text-stone-900 dark:text-white">
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">
                 1. First Expired, First Out (FEFO) Stock Allocation Algorithm
               </h3>
             </div>
-            <p className="text-xs text-stone-600 dark:text-stone-400 mb-3">
+            <p className="text-xs text-slate-600 dark:text-zinc-300 mb-3">
               Triggered during checkout fulfillment. Sorts inventory lots by expiration date and
               exhausts earlier harvested lots first.
             </p>
-            <div className="p-4 rounded-xl bg-stone-950 text-stone-100 font-mono text-xs overflow-x-auto leading-relaxed">
+            <div className="p-4 rounded-xl bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto leading-relaxed">
               <pre>{`function allocateFEFO(sku, requestedQty, storeId) {
   // 1. Fetch active batches for SKU and store
   const eligibleBatches = db.batches.find({
@@ -454,21 +454,21 @@ CREATE TABLE general_ledger_entries (
           <div
             className={`rounded-2xl border p-5 sm:p-6 transition-all ${
               isLight
-                ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-                : 'bg-stone-900/90 border-stone-800'
+                ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+                : 'bg-zinc-900/90 border-zinc-800'
             }`}
           >
             <div className="flex items-center gap-2 mb-2">
               <Terminal className="w-5 h-5 text-blue-600" />
-              <h3 className="font-bold text-base text-stone-900 dark:text-white">
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">
                 2. Partial Goods Receipt (GR) &amp; Backorder Accounting Logic
               </h3>
             </div>
-            <p className="text-xs text-stone-600 dark:text-stone-400 mb-3">
+            <p className="text-xs text-slate-600 dark:text-zinc-300 mb-3">
               Handles vendor deliveries fulfilling only part of a PO. Updates stock for received items,
               tracks remaining backorders, and automatically creates Trade Accounts Payable journal entries.
             </p>
-            <div className="p-4 rounded-xl bg-stone-950 text-stone-100 font-mono text-xs overflow-x-auto leading-relaxed">
+            <div className="p-4 rounded-xl bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto leading-relaxed">
               <pre>{`async function processPartialGoodsReceipt(poId, receivedItems, deliveryNote) {
   return await db.transaction(async (tx) => {
     const po = await tx.purchaseOrders.get(poId);
@@ -516,21 +516,21 @@ CREATE TABLE general_ledger_entries (
           <div
             className={`rounded-2xl border p-5 sm:p-6 transition-all ${
               isLight
-                ? 'bg-white border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-                : 'bg-stone-900/90 border-stone-800'
+                ? 'bg-white border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+                : 'bg-zinc-900/90 border-zinc-800'
             }`}
           >
             <div className="flex items-center gap-2 mb-2">
               <Terminal className="w-5 h-5 text-amber-600" />
-              <h3 className="font-bold text-base text-stone-900 dark:text-white">
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">
                 3. Granular Store Operating Hours &amp; Cart Guard
               </h3>
             </div>
-            <p className="text-xs text-stone-600 dark:text-stone-400 mb-3">
+            <p className="text-xs text-slate-600 dark:text-zinc-300 mb-3">
               Guards customer checkouts. Locks QRIS initiation outside configured outlet operating
               hours while retaining customer catalog browsing.
             </p>
-            <div className="p-4 rounded-xl bg-stone-950 text-stone-100 font-mono text-xs overflow-x-auto leading-relaxed">
+            <div className="p-4 rounded-xl bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto leading-relaxed">
               <pre>{`function checkStoreCheckoutAllowed(outletSchedule, networkStatus) {
   // 1. Company-wide maintenance takes precedence
   if (!networkStatus.isOpen) {

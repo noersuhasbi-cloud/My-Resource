@@ -118,6 +118,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch {}
   };
 
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
+  }, [theme]);
+
   const isLight = theme === 'light';
 
   // Global Store Outlet Filter Selector
@@ -556,22 +567,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
 
   const cardClass = isLight
-    ? 'bg-white border border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 rounded-2xl'
-    : 'bg-stone-900/90 border border-stone-800 text-stone-100 rounded-2xl';
+    ? 'bg-white border border-slate-200 shadow-sm text-slate-900 rounded-2xl'
+    : 'bg-zinc-900/90 border border-zinc-800 text-zinc-100 rounded-2xl';
   const subCardClass = isLight
-    ? 'bg-white border border-gray-200 text-gray-900 rounded-xl shadow-xs'
-    : 'bg-stone-800/80 border border-stone-700 text-stone-100 rounded-xl';
-  const textTitle = isLight ? 'text-gray-900' : 'text-white';
-  const textMuted = isLight ? 'text-gray-500' : 'text-stone-400';
+    ? 'bg-slate-50/80 border border-slate-200 text-slate-900 rounded-xl shadow-xs'
+    : 'bg-zinc-900 border border-zinc-800/80 text-zinc-100 rounded-xl';
+  const textTitle = isLight ? 'text-slate-900' : 'text-zinc-100';
+  const textMuted = isLight ? 'text-slate-500' : 'text-zinc-300';
   const tableHeaderClass = isLight
-    ? 'border-b border-gray-200 bg-gray-50/70 text-gray-500 font-semibold uppercase text-[10px]'
-    : 'border-b border-stone-800 bg-stone-800/50 text-stone-400 font-semibold uppercase text-[10px]';
+    ? 'border-b border-slate-200 bg-slate-50/80 text-slate-600 font-semibold uppercase text-[10px]'
+    : 'border-b border-zinc-800 bg-zinc-900/60 text-zinc-300 font-bold uppercase text-[10px]';
   const inputClass = isLight
-    ? 'bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-    : 'bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:outline-none focus:border-emerald-500';
+    ? 'bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600'
+    : 'bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-500';
   const modalClass = isLight
-    ? 'bg-white border border-gray-200 text-gray-900 shadow-2xl rounded-2xl'
-    : 'bg-stone-900 border border-stone-700 text-white shadow-2xl rounded-2xl';
+    ? 'bg-white border border-slate-200 text-slate-900 shadow-2xl rounded-2xl'
+    : 'bg-zinc-950 border border-zinc-800 text-zinc-100 shadow-2xl rounded-2xl';
 
   const currentModuleTitle = (() => {
     switch (activeTab) {
@@ -605,7 +616,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   })();
 
   return (
-    <div className={`min-h-screen ${isLight ? 'bg-[#F9FAFB] text-gray-900' : 'bg-stone-950 text-stone-100'} flex font-sans transition-colors duration-200 overflow-x-hidden`}>
+    <div className={`min-h-screen ${theme === 'dark' ? 'dark' : ''} ${isLight ? 'bg-slate-50 text-slate-900' : 'bg-zinc-950 text-zinc-100'} flex font-sans transition-colors duration-200 overflow-x-hidden`}>
       {/* 1. Left Vertical Sidebar Component */}
       <AdminSidebar
         theme={theme}
@@ -637,7 +648,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* Top Utility Header Bar */}
         <header
           className={`${
-            isLight ? 'bg-white/95 border-gray-200/90 text-gray-900 shadow-2xs' : 'bg-stone-900/95 border-stone-800 text-white'
+            isLight ? 'bg-white/95 border-slate-200 text-slate-900 shadow-xs' : 'bg-zinc-950/95 border-zinc-800 text-zinc-100'
           } backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-2.5 transition-colors duration-200`}
         >
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -648,8 +659,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 onClick={() => setIsMobileSidebarOpen(true)}
                 className={`lg:hidden p-2 rounded-xl border text-xs transition-colors flex items-center justify-center ${
                   isLight
-                    ? 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700'
-                    : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200'
+                    ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                    : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-200'
                 }`}
                 aria-label="Open navigation sidebar"
               >
@@ -658,20 +669,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-stone-500'}`}>
+                  <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-zinc-300'}`}>
                     GroceMart ERP
                   </span>
-                  <ChevronRight className="w-3 h-3 text-gray-400" />
-                  <h1 className={`text-sm sm:text-base font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                  <ChevronRight className="w-3 h-3 text-slate-400" />
+                  <h1 className={`text-sm sm:text-base font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
                     {currentModuleTitle}
                   </h1>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 hidden sm:flex">
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 border border-[#0F4C3A]/20">
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 border border-[#0F4C3A]/20">
                     Supply Chain v2.4
                   </span>
-                  <span className="text-[11px] text-gray-400">•</span>
-                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+                  <span className="text-[11px] text-slate-400">•</span>
+                  <span className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
                     Multi-Warehouse Cold Chain, FEFO &amp; Consolidate COA
                   </span>
                 </div>
@@ -688,7 +699,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   }`}
                 >
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                  <span className="hidden xl:inline text-[11px] text-gray-500 dark:text-stone-400 font-normal">Operator:</span>
+                  <span className="hidden xl:inline text-[11px] text-gray-500 dark:text-zinc-300 font-normal">Operator:</span>
                   <span className="font-bold truncate max-w-[120px]">{activeStaffSession.userName}</span>
                   <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#0F4C3A]/15 text-[#0F4C3A] dark:text-emerald-300 uppercase font-mono">
                     {activeStaffSession.userRole.replace(/_/g, ' ')}
@@ -708,7 +719,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       }
                     }}
                     className={`text-[11px] font-semibold bg-transparent border-0 cursor-pointer focus:ring-0 p-0 ml-1 ${
-                      isLight ? 'text-gray-700' : 'text-stone-200'
+                      isLight ? 'text-gray-700' : 'text-zinc-200'
                     }`}
                     title="Switch Active Operator Identity"
                   >
@@ -716,7 +727,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <option
                         key={p.userId}
                         value={p.userId}
-                        className={isLight ? 'bg-white text-gray-900' : 'bg-stone-900 text-white'}
+                        className={isLight ? 'bg-white text-gray-900' : 'bg-zinc-900 text-white'}
                       >
                         {p.userName} ({p.userRole.replace(/_/g, ' ')})
                       </option>
@@ -727,7 +738,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* Global Outlet Selector Dropdown */}
               <div className="flex items-center gap-1.5">
-                <span className={`text-[11px] font-medium hidden md:inline ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+                <span className={`text-[11px] font-medium hidden md:inline ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
                   Outlet Scope:
                 </span>
                 <select
@@ -745,7 +756,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
                     isLight
                       ? 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50 focus:border-[#0F4C3A]'
-                      : 'bg-stone-800 border-stone-700 text-stone-100 hover:bg-stone-700'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-100 hover:bg-zinc-700'
                   }`}
                 >
                   <option value="CONSOLIDATED">All Outlets (Consolidated Network)</option>
@@ -764,7 +775,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`p-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center ${
                   isLight
                     ? 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700 shadow-2xs'
-                    : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-amber-400'
+                    : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-amber-400'
                 }`}
                 title={isLight ? 'Switch to Dark Mode' : 'Switch to Clean Light Mode'}
                 aria-label="Toggle theme"
@@ -779,7 +790,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-all disabled:opacity-50 cursor-pointer ${
                   isLight
                     ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700 shadow-2xs'
-                    : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-300'
+                    : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300'
                 }`}
                 title="Refresh Backend Data"
               >
@@ -932,20 +943,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <th className="py-2.5 px-3 text-right">Status</th>
                       </tr>
                     </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
+                    <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-zinc-800'}`}>
                       {(omzetData?.storeBreakdown || []).map((store) => (
-                        <tr key={store.storeId} className={`transition-colors ${isLight ? 'hover:bg-stone-50/80' : 'hover:bg-stone-800/40'}`}>
+                        <tr key={store.storeId} className={`transition-colors ${isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'}`}>
                           <td className={`py-3 px-3 font-semibold ${textTitle}`}>
                             {store.storeName}
                           </td>
-                          <td className={`py-3 px-3 ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>{store.city}</td>
-                          <td className={`py-3 px-3 ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>{store.orderCount}</td>
+                          <td className={`py-3 px-3 ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>{store.city}</td>
+                          <td className={`py-3 px-3 ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>{store.orderCount}</td>
                           <td className="py-3 px-3 font-mono font-semibold text-[#0F4C3A] dark:text-emerald-400">
                             {formatIDR(store.omzet)}
                           </td>
                           <td className="py-3 px-3">
                             <div className="flex items-center gap-2">
-                              <div className={`w-16 ${isLight ? 'bg-stone-200' : 'bg-stone-700'} h-1.5 rounded-full overflow-hidden`}>
+                              <div className={`w-16 ${isLight ? 'bg-slate-200' : 'bg-zinc-700'} h-1.5 rounded-full overflow-hidden`}>
                                 <div
                                   className="bg-[#0F4C3A] dark:bg-emerald-500 h-full rounded-full"
                                   style={{ width: `${store.sharePercent}%` }}
@@ -983,7 +994,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <span className={`${textTitle} font-medium`}>{cat.label}</span>
                         <span className="text-[#0F4C3A] dark:text-emerald-400 font-mono font-semibold">{cat.sharePercent}%</span>
                       </div>
-                      <div className={`w-full ${isLight ? 'bg-stone-200' : 'bg-stone-700'} h-2 rounded-full overflow-hidden`}>
+                      <div className={`w-full ${isLight ? 'bg-slate-200' : 'bg-zinc-700'} h-2 rounded-full overflow-hidden`}>
                         <div
                           className="bg-[#0F4C3A] dark:bg-emerald-500 h-full rounded-full"
                           style={{ width: `${cat.sharePercent}%` }}
@@ -997,8 +1008,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ))}
                 </div>
 
-                <div className={`pt-2 border-t ${isLight ? 'border-stone-200' : 'border-stone-700/60'}`}>
-                  <div className={`p-3 ${isLight ? 'bg-emerald-50/80 border border-emerald-200 text-stone-800' : 'bg-stone-800/80 border border-stone-700 text-stone-300'} rounded-xl text-xs flex items-start gap-2.5`}>
+                <div className={`pt-2 border-t ${isLight ? 'border-slate-200' : 'border-zinc-700/60'}`}>
+                  <div className={`p-3 ${isLight ? 'bg-emerald-50/80 border border-emerald-200 text-slate-800' : 'bg-zinc-800/80 border border-zinc-700 text-zinc-300'} rounded-xl text-xs flex items-start gap-2.5`}>
                     <Sparkles className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className={`font-semibold ${textTitle}`}>Cold-Chain Priority</p>
@@ -1048,7 +1059,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="space-y-6">
             {/* Network Master Switch & Announcement Banner */}
             <div className={`${cardClass} p-6`}>
-              <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+              <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                 <div>
                   <h2 className={`text-base font-bold ${textTitle} flex items-center gap-2`}>
                     <Store className="w-5 h-5 text-[#0F4C3A] dark:text-emerald-400" />
@@ -1061,7 +1072,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-medium ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
+                    <span className={`text-xs font-medium ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>
                       {storeStatus?.isOpen ? 'Network Online' : 'Network Closed'}
                     </span>
                     <button
@@ -1085,7 +1096,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="mt-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="sm:col-span-2">
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>
                       Customer Notice Banner (Displayed on Storefront Header)
                     </label>
                     <input
@@ -1098,7 +1109,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>
                       Estimated Operating Window
                     </label>
                     <input
@@ -1141,7 +1152,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       className={`border rounded-2xl p-5 transition-all space-y-4 ${
                         isClosed
                           ? isLight
-                            ? 'border-rose-200 bg-rose-50/40 text-stone-900'
+                            ? 'border-rose-200 bg-rose-50/40 text-slate-900'
                             : 'border-red-900/50 bg-red-950/10 text-white'
                           : cardClass
                       }`}
@@ -1151,7 +1162,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <div className="flex items-center gap-2">
                             <span className={`font-bold ${textTitle} text-sm`}>{outlet.storeName}</span>
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                              isLight ? 'bg-stone-100 text-stone-700 border border-stone-200' : 'bg-stone-800 text-stone-300'
+                              isLight ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-zinc-800 text-zinc-300'
                             }`}>
                               {outlet.timezone}
                             </span>
@@ -1177,11 +1188,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </div>
                         <div className="flex justify-between">
                           <span className={textMuted}>Days Active:</span>
-                          <span className={isLight ? 'text-stone-700' : 'text-stone-300'}>{outlet.daysOpen}</span>
+                          <span className={isLight ? 'text-slate-700' : 'text-zinc-300'}>{outlet.daysOpen}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className={textMuted}>Contact:</span>
-                          <span className={`font-mono ${isLight ? 'text-stone-700' : 'text-stone-400'}`}>{outlet.contactPhone}</span>
+                          <span className={`font-mono ${isLight ? 'text-slate-700' : 'text-zinc-300'}`}>{outlet.contactPhone}</span>
                         </div>
                       </div>
 
@@ -1193,7 +1204,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       )}
 
                       {/* Action buttons */}
-                      <div className={`flex items-center justify-between pt-2 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                      <div className={`flex items-center justify-between pt-2 border-t ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                         <button
                           onClick={() => handleToggleOutletEmergency(outlet)}
                           className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
@@ -1209,8 +1220,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           onClick={() => setEditingOutlet(outlet)}
                           className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 border ${
                             isLight
-                              ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
-                              : 'bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700'
+                              ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                              : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
                           }`}
                         >
                           <Edit3 className="w-3.5 h-3.5" />
@@ -1227,11 +1238,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {editingOutlet && (
               <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
                 <div className={`${modalClass} max-w-lg w-full p-6 space-y-4`}>
-                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                     <h3 className={`text-base font-bold ${textTitle}`}>Edit Schedule: {editingOutlet.storeName}</h3>
                     <button
                       onClick={() => setEditingOutlet(null)}
-                      className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-stone-100 text-stone-500' : 'hover:bg-stone-800 text-stone-400'}`}
+                      className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-slate-100 text-zinc-500' : 'hover:bg-zinc-800 text-zinc-200'}`}
                     >
                       <X className="w-5 h-5" />
                     </button>
@@ -1239,7 +1250,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Open Time</label>
+                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Open Time</label>
                       <input
                         type="time"
                         value={editingOutlet.openTime}
@@ -1248,7 +1259,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       />
                     </div>
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Close Time</label>
+                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Close Time</label>
                       <input
                         type="time"
                         value={editingOutlet.closeTime}
@@ -1259,7 +1270,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Days Open</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Days Open</label>
                     <input
                       type="text"
                       value={editingOutlet.daysOpen}
@@ -1269,7 +1280,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Emergency Closure Reason (Optional)</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Emergency Closure Reason (Optional)</label>
                     <input
                       type="text"
                       value={editingOutlet.closureReason || ''}
@@ -1279,13 +1290,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     />
                   </div>
 
-                  <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                  <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                     <button
                       onClick={() => setEditingOutlet(null)}
                       className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
                         isLight
-                          ? 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
-                          : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                          ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                       }`}
                     >
                       Cancel
@@ -1310,7 +1321,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="space-y-6">
             {/* MODULE 4: Climate-Adaptive Cold-Chain Monitoring & Dynamic IoT Thresholds */}
             <div className={`${cardClass} p-5 border transition-all`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-stone-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-zinc-800">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0F4C3A] text-white uppercase tracking-wider">
@@ -1352,7 +1363,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           ? 'border-amber-500 bg-amber-500/5'
                           : isLight
                           ? 'border-gray-200 bg-gray-50/70'
-                          : 'border-stone-800 bg-stone-800/40'
+                          : 'border-zinc-800 bg-zinc-800/40'
                       }`}
                     >
                       <div>
@@ -1373,14 +1384,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </span>
                         </div>
 
-                        <div className="text-[11px] text-gray-500 dark:text-stone-400 mb-3 flex items-center gap-1.5">
+                        <div className="text-[11px] text-gray-500 dark:text-zinc-300 mb-3 flex items-center gap-1.5">
                           <Globe2 className="w-3 h-3 text-sky-500" />
                           <span>{cfg.regionalClimateProfile}</span>
                         </div>
 
                         {/* Ambient Weather vs Actual Zone Temp */}
                         <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                          <div className={`p-2.5 rounded-lg border ${isLight ? 'bg-white border-gray-200' : 'bg-stone-800 border-stone-700'}`}>
+                          <div className={`p-2.5 rounded-lg border ${isLight ? 'bg-white border-gray-200' : 'bg-zinc-800 border-zinc-700'}`}>
                             <span className="text-[10px] text-gray-400 block">External Weather:</span>
                             <div className="font-bold mt-0.5 flex items-center gap-1">
                               <Sun className="w-3 h-3 text-amber-500" />
@@ -1388,7 +1399,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </div>
                           </div>
 
-                          <div className={`p-2.5 rounded-lg border ${isLight ? 'bg-white border-gray-200' : 'bg-stone-800 border-stone-700'}`}>
+                          <div className={`p-2.5 rounded-lg border ${isLight ? 'bg-white border-gray-200' : 'bg-zinc-800 border-zinc-700'}`}>
                             <span className="text-[10px] text-gray-400 block">Current IoT Sensor:</span>
                             <div className={`font-mono font-bold mt-0.5 ${isBreached ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>
                               {cfg.currentActualTempCelsius}°C
@@ -1396,10 +1407,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </div>
                         </div>
 
-                        <div className="space-y-1.5 text-[11px] text-gray-500 dark:text-stone-400">
+                        <div className="space-y-1.5 text-[11px] text-gray-500 dark:text-zinc-300">
                           <div className="flex justify-between">
                             <span>Standard Safe Range:</span>
-                            <span className="font-mono font-semibold text-gray-700 dark:text-stone-300">
+                            <span className="font-mono font-semibold text-gray-700 dark:text-zinc-300">
                               {cfg.standardTempMinCelsius}°C to {cfg.standardTempMaxCelsius}°C
                             </span>
                           </div>
@@ -1409,7 +1420,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               {cfg.adaptiveOffsetCelsius > 0 ? `+${cfg.adaptiveOffsetCelsius}` : cfg.adaptiveOffsetCelsius}°C
                             </span>
                           </div>
-                          <div className="flex justify-between font-bold text-gray-800 dark:text-stone-200 pt-1 border-t border-gray-200 dark:border-stone-700">
+                          <div className="flex justify-between font-bold text-gray-800 dark:text-zinc-200 pt-1 border-t border-gray-200 dark:border-zinc-700">
                             <span>Active IoT Breach Trigger:</span>
                             <span className="font-mono text-rose-600 dark:text-rose-400">
                               &gt; {cfg.activeAlertThresholdCelsius}°C
@@ -1419,7 +1430,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
 
                       {/* Interactive Threshold Offset Tweak */}
-                      <div className="mt-3.5 pt-2.5 border-t border-gray-200 dark:border-stone-700 flex items-center justify-between gap-2">
+                      <div className="mt-3.5 pt-2.5 border-t border-gray-200 dark:border-zinc-700 flex items-center justify-between gap-2">
                         <span className="text-[10px] font-semibold text-gray-400">
                           Adjust Adaptive Margin:
                         </span>
@@ -1439,7 +1450,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onShowToast('Error', String(e));
                               }
                             }}
-                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-stone-700"
+                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-zinc-700"
                             title="Tighter threshold (-0.5°C)"
                           >
                             -0.5°
@@ -1459,7 +1470,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onShowToast('Error', String(e));
                               }
                             }}
-                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-stone-700"
+                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-zinc-700"
                             title="Looser threshold (+0.5°C)"
                           >
                             +0.5°
@@ -1534,7 +1545,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </select>
 
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
+                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
                     value={inventorySearch}
@@ -1569,11 +1580,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="py-3 px-3.5 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
+                  <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-zinc-800'}`}>
                     {filteredTiers.map((tier) => {
                       const isLowStock = tier.availableStock <= tier.minimumThreshold;
                       return (
-                        <tr key={tier.id} className={`transition-colors ${isLight ? 'hover:bg-stone-50/80' : 'hover:bg-stone-800/40'}`}>
+                        <tr key={tier.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'}`}>
                           <td className="py-3 px-3.5">
                             <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">{tier.sku}</span>
                             <div className={`font-bold ${textTitle} text-xs`}>{tier.productName}</div>
@@ -1581,7 +1592,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </td>
 
                           <td className="py-3 px-3.5">
-                            <div className={`font-semibold ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>{tier.storeName}</div>
+                            <div className={`font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>{tier.storeName}</div>
                             <div className={`text-[11px] ${textMuted} font-mono flex items-center gap-1 mt-0.5`}>
                               <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                               {tier.warehouseZoneId}
@@ -1612,12 +1623,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             +{tier.incomingStock}
                           </td>
 
-                          <td className={`py-3 px-3.5 font-mono ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>
+                          <td className={`py-3 px-3.5 font-mono ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>
                             <div>Min: {tier.minimumThreshold}</div>
                             <div className={`text-[10px] ${textMuted}`}>Buffer: {tier.safetyStockBuffer} | Max: {tier.maxCapacity}</div>
                           </td>
 
-                          <td className={`py-3 px-3.5 text-[11px] max-w-xs ${isLight ? 'text-stone-600' : 'text-stone-300'}`}>
+                          <td className={`py-3 px-3.5 text-[11px] max-w-xs ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
                             <p className="line-clamp-2">
                               {tier.handlingInstructions || 'Standard cold-chain storage.'}
                             </p>
@@ -1631,8 +1642,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               }}
                               className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border ${
                                 isLight
-                                  ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
-                                  : 'bg-stone-700 border-stone-600 text-stone-200 hover:bg-stone-600'
+                                  ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                                  : 'bg-zinc-700 border-zinc-600 text-zinc-200 hover:bg-zinc-600'
                               }`}
                             >
                               Audit Count
@@ -1656,14 +1667,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {editingTier && (
               <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
                 <div className={`${modalClass} max-w-lg w-full p-6 space-y-4`}>
-                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                     <div>
                       <h3 className={`text-base font-bold ${textTitle}`}>Item Metadata &amp; Handling Notes</h3>
                       <p className={`text-xs ${textMuted}`}>{editingTier.sku} - {editingTier.productName}</p>
                     </div>
                     <button
                       onClick={() => setEditingTier(null)}
-                      className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-stone-100 text-stone-500' : 'hover:bg-stone-800 text-stone-400'}`}
+                      className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-slate-100 text-zinc-500' : 'hover:bg-zinc-800 text-zinc-200'}`}
                     >
                       <X className="w-5 h-5" />
                     </button>
@@ -1671,7 +1682,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Safety Stock Buffer</label>
+                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Safety Stock Buffer</label>
                       <input
                         type="number"
                         value={editingTier.safetyStockBuffer}
@@ -1680,7 +1691,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       />
                     </div>
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Maximum Bin Capacity</label>
+                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Maximum Bin Capacity</label>
                       <input
                         type="number"
                         value={editingTier.maxCapacity}
@@ -1691,7 +1702,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Handling Instructions (Staff Directives)</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Handling Instructions (Staff Directives)</label>
                     <textarea
                       rows={3}
                       value={editingTier.handlingInstructions || ''}
@@ -1702,7 +1713,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Internal Admin Notes</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Internal Admin Notes</label>
                     <input
                       type="text"
                       value={editingTier.internalNotes || ''}
@@ -1712,13 +1723,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     />
                   </div>
 
-                  <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                  <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                     <button
                       onClick={() => setEditingTier(null)}
                       className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
                         isLight
-                          ? 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
-                          : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                          ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                       }`}
                     >
                       Cancel
@@ -1748,11 +1759,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {adjustingSku && (
               <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
                 <div className={`${modalClass} max-w-md w-full p-6 space-y-4`}>
-                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                  <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                     <h3 className={`text-base font-bold ${textTitle}`}>Physical Stocktake Adjustment</h3>
                     <button
                       onClick={() => setAdjustingSku(null)}
-                      className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-stone-100 text-stone-500' : 'hover:bg-stone-800 text-stone-400'}`}
+                      className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-slate-100 text-zinc-500' : 'hover:bg-zinc-800 text-zinc-200'}`}
                     >
                       <X className="w-5 h-5" />
                     </button>
@@ -1763,7 +1774,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </p>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Adjustment Delta (+ or - units)</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Adjustment Delta (+ or - units)</label>
                     <input
                       type="number"
                       value={adjustQty}
@@ -1774,7 +1785,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-stone-700' : 'text-stone-300'}`}>Adjustment Reason</label>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>Adjustment Reason</label>
                     <select
                       value={adjustReason}
                       onChange={(e) => setAdjustReason(e.target.value)}
@@ -1787,13 +1798,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </select>
                   </div>
 
-                  <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-stone-200' : 'border-stone-800'}`}>
+                  <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                     <button
                       onClick={() => setAdjustingSku(null)}
                       className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
                         isLight
-                          ? 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
-                          : 'bg-stone-800 border-stone-700 text-stone-300 hover:bg-stone-700'
+                          ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
                       }`}
                     >
                       Cancel
@@ -1872,8 +1883,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   rel="noreferrer"
                   className={`px-3 py-1.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all border ${
                     isLight
-                      ? 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
-                      : 'bg-stone-700 border-stone-600 text-white hover:bg-stone-600'
+                      ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      : 'bg-zinc-700 border-zinc-600 text-white hover:bg-zinc-600'
                   }`}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1923,13 +1934,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="py-2.5 px-3 text-right">Status</th>
                     </tr>
                   </thead>
-                  <tbody className={`divide-y ${isLight ? 'divide-stone-200' : 'divide-stone-800'}`}>
+                  <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-zinc-800'}`}>
                     {auditRecords.map((aud) => (
-                      <tr key={aud.id} className={`transition-colors ${isLight ? 'hover:bg-stone-50/80' : 'hover:bg-stone-800/40'}`}>
+                      <tr key={aud.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'}`}>
                         <td className="py-3 px-3 font-bold text-[#0F4C3A] dark:text-emerald-400">{aud.id}</td>
-                        <td className={`py-3 px-3 ${isLight ? 'text-stone-800' : 'text-stone-200'}`}>{aud.qrisReference}</td>
+                        <td className={`py-3 px-3 ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>{aud.qrisReference}</td>
                         <td className="py-3 px-3 text-blue-600 dark:text-blue-400 font-bold">{aud.orderId}</td>
-                        <td className={`py-3 px-3 ${isLight ? 'text-stone-700' : 'text-stone-300'} font-sans`}>{aud.customerName}</td>
+                        <td className={`py-3 px-3 ${isLight ? 'text-slate-700' : 'text-zinc-200'} font-sans`}>{aud.customerName}</td>
                         <td className="py-3 px-3 text-[#0F4C3A] dark:text-emerald-400 font-bold">{formatIDR(aud.amount)}</td>
                         <td className={`py-3 px-3 ${textMuted}`}>{aud.settlementChannel}</td>
                         <td className="py-3 px-3 text-right">
@@ -2122,13 +2133,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </p>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-200 dark:border-stone-800">
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-200 dark:border-zinc-800">
                 <button
                   onClick={() => setClosureWarningModal(null)}
                   className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-all ${
                     isLight
                       ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
-                      : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200'
+                      : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-200'
                   }`}
                 >
                   Abort / Keep Open

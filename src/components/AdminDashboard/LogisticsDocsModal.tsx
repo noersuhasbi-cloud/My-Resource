@@ -169,13 +169,13 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
       className={`w-full flex flex-col rounded-2xl border transition-all overflow-hidden ${
         isStandalonePage ? 'shadow-xs min-h-[750px]' : 'max-w-6xl max-h-[94vh] shadow-2xl'
       } ${
-        isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-800 text-stone-100'
+        isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
       }`}
     >
       {/* Modal Header */}
       <div
         className={`flex items-center justify-between px-6 py-4 border-b flex-shrink-0 ${
-          isLight ? 'bg-gray-50/80 border-gray-200' : 'bg-stone-900/80 border-stone-800'
+          isLight ? 'bg-gray-50/80 border-gray-200' : 'bg-zinc-900/80 border-zinc-800'
         }`}
       >
           <div className="flex items-center gap-3">
@@ -189,7 +189,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   Official ERP Forms
                 </span>
               </div>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
                 Surat Jalan (Waybill / Delivery Note), Delivery Order (DO), and Fleet Quota Dispatch Tracking
               </p>
             </div>
@@ -201,7 +201,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 isLight
                   ? 'bg-white hover:bg-gray-100 border-gray-300 text-gray-700 shadow-2xs'
-                  : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200'
+                  : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-200'
               }`}
               title="Print document in official A4 layout"
             >
@@ -212,7 +212,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
             <button
               onClick={onClose}
               className={`p-2 rounded-xl transition-colors ${
-                isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-stone-800 text-stone-400'
+                isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'
               }`}
             >
               <X className="w-5 h-5" />
@@ -223,7 +223,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
         {/* Navigation Tabs */}
         <div
           className={`flex items-center justify-between px-6 py-2 border-b flex-shrink-0 ${
-            isLight ? 'bg-white border-gray-100' : 'bg-stone-900 border-stone-800'
+            isLight ? 'bg-white border-gray-100' : 'bg-zinc-900 border-zinc-800'
           }`}
         >
           <div className="flex items-center gap-1 sm:gap-2">
@@ -234,7 +234,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:bg-gray-100'
-                  : 'text-stone-400 hover:bg-stone-800'
+                  : 'text-zinc-400 hover:bg-zinc-800'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
@@ -251,7 +251,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:bg-gray-100'
-                  : 'text-stone-400 hover:bg-stone-800'
+                  : 'text-zinc-400 hover:bg-zinc-800'
               }`}
             >
               <PackageCheck className="w-3.5 h-3.5" />
@@ -268,7 +268,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:bg-gray-100'
-                  : 'text-stone-400 hover:bg-stone-800'
+                  : 'text-zinc-400 hover:bg-zinc-800'
               }`}
             >
               <Truck className="w-3.5 h-3.5" />
@@ -307,7 +307,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by SJ # or recipient..."
                     className={`w-full pl-8 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   />
                 </div>
@@ -324,7 +324,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                             ? 'bg-emerald-500/10 border-emerald-500 text-[#0F4C3A] dark:text-emerald-300 shadow-xs'
                             : isLight
                             ? 'bg-white border-gray-200/90 hover:bg-gray-50'
-                            : 'bg-stone-800/70 border-stone-700/80 hover:bg-stone-800'
+                            : 'bg-zinc-800/70 border-zinc-700/80 hover:bg-zinc-800'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -358,11 +358,11 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   <div
                     id="printable-surat-jalan"
                     className={`p-6 sm:p-8 rounded-2xl border shadow-sm print:border-none print:shadow-none print:p-0 ${
-                      isLight ? 'bg-white border-gray-300' : 'bg-stone-800/90 border-stone-700 text-stone-100'
+                      isLight ? 'bg-white border-gray-300' : 'bg-zinc-800/90 border-zinc-700 text-zinc-100'
                     }`}
                   >
                     {/* Official Company Header */}
-                    <div className="border-b-2 border-stone-900 dark:border-stone-100 pb-4 mb-4">
+                    <div className="border-b-2 border-zinc-900 dark:border-zinc-100 pb-4 mb-4">
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-2">
@@ -373,10 +373,10 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                               PT GROCEMART RETAIL INDONESIA
                             </span>
                           </div>
-                          <p className="text-[11px] text-gray-500 dark:text-stone-400 mt-1">
+                          <p className="text-[11px] text-gray-500 dark:text-zinc-300 mt-1">
                             HQ: Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan 12190
                           </p>
-                          <p className="text-[10px] text-gray-400 dark:text-stone-500 font-mono">
+                          <p className="text-[10px] text-gray-400 dark:text-zinc-300 font-mono">
                             NPWP: 01.345.678.9-012.000 | NIB: 9120003482114 | Izin Edar: KEMENKES-RI
                           </p>
                         </div>
@@ -386,7 +386,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                             SURAT JALAN
                           </h3>
                           <p className="text-xs font-mono font-bold mt-0.5">{selectedSj.documentNumber}</p>
-                          <p className="text-[11px] text-gray-500 dark:text-stone-400">
+                          <p className="text-[11px] text-gray-500 dark:text-zinc-300">
                             Tanggal: <strong className="font-mono">{selectedSj.issueDate}</strong>
                           </p>
                         </div>
@@ -394,13 +394,13 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     </div>
 
                     {/* Dual Info Block (Sender vs Recipient) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mb-6 p-3 rounded-xl bg-gray-50 dark:bg-stone-900 border border-gray-200 dark:border-stone-700">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mb-6 p-3 rounded-xl bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700">
                       <div>
                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                           Pengirim / Gudang Asal:
                         </div>
                         <div className="font-bold">{selectedSj.senderStoreName}</div>
-                        <div className="text-[11px] text-gray-600 dark:text-stone-400 mt-0.5">
+                        <div className="text-[11px] text-gray-600 dark:text-zinc-300 mt-0.5">
                           {selectedSj.senderAddress}
                         </div>
                         <div className="text-[11px] font-mono mt-1 text-gray-500">Telp: {selectedSj.senderPhone}</div>
@@ -411,7 +411,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                           Penerima / Tujuan:
                         </div>
                         <div className="font-bold text-[#0F4C3A] dark:text-emerald-400">{selectedSj.recipientName}</div>
-                        <div className="text-[11px] text-gray-600 dark:text-stone-400 mt-0.5">
+                        <div className="text-[11px] text-gray-600 dark:text-zinc-300 mt-0.5">
                           {selectedSj.recipientAddress}
                         </div>
                         <div className="text-[11px] font-mono mt-1 text-gray-500">Telp: {selectedSj.recipientPhone}</div>
@@ -419,7 +419,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     </div>
 
                     {/* Transport & Carrier Info */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-6 py-2 px-3 rounded-lg border border-gray-200 dark:border-stone-700 font-mono">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-6 py-2 px-3 rounded-lg border border-gray-200 dark:border-zinc-700 font-mono">
                       <div>
                         <span className="text-[10px] text-gray-400 font-sans block">Kurir / Armada:</span>
                         <span className="font-semibold">{selectedSj.carrierName}</span>
@@ -440,40 +440,40 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
                     {/* Item Table */}
                     <div className="overflow-x-auto mb-6">
-                      <table className="w-full text-left text-xs border border-gray-300 dark:border-stone-700">
-                        <thead className="bg-gray-100 dark:bg-stone-900 border-b border-gray-300 dark:border-stone-700 font-bold uppercase text-[10px]">
+                      <table className="w-full text-left text-xs border border-gray-300 dark:border-zinc-700">
+                        <thead className="bg-gray-100 dark:bg-zinc-900 border-b border-gray-300 dark:border-zinc-700 font-bold uppercase text-[10px]">
                           <tr>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-stone-700 text-center w-8">No</th>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-stone-700">Kode SKU</th>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-stone-700">Nama Barang &amp; Spesifikasi</th>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-stone-700">Batch / Lot</th>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-stone-700 text-center">Jumlah</th>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-stone-700">Kemasan</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700 text-center w-8">No</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Kode SKU</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Nama Barang &amp; Spesifikasi</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Batch / Lot</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700 text-center">Jumlah</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Kemasan</th>
                             <th className="py-2 px-3">Kondisi / Keterangan</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-stone-700">
+                        <tbody className="divide-y divide-gray-200 dark:divide-zinc-700">
                           {selectedSj.items.map((item, idx) => (
                             <tr key={idx}>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-stone-700 text-center font-mono">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 text-center font-mono">
                                 {idx + 1}
                               </td>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-stone-700 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                                 {item.sku}
                               </td>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-stone-700 font-semibold">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 font-semibold">
                                 {item.productName}
                               </td>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-stone-700 font-mono text-[11px]">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 font-mono text-[11px]">
                                 {item.batchNumber}
                               </td>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-stone-700 text-center font-bold">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 text-center font-bold">
                                 {item.quantity} {item.unit}
                               </td>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-stone-700">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700">
                                 {item.packagingType}
                               </td>
-                              <td className="py-2 px-3 text-[11px] text-gray-600 dark:text-stone-400">
+                              <td className="py-2 px-3 text-[11px] text-gray-600 dark:text-zinc-300">
                                 {item.condition} - {item.notes || 'Normal'}
                               </td>
                             </tr>
@@ -491,7 +491,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     </div>
 
                     {/* 3-Column Formal Sign-off Block */}
-                    <div className="grid grid-cols-3 gap-4 text-center text-xs pt-4 border-t border-gray-300 dark:border-stone-700">
+                    <div className="grid grid-cols-3 gap-4 text-center text-xs pt-4 border-t border-gray-300 dark:border-zinc-700">
                       <div className="space-y-12">
                         <span className="font-semibold text-gray-500">Yang Menyerahkan (Pengirim)</span>
                         <div className="border-b border-gray-400 mx-4 pb-1 font-bold">
@@ -531,10 +531,10 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   <div
                     key={doDoc.id}
                     className={`p-5 rounded-2xl border space-y-3 ${
-                      isLight ? 'bg-white border-gray-200' : 'bg-stone-800/80 border-stone-700'
+                      isLight ? 'bg-white border-gray-200' : 'bg-zinc-800/80 border-zinc-700'
                     }`}
                   >
-                    <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-stone-700">
+                    <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-zinc-700">
                       <div>
                         <span className="font-mono text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">
                           {doDoc.doNumber}
@@ -546,13 +546,13 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                       </span>
                     </div>
 
-                    <div className="text-xs space-y-1 text-gray-600 dark:text-stone-300">
+                    <div className="text-xs space-y-1 text-gray-600 dark:text-zinc-300">
                       <div>Address: <strong>{doDoc.deliveryAddress}</strong></div>
                       <div>Window: <strong>{doDoc.deliveryWindow}</strong></div>
                       <div>Authorized By: <strong>{doDoc.authorizedOfficer}</strong></div>
                     </div>
 
-                    <div className="border-t pt-2 border-gray-100 dark:border-stone-700 flex justify-between items-center text-xs">
+                    <div className="border-t pt-2 border-gray-100 dark:border-zinc-700 flex justify-between items-center text-xs">
                       <span>Total Value:</span>
                       <span className="font-mono font-bold text-sm text-[#0F4C3A] dark:text-emerald-400">
                         {formatIDR(doDoc.totalAmountIDR)}
@@ -574,7 +574,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   <div
                     key={shp.id}
                     className={`p-5 rounded-2xl border space-y-4 ${
-                      isLight ? 'bg-white border-gray-200' : 'bg-stone-800/80 border-stone-700'
+                      isLight ? 'bg-white border-gray-200' : 'bg-zinc-800/80 border-zinc-700'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -598,7 +598,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                           {shp.currentPayloadKg} / {shp.maxPayloadKg} kg ({shp.quotaUtilizationPercent}%)
                         </strong>
                       </div>
-                      <div className="w-full bg-gray-200 dark:bg-stone-700 h-2.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-gray-200 dark:bg-zinc-700 h-2.5 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all ${
                             shp.quotaUtilizationPercent > 90
@@ -613,7 +613,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     </div>
 
                     {/* Route & Temp */}
-                    <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-gray-50 dark:bg-stone-900 text-xs">
+                    <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-gray-50 dark:bg-zinc-900 text-xs">
                       <div>
                         <span className="text-[10px] text-gray-400 block">Route:</span>
                         <span className="font-semibold">{shp.departureHub} → {shp.destinationHub}</span>
@@ -626,7 +626,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex justify-between text-xs text-gray-500 dark:text-stone-400">
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-zinc-300">
                       <span>Driver: {shp.driverName} ({shp.driverContact})</span>
                       <span>{shp.assignedOrdersCount} Orders Loaded</span>
                     </div>
@@ -641,7 +641,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
         {isCreatingSj && (
           <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
             <div className={`w-full max-w-lg p-6 rounded-2xl border shadow-xl space-y-4 ${
-              isLight ? 'bg-white border-gray-300' : 'bg-stone-900 border-stone-800'
+              isLight ? 'bg-white border-gray-300' : 'bg-zinc-900 border-zinc-800'
             }`}>
               <div className="flex justify-between items-center border-b pb-3">
                 <h3 className="font-bold text-base">Issue Formal Surat Jalan</h3>
@@ -650,65 +650,65 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
               <form onSubmit={handleCreateSubmit} className="space-y-3 text-xs">
                 <div>
-                  <label className="block font-semibold mb-1">Recipient Hub / Customer Name</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Recipient Hub / Customer Name</label>
                   <input
                     type="text"
                     value={newSjRecipient}
                     onChange={(e) => setNewSjRecipient(e.target.value)}
                     required
-                    className={`w-full px-3 py-2 rounded-xl border ${isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'}`}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Delivery Destination Address</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Delivery Destination Address</label>
                   <input
                     type="text"
                     value={newSjAddress}
                     onChange={(e) => setNewSjAddress(e.target.value)}
                     required
-                    className={`w-full px-3 py-2 rounded-xl border ${isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'}`}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold mb-1">Driver Name</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Driver Name</label>
                     <input
                       type="text"
                       value={newSjDriver}
                       onChange={(e) => setNewSjDriver(e.target.value)}
                       required
-                      className={`w-full px-3 py-2 rounded-xl border ${isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'}`}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold mb-1">Vehicle License Plate</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Vehicle License Plate</label>
                     <input
                       type="text"
                       value={newSjVehiclePlate}
                       onChange={(e) => setNewSjVehiclePlate(e.target.value)}
                       required
-                      className={`w-full px-3 py-2 rounded-xl border ${isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'}`}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold mb-1">Cold-Chain Temp (°C)</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Cold-Chain Temp (°C)</label>
                     <input
                       type="number"
                       step="0.1"
                       value={newSjTemp}
                       onChange={(e) => setNewSjTemp(Number(e.target.value))}
-                      className={`w-full px-3 py-2 rounded-xl border font-mono ${isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'}`}
+                      className={`w-full px-3 py-2 rounded-xl border font-mono ${isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'}`}
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold mb-1">Handling Notes</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Handling Notes</label>
                     <input
                       type="text"
                       value={newSjNotes}
                       onChange={(e) => setNewSjNotes(e.target.value)}
-                      className={`w-full px-3 py-2 rounded-xl border ${isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'}`}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
                     />
                   </div>
                 </div>

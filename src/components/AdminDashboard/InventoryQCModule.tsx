@@ -184,7 +184,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   const cardClass = `rounded-2xl border transition-all ${
     isLight
       ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.03)]'
-      : 'bg-stone-900/90 border-stone-800 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
+      : 'bg-zinc-900/90 border-zinc-800 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
   }`;
 
   return (
@@ -208,7 +208,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
               <h1 className={`text-xl font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-white'}`}>
                 Perishables Quality Control (QC) &amp; Disposition
               </h1>
-              <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? 'text-gray-600' : 'text-stone-400'}`}>
+              <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
                 Audit incoming farm shipments, evaluate cold-chain temperature thresholds, and execute formal disposition (Passed to Shelf, Quarantined Hold, Return to Vendor, or Scrap Write-Off).
               </p>
             </div>
@@ -227,10 +227,10 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
           <div
             className={`p-4 rounded-xl border ${
-              isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-stone-800/60 border-stone-700'
+              isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'
             }`}
           >
-            <div className={`text-xs font-semibold ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+            <div className={`text-xs font-semibold ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
               Inspection Pass Rate
             </div>
             <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 font-mono">
@@ -243,10 +243,10 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
 
           <div
             className={`p-4 rounded-xl border ${
-              isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-stone-800/60 border-stone-700'
+              isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'
             }`}
           >
-            <div className={`text-xs font-semibold ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+            <div className={`text-xs font-semibold ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
               Quarantine Isolation Hold
             </div>
             <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1 font-mono">
@@ -259,10 +259,10 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
 
           <div
             className={`p-4 rounded-xl border ${
-              isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-stone-800/60 border-stone-700'
+              isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'
             }`}
           >
-            <div className={`text-xs font-semibold ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+            <div className={`text-xs font-semibold ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
               Rejected / Return to Vendor (RTV)
             </div>
             <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1 font-mono">
@@ -275,17 +275,17 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
 
           <div
             className={`p-4 rounded-xl border ${
-              isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-stone-800/60 border-stone-700'
+              isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'
             }`}
           >
-            <div className={`text-xs font-semibold ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+            <div className={`text-xs font-semibold ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
               Active Cold-Chain Protocol
             </div>
             <div className="text-sm font-bold text-teal-700 dark:text-teal-300 mt-1 flex items-center gap-1.5">
               <Thermometer className="w-4 h-4 text-teal-600" />
               <span>Chilled: 2 - 4°C | Frozen: -18°C</span>
             </div>
-            <div className="text-[11px] text-gray-500 dark:text-stone-400 mt-0.5">
+            <div className="text-[11px] text-gray-500 dark:text-zinc-300 mt-0.5">
               Instant trigger on &gt;1.5°C temperature breach
             </div>
           </div>
@@ -294,14 +294,14 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
 
       {/* QC Logs Table */}
       <div className={cardClass}>
-        <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-stone-800 bg-stone-900/50'}`}>
+        <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
                 <FileText className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                 <span>Quality Inspection Log &amp; Disposition Records</span>
               </h3>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-stone-400'} mt-0.5`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
                 Official audit trail of all produce grading, temperature verifications, and action routing
               </p>
             </div>
@@ -315,7 +315,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search SKU or batch..."
                   className={`pl-8 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-stone-800 border-stone-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
                   }`}
                 />
               </div>
@@ -330,7 +330,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'text-gray-600 hover:bg-gray-100'
-                        : 'text-stone-400 hover:bg-stone-800'
+                        : 'text-zinc-400 hover:bg-zinc-800'
                     }`}
                   >
                     {disp}
@@ -344,7 +344,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-sans">
             <thead className={`border-b text-[10px] uppercase font-bold tracking-wider ${
-              isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-stone-800 bg-stone-800/50 text-stone-400'
+              isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
             }`}>
               <tr>
                 <th className="py-3 px-4">QC Report ID</th>
@@ -357,12 +357,12 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                 <th className="py-3 px-4">Inspector / Notes</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-stone-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
               {filteredRecords.map((rec) => (
                 <tr
                   key={rec.id}
                   className={`transition-colors ${
-                    isLight ? 'hover:bg-gray-50/80' : 'hover:bg-stone-800/40'
+                    isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'
                   }`}
                 >
                   <td className="py-3.5 px-4 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
@@ -415,14 +415,14 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                   </td>
 
                   <td className="py-3.5 px-4">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-gray-100 dark:bg-stone-800 text-gray-700 dark:text-stone-300 border border-gray-200 dark:border-stone-700">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-zinc-700">
                       {rec.actionTaken.replace(/_/g, ' ')}
                     </span>
                   </td>
 
                   <td className="py-3.5 px-4 text-[11px] max-w-xs">
                     <div className="font-semibold">{rec.inspectorName}</div>
-                    <p className="text-gray-500 dark:text-stone-400 text-[10px] truncate">{rec.notes}</p>
+                    <p className="text-gray-500 dark:text-zinc-300 text-[10px] truncate">{rec.notes}</p>
                   </td>
                 </tr>
               ))}
@@ -436,10 +436,10 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
             className={`w-full max-w-xl p-6 rounded-2xl border shadow-2xl space-y-4 my-8 ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-stone-900 border-stone-800 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
-            <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-stone-800">
+            <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-zinc-800">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-teal-600" />
                 <h3 className="text-base font-bold">New Perishables Quality Inspection</h3>
@@ -452,12 +452,12 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Select Item SKU</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Select Item SKU</label>
                   <select
                     value={selectedSku}
                     onChange={(e) => setSelectedSku(e.target.value)}
                     className={`w-full px-3 py-2 rounded-xl border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   >
                     {inventory.map((i, idx) => (
@@ -469,13 +469,13 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-semibold mb-1">Batch / Lot Number</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Batch / Lot Number</label>
                   <input
                     type="text"
                     value={batchNumber}
                     onChange={(e) => setBatchNumber(e.target.value)}
                     className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   />
                 </div>
@@ -483,12 +483,12 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Audit Source</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Audit Source</label>
                   <select
                     value={refType}
                     onChange={(e) => setRefType(e.target.value as any)}
                     className={`w-full px-3 py-2 rounded-xl border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   >
                     <option value="INCOMING_PO">Incoming PO Delivery</option>
@@ -498,32 +498,32 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-semibold mb-1">Sample Qty</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Sample Qty</label>
                   <input
                     type="number"
                     value={sampleQty}
                     onChange={(e) => setSampleQty(Number(e.target.value))}
                     className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   />
                 </div>
 
                 <div>
-                  <label className="block font-semibold mb-1">Total Batch Qty</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Total Batch Qty</label>
                   <input
                     type="number"
                     value={totalBatchQty}
                     onChange={(e) => setTotalBatchQty(Number(e.target.value))}
                     className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-stone-800 border-stone-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   />
                 </div>
               </div>
 
               {/* Physical Parameters Card */}
-              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-stone-700 space-y-3 bg-gray-50/50 dark:bg-stone-850">
+              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 space-y-3 bg-gray-50/50 dark:bg-zinc-850">
                 <span className="font-bold text-xs flex items-center gap-1.5 text-teal-700 dark:text-teal-400">
                   <Sparkles className="w-3.5 h-3.5" />
                   Sensory &amp; Cold-Chain Physical Evaluation
@@ -531,12 +531,12 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold mb-1">Visual Freshness Grade</label>
+                    <label className="block text-[11px] font-semibold mb-1 text-slate-800 dark:text-zinc-200">Visual Freshness Grade</label>
                     <select
                       value={visualFreshness}
                       onChange={(e) => handleVisualChange(e.target.value as any)}
                       className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'
+                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
                       }`}
                     >
                       <option value="Grade A (Pristine)">Grade A (Pristine)</option>
@@ -546,7 +546,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold mb-1">Cold-Chain Temp (°C)</label>
+                    <label className="block text-[11px] font-semibold mb-1 text-slate-800 dark:text-zinc-200">Cold-Chain Temp (°C)</label>
                     <input
                       type="number"
                       step="0.1"
@@ -557,7 +557,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                           ? 'border-rose-500 bg-rose-500/10 text-rose-700'
                           : isLight
                           ? 'bg-white border-gray-300'
-                          : 'bg-stone-800 border-stone-700'
+                          : 'bg-zinc-800 border-zinc-700'
                       }`}
                     />
                   </div>
@@ -565,12 +565,12 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold mb-1">Packaging Integrity</label>
+                    <label className="block text-[11px] font-semibold mb-1 text-slate-800 dark:text-zinc-200">Packaging Integrity</label>
                     <select
                       value={packagingIntegrity}
                       onChange={(e) => setPackagingIntegrity(e.target.value as any)}
                       className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'
+                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
                       }`}
                     >
                       <option value="Sealed & Intact">Sealed &amp; Intact</option>
@@ -580,12 +580,12 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold mb-1">Sensory Odor Check</label>
+                    <label className="block text-[11px] font-semibold mb-1 text-slate-800 dark:text-zinc-200">Sensory Odor Check</label>
                     <select
                       value={sensoryOdorCheck}
                       onChange={(e) => setSensoryOdorCheck(e.target.value as any)}
                       className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'
+                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
                       }`}
                     >
                       <option value="Normal & Fresh">Normal &amp; Fresh</option>
@@ -598,11 +598,11 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
               {/* Disposition & Action */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Inspection Disposition</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Inspection Disposition</label>
                   <select
                     value={disposition}
                     onChange={(e) => setDisposition(e.target.value as QCDisposition)}
-                    className="w-full px-3 py-2 rounded-xl border font-bold bg-white dark:bg-stone-800 border-gray-300 dark:border-stone-700"
+                    className="w-full px-3 py-2 rounded-xl border font-bold bg-white dark:bg-zinc-800 border-gray-300 dark:border-zinc-700"
                   >
                     <option value="PASSED">PASSED (Food Grade OK)</option>
                     <option value="QUARANTINED">QUARANTINED (Hold for 24h)</option>
@@ -611,11 +611,11 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-semibold mb-1">Operational Action</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Operational Action</label>
                   <select
                     value={actionTaken}
                     onChange={(e) => setActionTaken(e.target.value as QCDispositionAction)}
-                    className="w-full px-3 py-2 rounded-xl border font-bold bg-white dark:bg-stone-800 border-gray-300 dark:border-stone-700"
+                    className="w-full px-3 py-2 rounded-xl border font-bold bg-white dark:bg-zinc-800 border-gray-300 dark:border-zinc-700"
                   >
                     <option value="RELEASE_TO_SHELF">Release to Shelf Inventory</option>
                     <option value="QUARANTINE_HOLD">Quarantine Cold Cell</option>
@@ -626,13 +626,13 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">Inspector Notes</label>
+                <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Inspector Notes</label>
                 <textarea
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className={`w-full px-3 py-2 rounded-xl border ${
-                    isLight ? 'bg-white border-gray-300' : 'bg-stone-800 border-stone-700'
+                    isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
                   }`}
                 />
               </div>

@@ -129,7 +129,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       {/* Brand Header */}
       <div
         className={`h-16 flex items-center justify-between px-4 border-b flex-shrink-0 transition-colors ${
-          isLight ? 'border-gray-200/90 bg-white' : 'border-stone-800/90 bg-stone-900/95'
+          isLight ? 'border-slate-200 bg-white' : 'border-zinc-800 bg-zinc-950'
         }`}
       >
         <div className="flex items-center gap-3 overflow-hidden">
@@ -139,14 +139,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {!isCollapsed && (
             <div className="truncate animate-fadeIn">
               <div className="flex items-center gap-1.5">
-                <span className={`text-sm font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <span className={`text-sm font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
                   GroceMart
                 </span>
                 <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 border border-[#0F4C3A]/20">
                   ERP
                 </span>
               </div>
-              <p className={`text-[11px] truncate ${isLight ? 'text-gray-500' : 'text-stone-400'}`}>
+              <p className={`text-[11px] truncate ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
                 Enterprise Suite v2.4
               </p>
             </div>
@@ -159,8 +159,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           title={isCollapsed ? 'Expand Sidebar (Ctrl+B)' : 'Collapse Sidebar (Ctrl+B)'}
           className={`hidden lg:flex p-1.5 rounded-lg border text-xs transition-colors items-center justify-center ${
             isLight
-              ? 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-600'
-              : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-300'
+              ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
+              : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300'
           }`}
           aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
@@ -170,7 +170,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         {/* Mobile Close Button */}
         <button
           onClick={onCloseMobile}
-          className="lg:hidden p-1.5 rounded-lg border text-gray-500 hover:text-gray-900 dark:hover:text-white"
+          className="lg:hidden p-1.5 rounded-lg border text-slate-500 hover:text-slate-900 dark:hover:text-white"
           aria-label="Close menu"
         >
           <X className="w-5 h-5" />
@@ -178,12 +178,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </div>
 
       {/* Navigation Scrollable Body */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-stone-800">
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-zinc-800">
         {/* SECTION 1: CORE OPERATIONS */}
         <div>
           {!isCollapsed && (
             <div className="px-3 mb-2 flex items-center justify-between">
-              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-gray-400' : 'text-stone-500'}`}>
+              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-slate-400' : 'text-zinc-300'}`}>
                 Core Operations
               </span>
             </div>
@@ -198,8 +198,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'overview'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <LayoutDashboard className={`w-4 h-4 flex-shrink-0 ${activeTab === 'overview' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
@@ -219,8 +219,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'pos'
                   ? 'bg-emerald-700 text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <CreditCard className={`w-4 h-4 flex-shrink-0 ${activeTab === 'pos' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
@@ -245,8 +245,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'operations'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <Store className={`w-4 h-4 flex-shrink-0 ${activeTab === 'operations' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
@@ -273,8 +273,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'inventory'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <Boxes className={`w-4 h-4 flex-shrink-0 ${activeTab === 'inventory' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} />
@@ -299,7 +299,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         <div>
           {!isCollapsed && (
             <div className="px-3 mb-2 flex items-center justify-between">
-              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-gray-400' : 'text-stone-500'}`}>
+              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-slate-400' : 'text-zinc-300'}`}>
                 Perishables &amp; Fulfillment
               </span>
             </div>
@@ -314,8 +314,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'fefo'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <Clock className={`w-4 h-4 flex-shrink-0 ${activeTab === 'fefo' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
@@ -337,8 +337,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'waste'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <Trash2 className={`w-4 h-4 flex-shrink-0 ${activeTab === 'waste' ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`} />
@@ -360,8 +360,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'picker'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <Scan className={`w-4 h-4 flex-shrink-0 ${activeTab === 'picker' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`} />
@@ -378,8 +378,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'procurement'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <Truck className={`w-4 h-4 flex-shrink-0 ${activeTab === 'procurement' ? 'text-white' : 'text-sky-600 dark:text-sky-400'}`} />
@@ -403,8 +403,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'qc'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <CheckSquare className={`w-4 h-4 flex-shrink-0 ${activeTab === 'qc' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
@@ -426,8 +426,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'logistics'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <FileText className={`w-4 h-4 flex-shrink-0 ${activeTab === 'logistics' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} />
@@ -449,8 +449,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'transfers'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <ArrowRightLeft className={`w-4 h-4 flex-shrink-0 ${activeTab === 'transfers' ? 'text-white' : 'text-cyan-600 dark:text-cyan-400'}`} />
@@ -467,8 +467,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'approvals'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <ShieldCheck className={`w-4 h-4 flex-shrink-0 ${activeTab === 'approvals' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`} />
@@ -490,8 +490,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'reports'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <BarChart3 className={`w-4 h-4 flex-shrink-0 ${activeTab === 'reports' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
@@ -513,11 +513,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'settings'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
-              <Settings className={`w-4 h-4 flex-shrink-0 ${activeTab === 'settings' ? 'text-white' : 'text-stone-600 dark:text-stone-400'}`} />
+              <Settings className={`w-4 h-4 flex-shrink-0 ${activeTab === 'settings' ? 'text-white' : 'text-slate-500 dark:text-zinc-300'}`} />
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Enterprise Settings Hub</span>
@@ -537,10 +537,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               onClick={onToggleFinanceMenu}
               className={`px-3 mb-2 flex items-center justify-between cursor-pointer group`}
             >
-              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-gray-400 group-hover:text-gray-600' : 'text-stone-500 group-hover:text-stone-300'}`}>
+              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-slate-400 group-hover:text-slate-600' : 'text-zinc-400 group-hover:text-zinc-200'}`}>
                 Finance &amp; Accounting
               </span>
-              <span className="text-gray-400">
+              <span className="text-slate-400">
                 {isFinanceMenuOpen ? (
                   <ChevronDown className="w-3.5 h-3.5" />
                 ) : (
@@ -549,7 +549,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               </span>
             </div>
           ) : (
-            <div className="border-t border-gray-200 dark:border-stone-800 my-2" />
+            <div className="border-t border-slate-200 dark:border-zinc-800 my-2" />
           )}
 
           <div className="space-y-1">
@@ -565,8 +565,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'accounting'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <ReceiptText className={`w-4 h-4 flex-shrink-0 ${activeTab === 'accounting' ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
@@ -587,8 +587,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                     activeTab === 'accounting' && accountingSubTab === 'pnl'
                       ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
                       : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60'
                   }`}
                 >
                   <TrendingUp className="w-3 h-3 text-emerald-600" />
@@ -601,8 +601,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                     activeTab === 'accounting' && accountingSubTab === 'balance_sheet'
                       ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
                       : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60'
                   }`}
                 >
                   <Scale className="w-3 h-3 text-blue-600" />
@@ -615,8 +615,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                     activeTab === 'accounting' && accountingSubTab === 'cash_flow'
                       ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
                       : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60'
                   }`}
                 >
                   <DollarSign className="w-3 h-3 text-amber-600" />
@@ -629,8 +629,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                     activeTab === 'accounting' && accountingSubTab === 'gl'
                       ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
                       : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60'
                   }`}
                 >
                   <ReceiptText className="w-3 h-3 text-purple-600" />
@@ -643,8 +643,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                     activeTab === 'accounting' && accountingSubTab === 'coa'
                       ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
                       : isLight
-                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60'
                   }`}
                 >
                   <Building2 className="w-3 h-3 text-teal-600" />
@@ -662,10 +662,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               onClick={onToggleSettingsMenu}
               className={`px-3 mb-2 flex items-center justify-between cursor-pointer group`}
             >
-              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-gray-400 group-hover:text-gray-600' : 'text-stone-500 group-hover:text-stone-300'}`}>
+              <span className={`text-[10px] font-bold tracking-wider uppercase ${isLight ? 'text-slate-400 group-hover:text-slate-600' : 'text-zinc-400 group-hover:text-zinc-200'}`}>
                 System &amp; Specifications
               </span>
-              <span className="text-gray-400">
+              <span className="text-slate-400">
                 {isSettingsMenuOpen ? (
                   <ChevronDown className="w-3.5 h-3.5" />
                 ) : (
@@ -674,7 +674,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               </span>
             </div>
           ) : (
-            <div className="border-t border-gray-200 dark:border-stone-800 my-2" />
+            <div className="border-t border-slate-200 dark:border-zinc-800 my-2" />
           )}
 
           <div className="space-y-1">
@@ -686,8 +686,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'rbac'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <Users className={`w-4 h-4 flex-shrink-0 ${activeTab === 'rbac' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
@@ -709,8 +709,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'audit'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <FileCheck2 className={`w-4 h-4 flex-shrink-0 ${activeTab === 'audit' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
@@ -727,8 +727,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'openapi'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <FileCode2 className={`w-4 h-4 flex-shrink-0 ${activeTab === 'openapi' ? 'text-white' : 'text-violet-600 dark:text-violet-400'}`} />
@@ -745,8 +745,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 activeTab === 'erd'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
-                  ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100/90'
-                  : 'text-stone-300 hover:text-white hover:bg-stone-800/80'
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
               }`}
             >
               <Database className={`w-4 h-4 flex-shrink-0 ${activeTab === 'erd' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
@@ -766,7 +766,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       {/* Footer / Storefront Exit Link */}
       <div
         className={`p-3 border-t flex-shrink-0 transition-colors ${
-          isLight ? 'border-gray-200/90 bg-gray-50/70' : 'border-stone-800/90 bg-stone-900/60'
+          isLight ? 'border-slate-200 bg-slate-50/70' : 'border-zinc-800 bg-zinc-950/80'
         }`}
       >
         <div className="space-y-1.5">
@@ -775,8 +775,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             title={isCollapsed ? 'Back to Customer Storefront' : undefined}
             className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               isLight
-                ? 'bg-white hover:bg-gray-100 border border-gray-200 text-gray-800 shadow-2xs'
-                : 'bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200'
+                ? 'bg-white hover:bg-slate-100 border border-slate-200 text-gray-800 shadow-2xs'
+                : 'bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200'
             }`}
           >
             <StoreIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
@@ -810,8 +810,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           isCollapsed ? 'w-20' : 'w-64'
         } ${
           isLight
-            ? 'bg-white border-gray-200/90 shadow-[4px_0_24px_rgba(0,0,0,0.02)]'
-            : 'bg-stone-900 border-stone-800/90'
+            ? 'bg-white border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)]'
+            : 'bg-zinc-950 border-zinc-800'
         }`}
       >
         {sidebarContent}
@@ -831,7 +831,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         className={`lg:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] transition-transform duration-300 ease-in-out shadow-2xl ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         } ${
-          isLight ? 'bg-white border-r border-gray-200' : 'bg-stone-900 border-r border-stone-800'
+          isLight ? 'bg-white border-r border-slate-200' : 'bg-zinc-950 border-r border-zinc-800'
         }`}
       >
         {sidebarContent}
