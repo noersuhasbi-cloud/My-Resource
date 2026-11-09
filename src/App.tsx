@@ -92,7 +92,7 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const showToast = (title: string, message?: string, image?: string) => {
-    const id = Date.now().toString();
+    const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     setToasts((prev) => [...prev, { id, title, message, image }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));

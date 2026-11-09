@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   EnterpriseSettingsConfig,
   LandedCostRecord,
@@ -465,7 +466,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                       </div>
                     </td>
                     <td className="py-3.5 px-3.5 font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
-                      {lc.glEntryIds.join(', ')}
+                      {lc.glEntryIds?.length ? lc.glEntryIds.join(', ') : 'N/A'}
                     </td>
                     <td className="py-3.5 px-3.5">
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
@@ -481,12 +482,19 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
       </div>
 
       {/* Modal: Apply Landed Cost Allocation */}
-      {isLandedModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className={`w-full max-w-xl p-6 rounded-2xl border shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto ${
-            isLight ? 'bg-white border-gray-300' : 'bg-zinc-900 border-zinc-800 text-white'
-          }`}>
-            <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+      {isLandedModalOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            onClick={() => setIsLandedModalOpen(false)}
+          >
+            <div
+              className={`w-full max-w-xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
+                isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
                   <Calculator className="w-5 h-5" />
@@ -652,7 +660,8 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

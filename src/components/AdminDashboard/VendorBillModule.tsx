@@ -1448,7 +1448,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 >
                   <div className="font-bold text-zinc-400 uppercase text-[10px]">General Ledger Audit Links</div>
                   <div className="text-blue-600 dark:text-blue-400">
-                    Vouchers: {selectedBillForDetail.glEntryIds.join(', ')}
+                    Vouchers: {selectedBillForDetail.glEntryIds?.length ? selectedBillForDetail.glEntryIds.join(', ') : 'N/A'}
                   </div>
                 </div>
               )}

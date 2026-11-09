@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   ChartOfAccount,
   CoaMappingConfig,
@@ -1993,9 +1994,18 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       </div>
 
       {/* Manual COA Create / Edit Modal */}
-      {isAddingCoa && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className={`${cardClass} max-w-lg w-full p-6 space-y-4 shadow-2xl`}>
+      {isAddingCoa && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          onClick={() => {
+            setIsAddingCoa(false);
+            setEditingCoa(null);
+          }}
+        >
+          <div 
+            className={`${cardClass} max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
               <div className="flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -2004,11 +2014,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setIsAddingCoa(false);
                   setEditingCoa(null);
                 }}
-                className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'}`}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'}`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2129,7 +2140,8 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )}
@@ -2577,9 +2589,15 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           </div>
 
           {/* Create Promotion Rule Modal */}
-          {isCreatingPromo && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className={`${cardClass} max-w-xl w-full p-6 space-y-4 shadow-2xl`}>
+          {isCreatingPromo && typeof document !== 'undefined' && createPortal(
+            <div 
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+              onClick={() => setIsCreatingPromo(false)}
+            >
+              <div 
+                className={`${cardClass} max-w-xl w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto`}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 pb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
@@ -2787,7 +2805,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <button
                       type="button"
                       onClick={() => setIsCreatingPromo(false)}
-                      className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -2802,7 +2820,8 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </div>
                 </form>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
         </div>
       )}
@@ -3135,12 +3154,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             </span>
                           </div>
                           <p className={`text-[11px] mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
-                            Audited by {session.auditorName} • {session.items.length} items counted • Variance: {session.totalVarianceUnits} units ({formatIDR(session.netFinancialVarianceIDR)})
+                            Audited by {session.auditorName || 'System'} • {session.items?.length || 0} items counted • Variance: {session.totalVarianceUnits ?? 0} units ({formatIDR(session.netFinancialVarianceIDR ?? 0)})
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] font-mono text-gray-500">
-                            GL: {session.glEntryIds.join(', ') || 'N/A'}
+                            GL: {session.glEntryIds?.length ? session.glEntryIds.join(', ') : 'N/A'}
                           </span>
                         </div>
                       </div>

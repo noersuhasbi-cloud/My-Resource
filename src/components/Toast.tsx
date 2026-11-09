@@ -18,9 +18,9 @@ export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
 
   return (
     <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0">
-      {toasts.map((toast) => (
+      {toasts.map((toast, idx) => (
         <div
-          key={toast.id}
+          key={`${toast.id}-${idx}`}
           className="pointer-events-auto bg-stone-900/95 text-white backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-stone-800 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-5 duration-200"
         >
           <div className="flex items-center gap-3 min-w-0">

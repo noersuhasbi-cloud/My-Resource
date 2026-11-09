@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   EnterpriseSettingsConfig,
   WarehouseBinLocation,
@@ -389,11 +390,17 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
       </div>
 
       {/* Add Bin Modal */}
-      {isAddBinModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className={`w-full max-w-md p-6 rounded-2xl border shadow-2xl space-y-4 ${
-            isLight ? 'bg-white border-gray-300' : 'bg-zinc-900 border-zinc-800 text-white'
-          }`}>
+      {isAddBinModalOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          onClick={() => setIsAddBinModalOpen(false)}
+        >
+          <div 
+            className={`w-full max-w-md p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
+              isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
@@ -522,7 +529,8 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

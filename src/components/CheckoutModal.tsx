@@ -53,6 +53,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [qrisCountdownSeconds, setQrisCountdownSeconds] = useState<number>(900); // 15 minutes
   const [isSimulatingPayment, setIsSimulatingPayment] = useState<boolean>(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
+  const [blockedNotice, setBlockedNotice] = useState<string>('');
 
   // Sync customer account updates
   useEffect(() => {
@@ -92,8 +93,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     : isPickupOutletClosed
     ? `Outlet '${selectedPickupStore?.name}' is under emergency closure (${selectedPickupStore?.closureReason || 'Maintenance'}). Orders cannot be collected from this branch.`
     : '';
-
-  const [blockedNotice, setBlockedNotice] = useState<string>('');
 
   const formatCountdown = (totalSec: number) => {
     const mins = Math.floor(totalSec / 60);

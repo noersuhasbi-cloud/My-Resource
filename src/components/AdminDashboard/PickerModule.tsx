@@ -492,9 +492,9 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                             {haccpAlert.advisory}
                           </p>
                           <div className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 flex flex-wrap gap-1">
-                            <span>Raw items: <strong>{haccpAlert.rawProteinItems.join(', ')}</strong></span>
+                            <span>Raw items: <strong>{haccpAlert.rawProteinItems?.join(', ') || 'None'}</strong></span>
                             <span>&bull;</span>
-                            <span>Produce/Bakery: <strong>{haccpAlert.readyToEatItems.join(', ')}</strong></span>
+                            <span>Produce/Bakery: <strong>{haccpAlert.readyToEatItems?.join(', ') || 'None'}</strong></span>
                           </div>
                         </div>
                       </div>

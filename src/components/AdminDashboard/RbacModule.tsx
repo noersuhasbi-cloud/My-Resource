@@ -336,7 +336,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 
                     <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between text-[10px] text-gray-400">
                       <span>Shift: {profile.shiftName}</span>
-                      <span className="font-mono">Zones: [{profile.assignedZones.join(', ')}]</span>
+                      <span className="font-mono">Zones: [{profile.assignedZones?.length ? profile.assignedZones.join(', ') : 'ALL'}]</span>
                     </div>
                   </button>
                 );

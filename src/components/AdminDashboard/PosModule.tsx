@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   POSProductItem,
   POSCartItem,
@@ -779,8 +780,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   <p className="text-[11px] text-zinc-400 mt-0.5">Scan items or select from catalog</p>
                 </div>
               ) : (
-                cart.map((item) => (
-                  <div key={item.id} className="py-2 flex items-center justify-between gap-2">
+                cart.map((item, idx) => (
+                  <div key={`${item.id}-${idx}`} className="py-2 flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-bold text-slate-900 dark:text-zinc-100 truncate">
@@ -891,139 +892,145 @@ export const PosModule: React.FC<PosModuleProps> = ({
       </div>
 
       {/* 3. DIGITAL WEIGHT SCALE MODAL (Produce & Meat nuanced workflow) */}
-      {scalingProduct && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      {scalingProduct &&
+        createPortal(
           <div
-            className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl space-y-5 animate-in zoom-in-95 ${
-              isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
-            }`}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            onClick={() => setScalingProduct(null)}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
-              <div className="flex items-center gap-2">
-                <Scale className="w-5 h-5 text-blue-500" />
-                <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100">
-                  Digital Scale Weighing
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setScalingProduct(null)}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src={scalingProduct.image}
-                  alt={scalingProduct.name}
-                  className="w-14 h-14 rounded-xl object-cover bg-slate-100 dark:bg-zinc-800 border"
-                />
-                <div>
-                  <h4 className="font-bold text-sm">{scalingProduct.name}</h4>
-                  <p className="text-xs text-zinc-400 font-mono">{scalingProduct.sku}</p>
-                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    {formatCurrency(scalingProduct.pricePerKg || scalingProduct.sellingPrice * 4)} / kg
-                  </p>
+            <div
+              className={`w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
+                isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <Scale className="w-5 h-5 text-blue-500" />
+                  <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100">
+                    Digital Scale Weighing
+                  </h3>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setScalingProduct(null)}
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              {/* Digital Scale Readout Display */}
-              <div className="p-4 rounded-xl bg-zinc-950 text-emerald-400 font-mono border border-emerald-500/30 text-center shadow-inner">
-                <span className="text-[10px] text-zinc-400 uppercase tracking-widest block">
-                  Net Weight (Beban Bersih)
-                </span>
-                <span className="text-3xl font-extrabold tracking-wider block my-1">
-                  {(Math.max(0, scaleGrossGrams - scaleTareGrams) / 1000).toFixed(3)} kg
-                </span>
-                <span className="text-xs text-zinc-400">
-                  Gross: {scaleGrossGrams}g | Tare (Bag): {scaleTareGrams}g
-                </span>
-              </div>
-
-              {/* Scale Controls: Sliders and Tare */}
-              <div className="space-y-3 pt-2">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-200 block mb-1">
-                    Simulate Scale Weight (Grams):
-                  </label>
-                  <input
-                    type="range"
-                    min={50}
-                    max={5000}
-                    step={25}
-                    value={scaleGrossGrams}
-                    onChange={(e) => setScaleGrossGrams(Number(e.target.value))}
-                    className="w-full accent-emerald-500 cursor-pointer"
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={scalingProduct.image}
+                    alt={scalingProduct.name}
+                    className="w-14 h-14 rounded-xl object-cover bg-slate-100 dark:bg-zinc-800 border shrink-0"
                   />
-                  <div className="flex items-center gap-2 mt-1">
-                    {[250, 500, 1000, 1500, 2000].map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => setScaleGrossGrams(g)}
-                        className="px-2 py-1 rounded bg-slate-100 dark:bg-zinc-800 text-[11px] font-mono hover:bg-slate-200 dark:hover:bg-zinc-700 cursor-pointer"
-                      >
-                        {g >= 1000 ? `${g / 1000}kg` : `${g}g`}
-                      </button>
-                    ))}
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-sm truncate">{scalingProduct.name}</h4>
+                    <p className="text-xs text-zinc-400 font-mono">{scalingProduct.sku}</p>
+                    <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(scalingProduct.pricePerKg || scalingProduct.sellingPrice * 4)} / kg
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-zinc-400">
-                  <span>Tare Deduction (Packaging):</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={scaleTareGrams}
-                      onChange={(e) => setScaleTareGrams(Number(e.target.value))}
-                      className="w-16 px-2 py-1 rounded border text-right font-mono text-xs dark:bg-zinc-800 dark:border-zinc-700"
-                    />
-                    <span>g</span>
-                  </div>
-                </div>
-
-                {/* Line Price preview */}
-                <div className="pt-2 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-between">
-                  <span className="text-xs font-bold text-zinc-400">Calculated Line Total:</span>
-                  <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                    {formatCurrency(
-                      Math.round(
-                        (scalingProduct.pricePerKg || scalingProduct.sellingPrice * 4) *
-                          (Math.max(0, scaleGrossGrams - scaleTareGrams) / 1000)
-                      )
-                    )}
+                {/* Digital Scale Readout Display */}
+                <div className="p-4 rounded-xl bg-zinc-950 text-emerald-400 font-mono border border-emerald-500/30 text-center shadow-inner">
+                  <span className="text-[10px] text-zinc-400 uppercase tracking-widest block">
+                    Net Weight (Beban Bersih)
+                  </span>
+                  <span className="text-3xl font-extrabold tracking-wider block my-1">
+                    {(Math.max(0, scaleGrossGrams - scaleTareGrams) / 1000).toFixed(3)} kg
+                  </span>
+                  <span className="text-xs text-zinc-400">
+                    Gross: {scaleGrossGrams}g | Tare (Bag): {scaleTareGrams}g
                   </span>
                 </div>
+
+                {/* Scale Controls: Sliders and Tare */}
+                <div className="space-y-3 pt-2">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 dark:text-zinc-200 block mb-1">
+                      Simulate Scale Weight (Grams):
+                    </label>
+                    <input
+                      type="range"
+                      min={50}
+                      max={5000}
+                      step={25}
+                      value={scaleGrossGrams}
+                      onChange={(e) => setScaleGrossGrams(Number(e.target.value))}
+                      className="w-full accent-emerald-500 cursor-pointer"
+                    />
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {[250, 500, 1000, 1500, 2000].map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => setScaleGrossGrams(g)}
+                          className="px-2 py-1 rounded bg-slate-100 dark:bg-zinc-800 text-[11px] font-mono hover:bg-slate-200 dark:hover:bg-zinc-700 cursor-pointer"
+                        >
+                          {g >= 1000 ? `${g / 1000}kg` : `${g}g`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                    <span>Tare Deduction (Packaging):</span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={scaleTareGrams}
+                        onChange={(e) => setScaleTareGrams(Number(e.target.value))}
+                        className="w-16 px-2 py-1 rounded border text-right font-mono text-xs dark:bg-zinc-800 dark:border-zinc-700"
+                      />
+                      <span>g</span>
+                    </div>
+                  </div>
+
+                  {/* Line Price preview */}
+                  <div className="pt-2 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-400">Calculated Line Total:</span>
+                    <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                      {formatCurrency(
+                        Math.round(
+                          (scalingProduct.pricePerKg || scalingProduct.sellingPrice * 4) *
+                            (Math.max(0, scaleGrossGrams - scaleTareGrams) / 1000)
+                        )
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setScalingProduct(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const netGrams = Math.max(0, scaleGrossGrams - scaleTareGrams);
+                    addToCart(scalingProduct, 1, true, netGrams);
+                    setScalingProduct(null);
+                    onShowToast('Weighed Item Added', `${scalingProduct.name} (${(netGrams / 1000).toFixed(3)}kg) added`);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md cursor-pointer"
+                >
+                  Apply Weight to Ticket
+                </button>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setScalingProduct(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const netGrams = Math.max(0, scaleGrossGrams - scaleTareGrams);
-                  addToCart(scalingProduct, 1, true, netGrams);
-                  setScalingProduct(null);
-                  onShowToast('Weighed Item Added', `${scalingProduct.name} (${(netGrams / 1000).toFixed(3)}kg) added`);
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md cursor-pointer"
-              >
-                Apply Weight to Ticket
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* 4. PAYMENT TENDER MODAL (Cash, QRIS, Card, Currency Conversion) */}
       {isTenderModalOpen && (
@@ -1272,8 +1279,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
             {/* Line Items */}
             <div className="space-y-1.5 py-1">
-              {completedReceipt.items.map((item) => (
-                <div key={item.id} className="text-[10px]">
+              {completedReceipt.items.map((item, idx) => (
+                <div key={`${item.id}-${idx}`} className="text-[10px]">
                   <div className="flex justify-between font-bold">
                     <span className="truncate max-w-[190px]">{item.name}</span>
                     <span>{formatIDR(item.lineTotal)}</span>

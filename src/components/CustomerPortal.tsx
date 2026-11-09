@@ -414,7 +414,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const account: CustomerAccount = {
-      id: `cust-${Date.now().toString().slice(-4)}`,
+      id: `cust-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       name: authName || authEmail.split('@')[0] || 'Member',
       email: authEmail,
       phone: authPhone || '+62 811 000 000',
@@ -442,7 +442,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     e.preventDefault();
     if (!customerAccount || !newAddrLine.trim()) return;
     const newAddress = {
-      id: `addr-${Date.now()}`,
+      id: `addr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       label: newAddrLabel || 'Other Address',
       recipient: newAddrRecipient || customerAccount.name,
       phone: customerAccount.phone,
@@ -775,8 +775,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {customerAccount.savedAddresses.map((addr) => (
-                        <div key={addr.id} className="p-4 bg-stone-50 rounded-xl border border-stone-200 relative text-xs space-y-1">
+                      {customerAccount.savedAddresses.map((addr, idx) => (
+                        <div key={`${addr.id}-${idx}`} className="p-4 bg-stone-50 rounded-xl border border-stone-200 relative text-xs space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-stone-900">{addr.label}</span>
                             {addr.isDefault && (
@@ -1068,13 +1068,13 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     <span className="font-mono font-bold text-emerald-800">{myUserOrders.length} Private Order{myUserOrders.length > 1 ? 's' : ''}</span>
                   </div>
 
-                  {myUserOrders.map((order) => {
+                  {myUserOrders.map((order, orderIdx) => {
                     const isPickup = order.deliveryMethod === 'pickup';
                     const isReady = order.status === 'ready_for_pickup' || (isPickup && order.status === 'in_transit');
 
                     return (
                       <div
-                        key={order.id}
+                        key={`${order.id}-${orderIdx}`}
                         className={`p-5 rounded-2xl transition-all space-y-4 shadow-xs ${
                           isReady
                             ? 'bg-gradient-to-r from-emerald-50/60 via-white to-white border-2 border-emerald-500/80 ring-2 ring-emerald-500/20 shadow-md'
@@ -1231,13 +1231,13 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           <Lock className="w-3 h-3 text-emerald-800" />
                           <span>My Verified Orders:</span>
                         </span>
-                        {myUserOrders.map((ord) => {
+                        {myUserOrders.map((ord, ordIdx) => {
                           const isPickup = ord.deliveryMethod === 'pickup';
                           const isReady = ord.status === 'ready_for_pickup' || (isPickup && ord.status === 'in_transit');
 
                           return (
                             <button
-                              key={ord.id}
+                              key={`${ord.id}-${ordIdx}`}
                               type="button"
                               onClick={() => setTrackingSearchId(ord.id)}
                               className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5 ${

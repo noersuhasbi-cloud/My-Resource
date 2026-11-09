@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   QCInspectionRecord,
   QCDisposition,
@@ -188,7 +189,8 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   }`;
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <>
+      <div className="space-y-6 animate-fadeIn">
       {/* Top Header & Overview */}
       <div className={`${cardClass} p-5 sm:p-6 space-y-6`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -430,38 +432,57 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
           </table>
         </div>
       </div>
+    </div>
 
-      {/* New Quality Inspection Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    {/* New Quality Inspection Modal - Portaled to document.body to break out of all container/transform/overflow clipping */}
+    {isModalOpen &&
+      createPortal(
+        <div
+          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          onClick={() => setIsModalOpen(false)}
+        >
           <div
-            className={`w-full max-w-xl p-6 rounded-2xl border shadow-2xl space-y-4 my-8 ${
+            className={`w-full max-w-xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto relative ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-zinc-800">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-teal-600" />
-                <h3 className="text-base font-bold">New Perishables Quality Inspection</h3>
+                <ShieldCheck className="w-5 h-5 text-teal-600 dark:text-teal-400 shrink-0" />
+                <div>
+                  <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-zinc-100'} dark:text-zinc-100`}>
+                    New Perishables Quality Inspection
+                  </h3>
+                  <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-400'} dark:text-zinc-400`}>
+                    Record physical inspection, cold-chain temperature &amp; disposition actions
+                  </p>
+                </div>
               </div>
-              <button onClick={() => setIsModalOpen(false)}>
-                <XCircle className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 p-1 rounded-lg transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Select Item SKU</label>
+                  <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                    Select Item SKU
+                  </label>
                   <select
                     value={selectedSku}
                     onChange={(e) => setSelectedSku(e.target.value)}
                     className={`w-full px-3 py-2 rounded-xl border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
-                    }`}
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                   >
                     {inventory.map((i, idx) => (
-                      <option key={`${i.sku}-${idx}`} value={i.sku}>
+                      <option key={`${i.sku}-${idx}`} value={i.sku} className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">
                         {i.sku} - {i.productName}
                       </option>
                     ))}
@@ -469,84 +490,96 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Batch / Lot Number</label>
+                  <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                    Batch / Lot Number
+                  </label>
                   <input
                     type="text"
                     value={batchNumber}
                     onChange={(e) => setBatchNumber(e.target.value)}
                     className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
-                    }`}
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Audit Source</label>
+                  <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                    Audit Source
+                  </label>
                   <select
                     value={refType}
                     onChange={(e) => setRefType(e.target.value as any)}
                     className={`w-full px-3 py-2 rounded-xl border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
-                    }`}
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                   >
-                    <option value="INCOMING_PO">Incoming PO Delivery</option>
-                    <option value="INTER_WAREHOUSE_TRANSFER">Warehouse Transfer</option>
-                    <option value="PERIODIC_SPOILAGE_CHECK">Periodic Shelf Spoilage</option>
+                    <option value="INCOMING_PO" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Incoming PO Delivery</option>
+                    <option value="INTER_WAREHOUSE_TRANSFER" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Warehouse Transfer</option>
+                    <option value="PERIODIC_SPOILAGE_CHECK" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Periodic Shelf Spoilage</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Sample Qty</label>
+                  <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                    Sample Qty
+                  </label>
                   <input
                     type="number"
                     value={sampleQty}
                     onChange={(e) => setSampleQty(Number(e.target.value))}
                     className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
-                    }`}
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Total Batch Qty</label>
+                  <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                    Total Batch Qty
+                  </label>
                   <input
                     type="number"
                     value={totalBatchQty}
                     onChange={(e) => setTotalBatchQty(Number(e.target.value))}
                     className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
-                    }`}
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                   />
                 </div>
               </div>
 
               {/* Physical Parameters Card */}
-              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 space-y-3 bg-gray-50/50 dark:bg-zinc-850">
-                <span className="font-bold text-xs flex items-center gap-1.5 text-teal-700 dark:text-teal-400">
+              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 space-y-3 bg-gray-50/50 dark:bg-zinc-800/60">
+                <span className={`font-bold text-xs flex items-center gap-1.5 ${isLight ? 'text-teal-700' : 'text-teal-300'} dark:text-zinc-200`}>
                   <Sparkles className="w-3.5 h-3.5" />
                   Sensory &amp; Cold-Chain Physical Evaluation
                 </span>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold mb-1 text-slate-800 dark:text-zinc-200">Visual Freshness Grade</label>
+                    <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                      Visual Freshness Grade
+                    </label>
                     <select
                       value={visualFreshness}
                       onChange={(e) => handleVisualChange(e.target.value as any)}
                       className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
-                      }`}
+                        isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                     >
-                      <option value="Grade A (Pristine)">Grade A (Pristine)</option>
-                      <option value="Grade B (Acceptable)">Grade B (Acceptable)</option>
-                      <option value="Defective (Browning/Bruised)">Defective (Browning/Bruised)</option>
+                      <option value="Grade A (Pristine)" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Grade A (Pristine)</option>
+                      <option value="Grade B (Acceptable)" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Grade B (Acceptable)</option>
+                      <option value="Defective (Browning/Bruised)" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Defective (Browning/Bruised)</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold mb-1 text-slate-800 dark:text-zinc-200">Cold-Chain Temp (°C)</label>
+                    <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                      Cold-Chain Temp (°C)
+                    </label>
                     <input
                       type="number"
                       step="0.1"
@@ -554,42 +587,46 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                       onChange={(e) => handleTempChange(Number(e.target.value))}
                       className={`w-full px-2.5 py-1.5 rounded-lg border font-mono text-xs ${
                         temperatureCelsius > 4.5
-                          ? 'border-rose-500 bg-rose-500/10 text-rose-700'
+                          ? 'border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 font-bold'
                           : isLight
-                          ? 'bg-white border-gray-300'
-                          : 'bg-zinc-800 border-zinc-700'
-                      }`}
+                          ? 'bg-white border-gray-300 text-gray-900'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold mb-1 text-slate-800 dark:text-zinc-200">Packaging Integrity</label>
+                    <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                      Packaging Integrity
+                    </label>
                     <select
                       value={packagingIntegrity}
                       onChange={(e) => setPackagingIntegrity(e.target.value as any)}
                       className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
-                      }`}
+                        isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                     >
-                      <option value="Sealed & Intact">Sealed &amp; Intact</option>
-                      <option value="Minor Scuff">Minor Scuff</option>
-                      <option value="Damaged/Leaking">Damaged / Leaking</option>
+                      <option value="Sealed & Intact" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Sealed &amp; Intact</option>
+                      <option value="Minor Scuff" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Minor Scuff</option>
+                      <option value="Damaged/Leaking" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Damaged / Leaking</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold mb-1 text-slate-800 dark:text-zinc-200">Sensory Odor Check</label>
+                    <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                      Sensory Odor Check
+                    </label>
                     <select
                       value={sensoryOdorCheck}
                       onChange={(e) => setSensoryOdorCheck(e.target.value as any)}
                       className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
-                      }`}
+                        isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                     >
-                      <option value="Normal & Fresh">Normal &amp; Fresh</option>
-                      <option value="Off-Odor / Souring">Off-Odor / Souring</option>
+                      <option value="Normal & Fresh" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Normal &amp; Fresh</option>
+                      <option value="Off-Odor / Souring" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Off-Odor / Souring</option>
                     </select>
                   </div>
                 </div>
@@ -598,65 +635,80 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
               {/* Disposition & Action */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Inspection Disposition</label>
+                  <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                    Inspection Disposition
+                  </label>
                   <select
                     value={disposition}
                     onChange={(e) => setDisposition(e.target.value as QCDisposition)}
-                    className="w-full px-3 py-2 rounded-xl border font-bold bg-white dark:bg-zinc-800 border-gray-300 dark:border-zinc-700"
+                    className={`w-full px-3 py-2 rounded-xl border font-bold ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                   >
-                    <option value="PASSED">PASSED (Food Grade OK)</option>
-                    <option value="QUARANTINED">QUARANTINED (Hold for 24h)</option>
-                    <option value="REJECTED">REJECTED (Non-Compliant)</option>
+                    <option value="PASSED" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">PASSED (Food Grade OK)</option>
+                    <option value="QUARANTINED" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">QUARANTINED (Hold for 24h)</option>
+                    <option value="REJECTED" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">REJECTED (Non-Compliant)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Operational Action</label>
+                  <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                    Operational Action
+                  </label>
                   <select
                     value={actionTaken}
                     onChange={(e) => setActionTaken(e.target.value as QCDispositionAction)}
-                    className="w-full px-3 py-2 rounded-xl border font-bold bg-white dark:bg-zinc-800 border-gray-300 dark:border-zinc-700"
+                    className={`w-full px-3 py-2 rounded-xl border font-bold ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                   >
-                    <option value="RELEASE_TO_SHELF">Release to Shelf Inventory</option>
-                    <option value="QUARANTINE_HOLD">Quarantine Cold Cell</option>
-                    <option value="RETURN_TO_VENDOR">Return to Vendor (Debit Note)</option>
-                    <option value="SCRAP_WASTE">Scrap to Waste Expense</option>
+                    <option value="RELEASE_TO_SHELF" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Release to Shelf Inventory</option>
+                    <option value="QUARANTINE_HOLD" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Quarantine Cold Cell</option>
+                    <option value="RETURN_TO_VENDOR" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Return to Vendor (Debit Note)</option>
+                    <option value="SCRAP_WASTE" className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-200">Scrap to Waste Expense</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Inspector Notes</label>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
+                  Inspector Notes
+                </label>
                 <textarea
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Record sensory evaluation details, quarantine reasoning, or vendor credit references..."
                   className={`w-full px-3 py-2 rounded-xl border ${
-                    isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
-                  }`}
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                  } dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100`}
                 />
+                <p className={`text-[10px] mt-1 ${isLight ? 'text-slate-500' : 'text-zinc-400'} dark:text-zinc-400`}>
+                  Provide audit reasoning for quarantine or vendor debit note
+                </p>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t">
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 text-xs font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold transition-all disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-sm"
                 >
                   {isSubmitting ? 'Recording...' : 'Submit QC Record'}
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
-  );
+  </>
+);
 };

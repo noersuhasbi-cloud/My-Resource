@@ -1,20 +1,10 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-
-let firestoreDb;
-try {
-  firestoreDb = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-  }, firebaseConfig.firestoreDatabaseId);
-} catch {
-  firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-}
-
-export const db = firestoreDb;
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -22,13 +12,8 @@ async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    try {
-      await new Promise((res) => setTimeout(res, 1200));
-      await getDocFromServer(doc(db, 'test', 'connection'));
-    } catch (retryErr) {
-      if (retryErr instanceof Error && retryErr.message.includes('the client is offline')) {
-        console.error('Please check your Firebase configuration.');
-      }
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
     }
   }
 }

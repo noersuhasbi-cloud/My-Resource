@@ -179,9 +179,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <label className="text-xs font-semibold text-stone-700 uppercase tracking-wider block">
                   Items in Basket ({items.length})
                 </label>
-                {items.map((item) => (
+                {items.map((item, idx) => (
                   <div
-                    key={item.product.id}
+                    key={`${item.product.id}-${idx}`}
                     className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl border border-stone-200/80"
                   >
                     <SafeImage

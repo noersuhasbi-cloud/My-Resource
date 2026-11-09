@@ -4789,13 +4789,41 @@ async function startServer() {
   });
 
   app.get('/api/admin/inventory/stock-opname', (_req: Request, res: Response) => {
-    res.json(stockOpnameSessions);
+    const sanitizedSessions = stockOpnameSessions.map((s) => ({
+      ...s,
+      glEntryIds: Array.isArray(s.glEntryIds) ? s.glEntryIds : ['GLE-2026-0099'],
+      items: Array.isArray(s.items) ? s.items : [],
+    }));
+    res.json(sanitizedSessions);
   });
 
   app.post('/api/admin/inventory/stock-opname/reconcile', (req: Request, res: Response) => {
-    const session = req.body as StockOpnameSession;
+    const rawSession = req.body as Partial<StockOpnameSession>;
+    const glEntryIds = Array.isArray(rawSession.glEntryIds) && rawSession.glEntryIds.length > 0
+      ? rawSession.glEntryIds
+      : ['GLE-2026-0099'];
+    const session: StockOpnameSession = {
+      id: rawSession.id || `OPN-2026-${(stockOpnameSessions.length + 1).toString().padStart(3, '0')}`,
+      date: rawSession.date || new Date().toISOString(),
+      storeId: rawSession.storeId || 'ST-JKT-SEN',
+      storeName: rawSession.storeName || 'Senayan Hub',
+      warehouseZoneId: rawSession.warehouseZoneId || 'WH-JKT-SEN-COLD',
+      auditorId: rawSession.auditorId || 'AUD-001',
+      auditorName: rawSession.auditorName || 'Admin Auditor',
+      status: 'reconciled',
+      items: Array.isArray(rawSession.items) ? rawSession.items : [],
+      totalSystemUnits: rawSession.totalSystemUnits || 0,
+      totalCountedUnits: rawSession.totalCountedUnits || 0,
+      totalVarianceUnits: rawSession.totalVarianceUnits || 0,
+      netFinancialVarianceIDR: rawSession.netFinancialVarianceIDR || 0,
+      glEntryIds,
+      notes: rawSession.notes || 'Periodic physical stocktake cycle count',
+      completedAt: rawSession.completedAt || new Date().toISOString(),
+      ...rawSession,
+    };
+    session.glEntryIds = glEntryIds;
     stockOpnameSessions.unshift(session);
-    res.json({ success: true, session, journalEntryIds: ['GLE-2026-0099'], message: 'Opname reconciled.' });
+    res.json({ success: true, session, journalEntryIds: glEntryIds, message: 'Opname reconciled.' });
   });
 
   app.get('/api/admin/inventory/transfer', (_req: Request, res: Response) => {
