@@ -239,10 +239,14 @@ export interface InventoryItem {
   sku: string;
   productId: string;
   productName: string;
+  name?: string;
+  barcode?: string;
   category: ProductCategory | string;
   currentStock: number;
+  stockLevel?: number;
   minimumThreshold: number;
   unitCost: number; // Acquisition cost in IDR
+  wacUnitCost?: number;
   sellingPrice: number; // Retail price in IDR
   unit: string;
   supplierId: string;
@@ -294,37 +298,44 @@ export interface PurchaseOrderItem {
   sku: string;
   productName: string;
   orderedQuantity: number;
+  quantity?: number;
   receivedQuantity: number;      // Tracks cumulative received items
   remainingBackorder: number;    // ordered - received
   unitCost: number;
   totalCost: number;
+  lineTotal?: number;
   handlingNotes?: string;
 }
 
 export interface PurchaseOrder {
   id: string; // e.g. PO-2026-089
+  poNumber?: string;
   createdAt: string;
   prId?: string;
   storeId: string;
   storeName: string;
   warehouseZoneId?: string;
+  supplierId?: string;
   supplierName: string;
-  supplierContact: string;
+  supplierContact?: string;
   items: PurchaseOrderItem[];
-  subtotalCost: number;
-  taxPercent: number; // e.g. 11% PPN
-  taxAmount: number;
+  subtotalCost?: number;
+  taxPercent?: number; // e.g. 11% PPN
+  taxAmount?: number;
   totalCost: number;
+  totalAmount?: number;
+  issueDate?: string;
   expectedDeliveryDate: string;
   actualDeliveryDate?: string;
-  status: 'Draft' | 'Sent' | 'Partially Received' | 'Completed' | 'Cancelled';
+  status: 'Draft' | 'Sent' | 'Partially Received' | 'Completed' | 'Cancelled' | 'pending_approval';
   notes?: string;
   supplierRemarks?: string;
-  paymentTerms: 'Net 30' | 'COD' | 'Advance Payment';
+  paymentTerms?: 'Net 30' | 'COD' | 'Advance Payment';
   goodsReceiptIds?: string[];
   closureNotes?: string;
   forceClosedAt?: string;
   isForceClosed?: boolean;
+  updatedAt?: string;
 }
 
 export interface GoodsReceiptItem {
@@ -397,6 +408,7 @@ export interface VendorBill {
   grandTotalIDR: number; // Statutory base currency amount
   amountPaid: number; // In bill currency
   remainingDue: number; // In bill currency
+  remainingBalanceIDR?: number; // Alias for remainingDue in IDR
   status: VendorBillStatus;
   paymentStatus: VendorBillPaymentStatus;
   paymentMethod?: VendorBillPaymentMethod;
@@ -412,7 +424,7 @@ export interface VendorBill {
 // -------------------------------------------------------------
 // FEFO (First Expired, First Out) Batch Tracking
 // -------------------------------------------------------------
-export type BatchExpiryStatus = 'fresh' | 'near_expiry' | 'critical' | 'expired' | 'depleted';
+export type BatchExpiryStatus = 'fresh' | 'near_expiry' | 'critical' | 'expired' | 'depleted' | 'quarantined' | 'recalled' | 'active';
 
 export interface InventoryBatch {
   batchId: string; // e.g. BAT-2026-081
@@ -424,6 +436,8 @@ export interface InventoryBatch {
   lotNumber: string;
   initialQuantity: number;
   currentStock: number;
+  quantity?: number;
+  remainingQuantity?: number;
   unitCost: number;
   sellingPrice: number;
   receivedDate: string;
@@ -432,6 +446,9 @@ export interface InventoryBatch {
   status: BatchExpiryStatus;
   storageZone: StorageZoneType;
   supplierName: string;
+  sourcePoNumber?: string;
+  notes?: string;
+  markdownDiscountPercent?: number;
 }
 
 export interface FEFOAllocationTrace {
@@ -532,7 +549,7 @@ export interface VendorCreditNote {
   unit: string;
   unitCost: number;
   totalCreditIDR: number;
-  reason: 'spoiled_on_delivery' | 'broken_seal' | 'cold_chain_breach' | 'pest_defect' | 'wrong_grade';
+  reason: 'spoiled_on_delivery' | 'spoiled_on_arrival' | 'broken_seal' | 'cold_chain_breach' | 'pest_defect' | 'wrong_grade';
   status: 'pending_pickup' | 'verified_by_vendor' | 'applied_to_bill';
   appliedToBillId?: string;
   createdAt: string;
@@ -1589,6 +1606,7 @@ export interface BatchRecallTraceResult {
     fsanzAlertId: string;
     hazardDescription: string;
     recommendedAction: string;
+    mandatoryActionRequired?: string;
   };
 }
 

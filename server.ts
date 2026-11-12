@@ -101,7 +101,10 @@ import type {
   BatchRecallTraceResult,
   POSHardwarePeripheralStatus,
   POSReturnRecord,
+  RefundPaymentChannel,
   AutoReplenishmentConsolidatedPlan,
+  AutoReplenishmentItemPlan,
+  PurchaseOrderItem,
   VendorCreditNote,
   DynamicMarkdownConfig,
 } from './src/types/index.ts';
@@ -236,17 +239,19 @@ let posReturnsList: POSReturnRecord[] = [
       {
         sku: 'SKU-PRD-001',
         productName: 'Organic Hydroponic Baby Spinach 250g',
-        quantity: 1,
-        unit: 'pack',
+        category: 'fresh_produce',
+        originalQuantity: 1,
+        returnQuantity: 1,
         unitPrice: 18500,
+        unitCost: 12000,
         refundAmount: 18500,
-        reason: 'DEFECTIVE_SPOILED',
-        disposition: 'SCRAP_WASTE_CAGE',
+        returnReason: 'PERISHABLE_DEFECT',
+        disposition: 'RETURN_CAGE_WASTE',
         conditionNotes: 'Customer discovered wilted leaves at home same evening',
       },
     ],
     totalRefundAmountIDR: 18500,
-    refundChannel: 'CASH',
+    refundChannel: 'CASH_DRAWER',
     glVoucherIds: ['GLE-2026-0988'],
     status: 'COMPLETED',
     customerName: 'Sarah Jenkins',
@@ -5964,8 +5969,8 @@ async function startServer() {
       supplierName: batch.supplierName || 'PT Lembang Agro Sejahtera',
       receivedDate: batch.receivedDate || new Date(Date.now() - 1000 * 3600 * 48).toISOString(),
       expiryDate: batch.expiryDate,
-      currentWarehouseStock: batch.remainingQuantity,
-      quarantinedStock: batch.status === 'quarantined' ? batch.remainingQuantity : 0,
+      currentWarehouseStock: batch.remainingQuantity ?? batch.currentStock ?? 0,
+      quarantinedStock: batch.status === 'quarantined' ? (batch.remainingQuantity ?? batch.currentStock ?? 0) : 0,
       recallStatus: batch.status === 'quarantined' ? 'fda_class_1_active' : 'none',
       quarantineReason: batch.notes || undefined,
       quarantinedAt: batch.status === 'quarantined' ? new Date().toISOString() : undefined,
@@ -5984,8 +5989,8 @@ async function startServer() {
           storeName: 'GroceMart Senopati Flagship',
           warehouseZoneId: 'zone-produce-01',
           storageType: 'Chilled / Controlled Atmosphere',
-          physicalStock: batch.remainingQuantity,
-          availableStock: batch.status === 'quarantined' ? 0 : batch.remainingQuantity,
+          physicalStock: batch.remainingQuantity ?? batch.currentStock ?? 0,
+          availableStock: batch.status === 'quarantined' ? 0 : (batch.remainingQuantity ?? batch.currentStock ?? 0),
           isQuarantined: batch.status === 'quarantined',
         },
       ],
@@ -6020,6 +6025,7 @@ async function startServer() {
         euRasffReferenceNumber: 'RASFF-2026.4182',
         fsanzAlertId: 'FSANZ-ALERT-88',
         hazardDescription: 'Microbiological contamination check or cold chain breach risk identified during quality audit.',
+        recommendedAction: 'Immediately cease distribution, isolate inventory in biohazard waste cage, notify affected purchasers.',
         mandatoryActionRequired: 'Immediately cease distribution, isolate inventory in biohazard waste cage, notify affected purchasers.',
       },
     };
@@ -6187,22 +6193,28 @@ async function startServer() {
     const { query } = req.params;
     const cleanQ = query.toLowerCase().trim();
     const order = customerOrders.find(
-      (o) => o.id.toLowerCase().includes(cleanQ) || (o.items && o.items.some((i) => i.name.toLowerCase().includes(cleanQ)))
+      (o) => o.id.toLowerCase().includes(cleanQ) || (o.items && o.items.some((i: any) => ((i.product?.name || i.name || '') as string).toLowerCase().includes(cleanQ)))
     ) || customerOrders[0];
 
     if (!order) {
       return res.status(404).json({ error: `Receipt '${query}' not found in POS archives` });
     }
 
-    const items = order.items.map((i) => ({
-      sku: i.sku || 'SKU-PRD-001',
-      name: i.name,
-      quantity: i.quantity,
-      unitPrice: i.price,
-      lineTotal: i.price * i.quantity,
-      unit: 'pack',
-      returnEligible: true,
-    }));
+    const items = (order.items || []).map((i: any) => {
+      const prodName = i.product?.name || i.name || 'GroceMart Item';
+      const prodSku = i.product?.sku || i.sku || 'SKU-PRD-001';
+      const uPrice = i.product?.price || i.price || 0;
+      const qty = i.quantity || 1;
+      return {
+        sku: prodSku,
+        name: prodName,
+        quantity: qty,
+        unitPrice: uPrice,
+        lineTotal: uPrice * qty,
+        unit: 'pack',
+        returnEligible: true,
+      };
+    });
 
     res.json({
       receiptNumber: `RCP-${order.id}`,
@@ -6212,7 +6224,7 @@ async function startServer() {
       customerName: order.customerName || 'Walk-in Customer',
       customerPhone: order.customerPhone || '+6281234567890',
       timestamp: order.createdAt || new Date().toISOString(),
-      totalAmountIDR: order.totalAmount,
+      totalAmountIDR: (order as any).totalAmount || order.total || 0,
       items,
     });
   });
@@ -6245,7 +6257,7 @@ async function startServer() {
       timestamp: new Date().toISOString(),
       items: items || [],
       totalRefundAmountIDR: totalRefund,
-      refundChannel: refundChannel || 'CASH',
+      refundChannel: (refundChannel as RefundPaymentChannel) || 'CASH_DRAWER',
       glVoucherIds: [glVoucherId],
       status: 'COMPLETED',
       customerName,
@@ -6258,7 +6270,7 @@ async function startServer() {
     (items || []).forEach((it: any) => {
       if (it.disposition === 'RESTOCK_INVENTORY') {
         const inv = inventoryList.find((p) => p.sku === it.sku);
-        if (inv) inv.stockLevel += Number(it.quantity) || 0;
+        if (inv) inv.stockLevel = (inv.stockLevel || 0) + (Number(it.quantity) || 0);
       }
     });
 
@@ -6275,7 +6287,7 @@ async function startServer() {
       ...(items || []).map((it: any) => `${it.productName || it.sku} x${it.quantity} = Rp ${Number(it.refundAmount).toLocaleString('id-ID')}`),
       '--------------------------------',
       `TOTAL REFUND: Rp ${totalRefund.toLocaleString('id-ID')}`,
-      `CHANNEL: ${refundChannel || 'CASH'}`,
+      `CHANNEL: ${refundChannel || 'CASH_DRAWER'}`,
       `GL ENTRY: ${glVoucherId}`,
       '================================',
     ].join('\n');
@@ -6295,46 +6307,61 @@ async function startServer() {
   app.get('/api/admin/replenishment/plan', (req: Request, res: Response) => {
     const { storeId } = req.query as { storeId?: string };
     const targetStore = storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED' ? storeId : 'store-jkt-senopati';
+    const storeName = targetStore === 'store-jkt-senopati' ? 'GroceMart Senopati Flagship' : 'GroceMart Regional Outlet';
 
-    const items = inventoryList.map((item) => {
+    const items: AutoReplenishmentItemPlan[] = inventoryList.map((item) => {
       const minThresh = item.minimumThreshold || 20;
       const currentStock = item.stockLevel || 0;
       const reorderQty = item.reorderQuantity || Math.max(30, minThresh * 2);
       const isCritical = currentStock <= minThresh / 2;
       const needsRestock = currentStock < minThresh;
       const suggestedOrderQty = needsRestock ? reorderQty : 0;
-      const suggestedTotalCostIDR = suggestedOrderQty * (item.wacUnitCost || Math.round(item.sellingPrice * 0.7));
+      const uCost = item.wacUnitCost || Math.round(item.sellingPrice * 0.7);
+      const estimatedOrderCostIDR = suggestedOrderQty * uCost;
+
+      let urgencyLevel: AutoReplenishmentItemPlan['urgencyLevel'] = 'HEALTHY_STOCK';
+      if (currentStock <= 0) {
+        urgencyLevel = 'CRITICAL_OUT_OF_STOCK';
+      } else if (needsRestock) {
+        urgencyLevel = 'BELOW_SAFETY_STOCK';
+      }
 
       return {
         sku: item.sku,
-        productName: item.name,
+        productName: item.name || item.productName || 'GroceMart Item',
         category: item.category,
-        currentPhysicalStock: currentStock,
-        incomingPoQty: 0,
-        reservedStorefrontQty: 0,
-        projectedAvailableStock: currentStock,
+        storeId: targetStore,
+        storeName,
+        warehouseZoneId: 'zone-produce-01',
+        physicalStock: currentStock,
+        availableStock: currentStock,
+        reservedStock: 0,
+        incomingStock: 0,
         minimumThreshold: minThresh,
+        safetyStockBuffer: Math.round(minThresh * 0.4),
+        maxCapacity: Math.max(100, minThresh * 4),
         reorderQuantity: reorderQty,
-        dailyAverageSalesRate: 4.5,
-        estimatedDaysOfCover: currentStock > 0 ? Number((currentStock / 4.5).toFixed(1)) : 0,
-        isBelowMinimum: needsRestock,
-        isCriticalStockout: isCritical,
-        recommendedAction: isCritical ? 'URGENT_PO' : needsRestock ? 'REGULAR_PO' : 'STOCK_HEALTHY',
+        dailySalesVelocity: 4.5,
+        daysOfInventoryLeft: currentStock > 0 ? Number((currentStock / 4.5).toFixed(1)) : 0,
+        supplierLeadTimeDays: 3,
+        reorderPoint: minThresh,
+        isReorderTriggered: needsRestock,
+        urgencyLevel,
         suggestedOrderQty,
-        estimatedUnitCostIDR: item.wacUnitCost || Math.round(item.sellingPrice * 0.7),
-        suggestedTotalCostIDR,
-        primarySupplierId: item.supplierId || 'SUPP-AGRO-01',
-        primarySupplierName: item.supplierName || 'PT Lembang Agro Sejahtera',
+        unitCost: uCost,
+        estimatedOrderCostIDR,
+        supplierId: item.supplierId || 'SUPP-AGRO-01',
+        supplierName: item.supplierName || 'PT Lembang Agro Sejahtera',
       };
     });
 
-    const needingRestock = items.filter((i) => i.isBelowMinimum);
-    const critical = items.filter((i) => i.isCriticalStockout);
-    const totalCost = needingRestock.reduce((sum, i) => sum + i.suggestedTotalCostIDR, 0);
+    const needingRestock = items.filter((i) => i.isReorderTriggered);
+    const critical = items.filter((i) => i.urgencyLevel === 'CRITICAL_OUT_OF_STOCK');
+    const totalCost = needingRestock.reduce((sum, i) => sum + i.estimatedOrderCostIDR, 0);
 
     const plan: AutoReplenishmentConsolidatedPlan = {
       storeId: targetStore,
-      storeName: targetStore === 'store-jkt-senopati' ? 'GroceMart Senopati Flagship' : 'GroceMart Regional Outlet',
+      storeName,
       calculatedAt: new Date().toISOString(),
       totalSkusEvaluated: items.length,
       skusNeedingRestockCount: needingRestock.length,
@@ -6358,9 +6385,28 @@ async function startServer() {
 
   app.post('/api/admin/replenishment/generate-po', (req: Request, res: Response) => {
     const { storeId, selectedSkus } = req.body;
-    const targetSkus: string[] = selectedSkus && selectedSkus.length > 0 ? selectedSkus : inventoryList.filter((i) => i.stockLevel < (i.minimumThreshold || 20)).map((i) => i.sku);
+    const targetSkus: string[] = selectedSkus && selectedSkus.length > 0 ? selectedSkus : inventoryList.filter((i) => (i.stockLevel ?? 0) < (i.minimumThreshold || 20)).map((i) => i.sku);
 
     const generatedPoId = `PO-REPL-${Date.now().toString().slice(-4)}`;
+    const poItems: PurchaseOrderItem[] = targetSkus.slice(0, 5).map((sku) => {
+      const item = inventoryList.find((p) => p.sku === sku) || inventoryList[0];
+      const qty = item.reorderQuantity || 30;
+      const uCost = item.wacUnitCost || Math.round(item.sellingPrice * 0.7);
+      return {
+        sku: item.sku,
+        productName: item.name || item.productName || 'Produce Item',
+        orderedQuantity: qty,
+        quantity: qty,
+        receivedQuantity: 0,
+        remainingBackorder: qty,
+        unitCost: uCost,
+        totalCost: qty * uCost,
+        lineTotal: qty * uCost,
+      };
+    });
+
+    const totalPoCost = poItems.reduce((sum, it) => sum + it.totalCost, 0) || 12500000;
+
     const newPo: PurchaseOrder = {
       id: generatedPoId,
       poNumber: generatedPoId,
@@ -6371,18 +6417,9 @@ async function startServer() {
       expectedDeliveryDate: new Date(Date.now() + 1000 * 3600 * 48).toISOString().split('T')[0],
       storeId: storeId || 'store-jkt-senopati',
       storeName: 'GroceMart Senopati Flagship',
-      items: targetSkus.slice(0, 5).map((sku) => {
-        const item = inventoryList.find((p) => p.sku === sku) || inventoryList[0];
-        return {
-          sku: item.sku,
-          productName: item.name,
-          quantity: item.reorderQuantity || 30,
-          unitCost: item.wacUnitCost || Math.round(item.sellingPrice * 0.7),
-          lineTotal: (item.reorderQuantity || 30) * (item.wacUnitCost || Math.round(item.sellingPrice * 0.7)),
-          receivedQuantity: 0,
-        };
-      }),
-      totalAmount: 12500000,
+      items: poItems,
+      totalCost: totalPoCost,
+      totalAmount: totalPoCost,
       notes: 'Auto-generated replenishment purchase order triggered by min-max inventory thresholds.',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -6460,11 +6497,16 @@ async function startServer() {
 
     const bill = vendorBillsList.find((b) => b.id === vendorBillId);
     if (bill) {
-      bill.remainingBalanceIDR = Math.max(0, bill.remainingBalanceIDR - note.totalCreditIDR);
-      if (bill.remainingBalanceIDR === 0) {
+      const curDue = bill.remainingDue !== undefined ? bill.remainingDue : (bill.remainingBalanceIDR ?? bill.grandTotalIDR ?? bill.grandTotal ?? 0);
+      const newDue = Math.max(0, curDue - note.totalCreditIDR);
+      bill.remainingDue = newDue;
+      bill.remainingBalanceIDR = newDue;
+      if (newDue === 0) {
         bill.status = 'PAID';
+        bill.paymentStatus = 'PAID';
       } else {
         bill.status = 'PARTIALLY_PAID';
+        bill.paymentStatus = 'PARTIALLY_PAID';
       }
     }
 

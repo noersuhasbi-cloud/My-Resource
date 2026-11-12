@@ -304,8 +304,8 @@ export const ThreeWayMatchingSettingsTab: React.FC<ThreeWayMatchingSettingsTabPr
                   setSimPoId(e.target.value);
                   const p = purchaseOrders.find((x) => x.id === e.target.value);
                   if (p?.items[0]) {
-                    setSimBilledQty(p.items[0].orderedQuantity);
-                    setSimBilledPrice(p.items[0].unitCost);
+                    setSimBilledQty(p.items[0].orderedQuantity || 0);
+                    setSimBilledPrice(p.items[0].unitCost || 0);
                   }
                 }}
                 className={`font-mono ${inputClass}`}
