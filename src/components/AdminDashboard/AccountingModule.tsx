@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type {
   ChartOfAccount,
   GeneralLedgerEntry,
@@ -9,6 +9,8 @@ import type {
   VendorBill,
   PurchaseOrder,
   GoodsReceiptRecord,
+  B2BCustomer,
+  GiroPaymentRecord,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import {
@@ -31,6 +33,11 @@ import {
   ShieldCheck,
   X,
   Globe2,
+  CreditCard,
+  Ban,
+  Clock,
+  ShieldAlert,
+  UserCheck,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { VendorBillModule } from './VendorBillModule';
@@ -56,8 +63,8 @@ interface AccountingModuleProps {
   goodsReceipts?: GoodsReceiptRecord[];
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
-  activeSubTab?: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills';
-  onSubTabChange?: (subTab: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills') => void;
+  activeSubTab?: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar';
+  onSubTabChange?: (subTab: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar') => void;
 }
 
 export const AccountingModule: React.FC<AccountingModuleProps> = ({
@@ -90,15 +97,93 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   };
 
   // Sub-tabs (controlled or internal)
-  const [internalSubTab, setInternalSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills'>('pnl');
+  const [internalSubTab, setInternalSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar'>('pnl');
   const subTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
-  const setSubTab = (val: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills') => {
+  const setSubTab = (val: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar') => {
     setInternalSubTab(val);
     if (onSubTabChange) onSubTabChange(val);
   };
   const [glSearch, setGlSearch] = useState<string>('');
   const [glRefFilter, setGlRefFilter] = useState<string>('ALL');
   const [coaCategoryFilter, setCoaCategoryFilter] = useState<string>('ALL');
+
+  // B2B Accounts Receivable & Bilyet Giro State
+  const [b2bCustomers, setB2bCustomers] = useState<B2BCustomer[]>([]);
+  const [giroRecords, setGiroRecords] = useState<GiroPaymentRecord[]>([]);
+  const [isProcessingGiro, setIsProcessingGiro] = useState<boolean>(false);
+  const [bouncedReasonPrompt, setBouncedReasonPrompt] = useState<string>('Saldo giro tidak mencukupi (SKNBI Tolakan)');
+
+  const loadB2bAccountingData = async () => {
+    try {
+      const [custs, giros] = await Promise.all([
+        apiClient.getB2BCustomers(),
+        apiClient.getGiroRecords(),
+      ]);
+      setB2bCustomers(custs);
+      setGiroRecords(giros);
+    } catch (err) {
+      console.error('Failed to load B2B accounting data:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadB2bAccountingData();
+  }, []);
+
+  const handleClearGiro = async (giroId: string) => {
+    setIsProcessingGiro(true);
+    try {
+      const res = await apiClient.clearGiro(giroId);
+      onShowToast('Bilyet Giro Cleared', res.message);
+      await loadB2bAccountingData();
+      onRefreshData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Giro Action Error', msg);
+    } finally {
+      setIsProcessingGiro(false);
+    }
+  };
+
+  const handleBounceGiro = async (giroId: string) => {
+    setIsProcessingGiro(true);
+    try {
+      const res = await apiClient.bounceGiro(giroId, bouncedReasonPrompt);
+      onShowToast(
+        'Giro Marked as BOUNCED',
+        `Giro marked as dishonored. AR debt re-opened, Rp 150.000 penalty assessed, and customer ${res.customer.companyName} credit FROZEN.`
+      );
+      await loadB2bAccountingData();
+      onRefreshData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Giro Action Error', msg);
+    } finally {
+      setIsProcessingGiro(false);
+    }
+  };
+
+  const handleToggleCustomerLock = async (customer: B2BCustomer) => {
+    const nextStatus = customer.status === 'CREDIT_LOCKED' ? 'ACTIVE' : 'CREDIT_LOCKED';
+    const lockReason =
+      nextStatus === 'CREDIT_LOCKED'
+        ? 'Manual credit freeze imposed by Financial Controller.'
+        : undefined;
+    try {
+      const updated = await apiClient.updateB2BCustomer(customer.id, {
+        status: nextStatus,
+        lockReason,
+      });
+      onShowToast(
+        `Customer Credit ${nextStatus === 'ACTIVE' ? 'Restored' : 'Locked'}`,
+        `${updated.companyName} credit status set to ${nextStatus}`
+      );
+      await loadB2bAccountingData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Failed to update credit', msg);
+    }
+  };
 
   // Immutability & Reversing Journal Entry State
   const [reversingEntry, setReversingEntry] = useState<GeneralLedgerEntry | null>(null);
@@ -233,6 +318,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             { id: 'gl', label: 'General Ledger Drill-Down', icon: ReceiptText },
             { id: 'coa', label: 'Chart of Accounts (COA)', icon: Building2 },
             { id: 'vendor_bills', label: 'Vendor Bills & AP', icon: FileCheck },
+            { id: 'b2b_ar', label: 'B2B AR & Giro Clearing', icon: CreditCard },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = subTab === tab.id;
@@ -879,6 +965,273 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           onRefreshData={onRefreshData}
           onShowToast={onShowToast}
         />
+      )}
+
+      {/* SUB-TAB 7: B2B WHOLESALE RECEIVABLES (AR) & BILYET GIRO CLEARING */}
+      {subTab === 'b2b_ar' && (
+        <div className="space-y-6">
+          {/* Summary KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+                <span>Total Wholesale AR (COA #1200)</span>
+                <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                  <CreditCard className="w-4 h-4" />
+                </span>
+              </div>
+              <div className="mt-2 text-xl font-bold font-mono text-gray-900 dark:text-zinc-100">
+                {formatIDR(b2bCustomers.reduce((sum, c) => sum + (c.outstandingAR || 0), 0))}
+              </div>
+              <span className="text-[10px] text-gray-400 mt-1 block">Trade credit receivables from B2B buyers</span>
+            </div>
+
+            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+                <span>Warkat Giro Belum Cair (#1210)</span>
+                <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <Building2 className="w-4 h-4" />
+                </span>
+              </div>
+              <div className="mt-2 text-xl font-bold font-mono text-emerald-700 dark:text-emerald-300">
+                {formatIDR(
+                  giroRecords
+                    .filter((g) => g.status === 'PENDING_CLEARING')
+                    .reduce((sum, g) => sum + g.amountIDR, 0)
+                )}
+              </div>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1 block">
+                {giroRecords.filter((g) => g.status === 'PENDING_CLEARING').length} Warkat awaiting bank clearing
+              </span>
+            </div>
+
+            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+                <span>Overdue AR (&gt;7 Days Alert)</span>
+                <span className="p-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                  <AlertTriangle className="w-4 h-4" />
+                </span>
+              </div>
+              <div className="mt-2 text-xl font-bold font-mono text-rose-600 dark:text-rose-400">
+                {formatIDR(
+                  b2bCustomers
+                    .filter((c) => c.overdueDaysMax > 0)
+                    .reduce((sum, c) => sum + (c.outstandingAR || 0), 0)
+                )}
+              </div>
+              <span className="text-[10px] text-rose-500 mt-1 block">
+                {b2bCustomers.filter((c) => c.status === 'CREDIT_LOCKED').length} Customers with frozen credit
+              </span>
+            </div>
+
+            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+                <span>Denda Tolakan Kliring (#4090)</span>
+                <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                  <ShieldAlert className="w-4 h-4" />
+                </span>
+              </div>
+              <div className="mt-2 text-xl font-bold font-mono text-purple-700 dark:text-purple-400">
+                {formatIDR(450000)}
+              </div>
+              <span className="text-[10px] text-gray-400 mt-1 block">
+                Rp 150.000 / bounced check penalty fee
+              </span>
+            </div>
+          </div>
+
+          {/* Table 1: Accounts Receivable Aging & Customer Limits */}
+          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'} space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-zinc-800">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Wholesale Accounts Receivable Aging Matrix &amp; Plafond</span>
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  B2B customer credit limit monitoring, AR aging buckets, and auto-freeze enforcement
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300">
+                {b2bCustomers.length} Wholesale Accounts
+              </span>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 dark:bg-zinc-800/60 uppercase text-[10px] font-bold text-gray-500 dark:text-zinc-400 border-b border-gray-200 dark:border-zinc-800">
+                  <tr>
+                    <th className="py-3 px-3.5">Customer &amp; Tier</th>
+                    <th className="py-3 px-3.5">Credit Plafond</th>
+                    <th className="py-3 px-3.5">Total AR Due</th>
+                    <th className="py-3 px-3.5">Current (0-30d)</th>
+                    <th className="py-3 px-3.5">31 - 60 Days</th>
+                    <th className="py-3 px-3.5">&gt; 60 Days (Critical)</th>
+                    <th className="py-3 px-3.5">Facility Status</th>
+                    <th className="py-3 px-3.5 text-right">Controller Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800 font-medium">
+                  {b2bCustomers.map((cust) => {
+                    const isLocked = cust.status === 'CREDIT_LOCKED';
+                    return (
+                      <tr key={cust.id} className="hover:bg-gray-50/60 dark:hover:bg-zinc-800/40 transition-colors">
+                        <td className="py-3.5 px-3.5">
+                          <div className="font-bold text-gray-900 dark:text-zinc-100">{cust.companyName}</div>
+                          <div className="text-[11px] text-gray-500 dark:text-zinc-400">{cust.name} ({cust.tierLabel})</div>
+                        </td>
+                        <td className="py-3.5 px-3.5 font-mono text-gray-700 dark:text-zinc-300">
+                          {formatIDR(cust.creditLimit)}
+                        </td>
+                        <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-zinc-100">
+                          {formatIDR(cust.outstandingAR)}
+                        </td>
+                        <td className="py-3.5 px-3.5 font-mono text-emerald-600 dark:text-emerald-400">
+                          {formatIDR(Math.max(0, cust.outstandingAR * 0.7))}
+                        </td>
+                        <td className="py-3.5 px-3.5 font-mono text-amber-600 dark:text-amber-400">
+                          {formatIDR(Math.max(0, cust.outstandingAR * 0.2))}
+                        </td>
+                        <td className="py-3.5 px-3.5 font-mono text-rose-600 dark:text-rose-400">
+                          {cust.overdueDaysMax > 0 ? formatIDR(cust.outstandingAR * 0.1) : 'Rp 0'}
+                        </td>
+                        <td className="py-3.5 px-3.5">
+                          {isLocked ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1 w-max">
+                              <ShieldAlert className="w-3 h-3" />
+                              <span>CREDIT LOCKED</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 w-max">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>GOOD STANDING</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-3.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCustomerLock(cust)}
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                              isLocked
+                                ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 hover:bg-emerald-100'
+                                : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-300 hover:bg-rose-100'
+                            }`}
+                          >
+                            {isLocked ? 'Restore Facility' : 'Freeze Credit'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Table 2: Bilyet Giro (PDC) Clearing & Bounce Management */}
+          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'} space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-zinc-800">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Bilyet Giro (PDC) Clearing &amp; Dishonor / Bounce Management</span>
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  Warkat giro masuk, eksekusi kliring bank (COA #1020), atau proses tolak kliring dengan denda administratif
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300">
+                {giroRecords.length} Giro Registers
+              </span>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 dark:bg-zinc-800/60 uppercase text-[10px] font-bold text-gray-500 dark:text-zinc-400 border-b border-gray-200 dark:border-zinc-800">
+                  <tr>
+                    <th className="py-3 px-3.5">Giro No &amp; Bank</th>
+                    <th className="py-3 px-3.5">Customer / Drawer</th>
+                    <th className="py-3 px-3.5">Order Ref</th>
+                    <th className="py-3 px-3.5">Clearing Due Date</th>
+                    <th className="py-3 px-3.5">Nominal (IDR)</th>
+                    <th className="py-3 px-3.5">Clearing Status</th>
+                    <th className="py-3 px-3.5 text-right">Controller Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800 font-medium">
+                  {giroRecords.map((giro) => (
+                    <tr key={giro.id} className="hover:bg-gray-50/60 dark:hover:bg-zinc-800/40 transition-colors">
+                      <td className="py-3.5 px-3.5">
+                        <div className="font-bold font-mono text-emerald-800 dark:text-emerald-400">{giro.giroNumber}</div>
+                        <div className="text-[11px] text-gray-500 dark:text-zinc-400">{giro.issuingBank}</div>
+                      </td>
+                      <td className="py-3.5 px-3.5 font-semibold text-gray-900 dark:text-zinc-100">
+                        {giro.customerName}
+                      </td>
+                      <td className="py-3.5 px-3.5 font-mono text-[11px] text-gray-500">
+                        {giro.orderId}
+                      </td>
+                      <td className="py-3.5 px-3.5">
+                        <div className="font-mono">{new Date(giro.clearingDueDate).toLocaleDateString()}</div>
+                        <span className="text-[10px] text-gray-400">Jatuh Tempo Kliring</span>
+                      </td>
+                      <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-zinc-100">
+                        {formatIDR(giro.amountIDR)}
+                      </td>
+                      <td className="py-3.5 px-3.5">
+                        {giro.status === 'CLEARED' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300">
+                            CLEARED (CAIR)
+                          </span>
+                        )}
+                        {giro.status === 'BOUNCED' && (
+                          <div>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300">
+                              BOUNCED (TOLAKAN)
+                            </span>
+                            <span className="text-[9px] text-rose-600 block mt-0.5">{giro.bounceReason}</span>
+                          </div>
+                        )}
+                        {giro.status === 'PENDING_CLEARING' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 flex items-center gap-1 w-max">
+                            <Clock className="w-3 h-3" />
+                            <span>PENDING CLEARING</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-3.5 text-right">
+                        {giro.status === 'PENDING_CLEARING' ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              disabled={isProcessingGiro}
+                              onClick={() => handleClearGiro(giro.id)}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold transition-all shadow-2xs cursor-pointer"
+                              title="Clear Giro and deposit into Bank BCA #1020"
+                            >
+                              Mark Cleared
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isProcessingGiro}
+                              onClick={() => handleBounceGiro(giro.id)}
+                              className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition-all shadow-2xs cursor-pointer"
+                              title="Dishonor Giro, assess penalty, and freeze customer credit"
+                            >
+                              Tolak Kliring
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-gray-400 font-mono">Completed</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL: POST REVERSING JOURNAL ENTRY */}

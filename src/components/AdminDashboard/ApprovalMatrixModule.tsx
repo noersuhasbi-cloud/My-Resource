@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   ApprovalTierRule,
   ApprovalRequest,
@@ -245,6 +246,8 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                   <option value="procurement_po">Purchase Orders (PO)</option>
                   <option value="stock_adjustment">Stock Adjustments</option>
                   <option value="waste_write_off">Waste Write-Offs</option>
+                  <option value="b2b_credit_term">B2B Wholesale Credit Terms (&gt;10M)</option>
+                  <option value="b2b_transfer_verification">B2B Bank Transfer Verification</option>
                 </select>
 
                 <div className="flex items-center gap-1">
@@ -504,64 +507,75 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
       )}
 
       {/* Action Confirmation Modal */}
-      {activeActionRequest && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      {activeActionRequest &&
+        createPortal(
           <div
-            className={`w-full max-w-md p-6 rounded-2xl border shadow-2xl space-y-4 ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
-            }`}
+            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            onClick={() => setActiveActionRequest(null)}
           >
-            <div className="flex items-center gap-2 border-b pb-3">
-              {actionType === 'APPROVED' ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              ) : (
-                <XCircle className="w-5 h-5 text-rose-600" />
-              )}
-              <h3 className="font-bold text-base">
-                Confirm {actionType === 'APPROVED' ? 'Approval' : 'Rejection'}
-              </h3>
-            </div>
+            <div
+              className={`w-full max-w-md p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
+                isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 border-b pb-3 border-gray-100 dark:border-zinc-800">
+                {actionType === 'APPROVED' ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                ) : (
+                  <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                )}
+                <h3 className="font-bold text-base">
+                  Confirm {actionType === 'APPROVED' ? 'Approval' : 'Rejection'}
+                </h3>
+              </div>
 
-            <p className="text-xs text-gray-600 dark:text-zinc-300">
-              You are about to execute <strong>{actionType}</strong> on{' '}
-              <strong className="font-mono text-[#0F4C3A] dark:text-emerald-400">
-                {activeActionRequest.documentId}
-              </strong>{' '}
-              ({formatIDR(activeActionRequest.amountIDR)}).
-            </p>
+              <p className="text-xs text-gray-600 dark:text-zinc-300">
+                You are about to execute <strong>{actionType}</strong> on{' '}
+                <strong className="font-mono text-[#0F4C3A] dark:text-emerald-400">
+                  {activeActionRequest.documentId}
+                </strong>{' '}
+                ({formatIDR(activeActionRequest.amountIDR)}).
+              </p>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-200 mb-1">Approval Review Commentary</label>
-              <textarea
-                rows={3}
-                value={actionComment}
-                onChange={(e) => setActionComment(e.target.value)}
-                className={`w-full px-3 py-2 text-xs rounded-xl border ${
-                  isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
-                }`}
-              />
-            </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-200 mb-1">
+                  Approval Review Commentary
+                </label>
+                <textarea
+                  rows={3}
+                  value={actionComment}
+                  onChange={(e) => setActionComment(e.target.value)}
+                  className={`w-full px-3 py-2 text-xs rounded-xl border ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                  }`}
+                  placeholder="Enter approval review commentary or rationale..."
+                />
+              </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t">
-              <button
-                onClick={() => setActiveActionRequest(null)}
-                className="px-4 py-2 rounded-xl border text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleExecuteAction}
-                disabled={isProcessing}
-                className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-50 ${
-                  actionType === 'APPROVED' ? 'bg-[#0F4C3A] hover:bg-[#0b382b]' : 'bg-rose-600 hover:bg-rose-700'
-                }`}
-              >
-                {isProcessing ? 'Processing...' : `Confirm ${actionType}`}
-              </button>
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setActiveActionRequest(null)}
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 text-xs font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteAction}
+                  disabled={isProcessing}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-50 cursor-pointer shadow-sm ${
+                    actionType === 'APPROVED' ? 'bg-[#0F4C3A] hover:bg-[#0b382b]' : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
+                >
+                  {isProcessing ? 'Processing...' : `Confirm ${actionType}`}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

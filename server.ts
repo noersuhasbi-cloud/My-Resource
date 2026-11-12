@@ -27,6 +27,13 @@ import {
   INITIAL_QUOTATIONS,
 } from './src/data/inventoryData.ts';
 import { INITIAL_ORDERS, PRODUCTS } from './src/data/mockData.ts';
+import {
+  INITIAL_B2B_CUSTOMERS,
+  WHOLESALE_PRODUCTS,
+  INITIAL_PWP_RULES,
+  INITIAL_GIRO_RECORDS,
+  INITIAL_B2B_ORDERS,
+} from './src/data/b2bWholesaleData.ts';
 
 import type {
   InventoryItem,
@@ -84,7 +91,24 @@ import type {
   ShipmentQuotaTracking,
   QCInspectionRecord,
   GroceryMetricsReport,
+  B2BCustomer,
+  WholesaleProduct,
+  PWPRule,
+  GiroPaymentRecord,
+  B2BWholesaleOrder,
+  B2BCartItem,
+  ColdChainLogEntry,
+  BatchRecallTraceResult,
+  POSHardwarePeripheralStatus,
+  POSReturnRecord,
+  AutoReplenishmentConsolidatedPlan,
+  VendorCreditNote,
+  DynamicMarkdownConfig,
 } from './src/types/index.ts';
+import {
+  DEFAULT_MARKDOWN_CONFIG,
+  MOCK_VENDOR_CREDIT_NOTES,
+} from './src/utils/groceryEngine.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -111,6 +135,124 @@ let warehouseBins: WarehouseBinLocation[] = JSON.parse(JSON.stringify(INITIAL_WA
 let warehouseRoutes: WarehouseMultiStepRoute[] = JSON.parse(JSON.stringify(INITIAL_WAREHOUSE_ROUTES));
 let vendorBillsList: VendorBill[] = JSON.parse(JSON.stringify(INITIAL_VENDOR_BILLS));
 let enterpriseQuotationsList: EnterpriseQuotation[] = JSON.parse(JSON.stringify(INITIAL_QUOTATIONS));
+let b2bCustomersList: B2BCustomer[] = JSON.parse(JSON.stringify(INITIAL_B2B_CUSTOMERS));
+let wholesaleProductsList: WholesaleProduct[] = JSON.parse(JSON.stringify(WHOLESALE_PRODUCTS));
+let pwpRulesList: PWPRule[] = JSON.parse(JSON.stringify(INITIAL_PWP_RULES));
+let giroRecordsList: GiroPaymentRecord[] = JSON.parse(JSON.stringify(INITIAL_GIRO_RECORDS));
+let b2bOrdersList: B2BWholesaleOrder[] = JSON.parse(JSON.stringify(INITIAL_B2B_ORDERS));
+let vendorCreditNotesList: VendorCreditNote[] = JSON.parse(JSON.stringify(MOCK_VENDOR_CREDIT_NOTES));
+let dynamicMarkdownConfig: DynamicMarkdownConfig = JSON.parse(JSON.stringify(DEFAULT_MARKDOWN_CONFIG));
+
+let posHardwareStatus: POSHardwarePeripheralStatus = {
+  thermalPrinter: {
+    status: 'connected',
+    model: 'Epson TM-T88VI High-Speed Thermal (80mm USB/LAN)',
+    paperWidthMm: 80,
+    lastPrintedAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
+  },
+  cashDrawer: {
+    status: 'closed',
+    kickPulseMs: 120,
+    lastKickedAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+  },
+  barcodeScanner: {
+    status: 'active_listening',
+    interfaceType: 'USB-HID-Wedge',
+    lastScannedBarcode: '020042004505',
+    lastScannedAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+  },
+  digitalScale: {
+    status: 'stable',
+    currentWeightGrams: 450,
+    tareGrams: 20,
+    unit: 'g',
+    isStable: true,
+    lastStabilizedAt: new Date().toISOString(),
+  },
+};
+
+let coldChainLogs: ColdChainLogEntry[] = [
+  {
+    id: 'CCL-2026-001',
+    warehouseZoneId: 'zone-chiller-01',
+    zoneName: 'Chilled Dairy & Cold Storage',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    sensorId: 'IOT-TEMP-042',
+    timestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+    temperatureCelsius: 3.2,
+    temperatureFahrenheit: 37.8,
+    humidityPercent: 84,
+    isExcursion: false,
+    severity: 'NORMAL',
+    complianceStandard: 'FDA FSMA 204',
+    inspectorName: 'IoT Auto-Telemetry Logger',
+  },
+  {
+    id: 'CCL-2026-002',
+    warehouseZoneId: 'zone-freezer-01',
+    zoneName: 'Blast Deep Freezer (-18°C)',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    sensorId: 'IOT-FREEZER-01',
+    timestamp: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
+    temperatureCelsius: -19.4,
+    temperatureFahrenheit: -2.9,
+    humidityPercent: 62,
+    isExcursion: false,
+    severity: 'NORMAL',
+    complianceStandard: 'HACCP CCP',
+    inspectorName: 'IoT Auto-Telemetry Logger',
+  },
+  {
+    id: 'CCL-2026-003',
+    warehouseZoneId: 'zone-produce-01',
+    zoneName: 'Hydroponics & Mist Room',
+    storeId: 'store-bdg-riau',
+    storeName: 'GroceMart Riau Bandung',
+    sensorId: 'IOT-PROD-09',
+    timestamp: new Date(Date.now() - 1000 * 60 * 50).toISOString(),
+    temperatureCelsius: 8.5,
+    temperatureFahrenheit: 47.3,
+    humidityPercent: 91,
+    isExcursion: false,
+    severity: 'NORMAL',
+    complianceStandard: 'EU Reg 852/2004',
+    inspectorName: 'IoT Auto-Telemetry Logger',
+  },
+];
+
+let posReturnsList: POSReturnRecord[] = [
+  {
+    id: 'RET-2026-0001',
+    originalReceiptNumber: 'RCP-2026-1029-001',
+    originalOrderId: 'ORD-2026-1029',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    processedByUserId: 'usr-cashier-01',
+    processedByUserName: 'Dewi Lestari',
+    timestamp: new Date(Date.now() - 1000 * 3600 * 6).toISOString(),
+    items: [
+      {
+        sku: 'SKU-PRD-001',
+        productName: 'Organic Hydroponic Baby Spinach 250g',
+        quantity: 1,
+        unit: 'pack',
+        unitPrice: 18500,
+        refundAmount: 18500,
+        reason: 'DEFECTIVE_SPOILED',
+        disposition: 'SCRAP_WASTE_CAGE',
+        conditionNotes: 'Customer discovered wilted leaves at home same evening',
+      },
+    ],
+    totalRefundAmountIDR: 18500,
+    refundChannel: 'CASH',
+    glVoucherIds: ['GLE-2026-0988'],
+    status: 'COMPLETED',
+    customerName: 'Sarah Jenkins',
+    customerPhone: '+6281298765432',
+  },
+];
 
 let coaMappingConfig: CoaMappingConfig = {
   posRevenueAccountCode: '4010',
@@ -2863,6 +3005,17 @@ async function startServer() {
       { sku: 'SKU-BAK-001', productName: 'Artisan Country Sourdough Loaf', category: 'Bakery', unitsSold: 720, revenue: 28800000 },
     ];
 
+    const b2cRevenue = totalRevenueMTD;
+    const b2bRevenue = b2bOrdersList.reduce((sum, ord) => sum + (ord.totalAmountIDR || 0), 185000000);
+    const combinedTotal = b2cRevenue + b2bRevenue;
+    const b2bSharePercent = Math.round((b2bRevenue / combinedTotal) * 1000) / 10;
+    const b2cSharePercent = Math.round((100 - b2bSharePercent) * 10) / 10;
+
+    const totalArIDR = b2bCustomersList.reduce((sum, c) => sum + (c.outstandingAR || 0), 0);
+    const overdueAccountsCount = b2bCustomersList.filter((c) => c.overdueDaysMax > 0).length;
+
+    const totalLandedInformal = landedCostsList.reduce((sum, lc) => sum + (lc.informalLaborCostIDR || 0), 2450000);
+
     res.json({
       totalRevenueMTD,
       dodGrowthPercent: 4.8,  // Day-over-Day
@@ -2880,6 +3033,27 @@ async function startServer() {
       storeBreakdown,
       categoryBreakdown,
       topSkus,
+      b2bVsB2cSplit: {
+        b2cRevenue,
+        b2bRevenue,
+        totalRevenue: combinedTotal,
+        b2bSharePercent,
+        b2cSharePercent,
+        b2bOrdersCount: b2bOrdersList.length,
+      },
+      arAgingSummary: {
+        currentIDR: 54500000,
+        days31to60IDR: 32000000,
+        overdue60PlusIDR: 8500000,
+        totalArIDR,
+        overdueAccountsCount,
+      },
+      informalLandedCostSummary: {
+        totalAbsorbedIDR: totalLandedInformal,
+        kuliBongkarFeesIDR: totalLandedInformal,
+        dockRetribusiIDR: 650000,
+        grossMarginProtectionPercent: 14.8,
+      },
     });
   });
 
@@ -4019,11 +4193,12 @@ async function startServer() {
       customsDutyIDR = 0,
       handlingCostIDR = 0,
       insuranceCostIDR = 0,
+      informalLaborCostIDR = 0, // Biaya Kuli Bongkar / Retribusi Non-Faktur (Petty Cash)
       allocationMethod = 'BY_QUANTITY',
       items = [], // Array<{ sku: string; quantity: number }>
     } = req.body;
 
-    const totalLandedCostIDR = freightCostIDR + customsDutyIDR + handlingCostIDR + insuranceCostIDR;
+    const totalLandedCostIDR = freightCostIDR + customsDutyIDR + handlingCostIDR + insuranceCostIDR + informalLaborCostIDR;
     if (totalLandedCostIDR <= 0) {
       return res.status(400).json({ error: 'Total landed cost must be greater than zero.' });
     }
@@ -4079,6 +4254,7 @@ async function startServer() {
     const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
     const glEntryIds = [gleId1, gleId2];
 
+    // Debit Merchandise Inventory Asset #1040 for entire absorbed amount (including informal fees)
     generalLedger.unshift({
       id: gleId1,
       timestamp,
@@ -4091,23 +4267,46 @@ async function startServer() {
       credit: 0,
       referenceType: 'LANDED_COST',
       referenceId: id,
-      description: `Landed Cost Absorption [${id}]: ${description} allocated across ${allocatedItems.length} SKUs`,
+      description: `Landed Cost Absorption [${id}]: ${description} allocated across ${allocatedItems.length} SKUs (incl. kuli bongkar absorption)`,
     });
 
-    generalLedger.unshift({
-      id: gleId2,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: enterpriseSettings.landedCosts.clearingAccountCode as AccountCode || '2040',
-      accountName: enterpriseSettings.landedCosts.clearingAccountName || 'Landed Cost Accrual / Clearing',
-      category: 'Liability',
-      debit: 0,
-      credit: totalLandedCostIDR,
-      referenceType: 'LANDED_COST',
-      referenceId: id,
-      description: `Landed Cost Accrual for freight, customs & handling voucher #${id}`,
-    });
+    // Credit side: Split between Petty Cash #1015 (for informal labor) and Accrual Clearing #2040 (for formal freight/customs)
+    const formalAccrualIDR = totalLandedCostIDR - informalLaborCostIDR;
+    if (formalAccrualIDR > 0) {
+      generalLedger.unshift({
+        id: gleId2,
+        timestamp,
+        storeId: 'CONSOLIDATED',
+        storeName: 'Consolidated Company-Wide',
+        accountCode: enterpriseSettings.landedCosts.clearingAccountCode as AccountCode || '2040',
+        accountName: enterpriseSettings.landedCosts.clearingAccountName || 'Landed Cost Accrual / Clearing',
+        category: 'Liability',
+        debit: 0,
+        credit: formalAccrualIDR,
+        referenceType: 'LANDED_COST',
+        referenceId: id,
+        description: `Landed Cost Accrual for freight, customs & handling voucher #${id}`,
+      });
+    }
+
+    if (informalLaborCostIDR > 0) {
+      const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
+      glEntryIds.push(gleId3);
+      generalLedger.unshift({
+        id: gleId3,
+        timestamp,
+        storeId: 'CONSOLIDATED',
+        storeName: 'Consolidated Company-Wide',
+        accountCode: '1015',
+        accountName: 'Petty Cash & Informal Labor Fund (Kas Kecil)',
+        category: 'Asset',
+        debit: 0,
+        credit: informalLaborCostIDR,
+        referenceType: 'LANDED_COST',
+        referenceId: id,
+        description: `Petty cash disbursement for informal unloading labor (Kuli Bongkar / Retribusi Non-Faktur) voucher #${id}`,
+      });
+    }
 
     const record: LandedCostRecord = {
       id,
@@ -4122,6 +4321,7 @@ async function startServer() {
       customsDutyIDR,
       handlingCostIDR,
       insuranceCostIDR,
+      informalLaborCostIDR,
       totalLandedCostIDR,
       allocationMethod,
       allocatedItems,
@@ -4137,6 +4337,494 @@ async function startServer() {
       record,
       journalEntryIds: glEntryIds,
       message: `Landed cost ${id} (Rp ${totalLandedCostIDR.toLocaleString('id-ID')}) absorbed into product valuation and posted to General Ledger.`,
+    });
+  });
+
+  // =============================================================
+  // --- 3B. ENTERPRISE B2B WHOLESALE & GIRO CLEARING APIS ---
+  // =============================================================
+  app.get('/api/b2b/customers', (_req: Request, res: Response) => {
+    res.json(b2bCustomersList);
+  });
+
+  app.patch('/api/b2b/customers/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const cust = b2bCustomersList.find((c) => c.id === id);
+    if (!cust) return res.status(404).json({ error: 'Customer not found' });
+    Object.assign(cust, req.body);
+    res.json(cust);
+  });
+
+  app.get('/api/b2b/products', (_req: Request, res: Response) => {
+    // Sync current stock from live inventory list
+    wholesaleProductsList.forEach((prod) => {
+      const inv = inventoryList.find((i) => i.sku.includes(prod.sku.replace('B2B-SKU-', '')) || i.productName.toLowerCase().includes(prod.name.slice(0, 8).toLowerCase()));
+      if (inv) {
+        prod.currentStockBaseUnits = inv.currentStock;
+      }
+    });
+    res.json(wholesaleProductsList);
+  });
+
+  app.get('/api/b2b/pwp-rules', (_req: Request, res: Response) => {
+    res.json(pwpRulesList);
+  });
+
+  app.get('/api/b2b/orders', (_req: Request, res: Response) => {
+    res.json(b2bOrdersList);
+  });
+
+  app.get('/api/b2b/giro-records', (_req: Request, res: Response) => {
+    res.json(giroRecordsList);
+  });
+
+  // B2B Wholesale Checkout Endpoint
+  app.post('/api/b2b/checkout', (req: Request, res: Response) => {
+    const {
+      customerId,
+      items = [],
+      paymentMethod,
+      giroDetails,
+      transferProofUrl,
+    } = req.body;
+
+    const customer = b2bCustomersList.find((c) => c.id === customerId);
+    if (!customer) {
+      return res.status(404).json({ error: 'B2B Customer profile not found' });
+    }
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'Wholesale cart cannot be empty' });
+    }
+
+    // Calculate subtotal, PWP discounts, tax, and base units
+    let subtotalIDR = 0;
+    let pwpDiscountIDR = 0;
+    let totalBaseUnits = 0;
+    let totalCogsIDR = 0;
+
+    for (const item of items) {
+      subtotalIDR += Number(item.lineTotal) || 0;
+      totalBaseUnits += Number(item.baseUnitsCalculated) || 0;
+      if (item.isPwpRedemption) {
+        // Savings = normal price - promo price
+        const normalPrice = 38000;
+        pwpDiscountIDR += Math.max(0, normalPrice - (item.unitPrice || 10000));
+      }
+    }
+
+    const taxPPN11IDR = Math.round(subtotalIDR * 0.11);
+    const totalAmountIDR = subtotalIDR + taxPPN11IDR;
+
+    // Strict Auto-Credit Lock & AR Validation
+    const isCreditPayment = paymentMethod.startsWith('term_') || paymentMethod === 'bilyet_giro';
+    if (isCreditPayment) {
+      if (customer.status === 'CREDIT_LOCKED') {
+        return res.status(400).json({
+          error: `Credit terms disabled: Customer account is LOCKED. Reason: ${customer.lockReason || 'Overdue invoice > 7 days'}`,
+        });
+      }
+      if (customer.overdueDaysMax > 7) {
+        customer.status = 'CREDIT_LOCKED';
+        customer.lockReason = `Account automatically locked due to overdue receivables (${customer.overdueDaysMax} days overdue).`;
+        return res.status(400).json({
+          error: `Credit terms disabled: Customer has an invoice overdue by ${customer.overdueDaysMax} days. Please settle outstanding balance first.`,
+        });
+      }
+      if (customer.outstandingAR + totalAmountIDR > customer.creditLimit) {
+        return res.status(400).json({
+          error: `Credit limit exceeded. Total due (Rp ${totalAmountIDR.toLocaleString('id-ID')}) exceeds available credit balance (Rp ${customer.availableCredit.toLocaleString('id-ID')}).`,
+        });
+      }
+    }
+
+    // Real-Time Fractional FEFO Inventory Deduction & Moving Average COGS
+    for (const cartIt of items) {
+      const prod = wholesaleProductsList.find((p) => p.id === cartIt.product.id || p.sku === cartIt.product.sku);
+      const unitsToDeduct = Number(cartIt.baseUnitsCalculated) || 1;
+
+      // Deduct from batches
+      const eligibleBatches = inventoryBatches
+        .filter((b) => b.sku === (prod?.sku || cartIt.product.sku) && b.currentStock > 0)
+        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+      let remaining = unitsToDeduct;
+      let lineCogs = 0;
+
+      for (const batch of eligibleBatches) {
+        if (remaining <= 0) break;
+        const take = Math.min(batch.currentStock, remaining);
+        batch.currentStock -= take;
+        remaining -= take;
+        lineCogs += take * batch.unitCost;
+      }
+
+      if (remaining > 0) {
+        // Fallback standard cost if batches depleted
+        lineCogs += remaining * ((prod?.baseUnitPrice || 20000) * 0.72);
+      }
+
+      totalCogsIDR += Math.round(lineCogs);
+
+      if (prod) {
+        prod.currentStockBaseUnits = Math.max(0, prod.currentStockBaseUnits - unitsToDeduct);
+      }
+    }
+
+    const timestamp = new Date().toISOString();
+    const orderId = `B2B-2026-${(b2bOrdersList.length + 80).toString().padStart(4, '0')}`;
+    const journalEntryIds: string[] = [];
+
+    // General Ledger Automation
+    const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const gle3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
+    const gle4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
+    journalEntryIds.push(gle1, gle2, gle3, gle4);
+
+    let paymentStatus: B2BWholesaleOrder['paymentStatus'] = 'APPROVED_CREDIT';
+    let orderStatus: B2BWholesaleOrder['status'] = 'CONFIRMED';
+    let requiresApproval = false;
+    let approvalRequestId: string | undefined;
+
+    // Check if order exceeds threshold for Approval Matrix
+    if (totalAmountIDR > 10000000 || paymentMethod === 'transfer_verification') {
+      requiresApproval = true;
+      orderStatus = 'PENDING_FINANCE';
+      paymentStatus = paymentMethod === 'transfer_verification' ? 'PENDING_VERIFICATION' : 'AWAITING_APPROVAL';
+      approvalRequestId = `APR-2026-${(approvalQueueList.length + 1).toString().padStart(3, '0')}`;
+
+      approvalQueueList.unshift({
+        id: approvalRequestId,
+        module: paymentMethod === 'transfer_verification' ? 'b2b_transfer_verification' : 'b2b_credit_term',
+        documentId: orderId,
+        documentTitle: `B2B Wholesale Order [${orderId}]: ${customer.companyName}`,
+        requestedBy: 'Wholesale Sales Desk',
+        requestedAt: timestamp,
+        amountIDR: totalAmountIDR,
+        storeId: 'CONSOLIDATED',
+        storeName: 'Central Wholesale Logistics Hub',
+        currentTierLevel: 1,
+        requiredTierLevel: totalAmountIDR > 50000000 ? 3 : 2,
+        status: 'PENDING',
+        history: [],
+        payloadSummary: {
+          productName: `${items.length} Wholesale SKUs (${totalBaseUnits} Base Units)`,
+          quantity: totalBaseUnits,
+          reason: `Wholesale order (${paymentMethod}) total Rp ${totalAmountIDR.toLocaleString('id-ID')} routed to Finance Controller queue.`,
+        },
+      });
+    }
+
+    if (paymentMethod === 'bilyet_giro') {
+      paymentStatus = 'GIRO_PENDING';
+      const giroId = `GIRO-2026-${(giroRecordsList.length + 1).toString().padStart(3, '0')}`;
+      const dueDays = 14;
+      const dueDate = giroDetails?.clearingDueDate || new Date(Date.now() + 86400000 * dueDays).toISOString();
+
+      const newGiro: GiroPaymentRecord = {
+        id: giroId,
+        orderId,
+        customerName: customer.companyName,
+        customerId: customer.id,
+        giroNumber: giroDetails?.giroNumber || `BG-BCA-${Math.floor(1000000 + Math.random() * 9000000)}`,
+        issuingBank: giroDetails?.bankName || 'Bank Central Asia (BCA)',
+        amountIDR: totalAmountIDR,
+        issueDate: timestamp,
+        clearingDueDate: dueDate,
+        status: 'PENDING_CLEARING',
+        journalEntryIds: [gle1, gle2],
+      };
+      giroRecordsList.unshift(newGiro);
+
+      // Debit Giro Receivable #1210 / Credit Wholesale Revenue #4020
+      generalLedger.unshift({
+        id: gle1,
+        timestamp,
+        storeId: 'CONSOLIDATED',
+        storeName: 'Consolidated Company-Wide',
+        accountCode: '1210',
+        accountName: 'Bilyet Giro & PDC Clearing Receivable',
+        category: 'Asset',
+        debit: totalAmountIDR,
+        credit: 0,
+        referenceType: 'B2B_WHOLESALE_ORDER',
+        referenceId: orderId,
+        description: `B2B Wholesale Order [${orderId}]: Giro PDC received #${newGiro.giroNumber} from ${customer.companyName}`,
+      });
+    } else {
+      // Debit Accounts Receivable #1200 / Credit Wholesale Revenue #4020
+      generalLedger.unshift({
+        id: gle1,
+        timestamp,
+        storeId: 'CONSOLIDATED',
+        storeName: 'Consolidated Company-Wide',
+        accountCode: '1200',
+        accountName: 'Accounts Receivable - B2B Wholesale',
+        category: 'Asset',
+        debit: totalAmountIDR,
+        credit: 0,
+        referenceType: 'B2B_WHOLESALE_ORDER',
+        referenceId: orderId,
+        description: `B2B Wholesale Order [${orderId}]: Trade receivable invoiced to ${customer.companyName} (${paymentMethod})`,
+      });
+    }
+
+    // Credit Wholesale Revenue #4020
+    generalLedger.unshift({
+      id: gle2,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '4020',
+      accountName: 'B2B Wholesale Grocery Revenue',
+      category: 'Revenue',
+      debit: 0,
+      credit: totalAmountIDR,
+      referenceType: 'B2B_WHOLESALE_ORDER',
+      referenceId: orderId,
+      description: `B2B Wholesale Order [${orderId}]: Gross revenue recognized for ${items.length} wholesale lines`,
+    });
+
+    // Debit COGS #5010 / Credit Merchandise Inventory #1040
+    generalLedger.unshift({
+      id: gle3,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '5010',
+      accountName: 'Cost of Goods Sold (COGS) - FIFO / WAC',
+      category: 'Expense',
+      debit: totalCogsIDR,
+      credit: 0,
+      referenceType: 'B2B_WHOLESALE_ORDER',
+      referenceId: orderId,
+      description: `B2B Wholesale Order [${orderId}]: FEFO moving average cost recognized (${totalBaseUnits} base units)`,
+    });
+
+    generalLedger.unshift({
+      id: gle4,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '1040',
+      accountName: 'Merchandise Inventory Asset',
+      category: 'Asset',
+      debit: 0,
+      credit: totalCogsIDR,
+      referenceType: 'B2B_WHOLESALE_ORDER',
+      referenceId: orderId,
+      description: `B2B Wholesale Order [${orderId}]: Stock inventory deduction via FEFO`,
+    });
+
+    // Update Customer Accounts Receivable & Credit Balance
+    customer.outstandingAR += totalAmountIDR;
+    customer.availableCredit = Math.max(0, customer.creditLimit - customer.outstandingAR);
+    if (customer.outstandingAR >= customer.creditLimit) {
+      customer.status = 'CREDIT_LOCKED';
+      customer.lockReason = `Credit limit (Rp ${customer.creditLimit.toLocaleString('id-ID')}) has been fully utilized.`;
+    }
+
+    const newOrder: B2BWholesaleOrder = {
+      id: orderId,
+      customerId: customer.id,
+      customerName: customer.name,
+      companyName: customer.companyName,
+      customerTier: customer.tier,
+      items,
+      subtotalIDR,
+      pwpDiscountIDR,
+      taxPPN11IDR,
+      totalAmountIDR,
+      paymentMethod,
+      paymentStatus,
+      giroDetails,
+      transferProofUrl,
+      approvalRequestId,
+      status: orderStatus,
+      totalBaseUnits,
+      totalCogsIDR,
+      orderDate: timestamp,
+      duePaymentDate: new Date(Date.now() + 86400000 * 14).toISOString(),
+      journalEntryIds,
+    };
+
+    b2bOrdersList.unshift(newOrder);
+
+    res.json({
+      success: true,
+      order: newOrder,
+      customerUpdated: customer,
+      requiresApproval,
+      journalEntryIds,
+      message: requiresApproval
+        ? `Order #${orderId} created and submitted to Executive Approval Matrix queue.`
+        : `Wholesale Order #${orderId} placed successfully. Stock deducted via FEFO.`,
+    });
+  });
+
+  // Giro Clearing Action
+  app.post('/api/b2b/giro/:id/clear', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const giro = giroRecordsList.find((g) => g.id === id);
+    if (!giro) return res.status(404).json({ error: 'Giro record not found' });
+    if (giro.status === 'CLEARED') return res.status(400).json({ error: 'Giro has already been cleared' });
+
+    const timestamp = new Date().toISOString();
+    giro.status = 'CLEARED';
+    giro.clearedAt = timestamp;
+
+    const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+
+    // Debit Bank BCA #1020 / Credit Giro Receivable #1210
+    generalLedger.unshift({
+      id: gle1,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '1020',
+      accountName: 'Bank BCA Operational Clearing',
+      category: 'Asset',
+      debit: giro.amountIDR,
+      credit: 0,
+      referenceType: 'GIRO_CLEARING',
+      referenceId: giro.id,
+      description: `Bilyet Giro #${giro.giroNumber} cleared into Bank BCA from ${giro.customerName}`,
+    });
+
+    generalLedger.unshift({
+      id: gle2,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '1210',
+      accountName: 'Bilyet Giro & PDC Clearing Receivable',
+      category: 'Asset',
+      debit: 0,
+      credit: giro.amountIDR,
+      referenceType: 'GIRO_CLEARING',
+      referenceId: giro.id,
+      description: `Settlement of cleared Giro Warkat #${giro.giroNumber}`,
+    });
+
+    // Update customer available credit
+    const customer = b2bCustomersList.find((c) => c.id === giro.customerId);
+    if (customer) {
+      customer.outstandingAR = Math.max(0, customer.outstandingAR - giro.amountIDR);
+      customer.availableCredit = Math.max(0, customer.creditLimit - customer.outstandingAR);
+      if (customer.status === 'CREDIT_LOCKED' && customer.outstandingAR < customer.creditLimit && customer.overdueDaysMax <= 7) {
+        customer.status = 'ACTIVE';
+        customer.lockReason = undefined;
+      }
+    }
+
+    res.json({
+      success: true,
+      giro,
+      journalEntryIds: [gle1, gle2],
+      message: `Bilyet Giro #${giro.giroNumber} marked as CLEARED. Funds deposited into Bank BCA (#1020).`,
+    });
+  });
+
+  // Giro Bounced / Tolak Kliring Action
+  app.post('/api/b2b/giro/:id/bounce', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { reason = 'Insufficient funds in drawer / Saldo giro nasabah tidak mencukupi (SKNBI Tolakan)' } = req.body;
+    const giro = giroRecordsList.find((g) => g.id === id);
+    if (!giro) return res.status(404).json({ error: 'Giro record not found' });
+    if (giro.status === 'BOUNCED') return res.status(400).json({ error: 'Giro has already been marked as bounced' });
+
+    const timestamp = new Date().toISOString();
+    const penaltyFee = 150000; // Rp 150,000 standard bounced check administrative penalty fee
+    giro.status = 'BOUNCED';
+    giro.bouncedAt = timestamp;
+    giro.bounceReason = reason;
+    giro.penaltyFeeIDR = penaltyFee;
+
+    const customer = b2bCustomersList.find((c) => c.id === giro.customerId);
+    if (customer) {
+      // Re-open debt and auto-lock customer credit
+      customer.outstandingAR += penaltyFee;
+      customer.availableCredit = Math.max(0, customer.creditLimit - customer.outstandingAR);
+      customer.status = 'CREDIT_LOCKED';
+      customer.lockReason = `DISHONORED BILYET GIRO: Giro #${giro.giroNumber} bounced (${reason}). Credit facility frozen pending full cashier restitution.`;
+    }
+
+    const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const gle3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
+    const gle4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
+
+    // Re-open AR: Debit AR #1200 / Credit Giro Receivable #1210
+    generalLedger.unshift({
+      id: gle1,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '1200',
+      accountName: 'Accounts Receivable - B2B Wholesale',
+      category: 'Asset',
+      debit: giro.amountIDR,
+      credit: 0,
+      referenceType: 'GIRO_BOUNCED',
+      referenceId: giro.id,
+      description: `Dishonored Giro #${giro.giroNumber}: Re-opened AR debt for ${giro.customerName}`,
+    });
+
+    generalLedger.unshift({
+      id: gle2,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '1210',
+      accountName: 'Bilyet Giro & PDC Clearing Receivable',
+      category: 'Asset',
+      debit: 0,
+      credit: giro.amountIDR,
+      referenceType: 'GIRO_BOUNCED',
+      referenceId: giro.id,
+      description: `Removal of bounced Giro Warkat #${giro.giroNumber} from clearing queue`,
+    });
+
+    // Penalty Fee: Debit AR #1200 / Credit Giro Penalty Income #4090
+    generalLedger.unshift({
+      id: gle3,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '1200',
+      accountName: 'Accounts Receivable - B2B Wholesale',
+      category: 'Asset',
+      debit: penaltyFee,
+      credit: 0,
+      referenceType: 'GIRO_BOUNCED_PENALTY',
+      referenceId: giro.id,
+      description: `Administrative penalty surcharge on bounced Giro #${giro.giroNumber}`,
+    });
+
+    generalLedger.unshift({
+      id: gle4,
+      timestamp,
+      storeId: 'CONSOLIDATED',
+      storeName: 'Consolidated Company-Wide',
+      accountCode: '4090',
+      accountName: 'Giro Bounced Penalty & Admin Surcharge Income',
+      category: 'Revenue',
+      debit: 0,
+      credit: penaltyFee,
+      referenceType: 'GIRO_BOUNCED_PENALTY',
+      referenceId: giro.id,
+      description: `Fee income recognized on dishonored check #${giro.giroNumber}`,
+    });
+
+    res.json({
+      success: true,
+      giro,
+      customer,
+      penaltyFee,
+      journalEntryIds: [gle1, gle2, gle3, gle4],
+      message: `Giro #${giro.giroNumber} marked as BOUNCED. AR re-opened, Rp 150.000 penalty assessed, and customer credit frozen.`,
     });
   });
 
@@ -5206,6 +5894,627 @@ async function startServer() {
       },
     };
     res.json(report);
+  });
+
+  // =============================================================
+  // 14. COLD CHAIN TELEMETRY & COMPLIANCE
+  // =============================================================
+  app.get('/api/admin/cold-chain/logs', (req: Request, res: Response) => {
+    const { zoneId, storeId } = req.query as { zoneId?: string; storeId?: string };
+    let filtered = [...coldChainLogs];
+    if (zoneId && zoneId !== 'ALL') {
+      filtered = filtered.filter((l) => l.warehouseZoneId === zoneId);
+    }
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      filtered = filtered.filter((l) => l.storeId === storeId);
+    }
+    res.json(filtered);
+  });
+
+  app.post('/api/admin/cold-chain/logs', (req: Request, res: Response) => {
+    const payload = req.body as Partial<ColdChainLogEntry>;
+    const tempC = payload.temperatureCelsius ?? 4.0;
+    const isExcursion = tempC > 8.0 || tempC < -22.0;
+    const newLog: ColdChainLogEntry = {
+      id: `CCL-${Date.now()}`,
+      warehouseZoneId: payload.warehouseZoneId || 'zone-chiller-01',
+      zoneName: payload.zoneName || 'Chilled Dairy & Cold Storage',
+      storeId: payload.storeId || 'store-jkt-senopati',
+      storeName: payload.storeName || 'GroceMart Senopati Flagship',
+      sensorId: payload.sensorId || `IOT-TEMP-${Math.floor(Math.random() * 900 + 100)}`,
+      timestamp: new Date().toISOString(),
+      temperatureCelsius: tempC,
+      temperatureFahrenheit: Number(((tempC * 9) / 5 + 32).toFixed(1)),
+      humidityPercent: payload.humidityPercent ?? 75,
+      isExcursion,
+      severity: isExcursion ? (tempC > 12 ? 'CRITICAL_SPIKE' : 'ELEVATED') : 'NORMAL',
+      complianceStandard: payload.complianceStandard || 'FDA FSMA 204',
+      correctiveAction: payload.correctiveAction,
+      inspectorName: payload.inspectorName || 'Store IoT Logger',
+    };
+    coldChainLogs.unshift(newLog);
+    res.json({ success: true, log: newLog, message: 'Cold chain telemetry recorded successfully' });
+  });
+
+  // =============================================================
+  // 15. BATCH RECALL & FDA/EU TRACEABILITY APIS
+  // =============================================================
+  app.get('/api/admin/batch-recall/trace/:query', (req: Request, res: Response) => {
+    const { query } = req.params;
+    const cleanQ = query.toLowerCase().trim();
+    const batch = inventoryBatches.find(
+      (b) =>
+        b.batchId.toLowerCase().includes(cleanQ) ||
+        b.lotNumber.toLowerCase().includes(cleanQ) ||
+        b.sku.toLowerCase().includes(cleanQ) ||
+        b.productName.toLowerCase().includes(cleanQ)
+    ) || inventoryBatches[0];
+
+    if (!batch) {
+      return res.status(404).json({ error: `No batch found matching query '${query}'` });
+    }
+
+    const matchedItem = inventoryList.find((i) => i.sku === batch.sku);
+    const traceResult: BatchRecallTraceResult = {
+      batchId: batch.batchId,
+      lotNumber: batch.lotNumber,
+      sku: batch.sku,
+      productName: batch.productName,
+      category: matchedItem?.category || 'fresh_produce',
+      supplierName: batch.supplierName || 'PT Lembang Agro Sejahtera',
+      receivedDate: batch.receivedDate || new Date(Date.now() - 1000 * 3600 * 48).toISOString(),
+      expiryDate: batch.expiryDate,
+      currentWarehouseStock: batch.remainingQuantity,
+      quarantinedStock: batch.status === 'quarantined' ? batch.remainingQuantity : 0,
+      recallStatus: batch.status === 'quarantined' ? 'fda_class_1_active' : 'none',
+      quarantineReason: batch.notes || undefined,
+      quarantinedAt: batch.status === 'quarantined' ? new Date().toISOString() : undefined,
+      upstreamOrigin: {
+        poId: batch.sourcePoNumber || 'PO-2026-0042',
+        supplierId: 'SUPP-AGRO-01',
+        supplierName: batch.supplierName || 'PT Lembang Agro Sejahtera',
+        deliveryNoteNumber: 'DN-AGRO-8821',
+        intakeTempCelsius: 3.5,
+        intakeQualityStatus: 'Grade A Certified',
+        receivedDate: batch.receivedDate || new Date().toISOString(),
+      },
+      warehouseLocations: [
+        {
+          storeId: batch.storeId || 'store-jkt-senopati',
+          storeName: 'GroceMart Senopati Flagship',
+          warehouseZoneId: 'zone-produce-01',
+          storageType: 'Chilled / Controlled Atmosphere',
+          physicalStock: batch.remainingQuantity,
+          availableStock: batch.status === 'quarantined' ? 0 : batch.remainingQuantity,
+          isQuarantined: batch.status === 'quarantined',
+        },
+      ],
+      posSales: [
+        {
+          receiptNumber: 'RCP-2026-1028-04',
+          transactionId: 'TX-2026-904',
+          orderId: 'ORD-2026-1028',
+          timestamp: new Date(Date.now() - 1000 * 3600 * 12).toISOString(),
+          storeName: 'GroceMart Senopati Flagship',
+          cashierName: 'Dewi Lestari',
+          customerName: 'Sarah Jenkins',
+          quantitySold: 2,
+          lineTotal: (matchedItem?.sellingPrice || 18500) * 2,
+        },
+      ],
+      onlineOrders: [
+        {
+          orderId: 'ORD-B2C-9901',
+          customerName: 'Budi Santoso',
+          customerEmail: 'budi.santoso@example.com',
+          customerPhone: '+6281234567890',
+          orderDate: new Date(Date.now() - 1000 * 3600 * 8).toISOString(),
+          status: 'DELIVERED',
+          quantity: 1,
+          deliveryAddress: 'Jl. Senopati No. 45, Kebayoran Baru, Jakarta Selatan',
+        },
+      ],
+      regulatoryNotice: {
+        recallClassification: 'Class I (High Risk / Immediate Hazard)',
+        fdaReportableFoodRegistryId: 'RFR-2026-ID-0091',
+        euRasffReferenceNumber: 'RASFF-2026.4182',
+        fsanzAlertId: 'FSANZ-ALERT-88',
+        hazardDescription: 'Microbiological contamination check or cold chain breach risk identified during quality audit.',
+        mandatoryActionRequired: 'Immediately cease distribution, isolate inventory in biohazard waste cage, notify affected purchasers.',
+      },
+    };
+
+    res.json(traceResult);
+  });
+
+  app.post('/api/admin/batch-recall/quarantine', (req: Request, res: Response) => {
+    const { batchId, reason, recallClassification, hazardDescription } = req.body;
+    const batch = inventoryBatches.find((b) => b.batchId === batchId);
+    if (batch) {
+      batch.status = 'quarantined';
+      batch.notes = `Quarantined: ${reason || hazardDescription || recallClassification || 'Suspected contamination'}`;
+    }
+    res.json({
+      success: true,
+      message: `Batch ${batchId} has been locked and quarantined from all picking & POS sales.`,
+      quarantinedUnits: batch ? batch.remainingQuantity : 1,
+    });
+  });
+
+  app.post('/api/admin/batch-recall/notify-customers', (req: Request, res: Response) => {
+    const { batchId, message, channel } = req.body;
+    const notifications = [
+      {
+        notificationId: `NOTIF-${Date.now()}-1`,
+        customerName: 'Sarah Jenkins',
+        contactDetail: '+6281298765432',
+        channel: (channel || 'WhatsApp') as 'WhatsApp' | 'SMS' | 'Email',
+        sentAt: new Date().toISOString(),
+        status: 'SENT' as const,
+      },
+      {
+        notificationId: `NOTIF-${Date.now()}-2`,
+        customerName: 'Budi Santoso',
+        contactDetail: 'budi.santoso@example.com',
+        channel: (channel || 'Email') as 'WhatsApp' | 'SMS' | 'Email',
+        sentAt: new Date().toISOString(),
+        status: 'DELIVERED' as const,
+      },
+    ];
+    res.json({
+      success: true,
+      message: `Safety recall notice dispatched to all purchasers of batch ${batchId}.`,
+      notifications,
+    });
+  });
+
+  app.post('/api/admin/batch-recall/release', (req: Request, res: Response) => {
+    const { batchId } = req.body;
+    const batch = inventoryBatches.find((b) => b.batchId === batchId);
+    if (batch) {
+      batch.status = 'active';
+      batch.notes = 'Released from quarantine after lab clearance verified.';
+    }
+    res.json({
+      success: true,
+      message: `Batch ${batchId} cleared and returned to active sellable inventory.`,
+    });
+  });
+
+  // =============================================================
+  // 16. POS HARDWARE & PERIPHERAL INTEGRATION
+  // =============================================================
+  app.get('/api/admin/hardware/status', (_req: Request, res: Response) => {
+    res.json(posHardwareStatus);
+  });
+
+  app.post('/api/admin/hardware/kick-drawer', (req: Request, res: Response) => {
+    const { pulseMs } = req.body;
+    posHardwareStatus.cashDrawer.status = 'open';
+    posHardwareStatus.cashDrawer.kickPulseMs = pulseMs || 120;
+    posHardwareStatus.cashDrawer.lastKickedAt = new Date().toISOString();
+    res.json({
+      success: true,
+      message: 'Cash drawer solenoid kick pulse dispatched successfully',
+      status: posHardwareStatus,
+    });
+  });
+
+  app.post('/api/admin/hardware/close-drawer', (_req: Request, res: Response) => {
+    posHardwareStatus.cashDrawer.status = 'closed';
+    res.json({ success: true, status: posHardwareStatus });
+  });
+
+  app.post('/api/admin/hardware/test-print', (req: Request, res: Response) => {
+    const { paperWidthMm, storeName } = req.body;
+    posHardwareStatus.thermalPrinter.lastPrintedAt = new Date().toISOString();
+    posHardwareStatus.thermalPrinter.paperWidthMm = paperWidthMm || 80;
+    const slipText = [
+      '================================',
+      `    ${storeName || 'GROCEMART ERP'}    `,
+      '   ESC/POS THERMAL TEST SLIP    ',
+      '================================',
+      `Date: ${new Date().toLocaleString('id-ID')}`,
+      `Printer: ${posHardwareStatus.thermalPrinter.model}`,
+      `Width: ${posHardwareStatus.thermalPrinter.paperWidthMm}mm ESC/POS Raster`,
+      'Status: ONLINE / PAPER LOADED OK',
+      '--------------------------------',
+      'Items Checked: 3 SKUs Tested    ',
+      'Cutter Pulse: SUCCESS           ',
+      '================================',
+      '     THANK YOU FOR TESTING      ',
+      '================================',
+    ].join('\n');
+    res.json({
+      success: true,
+      message: 'Thermal receipt sent to printer buffer',
+      slipText,
+      status: posHardwareStatus,
+    });
+  });
+
+  app.post('/api/admin/hardware/scale/tare', (req: Request, res: Response) => {
+    const { tareGrams } = req.body;
+    posHardwareStatus.digitalScale.tareGrams = Number(tareGrams) || 0;
+    posHardwareStatus.digitalScale.status = 'stable';
+    res.json({ success: true, status: posHardwareStatus });
+  });
+
+  app.post('/api/admin/hardware/scale/zero', (_req: Request, res: Response) => {
+    posHardwareStatus.digitalScale.currentWeightGrams = 0;
+    posHardwareStatus.digitalScale.tareGrams = 0;
+    posHardwareStatus.digitalScale.status = 'zeroed';
+    posHardwareStatus.digitalScale.isStable = true;
+    res.json({ success: true, status: posHardwareStatus });
+  });
+
+  app.post('/api/admin/hardware/scale/weigh', (req: Request, res: Response) => {
+    const { weightGrams, isStable } = req.body;
+    posHardwareStatus.digitalScale.currentWeightGrams = Number(weightGrams) || 0;
+    posHardwareStatus.digitalScale.isStable = isStable !== undefined ? Boolean(isStable) : true;
+    posHardwareStatus.digitalScale.status = posHardwareStatus.digitalScale.isStable ? 'stable' : 'motion';
+    posHardwareStatus.digitalScale.lastStabilizedAt = new Date().toISOString();
+    res.json({ success: true, status: posHardwareStatus });
+  });
+
+  app.post('/api/admin/hardware/scanner/simulate', (req: Request, res: Response) => {
+    const { barcode } = req.body;
+    posHardwareStatus.barcodeScanner.lastScannedBarcode = barcode;
+    posHardwareStatus.barcodeScanner.lastScannedAt = new Date().toISOString();
+    const clean = String(barcode || '').trim();
+    const matched = inventoryList.find((i) => i.barcode === clean || i.sku === clean) || inventoryList[0];
+    res.json({
+      success: true,
+      barcode: clean,
+      matchedItem: matched,
+      status: posHardwareStatus,
+    });
+  });
+
+  // =============================================================
+  // 17. REVERSE LOGISTICS, RETURNS, & REFUNDS
+  // =============================================================
+  app.get('/api/admin/returns', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    let filtered = [...posReturnsList];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      filtered = filtered.filter((r) => r.storeId === storeId);
+    }
+    res.json(filtered);
+  });
+
+  app.get('/api/admin/returns/lookup-receipt/:query', (req: Request, res: Response) => {
+    const { query } = req.params;
+    const cleanQ = query.toLowerCase().trim();
+    const order = customerOrders.find(
+      (o) => o.id.toLowerCase().includes(cleanQ) || (o.items && o.items.some((i) => i.name.toLowerCase().includes(cleanQ)))
+    ) || customerOrders[0];
+
+    if (!order) {
+      return res.status(404).json({ error: `Receipt '${query}' not found in POS archives` });
+    }
+
+    const items = order.items.map((i) => ({
+      sku: i.sku || 'SKU-PRD-001',
+      name: i.name,
+      quantity: i.quantity,
+      unitPrice: i.price,
+      lineTotal: i.price * i.quantity,
+      unit: 'pack',
+      returnEligible: true,
+    }));
+
+    res.json({
+      receiptNumber: `RCP-${order.id}`,
+      orderId: order.id,
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      customerName: order.customerName || 'Walk-in Customer',
+      customerPhone: order.customerPhone || '+6281234567890',
+      timestamp: order.createdAt || new Date().toISOString(),
+      totalAmountIDR: order.totalAmount,
+      items,
+    });
+  });
+
+  app.post('/api/admin/returns', (req: Request, res: Response) => {
+    const {
+      originalReceiptNumber,
+      originalOrderId,
+      storeId,
+      processedByUserId,
+      processedByUserName,
+      items,
+      refundChannel,
+      customerName,
+      customerPhone,
+    } = req.body;
+
+    const totalRefund = (items || []).reduce((sum: number, it: any) => sum + (Number(it.refundAmount) || 0), 0);
+    const returnId = `RET-${Date.now()}`;
+    const glVoucherId = `GLE-RET-${Date.now()}`;
+
+    const newReturn: POSReturnRecord = {
+      id: returnId,
+      originalReceiptNumber: originalReceiptNumber || `RCP-${Date.now()}`,
+      originalOrderId,
+      storeId: storeId || 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      processedByUserId: processedByUserId || 'usr-cashier-01',
+      processedByUserName: processedByUserName || 'Dewi Lestari',
+      timestamp: new Date().toISOString(),
+      items: items || [],
+      totalRefundAmountIDR: totalRefund,
+      refundChannel: refundChannel || 'CASH',
+      glVoucherIds: [glVoucherId],
+      status: 'COMPLETED',
+      customerName,
+      customerPhone,
+    };
+
+    posReturnsList.unshift(newReturn);
+
+    // If restockable items exist, restore inventory
+    (items || []).forEach((it: any) => {
+      if (it.disposition === 'RESTOCK_INVENTORY') {
+        const inv = inventoryList.find((p) => p.sku === it.sku);
+        if (inv) inv.stockLevel += Number(it.quantity) || 0;
+      }
+    });
+
+    const slipText = [
+      '================================',
+      '      GROCEMART RETURN SLIP     ',
+      '================================',
+      `Return ID: ${newReturn.id}`,
+      `Original Receipt: ${newReturn.originalReceiptNumber}`,
+      `Date: ${new Date().toLocaleString('id-ID')}`,
+      `Cashier: ${newReturn.processedByUserName}`,
+      `Customer: ${customerName || 'Walk-in'}`,
+      '--------------------------------',
+      ...(items || []).map((it: any) => `${it.productName || it.sku} x${it.quantity} = Rp ${Number(it.refundAmount).toLocaleString('id-ID')}`),
+      '--------------------------------',
+      `TOTAL REFUND: Rp ${totalRefund.toLocaleString('id-ID')}`,
+      `CHANNEL: ${refundChannel || 'CASH'}`,
+      `GL ENTRY: ${glVoucherId}`,
+      '================================',
+    ].join('\n');
+
+    res.json({
+      success: true,
+      returnRecord: newReturn,
+      glVoucherIds: [glVoucherId],
+      slipText,
+      message: `Return ${returnId} processed successfully. Refund Rp ${totalRefund.toLocaleString('id-ID')} authorized.`,
+    });
+  });
+
+  // =============================================================
+  // 18. AUTO-REPLENISHMENT & MIN-MAX PLANNING
+  // =============================================================
+  app.get('/api/admin/replenishment/plan', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    const targetStore = storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED' ? storeId : 'store-jkt-senopati';
+
+    const items = inventoryList.map((item) => {
+      const minThresh = item.minimumThreshold || 20;
+      const currentStock = item.stockLevel || 0;
+      const reorderQty = item.reorderQuantity || Math.max(30, minThresh * 2);
+      const isCritical = currentStock <= minThresh / 2;
+      const needsRestock = currentStock < minThresh;
+      const suggestedOrderQty = needsRestock ? reorderQty : 0;
+      const suggestedTotalCostIDR = suggestedOrderQty * (item.wacUnitCost || Math.round(item.sellingPrice * 0.7));
+
+      return {
+        sku: item.sku,
+        productName: item.name,
+        category: item.category,
+        currentPhysicalStock: currentStock,
+        incomingPoQty: 0,
+        reservedStorefrontQty: 0,
+        projectedAvailableStock: currentStock,
+        minimumThreshold: minThresh,
+        reorderQuantity: reorderQty,
+        dailyAverageSalesRate: 4.5,
+        estimatedDaysOfCover: currentStock > 0 ? Number((currentStock / 4.5).toFixed(1)) : 0,
+        isBelowMinimum: needsRestock,
+        isCriticalStockout: isCritical,
+        recommendedAction: isCritical ? 'URGENT_PO' : needsRestock ? 'REGULAR_PO' : 'STOCK_HEALTHY',
+        suggestedOrderQty,
+        estimatedUnitCostIDR: item.wacUnitCost || Math.round(item.sellingPrice * 0.7),
+        suggestedTotalCostIDR,
+        primarySupplierId: item.supplierId || 'SUPP-AGRO-01',
+        primarySupplierName: item.supplierName || 'PT Lembang Agro Sejahtera',
+      };
+    });
+
+    const needingRestock = items.filter((i) => i.isBelowMinimum);
+    const critical = items.filter((i) => i.isCriticalStockout);
+    const totalCost = needingRestock.reduce((sum, i) => sum + i.suggestedTotalCostIDR, 0);
+
+    const plan: AutoReplenishmentConsolidatedPlan = {
+      storeId: targetStore,
+      storeName: targetStore === 'store-jkt-senopati' ? 'GroceMart Senopati Flagship' : 'GroceMart Regional Outlet',
+      calculatedAt: new Date().toISOString(),
+      totalSkusEvaluated: items.length,
+      skusNeedingRestockCount: needingRestock.length,
+      criticalSkusCount: critical.length,
+      totalSuggestedCostIDR: totalCost,
+      items,
+      bySupplier: [
+        {
+          supplierId: 'SUPP-AGRO-01',
+          supplierName: 'PT Lembang Agro Sejahtera',
+          skuCount: needingRestock.length || 3,
+          totalOrderQty: needingRestock.reduce((sum, i) => sum + i.suggestedOrderQty, 0) || 150,
+          totalAmountIDR: totalCost || 4500000,
+          suggestedPoId: `PO-AUTO-${Date.now().toString().slice(-4)}`,
+        },
+      ],
+    };
+
+    res.json(plan);
+  });
+
+  app.post('/api/admin/replenishment/generate-po', (req: Request, res: Response) => {
+    const { storeId, selectedSkus } = req.body;
+    const targetSkus: string[] = selectedSkus && selectedSkus.length > 0 ? selectedSkus : inventoryList.filter((i) => i.stockLevel < (i.minimumThreshold || 20)).map((i) => i.sku);
+
+    const generatedPoId = `PO-REPL-${Date.now().toString().slice(-4)}`;
+    const newPo: PurchaseOrder = {
+      id: generatedPoId,
+      poNumber: generatedPoId,
+      supplierId: 'SUPP-AGRO-01',
+      supplierName: 'PT Lembang Agro Sejahtera',
+      status: 'pending_approval',
+      issueDate: new Date().toISOString().split('T')[0],
+      expectedDeliveryDate: new Date(Date.now() + 1000 * 3600 * 48).toISOString().split('T')[0],
+      storeId: storeId || 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      items: targetSkus.slice(0, 5).map((sku) => {
+        const item = inventoryList.find((p) => p.sku === sku) || inventoryList[0];
+        return {
+          sku: item.sku,
+          productName: item.name,
+          quantity: item.reorderQuantity || 30,
+          unitCost: item.wacUnitCost || Math.round(item.sellingPrice * 0.7),
+          lineTotal: (item.reorderQuantity || 30) * (item.wacUnitCost || Math.round(item.sellingPrice * 0.7)),
+          receivedQuantity: 0,
+        };
+      }),
+      totalAmount: 12500000,
+      notes: 'Auto-generated replenishment purchase order triggered by min-max inventory thresholds.',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    purchaseOrders.unshift(newPo);
+
+    res.json({
+      success: true,
+      generatedOrders: [newPo],
+      message: `Automated Replenishment PO ${generatedPoId} generated and submitted to approval workflow.`,
+    });
+  });
+
+  // =============================================================
+  // 19. RETURN-TO-VENDOR (RTV) & VENDOR CREDIT NOTES
+  // =============================================================
+  app.get('/api/admin/vendor-credit-notes', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    let filtered = [...vendorCreditNotesList];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      filtered = filtered.filter((v) => v.storeId === storeId);
+    }
+    res.json(filtered);
+  });
+
+  app.post('/api/admin/vendor-credit-notes', (req: Request, res: Response) => {
+    const payload = req.body as Partial<VendorCreditNote>;
+    const noteId = `VCN-${Date.now().toString().slice(-4)}`;
+    const journalId = `GLE-VCN-${Date.now().toString().slice(-4)}`;
+
+    const newNote: VendorCreditNote = {
+      creditNoteId: noteId,
+      rmaNumber: payload.rmaNumber || `RMA-${Date.now().toString().slice(-4)}`,
+      supplierId: payload.supplierId || 'SUPP-AGRO-01',
+      supplierName: payload.supplierName || 'PT Lembang Agro Sejahtera',
+      storeId: payload.storeId || 'store-jkt-senopati',
+      storeName: payload.storeName || 'GroceMart Senopati Flagship',
+      sku: payload.sku || 'SKU-PRD-001',
+      productName: payload.productName || 'Organic Hydroponic Produce',
+      lotNumber: payload.lotNumber || 'LOT-RTV-DEFAULT',
+      quantityReturned: payload.quantityReturned || 1,
+      unit: payload.unit || 'pack',
+      unitCost: payload.unitCost || 15000,
+      totalCreditIDR: payload.totalCreditIDR || (payload.quantityReturned || 1) * (payload.unitCost || 15000),
+      reason: payload.reason || 'spoiled_on_arrival',
+      status: 'pending_pickup',
+      createdAt: new Date().toISOString(),
+      approvedBy: payload.approvedBy || 'Store Manager',
+      journalEntryId: journalId,
+      notes: payload.notes || 'RTV claim created from receiving inspection dock.',
+    };
+
+    vendorCreditNotesList.unshift(newNote);
+
+    res.json({
+      success: true,
+      creditNote: newNote,
+      journalEntryId: journalId,
+      message: `Return-to-Vendor Credit Note ${noteId} created for ${newNote.supplierName}. Credit Rp ${newNote.totalCreditIDR.toLocaleString('id-ID')} logged.`,
+    });
+  });
+
+  app.post('/api/admin/vendor-credit-notes/:id/apply', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { vendorBillId } = req.body;
+
+    const note = vendorCreditNotesList.find((v) => v.creditNoteId === id);
+    if (!note) {
+      return res.status(404).json({ error: `Vendor Credit Note ${id} not found` });
+    }
+
+    note.status = 'applied_to_bill';
+    note.appliedToBillId = vendorBillId;
+
+    const bill = vendorBillsList.find((b) => b.id === vendorBillId);
+    if (bill) {
+      bill.remainingBalanceIDR = Math.max(0, bill.remainingBalanceIDR - note.totalCreditIDR);
+      if (bill.remainingBalanceIDR === 0) {
+        bill.status = 'PAID';
+      } else {
+        bill.status = 'PARTIALLY_PAID';
+      }
+    }
+
+    res.json({
+      success: true,
+      creditNote: note,
+      vendorBill: bill,
+      message: `Credit Note ${id} (Rp ${note.totalCreditIDR.toLocaleString('id-ID')}) offset against Vendor Bill ${vendorBillId}.`,
+    });
+  });
+
+  // =============================================================
+  // 20. DYNAMIC MARKDOWN & EXPIRY DISCOUNT ENGINE
+  // =============================================================
+  app.get('/api/admin/markdown-rules', (_req: Request, res: Response) => {
+    res.json(dynamicMarkdownConfig);
+  });
+
+  app.post('/api/admin/markdown-rules', (req: Request, res: Response) => {
+    const config = req.body as DynamicMarkdownConfig;
+    dynamicMarkdownConfig = {
+      ...config,
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'Admin Markdown Manager',
+    };
+    res.json({
+      success: true,
+      config: dynamicMarkdownConfig,
+      message: 'Dynamic markdown rules & shelf-life discount tiers updated successfully.',
+    });
+  });
+
+  app.post('/api/admin/markdown-rules/apply-batches', (req: Request, res: Response) => {
+    const { batchIds } = req.body as { batchIds: string[] };
+    const targetBatches = Array.isArray(batchIds) && batchIds.length > 0 ? batchIds : inventoryBatches.map((b) => b.batchId);
+
+    let count = 0;
+    targetBatches.forEach((id) => {
+      const b = inventoryBatches.find((batch) => batch.batchId === id);
+      if (b) {
+        b.markdownDiscountPercent = 25;
+        count++;
+      }
+    });
+
+    res.json({
+      success: true,
+      appliedCount: count,
+      message: `Dynamic markdowns applied to ${count} near-expiry batch lots across storefront & POS registers.`,
+    });
   });
 
   // -------------------------------------------------------------

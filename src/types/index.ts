@@ -697,7 +697,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -797,6 +797,35 @@ export interface OmzetAnalyticsReport {
     unitsSold: number;
     revenue: number;
   }[];
+  b2bVsB2cSplit?: {
+    b2cRevenue: number;
+    b2bRevenue: number;
+    totalRevenue: number;
+    b2bSharePercent: number;
+    b2cSharePercent: number;
+    b2bOrdersCount: number;
+    b2cOrders?: number;
+    b2bOrders?: number;
+  };
+  arAgingSummary?: {
+    currentIDR: number;
+    days31to60IDR: number;
+    overdue60PlusIDR: number;
+    totalArIDR: number;
+    overdueAccountsCount: number;
+    totalOutstandingAR?: number;
+    current0To30Days?: number;
+    aging31To60Days?: number;
+    overdueAbove60Days?: number;
+    overdueInvoicesCount?: number;
+  };
+  informalLandedCostSummary?: {
+    totalAbsorbedIDR: number;
+    kuliBongkarFeesIDR: number;
+    dockRetribusiIDR: number;
+    grossMarginProtectionPercent: number;
+    voucherCount?: number;
+  };
 }
 
 export interface TransactionAuditRecord {
@@ -1250,7 +1279,9 @@ export type ApprovalModuleType =
   | 'procurement_pr'
   | 'procurement_po'
   | 'stock_adjustment'
-  | 'waste_write_off';
+  | 'waste_write_off'
+  | 'b2b_credit_term'
+  | 'b2b_transfer_verification';
 
 export interface ApprovalTierRule {
   id: string;
@@ -1858,6 +1889,7 @@ export interface LandedCostRecord {
   customsDutyIDR: number;
   handlingCostIDR: number;
   insuranceCostIDR: number;
+  informalLaborCostIDR?: number; // Biaya Kuli Bongkar / Retribusi Non-Faktur (Petty Cash)
   totalLandedCostIDR: number;
   allocationMethod: 'EQUAL' | 'BY_QUANTITY' | 'BY_VALUE' | 'BY_WEIGHT';
   allocatedItems: Array<{
@@ -1969,3 +2001,131 @@ export interface EnterpriseQuotation {
   isProForma: boolean;
   convertedOrderId?: string;
 }
+
+// =============================================================
+// MODULE 14: ENTERPRISE B2B WHOLESALE CUSTOMER PORTAL & ERP
+// =============================================================
+export type B2BCustomerTier = 'warung_retailer' | 'agen_grosir' | 'horeca';
+
+export interface B2BCustomer {
+  id: string; // e.g. "B2B-CUST-001"
+  name: string; // e.g. "Toko Berkah Mandiri"
+  companyName: string;
+  tier: B2BCustomerTier;
+  tierLabel: string;
+  creditLimit: number;
+  outstandingAR: number;
+  availableCredit: number;
+  status: 'ACTIVE' | 'CREDIT_LOCKED' | 'SUSPENDED';
+  overdueDaysMax: number;
+  overdueInvoicesCount: number;
+  lockReason?: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  address: string;
+  npwp?: string;
+  paymentTermsAllowed: Array<'cash' | 'net7' | 'net14' | 'net30' | 'giro' | 'transfer_proof'>;
+}
+
+export type WholesaleUoM = 'pallet' | 'carton' | 'slop' | 'pack' | 'renceng' | 'pcs';
+
+export interface UoMHierarchyLevel {
+  uom: WholesaleUoM;
+  label: string;
+  multiplierToBase: number; // e.g. 1 Carton = 40 Pcs -> 40
+  unitPrice: number; // Price in IDR per this UoM
+  minBulkQty?: number;
+  tierDiscountPercent?: number;
+}
+
+export interface WholesaleProduct {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  categoryLabel: string;
+  baseUnit: string; // e.g. "Pcs", "Sachet", "Bungkus", "Kg"
+  baseUnitPrice: number;
+  image: string;
+  fallbackGradient: string;
+  description: string;
+  currentStockBaseUnits: number;
+  isRestrictedForPwp?: boolean; // Cigarettes / Infant Formula excluded from PWP spend
+  uomTiers: UoMHierarchyLevel[];
+  allowFractional: boolean; // allows 0.5 Renceng or 1.5 Carton
+}
+
+export interface B2BCartItem {
+  id: string;
+  product: WholesaleProduct;
+  selectedUoM: WholesaleUoM;
+  quantity: number; // can be fractional like 1.5
+  unitPrice: number;
+  baseUnitsCalculated: number; // quantity * multiplierToBase
+  lineTotal: number;
+  isPwpRedemption?: boolean;
+}
+
+export interface PWPRule {
+  id: string;
+  title: string;
+  description: string;
+  minSpendIDR: number; // e.g. 1,000,000
+  excludedCategories: string[]; // e.g. ['cigarettes', 'infant_formula']
+  redemptionProductSku: string;
+  redemptionProductName: string;
+  promoPriceIDR: number; // e.g. 10,000
+  normalPriceIDR: number; // e.g. 38,000
+  maxUnitsPerInvoice: number; // exactly 1 (non-cumulative)
+  image?: string;
+}
+
+export interface GiroPaymentRecord {
+  id: string; // e.g. "GIRO-2026-001"
+  orderId: string;
+  customerName: string;
+  customerId: string;
+  giroNumber: string; // e.g. "BG-BCA-9842103"
+  issuingBank: string; // e.g. "Bank Central Asia (BCA)"
+  amountIDR: number;
+  issueDate: string;
+  clearingDueDate: string; // Jatuh tempo
+  slipPhotoUrl?: string;
+  status: 'PENDING_CLEARING' | 'CLEARED' | 'BOUNCED';
+  clearedAt?: string;
+  bouncedAt?: string;
+  bounceReason?: string;
+  penaltyFeeIDR?: number;
+  journalEntryIds?: string[];
+}
+
+export interface B2BWholesaleOrder {
+  id: string; // e.g. "B2B-2026-0081"
+  customerId: string;
+  customerName: string;
+  companyName: string;
+  customerTier: B2BCustomerTier;
+  items: B2BCartItem[];
+  subtotalIDR: number;
+  pwpDiscountIDR: number;
+  taxPPN11IDR: number;
+  totalAmountIDR: number;
+  paymentMethod: 'term_net7' | 'term_net14' | 'term_net30' | 'bilyet_giro' | 'transfer_verification' | 'instant_va';
+  paymentStatus: 'AWAITING_APPROVAL' | 'PENDING_VERIFICATION' | 'APPROVED_CREDIT' | 'GIRO_PENDING' | 'SETTLED' | 'BOUNCED';
+  giroDetails?: {
+    giroNumber: string;
+    bankName: string;
+    clearingDueDate: string;
+    nominal: number;
+  };
+  transferProofUrl?: string;
+  approvalRequestId?: string;
+  status: 'DRAFT' | 'PENDING_FINANCE' | 'CONFIRMED' | 'PICKING' | 'DISPATCHED' | 'DELIVERED';
+  totalBaseUnits: number;
+  totalCogsIDR: number;
+  orderDate: string;
+  duePaymentDate?: string;
+  journalEntryIds: string[];
+}
+

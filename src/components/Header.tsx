@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { ShoppingBag, User, Menu, X, ArrowRight, Store, BookOpen, Truck, Sparkles, ShieldCheck, AlertTriangle, CreditCard } from 'lucide-react';
-import type { CartItem, StoreOperationalStatus } from '../types/index.ts';
+import type { CartItem, B2BCartItem, StoreOperationalStatus } from '../types/index.ts';
 import { formatIDR } from '../utils/formatters';
 
 interface HeaderProps {
   cartItems: CartItem[];
+  b2bCartItems?: B2BCartItem[];
   onOpenCart: () => void;
   onOpenPortal: () => void;
   storeStatus?: StoreOperationalStatus | null;
@@ -13,10 +14,15 @@ interface HeaderProps {
   isLoggedIn: boolean;
   customerName?: string;
   memberTier?: string;
+  storefrontMode?: 'b2c' | 'b2b';
+  onToggleStorefrontMode?: (mode: 'b2c' | 'b2b') => void;
+  b2bCustomerName?: string;
+  b2bCustomerTier?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   cartItems,
+  b2bCartItems = [],
   onOpenCart,
   onOpenPortal,
   storeStatus,
@@ -25,11 +31,21 @@ export const Header: React.FC<HeaderProps> = ({
   isLoggedIn,
   customerName,
   memberTier,
+  storefrontMode = 'b2c',
+  onToggleStorefrontMode,
+  b2bCustomerName,
+  b2bCustomerTier,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const totalItemsCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-  const cartSubtotal = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+  const isB2B = storefrontMode === 'b2b';
+  const totalB2CItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const totalB2BItems = b2bCartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const totalItemsCount = isB2B ? totalB2BItems : totalB2CItems;
+
+  const b2cSubtotal = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+  const b2bSubtotal = b2bCartItems.reduce((acc, item) => acc + item.lineTotal, 0);
+  const cartSubtotal = isB2B ? b2bSubtotal : b2cSubtotal;
 
   const handleMobileNav = (sectionId: string) => {
     setMobileMenuOpen(false);
@@ -49,36 +65,36 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-4 sm:gap-8 h-20">
-          {/* Zone 1: Brand Wordmark (Strict single element) */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between gap-2 sm:gap-6 h-16 sm:h-20">
+          {/* Zone 1: Brand Wordmark */}
           <button
             onClick={() => onNavigate('hero')}
-            className="text-left group cursor-pointer focus:outline-none flex items-center gap-3 shrink-0 py-2"
+            className="text-left group cursor-pointer focus:outline-none flex items-center gap-2 sm:gap-3 shrink-0 py-1"
             aria-label="GroceMart Home"
           >
-            <div className="w-10 h-10 rounded-xl bg-emerald-800 text-amber-300 flex items-center justify-center font-bold text-xl shadow-xs group-hover:bg-emerald-900 group-hover:scale-105 transition-all">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-800 text-amber-300 flex items-center justify-center font-bold text-lg sm:text-xl shadow-xs group-hover:bg-emerald-900 group-hover:scale-105 transition-all">
               G
             </div>
             <div className="whitespace-nowrap shrink-0">
-              <span className="text-2xl font-bold tracking-tight text-stone-900 group-hover:text-emerald-800 transition-colors font-display">
+              <span className="text-lg sm:text-2xl font-bold tracking-tight text-stone-900 group-hover:text-emerald-800 transition-colors font-display">
                 GroceMart
               </span>
-              <span className="hidden sm:inline-block ml-2 text-xs font-semibold text-emerald-800/80 uppercase tracking-widest">
+              <span className="hidden xl:inline-block ml-2 text-xs font-semibold text-emerald-800/80 uppercase tracking-widest">
                 Est. 1998
               </span>
             </div>
           </button>
 
-          {/* Zone 2: 4-5 Clean single-line text navigation links (Desktop) */}
-          <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-stone-600">
+          {/* Zone 2: Navigation Links (Desktop) */}
+          <nav className="hidden lg:flex items-center gap-6 xl:gap-8 text-sm font-medium text-stone-600">
             <button
               onClick={() => onNavigate('story')}
               className={`hover:text-emerald-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer py-2 ${
                 activeSection === 'story' ? 'text-emerald-800 font-semibold' : ''
               }`}
             >
-              Our Heritage & Story
+              Our Heritage
             </button>
             <button
               onClick={() => onNavigate('stores')}
@@ -94,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
                 activeSection === 'catalog' ? 'text-emerald-800 font-semibold' : ''
               }`}
             >
-              Shop Groceries
+              {isB2B ? 'Wholesale Catalog' : 'Shop Groceries'}
             </button>
             <button
               onClick={() => onNavigate('tracking')}
@@ -106,40 +122,81 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </nav>
 
-          {/* Zone 3: Primary Action & Portal Trigger */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Staff ERP & POS Quick Portal Button */}
+          {/* Zone 3: Primary Action & Controls (Responsive across mobile, tablet, desktop) */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* Single Source of Truth Mode Switcher (Visible on both Mobile and Desktop) */}
+            {onToggleStorefrontMode && (
+              <div className="flex items-center p-0.5 sm:p-1 bg-stone-100 rounded-xl border border-stone-200 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => onToggleStorefrontMode('b2c')}
+                  className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg transition-all cursor-pointer text-[11px] sm:text-xs ${
+                    storefrontMode === 'b2c'
+                      ? 'bg-white text-emerald-900 font-bold shadow-xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                  title="Switch to B2C Retail Groceries"
+                >
+                  <span className="inline md:hidden">B2C</span>
+                  <span className="hidden md:inline">B2C Retail</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onToggleStorefrontMode('b2b')}
+                  className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg transition-all cursor-pointer text-[11px] sm:text-xs flex items-center gap-1 sm:gap-1.5 ${
+                    storefrontMode === 'b2b'
+                      ? 'bg-emerald-900 text-amber-300 font-bold shadow-xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                  title="Switch to B2B Wholesale Portal"
+                >
+                  <span className="inline md:hidden">B2B</span>
+                  <span className="hidden md:inline">B2B Wholesale</span>
+                  <span className="text-[9px] px-1 py-0.2 bg-amber-400 text-stone-950 rounded font-black hidden sm:inline">
+                    GROSIR
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* Staff ERP & POS Quick Portal Button (Desktop/Tablet) */}
             <a
               href="#admin-erp"
-              className="hidden md:flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 active:scale-98 rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer min-h-[44px]"
+              className="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 active:scale-98 rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer min-h-[38px]"
               title="Open Staff ERP & POS Cashier Portal"
             >
               <CreditCard className="w-3.5 h-3.5 text-emerald-800" />
               <span>ERP &amp; POS</span>
             </a>
 
-            {/* Customer Portal Button */}
+            {/* Unified Customer Portal Button */}
             <button
               onClick={onOpenPortal}
-              className="hidden sm:flex items-center gap-2 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 active:scale-98 rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer min-h-[44px]"
-              title="Customer Portal"
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 active:scale-98 rounded-xl transition-all whitespace-nowrap shrink-0 cursor-pointer min-h-[38px] sm:min-h-[42px]"
+              title={isB2B ? 'Wholesale Account & Credit Facility' : 'Customer Account Portal'}
             >
               <User className="w-4 h-4 text-emerald-800" />
-              <span>
-                {isLoggedIn && customerName ? customerName.split(' ')[0] : 'Customer Portal'}
+              <span className="hidden sm:inline">
+                {isB2B
+                  ? (b2bCustomerName ? b2bCustomerName.split(' ')[0] : 'B2B Account')
+                  : (isLoggedIn && customerName ? customerName.split(' ')[0] : 'Portal')}
               </span>
-              {memberTier && (
-                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-0.5">
+              {isB2B && b2bCustomerTier ? (
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded hidden sm:inline">
+                  {b2bCustomerTier}
+                </span>
+              ) : memberTier ? (
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded hidden sm:inline">
                   Gold
                 </span>
-              )}
+              ) : null}
             </button>
 
-            {/* Cart Trigger Button */}
+            {/* Unified Cart Trigger Button */}
             <button
               onClick={onOpenCart}
-              className="flex items-center gap-2.5 px-4 py-2.5 text-xs sm:text-sm font-medium text-white bg-emerald-800 hover:bg-emerald-900 active:scale-95 rounded-xl shadow-xs hover:shadow transition-all whitespace-nowrap shrink-0 cursor-pointer min-h-[44px]"
-              aria-label={`Shopping bag with ${totalItemsCount} items`}
+              className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white bg-emerald-800 hover:bg-emerald-900 active:scale-95 rounded-xl shadow-xs hover:shadow transition-all whitespace-nowrap shrink-0 cursor-pointer min-h-[38px] sm:min-h-[42px]"
+              aria-label={`Shopping cart with ${totalItemsCount} items`}
             >
               <div className="relative">
                 <ShoppingBag className="w-4 h-4 text-amber-300" />
@@ -149,9 +206,11 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 )}
               </div>
-              <span className="font-semibold">Cart</span>
+              <span className="font-semibold hidden xs:inline">
+                {isB2B ? 'Grosir' : 'Cart'}
+              </span>
               {totalItemsCount > 0 && (
-                <span className="hidden sm:inline text-emerald-200 font-mono text-xs tabular-nums">
+                <span className="hidden md:inline text-emerald-200 font-mono text-xs tabular-nums">
                   ({formatIDR(cartSubtotal)})
                 </span>
               )}
@@ -160,7 +219,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Mobile Menu Toggle Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-xl transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+              className="lg:hidden p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-xl transition-colors min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
               aria-label="Toggle navigation menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

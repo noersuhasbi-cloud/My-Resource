@@ -61,7 +61,7 @@ export type AdminDashboardTab =
   | 'rbac'
   | 'audit';
 
-export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills';
+export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar';
 
 interface AdminSidebarProps {
   theme: 'light' | 'dark';
@@ -649,6 +649,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 >
                   <Building2 className="w-3 h-3 text-teal-600" />
                   <span className="truncate">Chart of Accounts (COA)</span>
+                </button>
+
+                <button
+                  onClick={() => handleAccountingSubClick('b2b_ar')}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                    activeTab === 'accounting' && accountingSubTab === 'b2b_ar'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      : isLight
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60'
+                  }`}
+                >
+                  <CreditCard className="w-3 h-3 text-emerald-600" />
+                  <span className="truncate">B2B AR &amp; Giro Clearing</span>
                 </button>
               </div>
             )}

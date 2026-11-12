@@ -12,10 +12,25 @@ import { ProductCatalog } from './components/ProductCatalog';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { CustomerPortal } from './components/CustomerPortal';
+import { B2BWholesalePortal } from './components/B2BWholesalePortal';
 import { Footer } from './components/Footer';
 import { ToastContainer, ToastMessage } from './components/Toast';
 
-import { CartItem, Product, StoreLocation, CustomerAccount, Order, OrderStatus, StoreOperationalStatus, UserRole, StaffShiftSession } from './types';
+import {
+  CartItem,
+  Product,
+  StoreLocation,
+  CustomerAccount,
+  Order,
+  OrderStatus,
+  StoreOperationalStatus,
+  UserRole,
+  StaffShiftSession,
+  B2BCustomer,
+  B2BCartItem,
+  B2BWholesaleOrder,
+  GiroPaymentRecord,
+} from './types';
 import { STORE_LOCATIONS, PRODUCTS, INITIAL_DEMO_ACCOUNT, INITIAL_ORDERS } from './data/mockData';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -40,6 +55,14 @@ export default function App() {
       if (saved) return JSON.parse(saved);
     } catch {}
     return null;
+  });
+
+  const [storefrontMode, setStorefrontMode] = useState<'b2c' | 'b2b'>(() => {
+    try {
+      const hash = window.location.hash;
+      if (hash === '#b2b' || hash === '#wholesale') return 'b2b';
+    } catch {}
+    return 'b2c';
   });
 
   const [portalView, setPortalView] = useState<PortalView>(() => {
@@ -70,8 +93,12 @@ export default function App() {
         }
       } else if (hash === '#admin-login') {
         setPortalView('admin_login');
+      } else if (hash === '#b2b' || hash === '#wholesale') {
+        setPortalView('customer');
+        setStorefrontMode('b2b');
       } else if (!hash || hash === '#storefront' || hash === '#home') {
         setPortalView('customer');
+        setStorefrontMode('b2c');
       }
     };
 
@@ -172,6 +199,80 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
   const [isPortalOpen, setIsPortalOpen] = useState<boolean>(false);
   const [trackingOrderId, setTrackingOrderId] = useState<string | undefined>(undefined);
+  const [portalInitialTab, setPortalInitialTab] = useState<
+    'profile' | 'orders' | 'track' | 'suggestions' | 'b2b_credit' | 'b2b_orders' | 'b2b_profile' | undefined
+  >(undefined);
+
+  // 4b. B2B Wholesale state & persistence
+  const [b2bCustomers, setB2bCustomers] = useState<B2BCustomer[]>([]);
+  const [selectedB2bCustomerId, setSelectedB2bCustomerId] = useState<string>('cust-b2b-01');
+  const [b2bOrders, setB2bOrders] = useState<B2BWholesaleOrder[]>([]);
+  const [giroRecords, setGiroRecords] = useState<GiroPaymentRecord[]>([]);
+  const [b2bCartItems, setB2bCartItems] = useState<B2BCartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('grocemart_b2b_cart');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+  const [isB2bCartOpen, setIsB2bCartOpen] = useState<boolean>(false);
+
+  // Sync B2B Wholesale Initial Data from API
+  useEffect(() => {
+    Promise.all([
+      apiClient.getB2BCustomers(),
+      apiClient.getB2BOrders(),
+      apiClient.getGiroRecords(),
+    ])
+      .then(([custs, ords, giros]) => {
+        setB2bCustomers(custs);
+        setB2bOrders(ords);
+        setGiroRecords(giros);
+      })
+      .catch((err) => {
+        console.warn('Initial B2B data fetch notice:', err);
+      });
+  }, []);
+
+  // Persist B2B Cart
+  useEffect(() => {
+    try {
+      localStorage.setItem('grocemart_b2b_cart', JSON.stringify(b2bCartItems));
+    } catch (e) {}
+  }, [b2bCartItems]);
+
+  // B2B Giro Action Handlers
+  const handleClearGiro = async (giroId: string) => {
+    try {
+      const res = await apiClient.clearGiro(giroId);
+      setGiroRecords((prev) => prev.map((g) => (g.id === giroId ? res.giro : g)));
+      const [custs, ords] = await Promise.all([
+        apiClient.getB2BCustomers(),
+        apiClient.getB2BOrders(),
+      ]);
+      setB2bCustomers(custs);
+      setB2bOrders(ords);
+      showToast('Kliring Bilyet Giro Sukses', `Warkat ${giroId} telah dicairkan ke Rekening Bank Operasional.`);
+    } catch (err: any) {
+      showToast('Gagal Kliring Giro', err.message || String(err));
+    }
+  };
+
+  const handleBounceGiro = async (giroId: string) => {
+    try {
+      const res = await apiClient.bounceGiro(giroId, 'Tolakan Kliring: Saldo Giro Bank Tidak Mencukupi');
+      setGiroRecords((prev) => prev.map((g) => (g.id === giroId ? res.giro : g)));
+      const [custs, ords] = await Promise.all([
+        apiClient.getB2BCustomers(),
+        apiClient.getB2BOrders(),
+      ]);
+      setB2bCustomers(custs);
+      setB2bOrders(ords);
+      showToast('Tolakan Giro Tercatat', 'Akun dibekukan (Auto-Credit Lock) & denda administratif Rp 150.000 diterapkan.');
+    } catch (err: any) {
+      showToast('Gagal Tolakan Giro', err.message || String(err));
+    }
+  };
 
   // 5. Store & Delivery preferences
   const [selectedPickupStore, setSelectedPickupStore] = useState<StoreLocation>(STORE_LOCATIONS[0]);
@@ -470,47 +571,88 @@ export default function App() {
       {/* Top Navigation - Customer only, completely removed Admin HQ shortcut */}
       <Header
         cartItems={cartItems}
-        onOpenCart={() => setIsCartOpen(true)}
-        onOpenPortal={() => setIsPortalOpen(true)}
+        b2bCartItems={b2bCartItems}
+        onOpenCart={() => {
+          if (storefrontMode === 'b2b') {
+            setIsB2bCartOpen(true);
+          } else {
+            setIsCartOpen(true);
+          }
+        }}
+        onOpenPortal={() => {
+          setPortalInitialTab(storefrontMode === 'b2b' ? 'b2b_credit' : 'profile');
+          setIsPortalOpen(true);
+        }}
         storeStatus={storeStatus}
         activeSection={activeSection}
         onNavigate={handleNavigate}
         isLoggedIn={!!customerAccount}
         customerName={customerAccount?.name}
         memberTier={customerAccount?.memberTier}
+        b2bCustomerName={
+          b2bCustomers.find((c) => c.id === selectedB2bCustomerId)?.companyName || 'Toko Berkah Mandiri'
+        }
+        b2bCustomerTier={
+          b2bCustomers.find((c) => c.id === selectedB2bCustomerId)?.tier || 'Agen Grosir'
+        }
+        storefrontMode={storefrontMode}
+        onToggleStorefrontMode={(mode) => setStorefrontMode(mode)}
       />
 
       <main className="flex-1">
-        {/* Hero Section */}
-        <HeroSection
-          onNavigateToCatalog={() => handleNavigate('catalog')}
-          onNavigateToStores={() => handleNavigate('stores')}
-          onNavigateToStory={() => handleNavigate('story')}
-        />
+        {storefrontMode === 'b2b' ? (
+          <B2BWholesalePortal
+            onBackToRetailStorefront={() => setStorefrontMode('b2c')}
+            onShowToast={showToast}
+            isCartOpen={isB2bCartOpen}
+            onCloseCart={() => setIsB2bCartOpen(false)}
+            onOpenCart={() => setIsB2bCartOpen(true)}
+            cartItems={b2bCartItems}
+            onUpdateCartItems={setB2bCartItems}
+            onOpenCustomerPortal={(tab) => {
+              setPortalInitialTab(tab);
+              setIsPortalOpen(true);
+            }}
+            customers={b2bCustomers}
+            selectedCustomerId={selectedB2bCustomerId}
+            onSelectCustomerId={setSelectedB2bCustomerId}
+            b2bOrders={b2bOrders}
+            onUpdateB2bOrders={setB2bOrders}
+          />
+        ) : (
+          <>
+            {/* Hero Section */}
+            <HeroSection
+              onNavigateToCatalog={() => handleNavigate('catalog')}
+              onNavigateToStores={() => handleNavigate('stores')}
+              onNavigateToStory={() => handleNavigate('story')}
+            />
 
-        {/* Heritage & 28-Year Story Section */}
-        <HeritageStory />
+            {/* Heritage & 28-Year Story Section */}
+            <HeritageStory />
 
-        {/* Store Locations Directory */}
-        <StoreLocations
-          selectedPickupStore={selectedPickupStore}
-          onSelectPickupStore={(store) => {
-            setSelectedPickupStore(store);
-          }}
-          onShopStoreGroceries={(store) => {
-            setSelectedPickupStore(store);
-            handleNavigate('catalog');
-          }}
-        />
+            {/* Store Locations Directory */}
+            <StoreLocations
+              selectedPickupStore={selectedPickupStore}
+              onSelectPickupStore={(store) => {
+                setSelectedPickupStore(store);
+              }}
+              onShopStoreGroceries={(store) => {
+                setSelectedPickupStore(store);
+                handleNavigate('catalog');
+              }}
+            />
 
-        {/* Fresh Groceries Catalog */}
-        <ProductCatalog
-          cartItems={cartItems}
-          onAddToCart={handleAddToCart}
-          onUpdateQuantity={handleUpdateQuantity}
-          selectedStore={selectedPickupStore}
-          onShowToast={showToast}
-        />
+            {/* Fresh Groceries Catalog */}
+            <ProductCatalog
+              cartItems={cartItems}
+              onAddToCart={handleAddToCart}
+              onUpdateQuantity={handleUpdateQuantity}
+              selectedStore={selectedPickupStore}
+              onShowToast={showToast}
+            />
+          </>
+        )}
       </main>
 
       {/* Corporate & Retail Footer */}
@@ -571,6 +713,7 @@ export default function App() {
         onClose={() => {
           setIsPortalOpen(false);
           setTrackingOrderId(undefined);
+          setPortalInitialTab(undefined);
         }}
         customerAccount={customerAccount}
         onLogin={(acc) => setCustomerAccount(acc)}
@@ -584,6 +727,15 @@ export default function App() {
         initialTrackingOrderId={trackingOrderId}
         onReorder={handleReorder}
         onAddToCart={handleAddToCart}
+        storefrontMode={storefrontMode}
+        b2bCustomers={b2bCustomers}
+        selectedB2bCustomerId={selectedB2bCustomerId}
+        onSelectB2bCustomerId={setSelectedB2bCustomerId}
+        b2bOrders={b2bOrders}
+        giroRecords={giroRecords}
+        onClearGiro={handleClearGiro}
+        onBounceGiro={handleBounceGiro}
+        initialTab={portalInitialTab}
       />
     </div>
   );

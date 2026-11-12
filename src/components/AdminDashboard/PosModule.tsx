@@ -1033,338 +1033,352 @@ export const PosModule: React.FC<PosModuleProps> = ({
         )}
 
       {/* 4. PAYMENT TENDER MODAL (Cash, QRIS, Card, Currency Conversion) */}
-      {isTenderModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      {isTenderModalOpen &&
+        createPortal(
           <div
-            className={`w-full max-w-lg rounded-2xl border p-6 shadow-2xl space-y-5 animate-in zoom-in-95 ${
-              isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
-            }`}
+            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            onClick={() => setIsTenderModalOpen(false)}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
-              <div className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100">
-                  Payment Tender &amp; Register Settle
-                </h3>
+            <div
+              className={`w-full max-w-lg rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto animate-in zoom-in-95 ${
+                isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100">
+                    Payment Tender &amp; Register Settle
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsTenderModalOpen(false)}
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsTenderModalOpen(false)}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            {/* Total Due Banner */}
-            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between">
-              <div>
-                <span className="text-xs text-zinc-500 dark:text-zinc-300">Total Tender Due:</span>
-                <span className="text-2xl font-black text-emerald-800 dark:text-emerald-300 font-mono block">
-                  {formatCurrency(totalAmount)}
-                </span>
-              </div>
-              {activeCurrency !== 'IDR' && (
-                <div className="text-right">
-                  <span className="text-[11px] text-slate-600 dark:text-zinc-300 font-mono font-medium">Base Statutory IDR:</span>
-                  <span className="text-xs font-bold font-mono text-slate-700 dark:text-zinc-300 block">
-                    {formatIDR(totalAmount)}
+              {/* Total Due Banner */}
+              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-300">Total Tender Due:</span>
+                  <span className="text-2xl font-black text-emerald-800 dark:text-emerald-300 font-mono block">
+                    {formatCurrency(totalAmount)}
                   </span>
                 </div>
-              )}
-            </div>
-
-            {/* Payment Method Selector Tabs */}
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('cash')}
-                className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
-                  paymentMethod === 'cash'
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                    : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
-                }`}
-              >
-                <Banknote className="w-4 h-4" />
-                <span>Cash (Tunai)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('qris')}
-                className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
-                  paymentMethod === 'qris'
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                    : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
-                }`}
-              >
-                <QrCode className="w-4 h-4" />
-                <span>QRIS Instant</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('debit_card')}
-                className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
-                  paymentMethod.includes('card')
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                    : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
-                }`}
-              >
-                <CreditCard className="w-4 h-4" />
-                <span>Debit / Card</span>
-              </button>
-            </div>
-
-            {/* Method Specific Panels */}
-            {paymentMethod === 'cash' && (
-              <div className="space-y-3 pt-1">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 dark:text-zinc-200 block mb-1">
-                    Cash Tendered (Uang Diterima):
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-400">
-                      Rp
+                {activeCurrency !== 'IDR' && (
+                  <div className="text-right">
+                    <span className="text-[11px] text-slate-600 dark:text-zinc-300 font-mono font-medium">Base Statutory IDR:</span>
+                    <span className="text-xs font-bold font-mono text-slate-700 dark:text-zinc-300 block">
+                      {formatIDR(totalAmount)}
                     </span>
-                    <input
-                      type="number"
-                      value={cashTendered || ''}
-                      onChange={(e) => setCashTendered(Number(e.target.value))}
-                      className="w-full pl-9 pr-3 py-2 text-base font-bold font-mono rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white border-slate-300 text-slate-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-400"
-                      placeholder="0"
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Method Selector Tabs */}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('cash')}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
+                    paymentMethod === 'cash'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
+                  }`}
+                >
+                  <Banknote className="w-4 h-4" />
+                  <span>Cash (Tunai)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('qris')}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
+                    paymentMethod === 'qris'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
+                  }`}
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>QRIS Instant</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('debit_card')}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
+                    paymentMethod.includes('card')
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Debit / Card</span>
+                </button>
+              </div>
+
+              {/* Method Specific Panels */}
+              {paymentMethod === 'cash' && (
+                <div className="space-y-3 pt-1">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 dark:text-zinc-200 block mb-1">
+                      Cash Tendered (Uang Diterima):
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-400">
+                        Rp
+                      </span>
+                      <input
+                        type="number"
+                        value={cashTendered || ''}
+                        onChange={(e) => setCashTendered(Number(e.target.value))}
+                        className="w-full pl-9 pr-3 py-2 text-base font-bold font-mono rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white border-slate-300 text-slate-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-400"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick denomination chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setCashTendered(totalAmount)}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 text-xs font-bold cursor-pointer"
+                    >
+                      Uang Pas (Exact)
+                    </button>
+                    {[50000, 100000, 200000, 500000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setCashTendered(amt)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-xs font-mono cursor-pointer"
+                      >
+                        Rp {amt.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Change calculation */}
+                  <div className="p-3 rounded-xl bg-slate-100 dark:bg-zinc-800/80 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-zinc-200">Change Due (Kembalian):</span>
+                    <span
+                      className={`text-base font-black font-mono ${
+                        cashTendered >= totalAmount ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
+                      }`}
+                    >
+                      {cashTendered >= totalAmount ? formatIDR(cashChange) : 'Kurang ' + formatIDR(totalAmount - cashTendered)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {paymentMethod === 'qris' && (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border text-center space-y-3">
+                  <div className="w-36 h-36 mx-auto bg-white p-2 rounded-xl border shadow-sm flex items-center justify-center">
+                    <QRCodeSVG
+                      value={`00020101021226670014ID.LINKAJA.WWW01189360091438201948250215ID10200392817440303UME520454115303360540${totalAmount}5802ID5913GroceMart SEN6007Jakarta61051211062070703A016304`}
+                      size={130}
+                      level="M"
                     />
                   </div>
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-800 dark:text-zinc-200 block">
+                      GroceMart Senopati Dynamic QRIS
+                    </span>
+                    <span className="text-[11px] text-zinc-400 font-mono">
+                      NMID: ID1020039281744 · ASPI Standard 2026
+                    </span>
+                  </div>
                 </div>
+              )}
 
-                {/* Quick denomination chips */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setCashTendered(totalAmount)}
-                    className="px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 text-xs font-bold cursor-pointer"
-                  >
-                    Uang Pas (Exact)
-                  </button>
-                  {[50000, 100000, 200000, 500000].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => setCashTendered(amt)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-xs font-mono cursor-pointer"
-                    >
-                      Rp {amt.toLocaleString()}
-                    </button>
-                  ))}
+              {paymentMethod.includes('card') && (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border text-center space-y-2">
+                  <CreditCard className="w-8 h-8 text-blue-500 mx-auto" />
+                  <div className="text-xs">
+                    <span className="font-bold block">BCA EDC Register Terminal #04</span>
+                    <span className="text-[11px] text-zinc-400">
+                      Insert or Tap Customer Debit / Credit Card
+                    </span>
+                  </div>
                 </div>
+              )}
 
-                {/* Change calculation */}
-                <div className="p-3 rounded-xl bg-slate-100 dark:bg-zinc-800/80 flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-700 dark:text-zinc-200">Change Due (Kembalian):</span>
-                  <span
-                    className={`text-base font-black font-mono ${
-                      cashTendered >= totalAmount ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
-                    }`}
-                  >
-                    {cashTendered >= totalAmount ? formatIDR(cashChange) : 'Kurang ' + formatIDR(totalAmount - cashTendered)}
-                  </span>
-                </div>
+              {/* Accounting Hook Notice */}
+              <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-zinc-800/40 text-[10px] text-zinc-500 flex items-center gap-1.5 font-mono">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                <span>
+                  Auto GL Posting: Debit Asset #{paymentMethod === 'cash' ? '1010' : paymentMethod === 'qris' ? '1030' : '1020'} · Credit Sales #4010 · COGS #5010
+                </span>
               </div>
-            )}
 
-            {paymentMethod === 'qris' && (
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border text-center space-y-3">
-                <div className="w-36 h-36 mx-auto bg-white p-2 rounded-xl border shadow-sm flex items-center justify-center">
-                  <QRCodeSVG
-                    value={`00020101021226670014ID.LINKAJA.WWW01189360091438201948250215ID10200392817440303UME520454115303360540${totalAmount}5802ID5913GroceMart SEN6007Jakarta61051211062070703A016304`}
-                    size={130}
-                    level="M"
-                  />
-                </div>
-                <div className="text-xs">
-                  <span className="font-bold text-slate-800 dark:text-zinc-200 block">
-                    GroceMart Senopati Dynamic QRIS
-                  </span>
-                  <span className="text-[11px] text-zinc-400 font-mono">
-                    NMID: ID1020039281744 · ASPI Standard 2026
-                  </span>
-                </div>
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTenderModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={isProcessingCheckout || (paymentMethod === 'cash' && cashTendered < totalAmount)}
+                  onClick={handleExecuteCheckout}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isProcessingCheckout ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Deducting Stock &amp; Syncing GL...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Complete Sale &amp; Print Struk</span>
+                    </>
+                  )}
+                </button>
               </div>
-            )}
-
-            {paymentMethod.includes('card') && (
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border text-center space-y-2">
-                <CreditCard className="w-8 h-8 text-blue-500 mx-auto" />
-                <div className="text-xs">
-                  <span className="font-bold block">BCA EDC Register Terminal #04</span>
-                  <span className="text-[11px] text-zinc-400">
-                    Insert or Tap Customer Debit / Credit Card
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Accounting Hook Notice */}
-            <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-zinc-800/40 text-[10px] text-zinc-500 flex items-center gap-1.5 font-mono">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-              <span>
-                Auto GL Posting: Debit Asset #{paymentMethod === 'cash' ? '1010' : paymentMethod === 'qris' ? '1030' : '1020'} · Credit Sales #4010 · COGS #5010
-              </span>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsTenderModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                disabled={isProcessingCheckout || (paymentMethod === 'cash' && cashTendered < totalAmount)}
-                onClick={handleExecuteCheckout}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                {isProcessingCheckout ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Deducting Stock &amp; Syncing GL...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Complete Sale &amp; Print Struk</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* 5. ELECTRONIC THERMAL RECEIPT MODAL (Struk Kasir) */}
-      {completedReceipt && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white text-slate-900 border border-slate-200 p-6 shadow-2xl space-y-4 font-mono text-xs animate-in zoom-in-95">
-            {/* Header */}
-            <div className="text-center space-y-1 pb-3 border-b border-dashed border-slate-300">
-              <div className="w-8 h-8 rounded-lg bg-emerald-800 text-amber-300 font-bold text-sm mx-auto flex items-center justify-center">
-                GM
+      {completedReceipt &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            onClick={() => setCompletedReceipt(null)}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl bg-white text-slate-900 border border-slate-200 p-6 shadow-2xl space-y-4 font-mono text-xs my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto animate-in zoom-in-95"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="text-center space-y-1 pb-3 border-b border-dashed border-slate-300">
+                <div className="w-8 h-8 rounded-lg bg-emerald-800 text-amber-300 font-bold text-sm mx-auto flex items-center justify-center">
+                  GM
+                </div>
+                <h3 className="font-extrabold text-sm tracking-wider">PT BUMI RETAIL SEJAHTERA</h3>
+                <p className="text-[10px] text-zinc-500 leading-tight">
+                  {completedReceipt.storeName}
+                  <br />
+                  Jl. Senopati No. 82, Jakarta Selatan 12110
+                </p>
               </div>
-              <h3 className="font-extrabold text-sm tracking-wider">PT BUMI RETAIL SEJAHTERA</h3>
-              <p className="text-[10px] text-zinc-500 leading-tight">
-                {completedReceipt.storeName}
-                <br />
-                Jl. Senopati No. 82, Jakarta Selatan 12110
-              </p>
-            </div>
 
-            {/* Metadata */}
-            <div className="text-[10px] space-y-0.5 text-slate-600 pb-2 border-b border-dashed border-slate-300">
-              <div className="flex justify-between">
-                <span>Receipt #:</span>
-                <span className="font-bold text-slate-900">{completedReceipt.receiptNumber}</span>
+              {/* Metadata */}
+              <div className="text-[10px] space-y-0.5 text-slate-600 pb-2 border-b border-dashed border-slate-300">
+                <div className="flex justify-between">
+                  <span>Receipt #:</span>
+                  <span className="font-bold text-slate-900">{completedReceipt.receiptNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Date:</span>
+                  <span>{new Date(completedReceipt.timestamp).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Cashier:</span>
+                  <span>{completedReceipt.cashierName.split(' ')[0]} (Reg #04)</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span>Date:</span>
-                <span>{new Date(completedReceipt.timestamp).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Cashier:</span>
-                <span>{completedReceipt.cashierName.split(' ')[0]} (Reg #04)</span>
-              </div>
-            </div>
 
-            {/* Line Items */}
-            <div className="space-y-1.5 py-1">
-              {completedReceipt.items.map((item, idx) => (
-                <div key={`${item.id}-${idx}`} className="text-[10px]">
-                  <div className="flex justify-between font-bold">
-                    <span className="truncate max-w-[190px]">{item.name}</span>
-                    <span>{formatIDR(item.lineTotal)}</span>
+              {/* Line Items */}
+              <div className="space-y-1.5 py-1">
+                {completedReceipt.items.map((item, idx) => (
+                  <div key={`${item.id}-${idx}`} className="text-[10px]">
+                    <div className="flex justify-between font-bold">
+                      <span className="truncate max-w-[190px]">{item.name}</span>
+                      <span>{formatIDR(item.lineTotal)}</span>
+                    </div>
+                    <div className="text-zinc-500 text-[9px] flex justify-between">
+                      <span>
+                        {item.quantity} x {formatIDR(item.unitPrice)}
+                      </span>
+                      {item.lotNumber && <span>LOT: {item.lotNumber}</span>}
+                    </div>
                   </div>
-                  <div className="text-zinc-500 text-[9px] flex justify-between">
+                ))}
+              </div>
+
+              {/* Totals */}
+              <div className="pt-2 border-t border-dashed border-slate-300 space-y-0.5 text-[10px]">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>{formatIDR(completedReceipt.subtotal)}</span>
+                </div>
+                {completedReceipt.discount > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Discount:</span>
+                    <span>-{formatIDR(completedReceipt.discount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span>PPN (11%):</span>
+                  <span>{formatIDR(completedReceipt.tax)}</span>
+                </div>
+                <div className="flex justify-between text-xs font-bold pt-1 border-t border-zinc-900">
+                  <span>TOTAL:</span>
+                  <span>{formatIDR(completedReceipt.total)}</span>
+                </div>
+                {completedReceipt.currency !== 'IDR' && (
+                  <div className="flex justify-between text-[10px] text-zinc-500">
+                    <span>Tender ({completedReceipt.currency}):</span>
                     <span>
-                      {item.quantity} x {formatIDR(item.unitPrice)}
+                      {completedReceipt.currency} {completedReceipt.currencyTotal}
                     </span>
-                    {item.lotNumber && <span>LOT: {item.lotNumber}</span>}
                   </div>
+                )}
+                <div className="flex justify-between text-[10px] pt-1 text-slate-600">
+                  <span>Tender: {completedReceipt.paymentMethod.toUpperCase()}</span>
+                  <span>{formatIDR(completedReceipt.cashTendered || completedReceipt.total)}</span>
                 </div>
-              ))}
-            </div>
+                {completedReceipt.cashChange !== undefined && completedReceipt.cashChange > 0 && (
+                  <div className="flex justify-between text-[10px] text-slate-600 font-bold">
+                    <span>Change (Kembalian):</span>
+                    <span>{formatIDR(completedReceipt.cashChange)}</span>
+                  </div>
+                )}
+              </div>
 
-            {/* Totals */}
-            <div className="pt-2 border-t border-dashed border-slate-300 space-y-0.5 text-[10px]">
-              <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span>{formatIDR(completedReceipt.subtotal)}</span>
+              {/* Footer / GL Audit Stamp */}
+              <div className="pt-2 border-t border-dashed border-slate-300 text-center text-[9px] text-zinc-500 space-y-1">
+                <p>GL Journal Vouchers: {completedReceipt.journalEntryIds.slice(0, 2).join(', ')}</p>
+                <p>*** TERIMA KASIH ATAS KUNJUNGAN ANDA ***</p>
+                <p className="text-[8px] text-zinc-400">Barang yang dibeli tidak dapat ditukar kecuali basi.</p>
               </div>
-              {completedReceipt.discount > 0 && (
-                <div className="flex justify-between text-emerald-700">
-                  <span>Discount:</span>
-                  <span>-{formatIDR(completedReceipt.discount)}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span>PPN (11%):</span>
-                <span>{formatIDR(completedReceipt.tax)}</span>
-              </div>
-              <div className="flex justify-between text-xs font-bold pt-1 border-t border-zinc-900">
-                <span>TOTAL:</span>
-                <span>{formatIDR(completedReceipt.total)}</span>
-              </div>
-              {completedReceipt.currency !== 'IDR' && (
-                <div className="flex justify-between text-[10px] text-zinc-500">
-                  <span>Tender ({completedReceipt.currency}):</span>
-                  <span>
-                    {completedReceipt.currency} {completedReceipt.currencyTotal}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between text-[10px] pt-1 text-slate-600">
-                <span>Tender: {completedReceipt.paymentMethod.toUpperCase()}</span>
-                <span>{formatIDR(completedReceipt.cashTendered || completedReceipt.total)}</span>
-              </div>
-              {completedReceipt.cashChange !== undefined && completedReceipt.cashChange > 0 && (
-                <div className="flex justify-between text-[10px] text-slate-600 font-bold">
-                  <span>Change (Kembalian):</span>
-                  <span>{formatIDR(completedReceipt.cashChange)}</span>
-                </div>
-              )}
-            </div>
 
-            {/* Footer / GL Audit Stamp */}
-            <div className="pt-2 border-t border-dashed border-slate-300 text-center text-[9px] text-zinc-500 space-y-1">
-              <p>GL Journal Vouchers: {completedReceipt.journalEntryIds.slice(0, 2).join(', ')}</p>
-              <p>*** TERIMA KASIH ATAS KUNJUNGAN ANDA ***</p>
-              <p className="text-[8px] text-zinc-400">Barang yang dibeli tidak dapat ditukar kecuali basi.</p>
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.print();
+                  }}
+                  className="flex-1 py-2 rounded-xl border border-slate-300 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-slate-50 cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompletedReceipt(null)}
+                  className="flex-1 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer"
+                >
+                  New Sale (F2)
+                </button>
+              </div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  window.print();
-                }}
-                className="flex-1 py-2 rounded-xl border border-slate-300 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-slate-50 cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Print</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCompletedReceipt(null)}
-                className="flex-1 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer"
-              >
-                New Sale (F2)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* 6. RECENT TRANSACTIONS DRAWER */}
       {isHistoryDrawerOpen && (

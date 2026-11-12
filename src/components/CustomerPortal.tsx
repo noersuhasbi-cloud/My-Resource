@@ -1,5 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import type { CustomerAccount, Order, OrderStatus, Product } from '../types/index.ts';
+import type {
+  CustomerAccount,
+  Order,
+  OrderStatus,
+  Product,
+  B2BCustomer,
+  B2BWholesaleOrder,
+  GiroPaymentRecord,
+} from '../types/index.ts';
 import { PRODUCTS } from '../data/mockData';
 import { formatIDR } from '../utils/formatters';
 import {
@@ -7,7 +15,8 @@ import {
   Search, Plus, Printer,
   Sparkles, X, TrendingUp, Award, Database, LogOut,
   ShieldAlert, Lock, ShieldCheck,
-  Bell, BellRing, Store, Volume2
+  Bell, BellRing, Store, Volume2,
+  Building2, Building, CreditCard, Layers, Clock, AlertTriangle, FileText, Check, Eye, Send
 } from 'lucide-react';
 import { loginWithGoogle } from '../services/firebaseService';
 import { SafeImage } from './SafeImage';
@@ -24,6 +33,16 @@ interface CustomerPortalProps {
   initialTrackingOrderId?: string;
   onReorder: (order: Order) => void;
   onAddToCart?: (product: Product, quantity?: number) => void;
+  // B2B Wholesale Unified Integration
+  storefrontMode?: 'b2c' | 'b2b';
+  b2bCustomers?: B2BCustomer[];
+  selectedB2bCustomerId?: string;
+  onSelectB2bCustomerId?: (id: string) => void;
+  b2bOrders?: B2BWholesaleOrder[];
+  giroRecords?: GiroPaymentRecord[];
+  onClearGiro?: (giroId: string) => void;
+  onBounceGiro?: (giroId: string) => void;
+  initialTab?: 'profile' | 'orders' | 'track' | 'suggestions' | 'b2b_credit' | 'b2b_orders' | 'b2b_profile';
 }
 
 export const CustomerPortal: React.FC<CustomerPortalProps> = ({
@@ -38,10 +57,65 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   initialTrackingOrderId,
   onReorder,
   onAddToCart,
+  storefrontMode = 'b2c',
+  b2bCustomers = [],
+  selectedB2bCustomerId = 'B2B-CUST-001',
+  onSelectB2bCustomerId,
+  b2bOrders = [],
+  giroRecords = [],
+  onClearGiro,
+  onBounceGiro,
+  initialTab,
 }) => {
-  const [activeTab, setActiveTab] = useState<'track' | 'orders' | 'profile' | 'suggestions'>(
-    initialTrackingOrderId ? 'track' : customerAccount ? 'profile' : 'profile'
+  const isB2B = storefrontMode?.toLowerCase() === 'b2b';
+
+  const [activeTab, setActiveTab] = useState<
+    'track' | 'orders' | 'profile' | 'suggestions' | 'b2b_credit' | 'b2b_orders' | 'b2b_profile'
+  >(() => {
+    if (initialTab) return initialTab;
+    if (isB2B) return 'b2b_credit';
+    if (initialTrackingOrderId) return 'track';
+    return 'profile';
+  });
+
+  // Auto-switch tabs to prevent cross-portal contamination when storefrontMode switches
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    } else if (isB2B) {
+      if (activeTab === 'profile' || activeTab === 'suggestions' || activeTab === 'orders' || activeTab === 'track') {
+        setActiveTab('b2b_credit');
+      }
+    } else {
+      if (activeTab === 'b2b_credit' || activeTab === 'b2b_orders' || activeTab === 'b2b_profile') {
+        setActiveTab('profile');
+      }
+    }
+  }, [initialTab, isB2B]);
+
+  const [activeB2bReceiptOrder, setActiveB2bReceiptOrder] = useState<B2BWholesaleOrder | null>(null);
+  const [b2bOrderSearch, setB2bOrderSearch] = useState<string>('');
+  const [viewingGiroSlip, setViewingGiroSlip] = useState<GiroPaymentRecord | null>(null);
+
+  const currentB2bCustomer = useMemo(() => {
+    return b2bCustomers.find((c) => c.id === selectedB2bCustomerId) || b2bCustomers[0] || null;
+  }, [b2bCustomers, selectedB2bCustomerId]);
+
+  // Credit Limit Increase Request Form State
+  const [requestedLimit, setRequestedLimit] = useState<number>(() => {
+    return currentB2bCustomer ? currentB2bCustomer.creditLimit + 25000000 : 100000000;
+  });
+  const [creditIncreaseReason, setCreditIncreaseReason] = useState<string>(
+    'Persiapan Stok Menjelang Peak Season (Ramadan/Idul Fitri/Tahun Baru)'
   );
+  const [creditLimitSuccessMsg, setCreditLimitSuccessMsg] = useState<string | null>(null);
+
+  const handleCreditIncreaseSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreditLimitSuccessMsg(
+      `Permohonan kenaikan limit menjadi ${formatIDR(requestedLimit)} dengan alasan "${creditIncreaseReason}" telah diajukan ke Credit Risk Committee. Hasil verifikasi akan diinformasikan dalam 1x24 jam kerja.`
+    );
+  };
 
   const [trackingSearchId, setTrackingSearchId] = useState<string>(
     initialTrackingOrderId || (orders.length > 0 ? orders[0].id : '')
@@ -479,24 +553,35 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
       <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-stone-200 overflow-hidden relative max-h-[92vh] flex flex-col">
         
-        {/* Top Header */}
+        {/* Top Header - Context Aware Branding */}
         <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50/80">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-800 text-amber-300 flex items-center justify-center font-bold text-sm shadow-xs">
-              G
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-xs ${
+              isB2B ? 'bg-indigo-900 text-amber-300' : 'bg-emerald-800 text-amber-300'
+            }`}>
+              {isB2B ? 'B2B' : 'G'}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-bold text-stone-900 font-display">
-                  GroceMart Customer Portal
+                  {isB2B ? 'GroceMart B2B Wholesale Portal' : 'GroceMart Customer Portal'}
                 </h2>
-                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                  <Database className="w-3 h-3" />
-                  <span>Firestore Synced</span>
-                </span>
+                {isB2B ? (
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-800">
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>B2B Enterprise</span>
+                  </span>
+                ) : (
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                    <Database className="w-3 h-3" />
+                    <span>Firestore Synced</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-stone-500">
-                Personalized Hub Tier Progress & Live Order Tracking
+                {isB2B
+                  ? 'Corporate Credit Facility, Bulk Procurement & Giro Ledger'
+                  : 'Personalized Hub, Tier Progress & Live Order Tracking'}
               </p>
             </div>
           </div>
@@ -508,87 +593,150 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           </button>
         </div>
 
-        {/* Portal Nav Tabs */}
-        <div className="px-6 pt-3 border-b border-stone-200 flex items-center justify-between gap-4 overflow-x-auto bg-white">
-          <div className="flex items-center gap-6">
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer ${
-                activeTab === 'profile'
-                  ? 'border-emerald-800 text-emerald-800'
-                  : 'border-transparent text-stone-500 hover:text-stone-900'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              <span>{customerAccount ? `${customerAccount.name.split(' ')[0]}'s Profile` : 'Sign In / Account'}</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('suggestions')}
-              className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer ${
-                activeTab === 'suggestions'
-                  ? 'border-emerald-800 text-emerald-800'
-                  : 'border-transparent text-stone-500 hover:text-stone-900'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <span>Recommended For You</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer ${
-                activeTab === 'orders'
-                  ? 'border-emerald-800 text-emerald-800'
-                  : 'border-transparent text-stone-500 hover:text-stone-900'
-              }`}
-            >
-              <Package className="w-4 h-4" />
-              <span>Orders ({orders.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('track')}
-              className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer ${
-                activeTab === 'track'
-                  ? 'border-emerald-800 text-emerald-800'
-                  : 'border-transparent text-stone-500 hover:text-stone-900'
-              }`}
-            >
-              <Truck className="w-4 h-4" />
-              <span>Track Orders</span>
-            </button>
-          </div>
-          <div className="flex items-center gap-3 shrink-0 pb-3">
-            {/* Browser Notification Status Pill */}
-            {notificationPermission === 'granted' ? (
-              <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-lg">
-                <Bell className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Pickup Alerts On</span>
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={requestNotificationPermission}
-                className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-600 hover:text-emerald-800 bg-stone-100 hover:bg-stone-200 px-2.5 py-1 rounded-lg border border-stone-200 transition-colors cursor-pointer"
-                title="Enable browser notifications for real-time pickup alerts"
-              >
-                <Bell className="w-3.5 h-3.5 text-amber-600" />
-                <span>Enable Alerts</span>
-              </button>
-            )}
+        {/* Portal Nav Tabs - Strict Isolation (Zero Tab Mixing) */}
+        <div className="px-4 sm:px-6 pt-3 border-b border-stone-200 flex items-center justify-between gap-3 overflow-x-auto bg-white scrollbar-thin">
+          <div className="flex items-center gap-3 sm:gap-6 shrink-0">
+            {isB2B ? (
+              // B2B Wholesale Portal: Strictly 3 Clean Tabs Only — Zero Overflow
+              <>
+                <button
+                  onClick={() => setActiveTab('b2b_credit')}
+                  className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'b2b_credit'
+                      ? 'border-indigo-600 text-indigo-700 font-bold'
+                      : 'border-transparent text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4 text-indigo-600" />
+                  <span>Wholesale Credit &amp; Giro</span>
+                  {currentB2bCustomer?.status === 'CREDIT_LOCKED' && (
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  )}
+                </button>
 
-            {customerAccount && (
-              <button
-                onClick={onLogout}
-                className="text-xs font-medium text-stone-400 hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Sign Out</span>
-              </button>
+                <button
+                  onClick={() => setActiveTab('b2b_orders')}
+                  className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'b2b_orders'
+                      ? 'border-indigo-600 text-indigo-700 font-bold'
+                      : 'border-transparent text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 text-indigo-600" />
+                  <span>Bulk Orders &amp; Invoices ({b2bOrders.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('b2b_profile')}
+                  className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'b2b_profile'
+                      ? 'border-indigo-600 text-indigo-700 font-bold'
+                      : 'border-transparent text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  <Building className="w-4 h-4 text-indigo-600" />
+                  <span>Company &amp; Credit Profile</span>
+                </button>
+              </>
+            ) : (
+              // B2C Retail Customer Portal: Strictly 4 Clean Tabs Only
+              <>
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'profile'
+                      ? 'border-emerald-800 text-emerald-800'
+                      : 'border-transparent text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  <User className="w-4 h-4" />
+                  <span>{customerAccount ? `${customerAccount.name.split(' ')[0]}'s Profile` : 'Profile & Loyalty Tier'}</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('suggestions')}
+                  className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'suggestions'
+                      ? 'border-emerald-800 text-emerald-800'
+                      : 'border-transparent text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <span>Recommended For You</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('orders')}
+                  className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'orders'
+                      ? 'border-emerald-800 text-emerald-800'
+                      : 'border-transparent text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  <Package className="w-4 h-4" />
+                  <span>My Orders ({orders.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('track')}
+                  className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'track'
+                      ? 'border-emerald-800 text-emerald-800'
+                      : 'border-transparent text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  <Truck className="w-4 h-4" />
+                  <span>Live Track Orders</span>
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0 pb-3">
+            {isB2B ? (
+              // B2B Right Status Indicator
+              currentB2bCustomer && (
+                <div className="hidden sm:inline-flex items-center gap-2 text-[11px] font-semibold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg">
+                  <span className="w-2 h-2 rounded-full bg-indigo-600" />
+                  <span className="truncate max-w-[150px]">{currentB2bCustomer.companyName}</span>
+                </div>
+              )
+            ) : (
+              // B2C Browser Pickup Alerts & Sign Out
+              <>
+                {notificationPermission === 'granted' ? (
+                  <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-lg">
+                    <Bell className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Pickup Alerts On</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={requestNotificationPermission}
+                    className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-600 hover:text-emerald-800 bg-stone-100 hover:bg-stone-200 px-2.5 py-1 rounded-lg border border-stone-200 transition-colors cursor-pointer"
+                    title="Enable browser notifications for real-time pickup alerts"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Enable Alerts</span>
+                  </button>
+                )}
+
+                {customerAccount && (
+                  <button
+                    onClick={onLogout}
+                    className="text-xs font-medium text-stone-400 hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
 
-        {/* Real-time Order Ready for Pickup Visual Notification Banner */}
-        {readyPickupAlert && (
+        {/* Real-time Order Ready for Pickup Visual Notification Banner (B2C Only) */}
+        {!isB2B && readyPickupAlert && (
           <div className="mx-6 sm:mx-8 mt-4 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white flex items-center justify-between gap-3 shadow-lg ring-4 ring-emerald-500/30 animate-pulse">
             <div className="flex items-center gap-3 min-w-0">
               <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
@@ -633,8 +781,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
           
-          {/* TAB 1: PROFILE & TIER PROGRESS */}
-          {activeTab === 'profile' && (
+          {/* TAB 1: PROFILE & TIER PROGRESS (B2C Only) */}
+          {!isB2B && activeTab === 'profile' && (
             <div className="space-y-6">
               {customerAccount ? (
                 <>
@@ -945,8 +1093,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: SUGGESTIONS */}
-          {activeTab === 'suggestions' && (
+          {/* TAB 2: SUGGESTIONS (B2C Only) */}
+          {!isB2B && activeTab === 'suggestions' && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-stone-200">
                 <div>
@@ -1010,8 +1158,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: ORDERS */}
-          {activeTab === 'orders' && (
+          {/* TAB 3: ORDERS (B2C Only) */}
+          {!isB2B && activeTab === 'orders' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-stone-200">
                 <div>
@@ -1162,8 +1310,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: TRACKING */}
-          {activeTab === 'track' && (
+          {/* TAB 4: TRACKING (B2C Only) */}
+          {!isB2B && activeTab === 'track' && (
             <div className="space-y-6">
               {!customerAccount ? (
                 <div className="p-8 bg-stone-50 rounded-2xl border border-stone-200 text-center space-y-4">
@@ -1486,6 +1634,712 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               )}
                 </>
               )}
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 1 (B2B): B2B Wholesale Trade Credit & Bilyet Giro Facility */}
+          {/* ========================================================================= */}
+          {isB2B && activeTab === 'b2b_credit' && (
+            <div className="p-6 space-y-6">
+              {/* Account Selector Strip */}
+              {b2bCustomers.length > 0 && onSelectB2bCustomerId && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-stone-100 border border-stone-200 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-indigo-700 shrink-0" />
+                    <span className="font-semibold text-stone-700">Active Wholesale Account:</span>
+                  </div>
+                  <select
+                    value={selectedB2bCustomerId}
+                    onChange={(e) => onSelectB2bCustomerId(e.target.value)}
+                    className="bg-white px-3 py-1.5 rounded-lg border border-stone-300 font-bold text-stone-900 focus:outline-none cursor-pointer"
+                  >
+                    {b2bCustomers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.companyName} ({c.tierLabel}) {c.status === 'CREDIT_LOCKED' ? '⚠️ [LOCKED]' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {currentB2bCustomer ? (
+                <div className="space-y-6">
+                  {/* Credit Status KPI Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-1">
+                      <span className="text-xs text-stone-500">Plafond Kredit Resmi</span>
+                      <div className="text-xl font-bold font-mono text-stone-900">
+                        {formatIDR(currentB2bCustomer.creditLimit)}
+                      </div>
+                      <span className="text-[10px] text-indigo-700 font-semibold block">
+                        Disetujui Divisi Finance &amp; AR (Tier: {currentB2bCustomer.tierLabel})
+                      </span>
+                    </div>
+
+                    <div className="p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-1">
+                      <span className="text-xs text-stone-500">Sisa Saldo Kredit Tersedia</span>
+                      <div className="text-xl font-bold font-mono text-emerald-700">
+                        {formatIDR(currentB2bCustomer.availableCredit)}
+                      </div>
+                      <div className="w-full bg-stone-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                        <div
+                          className="bg-emerald-600 h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.max(0, (currentB2bCustomer.availableCredit / currentB2bCustomer.creditLimit) * 100)
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div
+                      className={`p-4 rounded-xl border space-y-1 ${
+                        currentB2bCustomer.status === 'CREDIT_LOCKED' || currentB2bCustomer.overdueDaysMax > 0
+                          ? 'bg-rose-50 border-rose-300 text-rose-950'
+                          : 'bg-stone-50 border-stone-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-stone-500">Total Piutang (AR)</span>
+                        {currentB2bCustomer.status === 'CREDIT_LOCKED' && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-600 text-white uppercase">
+                            Locked
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xl font-bold font-mono text-stone-900">
+                        {formatIDR(currentB2bCustomer.outstandingAR)}
+                      </div>
+                      {currentB2bCustomer.overdueDaysMax > 0 ? (
+                        <span className="text-[10px] font-bold text-rose-600 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>{currentB2bCustomer.overdueDaysMax} hari lewat tempo (&gt;7d auto-lock)</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-emerald-600 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Good Standing (0 hari overdue)</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Auto-Credit Lock Warning Banner */}
+                  {(currentB2bCustomer.status === 'CREDIT_LOCKED' || currentB2bCustomer.overdueDaysMax > 7) && (
+                    <div className="p-4 rounded-xl bg-amber-500/15 border border-amber-500/40 text-xs text-amber-950 flex items-start gap-2.5">
+                      <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-sm">Fasilitas Kredit Dibekukan Sementara (Auto-Credit Lock)</div>
+                        <p className="mt-1 leading-relaxed">
+                          {currentB2bCustomer.lockReason ||
+                            'Pelanggan memiliki tagihan yang telah lewat jatuh tempo > 7 hari atau telah mencapai batas limit kredit. Opsi pembayaran Term dan Bilyet Giro dinonaktifkan hingga saldo tunggakan diselesaikan.'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bilyet Giro Clearing Register */}
+                  <div className="rounded-xl border border-stone-200 bg-white overflow-hidden shadow-xs">
+                    <div className="p-4 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-indigo-700" />
+                        <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
+                          Register Warkat Bilyet Giro / Post-Dated Check (PDC)
+                        </h4>
+                      </div>
+                      <span className="text-xs font-semibold text-stone-500 font-mono">
+                        {giroRecords.length} warkat terdaftar
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-stone-100/70 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[10px]">
+                          <tr>
+                            <th className="py-2.5 px-3">Nomor Giro &amp; Bank</th>
+                            <th className="py-2.5 px-3">Tgl Jatuh Tempo</th>
+                            <th className="py-2.5 px-3">Nilai Giro</th>
+                            <th className="py-2.5 px-3">Status Kliring</th>
+                            <th className="py-2.5 px-3 text-right">Status &amp; Referensi Warkat</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100">
+                          {giroRecords.map((giro) => (
+                            <tr key={giro.id} className="hover:bg-stone-50/60 transition-colors">
+                              <td className="py-3 px-3">
+                                <div className="font-bold font-mono text-stone-900">{giro.giroNumber}</div>
+                                <div className="text-[11px] text-stone-500">{giro.issuingBank}</div>
+                              </td>
+                              <td className="py-3 px-3 font-mono text-stone-700">
+                                {giro.clearingDueDate}
+                              </td>
+                              <td className="py-3 px-3 font-mono font-bold text-emerald-800">
+                                {formatIDR(giro.amountIDR)}
+                              </td>
+                              <td className="py-3 px-3">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    giro.status === 'CLEARED'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : giro.status === 'BOUNCED'
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {giro.status}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                <div className="inline-flex items-center justify-end gap-2 flex-wrap">
+                                  {giro.status === 'CLEARED' && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                      GL #1020 Matched
+                                    </span>
+                                  )}
+                                  {giro.status === 'PENDING_CLEARING' && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-medium font-mono bg-amber-100 text-amber-800 border border-amber-200">
+                                      Awaiting Bank Clearing
+                                    </span>
+                                  )}
+                                  {giro.status === 'BOUNCED' && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-800 border border-rose-200">
+                                      Bounced - Credit Frozen
+                                    </span>
+                                  )}
+                                  {giro.slipPhotoUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingGiroSlip(giro)}
+                                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-semibold border border-stone-200 flex items-center gap-1 cursor-pointer transition-colors"
+                                      title="Lihat foto bukti fisik warkat bilyet giro"
+                                    >
+                                      <Eye className="w-3 h-3 text-stone-500" />
+                                      <span>View Slip</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* RBAC Segregation of Duties Banner */}
+                    <div className="p-3 bg-stone-50/90 border-t border-stone-200 text-[11px] text-stone-600 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>
+                        <strong>Segregasi Tugas Internal (SoD):</strong> Pelanggan B2B memiliki akses <em>Read &amp; Submit Only</em> untuk register warkat giro. Otorisasi pencairan kliring bank (COA #1020) atau penerbitan tolakan warkat secara resmi dikelola oleh Divisi Financial Controller di <strong>Accounting Suite ERP Admin</strong>.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Policy Explanation */}
+                  <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200/80 text-xs text-indigo-950 space-y-1.5">
+                    <div className="font-bold flex items-center gap-1.5 text-indigo-900">
+                      <ShieldCheck className="w-4 h-4 text-indigo-700" />
+                      <span>GroceMatrix™ Wholesale Credit Policy &amp; General Ledger Integration</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-indigo-900/80">
+                      Warkat Bilyet Giro dicatat pada COA #1210 (Giro Clearing Receivable). Pada saat kliring dinyatakan berhasil oleh bank, sistem secara otomatis mendebit BCA Escrow (#1020), mengkredit #1210, dan membebaskan sisa limit kredit pelanggan.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-12 text-center text-xs text-stone-500">
+                  Data akun wholesale tidak ditemukan.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 2 (B2B): B2B Wholesale Bulk Orders & Invoices */}
+          {/* ========================================================================= */}
+          {isB2B && activeTab === 'b2b_orders' && (
+            <div className="p-6 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">Riwayat Pesanan Grosir (B2B Bulk Orders)</h3>
+                  <p className="text-xs text-stone-500">Daftar faktur pemesanan multi-tier UoM dan status termin kredit</p>
+                </div>
+                <div className="relative sm:w-64">
+                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={b2bOrderSearch}
+                    onChange={(e) => setB2bOrderSearch(e.target.value)}
+                    placeholder="Cari nomor faktur / B2B-ORD..."
+                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {b2bOrders
+                  .filter((ord) => !b2bOrderSearch || ord.id.toLowerCase().includes(b2bOrderSearch.toLowerCase()))
+                  .map((ord) => (
+                    <div
+                      key={ord.id}
+                      className="p-4 sm:p-5 rounded-2xl border border-stone-200 bg-white hover:border-indigo-300 transition-all shadow-xs space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-xs font-bold text-indigo-700">
+                            {ord.id}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              ord.status === 'CONFIRMED' || ord.status === 'DELIVERED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : ord.status === 'PENDING_FINANCE'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
+                            {ord.status}
+                          </span>
+                          <span className="text-[11px] text-stone-500">
+                            {new Date(ord.orderDate).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setActiveB2bReceiptOrder(ord)}
+                            className="px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-stone-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-stone-500" />
+                            <span>Cetak Faktur</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Items Multi-Tier Breakdown */}
+                      <div className="space-y-1.5 text-xs">
+                        {ord.items.map((it, idx) => (
+                          <div key={idx} className="flex items-center justify-between py-1 border-b border-stone-50">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-stone-900">{it.product.name}</span>
+                              <span className="px-1.5 py-0.2 rounded bg-stone-100 text-stone-600 text-[10px] font-mono">
+                                {it.quantity} {it.selectedUoM} ({it.baseUnitsCalculated} base units)
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold text-stone-800">
+                              {formatIDR(it.lineTotal)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 text-xs">
+                        <div className="flex items-center gap-2 text-stone-500">
+                          <CreditCard className="w-3.5 h-3.5 text-indigo-700" />
+                          <span>Metode: <strong className="text-stone-800 uppercase">{ord.paymentMethod.replace(/_/g, ' ')}</strong></span>
+                          {ord.approvalRequestId && (
+                            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                              Approval ID: {ord.approvalRequestId}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-stone-500">Total Faktur:</span>
+                          <span className="text-base font-extrabold font-mono text-emerald-800">
+                            {formatIDR(ord.totalAmountIDR)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 3 (B2B): Company & Credit Profile */}
+          {/* ========================================================================= */}
+          {isB2B && activeTab === 'b2b_profile' && currentB2bCustomer && (
+            <div className="p-6 space-y-6">
+              {/* Company Profile Header Card */}
+              <div className="p-5 sm:p-6 rounded-2xl border border-stone-200 bg-white shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-100">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-900 text-amber-300 font-bold text-lg flex items-center justify-center shadow-xs shrink-0">
+                      {currentB2bCustomer.companyName.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base sm:text-lg font-bold text-stone-900">
+                          {currentB2bCustomer.companyName}
+                        </h3>
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800">
+                          {currentB2bCustomer.tierLabel || currentB2bCustomer.tier}
+                        </span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            currentB2bCustomer.status === 'ACTIVE'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {currentB2bCustomer.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-stone-500 font-mono mt-0.5">
+                        Account ID: {currentB2bCustomer.id} · Terdaftar sejak 2023
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* B2B Customer Selector Dropdown */}
+                  {b2bCustomers.length > 1 && onSelectB2bCustomerId && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-stone-500 hidden sm:inline">Ganti Akun:</span>
+                      <select
+                        value={selectedB2bCustomerId}
+                        onChange={(e) => onSelectB2bCustomerId(e.target.value)}
+                        className="text-xs font-semibold py-1.5 px-3 rounded-xl border border-stone-200 bg-stone-50 text-stone-800 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
+                      >
+                        {b2bCustomers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.companyName} ({c.tier})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Grid: Legal & Entity Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-2.5">
+                    <h4 className="font-bold text-stone-900 flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-indigo-700" />
+                      <span>Informasi Legalitas &amp; Pajak (Tax / e-Faktur)</span>
+                    </h4>
+                    <div className="space-y-1.5 text-stone-700">
+                      <div className="flex justify-between py-1 border-b border-stone-200/60">
+                        <span className="text-stone-500">Nama Badan Usaha:</span>
+                        <span className="font-semibold text-stone-900">{currentB2bCustomer.companyName}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-stone-200/60">
+                        <span className="text-stone-500">NPWP Perusahaan (16 Digit):</span>
+                        <span className="font-mono font-bold text-indigo-900">{currentB2bCustomer.npwp || '01.345.678.9-012.000'}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-stone-200/60">
+                        <span className="text-stone-500">Alamat Faktur Pajak:</span>
+                        <span className="text-right max-w-xs">{currentB2bCustomer.address}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-stone-500">Status Validasi e-Faktur DJP:</span>
+                        <span className="font-semibold text-emerald-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Terverifikasi DJP
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-2.5">
+                    <h4 className="font-bold text-stone-900 flex items-center gap-2">
+                      <User className="w-4 h-4 text-indigo-700" />
+                      <span>Kontak PIC &amp; Assigned Key Account Manager</span>
+                    </h4>
+                    <div className="space-y-1.5 text-stone-700">
+                      <div className="flex justify-between py-1 border-b border-stone-200/60">
+                        <span className="text-stone-500">PIC Pembelian (Buyer):</span>
+                        <span className="font-semibold text-stone-900">{currentB2bCustomer.contactPerson}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-stone-200/60">
+                        <span className="text-stone-500">Nomor Telepon / WhatsApp:</span>
+                        <span className="font-mono">{currentB2bCustomer.phone}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-stone-200/60">
+                        <span className="text-stone-500">Email Faktur &amp; Tagihan:</span>
+                        <span className="font-mono">{currentB2bCustomer.email}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-stone-500">Key Account Manager (KAM):</span>
+                        <span className="font-semibold text-stone-900">Hendro Kusumo (Senior Wholesale KAM)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Allowed Payment Terms Badges */}
+                <div className="pt-2">
+                  <span className="text-xs font-bold text-stone-700 block mb-2">
+                    Fasilitas Metode Pembayaran yang Diizinkan (Approved Credit Terms):
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {currentB2bCustomer.paymentTermsAllowed.map((term) => (
+                      <span
+                        key={term}
+                        className="px-3 py-1 rounded-lg text-xs font-mono font-bold bg-indigo-50 border border-indigo-200 text-indigo-900 uppercase"
+                      >
+                        ✓ {term.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Interactive Request Credit Limit Increase Form */}
+              <div className="p-5 sm:p-6 rounded-2xl border border-stone-200 bg-white shadow-xs space-y-4">
+                <div className="flex items-center gap-2.5 pb-3 border-b border-stone-100">
+                  <TrendingUp className="w-5 h-5 text-indigo-700" />
+                  <div>
+                    <h4 className="text-sm sm:text-base font-bold text-stone-900">
+                      Pengajuan Kenaikan Plafond Kredit (Credit Limit Increase)
+                    </h4>
+                    <p className="text-xs text-stone-500">
+                      Ajukan penambahan limit fasilitas belanja tempo untuk mendukung lonjakan volume usaha Anda.
+                    </p>
+                  </div>
+                </div>
+
+                {creditLimitSuccessMsg ? (
+                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-900 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <div className="font-bold">Pengajuan Berhasil Dikirimkan!</div>
+                      <p>{creditLimitSuccessMsg}</p>
+                      <button
+                        type="button"
+                        onClick={() => setCreditLimitSuccessMsg(null)}
+                        className="text-[11px] font-bold text-emerald-700 underline mt-1 cursor-pointer"
+                      >
+                        Buat Pengajuan Lain
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleCreditIncreaseSubmit} className="space-y-4 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-stone-600 font-semibold mb-1">
+                          Plafond Kredit Saat Ini (Current Limit):
+                        </label>
+                        <input
+                          type="text"
+                          disabled
+                          value={formatIDR(currentB2bCustomer.creditLimit)}
+                          className="w-full px-3 py-2 rounded-xl bg-stone-100 border border-stone-200 font-mono font-bold text-stone-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-stone-600 font-semibold mb-1">
+                          Plafond Baru yang Diajukan (Requested Limit IDR):
+                        </label>
+                        <input
+                          type="number"
+                          step="5000000"
+                          min={currentB2bCustomer.creditLimit + 5000000}
+                          value={requestedLimit}
+                          onChange={(e) => setRequestedLimit(Number(e.target.value))}
+                          placeholder="cth. 150000000"
+                          required
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-stone-300 font-mono font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-stone-600 font-semibold mb-1">
+                          Alasan Pengajuan Tambahan Limit:
+                        </label>
+                        <select
+                          value={creditIncreaseReason}
+                          onChange={(e) => setCreditIncreaseReason(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-stone-300 text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
+                        >
+                          <option value="Persiapan Stok Menjelang Peak Season (Ramadan/Idul Fitri/Tahun Baru)">
+                            Persiapan Stok Menjelang Peak Season (Ramadan/Idul Fitri/Tahun Baru)
+                          </option>
+                          <option value="Ekspansi Cabang Baru / Gerai Tambahan">
+                            Ekspansi Cabang Baru / Gerai Tambahan
+                          </option>
+                          <option value="Peningkatan Omzet &amp; Kontrak Katering / HoReCa">
+                            Peningkatan Omzet &amp; Kontrak Katering / HoReCa
+                          </option>
+                          <option value="Kebutuhan Pasokan Rutin Volume Besar (Pallet Order)">
+                            Kebutuhan Pasokan Rutin Volume Besar (Pallet Order)
+                          </option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-stone-600 font-semibold mb-1">
+                          Lampiran Dokumen Finansial Pendukung:
+                        </label>
+                        <div className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-dashed border-stone-300 text-stone-500 flex items-center justify-between">
+                          <span className="truncate">Rekening Koran 3 Bln / Laporan Keuangan</span>
+                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                            Lampirkan
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 rounded-xl bg-indigo-900 hover:bg-indigo-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center gap-2"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Kirim Permohonan ke Komite Kredit</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Printable B2B Receipt Modal */}
+          {activeB2bReceiptOrder && (
+            <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-stone-200 space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div>
+                    <h3 className="font-bold text-base text-stone-900">FAKTUR PENJUALAN GROSIR</h3>
+                    <p className="text-xs text-stone-500 font-mono">{activeB2bReceiptOrder.id}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveB2bReceiptOrder(null)}
+                    className="p-1 rounded-lg hover:bg-stone-100 text-stone-400 cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="text-xs space-y-1.5 p-3 rounded-xl bg-stone-50 border border-stone-200">
+                  <div className="flex justify-between">
+                    <span className="text-stone-500">Pelanggan:</span>
+                    <span className="font-bold">{activeB2bReceiptOrder.customerName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-stone-500">Metode Bayar:</span>
+                    <span className="font-mono font-semibold uppercase">{activeB2bReceiptOrder.paymentMethod.replace(/_/g, ' ')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-stone-500">Tgl Order:</span>
+                    <span className="font-mono">{new Date(activeB2bReceiptOrder.orderDate).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 border-y py-3 text-xs">
+                  {activeB2bReceiptOrder.items.map((it, i) => (
+                    <div key={i} className="flex justify-between items-center">
+                      <div>
+                        <div className="font-semibold text-stone-900">{it.product.name}</div>
+                        <div className="text-[11px] text-stone-500 font-mono">
+                          {it.quantity} {it.selectedUoM} ({it.baseUnitsCalculated} base units)
+                        </div>
+                      </div>
+                      <span className="font-mono font-bold text-stone-800">{formatIDR(it.lineTotal)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-stone-500">Subtotal:</span>
+                    <span className="font-mono font-semibold">{formatIDR(activeB2bReceiptOrder.subtotalIDR)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-stone-500">PPN (11%):</span>
+                    <span className="font-mono font-semibold">{formatIDR(activeB2bReceiptOrder.taxPPN11IDR)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold pt-2 border-t text-emerald-800">
+                    <span>Total Pembayaran:</span>
+                    <span className="font-mono">{formatIDR(activeB2bReceiptOrder.totalAmountIDR)}</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveB2bReceiptOrder(null)}
+                    className="px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    Tutup Faktur
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Viewing Bilyet Giro Physical Slip Modal */}
+          {viewingGiroSlip && (
+            <div className="fixed inset-0 z-70 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-indigo-700" />
+                    <div>
+                      <h3 className="font-bold text-sm text-stone-900">Bukti Fisik Warkat Bilyet Giro</h3>
+                      <p className="text-[11px] font-mono text-stone-500">{viewingGiroSlip.giroNumber}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setViewingGiroSlip(null)}
+                    className="p-1 rounded-lg hover:bg-stone-100 text-stone-400 cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="p-3 rounded-xl bg-stone-50 border border-stone-200 space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Bank Penerbit:</span>
+                      <span className="font-bold text-stone-900">{viewingGiroSlip.issuingBank}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Tgl Jatuh Tempo:</span>
+                      <span className="font-mono font-bold text-stone-900">{viewingGiroSlip.clearingDueDate}</span>
+                    </div>
+                    <div className="flex justify-between text-sm pt-1 border-t border-stone-200">
+                      <span className="text-stone-600 font-semibold">Nominal Warkat:</span>
+                      <span className="font-mono font-extrabold text-emerald-800">{formatIDR(viewingGiroSlip.amountIDR)}</span>
+                    </div>
+                  </div>
+
+                  {viewingGiroSlip.slipPhotoUrl && (
+                    <div className="space-y-1">
+                      <span className="text-[11px] text-stone-500 font-medium block">Foto Warkat Giro:</span>
+                      <img
+                        src={viewingGiroSlip.slipPhotoUrl}
+                        alt={viewingGiroSlip.giroNumber}
+                        className="w-full h-48 object-cover rounded-xl border border-stone-200 shadow-inner"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setViewingGiroSlip(null)}
+                    className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

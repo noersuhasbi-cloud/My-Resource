@@ -67,6 +67,12 @@ import type {
   DynamicMarkdownConfig,
   BatchMarkdownCandidate,
   WasteDisposition,
+  B2BCustomer,
+  WholesaleProduct,
+  PWPRule,
+  GiroPaymentRecord,
+  B2BWholesaleOrder,
+  B2BCartItem,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
@@ -1607,6 +1613,7 @@ export const apiClient = {
     customsDutyIDR?: number;
     handlingCostIDR?: number;
     insuranceCostIDR?: number;
+    informalLaborCostIDR?: number;
     allocationMethod: 'EQUAL' | 'BY_QUANTITY' | 'BY_VALUE' | 'BY_WEIGHT';
     items: Array<{ sku: string; quantity: number }>;
   }): Promise<{
@@ -1864,6 +1871,150 @@ export const apiClient = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to apply markdown prices to POS & Storefront');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MODULE 14: ENTERPRISE B2B WHOLESALE & GIRO APIS
+  // -------------------------------------------------------------
+  async getB2BCustomers(): Promise<B2BCustomer[]> {
+    const res = await fetch('/api/b2b/customers');
+    if (!res.ok) {
+      const { INITIAL_B2B_CUSTOMERS } = await import('../data/b2bWholesaleData.ts');
+      return INITIAL_B2B_CUSTOMERS;
+    }
+    return res.json().catch(async () => {
+      const { INITIAL_B2B_CUSTOMERS } = await import('../data/b2bWholesaleData.ts');
+      return INITIAL_B2B_CUSTOMERS;
+    });
+  },
+
+  async updateB2BCustomer(customerId: string, update: Partial<B2BCustomer>): Promise<B2BCustomer> {
+    const res = await fetch(`/api/b2b/customers/${encodeURIComponent(customerId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(update),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update customer profile');
+    }
+    return res.json();
+  },
+
+  async getB2BProducts(): Promise<WholesaleProduct[]> {
+    const res = await fetch('/api/b2b/products');
+    if (!res.ok) {
+      const { WHOLESALE_PRODUCTS } = await import('../data/b2bWholesaleData.ts');
+      return WHOLESALE_PRODUCTS;
+    }
+    return res.json().catch(async () => {
+      const { WHOLESALE_PRODUCTS } = await import('../data/b2bWholesaleData.ts');
+      return WHOLESALE_PRODUCTS;
+    });
+  },
+
+  async getPWPRules(): Promise<PWPRule[]> {
+    const res = await fetch('/api/b2b/pwp-rules');
+    if (!res.ok) {
+      const { INITIAL_PWP_RULES } = await import('../data/b2bWholesaleData.ts');
+      return INITIAL_PWP_RULES;
+    }
+    return res.json().catch(async () => {
+      const { INITIAL_PWP_RULES } = await import('../data/b2bWholesaleData.ts');
+      return INITIAL_PWP_RULES;
+    });
+  },
+
+  async getB2BOrders(): Promise<B2BWholesaleOrder[]> {
+    const res = await fetch('/api/b2b/orders');
+    if (!res.ok) {
+      const { INITIAL_B2B_ORDERS } = await import('../data/b2bWholesaleData.ts');
+      return INITIAL_B2B_ORDERS;
+    }
+    return res.json().catch(async () => {
+      const { INITIAL_B2B_ORDERS } = await import('../data/b2bWholesaleData.ts');
+      return INITIAL_B2B_ORDERS;
+    });
+  },
+
+  async checkoutB2BOrder(payload: {
+    customerId: string;
+    items: B2BCartItem[];
+    paymentMethod: 'term_net7' | 'term_net14' | 'term_net30' | 'bilyet_giro' | 'transfer_verification' | 'instant_va';
+    giroDetails?: {
+      giroNumber: string;
+      bankName: string;
+      clearingDueDate: string;
+      nominal: number;
+    };
+    transferProofUrl?: string;
+  }): Promise<{
+    success: boolean;
+    order: B2BWholesaleOrder;
+    message: string;
+    requiresApproval?: boolean;
+    journalEntryIds: string[];
+    customerUpdated: B2BCustomer;
+  }> {
+    const res = await fetch('/api/b2b/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'B2B Wholesale checkout failed');
+    }
+    return res.json();
+  },
+
+  async getGiroRecords(): Promise<GiroPaymentRecord[]> {
+    const res = await fetch('/api/b2b/giro-records');
+    if (!res.ok) {
+      const { INITIAL_GIRO_RECORDS } = await import('../data/b2bWholesaleData.ts');
+      return INITIAL_GIRO_RECORDS;
+    }
+    return res.json().catch(async () => {
+      const { INITIAL_GIRO_RECORDS } = await import('../data/b2bWholesaleData.ts');
+      return INITIAL_GIRO_RECORDS;
+    });
+  },
+
+  async clearGiro(giroId: string): Promise<{
+    success: boolean;
+    giro: GiroPaymentRecord;
+    journalEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetch(`/api/b2b/giro/${encodeURIComponent(giroId)}/clear`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to clear Bilyet Giro');
+    }
+    return res.json();
+  },
+
+  async bounceGiro(giroId: string, reason?: string): Promise<{
+    success: boolean;
+    giro: GiroPaymentRecord;
+    customer: B2BCustomer;
+    penaltyFee: number;
+    journalEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetch(`/api/b2b/giro/${encodeURIComponent(giroId)}/bounce`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to process bounced Giro');
     }
     return res.json();
   },

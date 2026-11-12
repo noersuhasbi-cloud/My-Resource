@@ -62,6 +62,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
   const [lcCustomsDutyIDR, setLcCustomsDutyIDR] = useState<number>(0);
   const [lcHandlingCostIDR, setLcHandlingCostIDR] = useState<number>(120000);
   const [lcInsuranceCostIDR, setLcInsuranceCostIDR] = useState<number>(50000);
+  const [lcInformalLaborCostIDR, setLcInformalLaborCostIDR] = useState<number>(75000); // Biaya Kuli Bongkar (Petty Cash)
   const [lcAllocationMethod, setLcAllocationMethod] = useState<'EQUAL' | 'BY_QUANTITY' | 'BY_VALUE' | 'BY_WEIGHT'>('BY_QUANTITY');
 
   // Selected SKUs for landed cost absorption
@@ -109,7 +110,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
 
   const handleExecuteLandedCost = async (e: React.FormEvent) => {
     e.preventDefault();
-    const total = lcFreightIDR + lcCustomsDutyIDR + lcHandlingCostIDR + lcInsuranceCostIDR;
+    const total = lcFreightIDR + lcCustomsDutyIDR + lcHandlingCostIDR + lcInsuranceCostIDR + lcInformalLaborCostIDR;
     if (total <= 0) {
       onShowToast('Validation Error', 'Total landed cost must be greater than Rp 0.');
       return;
@@ -129,6 +130,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
         customsDutyIDR: lcCustomsDutyIDR,
         handlingCostIDR: lcHandlingCostIDR,
         insuranceCostIDR: lcInsuranceCostIDR,
+        informalLaborCostIDR: lcInformalLaborCostIDR,
         allocationMethod: lcAllocationMethod,
         items: selectedSkus,
       });
@@ -146,7 +148,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
     }
   };
 
-  const totalCalculatedLandedCost = lcFreightIDR + lcCustomsDutyIDR + lcHandlingCostIDR + lcInsuranceCostIDR;
+  const totalCalculatedLandedCost = lcFreightIDR + lcCustomsDutyIDR + lcHandlingCostIDR + lcInsuranceCostIDR + lcInformalLaborCostIDR;
   const totalUnits = selectedSkus.reduce((s, it) => s + it.quantity, 0);
 
   return (
@@ -589,6 +591,27 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                     onChange={(e) => setLcInsuranceCostIDR(Number(e.target.value))}
                     className={`font-mono font-bold ${inputClass}`}
                   />
+                </div>
+                <div className="col-span-2 pt-2 border-t border-gray-200 dark:border-zinc-700">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className={labelClass}>
+                      Informal Labor / Kuli Bongkar &amp; Retribusi (IDR)
+                    </label>
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
+                      Paid via Petty Cash (#1015)
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    value={lcInformalLaborCostIDR}
+                    onChange={(e) => setLcInformalLaborCostIDR(Number(e.target.value))}
+                    className={`font-mono font-bold ${inputClass}`}
+                    placeholder="e.g. 75000"
+                  />
+                  <p className="text-[11px] text-gray-500 dark:text-zinc-300 mt-1">
+                    Directly capitalizes informal cash labor into inventory asset valuation (COA #1040/1300) so gross profit reflects true landing cost.
+                  </p>
                 </div>
               </div>
 
