@@ -2,6 +2,7 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import https from 'https';
 import { fileURLToPath } from 'url';
 
 import {
@@ -1206,6 +1207,65 @@ function generateQRISPayload(orderId: string, amount: number): string {
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+
+  // Same-origin Firestore WebChannel & RPC streaming proxy (prevents browser/proxy/extension WebChannel blocks)
+  app.all('/google.firestore.v1.Firestore/*', (req: Request, res: Response) => {
+    const forwardHeaders: Record<string, string | string[]> = {};
+    for (const [key, val] of Object.entries(req.headers)) {
+      const lower = key.toLowerCase();
+      if (
+        val !== undefined &&
+        !['host', 'connection', 'origin', 'referer', 'cookie', 'accept-encoding'].includes(lower)
+      ) {
+        forwardHeaders[key] = val;
+      }
+    }
+    forwardHeaders['host'] = 'firestore.googleapis.com';
+
+    const proxyReq = https.request(
+      {
+        hostname: 'firestore.googleapis.com',
+        port: 443,
+        path: req.originalUrl,
+        method: req.method,
+        headers: forwardHeaders,
+      },
+      (proxyRes) => {
+        res.status(proxyRes.statusCode || 200);
+        for (const [key, val] of Object.entries(proxyRes.headers)) {
+          const lower = key.toLowerCase();
+          if (
+            val !== undefined &&
+            !['transfer-encoding', 'connection', 'content-encoding', 'alt-svc', 'x-frame-options'].includes(lower)
+          ) {
+            res.setHeader(key, val);
+          }
+        }
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('X-Accel-Buffering', 'no');
+        if (typeof res.flushHeaders === 'function') {
+          res.flushHeaders();
+        }
+        proxyRes.pipe(res);
+      }
+    );
+
+    proxyReq.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(502).json({ error: { code: 502, status: 'UNAVAILABLE', message: err.message } });
+      } else {
+        res.end();
+      }
+    });
+
+    res.on('close', () => {
+      if (!res.writableEnded && !proxyReq.destroyed) {
+        proxyReq.destroy();
+      }
+    });
+
+    req.pipe(proxyReq);
+  });
 
   app.use(express.json());
 

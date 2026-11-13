@@ -1,23 +1,64 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  doc,
+  getDocFromServer,
+  type Firestore,
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+function createFirestoreClient(): Firestore {
+  const databaseId = firebaseConfig.firestoreDatabaseId || '(default)';
+  if (typeof window !== 'undefined') {
+    const isStaticFirebaseHosting =
+      window.location.hostname.endsWith('.web.app') ||
+      window.location.hostname.endsWith('.firebaseapp.com');
+
+    const settings = isStaticFirebaseHosting
+      ? {
+          experimentalForceLongPolling: true,
+          experimentalLongPollingOptions: { timeoutSeconds: 15 },
+        }
+      : {
+          host: window.location.host,
+          ssl: window.location.protocol === 'https:',
+          experimentalForceLongPolling: true,
+          experimentalLongPollingOptions: { timeoutSeconds: 15 },
+        };
+
+    try {
+      return initializeFirestore(app, settings, databaseId);
+    } catch {
+      return getFirestore(app, databaseId);
+    }
+  }
+  return getFirestore(app, databaseId);
+}
+
+export const db = createFirestoreClient();
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-async function testConnection() {
+async function testConnection(retryCount = 0) {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
+      if (retryCount < 1 && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+        setTimeout(() => {
+          void testConnection(retryCount + 1);
+        }, 1200);
+        return;
+      }
       console.error('Please check your Firebase configuration.');
     }
   }
 }
-testConnection();
+void testConnection();
 
 export enum OperationType {
   CREATE = 'create',
