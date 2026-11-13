@@ -74,6 +74,17 @@ import type {
   B2BWholesaleOrder,
   B2BCartItem,
   RemovalStrategyConfig,
+  CustomerRmaRecord,
+  VendorRtvDebitNote,
+  BlindOpnameSheet,
+  PosRegisterShiftSession,
+  PosShiftDenominationCount,
+  SkuTaxRule,
+  IndonesianTaxCategory,
+  CoretaxExportRow,
+  RmaDisposition,
+  RmaRefundMethod,
+  RmaSourceChannel,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
@@ -2104,5 +2115,273 @@ export const apiClient = {
     }
     return res.json();
   },
+
+  // -------------------------------------------------------------
+  // MODULE 15: INDONESIAN REGULATORY COMPLIANCE SUITE
+  // -------------------------------------------------------------
+  async getComplianceRmaList(storeId?: string): Promise<CustomerRmaRecord[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetchApi(`/api/admin/compliance/rma?${params.toString()}`);
+    if (!res.ok) return [];
+    return res.json().catch(() => []);
+  },
+
+  async getComplianceRmaSources(): Promise<{
+    posReceipts: Array<any>;
+    b2cOrders: Array<any>;
+    b2bOrders: Array<any>;
+  }> {
+    const res = await fetchApi('/api/admin/compliance/rma-sources');
+    if (!res.ok) return { posReceipts: [], b2cOrders: [], b2bOrders: [] };
+    return res.json().catch(() => ({ posReceipts: [], b2cOrders: [], b2bOrders: [] }));
+  },
+
+  async createComplianceRma(payload: {
+    sourceChannel: RmaSourceChannel;
+    sourceReferenceId: string;
+    storeId?: string;
+    storeName?: string;
+    customerId?: string;
+    customerName?: string;
+    customerNpwpOrNik?: string;
+    refundMethod: RmaRefundMethod;
+    items: Array<{
+      sku: string;
+      productName: string;
+      category?: string;
+      quantity: number;
+      unitPriceIDR: number;
+      unitCostIDR?: number;
+      disposition: RmaDisposition;
+      lotNumber?: string;
+      reason?: string;
+    }>;
+    notes?: string;
+  }): Promise<{ success: boolean; rma: CustomerRmaRecord; message: string }> {
+    const res = await fetchApi('/api/admin/compliance/rma', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to issue Customer RMA / Nota Retur');
+    }
+    return res.json();
+  },
+
+  async getComplianceRtvList(storeId?: string): Promise<VendorRtvDebitNote[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetchApi(`/api/admin/compliance/rtv?${params.toString()}`);
+    if (!res.ok) return [];
+    return res.json().catch(() => []);
+  },
+
+  async createComplianceRtv(payload: {
+    qcInspectionId?: string;
+    supplierId?: string;
+    supplierName?: string;
+    supplierNpwp?: string;
+    storeId?: string;
+    storeName?: string;
+    sku: string;
+    productName?: string;
+    lotNumber?: string;
+    quantityReturned: number;
+    unit?: string;
+    unitCostIDR?: number;
+    reason?: string;
+  }): Promise<{ success: boolean; rtv: VendorRtvDebitNote; message: string }> {
+    const res = await fetchApi('/api/admin/compliance/rtv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to generate RTV Debit Note');
+    }
+    return res.json();
+  },
+
+  async getBlindOpnameSheets(storeId?: string): Promise<BlindOpnameSheet[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetchApi(`/api/admin/compliance/blind-opname?${params.toString()}`);
+    if (!res.ok) return [];
+    return res.json().catch(() => []);
+  },
+
+  async generateBlindOpnameSheet(payload: {
+    warehouseHub: 'CDC' | 'DARK_STORE' | 'RETAIL_FRONT';
+    storeId?: string;
+    zoneFilter?: string;
+  }): Promise<{ success: boolean; sheet: BlindOpnameSheet; message: string }> {
+    const res = await fetchApi('/api/admin/compliance/blind-opname/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to generate Blind Cycle Count sheet');
+    }
+    return res.json();
+  },
+
+  async submitBlindOpnameCounts(
+    sheetId: string,
+    payload: {
+      counts: Array<{ sku: string; countedQty: number; countedLotNumber?: string; notes?: string }>;
+      submittedBy?: string;
+    }
+  ): Promise<{ success: boolean; sheet: BlindOpnameSheet; approvalRequestId: string; message: string }> {
+    const res = await fetchApi(`/api/admin/compliance/blind-opname/${encodeURIComponent(sheetId)}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to submit blind opname counts');
+    }
+    return res.json();
+  },
+
+  async approveBlindOpnameSheet(
+    sheetId: string,
+    action: 'APPROVED' | 'REJECTED',
+    approverNotes?: string
+  ): Promise<{ success: boolean; sheet: BlindOpnameSheet; glVoucherIds?: string[]; message: string }> {
+    const res = await fetchApi(`/api/admin/compliance/blind-opname/${encodeURIComponent(sheetId)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, approverNotes }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to process blind opname approval');
+    }
+    return res.json();
+  },
+
+  async getActivePosShift(storeId: string): Promise<{ activeShift: PosRegisterShiftSession | null }> {
+    const params = new URLSearchParams({ storeId });
+    const res = await fetchApi(`/api/pos/shifts/active?${params.toString()}`);
+    if (!res.ok) return { activeShift: null };
+    return res.json().catch(() => ({ activeShift: null }));
+  },
+
+  async getPosShiftHistory(storeId?: string): Promise<PosRegisterShiftSession[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetchApi(`/api/pos/shifts/history?${params.toString()}`);
+    if (!res.ok) return [];
+    return res.json().catch(() => []);
+  },
+
+  async openPosShift(payload: {
+    storeId: string;
+    storeName: string;
+    registerId?: string;
+    openingFloatIDR: number;
+    cashierName?: string;
+  }): Promise<{ success: boolean; shift: PosRegisterShiftSession; message: string }> {
+    const res = await fetchApi('/api/pos/shifts/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to open POS shift');
+    }
+    return res.json();
+  },
+
+  async closePosShift(payload: {
+    shiftId?: string;
+    storeId: string;
+    denominations: PosShiftDenominationCount[];
+    countedQrisBatchIDR: number;
+    countedEdcBatchIDR: number;
+    notes?: string;
+  }): Promise<{ success: boolean; shift: PosRegisterShiftSession; zReportNumber: string; message: string }> {
+    const res = await fetchApi('/api/pos/shifts/close', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to close POS shift and generate Z-Report');
+    }
+    return res.json();
+  },
+
+  async getSkuTaxRules(): Promise<SkuTaxRule[]> {
+    const res = await fetchApi('/api/admin/compliance/sku-tax-rules');
+    if (!res.ok) return [];
+    return res.json().catch(() => []);
+  },
+
+  async updateSkuTaxRule(payload: {
+    sku: string;
+    taxCategory: IndonesianTaxCategory;
+    taxRatePercent?: number;
+    b2cTaxInclusive?: boolean;
+    b2bTaxExclusive?: boolean;
+  }): Promise<{ success: boolean; rules: SkuTaxRule[]; message: string }> {
+    const res = await fetchApi('/api/admin/compliance/sku-tax-rules', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update SKU tax rule');
+    }
+    return res.json();
+  },
+
+  async validateNpwpOrNik(
+    npwpOrNik: string,
+    b2bCustomerId?: string
+  ): Promise<{
+    valid: boolean;
+    type: 'NPWP_16' | 'NIK_16' | 'NPWP_15' | 'INVALID';
+    cleanDigits: string;
+    formatted: string;
+    error?: string;
+  }> {
+    const res = await fetchApi('/api/admin/compliance/validate-npwp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ npwpOrNik, b2bCustomerId }),
+    });
+    return res.json();
+  },
+
+  async getCoretaxExport(): Promise<{
+    generatedAt: string;
+    summary: {
+      totalRows: number;
+      totalPpnKeluaranIDR: number;
+      totalNotaReturPpnIDR: number;
+      b2bMissingNpwpCount: number;
+    };
+    rows: CoretaxExportRow[];
+    csvContent: string;
+    xmlContent: string;
+  }> {
+    const res = await fetchApi('/api/admin/compliance/coretax-export');
+    if (!res.ok) {
+      throw new Error('Failed to compile Coretax / e-Faktur DJP export');
+    }
+    return res.json();
+  },
 };
+
 

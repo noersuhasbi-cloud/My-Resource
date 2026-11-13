@@ -24,6 +24,7 @@ import {
 } from '../../utils/inventoryOdooHelper';
 import {
   ArrowRightLeft,
+  Barcode,
   Boxes,
   CheckCircle2,
   ClipboardList,
@@ -46,6 +47,7 @@ import {
   Warehouse,
   X,
 } from 'lucide-react';
+import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
 
 interface OdooInventoryViewProps {
   theme: 'light' | 'dark';
@@ -172,6 +174,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   const [strategyFilter, setStrategyFilter] = useState<'ALL' | RemovalStrategyType>('ALL');
   const [includeB2BCatalogRows, setIncludeB2BCatalogRows] = useState<boolean>(true);
   const [showStrategyModal, setShowStrategyModal] = useState<boolean>(false);
+  const [showBarcodeLabelModal, setShowBarcodeLabelModal] = useState<boolean>(false);
   const [savingStrategy, setSavingStrategy] = useState<boolean>(false);
   const [mediaInspector, setMediaInspector] = useState<MediaInspectorTarget | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -696,6 +699,15 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             >
               <Settings2 className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
               FEFO / FIFO Rules
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowBarcodeLabelModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
+            >
+              <Barcode className="w-3.5 h-3.5" />
+              Barcode &amp; Shelf Labels
             </button>
           </div>
         </div>
@@ -1504,6 +1516,26 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
           </div>
         );
       })()}
+
+      {/* Additive EAN-13 Bulk Scale Barcode & Permendag Shelf Label Generator */}
+      <BarcodeShelfLabelModal
+        theme={theme}
+        isOpen={showBarcodeLabelModal}
+        onClose={() => setShowBarcodeLabelModal(false)}
+        products={inventory.map((it) => {
+          const isWeighted = ['kg', 'g', 'gram'].includes((it.unit || '').toLowerCase());
+          return {
+            sku: it.sku,
+            productName: it.name || it.productName || it.sku,
+            category: String(it.category),
+            unit: it.unit,
+            sellingPrice: it.sellingPrice,
+            pricePerKg: isWeighted ? it.sellingPrice : it.sellingPrice * 2,
+            isWeighted,
+          };
+        })}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };

@@ -753,7 +753,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -1337,7 +1337,8 @@ export type ApprovalModuleType =
   | 'stock_adjustment'
   | 'waste_write_off'
   | 'b2b_credit_term'
-  | 'b2b_transfer_verification';
+  | 'b2b_transfer_verification'
+  | 'blind_stock_opname';
 
 export interface ApprovalTierRule {
   id: string;
@@ -2082,6 +2083,7 @@ export interface B2BCustomer {
   email: string;
   address: string;
   npwp?: string;
+  nik?: string;
   paymentTermsAllowed: Array<'cash' | 'net7' | 'net14' | 'net30' | 'giro' | 'transfer_proof'>;
 }
 
@@ -2208,5 +2210,186 @@ export interface RemovalStrategyConfig {
   updatedAt: string;
   updatedBy?: string;
 }
+
+// =============================================================
+// INDONESIAN RETAIL & WHOLESALE REGULATORY COMPLIANCE MODULES
+// =============================================================
+export type IndonesianTaxCategory =
+  | 'BKP_STANDARD'     // Taxable Goods: PPN 11% / 12%
+  | 'BKP_DIBEBASKAN'   // VAT-Exempt Strategic Staples (Sembako: beras, daging, telur, sayur, susu)
+  | 'NON_BKP_PB1';     // Non-PPN / Regional Restaurant & Deli Tax (PB1 10%)
+
+export interface SkuTaxRule {
+  sku: string;
+  productName: string;
+  category: string;
+  taxCategory: IndonesianTaxCategory;
+  taxRatePercent: number; // 11 or 12 for BKP_STANDARD, 0 for BKP_DIBEBASKAN, 10 for NON_BKP_PB1
+  b2cTaxInclusive: boolean;
+  b2bTaxExclusive: boolean;
+  updatedAt?: string;
+}
+
+export type RmaDisposition = 'RESTOCK_ATP' | 'SCRAP_QUARANTINE';
+export type RmaSourceChannel = 'POS' | 'B2C' | 'B2B';
+export type RmaRefundMethod = 'CASH' | 'STORE_CREDIT' | 'AR_REDUCTION';
+
+export interface CustomerRmaItem {
+  sku: string;
+  productName: string;
+  category?: string;
+  quantity: number;
+  unitPriceIDR: number;
+  unitCostIDR: number;
+  lineTotalIDR: number;
+  taxCategory: IndonesianTaxCategory;
+  ppnAdjustmentIDR: number;
+  disposition: RmaDisposition;
+  lotNumber?: string;
+  reason: string;
+}
+
+export interface CustomerRmaRecord {
+  id: string; // RMA-2026-0001
+  notaReturNumber: string; // NR-2026-0001 (DJP Nota Retur)
+  sourceChannel: RmaSourceChannel;
+  sourceReferenceId: string; // Receipt # or Order #
+  storeId: string;
+  storeName: string;
+  customerId?: string;
+  customerName: string;
+  customerNpwpOrNik?: string;
+  items: CustomerRmaItem[];
+  subtotalReversedIDR: number;
+  ppnReversedIDR: number;
+  totalCreditNoteIDR: number;
+  refundMethod: RmaRefundMethod;
+  status: 'COMPLETED' | 'PENDING_QC';
+  glVoucherIds: string[];
+  createdAt: string;
+  processedBy: string;
+  notes?: string;
+}
+
+export interface VendorRtvDebitNote {
+  id: string; // RTV-2026-0001
+  debitNoteNumber: string; // NRP-2026-0001 (Nota Retur Pembelian)
+  qcInspectionId?: string;
+  vendorCreditNoteId?: string;
+  supplierId: string;
+  supplierName: string;
+  supplierNpwp?: string;
+  storeId: string;
+  storeName: string;
+  sku: string;
+  productName: string;
+  lotNumber: string;
+  quantityReturned: number;
+  unit: string;
+  unitCostIDR: number;
+  subtotalReturnedIDR: number;
+  ppnMasukanReversedIDR: number;
+  totalDebitNoteIDR: number;
+  reason: string;
+  status: 'ISSUED' | 'OFFSET_TO_AP';
+  glVoucherIds: string[];
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface BlindOpnameLine {
+  sku: string;
+  productName: string;
+  category: string;
+  unit: string;
+  warehouseZoneId: string;
+  binLocation: string;
+  expectedLotNumber: string;
+  countedLotNumber: string;
+  countedQty: number | null; // null until counter inputs physical count
+  // Strictly omitted (undefined) while status === 'COUNTING' so counter cannot see book stock
+  systemQty?: number;
+  varianceQty?: number;
+  unitCostIDR?: number;
+  varianceValueIDR?: number;
+  status?: 'MATCHED' | 'SURPLUS' | 'SHORTAGE';
+  notes?: string;
+}
+
+export interface BlindOpnameSheet {
+  id: string; // BLIND-OPN-2026-001
+  sheetNumber: string;
+  warehouseHub: 'CDC' | 'DARK_STORE' | 'RETAIL_FRONT';
+  storeId: string;
+  storeName: string;
+  zoneFilter: string;
+  status: 'COUNTING' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  createdBy: string;
+  submittedAt?: string;
+  submittedBy?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  approvalRequestId?: string;
+  totalSurplusValueIDR: number;
+  totalShortageValueIDR: number;
+  netVarianceValueIDR: number;
+  glVoucherIds: string[];
+  items: BlindOpnameLine[];
+}
+
+export interface PosShiftDenominationCount {
+  denomination: number; // 100000, 50000, ... 100
+  count: number;
+  subtotalIDR: number;
+}
+
+export interface PosRegisterShiftSession {
+  id: string; // SHF-2026-0001
+  zReportNumber?: string; // Z-RPT-2026-0001
+  storeId: string;
+  storeName: string;
+  registerId: string;
+  cashierId: string;
+  cashierName: string;
+  status: 'OPEN' | 'CLOSED';
+  openedAt: string;
+  closedAt?: string;
+  openingFloatIDR: number;
+  transactionCount: number;
+  expectedCashSalesIDR: number;
+  expectedQrisSalesIDR: number;
+  expectedEdcSalesIDR: number;
+  expectedTotalCashInDrawerIDR: number; // openingFloatIDR + expectedCashSalesIDR - cashRefundsIDR
+  cashRefundsIDR: number;
+  // Blind count submitted at shift close
+  denominations?: PosShiftDenominationCount[];
+  countedCashIDR?: number;
+  countedQrisBatchIDR?: number;
+  countedEdcBatchIDR?: number;
+  cashVarianceIDR?: number; // countedCashIDR - expectedTotalCashInDrawerIDR (Selisih Kasir)
+  qrisVarianceIDR?: number;
+  edcVarianceIDR?: number;
+  varianceGlVoucherIds?: string[];
+  notes?: string;
+}
+
+export interface CoretaxExportRow {
+  rowId: string;
+  documentType: 'FAKTUR_KELUARAN_B2B' | 'DIGUNGGUNG_B2C_POS' | 'NOTA_RETUR_PENJUALAN' | 'NOTA_RETUR_PEMBELIAN';
+  kodeTransaksi: string; // e.g. '01', '04', '08'
+  documentNumber: string;
+  documentDate: string;
+  counterpartyName: string;
+  npwpOrNik: string;
+  isNpwpValid: boolean;
+  taxClassification: IndonesianTaxCategory;
+  dppIDR: number; // Dasar Pengenaan Pajak
+  ppnIDR: number;
+  pb1IDR: number;
+  totalIDR: number;
+  referenceId: string;
+}
+
 
 

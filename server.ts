@@ -110,11 +110,32 @@ import type {
   DynamicMarkdownConfig,
   RemovalStrategyConfig,
   RemovalStrategyType,
+  IndonesianTaxCategory,
+  SkuTaxRule,
+  CustomerRmaRecord,
+  CustomerRmaItem,
+  VendorRtvDebitNote,
+  BlindOpnameSheet,
+  BlindOpnameLine,
+  PosRegisterShiftSession,
+  PosShiftDenominationCount,
+  CoretaxExportRow,
+  RmaDisposition,
+  RmaRefundMethod,
+  RmaSourceChannel,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
   MOCK_VENDOR_CREDIT_NOTES,
 } from './src/utils/groceryEngine.ts';
+import {
+  inferDefaultTaxCategory,
+  getTaxRateForCategory,
+  computeIndonesianTax,
+  validateNpwpOrNik,
+  buildCoretaxCsv,
+  buildCoretaxXml,
+} from './src/utils/indonesianCompliance.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -169,6 +190,383 @@ let removalStrategiesConfig: RemovalStrategyConfig = {
   updatedAt: new Date().toISOString(),
   updatedBy: 'ERP System Default',
 };
+
+// =============================================================
+// INDONESIAN REGULATORY COMPLIANCE RUNTIME STORES (ADDITIVE)
+// =============================================================
+function ensureRegulatoryCoaAccounts() {
+  const requiredAccounts: ChartOfAccount[] = [
+    {
+      accountCode: '1300',
+      accountName: 'Inventory Asset (Regulatory Valuation Ledger)',
+      category: 'Asset',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Mirror & regulatory adjustment ledger for inventory asset returns & opname',
+    },
+    {
+      accountCode: '2025',
+      accountName: 'PPN Keluaran (VAT Output Payable 11%/12%)',
+      category: 'Liability',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 28450000,
+      description: 'Indonesian Output VAT payable to DJP (Coretax / e-Faktur Keluaran & Nota Retur)',
+    },
+    {
+      accountCode: '2026',
+      accountName: 'PPN Masukan (VAT Input Creditable)',
+      category: 'Asset',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 16200000,
+      description: 'Creditable Input VAT from B2B supplier purchases & RTV Nota Retur Pembelian',
+    },
+    {
+      accountCode: '2027',
+      accountName: 'Pajak Daerah PB1 (10% Ready-to-Eat Deli)',
+      category: 'Liability',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 3420000,
+      description: 'Regional PB1 10% restaurant/deli prepared food tax payable to Bapenda',
+    },
+    {
+      accountCode: '2100',
+      accountName: 'Vendor Accounts Payable (RTV / Nota Retur)',
+      category: 'Liability',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 45000000,
+      description: 'Supplier payable control for Return-to-Vendor debit note offsets',
+    },
+    {
+      accountCode: '5210',
+      accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
+      category: 'Expense',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 1850000,
+      description: 'Selisih Lebih / Selisih Kurang from Blind Physical Stock Opname audits',
+    },
+    {
+      accountCode: '5220',
+      accountName: 'POS Cash Drawer Over/Short Variance (Selisih Kasir)',
+      category: 'Expense',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Cashier Z-Report blind denomination count over/short variance account',
+    },
+  ];
+  requiredAccounts.forEach((acc) => {
+    if (!chartOfAccounts.some((c) => c.accountCode === acc.accountCode)) {
+      chartOfAccounts.push(acc);
+    }
+  });
+}
+ensureRegulatoryCoaAccounts();
+
+let skuTaxRulesList: SkuTaxRule[] = [
+  ...inventoryList.map((item) => {
+    const taxCategory = inferDefaultTaxCategory(item.category, item.name || item.productName || '');
+    return {
+      sku: item.sku,
+      productName: item.name || item.productName || item.sku,
+      category: item.category,
+      taxCategory,
+      taxRatePercent: getTaxRateForCategory(taxCategory, 11),
+      b2cTaxInclusive: true,
+      b2bTaxExclusive: true,
+      updatedAt: new Date().toISOString(),
+    };
+  }),
+  ...wholesaleProductsList
+    .filter((wp) => !inventoryList.some((inv) => inv.sku === wp.sku))
+    .map((wp) => {
+      const taxCategory = inferDefaultTaxCategory(wp.category, wp.name);
+      return {
+        sku: wp.sku,
+        productName: wp.name,
+        category: wp.category,
+        taxCategory,
+        taxRatePercent: getTaxRateForCategory(taxCategory, 11),
+        b2cTaxInclusive: true,
+        b2bTaxExclusive: true,
+        updatedAt: new Date().toISOString(),
+      };
+    }),
+];
+
+let customerRmaList: CustomerRmaRecord[] = [
+  {
+    id: 'RMA-2026-0001',
+    notaReturNumber: 'NR-2026-0001',
+    sourceChannel: 'POS',
+    sourceReferenceId: 'RCP-2026-1029-001',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    customerName: 'Sarah Jenkins',
+    customerNpwpOrNik: '3174015408920001',
+    items: [
+      {
+        sku: 'SKU-PRD-001',
+        productName: 'Organic Hydroponic Baby Spinach 250g',
+        category: 'produce',
+        quantity: 1,
+        unitPriceIDR: 18500,
+        unitCostIDR: 12000,
+        lineTotalIDR: 18500,
+        taxCategory: 'BKP_DIBEBASKAN',
+        ppnAdjustmentIDR: 0,
+        disposition: 'SCRAP_QUARANTINE',
+        lotNumber: 'BAT-202611-01',
+        reason: 'Wilted cold-chain leaf damage reported by shopper',
+      },
+    ],
+    subtotalReversedIDR: 18500,
+    ppnReversedIDR: 0,
+    totalCreditNoteIDR: 18500,
+    refundMethod: 'CASH',
+    status: 'COMPLETED',
+    glVoucherIds: ['GLE-2026-0988'],
+    createdAt: new Date(Date.now() - 1000 * 3600 * 6).toISOString(),
+    processedBy: 'Dewi Lestari',
+    notes: 'Nota Retur Pelanggan B2C - Barang Rusak/Quarantine',
+  },
+];
+
+let vendorRtvList: VendorRtvDebitNote[] = [
+  {
+    id: 'RTV-2026-0001',
+    debitNoteNumber: 'NRP-2026-0001',
+    qcInspectionId: 'QC-2026-0002',
+    vendorCreditNoteId: 'VCN-2026-081',
+    supplierId: 'SUPP-AGRO-01',
+    supplierName: 'PT Lembang Agro Sejahtera',
+    supplierNpwp: '013084492007000',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    sku: 'SKU-PRD-002',
+    productName: 'Alpine Strawberry Punnet 250g',
+    lotNumber: 'BAT-STR-2611',
+    quantityReturned: 8,
+    unit: 'pack',
+    unitCostIDR: 24000,
+    subtotalReturnedIDR: 192000,
+    ppnMasukanReversedIDR: 21120,
+    totalDebitNoteIDR: 213120,
+    reason: 'QC Rejected: Temperature breach > 6.5°C on receiving dock',
+    status: 'ISSUED',
+    glVoucherIds: ['GLE-RTV-2026-0001'],
+    createdAt: new Date(Date.now() - 1000 * 3600 * 4).toISOString(),
+    createdBy: 'Budi Santoso (QC Lead)',
+  },
+];
+
+let blindOpnameSheetsList: BlindOpnameSheet[] = [
+  {
+    id: 'BLIND-OPN-2026-001',
+    sheetNumber: 'SO-BLIND-2026-001',
+    warehouseHub: 'CDC',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    zoneFilter: 'WH-JKT-SEN-COLD',
+    status: 'COUNTING',
+    createdAt: new Date(Date.now() - 1000 * 3600 * 2).toISOString(),
+    createdBy: 'Siti Rahmawati (Inventory Audit)',
+    totalSurplusValueIDR: 0,
+    totalShortageValueIDR: 0,
+    netVarianceValueIDR: 0,
+    glVoucherIds: [],
+    items: storeInventoryTiers
+      .filter((t) => t.storeId === 'store-jkt-senopati')
+      .slice(0, 6)
+      .map((t) => {
+        const batch = inventoryBatches.find((b) => b.sku === t.sku && b.storeId === t.storeId);
+        return {
+          sku: t.sku,
+          productName: t.productName,
+          category: t.category,
+          unit: t.unit,
+          warehouseZoneId: t.warehouseZoneId,
+          binLocation: t.warehouseZoneId.includes('COLD') ? 'CDC-Chilled-Rack-A1' : 'CDC-Ambient-Rack-B2',
+          expectedLotNumber: batch?.lotNumber || `BAT-202611-${t.sku.slice(-3)}`,
+          countedLotNumber: batch?.lotNumber || `BAT-202611-${t.sku.slice(-3)}`,
+          countedQty: null,
+          systemQty: t.physicalStock,
+          unitCostIDR: t.unitCost,
+        };
+      }),
+  },
+];
+
+let posShiftsList: PosRegisterShiftSession[] = [
+  {
+    id: 'SHF-2026-0000',
+    zReportNumber: 'Z-RPT-2026-0000',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    registerId: 'REG-04',
+    cashierId: 'usr-cashier-01',
+    cashierName: 'Dewi Lestari',
+    status: 'CLOSED',
+    openedAt: new Date(Date.now() - 1000 * 3600 * 18).toISOString(),
+    closedAt: new Date(Date.now() - 1000 * 3600 * 10).toISOString(),
+    openingFloatIDR: 500000,
+    transactionCount: 14,
+    expectedCashSalesIDR: 1450000,
+    expectedQrisSalesIDR: 2150000,
+    expectedEdcSalesIDR: 980000,
+    expectedTotalCashInDrawerIDR: 1950000,
+    cashRefundsIDR: 0,
+    countedCashIDR: 1950000,
+    countedQrisBatchIDR: 2150000,
+    countedEdcBatchIDR: 980000,
+    cashVarianceIDR: 0,
+    qrisVarianceIDR: 0,
+    edcVarianceIDR: 0,
+    varianceGlVoucherIds: [],
+    notes: 'Previous evening shift balanced — zero cash variance.',
+  },
+];
+
+function applyBlindOpnameApproval(sheet: BlindOpnameSheet, approverName: string): string[] {
+  const timestamp = new Date().toISOString();
+  const glIds: string[] = [];
+
+  const opnameSessionItems = sheet.items.map((line) => {
+    const tier = storeInventoryTiers.find(
+      (t) => t.sku === line.sku && (t.storeId === sheet.storeId || sheet.storeId === 'CONSOLIDATED')
+    );
+    const sysQty = line.systemQty ?? tier?.physicalStock ?? 0;
+    const counted = line.countedQty ?? sysQty;
+    const variance = Number((counted - sysQty).toFixed(2));
+    const unitCost = line.unitCostIDR ?? tier?.unitCost ?? 15000;
+    const financialVar = Math.round(variance * unitCost);
+
+    if (tier && variance !== 0) {
+      tier.physicalStock = Math.max(0, counted);
+      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.updatedAt = timestamp;
+    }
+    const inv = inventoryList.find((i) => i.sku === line.sku);
+    if (inv && variance !== 0) {
+      inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) + variance).toFixed(2)));
+    }
+
+    return {
+      sku: line.sku,
+      productName: line.productName,
+      category: line.category,
+      storeId: sheet.storeId,
+      storeName: sheet.storeName,
+      warehouseZoneId: line.warehouseZoneId,
+      systemStock: sysQty,
+      countedStock: counted,
+      varianceQty: variance,
+      unitCost,
+      financialVarianceIDR: financialVar,
+      notes: line.notes || `Blind Opname ${sheet.sheetNumber} (Lot: ${line.countedLotNumber})`,
+      status: (variance === 0 ? 'matched' : variance < 0 ? 'shortage' : 'surplus') as 'matched' | 'shortage' | 'surplus',
+    };
+  });
+
+  if (sheet.netVarianceValueIDR !== 0) {
+    const absVal = Math.abs(sheet.netVarianceValueIDR);
+    const isShortage = sheet.netVarianceValueIDR < 0;
+    const g1 = `GLE-OPN-${Date.now().toString().slice(-5)}-1`;
+    const g2 = `GLE-OPN-${Date.now().toString().slice(-5)}-2`;
+    glIds.push(g1, g2);
+
+    if (isShortage) {
+      generalLedger.unshift({
+        id: g1,
+        timestamp,
+        storeId: sheet.storeId,
+        storeName: sheet.storeName,
+        accountCode: '5210',
+        accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
+        category: 'Expense',
+        debit: absVal,
+        credit: 0,
+        referenceType: 'STOCK_OPNAME',
+        referenceId: sheet.sheetNumber,
+        description: `Blind Stock Opname Shortage Variance (${sheet.sheetNumber}) approved by ${approverName}`,
+      });
+      generalLedger.unshift({
+        id: g2,
+        timestamp,
+        storeId: sheet.storeId,
+        storeName: sheet.storeName,
+        accountCode: '1040',
+        accountName: 'Merchandise Inventory Asset',
+        category: 'Asset',
+        debit: 0,
+        credit: absVal,
+        referenceType: 'STOCK_OPNAME',
+        referenceId: sheet.sheetNumber,
+        description: `Inventory Asset write-down for Blind Stock Opname ${sheet.sheetNumber}`,
+      });
+    } else {
+      generalLedger.unshift({
+        id: g1,
+        timestamp,
+        storeId: sheet.storeId,
+        storeName: sheet.storeName,
+        accountCode: '1040',
+        accountName: 'Merchandise Inventory Asset',
+        category: 'Asset',
+        debit: absVal,
+        credit: 0,
+        referenceType: 'STOCK_OPNAME',
+        referenceId: sheet.sheetNumber,
+        description: `Inventory Asset surplus adjustment for Blind Stock Opname ${sheet.sheetNumber}`,
+      });
+      generalLedger.unshift({
+        id: g2,
+        timestamp,
+        storeId: sheet.storeId,
+        storeName: sheet.storeName,
+        accountCode: '5210',
+        accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
+        category: 'Expense',
+        debit: 0,
+        credit: absVal,
+        referenceType: 'STOCK_OPNAME',
+        referenceId: sheet.sheetNumber,
+        description: `Blind Stock Opname Surplus credit (${sheet.sheetNumber}) approved by ${approverName}`,
+      });
+    }
+  }
+
+  sheet.status = 'APPROVED';
+  sheet.approvedAt = timestamp;
+  sheet.approvedBy = approverName;
+  sheet.glVoucherIds = glIds;
+
+  stockOpnameSessions.unshift({
+    id: sheet.id,
+    date: timestamp,
+    storeId: sheet.storeId,
+    storeName: sheet.storeName,
+    warehouseZoneId: sheet.zoneFilter,
+    auditorId: 'BLIND-COUNTER',
+    auditorName: sheet.submittedBy || sheet.createdBy,
+    status: 'reconciled',
+    items: opnameSessionItems,
+    totalSystemUnits: opnameSessionItems.reduce((s, it) => s + it.systemStock, 0),
+    totalCountedUnits: opnameSessionItems.reduce((s, it) => s + it.countedStock, 0),
+    totalVarianceUnits: opnameSessionItems.reduce((s, it) => s + it.varianceQty, 0),
+    netFinancialVarianceIDR: sheet.netVarianceValueIDR,
+    glEntryIds: glIds,
+    notes: `Supervisor Approved Blind Cycle Count (${sheet.sheetNumber})`,
+    completedAt: timestamp,
+  });
+
+  return glIds;
+}
 
 function getEffectiveRemovalStrategy(sku: string, category?: string): RemovalStrategyType {
   if (removalStrategiesConfig.skuOverrides[sku]) {
@@ -4304,6 +4702,21 @@ async function startServer() {
 
     posTransactionsHistory.unshift(receipt);
 
+    // Accumulate POS transaction into active OPEN cash register shift if present
+    const activeShift = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
+    if (activeShift) {
+      activeShift.transactionCount += 1;
+      if (paymentMethod === 'cash') {
+        activeShift.expectedCashSalesIDR += total;
+      } else if (paymentMethod === 'qris') {
+        activeShift.expectedQrisSalesIDR += total;
+      } else {
+        activeShift.expectedEdcSalesIDR += total;
+      }
+      activeShift.expectedTotalCashInDrawerIDR =
+        activeShift.openingFloatIDR + activeShift.expectedCashSalesIDR - activeShift.cashRefundsIDR;
+    }
+
     res.json({
       success: true,
       receipt,
@@ -5825,11 +6238,21 @@ async function startServer() {
 
     if (action === 'REJECTED') {
       reqItem.status = 'REJECTED';
+      if (reqItem.module === 'blind_stock_opname') {
+        const sheet = blindOpnameSheetsList.find((s) => s.id === reqItem.documentId || s.approvalRequestId === reqItem.id);
+        if (sheet) sheet.status = 'REJECTED';
+      }
     } else {
       if (reqItem.currentTierLevel < reqItem.requiredTierLevel) {
         reqItem.currentTierLevel += 1;
       } else {
         reqItem.status = 'APPROVED';
+        if (reqItem.module === 'blind_stock_opname') {
+          const sheet = blindOpnameSheetsList.find((s) => s.id === reqItem.documentId || s.approvalRequestId === reqItem.id);
+          if (sheet && sheet.status !== 'APPROVED') {
+            applyBlindOpnameApproval(sheet, currentActiveStaffSession.userName);
+          }
+        }
       }
     }
 
@@ -6845,6 +7268,1199 @@ async function startServer() {
       success: true,
       appliedCount: count,
       message: `Dynamic markdowns applied to ${count} near-expiry batch lots across storefront & POS registers.`,
+    });
+  });
+
+  // =============================================================
+  // 21. INDONESIAN REGULATORY COMPLIANCE SUITE (5 CORE MODULES)
+  // =============================================================
+
+  // --- MODULE 1A: CUSTOMER RMA & NOTA RETUR PENJUALAN (B2C / B2B / POS) ---
+  app.get('/api/admin/compliance/rma', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    let list = [...customerRmaList];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((r) => r.storeId === storeId);
+    }
+    res.json(list);
+  });
+
+  app.get('/api/admin/compliance/rma-sources', (_req: Request, res: Response) => {
+    const posReceipts = posTransactionsHistory.slice(0, 20).map((r) => ({
+      sourceChannel: 'POS' as RmaSourceChannel,
+      referenceId: r.receiptNumber,
+      storeId: r.storeId,
+      storeName: r.storeName,
+      customerName: 'Walk-in Retail Shopper',
+      totalAmountIDR: r.total,
+      timestamp: r.timestamp,
+      items: r.items.map((it) => ({
+        sku: it.sku,
+        productName: it.name,
+        category: it.category,
+        quantity: it.quantity,
+        unitPriceIDR: it.unitPrice,
+        unitCostIDR: it.unitCost || Math.round(it.unitPrice * 0.62),
+        lotNumber: it.lotNumber,
+      })),
+    }));
+
+    const b2c = customerOrders.slice(0, 20).map((o) => ({
+      sourceChannel: 'B2C' as RmaSourceChannel,
+      referenceId: o.id,
+      storeId: (o as any).storeId || o.pickupStore?.id || 'store-jkt-senopati',
+      storeName: o.pickupStore?.name || 'GroceMart B2C Storefront',
+      customerName: o.customerName || 'B2C Shopper',
+      totalAmountIDR: (o as any).totalAmount ?? o.total ?? 0,
+      timestamp: o.createdAt || new Date().toISOString(),
+      items: (o.items || []).map((it: any) => ({
+        sku: it.product?.sku || it.sku || 'SKU-PRD-001',
+        productName: it.product?.name || it.name || 'GroceMart Item',
+        category: it.product?.category || 'produce',
+        quantity: it.quantity || 1,
+        unitPriceIDR: it.product?.price || it.price || 18500,
+        unitCostIDR: Math.round((it.product?.price || it.price || 18500) * 0.65),
+        lotNumber: 'BAT-202611-01',
+      })),
+    }));
+
+    const b2b = b2bOrdersList.slice(0, 20).map((o) => {
+      const cust = b2bCustomersList.find((c) => c.id === o.customerId);
+      return {
+        sourceChannel: 'B2B' as RmaSourceChannel,
+        referenceId: o.id,
+        storeId: 'store-jkt-senopati',
+        storeName: 'Central Distribution Center (B2B)',
+        customerId: o.customerId,
+        customerName: o.companyName,
+        customerNpwpOrNik: cust?.npwp || cust?.nik || '',
+        totalAmountIDR: o.totalAmountIDR,
+        timestamp: o.orderDate,
+        items: o.items.map((it) => ({
+          sku: it.product?.sku || 'B2B-SKU',
+          productName: it.product?.name || 'Wholesale Item',
+          category: it.product?.category || 'pantry_staples',
+          quantity: it.baseUnitsCalculated || it.quantity,
+          unitPriceIDR: Math.round(it.lineTotal / Math.max(1, it.baseUnitsCalculated || it.quantity)),
+          unitCostIDR: Math.round((it.lineTotal / Math.max(1, it.baseUnitsCalculated || it.quantity)) * 0.78),
+          lotNumber: 'BAT-B2B-2026',
+        })),
+      };
+    });
+
+    res.json({ posReceipts, b2cOrders: b2c, b2bOrders: b2b });
+  });
+
+  app.post('/api/admin/compliance/rma', (req: Request, res: Response) => {
+    const {
+      sourceChannel = 'POS',
+      sourceReferenceId,
+      storeId = 'store-jkt-senopati',
+      storeName = 'GroceMart Senopati Flagship',
+      customerId,
+      customerName = 'Retail Customer',
+      customerNpwpOrNik,
+      refundMethod = 'CASH',
+      items = [],
+      notes,
+    } = req.body as {
+      sourceChannel: RmaSourceChannel;
+      sourceReferenceId: string;
+      storeId?: string;
+      storeName?: string;
+      customerId?: string;
+      customerName?: string;
+      customerNpwpOrNik?: string;
+      refundMethod?: RmaRefundMethod;
+      items: Array<{
+        sku: string;
+        productName: string;
+        category?: string;
+        quantity: number;
+        unitPriceIDR: number;
+        unitCostIDR?: number;
+        disposition: RmaDisposition;
+        lotNumber?: string;
+        reason?: string;
+      }>;
+      notes?: string;
+    };
+
+    if (!sourceReferenceId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'sourceReferenceId and at least one return item are required.' });
+    }
+
+    const timestamp = new Date().toISOString();
+    const seq = (customerRmaList.length + 1).toString().padStart(4, '0');
+    const rmaId = `RMA-2026-${seq}`;
+    const notaReturNumber = `NR-2026-${seq}`;
+
+    let totalSubtotalReversed = 0;
+    let totalPpnReversed = 0;
+    let totalRestockCogs = 0;
+    let totalScrapLoss = 0;
+
+    const processedItems: CustomerRmaItem[] = items.map((it) => {
+      const qty = Math.max(0.01, Number(it.quantity) || 1);
+      const uPrice = Math.max(0, Number(it.unitPriceIDR) || 0);
+      const uCost = Math.max(0, Number(it.unitCostIDR) || Math.round(uPrice * 0.65));
+      const lineGross = Math.round(qty * uPrice);
+
+      const rule = skuTaxRulesList.find((r) => r.sku === it.sku);
+      const taxCat: IndonesianTaxCategory =
+        rule?.taxCategory || inferDefaultTaxCategory(it.category || '', it.productName);
+      const taxCalc = computeIndonesianTax(
+        lineGross,
+        taxCat,
+        sourceChannel !== 'B2B',
+        rule?.taxRatePercent || 11
+      );
+
+      totalSubtotalReversed += taxCalc.dppIDR;
+      totalPpnReversed += taxCalc.ppnIDR + taxCalc.pb1IDR;
+
+      if (it.disposition === 'RESTOCK_ATP') {
+        totalRestockCogs += Math.round(qty * uCost);
+        const tier = storeInventoryTiers.find(
+          (t) => t.sku === it.sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
+        );
+        if (tier) {
+          tier.physicalStock = Number((tier.physicalStock + qty).toFixed(2));
+          tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+          tier.updatedAt = timestamp;
+        }
+        const inv = inventoryList.find((p) => p.sku === it.sku);
+        if (inv) {
+          inv.currentStock = Number(((inv.currentStock || 0) + qty).toFixed(2));
+        }
+        const batch = inventoryBatches.find((b) => b.sku === it.sku && b.status === 'active');
+        if (batch) {
+          batch.currentStock = Number((batch.currentStock + qty).toFixed(2));
+        }
+      } else {
+        totalScrapLoss += Math.round(qty * uCost);
+        const batchId = `BAT-QUAR-${Date.now().toString().slice(-5)}`;
+        inventoryBatches.unshift({
+          batchId,
+          sku: it.sku,
+          productName: it.productName,
+          storeId,
+          storeName,
+          warehouseZoneId: 'ZONE-QUAR-01',
+          lotNumber: it.lotNumber || `QUAR-${seq}`,
+          initialQuantity: qty,
+          currentStock: qty,
+          unitCost: uCost,
+          sellingPrice: uPrice,
+          receivedDate: timestamp.split('T')[0],
+          expiryDate: timestamp.split('T')[0],
+          daysUntilExpiry: 0,
+          status: 'quarantined',
+          storageZone: 'cold_chilled',
+          supplierName: `Customer RMA (${customerName})`,
+          notes: `Quarantined from Customer RMA ${notaReturNumber}: ${it.reason || 'Damaged/Expired'}`,
+        });
+        wasteRecords.unshift({
+          id: `WST-RMA-${Date.now().toString().slice(-5)}`,
+          sku: it.sku,
+          productName: it.productName,
+          storeId,
+          storeName,
+          warehouseZoneId: 'ZONE-QUAR-01',
+          batchId,
+          lotNumber: it.lotNumber || `QUAR-${seq}`,
+          quantityScrapped: qty,
+          unit: 'unit',
+          unitCost: uCost,
+          totalShrinkageCost: Math.round(qty * uCost),
+          reason: 'customer_return_opened',
+          actionTaken: 'safe_disposal',
+          reportedBy: currentActiveStaffSession.userName,
+          reportedAt: timestamp,
+          glEntryId: `GLE-RMA-${seq}-SCRAP`,
+          notes: `RMA Scrap/Quarantine (${notaReturNumber}): ${it.reason || 'Damaged on return'}`,
+        });
+      }
+
+      return {
+        sku: it.sku,
+        productName: it.productName,
+        category: it.category,
+        quantity: qty,
+        unitPriceIDR: uPrice,
+        unitCostIDR: uCost,
+        lineTotalIDR: taxCalc.totalIDR,
+        taxCategory: taxCat,
+        ppnAdjustmentIDR: taxCalc.ppnIDR + taxCalc.pb1IDR,
+        disposition: it.disposition,
+        lotNumber: it.lotNumber,
+        reason: it.reason || 'Customer return',
+      };
+    });
+
+    const totalCreditNoteIDR = totalSubtotalReversed + totalPpnReversed;
+    const glIds: string[] = [];
+
+    // 1. Reverse Revenue (#4010 retail / #4020 B2B)
+    const revGleId = `GLE-RMA-${seq}-REV`;
+    glIds.push(revGleId);
+    generalLedger.unshift({
+      id: revGleId,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: sourceChannel === 'B2B' ? '4020' : '4010',
+      accountName: sourceChannel === 'B2B' ? 'B2B Wholesale Revenue' : 'Grocery Sales Revenue',
+      category: 'Revenue',
+      debit: totalSubtotalReversed,
+      credit: 0,
+      referenceType: 'POS_SALE',
+      referenceId: notaReturNumber,
+      description: `Sales Return Reversal (${notaReturNumber}) for ${sourceChannel} Ref #${sourceReferenceId}`,
+    });
+
+    // 2. Reverse PPN Keluaran (#2025) if applicable
+    if (totalPpnReversed > 0) {
+      const taxGleId = `GLE-RMA-${seq}-PPN`;
+      glIds.push(taxGleId);
+      generalLedger.unshift({
+        id: taxGleId,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '2025',
+        accountName: 'PPN Keluaran (VAT Output Payable 11%/12%)',
+        category: 'Liability',
+        debit: totalPpnReversed,
+        credit: 0,
+        referenceType: 'TAX_ADJUSTMENT',
+        referenceId: notaReturNumber,
+        description: `Nota Retur PPN Keluaran Adjustment (${notaReturNumber}) - DJP e-Faktur Compliance`,
+      });
+    }
+
+    // 3. Credit Refund Target: AR Reduction (#1200) vs Cash Drawer (#1010) vs Store Credit (#2020)
+    const settleGleId = `GLE-RMA-${seq}-SETTLE`;
+    glIds.push(settleGleId);
+    if (refundMethod === 'AR_REDUCTION' || sourceChannel === 'B2B') {
+      generalLedger.unshift({
+        id: settleGleId,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '1200',
+        accountName: 'B2B Accounts Receivable (Piutang Usaha)',
+        category: 'Asset',
+        debit: 0,
+        credit: totalCreditNoteIDR,
+        referenceType: 'B2B_AR_CREDIT',
+        referenceId: notaReturNumber,
+        description: `Credit Note ${notaReturNumber} AR reduction for ${customerName}`,
+      });
+      if (customerId) {
+        const b2bCust = b2bCustomersList.find((c) => c.id === customerId);
+        if (b2bCust) {
+          b2bCust.outstandingAR = Math.max(0, b2bCust.outstandingAR - totalCreditNoteIDR);
+          b2bCust.availableCredit = Math.max(0, b2bCust.creditLimit - b2bCust.outstandingAR);
+        }
+      }
+    } else if (refundMethod === 'CASH') {
+      generalLedger.unshift({
+        id: settleGleId,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '1010',
+        accountName: 'Cash on Hand & Store Registers',
+        category: 'Asset',
+        debit: 0,
+        credit: totalCreditNoteIDR,
+        referenceType: 'POS_SALE',
+        referenceId: notaReturNumber,
+        description: `Cash drawer refund for Customer RMA ${notaReturNumber}`,
+      });
+      const openShift = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
+      if (openShift) {
+        openShift.cashRefundsIDR += totalCreditNoteIDR;
+        openShift.expectedTotalCashInDrawerIDR =
+          openShift.openingFloatIDR + openShift.expectedCashSalesIDR - openShift.cashRefundsIDR;
+      }
+    } else {
+      generalLedger.unshift({
+        id: settleGleId,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '2020',
+        accountName: 'Customer Store Credit Liability',
+        category: 'Liability',
+        debit: 0,
+        credit: totalCreditNoteIDR,
+        referenceType: 'POS_SALE',
+        referenceId: notaReturNumber,
+        description: `Store credit voucher issued for RMA ${notaReturNumber}`,
+      });
+    }
+
+    // 4. Inventory Asset Restock (#1040 vs #5010 COGS) or Scrap Quarantine (#5030)
+    if (totalRestockCogs > 0) {
+      const invGle = `GLE-RMA-${seq}-INV`;
+      const cogsGle = `GLE-RMA-${seq}-COGS`;
+      glIds.push(invGle, cogsGle);
+      generalLedger.unshift({
+        id: invGle,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '1040',
+        accountName: 'Merchandise Inventory Asset',
+        category: 'Asset',
+        debit: totalRestockCogs,
+        credit: 0,
+        referenceType: 'POS_SALE',
+        referenceId: notaReturNumber,
+        description: `Good-condition RMA restocked to Available ATP (${notaReturNumber})`,
+      });
+      generalLedger.unshift({
+        id: cogsGle,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '5010',
+        accountName: 'Cost of Goods Sold (COGS)',
+        category: 'Expense',
+        debit: 0,
+        credit: totalRestockCogs,
+        referenceType: 'POS_SALE',
+        referenceId: notaReturNumber,
+        description: `COGS reversal for restocked RMA items (${notaReturNumber})`,
+      });
+    }
+
+    const rmaRecord: CustomerRmaRecord = {
+      id: rmaId,
+      notaReturNumber,
+      sourceChannel,
+      sourceReferenceId,
+      storeId,
+      storeName,
+      customerId,
+      customerName,
+      customerNpwpOrNik,
+      items: processedItems,
+      subtotalReversedIDR: totalSubtotalReversed,
+      ppnReversedIDR: totalPpnReversed,
+      totalCreditNoteIDR,
+      refundMethod,
+      status: 'COMPLETED',
+      glVoucherIds: glIds,
+      createdAt: timestamp,
+      processedBy: currentActiveStaffSession.userName,
+      notes,
+    };
+    customerRmaList.unshift(rmaRecord);
+
+    // Sync to existing posReturnsList for 100% backward compatibility
+    posReturnsList.unshift({
+      id: rmaId,
+      originalReceiptNumber: sourceReferenceId,
+      originalOrderId: sourceReferenceId,
+      storeId,
+      storeName,
+      processedByUserId: currentActiveStaffSession.userId,
+      processedByUserName: currentActiveStaffSession.userName,
+      timestamp,
+      items: processedItems.map((it) => ({
+        sku: it.sku,
+        productName: it.productName,
+        category: it.category || 'produce',
+        originalQuantity: it.quantity,
+        returnQuantity: it.quantity,
+        unitPrice: it.unitPriceIDR,
+        unitCost: it.unitCostIDR,
+        refundAmount: it.lineTotalIDR,
+        returnReason: 'PERISHABLE_DEFECT',
+        disposition: it.disposition === 'RESTOCK_ATP' ? 'RESTOCK_INVENTORY' : 'RETURN_CAGE_WASTE',
+        conditionNotes: it.reason,
+      })),
+      totalRefundAmountIDR: totalCreditNoteIDR,
+      refundChannel: refundMethod === 'CASH' ? 'CASH_DRAWER' : 'STORE_CREDIT_VOUCHER',
+      glVoucherIds: glIds,
+      status: 'COMPLETED',
+      customerName,
+    });
+
+    res.json({
+      success: true,
+      rma: rmaRecord,
+      message: `Credit Note ${notaReturNumber} issued (${refundMethod}) with PPN Keluaran adjustment Rp ${totalPpnReversed.toLocaleString('id-ID')}.`,
+    });
+  });
+
+  // --- MODULE 1B: RETURN-TO-VENDOR (RTV) & DEBIT NOTE (NOTA RETUR PEMBELIAN) ---
+  app.get('/api/admin/compliance/rtv', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    let list = [...vendorRtvList];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((r) => r.storeId === storeId);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/admin/compliance/rtv', (req: Request, res: Response) => {
+    const {
+      qcInspectionId,
+      supplierId = 'SUPP-AGRO-01',
+      supplierName = 'PT Lembang Agro Sejahtera',
+      supplierNpwp = '013084492007000',
+      storeId = 'store-jkt-senopati',
+      storeName = 'GroceMart Senopati Flagship',
+      sku,
+      productName,
+      lotNumber = 'LOT-QC-REJECT',
+      quantityReturned = 1,
+      unit = 'pack',
+      unitCostIDR,
+      reason = 'QC Rejected / Damaged Batch Return-to-Vendor',
+    } = req.body;
+
+    if (!sku) {
+      return res.status(400).json({ error: 'SKU is required to generate an RTV Debit Note.' });
+    }
+
+    const timestamp = new Date().toISOString();
+    const seq = (vendorRtvList.length + 1).toString().padStart(4, '0');
+    const rtvId = `RTV-2026-${seq}`;
+    const debitNoteNumber = `NRP-2026-${seq}`;
+    const qty = Math.max(1, Number(quantityReturned) || 1);
+
+    const inv = inventoryList.find((i) => i.sku === sku);
+    const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
+    const resolvedUnitCost = Number(unitCostIDR) || tier?.unitCost || inv?.wacUnitCost || 18000;
+    const subtotalReturnedIDR = Math.round(qty * resolvedUnitCost);
+
+    const rule = skuTaxRulesList.find((r) => r.sku === sku);
+    const taxCat: IndonesianTaxCategory =
+      rule?.taxCategory || inferDefaultTaxCategory(inv?.category || '', productName || inv?.name || '');
+    const taxCalc = computeIndonesianTax(subtotalReturnedIDR, taxCat, false, rule?.taxRatePercent || 11);
+    const ppnMasukanReversedIDR = taxCalc.ppnIDR;
+    const totalDebitNoteIDR = subtotalReturnedIDR + ppnMasukanReversedIDR;
+
+    // Deduct stock from batch, tier, and catalog
+    if (tier) {
+      tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
+      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.updatedAt = timestamp;
+    }
+    if (inv) {
+      inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) - qty).toFixed(2)));
+    }
+    const matchingBatch = inventoryBatches.find(
+      (b) => b.sku === sku && (b.lotNumber === lotNumber || b.status === 'quarantined')
+    );
+    if (matchingBatch) {
+      matchingBatch.currentStock = Math.max(0, Number((matchingBatch.currentStock - qty).toFixed(2)));
+      matchingBatch.notes = `Dispatched via RTV ${debitNoteNumber}`;
+    }
+
+    // GL Double-Entry: Debit Vendor AP (#2010), Credit Inventory Asset (#1040), Credit PPN Masukan (#2026)
+    const g1 = `GLE-RTV-${seq}-AP`;
+    const g2 = `GLE-RTV-${seq}-INV`;
+    const glIds = [g1, g2];
+
+    generalLedger.unshift({
+      id: g1,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '2010',
+      accountName: 'Trade Accounts Payable',
+      category: 'Liability',
+      debit: totalDebitNoteIDR,
+      credit: 0,
+      referenceType: 'PURCHASE_AP',
+      referenceId: debitNoteNumber,
+      description: `RTV Debit Note ${debitNoteNumber} reducing AP to ${supplierName} (QC: ${qcInspectionId || 'Manual'})`,
+    });
+    generalLedger.unshift({
+      id: g2,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '1040',
+      accountName: 'Merchandise Inventory Asset',
+      category: 'Asset',
+      debit: 0,
+      credit: subtotalReturnedIDR,
+      referenceType: 'PURCHASE_AP',
+      referenceId: debitNoteNumber,
+      description: `Inventory Asset deducted for RTV ${debitNoteNumber} (${qty} ${unit} ${sku})`,
+    });
+    if (ppnMasukanReversedIDR > 0) {
+      const g3 = `GLE-RTV-${seq}-VAT`;
+      glIds.push(g3);
+      generalLedger.unshift({
+        id: g3,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '2026',
+        accountName: 'PPN Masukan (VAT Input Creditable)',
+        category: 'Asset',
+        debit: 0,
+        credit: ppnMasukanReversedIDR,
+        referenceType: 'TAX_ADJUSTMENT',
+        referenceId: debitNoteNumber,
+        description: `PPN Masukan reversed on Nota Retur Pembelian ${debitNoteNumber}`,
+      });
+    }
+
+    const vcnId = `VCN-2026-${seq}`;
+    vendorCreditNotesList.unshift({
+      creditNoteId: vcnId,
+      rmaNumber: debitNoteNumber,
+      supplierId,
+      supplierName,
+      storeId,
+      storeName,
+      sku,
+      productName: productName || inv?.name || sku,
+      lotNumber,
+      quantityReturned: qty,
+      unit,
+      unitCost: resolvedUnitCost,
+      totalCreditIDR: totalDebitNoteIDR,
+      reason: 'spoiled_on_arrival',
+      status: 'pending_pickup',
+      createdAt: timestamp,
+      approvedBy: currentActiveStaffSession.userName,
+      journalEntryId: g1,
+      notes: `Linked to ${debitNoteNumber} (${reason})`,
+    });
+
+    const newRtv: VendorRtvDebitNote = {
+      id: rtvId,
+      debitNoteNumber,
+      qcInspectionId,
+      vendorCreditNoteId: vcnId,
+      supplierId,
+      supplierName,
+      supplierNpwp,
+      storeId,
+      storeName,
+      sku,
+      productName: productName || inv?.name || sku,
+      lotNumber,
+      quantityReturned: qty,
+      unit,
+      unitCostIDR: resolvedUnitCost,
+      subtotalReturnedIDR,
+      ppnMasukanReversedIDR,
+      totalDebitNoteIDR,
+      reason,
+      status: 'ISSUED',
+      glVoucherIds: glIds,
+      createdAt: timestamp,
+      createdBy: currentActiveStaffSession.userName,
+    };
+    vendorRtvList.unshift(newRtv);
+
+    res.json({
+      success: true,
+      rtv: newRtv,
+      message: `Vendor Debit Note ${debitNoteNumber} issued for ${supplierName}. AP & PPN Masukan adjusted.`,
+    });
+  });
+
+  // --- MODULE 2: BLIND STOCK OPNAME & SHRINKAGE VARIANCE ---
+  app.get('/api/admin/compliance/blind-opname', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    let sheets = [...blindOpnameSheetsList];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      sheets = sheets.filter((s) => s.storeId === storeId);
+    }
+    // Strict anti-fraud payload projection: NEVER return systemQty/varianceQty while COUNTING
+    const sanitized = sheets.map((s) => ({
+      ...s,
+      items: s.items.map((line) =>
+        s.status === 'COUNTING'
+          ? {
+              sku: line.sku,
+              productName: line.productName,
+              category: line.category,
+              unit: line.unit,
+              warehouseZoneId: line.warehouseZoneId,
+              binLocation: line.binLocation,
+              expectedLotNumber: line.expectedLotNumber,
+              countedLotNumber: line.countedLotNumber,
+              countedQty: line.countedQty,
+              notes: line.notes,
+            }
+          : line
+      ),
+    }));
+    res.json(sanitized);
+  });
+
+  app.post('/api/admin/compliance/blind-opname/generate', (req: Request, res: Response) => {
+    const {
+      warehouseHub = 'CDC',
+      storeId = 'store-jkt-senopati',
+      zoneFilter = 'ALL',
+    } = req.body as {
+      warehouseHub?: 'CDC' | 'DARK_STORE' | 'RETAIL_FRONT';
+      storeId?: string;
+      zoneFilter?: string;
+    };
+
+    const hubDefaultStore =
+      warehouseHub === 'CDC'
+        ? 'store-jkt-senopati'
+        : warehouseHub === 'DARK_STORE'
+        ? 'store-jkt-pik'
+        : storeId || 'store-bdg-dago';
+    const targetStoreId = storeId && storeId !== 'CONSOLIDATED' ? storeId : hubDefaultStore;
+    const storeInfo = storeSchedules.find((s) => s.storeId === targetStoreId);
+    const storeName = storeInfo?.storeName || 'GroceMart Senopati Flagship';
+
+    let tiers = storeInventoryTiers.filter((t) => t.storeId === targetStoreId);
+    if (zoneFilter && zoneFilter !== 'ALL') {
+      tiers = tiers.filter((t) => t.warehouseZoneId === zoneFilter);
+    }
+    if (tiers.length === 0) {
+      tiers = storeInventoryTiers.slice(0, 6);
+    }
+
+    const seq = (blindOpnameSheetsList.length + 1).toString().padStart(3, '0');
+    const id = `BLIND-OPN-2026-${seq}`;
+    const sheetNumber = `SO-BLIND-2026-${seq}`;
+
+    const items: BlindOpnameLine[] = tiers.slice(0, 10).map((t) => {
+      const batch = inventoryBatches.find((b) => b.sku === t.sku && b.storeId === t.storeId);
+      return {
+        sku: t.sku,
+        productName: t.productName,
+        category: t.category,
+        unit: t.unit,
+        warehouseZoneId: t.warehouseZoneId,
+        binLocation: t.warehouseZoneId.includes('COLD')
+          ? 'Chilled-Rack-A1'
+          : t.warehouseZoneId.includes('FRZ')
+          ? 'Freezer-Bay-F2'
+          : 'Ambient-Rack-B3',
+        expectedLotNumber: batch?.lotNumber || `BAT-202611-${t.sku.slice(-3)}`,
+        countedLotNumber: batch?.lotNumber || `BAT-202611-${t.sku.slice(-3)}`,
+        countedQty: null,
+        systemQty: t.physicalStock,
+        unitCostIDR: t.unitCost,
+      };
+    });
+
+    const newSheet: BlindOpnameSheet = {
+      id,
+      sheetNumber,
+      warehouseHub,
+      storeId: targetStoreId,
+      storeName,
+      zoneFilter,
+      status: 'COUNTING',
+      createdAt: new Date().toISOString(),
+      createdBy: currentActiveStaffSession.userName,
+      totalSurplusValueIDR: 0,
+      totalShortageValueIDR: 0,
+      netVarianceValueIDR: 0,
+      glVoucherIds: [],
+      items,
+    };
+
+    blindOpnameSheetsList.unshift(newSheet);
+
+    const sanitized = {
+      ...newSheet,
+      items: newSheet.items.map(({ systemQty: _sys, unitCostIDR: _cost, ...visible }) => visible),
+    };
+
+    res.json({
+      success: true,
+      sheet: sanitized,
+      message: `Blind Count Sheet ${sheetNumber} generated for ${storeName} (${items.length} SKUs). System quantities hidden from counter.`,
+    });
+  });
+
+  app.post('/api/admin/compliance/blind-opname/:id/submit', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { counts = [], submittedBy } = req.body as {
+      counts: Array<{ sku: string; countedQty: number; countedLotNumber?: string; notes?: string }>;
+      submittedBy?: string;
+    };
+
+    const sheet = blindOpnameSheetsList.find((s) => s.id === id);
+    if (!sheet) return res.status(404).json({ error: `Blind count sheet ${id} not found` });
+
+    const timestamp = new Date().toISOString();
+    let totalSurplus = 0;
+    let totalShortage = 0;
+
+    sheet.items = sheet.items.map((line) => {
+      const input = counts.find((c) => c.sku === line.sku);
+      const countedQty = input !== undefined ? Math.max(0, Number(input.countedQty) || 0) : (line.countedQty ?? 0);
+      const sysQty = line.systemQty ?? 0;
+      const varianceQty = Number((countedQty - sysQty).toFixed(2));
+      const unitCost = line.unitCostIDR ?? 15000;
+      const varianceVal = Math.round(varianceQty * unitCost);
+
+      if (varianceVal > 0) totalSurplus += varianceVal;
+      if (varianceVal < 0) totalShortage += Math.abs(varianceVal);
+
+      return {
+        ...line,
+        countedQty,
+        countedLotNumber: input?.countedLotNumber || line.countedLotNumber,
+        notes: input?.notes || line.notes,
+        systemQty: sysQty,
+        varianceQty,
+        unitCostIDR: unitCost,
+        varianceValueIDR: varianceVal,
+        status: varianceQty === 0 ? 'MATCHED' : varianceQty > 0 ? 'SURPLUS' : 'SHORTAGE',
+      };
+    });
+
+    sheet.totalSurplusValueIDR = totalSurplus;
+    sheet.totalShortageValueIDR = totalShortage;
+    sheet.netVarianceValueIDR = totalSurplus - totalShortage;
+    sheet.status = 'PENDING_APPROVAL';
+    sheet.submittedAt = timestamp;
+    sheet.submittedBy = submittedBy || currentActiveStaffSession.userName;
+
+    const approvalId = `APR-OPN-${Date.now().toString().slice(-5)}`;
+    sheet.approvalRequestId = approvalId;
+
+    approvalQueueList.unshift({
+      id: approvalId,
+      module: 'blind_stock_opname',
+      documentId: sheet.id,
+      documentTitle: `Blind Opname Variance Audit: ${sheet.sheetNumber} (${sheet.storeName})`,
+      requestedBy: sheet.submittedBy,
+      requestedAt: timestamp,
+      storeId: sheet.storeId,
+      storeName: sheet.storeName,
+      amountIDR: Math.abs(sheet.netVarianceValueIDR),
+      currentTierLevel: 1,
+      requiredTierLevel: 1,
+      status: 'PENDING',
+      history: [],
+      payloadSummary: {
+        sku: sheet.items[0]?.sku,
+        productName: `${sheet.items.length} SKUs (${sheet.warehouseHub})`,
+        quantity: sheet.items.length,
+        reason: `Surplus Rp ${totalSurplus.toLocaleString('id-ID')} / Shortage Rp ${totalShortage.toLocaleString('id-ID')} (Net Rp ${sheet.netVarianceValueIDR.toLocaleString('id-ID')})`,
+      },
+    });
+
+    res.json({
+      success: true,
+      sheet,
+      approvalRequestId: approvalId,
+      message: `Blind Count ${sheet.sheetNumber} submitted. Variance revealed and routed to Supervisor Approval Matrix (${approvalId}).`,
+    });
+  });
+
+  app.post('/api/admin/compliance/blind-opname/:id/approve', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { action = 'APPROVED', approverNotes } = req.body as {
+      action?: 'APPROVED' | 'REJECTED';
+      approverNotes?: string;
+    };
+
+    const sheet = blindOpnameSheetsList.find((s) => s.id === id);
+    if (!sheet) return res.status(404).json({ error: `Blind count sheet ${id} not found` });
+
+    const reqItem = approvalQueueList.find(
+      (q) => q.id === sheet.approvalRequestId || q.documentId === sheet.id
+    );
+
+    if (action === 'REJECTED') {
+      sheet.status = 'REJECTED';
+      if (reqItem) reqItem.status = 'REJECTED';
+      return res.json({
+        success: true,
+        sheet,
+        message: `Blind Opname ${sheet.sheetNumber} rejected. Re-count required.`,
+      });
+    }
+
+    const glIds = applyBlindOpnameApproval(sheet, currentActiveStaffSession.userName);
+    if (reqItem) {
+      reqItem.status = 'APPROVED';
+      reqItem.history.push({
+        tierLevel: 1,
+        tierName: 'Supervisor Reconciliation',
+        approverId: currentActiveStaffSession.userId,
+        approverName: currentActiveStaffSession.userName,
+        approverRole: currentActiveStaffSession.userRole,
+        action: 'APPROVED',
+        timestamp: new Date().toISOString(),
+        comments: approverNotes || 'Physical variance verified and posted to COA #5210',
+      });
+    }
+
+    res.json({
+      success: true,
+      sheet,
+      glVoucherIds: glIds,
+      message: `Blind Opname ${sheet.sheetNumber} approved. Stock levels & COA #5210 Shrinkage Variance synchronized.`,
+    });
+  });
+
+  // --- MODULE 4: POS CASHIER SHIFT & BLIND Z-REPORT RECONCILIATION ---
+  app.get('/api/pos/shifts/active', (req: Request, res: Response) => {
+    const { storeId = 'store-jkt-senopati' } = req.query as { storeId?: string };
+    const effectiveStore = storeId === 'CONSOLIDATED' ? 'store-jkt-senopati' : storeId;
+    const active = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === effectiveStore) || null;
+    res.json({ activeShift: active });
+  });
+
+  app.get('/api/pos/shifts/history', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    let list = [...posShiftsList];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((s) => s.storeId === storeId);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/pos/shifts/open', (req: Request, res: Response) => {
+    const {
+      storeId = 'store-jkt-senopati',
+      storeName = 'GroceMart Senopati Flagship',
+      registerId = 'REG-04',
+      openingFloatIDR = 500000,
+      cashierName,
+    } = req.body;
+
+    const existing = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
+    if (existing) {
+      return res.json({
+        success: true,
+        shift: existing,
+        message: `Register shift ${existing.id} is already open.`,
+      });
+    }
+
+    const seq = (posShiftsList.length + 1).toString().padStart(4, '0');
+    const newShift: PosRegisterShiftSession = {
+      id: `SHF-2026-${seq}`,
+      storeId,
+      storeName,
+      registerId,
+      cashierId: currentActiveStaffSession.userId,
+      cashierName: cashierName || currentActiveStaffSession.userName,
+      status: 'OPEN',
+      openedAt: new Date().toISOString(),
+      openingFloatIDR: Math.max(0, Number(openingFloatIDR) || 0),
+      transactionCount: 0,
+      expectedCashSalesIDR: 0,
+      expectedQrisSalesIDR: 0,
+      expectedEdcSalesIDR: 0,
+      expectedTotalCashInDrawerIDR: Math.max(0, Number(openingFloatIDR) || 0),
+      cashRefundsIDR: 0,
+    };
+
+    posShiftsList.unshift(newShift);
+    res.json({
+      success: true,
+      shift: newShift,
+      message: `Shift ${newShift.id} opened with petty cash float Rp ${newShift.openingFloatIDR.toLocaleString('id-ID')}.`,
+    });
+  });
+
+  app.post('/api/pos/shifts/close', (req: Request, res: Response) => {
+    const {
+      shiftId,
+      storeId = 'store-jkt-senopati',
+      denominations = [],
+      countedQrisBatchIDR = 0,
+      countedEdcBatchIDR = 0,
+      notes,
+    } = req.body as {
+      shiftId?: string;
+      storeId?: string;
+      denominations: PosShiftDenominationCount[];
+      countedQrisBatchIDR?: number;
+      countedEdcBatchIDR?: number;
+      notes?: string;
+    };
+
+    const shift =
+      (shiftId ? posShiftsList.find((s) => s.id === shiftId) : undefined) ||
+      posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
+
+    if (!shift) {
+      return res.status(404).json({ error: 'No open POS register shift found to close.' });
+    }
+
+    const timestamp = new Date().toISOString();
+    const countedCashIDR = (denominations || []).reduce(
+      (sum, d) => sum + (Number(d.denomination) || 0) * (Number(d.count) || 0),
+      0
+    );
+    const cashVarianceIDR = countedCashIDR - shift.expectedTotalCashInDrawerIDR;
+    const qrisVarianceIDR = Number(countedQrisBatchIDR || 0) - shift.expectedQrisSalesIDR;
+    const edcVarianceIDR = Number(countedEdcBatchIDR || 0) - shift.expectedEdcSalesIDR;
+
+    const zReportNumber = `Z-RPT-${shift.id.replace('SHF-', '')}`;
+    const glIds: string[] = [];
+
+    if (cashVarianceIDR !== 0) {
+      const absVar = Math.abs(cashVarianceIDR);
+      const isShort = cashVarianceIDR < 0;
+      const g1 = `GLE-ZRP-${Date.now().toString().slice(-5)}-1`;
+      const g2 = `GLE-ZRP-${Date.now().toString().slice(-5)}-2`;
+      glIds.push(g1, g2);
+
+      if (isShort) {
+        generalLedger.unshift({
+          id: g1,
+          timestamp,
+          storeId: shift.storeId,
+          storeName: shift.storeName,
+          accountCode: '5220',
+          accountName: 'POS Cash Drawer Over/Short Variance (Selisih Kasir)',
+          category: 'Expense',
+          debit: absVar,
+          credit: 0,
+          referenceType: 'POS_SHIFT_Z_REPORT',
+          referenceId: zReportNumber,
+          description: `Cashier Short Variance (Selisih Kurang) on ${zReportNumber} - ${shift.cashierName}`,
+        });
+        generalLedger.unshift({
+          id: g2,
+          timestamp,
+          storeId: shift.storeId,
+          storeName: shift.storeName,
+          accountCode: '1010',
+          accountName: 'Cash on Hand & Store Registers',
+          category: 'Asset',
+          debit: 0,
+          credit: absVar,
+          referenceType: 'POS_SHIFT_Z_REPORT',
+          referenceId: zReportNumber,
+          description: `Cash drawer physical balance adjustment on ${zReportNumber}`,
+        });
+      } else {
+        generalLedger.unshift({
+          id: g1,
+          timestamp,
+          storeId: shift.storeId,
+          storeName: shift.storeName,
+          accountCode: '1010',
+          accountName: 'Cash on Hand & Store Registers',
+          category: 'Asset',
+          debit: absVar,
+          credit: 0,
+          referenceType: 'POS_SHIFT_Z_REPORT',
+          referenceId: zReportNumber,
+          description: `Cash drawer surplus (Selisih Lebih) deposited on ${zReportNumber}`,
+        });
+        generalLedger.unshift({
+          id: g2,
+          timestamp,
+          storeId: shift.storeId,
+          storeName: shift.storeName,
+          accountCode: '5220',
+          accountName: 'POS Cash Drawer Over/Short Variance (Selisih Kasir)',
+          category: 'Expense',
+          debit: 0,
+          credit: absVar,
+          referenceType: 'POS_SHIFT_Z_REPORT',
+          referenceId: zReportNumber,
+          description: `Cashier Over Variance credit on ${zReportNumber} - ${shift.cashierName}`,
+        });
+      }
+    }
+
+    shift.status = 'CLOSED';
+    shift.closedAt = timestamp;
+    shift.zReportNumber = zReportNumber;
+    shift.denominations = denominations;
+    shift.countedCashIDR = countedCashIDR;
+    shift.countedQrisBatchIDR = Number(countedQrisBatchIDR || 0);
+    shift.countedEdcBatchIDR = Number(countedEdcBatchIDR || 0);
+    shift.cashVarianceIDR = cashVarianceIDR;
+    shift.qrisVarianceIDR = qrisVarianceIDR;
+    shift.edcVarianceIDR = edcVarianceIDR;
+    shift.varianceGlVoucherIds = glIds;
+    shift.notes = notes;
+
+    res.json({
+      success: true,
+      shift,
+      zReportNumber,
+      message: `Z-Report ${zReportNumber} finalized. Cash variance: Rp ${cashVarianceIDR.toLocaleString('id-ID')}.`,
+    });
+  });
+
+  // --- MODULE 5: INDONESIAN TAX ENGINE (PPN / SEMBAKO / PB1) & CORETAX DJP EXPORT ---
+  app.get('/api/admin/compliance/sku-tax-rules', (_req: Request, res: Response) => {
+    res.json(skuTaxRulesList);
+  });
+
+  app.put('/api/admin/compliance/sku-tax-rules', (req: Request, res: Response) => {
+    const { sku, taxCategory, taxRatePercent, b2cTaxInclusive, b2bTaxExclusive } = req.body as Partial<SkuTaxRule>;
+    if (!sku || !taxCategory) {
+      return res.status(400).json({ error: 'sku and taxCategory are required.' });
+    }
+    const resolvedRate =
+      taxRatePercent !== undefined ? Number(taxRatePercent) : getTaxRateForCategory(taxCategory, 11);
+    const existing = skuTaxRulesList.find((r) => r.sku === sku);
+    if (existing) {
+      existing.taxCategory = taxCategory;
+      existing.taxRatePercent = resolvedRate;
+      if (b2cTaxInclusive !== undefined) existing.b2cTaxInclusive = b2cTaxInclusive;
+      if (b2bTaxExclusive !== undefined) existing.b2bTaxExclusive = b2bTaxExclusive;
+      existing.updatedAt = new Date().toISOString();
+    } else {
+      const inv = inventoryList.find((i) => i.sku === sku);
+      skuTaxRulesList.push({
+        sku,
+        productName: inv?.name || inv?.productName || sku,
+        category: inv?.category || 'general',
+        taxCategory,
+        taxRatePercent: resolvedRate,
+        b2cTaxInclusive: b2cTaxInclusive ?? true,
+        b2bTaxExclusive: b2bTaxExclusive ?? true,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    res.json({
+      success: true,
+      rules: skuTaxRulesList,
+      message: `Indonesian tax classification for ${sku} updated to ${taxCategory} (${resolvedRate}%).`,
+    });
+  });
+
+  app.post('/api/admin/compliance/validate-npwp', (req: Request, res: Response) => {
+    const { npwpOrNik, b2bCustomerId } = req.body as { npwpOrNik: string; b2bCustomerId?: string };
+    const result = validateNpwpOrNik(npwpOrNik);
+    if (result.valid && b2bCustomerId) {
+      const cust = b2bCustomersList.find((c) => c.id === b2bCustomerId);
+      if (cust) {
+        if (result.type === 'NIK_16') cust.nik = result.cleanDigits;
+        else cust.npwp = result.cleanDigits;
+      }
+    }
+    res.json(result);
+  });
+
+  app.get('/api/admin/compliance/coretax-export', (_req: Request, res: Response) => {
+    const rows: CoretaxExportRow[] = [];
+
+    // 1. B2B Faktur Pajak Keluaran
+    b2bOrdersList.forEach((order, idx) => {
+      const cust = b2bCustomersList.find((c) => c.id === order.customerId);
+      const rawTin = cust?.npwp || cust?.nik || '';
+      const tinCheck = validateNpwpOrNik(rawTin);
+      rows.push({
+        rowId: `CT-B2B-${idx + 1}`,
+        documentType: 'FAKTUR_KELUARAN_B2B',
+        kodeTransaksi: '04',
+        documentNumber: `FP-040.000-26.${String(idx + 1001).padStart(8, '0')}`,
+        documentDate: order.orderDate,
+        counterpartyName: order.companyName,
+        npwpOrNik: tinCheck.cleanDigits || '0000000000000000',
+        isNpwpValid: tinCheck.valid,
+        taxClassification: 'BKP_STANDARD',
+        dppIDR: order.subtotalIDR - (order.pwpDiscountIDR || 0),
+        ppnIDR: order.taxPPN11IDR,
+        pb1IDR: 0,
+        totalIDR: order.totalAmountIDR,
+        referenceId: order.id,
+      });
+    });
+
+    // 2. B2C POS Digunggung Retail Invoices
+    posTransactionsHistory.forEach((rcp, idx) => {
+      const dpp = Math.max(0, rcp.total - rcp.tax);
+      rows.push({
+        rowId: `CT-POS-${idx + 1}`,
+        documentType: 'DIGUNGGUNG_B2C_POS',
+        kodeTransaksi: '01',
+        documentNumber: rcp.receiptNumber,
+        documentDate: rcp.timestamp,
+        counterpartyName: 'Konsumen Akhir (POS Retail Digunggung)',
+        npwpOrNik: '0000000000000000',
+        isNpwpValid: false,
+        taxClassification: 'BKP_STANDARD',
+        dppIDR: dpp,
+        ppnIDR: rcp.tax,
+        pb1IDR: 0,
+        totalIDR: rcp.total,
+        referenceId: rcp.receiptNumber,
+      });
+    });
+
+    // 3. Nota Retur Penjualan (Customer RMA)
+    customerRmaList.forEach((rma, idx) => {
+      const tinCheck = validateNpwpOrNik(rma.customerNpwpOrNik || '');
+      rows.push({
+        rowId: `CT-NR-${idx + 1}`,
+        documentType: 'NOTA_RETUR_PENJUALAN',
+        kodeTransaksi: '04',
+        documentNumber: rma.notaReturNumber,
+        documentDate: rma.createdAt,
+        counterpartyName: rma.customerName,
+        npwpOrNik: tinCheck.cleanDigits || '0000000000000000',
+        isNpwpValid: tinCheck.valid,
+        taxClassification: rma.items[0]?.taxCategory || 'BKP_STANDARD',
+        dppIDR: -rma.subtotalReversedIDR,
+        ppnIDR: -rma.ppnReversedIDR,
+        pb1IDR: 0,
+        totalIDR: -rma.totalCreditNoteIDR,
+        referenceId: rma.id,
+      });
+    });
+
+    // 4. Nota Retur Pembelian (Vendor RTV Debit Notes)
+    vendorRtvList.forEach((rtv, idx) => {
+      const tinCheck = validateNpwpOrNik(rtv.supplierNpwp || '');
+      rows.push({
+        rowId: `CT-NRP-${idx + 1}`,
+        documentType: 'NOTA_RETUR_PEMBELIAN',
+        kodeTransaksi: '04',
+        documentNumber: rtv.debitNoteNumber,
+        documentDate: rtv.createdAt,
+        counterpartyName: rtv.supplierName,
+        npwpOrNik: tinCheck.cleanDigits || '0000000000000000',
+        isNpwpValid: tinCheck.valid,
+        taxClassification: rtv.ppnMasukanReversedIDR > 0 ? 'BKP_STANDARD' : 'BKP_DIBEBASKAN',
+        dppIDR: -rtv.subtotalReturnedIDR,
+        ppnIDR: -rtv.ppnMasukanReversedIDR,
+        pb1IDR: 0,
+        totalIDR: -rtv.totalDebitNoteIDR,
+        referenceId: rtv.id,
+      });
+    });
+
+    const csvContent = buildCoretaxCsv(rows);
+    const xmlContent = buildCoretaxXml(rows);
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalRows: rows.length,
+        totalPpnKeluaranIDR: rows
+          .filter((r) => r.documentType !== 'NOTA_RETUR_PEMBELIAN')
+          .reduce((s, r) => s + r.ppnIDR, 0),
+        totalNotaReturPpnIDR: rows
+          .filter((r) => r.documentType === 'NOTA_RETUR_PENJUALAN')
+          .reduce((s, r) => s + Math.abs(r.ppnIDR), 0),
+        b2bMissingNpwpCount: rows.filter(
+          (r) => r.documentType === 'FAKTUR_KELUARAN_B2B' && !r.isNpwpValid
+        ).length,
+      },
+      rows,
+      csvContent,
+      xmlContent,
     });
   });
 

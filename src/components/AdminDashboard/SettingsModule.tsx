@@ -74,11 +74,14 @@ import {
   Layers,
   BarChart3,
   Lock,
+  EyeOff,
 } from 'lucide-react';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { ValuationCostingSettingsTab } from './ValuationCostingSettingsTab';
 import { WarehouseRoutingSettingsTab } from './WarehouseRoutingSettingsTab';
 import { ThreeWayMatchingSettingsTab } from './ThreeWayMatchingSettingsTab';
+import { BlindOpnamePanel } from './BlindOpnamePanel';
+import { IndonesianTaxRulesPanel } from './IndonesianTaxRulesPanel';
 
 export type SettingsSubTab =
   | 'enterprise'
@@ -127,6 +130,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   }, [initialSubTab]);
 
   const [opnameSubTab, setOpnameSubTab] = useState<'stocktake' | 'bulk_import'>('stocktake');
+  const [opnameAuditMode, setOpnameAuditMode] = useState<'standard' | 'blind'>('standard');
 
   // Enterprise Settings & Related Logistics State
   const [enterpriseSettings, setEnterpriseSettings] = useState<EnterpriseSettingsConfig>(INITIAL_ENTERPRISE_SETTINGS);
@@ -137,7 +141,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptRecord[]>([]);
   const [isSavingEnterprise, setIsSavingEnterprise] = useState<boolean>(false);
-  const [enterpriseQuickFilter, setEnterpriseQuickFilter] = useState<'ALL' | 'VALUATION' | 'WAREHOUSE' | 'ANALYTICS' | 'QUOTATIONS' | 'MATCHING'>('ALL');
+  const [enterpriseQuickFilter, setEnterpriseQuickFilter] = useState<'ALL' | 'VALUATION' | 'WAREHOUSE' | 'ANALYTICS' | 'QUOTATIONS' | 'MATCHING' | 'TAX'>('ALL');
 
   // Loading states
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -995,6 +999,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 { id: 'ANALYTICS', label: 'Analytic Cost Centers' },
                 { id: 'QUOTATIONS', label: 'Quotations & Policies' },
                 { id: 'MATCHING', label: '3-Way Matching' },
+                { id: 'TAX', label: 'Indonesian Tax & NPWP' },
               ] as const
             ).map((filter) => (
               <button
@@ -1522,6 +1527,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* SECTION 6: INDONESIAN TAXATION, PPN 11%/12% & NPWP/NIK VALIDATOR */}
+            {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'TAX') && (
+              <div className="lg:col-span-2">
+                <IndonesianTaxRulesPanel theme={theme} onShowToast={onShowToast} />
               </div>
             )}
           </div>
@@ -2865,9 +2877,71 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           {/* 3A: PHYSICAL STOCK OPNAME (STOCKTAKE) */}
           {opnameSubTab === 'stocktake' && (
             <div className="space-y-6">
-              <div className={`${cardClass} p-5 sm:p-6 space-y-5`}>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
+              {/* Audit Mode Switcher: Standard Reconciliation vs Blind Cycle Count (Anti-Fraud) */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className={`inline-flex items-center gap-1 p-1 rounded-xl border w-fit ${isLight ? 'bg-gray-100/80 border-gray-200' : 'bg-zinc-900 border-zinc-800'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setOpnameAuditMode('standard')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                      opnameAuditMode === 'standard'
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-gray-700 hover:text-gray-900'
+                        : 'text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <Boxes className="w-3.5 h-3.5" />
+                    <span>Standard Reconciliation</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpnameAuditMode('blind')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                      opnameAuditMode === 'blind'
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-gray-700 hover:text-gray-900'
+                        : 'text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <EyeOff className="w-3.5 h-3.5" />
+                    <span>Blind Cycle Count (Anti-Fraud)</span>
+                  </button>
+                </div>
+
+                {opnameAuditMode === 'blind' && (
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                      Target Outlet:
+                    </span>
+                    <select
+                      value={opnameStoreId}
+                      onChange={(e) => setOpnameStoreId(e.target.value)}
+                      className={`px-3 py-1.5 text-xs rounded-xl font-bold ${inputClass}`}
+                    >
+                      {storeOutlets.map((st) => (
+                        <option key={st.storeId} value={st.storeId}>
+                          {st.storeName} ({st.city})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {opnameAuditMode === 'blind' ? (
+                <BlindOpnamePanel
+                  theme={theme}
+                  selectedStoreId={opnameStoreId}
+                  onRefreshData={onRefreshData}
+                  onShowToast={onShowToast}
+                />
+              ) : (
+                <>
+                  <div className={`${cardClass} p-5 sm:p-6 space-y-5`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
                     <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
                       <Boxes className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                       Periodic Stock Opname &amp; Discrepancy Reconciliation
@@ -3164,8 +3238,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         </div>
                       </div>
                     ))}
+                    </div>
                   </div>
-                </div>
+                )}
+                </>
               )}
             </div>
           )}

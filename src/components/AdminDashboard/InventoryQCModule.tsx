@@ -422,9 +422,36 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                     </span>
                   </td>
 
-                  <td className="py-3.5 px-4 text-[11px] max-w-xs">
+                  <td className="py-3.5 px-4 text-[11px] max-w-xs space-y-1.5">
                     <div className="font-semibold">{rec.inspectorName}</div>
                     <p className="text-gray-500 dark:text-zinc-300 text-[10px] truncate">{rec.notes}</p>
+                    {(rec.disposition === 'REJECTED' || rec.disposition === 'QUARANTINED') && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await apiClient.createComplianceRtv({
+                              qcInspectionId: rec.id,
+                              storeId: rec.storeId,
+                              storeName: rec.storeName,
+                              sku: rec.sku,
+                              productName: rec.productName,
+                              lotNumber: rec.batchNumber,
+                              quantityReturned: Math.max(1, rec.sampleQuantity || 1),
+                              reason: `QC ${rec.disposition}: ${rec.notes || rec.actionTaken}`,
+                            });
+                            onShowToast('RTV Debit Note Issued', res.message);
+                            if (onRefreshData) onRefreshData();
+                          } catch (err: any) {
+                            onShowToast('RTV Error', err.message || 'Failed to generate RTV Debit Note');
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold cursor-pointer whitespace-nowrap"
+                      >
+                        <ArrowRight className="w-3 h-3" />
+                        <span>Issue RTV Debit Note</span>
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -212,23 +212,42 @@ export function parseVariableWeightBarcode(
   }
 
   // 2. Standard Retail EAN-13 Variable Measure Barcode: 12 or 13 digits starting with 02 or 20-29
+  // Supports Indonesian 13-digit standard: [2-Digit Prefix (21)] + [5-Digit PLU] + [5-Digit Weight Grams] + [1 Checksum]
+  // Plus legacy 12-digit [2][4][5][1] format for full backward compatibility.
   const isEan13Variable =
     (clean.length === 12 || clean.length === 13) &&
     /^(02|20|21|22|23|24|25|26|27|28|29)\d+$/.test(clean);
 
   if (isEan13Variable) {
     const prefix = clean.slice(0, 2);
-    const pluCode = clean.slice(2, 6); // 4-digit PLU
-    const weightOrPriceStr = clean.slice(6, 11); // 5-digit weight (grams)
+    const is13Digit5Plu = clean.length === 13;
+    const pluCode = is13Digit5Plu ? clean.slice(2, 7) : clean.slice(2, 6);
+    const weightOrPriceStr = is13Digit5Plu ? clean.slice(7, 12) : clean.slice(6, 11);
     const weightGrams = parseInt(weightOrPriceStr, 10);
 
-    // Map PLU to catalog product:
-    // Try matching by barcode snippet, SKU number (e.g. 0001 -> PRD-001), or PLU
+    // Map 5-digit PLU (e.g. 00105 -> PRD-005 or SKU-PRD-005) or 4-digit PLU to catalog product
+    const pluTrimmed = pluCode.replace(/^0+/, '');
+    const explicitPluSkuMap: Record<string, string> = {
+      '00101': 'SKU-PRD-001',
+      '00102': 'SKU-PRD-002',
+      '00103': 'SKU-PRD-003',
+      '00104': 'SKU-PRD-004',
+      '00105': 'SKU-PRD-005',
+      '00201': 'SKU-MEA-001',
+      '00202': 'SKU-MEA-002',
+      '00301': 'SKU-DAI-001',
+      '00302': 'SKU-DAI-002',
+      '00401': 'SKU-BAK-001',
+      '00501': 'SKU-PAN-001',
+      '00502': 'SKU-PAN-002',
+    };
+    const mappedSku = explicitPluSkuMap[pluCode];
+
     const matched =
+      (mappedSku ? catalog.find((p) => p.sku === mappedSku) : undefined) ||
       catalog.find((p) => p.barcode.includes(pluCode)) ||
       catalog.find((p) => p.sku.includes(pluCode)) ||
-      catalog.find((p) => p.sku.endsWith(pluCode.replace(/^0+/, ''))) ||
-      // Fallback matching to first weighted product or matching index
+      (pluTrimmed ? catalog.find((p) => p.sku.endsWith(pluTrimmed.slice(-3))) : undefined) ||
       catalog.find((p) => p.isWeighted) ||
       catalog[0];
 

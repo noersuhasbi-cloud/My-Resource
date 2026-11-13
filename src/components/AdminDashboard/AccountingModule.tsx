@@ -38,9 +38,12 @@ import {
   Clock,
   ShieldAlert,
   UserCheck,
+  RotateCcw,
+  FileCode2,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { VendorBillModule } from './VendorBillModule';
+import { ComplianceAccountingPanels } from './ComplianceAccountingPanels';
 
 const FX_RATES: Record<SupportedCurrency, { symbol: string; rate: number; label: string }> = {
   IDR: { symbol: 'Rp', rate: 1, label: 'IDR (Base)' },
@@ -96,10 +99,19 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
     return `${info.symbol}${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Sub-tabs (controlled or internal)
+  // Sub-tabs (controlled or internal) + additive Indonesian Compliance Views
   const [internalSubTab, setInternalSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar'>('pnl');
+  const [complianceSubView, setComplianceSubView] = useState<'rma_rtv' | 'coretax_djp' | null>(null);
   const subTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
+
+  useEffect(() => {
+    if (activeSubTab !== undefined) {
+      setComplianceSubView(null);
+    }
+  }, [activeSubTab]);
+
   const setSubTab = (val: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar') => {
+    setComplianceSubView(null);
     setInternalSubTab(val);
     if (onSubTabChange) onSubTabChange(val);
   };
@@ -321,12 +333,12 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             { id: 'b2b_ar', label: 'B2B AR & Giro Clearing', icon: CreditCard },
           ].map((tab) => {
             const Icon = tab.icon;
-            const active = subTab === tab.id;
+            const active = !complianceSubView && subTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setSubTab(tab.id as any)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
                   active
                     ? 'bg-[#0F4C3A] text-white shadow-xs'
                     : isLight
@@ -339,11 +351,39 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setComplianceSubView('rma_rtv')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+              complianceSubView === 'rma_rtv'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Returns &amp; Nota Retur
+          </button>
+          <button
+            type="button"
+            onClick={() => setComplianceSubView('coretax_djp')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+              complianceSubView === 'coretax_djp'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <FileCode2 className="w-3.5 h-3.5" />
+            e-Faktur &amp; Coretax DJP
+          </button>
         </div>
       </div>
 
       {/* SUB-TAB 1: PROFIT & LOSS STATEMENT */}
-      {subTab === 'pnl' && pnlReport && (
+      {!complianceSubView && subTab === 'pnl' && pnlReport && (
         <div
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
@@ -498,7 +538,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       )}
 
       {/* SUB-TAB 2: BALANCE SHEET */}
-      {subTab === 'balance_sheet' && balanceSheet && (
+      {!complianceSubView && subTab === 'balance_sheet' && balanceSheet && (
         <div
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
@@ -605,7 +645,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       )}
 
       {/* SUB-TAB 3: CASH FLOW STATEMENT */}
-      {subTab === 'cash_flow' && cashFlow && (
+      {!complianceSubView && subTab === 'cash_flow' && cashFlow && (
         <div
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
@@ -674,7 +714,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       )}
 
       {/* SUB-TAB 4: GENERAL LEDGER (GL) DRILL-DOWN */}
-      {subTab === 'gl' && (
+      {!complianceSubView && subTab === 'gl' && (
         <div
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
@@ -854,7 +894,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       )}
 
       {/* SUB-TAB 5: CHART OF ACCOUNTS (COA) STRUCTURE */}
-      {subTab === 'coa' && (
+      {!complianceSubView && subTab === 'coa' && (
         <div
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
@@ -955,7 +995,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       )}
 
       {/* SUB-TAB 6: VENDOR BILLS & ACCOUNTS PAYABLE (3-WAY MATCHING) */}
-      {subTab === 'vendor_bills' && (
+      {!complianceSubView && subTab === 'vendor_bills' && (
         <VendorBillModule
           theme={theme}
           selectedStore={selectedStore}
@@ -968,7 +1008,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       )}
 
       {/* SUB-TAB 7: B2B WHOLESALE RECEIVABLES (AR) & BILYET GIRO CLEARING */}
-      {subTab === 'b2b_ar' && (
+      {!complianceSubView && subTab === 'b2b_ar' && (
         <div className="space-y-6">
           {/* Summary KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1232,6 +1272,17 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ADDITIVE COMPLIANCE PANELS: RETURNS / NOTA RETUR & CORETAX DJP */}
+      {complianceSubView && (
+        <ComplianceAccountingPanels
+          theme={theme}
+          mode={complianceSubView}
+          selectedStore={selectedStore}
+          onRefreshData={onRefreshData}
+          onShowToast={onShowToast}
+        />
       )}
 
       {/* MODAL: POST REVERSING JOURNAL ENTRY */}

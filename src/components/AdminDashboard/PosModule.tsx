@@ -14,6 +14,7 @@ import type {
   StaffShiftSession,
   StoreOutletSchedule,
   SupportedCurrency,
+  PosRegisterShiftSession,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -22,6 +23,8 @@ import {
   parseVariableWeightBarcode,
   SAMPLE_SCALE_BARCODES,
 } from '../../utils/groceryEngine.ts';
+import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
+import { PosRmaQuickModal, PosShiftModal } from './PosShiftAndReturnModals';
 import {
   Scan,
   ShoppingCart,
@@ -134,6 +137,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState<boolean>(false);
   const [historyReceipts, setHistoryReceipts] = useState<POSTransactionReceipt[]>([]);
 
+  // 10. Indonesian Compliance: Cashier Shift & Z-Report, Quick RMA, & Scale Barcode Labels
+  const [activeShift, setActiveShift] = useState<PosRegisterShiftSession | null>(null);
+  const [shiftHistory, setShiftHistory] = useState<PosRegisterShiftSession[]>([]);
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState<boolean>(false);
+  const [rmaTargetReceipt, setRmaTargetReceipt] = useState<POSTransactionReceipt | null>(null);
+  const [isBarcodeLabelModalOpen, setIsBarcodeLabelModalOpen] = useState<boolean>(false);
+
   // Sound generator for barcode scan feedback (clean Web Audio API beep)
   const playBeep = () => {
     try {
@@ -179,9 +189,21 @@ export const PosModule: React.FC<PosModuleProps> = ({
     } catch {}
   };
 
+  const loadShiftState = async () => {
+    try {
+      const [activeRes, hist] = await Promise.all([
+        apiClient.getActivePosShift(effectiveStoreId),
+        apiClient.getPosShiftHistory(effectiveStoreId),
+      ]);
+      setActiveShift(activeRes.activeShift);
+      setShiftHistory(hist);
+    } catch {}
+  };
+
   useEffect(() => {
     loadProducts();
     loadHistory();
+    loadShiftState();
   }, [effectiveStoreId]);
 
   // Calculations
@@ -393,9 +415,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
         setIsTenderModalOpen(false);
         clearCart();
         onShowToast('Checkout Complete', `Receipt #${res.receipt.receiptNumber} generated.`);
-        // Reload products and notify parent dashboard to refresh GL and stock
+        // Reload products, shift totals, and notify parent dashboard to refresh GL and stock
         loadProducts();
         loadHistory();
+        loadShiftState();
         if (onInventoryUpdated) {
           onInventoryUpdated();
         }
@@ -451,8 +474,27 @@ export const PosModule: React.FC<PosModuleProps> = ({
             </div>
           </div>
 
-          {/* Right: Currency Selector & Parked Tickets & History */}
+          {/* Right: Shift Control & Currency Selector & Parked Tickets & History */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* POS Shift & Blind Z-Report Pill */}
+            <button
+              type="button"
+              onClick={() => setIsShiftModalOpen(true)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeShift
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                  : 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+              }`}
+              title="Manage POS Cash Drawer Float & Blind Z-Report"
+            >
+              <Banknote className="w-3.5 h-3.5" />
+              <span>
+                {activeShift
+                  ? `Shift Open · ${activeShift.transactionCount} Txn`
+                  : 'Open Shift (Modal Awal)'}
+              </span>
+            </button>
+
             {/* Multi-Currency Dropdown */}
             <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-800 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-zinc-700">
               <Globe className="w-3.5 h-3.5 text-zinc-500" />
@@ -548,6 +590,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">({s.weightGrams}g)</span>
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setIsBarcodeLabelModalOpen(true)}
+            className="px-2.5 py-1 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-sans font-bold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+          >
+            <Tag className="w-3 h-3" />
+            <span>Generate EAN-13 Scale &amp; Shelf Labels</span>
+          </button>
         </div>
       </div>
 
@@ -1369,6 +1419,17 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    setRmaTargetReceipt(completedReceipt);
+                    setCompletedReceipt(null);
+                  }}
+                  className="py-2 px-3 rounded-xl border border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Return / RMA</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setCompletedReceipt(null)}
                   className="flex-1 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer"
                 >
@@ -1422,7 +1483,16 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       <div className="flex items-center justify-between text-[11px] text-zinc-400 mt-1">
                         <span>{new Date(rcp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         <span className="uppercase font-mono">{rcp.paymentMethod}</span>
-                        <span>{rcp.items.length} items</span>
+                        <button
+                          type="button"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            setRmaTargetReceipt(rcp);
+                          }}
+                          className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold hover:bg-amber-500/25 cursor-pointer"
+                        >
+                          Process RMA
+                        </button>
                       </div>
                     </div>
                   ))
@@ -1440,6 +1510,57 @@ export const PosModule: React.FC<PosModuleProps> = ({
           </div>
         </div>
       )}
+
+      {/* 7. POS SHIFT & BLIND Z-REPORT MODAL */}
+      <PosShiftModal
+        theme={theme}
+        isOpen={isShiftModalOpen}
+        onClose={() => setIsShiftModalOpen(false)}
+        storeId={effectiveStoreId}
+        storeName={currentStoreInfo.storeName}
+        cashierName={activeStaffSession?.userName || 'Andi Wijaya'}
+        activeShift={activeShift}
+        shiftHistory={shiftHistory}
+        onShiftUpdated={() => {
+          loadShiftState();
+          if (onInventoryUpdated) onInventoryUpdated();
+        }}
+        onShowToast={onShowToast}
+      />
+
+      {/* 8. POS QUICK RETURN / RMA NOTA RETUR MODAL */}
+      <PosRmaQuickModal
+        theme={theme}
+        receipt={rmaTargetReceipt}
+        onClose={() => setRmaTargetReceipt(null)}
+        onCompleted={() => {
+          loadProducts();
+          loadShiftState();
+          if (onInventoryUpdated) onInventoryUpdated();
+        }}
+        onShowToast={onShowToast}
+      />
+
+      {/* 9. SCALE BARCODE & SHELF LABEL GENERATOR MODAL */}
+      <BarcodeShelfLabelModal
+        theme={theme}
+        isOpen={isBarcodeLabelModalOpen}
+        onClose={() => setIsBarcodeLabelModalOpen(false)}
+        products={products.map((p) => ({
+          sku: p.sku,
+          productName: p.name,
+          category: p.category,
+          unit: p.unit,
+          sellingPrice: p.sellingPrice,
+          pricePerKg: p.pricePerKg,
+          isWeighted: p.isWeighted,
+        }))}
+        onTestScanToPos={(ean13) => {
+          setBarcodeInput(ean13);
+          handleBarcodeSubmit(undefined, ean13);
+        }}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };
