@@ -10,6 +10,7 @@ import type {
   GiroPaymentRecord,
 } from '../types/index.ts';
 import { formatIDR } from '../utils/formatters';
+import { getOdooSkuProfile } from '../utils/inventoryOdooHelper';
 import { apiClient } from '../services/apiClient';
 import {
   Building2,
@@ -103,6 +104,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
   };
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   // 2. Search & Category Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -628,22 +630,38 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                   Math.round(currentSel.quantity * activeTier.multiplierToBase * 10) / 10;
                 const calculatedTotal = Math.round(currentSel.quantity * activeTier.unitPrice);
 
+                const odooProfile = getOdooSkuProfile(prod.sku, prod.category, prod.baseUnit, prod.image);
+                const wholesaleImg = prod.b2bImageUrl || odooProfile.b2bImageUrl || prod.image;
+                const imgFailed = failedImages[prod.id];
+
                 return (
                   <div
                     key={prod.id}
                     className="rounded-2xl border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs hover:border-emerald-500/50 transition-all flex flex-col justify-between overflow-hidden group"
                   >
                     <div>
-                      {/* Product Header & Image */}
+                      {/* Product Header & B2B Wholesale Packaging Image */}
                       <div className="relative h-44 w-full overflow-hidden bg-stone-100 dark:bg-zinc-800">
-                        <img
-                          src={prod.image}
-                          alt={prod.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
+                        {imgFailed ? (
+                          <div className={`w-full h-full bg-gradient-to-br ${prod.fallbackGradient} flex flex-col items-center justify-center p-4 text-center`}>
+                            <Package className="w-8 h-8 text-emerald-900/60 mb-1" />
+                            <span className="text-[11px] font-bold text-stone-700 line-clamp-1">{prod.name}</span>
+                          </div>
+                        ) : (
+                          <img
+                            src={wholesaleImg}
+                            alt={`${prod.name} B2B Wholesale Bulk Packaging`}
+                            referrerPolicy="no-referrer"
+                            onError={() => setFailedImages((prev) => ({ ...prev, [prod.id]: true }))}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        )}
                         <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
                           <span className="px-2 py-0.5 rounded-md bg-stone-900/80 backdrop-blur-xs text-white text-[10px] font-mono font-bold">
                             {prod.sku}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-600/90 text-white text-[10px] font-bold">
+                            B2B Bulk Spec
                           </span>
                           {prod.isRestrictedForPwp && (
                             <span className="px-2 py-0.5 rounded-md bg-rose-600/90 text-white text-[10px] font-bold">
@@ -668,6 +686,10 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                           <p className="text-[11px] text-stone-500 dark:text-zinc-400 line-clamp-2 mt-1">
                             {prod.description}
                           </p>
+                          <div className="mt-2 pt-2 border-t border-stone-100 dark:border-zinc-800/80 flex items-center justify-between gap-2 text-[10px] font-mono text-stone-600 dark:text-zinc-400">
+                            <span className="truncate">{prod.wholesalePackagingSpec || odooProfile.wholesalePackagingSpec}</span>
+                            <span className="shrink-0 font-bold">GTIN {prod.outerBoxBarcode || odooProfile.outerBoxBarcode}</span>
+                          </div>
                         </div>
 
                         {/* Multi-Tier UoM Selector Tabs (Pallet -> Carton -> Slop -> Pack -> Renceng -> Pcs) */}

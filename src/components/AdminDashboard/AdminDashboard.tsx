@@ -17,6 +17,15 @@ import type {
   TransactionAuditRecord,
   StaffShiftSession,
   ClimateAdaptiveThresholdConfig,
+  InventoryBatch,
+  WarehouseBinLocation,
+  QCInspectionRecord,
+  StockTransferRecord,
+  PickerOrder,
+  B2BWholesaleOrder,
+  WholesaleProduct,
+  WasteRecord,
+  RemovalStrategyConfig,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -87,6 +96,7 @@ import { LogisticsDocsModal } from './LogisticsDocsModal';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { GroceryReportsModule } from './GroceryReportsModule';
 import { SettingsModule } from './SettingsModule';
+import { OdooInventoryView } from './OdooInventoryView';
 
 interface AdminDashboardProps {
   initialStaffSession?: StaffShiftSession | null;
@@ -208,6 +218,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     lowStockCount: 0,
     totalSkus: 0,
   });
+  const [inventoryBatches, setInventoryBatches] = useState<InventoryBatch[]>([]);
+  const [warehouseBins, setWarehouseBins] = useState<WarehouseBinLocation[]>([]);
+  const [qcInspections, setQcInspections] = useState<QCInspectionRecord[]>([]);
+  const [stockTransfers, setStockTransfers] = useState<StockTransferRecord[]>([]);
+  const [pickerOrders, setPickerOrders] = useState<PickerOrder[]>([]);
+  const [b2bOrders, setB2bOrders] = useState<B2BWholesaleOrder[]>([]);
+  const [wholesaleProducts, setWholesaleProducts] = useState<WholesaleProduct[]>([]);
+  const [wasteRecords, setWasteRecords] = useState<WasteRecord[]>([]);
+  const [removalStrategies, setRemovalStrategies] = useState<RemovalStrategyConfig | null>(null);
 
   // Stock Adjustment Modal
   const [adjustingSku, setAdjustingSku] = useState<string | null>(null);
@@ -271,6 +290,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         auditRes,
         rbacRes,
         climateRes,
+        batchesRes,
+        binsRes,
+        qcRes,
+        transfersRes,
+        pickerRes,
+        b2bOrdersRes,
+        b2bProdsRes,
+        wasteRes,
+        strategyRes,
       ] = await Promise.all([
         apiClient.getOmzetAnalytics().catch(() => null),
         apiClient.getStoreStatus(),
@@ -288,6 +316,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         apiClient.getAuditTrail(),
         apiClient.getRbacSession().catch(() => null),
         apiClient.getClimateThresholds().catch(() => []),
+        apiClient.getInventoryBatches().catch(() => []),
+        apiClient.getWarehouseBins().catch(() => []),
+        apiClient.getQCInspections().catch(() => []),
+        apiClient.getStockTransfers().catch(() => []),
+        apiClient.getPickerOrders().catch(() => []),
+        apiClient.getB2BOrders().catch(() => []),
+        apiClient.getB2BProducts().catch(() => []),
+        apiClient.getWasteRecords().catch(() => ({ records: [] })),
+        apiClient.getRemovalStrategies().catch(() => null),
       ]);
 
       if (rbacRes) {
@@ -319,6 +356,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setBalanceSheet(bsRes);
       setCashFlow(cfRes);
       setAuditRecords(auditRes);
+
+      setInventoryBatches(batchesRes || []);
+      setWarehouseBins(binsRes || []);
+      setQcInspections(qcRes || []);
+      setStockTransfers(transfersRes || []);
+      setPickerOrders(pickerRes || []);
+      setB2bOrders(b2bOrdersRes || []);
+      setWholesaleProducts(b2bProdsRes || []);
+      setWasteRecords((wasteRes as { records?: WasteRecord[] })?.records || []);
+      if (strategyRes) {
+        setRemovalStrategies(strategyRes);
+      }
     } catch (err) {
       console.error('Failed to load dashboard data from backend:', err);
     } finally {
@@ -553,7 +602,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Filtered inventory matrix
   const filteredTiers = inventoryTiers.filter((tier) => {
-    if (selectedOutletFilter !== 'ALL' && tier.storeId !== selectedOutletFilter) return false;
+    if (selectedOutletFilter !== 'ALL' && selectedOutletFilter !== 'CONSOLIDATED' && tier.storeId !== selectedOutletFilter) return false;
     if (selectedStorageZoneFilter !== 'ALL' && tier.storageType !== selectedStorageZoneFilter) return false;
     if (inventorySearch) {
       const q = inventorySearch.toLowerCase();
@@ -1519,149 +1568,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            {/* Filter Bar */}
-            <div className={`${cardClass} p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3`}>
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={selectedOutletFilter}
-                  onChange={(e) => setSelectedOutletFilter(e.target.value)}
-                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
-                >
-                  <option value="ALL">All Store Outlets</option>
-                  <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
-                  <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
-                  <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
-                </select>
-
-                <select
-                  value={selectedStorageZoneFilter}
-                  onChange={(e) => setSelectedStorageZoneFilter(e.target.value)}
-                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
-                >
-                  <option value="ALL">All Storage Zones</option>
-                  <option value="cold_chilled">Cold Chilled (4°C)</option>
-                  <option value="freezer">Freezer (-18°C)</option>
-                  <option value="ambient">Ambient Dry</option>
-                </select>
-
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    value={inventorySearch}
-                    onChange={(e) => setInventorySearch(e.target.value)}
-                    placeholder="Search SKU or item..."
-                    className={`pl-8 pr-3 py-1.5 text-xs rounded-xl w-48 ${inputClass}`}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className={`text-xs ${textMuted}`}>
-                  Showing <strong className={textTitle}>{filteredTiers.length}</strong> location items
-                </span>
-              </div>
-            </div>
-
-            {/* Multi-Tier Stock Matrix Table */}
-            <div className={`${cardClass} overflow-hidden shadow-xs`}>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className={tableHeaderClass}>
-                      <th className="py-3 px-3.5">SKU &amp; Item Details</th>
-                      <th className="py-3 px-3.5">Store / Warehouse Hub</th>
-                      <th className="py-3 px-3 text-center">Physical</th>
-                      <th className="py-3 px-3 text-center">Available</th>
-                      <th className="py-3 px-3 text-center">Reserved</th>
-                      <th className="py-3 px-3 text-center">Incoming</th>
-                      <th className="py-3 px-3.5">Threshold / Buffer</th>
-                      <th className="py-3 px-3.5">Handling Instructions</th>
-                      <th className="py-3 px-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-zinc-800'}`}>
-                    {filteredTiers.map((tier) => {
-                      const isLowStock = tier.availableStock <= tier.minimumThreshold;
-                      return (
-                        <tr key={tier.id} className={`transition-colors ${isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'}`}>
-                          <td className="py-3 px-3.5">
-                            <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">{tier.sku}</span>
-                            <div className={`font-bold ${textTitle} text-xs`}>{tier.productName}</div>
-                            <span className={`text-[11px] ${textMuted}`}>{tier.unit}</span>
-                          </td>
-
-                          <td className="py-3 px-3.5">
-                            <div className={`font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>{tier.storeName}</div>
-                            <div className={`text-[11px] ${textMuted} font-mono flex items-center gap-1 mt-0.5`}>
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                              {tier.warehouseZoneId}
-                            </div>
-                          </td>
-
-                          <td className={`py-3 px-3 text-center font-mono font-bold ${textTitle}`}>
-                            {tier.physicalStock}
-                          </td>
-
-                          <td className="py-3 px-3 text-center font-mono font-bold">
-                            <span
-                              className={`px-2 py-0.5 rounded-full ${
-                                isLowStock
-                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/30'
-                                  : 'text-emerald-600 dark:text-emerald-400 font-bold'
-                              }`}
-                            >
-                              {tier.availableStock}
-                            </span>
-                          </td>
-
-                          <td className={`py-3 px-3 text-center font-mono ${textMuted}`}>
-                            {tier.reservedStock}
-                          </td>
-
-                          <td className="py-3 px-3 text-center font-mono text-blue-600 dark:text-blue-400 font-semibold">
-                            +{tier.incomingStock}
-                          </td>
-
-                          <td className={`py-3 px-3.5 font-mono ${isLight ? 'text-slate-700' : 'text-zinc-200'}`}>
-                            <div>Min: {tier.minimumThreshold}</div>
-                            <div className={`text-[10px] ${textMuted}`}>Buffer: {tier.safetyStockBuffer} | Max: {tier.maxCapacity}</div>
-                          </td>
-
-                          <td className={`py-3 px-3.5 text-[11px] max-w-xs ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
-                            <p className="line-clamp-2">
-                              {tier.handlingInstructions || 'Standard cold-chain storage.'}
-                            </p>
-                          </td>
-
-                          <td className="py-3 px-3.5 text-right space-x-1.5 whitespace-nowrap">
-                            <button
-                              onClick={() => {
-                                setAdjustingSku(tier.sku);
-                                setAdjustQty(0);
-                              }}
-                              className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border ${
-                                isLight
-                                  ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                                  : 'bg-zinc-700 border-zinc-600 text-zinc-200 hover:bg-zinc-600'
-                              }`}
-                            >
-                              Audit Count
-                            </button>
-                            <button
-                              onClick={() => setEditingTier(tier)}
-                              className="px-2.5 py-1 text-[11px] font-semibold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-300 border border-[#0F4C3A]/20 hover:bg-[#0F4C3A]/20 rounded-lg transition-all"
-                            >
-                              Edit Notes
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* Odoo-Standard Inventory Operations (Kanban + Granular Stock & Lot List + B2B/B2C Split + FEFO/FIFO) */}
+            <OdooInventoryView
+              theme={theme}
+              selectedOutletFilter={selectedOutletFilter === 'CONSOLIDATED' ? 'ALL' : selectedOutletFilter}
+              onOutletFilterChange={setSelectedOutletFilter}
+              selectedStorageZoneFilter={selectedStorageZoneFilter}
+              onStorageZoneFilterChange={setSelectedStorageZoneFilter}
+              inventorySearch={inventorySearch}
+              onInventorySearchChange={setInventorySearch}
+              filteredTiers={filteredTiers}
+              allTiers={inventoryTiers}
+              inventory={inventory}
+              batches={inventoryBatches}
+              warehouseBins={warehouseBins}
+              purchaseOrders={purchaseOrders}
+              qcInspections={qcInspections}
+              stockTransfers={stockTransfers}
+              pickerOrders={pickerOrders}
+              b2bOrders={b2bOrders}
+              wholesaleProducts={wholesaleProducts}
+              wasteRecords={wasteRecords}
+              removalStrategies={removalStrategies}
+              onSaveRemovalStrategies={async (next) => {
+                const res = await apiClient.updateRemovalStrategies(next);
+                setRemovalStrategies(res.config);
+              }}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+              onAuditSku={(sku) => {
+                setAdjustingSku(sku);
+                setAdjustQty(0);
+              }}
+              onEditTier={(tier) => setEditingTier(tier)}
+              onShowToast={onShowToast}
+            />
 
             {/* Edit Stock Tier Modal */}
             {editingTier && (

@@ -57,6 +57,12 @@ export interface Product {
   isWeightBased?: boolean;
   pricePerKg?: number;
   storageZone?: StorageZoneType;
+  sku?: string;
+  salesChannel?: 'B2C' | 'B2B' | 'BOTH';
+  b2cImageUrl?: string;
+  b2bImageUrl?: string;
+  retailPackagingSpec?: string;
+  removalStrategy?: 'FEFO' | 'FIFO';
 }
 
 export interface CartItem {
@@ -233,6 +239,25 @@ export interface StoreInventoryStock {
   supplierName: string;
   lastRestockedAt: string;
   updatedAt: string;
+  // Optional Odoo Inventory & B2B/B2C Differentiation fields
+  binLocation?: string;
+  lotNumber?: string;
+  expiryDate?: string;
+  removalStrategy?: 'FEFO' | 'FIFO';
+  salesChannel?: 'B2C' | 'B2B' | 'BOTH';
+  b2cImageUrl?: string;
+  b2bImageUrl?: string;
+  retailPackagingSpec?: string;
+  wholesalePackagingSpec?: string;
+  outerBoxBarcode?: string;
+  grossWeightKg?: number;
+  palletDimensions?: string;
+  uomConversion?: {
+    wholesaleUnitLabel: string;
+    unitsPerCarton: number;
+    cartonsPerPallet?: number;
+    baseUnitLabel: string;
+  };
 }
 
 export interface InventoryItem {
@@ -270,6 +295,20 @@ export interface InventoryItem {
   maxCapacity?: number;
   storageType?: StorageZoneType;
   weightGrams?: number;
+  removalStrategy?: 'FEFO' | 'FIFO';
+  salesChannel?: 'B2C' | 'B2B' | 'BOTH';
+  b2cImageUrl?: string;
+  b2bImageUrl?: string;
+  binLocation?: string;
+  retailPackagingSpec?: string;
+  wholesalePackagingSpec?: string;
+  outerBoxBarcode?: string;
+  uomConversion?: {
+    wholesaleUnitLabel: string;
+    unitsPerCarton: number;
+    cartonsPerPallet?: number;
+    baseUnitLabel: string;
+  };
 }
 
 // -------------------------------------------------------------
@@ -2072,6 +2111,16 @@ export interface WholesaleProduct {
   isRestrictedForPwp?: boolean; // Cigarettes / Infant Formula excluded from PWP spend
   uomTiers: UoMHierarchyLevel[];
   allowFractional: boolean; // allows 0.5 Renceng or 1.5 Carton
+  // Optional B2B Differentiation & Removal Strategy fields
+  salesChannel?: 'B2C' | 'B2B' | 'BOTH';
+  b2bImageUrl?: string;
+  b2cImageUrl?: string;
+  wholesalePackagingSpec?: string;
+  outerBoxBarcode?: string;
+  grossWeightKg?: number;
+  palletDimensions?: string;
+  removalStrategy?: 'FEFO' | 'FIFO';
+  binLocation?: string;
 }
 
 export interface B2BCartItem {
@@ -2146,4 +2195,18 @@ export interface B2BWholesaleOrder {
   duePaymentDate?: string;
   journalEntryIds: string[];
 }
+
+// =============================================================
+// ODOO-STANDARD INVENTORY REMOVAL STRATEGY CONFIG
+// =============================================================
+export type RemovalStrategyType = 'FEFO' | 'FIFO';
+export type SalesChannelScope = 'B2C' | 'B2B' | 'BOTH';
+
+export interface RemovalStrategyConfig {
+  categoryStrategies: Record<string, RemovalStrategyType>;
+  skuOverrides: Record<string, RemovalStrategyType>;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
 

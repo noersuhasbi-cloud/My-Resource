@@ -108,6 +108,8 @@ import type {
   PurchaseOrderItem,
   VendorCreditNote,
   DynamicMarkdownConfig,
+  RemovalStrategyConfig,
+  RemovalStrategyType,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -146,6 +148,114 @@ let giroRecordsList: GiroPaymentRecord[] = JSON.parse(JSON.stringify(INITIAL_GIR
 let b2bOrdersList: B2BWholesaleOrder[] = JSON.parse(JSON.stringify(INITIAL_B2B_ORDERS));
 let vendorCreditNotesList: VendorCreditNote[] = JSON.parse(JSON.stringify(MOCK_VENDOR_CREDIT_NOTES));
 let dynamicMarkdownConfig: DynamicMarkdownConfig = JSON.parse(JSON.stringify(DEFAULT_MARKDOWN_CONFIG));
+
+let removalStrategiesConfig: RemovalStrategyConfig = {
+  categoryStrategies: {
+    produce: 'FEFO',
+    fresh_produce: 'FEFO',
+    dairy_eggs: 'FEFO',
+    meat_seafood: 'FEFO',
+    bakery: 'FEFO',
+    fresh_eggs: 'FEFO',
+    dairy_beverages: 'FEFO',
+    pantry_coffee: 'FIFO',
+    pantry_staples: 'FIFO',
+    cooking_oil: 'FIFO',
+    instant_noodles: 'FIFO',
+    beverages: 'FIFO',
+    household_hygiene: 'FIFO',
+  },
+  skuOverrides: {},
+  updatedAt: new Date().toISOString(),
+  updatedBy: 'ERP System Default',
+};
+
+function getEffectiveRemovalStrategy(sku: string, category?: string): RemovalStrategyType {
+  if (removalStrategiesConfig.skuOverrides[sku]) {
+    return removalStrategiesConfig.skuOverrides[sku];
+  }
+  const matchedInv = inventoryList.find((i) => i.sku === sku);
+  const resolvedCategory = category || matchedInv?.category;
+  if (resolvedCategory && removalStrategiesConfig.categoryStrategies[resolvedCategory]) {
+    return removalStrategiesConfig.categoryStrategies[resolvedCategory];
+  }
+  if (sku.startsWith('B2B-SKU-')) {
+    return sku.includes('TELUR') || sku.includes('SUSU') ? 'FEFO' : 'FIFO';
+  }
+  return 'FEFO';
+}
+
+function deductBatchesByStrategy(
+  sku: string,
+  qty: number,
+  storeId: string = 'ALL',
+  fallbackUnitCost: number = 15000
+) {
+  const strategy = getEffectiveRemovalStrategy(sku);
+  const eligibleBatches = inventoryBatches
+    .filter(
+      (b) =>
+        b.sku === sku &&
+        (storeId === 'ALL' || storeId === 'CONSOLIDATED' || b.storeId === storeId) &&
+        b.currentStock > 0 &&
+        b.status !== 'quarantined' &&
+        b.status !== 'recalled' &&
+        b.status !== 'expired' &&
+        b.status !== 'depleted'
+    )
+    .sort((a, b) => {
+      if (strategy === 'FIFO') {
+        return new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime();
+      }
+      return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+    });
+
+  let remaining = Math.max(0, qty);
+  const allocations: {
+    batchId: string;
+    lotNumber: string;
+    expiryDate: string;
+    allocatedQty: number;
+    unitCost: number;
+    subtotalCost: number;
+  }[] = [];
+  let totalCogs = 0;
+
+  for (const batch of eligibleBatches) {
+    if (remaining <= 0) break;
+    const take = Math.min(batch.currentStock, remaining);
+    batch.currentStock = Math.max(0, Number((batch.currentStock - take).toFixed(2)));
+    remaining = Math.max(0, Number((remaining - take).toFixed(2)));
+
+    const subtotalCost = Math.round(take * batch.unitCost);
+    totalCogs += subtotalCost;
+
+    allocations.push({
+      batchId: batch.batchId,
+      lotNumber: batch.lotNumber,
+      expiryDate: batch.expiryDate,
+      allocatedQty: take,
+      unitCost: batch.unitCost,
+      subtotalCost,
+    });
+
+    if (batch.currentStock === 0) {
+      batch.status = 'depleted';
+    }
+  }
+
+  if (remaining > 0) {
+    totalCogs += Math.round(remaining * fallbackUnitCost);
+  }
+
+  return {
+    strategyApplied: strategy,
+    allocations,
+    totalCogs,
+    remainingShortage: remaining,
+    allocatedQty: Number((qty - remaining).toFixed(2)),
+  };
+}
 
 let posHardwareStatus: POSHardwarePeripheralStatus = {
   thermalPrinter: {
@@ -1246,6 +1356,11 @@ async function startServer() {
         if (typeof res.flushHeaders === 'function') {
           res.flushHeaders();
         }
+        proxyRes.on('error', () => {
+          if (!res.writableEnded) {
+            res.end();
+          }
+        });
         proxyRes.pipe(res);
       }
     );
@@ -1255,6 +1370,12 @@ async function startServer() {
         res.status(502).json({ error: { code: 502, status: 'UNAVAILABLE', message: err.message } });
       } else {
         res.end();
+      }
+    });
+
+    req.on('error', () => {
+      if (!proxyReq.destroyed) {
+        proxyReq.destroy();
       }
     });
 
@@ -1268,6 +1389,10 @@ async function startServer() {
   });
 
   app.use(express.json());
+
+  app.get('/api/health', (_req: Request, res: Response) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
 
   // -------------------------------------------------------------
   // OPENAPI 3.0.3 SPECIFICATION ENDPOINT
@@ -1543,6 +1668,9 @@ async function startServer() {
               invItem.currentStock = Math.max(0, invItem.currentStock - qty);
               invItem.outgoingStock += qty;
 
+              // Deduct from batches respecting FEFO vs FIFO removal strategy
+              const batchResult = deductBatchesByStrategy(invItem.sku, qty, 'store-jkt-senopati', invItem.unitCost);
+
               // Also update store warehouse tiers
               const tier = storeInventoryTiers.find((t) => t.sku === invItem.sku);
               if (tier) {
@@ -1551,7 +1679,7 @@ async function startServer() {
                 tier.updatedAt = new Date().toISOString();
               }
 
-              const itemCogs = invItem.unitCost * qty;
+              const itemCogs = batchResult.allocations.length > 0 ? batchResult.totalCogs : invItem.unitCost * qty;
               totalCogs += itemCogs;
               inventoryDeductions.push({
                 sku: invItem.sku,
@@ -2117,6 +2245,36 @@ async function startServer() {
     res.json(list);
   });
 
+  // -------------------------------------------------------------
+  // REMOVAL STRATEGY CONFIGURATION (FEFO vs FIFO)
+  // -------------------------------------------------------------
+  app.get('/api/admin/inventory/removal-strategies', (_req: Request, res: Response) => {
+    res.json(removalStrategiesConfig);
+  });
+
+  app.put('/api/admin/inventory/removal-strategies', (req: Request, res: Response) => {
+    const body = req.body as Partial<RemovalStrategyConfig>;
+    if (body.categoryStrategies) {
+      removalStrategiesConfig.categoryStrategies = {
+        ...removalStrategiesConfig.categoryStrategies,
+        ...body.categoryStrategies,
+      };
+    }
+    if (body.skuOverrides) {
+      removalStrategiesConfig.skuOverrides = {
+        ...removalStrategiesConfig.skuOverrides,
+        ...body.skuOverrides,
+      };
+    }
+    removalStrategiesConfig.updatedAt = new Date().toISOString();
+    removalStrategiesConfig.updatedBy = currentActiveStaffSession.userName;
+    res.json({
+      success: true,
+      config: removalStrategiesConfig,
+      message: 'FIFO / FEFO removal strategies updated across ERP picking and dispatch.',
+    });
+  });
+
   app.post('/api/inventory/fefo-allocate', (req: Request, res: Response) => {
     const { sku, quantity, storeId = 'store-jkt-senopati' } = req.body;
     const reqQty = Number(quantity);
@@ -2130,60 +2288,34 @@ async function startServer() {
       return res.status(404).json({ error: 'SKU not found in inventory catalog' });
     }
 
-    // Filter available batches for this SKU & store that are not fully depleted
-    const eligibleBatches = inventoryBatches
-      .filter((b) => b.sku === sku && (storeId === 'ALL' || b.storeId === storeId) && b.currentStock > 0)
-      .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+    const deduction = deductBatchesByStrategy(sku, reqQty, storeId, item.unitCost);
+    const actualAllocated = deduction.allocatedQty;
 
-    let remainingToAllocate = reqQty;
-    const allocations: {
-      batchId: string;
-      lotNumber: string;
-      expiryDate: string;
-      allocatedQty: number;
-      unitCost: number;
-      subtotalCost: number;
-    }[] = [];
-    let totalCogs = 0;
-
-    for (const batch of eligibleBatches) {
-      if (remainingToAllocate <= 0) break;
-      const take = Math.min(batch.currentStock, remainingToAllocate);
-      batch.currentStock -= take;
-      remainingToAllocate -= take;
-
-      const subtotalCost = take * batch.unitCost;
-      totalCogs += subtotalCost;
-
-      allocations.push({
-        batchId: batch.batchId,
-        lotNumber: batch.lotNumber,
-        expiryDate: batch.expiryDate,
-        allocatedQty: take,
-        unitCost: batch.unitCost,
-        subtotalCost,
-      });
-
-      // Update batch status if depleted
-      if (batch.currentStock === 0) {
-        batch.status = 'critical';
-      }
-    }
-
-    // Also deduct catalog stock
-    const actualAllocated = reqQty - remainingToAllocate;
+    // Also deduct catalog & store tier stock
     item.currentStock = Math.max(0, item.currentStock - actualAllocated);
     item.outgoingStock += actualAllocated;
+
+    const tier = storeInventoryTiers.find(
+      (t) => t.sku === sku && (storeId === 'ALL' || storeId === 'CONSOLIDATED' || t.storeId === storeId)
+    );
+    if (tier) {
+      tier.physicalStock = Math.max(0, Number((tier.physicalStock - actualAllocated).toFixed(2)));
+      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.updatedAt = new Date().toISOString();
+    }
 
     const result: FEFOAllocationResult = {
       sku,
       productName: item.productName,
       requestedQty: reqQty,
       allocatedQty: actualAllocated,
-      remainingShortage: remainingToAllocate,
-      allocations,
-      totalCogs,
-      fefoRuleApplied: 'First Expired, First Out (Earliest lot expiration date allocated first to minimize food spoilage)',
+      remainingShortage: deduction.remainingShortage,
+      allocations: deduction.allocations,
+      totalCogs: deduction.totalCogs,
+      fefoRuleApplied:
+        deduction.strategyApplied === 'FIFO'
+          ? 'FIFO (First In, First Out — Earliest received lot allocated first for dry/packaged goods)'
+          : 'FEFO (First Expired, First Out — Earliest lot expiration date allocated first to minimize food spoilage)',
     };
 
     res.json({ success: true, result });
@@ -2715,6 +2847,39 @@ async function startServer() {
         tier.lastRestockedAt = new Date().toISOString();
         tier.updatedAt = new Date().toISOString();
       }
+
+      // Create tracked Lot / Batch record in inventoryBatches for FEFO/FIFO traceability
+      const lotCode = itemInput.batchNumber || `BAT-${Date.now().toString().slice(-6)}`;
+      const expiryIso =
+        itemInput.expiryDate ||
+        new Date(Date.now() + 86400000 * 21).toISOString();
+      const daysUntilExpiry = Math.max(
+        1,
+        Math.ceil((new Date(expiryIso).getTime() - Date.now()) / 86400000)
+      );
+      const isQuarantineHold = String(itemInput.qualityCondition || '').toLowerCase().includes('quarantine');
+
+      inventoryBatches.unshift({
+        batchId: `BAT-GR-${Date.now().toString().slice(-5)}-${inventoryBatches.length + 1}`,
+        sku: poItem.sku,
+        productName: poItem.productName,
+        storeId: po.storeId,
+        storeName: po.storeName,
+        warehouseZoneId: tier?.warehouseZoneId || warehouseZoneId,
+        lotNumber: lotCode,
+        initialQuantity: receivedQty,
+        currentStock: receivedQty,
+        unitCost: poItem.unitCost,
+        sellingPrice: catalogItem?.sellingPrice || Math.round(poItem.unitCost * 1.45),
+        receivedDate: new Date().toISOString(),
+        expiryDate: expiryIso,
+        daysUntilExpiry,
+        status: isQuarantineHold ? 'quarantined' : daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
+        storageZone: tier?.storageType || 'cold_chilled',
+        supplierName: po.supplierName,
+        sourcePoNumber: po.id,
+        notes: `Received via GR against ${po.id}`,
+      });
     });
 
     // Check if PO is partially or completely received
@@ -3982,21 +4147,8 @@ async function startServer() {
         inv.currentStock = Math.max(0, Number((inv.currentStock - qty).toFixed(2)));
       }
 
-      // C. FEFO Batch Deduction (First Expired, First Out)
-      let remainingToDeduct = qty;
-      const batches = inventoryBatches
-        .filter((b) => b.sku === item.sku && (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati'))
-        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
-
-      for (const batch of batches) {
-        if (remainingToDeduct <= 0) break;
-        const take = Math.min(batch.currentStock, remainingToDeduct);
-        batch.currentStock = Math.max(0, Number((batch.currentStock - take).toFixed(2)));
-        if (batch.currentStock === 0) {
-          batch.status = 'depleted';
-        }
-        remainingToDeduct -= take;
-      }
+      // C. Strategy-Aware Batch Deduction (FEFO vs FIFO, skipping quarantined/expired lots)
+      deductBatchesByStrategy(item.sku, qty, storeId, item.unitCost || Math.round(item.unitPrice * 0.62));
     });
 
     // 2. Automatic Accounting & General Ledger Double-Entry
@@ -4503,36 +4655,31 @@ async function startServer() {
       }
     }
 
-    // Real-Time Fractional FEFO Inventory Deduction & Moving Average COGS
+    // Real-Time Fractional Strategy-Aware (FEFO/FIFO) Inventory Deduction & Moving Average COGS
     for (const cartIt of items) {
       const prod = wholesaleProductsList.find((p) => p.id === cartIt.product.id || p.sku === cartIt.product.sku);
+      const targetSku = prod?.sku || cartIt.product.sku;
       const unitsToDeduct = Number(cartIt.baseUnitsCalculated) || 1;
+      const fallbackCost = (prod?.baseUnitPrice || 20000) * 0.72;
 
-      // Deduct from batches
-      const eligibleBatches = inventoryBatches
-        .filter((b) => b.sku === (prod?.sku || cartIt.product.sku) && b.currentStock > 0)
-        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
-
-      let remaining = unitsToDeduct;
-      let lineCogs = 0;
-
-      for (const batch of eligibleBatches) {
-        if (remaining <= 0) break;
-        const take = Math.min(batch.currentStock, remaining);
-        batch.currentStock -= take;
-        remaining -= take;
-        lineCogs += take * batch.unitCost;
-      }
-
-      if (remaining > 0) {
-        // Fallback standard cost if batches depleted
-        lineCogs += remaining * ((prod?.baseUnitPrice || 20000) * 0.72);
-      }
-
-      totalCogsIDR += Math.round(lineCogs);
+      const batchDeduction = deductBatchesByStrategy(targetSku, unitsToDeduct, 'CONSOLIDATED', fallbackCost);
+      totalCogsIDR += Math.round(batchDeduction.totalCogs);
 
       if (prod) {
         prod.currentStockBaseUnits = Math.max(0, prod.currentStockBaseUnits - unitsToDeduct);
+      }
+
+      // Sync matching catalog inventory & store warehouse tier when SKUs share stock
+      const invItem = inventoryList.find((i) => i.sku === targetSku);
+      if (invItem) {
+        invItem.currentStock = Math.max(0, invItem.currentStock - unitsToDeduct);
+        invItem.outgoingStock += unitsToDeduct;
+      }
+      const tier = storeInventoryTiers.find((t) => t.sku === targetSku);
+      if (tier) {
+        tier.physicalStock = Math.max(0, tier.physicalStock - unitsToDeduct);
+        tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+        tier.updatedAt = new Date().toISOString();
       }
     }
 
@@ -5590,8 +5737,31 @@ async function startServer() {
       status: 'COMPLETED',
       ...req.body,
     };
+
+    // Bidirectional inter-warehouse stock tier synchronization
+    const qty = Math.max(0, Number(record.quantity) || 0);
+    if (record.sku && qty > 0) {
+      const sourceTier = storeInventoryTiers.find(
+        (t) => t.sku === record.sku && t.storeId === record.sourceStoreId
+      );
+      if (sourceTier) {
+        sourceTier.physicalStock = Math.max(0, sourceTier.physicalStock - qty);
+        sourceTier.availableStock = Math.max(0, sourceTier.physicalStock - sourceTier.reservedStock);
+        sourceTier.updatedAt = record.timestamp;
+      }
+      const destTier = storeInventoryTiers.find(
+        (t) => t.sku === record.sku && t.storeId === record.destinationStoreId
+      );
+      if (destTier) {
+        destTier.physicalStock += qty;
+        destTier.availableStock = Math.max(0, destTier.physicalStock - destTier.reservedStock);
+        destTier.lastRestockedAt = record.timestamp;
+        destTier.updatedAt = record.timestamp;
+      }
+    }
+
     stockTransfersList.unshift(record);
-    res.json({ success: true, record, message: 'Stock transferred.' });
+    res.json({ success: true, record, message: 'Stock transferred and warehouse tiers synchronized.' });
   });
 
   // --- 9. APPROVAL WORKFLOW & MATRIX APIS ---
@@ -5841,6 +6011,65 @@ async function startServer() {
       ...req.body,
     };
     qcInspectionsList.unshift(newQc);
+
+    // Sync QC disposition with Lot/Batch status and Available ATP stock
+    const qcQty = Math.max(0, Number(newQc.totalBatchQuantity) || 0);
+    const matchingBatch = inventoryBatches.find(
+      (b) =>
+        (b.lotNumber === newQc.batchNumber || b.sku === newQc.sku) &&
+        (b.storeId === newQc.storeId || newQc.storeId === 'ALL')
+    );
+    const matchingTier = storeInventoryTiers.find(
+      (t) => t.sku === newQc.sku && t.storeId === newQc.storeId
+    );
+
+    if (newQc.disposition === 'QUARANTINED' || newQc.disposition === 'REJECTED') {
+      if (matchingBatch) {
+        matchingBatch.status = 'quarantined';
+      } else if (qcQty > 0) {
+        const inv = inventoryList.find((i) => i.sku === newQc.sku);
+        inventoryBatches.unshift({
+          batchId: `BAT-QC-${seq}`,
+          sku: newQc.sku,
+          productName: newQc.productName,
+          storeId: newQc.storeId,
+          storeName: newQc.storeName,
+          warehouseZoneId: matchingTier?.warehouseZoneId || 'WH-JKT-SEN-COLD',
+          lotNumber: newQc.batchNumber,
+          initialQuantity: qcQty,
+          currentStock: qcQty,
+          unitCost: inv?.unitCost || 15000,
+          sellingPrice: inv?.sellingPrice || 24000,
+          receivedDate: newQc.timestamp,
+          expiryDate: newQc.expiryDate,
+          daysUntilExpiry: 7,
+          status: 'quarantined',
+          storageZone: matchingTier?.storageType || 'cold_chilled',
+          supplierName: inv?.supplierName || 'QC Quarantine Hold',
+          notes: `Quarantined by QC ${newQc.id}`,
+        });
+      }
+      if (matchingTier && qcQty > 0) {
+        matchingTier.reservedStock = Math.min(
+          matchingTier.physicalStock,
+          matchingTier.reservedStock + qcQty
+        );
+        matchingTier.availableStock = Math.max(
+          0,
+          matchingTier.physicalStock - matchingTier.reservedStock
+        );
+        matchingTier.updatedAt = newQc.timestamp;
+      }
+    } else if (newQc.disposition === 'PASSED') {
+      if (matchingBatch && matchingBatch.status === 'quarantined') {
+        matchingBatch.status = 'fresh';
+        if (matchingTier) {
+          matchingTier.reservedStock = Math.max(0, matchingTier.reservedStock - matchingBatch.currentStock);
+          matchingTier.availableStock = Math.max(0, matchingTier.physicalStock - matchingTier.reservedStock);
+          matchingTier.updatedAt = newQc.timestamp;
+        }
+      }
+    }
 
     securityAuditTrail.unshift({
       id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
@@ -6617,6 +6846,24 @@ async function startServer() {
       appliedCount: count,
       message: `Dynamic markdowns applied to ${count} near-expiry batch lots across storefront & POS registers.`,
     });
+  });
+
+  // -------------------------------------------------------------
+  // API 404 & ERROR JSON GUARDS (Prevent SPA HTML fallback on /api/*)
+  // -------------------------------------------------------------
+  app.use('/api', (req: Request, res: Response) => {
+    res.status(404).json({
+      error: `API endpoint not found: ${req.method} ${req.originalUrl}`,
+    });
+  });
+
+  app.use('/api', (err: any, _req: Request, res: Response, _next: express.NextFunction) => {
+    console.error('[GroceMart Backend API Error]', err);
+    if (!res.headersSent) {
+      res.status(err?.status || 500).json({
+        error: err?.message || 'Internal server error',
+      });
+    }
   });
 
   // -------------------------------------------------------------

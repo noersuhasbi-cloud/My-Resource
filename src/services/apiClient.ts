@@ -73,15 +73,66 @@ import type {
   GiroPaymentRecord,
   B2BWholesaleOrder,
   B2BCartItem,
+  RemovalStrategyConfig,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const retryDelays = [500, 1000, 1500, 2500, 3500];
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+    try {
+      const res = await fetch(input, init);
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      const isGatewayRetryable = res.status === 502 || res.status === 503 || res.status === 504;
+      const isJsonContentType = contentType.includes('application/json') || contentType.includes('+json');
+
+      if (!isJsonContentType) {
+        const bodyText = await res.clone().text().catch(() => '');
+        const trimmed = bodyText.trim();
+        const looksLikeHtml = contentType.includes('text/html') || trimmed.startsWith('<');
+
+        if ((isGatewayRetryable || looksLikeHtml) && attempt < retryDelays.length) {
+          await sleep(retryDelays[attempt]);
+          continue;
+        }
+
+        if (looksLikeHtml) {
+          const isWarmup = trimmed.includes('Starting Server') || isGatewayRetryable;
+          throw new Error(
+            isWarmup
+              ? 'Backend server is still starting up. Please refresh in a moment.'
+              : `Backend API returned HTML instead of JSON (HTTP ${res.status}).`
+          );
+        }
+      } else if (isGatewayRetryable && attempt < retryDelays.length) {
+        await sleep(retryDelays[attempt]);
+        continue;
+      }
+
+      return res;
+    } catch (err) {
+      lastError = err;
+      if (attempt < retryDelays.length && err instanceof TypeError) {
+        await sleep(retryDelays[attempt]);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Backend API request failed');
+}
 
 export const apiClient = {
   // -------------------------------------------------------------
   // QRIS Payment APIs
   // -------------------------------------------------------------
   async generateQRIS(orderId: string, amount: number, customerName: string, customerEmail: string): Promise<QRISGenerateResponse> {
-    const res = await fetch('/api/qris/generate', {
+    const res = await fetchApi('/api/qris/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId, amount, customerName, customerEmail }),
@@ -94,7 +145,7 @@ export const apiClient = {
   },
 
   async getQRISStatus(orderId: string): Promise<{ orderId: string; status: 'unpaid' | 'paid' | 'expired'; amount: number }> {
-    const res = await fetch(`/api/qris/status/${encodeURIComponent(orderId)}`);
+    const res = await fetchApi(`/api/qris/status/${encodeURIComponent(orderId)}`);
     return res.json();
   },
 
@@ -106,7 +157,7 @@ export const apiClient = {
     customerEmail: string;
     items?: CartItem[];
   }): Promise<{ success: boolean; message: string; auditRecordId: string; journalEntryIds: string[] }> {
-    const res = await fetch('/api/qris/simulate-pay', {
+    const res = await fetchApi('/api/qris/simulate-pay', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -122,7 +173,7 @@ export const apiClient = {
   // Store Operations & Outlets APIs
   // -------------------------------------------------------------
   async getStoreStatus(): Promise<StoreOperationalStatus> {
-    const res = await fetch('/api/admin/store-status');
+    const res = await fetchApi('/api/admin/store-status');
     return res.json();
   },
 
@@ -135,7 +186,7 @@ export const apiClient = {
     activeOrders?: any[];
     message?: string;
   }> {
-    const res = await fetch('/api/admin/store-status', {
+    const res = await fetchApi('/api/admin/store-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(update),
@@ -144,7 +195,7 @@ export const apiClient = {
   },
 
   async getStoreOutlets(): Promise<StoreOutletSchedule[]> {
-    const res = await fetch('/api/admin/store-outlets');
+    const res = await fetchApi('/api/admin/store-outlets');
     return res.json();
   },
 
@@ -158,7 +209,7 @@ export const apiClient = {
     message?: string;
     storeName?: string;
   }> {
-    const res = await fetch(`/api/admin/store-outlets/${encodeURIComponent(storeId)}`, {
+    const res = await fetchApi(`/api/admin/store-outlets/${encodeURIComponent(storeId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(update),
@@ -175,7 +226,7 @@ export const apiClient = {
     resumeTime?: string;
     hours?: string;
   }> {
-    const res = await fetch(`/api/store/check-open/${encodeURIComponent(storeId)}`);
+    const res = await fetchApi(`/api/store/check-open/${encodeURIComponent(storeId)}`);
     return res.json();
   },
 
@@ -191,7 +242,7 @@ export const apiClient = {
       totalSkus: number;
     };
   }> {
-    const res = await fetch('/api/admin/inventory');
+    const res = await fetchApi('/api/admin/inventory');
     return res.json();
   },
 
@@ -200,12 +251,12 @@ export const apiClient = {
     storeInventoryTiers: StoreInventoryStock[];
     outlets: StoreOutletSchedule[];
   }> {
-    const res = await fetch('/api/admin/inventory/matrix');
+    const res = await fetchApi('/api/admin/inventory/matrix');
     return res.json();
   },
 
   async updateStockTier(id: string, update: Partial<StoreInventoryStock>): Promise<{ success: boolean; stockTier: StoreInventoryStock }> {
-    const res = await fetch(`/api/admin/inventory/stock-tier/${encodeURIComponent(id)}`, {
+    const res = await fetchApi(`/api/admin/inventory/stock-tier/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(update),
@@ -214,7 +265,7 @@ export const apiClient = {
   },
 
   async updateThreshold(sku: string, minimumThreshold: number, reorderQuantity?: number): Promise<{ success: boolean; item: InventoryItem }> {
-    const res = await fetch('/api/admin/inventory/threshold', {
+    const res = await fetchApi('/api/admin/inventory/threshold', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sku, minimumThreshold, reorderQuantity }),
@@ -223,7 +274,7 @@ export const apiClient = {
   },
 
   async adjustStock(sku: string, adjustmentQty: number, reason: string, storeId?: string): Promise<{ success: boolean; item: InventoryItem; gleId: string }> {
-    const res = await fetch('/api/admin/inventory/adjust', {
+    const res = await fetchApi('/api/admin/inventory/adjust', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sku, adjustmentQty, reason, storeId }),
@@ -231,11 +282,46 @@ export const apiClient = {
     return res.json();
   },
 
+  async getRemovalStrategies(): Promise<RemovalStrategyConfig> {
+    const res = await fetchApi('/api/admin/inventory/removal-strategies');
+    if (!res.ok) {
+      return {
+        categoryStrategies: {
+          produce: 'FEFO',
+          dairy_eggs: 'FEFO',
+          meat_seafood: 'FEFO',
+          bakery: 'FEFO',
+          pantry_coffee: 'FIFO',
+        },
+        skuOverrides: {},
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return res.json();
+  },
+
+  async updateRemovalStrategies(payload: Partial<RemovalStrategyConfig>): Promise<{
+    success: boolean;
+    config: RemovalStrategyConfig;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/inventory/removal-strategies', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update removal strategies');
+    }
+    return res.json();
+  },
+
   // -------------------------------------------------------------
   // Procurement & Partial Goods Receipt APIs
   // -------------------------------------------------------------
   async getPurchaseRequests(): Promise<PurchaseRequest[]> {
-    const res = await fetch('/api/admin/procurement/requests');
+    const res = await fetchApi('/api/admin/procurement/requests');
     return res.json();
   },
 
@@ -247,7 +333,7 @@ export const apiClient = {
     requestedBy?: string;
     storeId?: string;
   }): Promise<{ success: boolean; purchaseRequest: PurchaseRequest }> {
-    const res = await fetch('/api/admin/procurement/requests', {
+    const res = await fetchApi('/api/admin/procurement/requests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -256,14 +342,14 @@ export const apiClient = {
   },
 
   async approvePurchaseRequest(id: string): Promise<{ success: boolean; purchaseRequest: PurchaseRequest; purchaseOrder: PurchaseOrder }> {
-    const res = await fetch(`/api/admin/procurement/requests/${encodeURIComponent(id)}/approve`, {
+    const res = await fetchApi(`/api/admin/procurement/requests/${encodeURIComponent(id)}/approve`, {
       method: 'POST',
     });
     return res.json();
   },
 
   async getPurchaseOrders(): Promise<PurchaseOrder[]> {
-    const res = await fetch('/api/admin/procurement/orders');
+    const res = await fetchApi('/api/admin/procurement/orders');
     return res.json();
   },
 
@@ -277,7 +363,7 @@ export const apiClient = {
     error?: string;
     message?: string;
   }> {
-    const res = await fetch(`/api/admin/procurement/orders/${encodeURIComponent(id)}/status`, {
+    const res = await fetchApi(`/api/admin/procurement/orders/${encodeURIComponent(id)}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, closureNotes }),
@@ -290,7 +376,7 @@ export const apiClient = {
   },
 
   async getGoodsReceipts(): Promise<GoodsReceiptRecord[]> {
-    const res = await fetch('/api/admin/procurement/gr');
+    const res = await fetchApi('/api/admin/procurement/gr');
     return res.json();
   },
 
@@ -316,7 +402,7 @@ export const apiClient = {
     remainingBackorder: number;
     journalEntryIds: string[];
   }> {
-    const res = await fetch('/api/admin/procurement/gr/receive-partial', {
+    const res = await fetchApi('/api/admin/procurement/gr/receive-partial', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -338,7 +424,7 @@ export const apiClient = {
     if (currency && currency !== 'ALL') params.append('currency', currency);
 
     const qs = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`/api/admin/procurement/vendor-bills${qs}`);
+    const res = await fetchApi(`/api/admin/procurement/vendor-bills${qs}`);
     return res.json();
   },
 
@@ -372,7 +458,7 @@ export const apiClient = {
     journalEntryIds?: string[];
     message?: string;
   }> {
-    const res = await fetch('/api/admin/procurement/vendor-bills', {
+    const res = await fetchApi('/api/admin/procurement/vendor-bills', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -390,7 +476,7 @@ export const apiClient = {
     journalEntryIds?: string[];
     message?: string;
   }> {
-    const res = await fetch(`/api/admin/procurement/vendor-bills/${encodeURIComponent(id)}/approve`, {
+    const res = await fetchApi(`/api/admin/procurement/vendor-bills/${encodeURIComponent(id)}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approverName }),
@@ -416,7 +502,7 @@ export const apiClient = {
     journalEntryIds?: string[];
     message?: string;
   }> {
-    const res = await fetch(`/api/admin/procurement/vendor-bills/${encodeURIComponent(id)}/pay`, {
+    const res = await fetchApi(`/api/admin/procurement/vendor-bills/${encodeURIComponent(id)}/pay`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -433,7 +519,7 @@ export const apiClient = {
     vendorBill: VendorBill;
     message?: string;
   }> {
-    const res = await fetch(`/api/admin/procurement/vendor-bills/${encodeURIComponent(id)}/void`, {
+    const res = await fetchApi(`/api/admin/procurement/vendor-bills/${encodeURIComponent(id)}/void`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason }),
@@ -445,7 +531,7 @@ export const apiClient = {
     return res.json();
   },
   async getChartOfAccounts(): Promise<ChartOfAccount[]> {
-    const res = await fetch('/api/admin/accounting/coa');
+    const res = await fetchApi('/api/admin/accounting/coa');
     return res.json();
   },
 
@@ -453,7 +539,7 @@ export const apiClient = {
     const url = storeId && storeId !== 'CONSOLIDATED'
       ? `/api/admin/accounting/general-ledger?storeId=${encodeURIComponent(storeId)}`
       : '/api/admin/accounting/general-ledger';
-    const res = await fetch(url);
+    const res = await fetchApi(url);
     return res.json();
   },
 
@@ -461,7 +547,7 @@ export const apiClient = {
     const url = storeId && storeId !== 'CONSOLIDATED'
       ? `/api/admin/accounting/pnl?storeId=${encodeURIComponent(storeId)}`
       : '/api/admin/accounting/pnl';
-    const res = await fetch(url);
+    const res = await fetchApi(url);
     return res.json();
   },
 
@@ -469,7 +555,7 @@ export const apiClient = {
     const url = storeId && storeId !== 'CONSOLIDATED'
       ? `/api/admin/accounting/balance-sheet?storeId=${encodeURIComponent(storeId)}`
       : '/api/admin/accounting/balance-sheet';
-    const res = await fetch(url);
+    const res = await fetchApi(url);
     return res.json();
   },
 
@@ -477,17 +563,17 @@ export const apiClient = {
     const url = storeId && storeId !== 'CONSOLIDATED'
       ? `/api/admin/accounting/cash-flow?storeId=${encodeURIComponent(storeId)}`
       : '/api/admin/accounting/cash-flow';
-    const res = await fetch(url);
+    const res = await fetchApi(url);
     return res.json();
   },
 
   async getOmzetAnalytics(): Promise<OmzetAnalyticsReport> {
-    const res = await fetch('/api/admin/analytics/omzet');
+    const res = await fetchApi('/api/admin/analytics/omzet');
     return res.json();
   },
 
   async getAuditTrail(): Promise<TransactionAuditRecord[]> {
-    const res = await fetch('/api/admin/accounting/audit-trail');
+    const res = await fetchApi('/api/admin/accounting/audit-trail');
     return res.json();
   },
 
@@ -497,7 +583,7 @@ export const apiClient = {
     originalVoucher: GeneralLedgerEntry;
     reversingVoucher: GeneralLedgerEntry;
   }> {
-    const res = await fetch(`/api/admin/accounting/general-ledger/${encodeURIComponent(id)}/reverse`, {
+    const res = await fetchApi(`/api/admin/accounting/general-ledger/${encodeURIComponent(id)}/reverse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason }),
@@ -522,7 +608,7 @@ export const apiClient = {
     negativeInventoryPrevented: boolean;
     trace: { attempt: number; success: boolean; stockRemaining: number; error?: string }[];
   }> {
-    const res = await fetch('/api/admin/inventory/concurrency-test', {
+    const res = await fetchApi('/api/admin/inventory/concurrency-test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sku, concurrentRequests, qtyPerRequest }),
@@ -536,7 +622,7 @@ export const apiClient = {
     isIdempotentReplay?: boolean;
     idempotencyKey?: string;
   }> {
-    const res = await fetch('/api/qris/webhook', {
+    const res = await fetchApi('/api/qris/webhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -553,12 +639,12 @@ export const apiClient = {
     if (sku) params.append('sku', sku);
     if (status && status !== 'ALL') params.append('status', status);
     const query = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`/api/admin/inventory/batches${query}`);
+    const res = await fetchApi(`/api/admin/inventory/batches${query}`);
     return res.json();
   },
 
   async allocateFEFO(sku: string, quantity: number, storeId?: string): Promise<{ success: boolean; result: FEFOAllocationResult }> {
-    const res = await fetch('/api/inventory/fefo-allocate', {
+    const res = await fetchApi('/api/inventory/fefo-allocate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sku, quantity, storeId }),
@@ -585,7 +671,7 @@ export const apiClient = {
     const url = storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED'
       ? `/api/admin/waste?storeId=${encodeURIComponent(storeId)}`
       : '/api/admin/waste';
-    const res = await fetch(url);
+    const res = await fetchApi(url);
     return res.json();
   },
 
@@ -599,7 +685,7 @@ export const apiClient = {
     reportedBy?: string;
     notes?: string;
   }): Promise<{ success: boolean; wasteRecord: WasteRecord; journalEntryIds: string[] }> {
-    const res = await fetch('/api/admin/waste', {
+    const res = await fetchApi('/api/admin/waste', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -619,12 +705,12 @@ export const apiClient = {
     if (storeId && storeId !== 'ALL') params.append('storeId', storeId);
     if (pickerStatus && pickerStatus !== 'ALL') params.append('pickerStatus', pickerStatus);
     const query = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`/api/admin/picker/orders${query}`);
+    const res = await fetchApi(`/api/admin/picker/orders${query}`);
     return res.json();
   },
 
   async pickOrderItem(orderId: string, itemId: string, barcode?: string): Promise<{ success: boolean; order: PickerOrder; item: PickerOrderItem }> {
-    const res = await fetch(`/api/admin/picker/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/pick`, {
+    const res = await fetchApi(`/api/admin/picker/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/pick`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ barcode }),
@@ -640,7 +726,7 @@ export const apiClient = {
     replacementSku: string;
     reason?: string;
   }): Promise<{ success: boolean; order: PickerOrder; item: PickerOrderItem; notificationMessage: string }> {
-    const res = await fetch(`/api/admin/picker/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/substitute`, {
+    const res = await fetchApi(`/api/admin/picker/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/substitute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -653,7 +739,7 @@ export const apiClient = {
   },
 
   async completePickerOrder(orderId: string): Promise<{ success: boolean; order: PickerOrder; message: string }> {
-    const res = await fetch(`/api/admin/picker/orders/${encodeURIComponent(orderId)}/complete`, {
+    const res = await fetchApi(`/api/admin/picker/orders/${encodeURIComponent(orderId)}/complete`, {
       method: 'POST',
     });
     if (!res.ok) {
@@ -678,7 +764,7 @@ export const apiClient = {
       variancePercent: number;
     };
   }> {
-    const res = await fetch('/api/admin/catch-weight/weigh', {
+    const res = await fetchApi('/api/admin/catch-weight/weigh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderId, itemId, actualWeighedGrams }),
@@ -694,7 +780,7 @@ export const apiClient = {
   // MODULE 1: Shrinkage & Natural Weight Loss (Evaporation)
   // -------------------------------------------------------------
   async getWeightTolerances(): Promise<WeightToleranceConfig[]> {
-    const res = await fetch('/api/admin/shrinkage/tolerances');
+    const res = await fetchApi('/api/admin/shrinkage/tolerances');
     return res.json();
   },
 
@@ -702,7 +788,7 @@ export const apiClient = {
     success: boolean;
     config: WeightToleranceConfig;
   }> {
-    const res = await fetch(`/api/admin/shrinkage/tolerances/${encodeURIComponent(category)}`, {
+    const res = await fetchApi(`/api/admin/shrinkage/tolerances/${encodeURIComponent(category)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(update),
@@ -714,7 +800,7 @@ export const apiClient = {
     const params = new URLSearchParams();
     if (storeId) params.append('storeId', storeId);
     if (category) params.append('category', category);
-    const res = await fetch(`/api/admin/shrinkage/adjustments?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/shrinkage/adjustments?${params.toString()}`);
     return res.json();
   },
 
@@ -731,7 +817,7 @@ export const apiClient = {
     adjustment: NaturalShrinkageAdjustment;
     journalEntryIds: string[];
   }> {
-    const res = await fetch('/api/admin/shrinkage/adjust-natural', {
+    const res = await fetchApi('/api/admin/shrinkage/adjust-natural', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -750,7 +836,7 @@ export const apiClient = {
     const params = new URLSearchParams();
     if (status) params.append('status', status);
     if (storeId) params.append('storeId', storeId);
-    const res = await fetch(`/api/admin/substitutions/prompts?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/substitutions/prompts?${params.toString()}`);
     return res.json();
   },
 
@@ -765,7 +851,7 @@ export const apiClient = {
     message: string;
     prompt: SubstitutionPromptRecord;
   }> {
-    const res = await fetch('/api/admin/substitutions/request-prompt', {
+    const res = await fetchApi('/api/admin/substitutions/request-prompt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -782,7 +868,7 @@ export const apiClient = {
     message: string;
     prompt: SubstitutionPromptRecord;
   }> {
-    const res = await fetch(`/api/admin/substitutions/${encodeURIComponent(promptId)}/respond`, {
+    const res = await fetchApi(`/api/admin/substitutions/${encodeURIComponent(promptId)}/respond`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
@@ -801,7 +887,7 @@ export const apiClient = {
     currentSession: StaffShiftSession;
     availableProfiles: StaffShiftSession[];
   }> {
-    const res = await fetch('/api/admin/rbac/current-session');
+    const res = await fetchApi('/api/admin/rbac/current-session');
     return res.json();
   },
 
@@ -809,7 +895,7 @@ export const apiClient = {
     success: boolean;
     session: StaffShiftSession;
   }> {
-    const res = await fetch('/api/admin/rbac/switch-session', {
+    const res = await fetchApi('/api/admin/rbac/switch-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId }),
@@ -824,7 +910,7 @@ export const apiClient = {
     pin?: string;
     shiftName?: string;
   }): Promise<AdminAuthResponse> {
-    const res = await fetch('/api/admin/auth/login', {
+    const res = await fetchApi('/api/admin/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
@@ -837,7 +923,7 @@ export const apiClient = {
   },
 
   async adminLogout(): Promise<{ success: boolean; message?: string }> {
-    const res = await fetch('/api/admin/auth/logout', { method: 'POST' });
+    const res = await fetchApi('/api/admin/auth/logout', { method: 'POST' });
     return res.json().catch(() => ({ success: true }));
   },
 
@@ -845,7 +931,7 @@ export const apiClient = {
     const params = new URLSearchParams();
     if (storeId) params.append('storeId', storeId);
     if (actionType) params.append('actionType', actionType);
-    const res = await fetch(`/api/admin/rbac/security-audit-trail?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/rbac/security-audit-trail?${params.toString()}`);
     return res.json();
   },
 
@@ -854,7 +940,7 @@ export const apiClient = {
     authorized: boolean;
     error?: string;
   }> {
-    const res = await fetch('/api/admin/rbac/check-zone-access', {
+    const res = await fetchApi('/api/admin/rbac/check-zone-access', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ zoneType }),
@@ -868,7 +954,7 @@ export const apiClient = {
   async getClimateThresholds(storeId?: string): Promise<ClimateAdaptiveThresholdConfig[]> {
     const params = new URLSearchParams();
     if (storeId) params.append('storeId', storeId);
-    const res = await fetch(`/api/admin/scalability/climate-thresholds?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/scalability/climate-thresholds?${params.toString()}`);
     return res.json();
   },
 
@@ -876,7 +962,7 @@ export const apiClient = {
     success: boolean;
     config: ClimateAdaptiveThresholdConfig;
   }> {
-    const res = await fetch(`/api/admin/scalability/climate-thresholds/${encodeURIComponent(zoneId)}`, {
+    const res = await fetchApi(`/api/admin/scalability/climate-thresholds/${encodeURIComponent(zoneId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(update),
@@ -888,7 +974,7 @@ export const apiClient = {
     const params = new URLSearchParams();
     if (storeId) params.append('storeId', storeId);
     if (currency) params.append('currency', currency);
-    const res = await fetch(`/api/admin/accounting/pnl-multicurrency?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/accounting/pnl-multicurrency?${params.toString()}`);
     return res.json();
   },
 
@@ -898,7 +984,7 @@ export const apiClient = {
   async getPosProducts(storeId?: string): Promise<POSProductItem[]> {
     const params = new URLSearchParams();
     if (storeId) params.append('storeId', storeId);
-    const res = await fetch(`/api/pos/products?${params.toString()}`);
+    const res = await fetchApi(`/api/pos/products?${params.toString()}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to fetch POS product catalog');
@@ -911,7 +997,7 @@ export const apiClient = {
     receipt: POSTransactionReceipt;
     message: string;
   }> {
-    const res = await fetch('/api/pos/checkout', {
+    const res = await fetchApi('/api/pos/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -926,7 +1012,7 @@ export const apiClient = {
   async getPosHistory(storeId?: string): Promise<POSTransactionReceipt[]> {
     const params = new URLSearchParams();
     if (storeId) params.append('storeId', storeId);
-    const res = await fetch(`/api/pos/history?${params.toString()}`);
+    const res = await fetchApi(`/api/pos/history?${params.toString()}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to fetch POS transaction history');
@@ -938,7 +1024,7 @@ export const apiClient = {
   // MODULE 6: Settings, COA Mapping, POS Config & Stock Opname APIs
   // -------------------------------------------------------------
   async getCoaMapping(): Promise<CoaMappingConfig> {
-    const res = await fetch('/api/admin/settings/coa-mapping');
+    const res = await fetchApi('/api/admin/settings/coa-mapping');
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to fetch COA mapping configuration');
@@ -947,7 +1033,7 @@ export const apiClient = {
   },
 
   async updateCoaMapping(config: Partial<CoaMappingConfig>): Promise<{ success: boolean; config: CoaMappingConfig; message?: string }> {
-    const res = await fetch('/api/admin/settings/coa-mapping', {
+    const res = await fetchApi('/api/admin/settings/coa-mapping', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
@@ -960,7 +1046,7 @@ export const apiClient = {
   },
 
   async getPosConfig(): Promise<PosCheckoutConfig> {
-    const res = await fetch('/api/admin/settings/pos-config');
+    const res = await fetchApi('/api/admin/settings/pos-config');
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to fetch POS checkout configuration');
@@ -969,7 +1055,7 @@ export const apiClient = {
   },
 
   async updatePosConfig(config: Partial<PosCheckoutConfig>): Promise<{ success: boolean; config: PosCheckoutConfig; message?: string }> {
-    const res = await fetch('/api/admin/settings/pos-config', {
+    const res = await fetchApi('/api/admin/settings/pos-config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
@@ -987,7 +1073,7 @@ export const apiClient = {
     tiersUpdatedCount: number;
     message: string;
   }> {
-    const res = await fetch('/api/admin/inventory/bulk-import', {
+    const res = await fetchApi('/api/admin/inventory/bulk-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),
@@ -1002,7 +1088,7 @@ export const apiClient = {
   async getStockOpnameSessions(storeId?: string): Promise<StockOpnameSession[]> {
     const params = new URLSearchParams();
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
-    const res = await fetch(`/api/admin/inventory/stock-opname?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/inventory/stock-opname?${params.toString()}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to fetch Stock Opname sessions');
@@ -1016,7 +1102,7 @@ export const apiClient = {
     journalEntryIds: string[];
     message: string;
   }> {
-    const res = await fetch('/api/admin/inventory/stock-opname/reconcile', {
+    const res = await fetchApi('/api/admin/inventory/stock-opname/reconcile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(session),
@@ -1039,7 +1125,7 @@ export const apiClient = {
     record: StockTransferRecord;
     message: string;
   }> {
-    const res = await fetch('/api/admin/inventory/transfer', {
+    const res = await fetchApi('/api/admin/inventory/transfer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1054,7 +1140,7 @@ export const apiClient = {
   async getStockTransfers(storeId?: string): Promise<StockTransferRecord[]> {
     const params = new URLSearchParams();
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
-    const res = await fetch(`/api/admin/inventory/transfer?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/inventory/transfer?${params.toString()}`);
     return res.json().catch(() => []);
   },
 
@@ -1062,12 +1148,12 @@ export const apiClient = {
   // APPROVAL WORKFLOW & MATRIX APIS
   // -------------------------------------------------------------
   async getApprovalRules(): Promise<ApprovalTierRule[]> {
-    const res = await fetch('/api/admin/approvals/rules');
+    const res = await fetchApi('/api/admin/approvals/rules');
     return res.json().catch(() => []);
   },
 
   async updateApprovalRules(rules: ApprovalTierRule[]): Promise<{ success: boolean; rules: ApprovalTierRule[]; message: string }> {
-    const res = await fetch('/api/admin/approvals/rules', {
+    const res = await fetchApi('/api/admin/approvals/rules', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rules }),
@@ -1083,7 +1169,7 @@ export const apiClient = {
     const params = new URLSearchParams();
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
     if (status && status !== 'ALL') params.append('status', status);
-    const res = await fetch(`/api/admin/approvals/queue?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/approvals/queue?${params.toString()}`);
     return res.json().catch(() => []);
   },
 
@@ -1092,7 +1178,7 @@ export const apiClient = {
     request: ApprovalRequest;
     message: string;
   }> {
-    const res = await fetch('/api/admin/approvals/action', {
+    const res = await fetchApi('/api/admin/approvals/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requestId, action, comments }),
@@ -1110,7 +1196,7 @@ export const apiClient = {
   async getSuratJalanList(storeId?: string): Promise<SuratJalanDocument[]> {
     const params = new URLSearchParams();
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
-    const res = await fetch(`/api/admin/logistics/surat-jalan?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/logistics/surat-jalan?${params.toString()}`);
     return res.json().catch(() => []);
   },
 
@@ -1119,7 +1205,7 @@ export const apiClient = {
     document: SuratJalanDocument;
     message: string;
   }> {
-    const res = await fetch('/api/admin/logistics/surat-jalan', {
+    const res = await fetchApi('/api/admin/logistics/surat-jalan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(doc),
@@ -1132,7 +1218,7 @@ export const apiClient = {
   },
 
   async getDeliveryOrders(): Promise<DeliveryOrderDocument[]> {
-    const res = await fetch('/api/admin/logistics/delivery-orders');
+    const res = await fetchApi('/api/admin/logistics/delivery-orders');
     return res.json().catch(() => []);
   },
 
@@ -1141,7 +1227,7 @@ export const apiClient = {
     document: DeliveryOrderDocument;
     message: string;
   }> {
-    const res = await fetch('/api/admin/logistics/delivery-orders', {
+    const res = await fetchApi('/api/admin/logistics/delivery-orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(doc),
@@ -1150,7 +1236,7 @@ export const apiClient = {
   },
 
   async getShipments(): Promise<ShipmentQuotaTracking[]> {
-    const res = await fetch('/api/admin/logistics/shipments');
+    const res = await fetchApi('/api/admin/logistics/shipments');
     return res.json().catch(() => []);
   },
 
@@ -1163,7 +1249,7 @@ export const apiClient = {
     shipment: ShipmentQuotaTracking;
     message: string;
   }> {
-    const res = await fetch('/api/admin/logistics/shipments', {
+    const res = await fetchApi('/api/admin/logistics/shipments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -1178,7 +1264,7 @@ export const apiClient = {
     const params = new URLSearchParams();
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
     if (disposition && disposition !== 'ALL') params.append('disposition', disposition);
-    const res = await fetch(`/api/admin/qc/inspections?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/qc/inspections?${params.toString()}`);
     return res.json().catch(() => []);
   },
 
@@ -1187,7 +1273,7 @@ export const apiClient = {
     record: QCInspectionRecord;
     message: string;
   }> {
-    const res = await fetch('/api/admin/qc/inspections', {
+    const res = await fetchApi('/api/admin/qc/inspections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1207,7 +1293,7 @@ export const apiClient = {
     account: ChartOfAccount;
     message: string;
   }> {
-    const res = await fetch('/api/admin/settings/coa-account', {
+    const res = await fetchApi('/api/admin/settings/coa-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(account),
@@ -1224,7 +1310,7 @@ export const apiClient = {
     account: ChartOfAccount;
     message: string;
   }> {
-    const res = await fetch(`/api/admin/settings/coa-account/${encodeURIComponent(code)}`, {
+    const res = await fetchApi(`/api/admin/settings/coa-account/${encodeURIComponent(code)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(update),
@@ -1237,7 +1323,7 @@ export const apiClient = {
   },
 
   async deleteCoaAccount(code: string): Promise<{ success: boolean; message: string }> {
-    const res = await fetch(`/api/admin/settings/coa-account/${encodeURIComponent(code)}`, {
+    const res = await fetchApi(`/api/admin/settings/coa-account/${encodeURIComponent(code)}`, {
       method: 'DELETE',
     });
     if (!res.ok) {
@@ -1253,7 +1339,7 @@ export const apiClient = {
   async getGroceryMetrics(storeId?: string): Promise<GroceryMetricsReport> {
     const params = new URLSearchParams();
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
-    const res = await fetch(`/api/admin/reports/grocery-metrics?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/reports/grocery-metrics?${params.toString()}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to fetch grocery metrics');
@@ -1268,7 +1354,7 @@ export const apiClient = {
     const params = new URLSearchParams();
     if (zoneId && zoneId !== 'ALL') params.append('zoneId', zoneId);
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
-    const res = await fetch(`/api/admin/cold-chain/logs?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/cold-chain/logs?${params.toString()}`);
     return res.json().catch(() => []);
   },
 
@@ -1277,7 +1363,7 @@ export const apiClient = {
     log: ColdChainLogEntry;
     message: string;
   }> {
-    const res = await fetch('/api/admin/cold-chain/logs', {
+    const res = await fetchApi('/api/admin/cold-chain/logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1293,7 +1379,7 @@ export const apiClient = {
   // GLOBAL COMPLIANCE: BATCH RECALL & FDA/EU TRACEABILITY APIS
   // -------------------------------------------------------------
   async traceBatchRecall(query: string): Promise<BatchRecallTraceResult> {
-    const res = await fetch(`/api/admin/batch-recall/trace/${encodeURIComponent(query)}`);
+    const res = await fetchApi(`/api/admin/batch-recall/trace/${encodeURIComponent(query)}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `No batch found matching query '${query}'`);
@@ -1308,7 +1394,7 @@ export const apiClient = {
     hazardDescription?: string;
     auditorName?: string;
   }): Promise<{ success: boolean; message: string; quarantinedUnits: number }> {
-    const res = await fetch('/api/admin/batch-recall/quarantine', {
+    const res = await fetchApi('/api/admin/batch-recall/quarantine', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1325,7 +1411,7 @@ export const apiClient = {
     message?: string;
     channel?: 'WhatsApp' | 'SMS' | 'Email';
   }): Promise<{ success: boolean; message: string; notifications: CustomerRecallNotification[] }> {
-    const res = await fetch('/api/admin/batch-recall/notify-customers', {
+    const res = await fetchApi('/api/admin/batch-recall/notify-customers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1338,7 +1424,7 @@ export const apiClient = {
   },
 
   async releaseBatchRecall(batchId: string): Promise<{ success: boolean; message: string }> {
-    const res = await fetch('/api/admin/batch-recall/release', {
+    const res = await fetchApi('/api/admin/batch-recall/release', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ batchId }),
@@ -1354,7 +1440,7 @@ export const apiClient = {
   // MODULE 1: POS HARDWARE & PERIPHERAL INTEGRATION
   // -------------------------------------------------------------
   async getHardwareStatus(): Promise<POSHardwarePeripheralStatus> {
-    const res = await fetch('/api/admin/hardware/status');
+    const res = await fetchApi('/api/admin/hardware/status');
     return res.json();
   },
 
@@ -1363,7 +1449,7 @@ export const apiClient = {
     message: string;
     status: POSHardwarePeripheralStatus;
   }> {
-    const res = await fetch('/api/admin/hardware/kick-drawer', {
+    const res = await fetchApi('/api/admin/hardware/kick-drawer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pulseMs, cashierName }),
@@ -1372,7 +1458,7 @@ export const apiClient = {
   },
 
   async closeCashDrawer(): Promise<{ success: boolean; status: POSHardwarePeripheralStatus }> {
-    const res = await fetch('/api/admin/hardware/close-drawer', { method: 'POST' });
+    const res = await fetchApi('/api/admin/hardware/close-drawer', { method: 'POST' });
     return res.json();
   },
 
@@ -1385,7 +1471,7 @@ export const apiClient = {
     slipText: string;
     status: POSHardwarePeripheralStatus;
   }> {
-    const res = await fetch('/api/admin/hardware/test-print', {
+    const res = await fetchApi('/api/admin/hardware/test-print', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paperWidthMm, storeName }),
@@ -1394,7 +1480,7 @@ export const apiClient = {
   },
 
   async scaleTare(tareGrams: number): Promise<{ success: boolean; status: POSHardwarePeripheralStatus }> {
-    const res = await fetch('/api/admin/hardware/scale/tare', {
+    const res = await fetchApi('/api/admin/hardware/scale/tare', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tareGrams }),
@@ -1403,7 +1489,7 @@ export const apiClient = {
   },
 
   async scaleZero(): Promise<{ success: boolean; status: POSHardwarePeripheralStatus }> {
-    const res = await fetch('/api/admin/hardware/scale/zero', { method: 'POST' });
+    const res = await fetchApi('/api/admin/hardware/scale/zero', { method: 'POST' });
     return res.json();
   },
 
@@ -1411,7 +1497,7 @@ export const apiClient = {
     weightGrams: number,
     isStable?: boolean
   ): Promise<{ success: boolean; status: POSHardwarePeripheralStatus }> {
-    const res = await fetch('/api/admin/hardware/scale/weigh', {
+    const res = await fetchApi('/api/admin/hardware/scale/weigh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ weightGrams, isStable }),
@@ -1425,7 +1511,7 @@ export const apiClient = {
     matchedItem: any;
     status: POSHardwarePeripheralStatus;
   }> {
-    const res = await fetch('/api/admin/hardware/scanner/simulate', {
+    const res = await fetchApi('/api/admin/hardware/scanner/simulate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ barcode }),
@@ -1439,12 +1525,12 @@ export const apiClient = {
   async getPosReturns(storeId?: string): Promise<POSReturnRecord[]> {
     const params = new URLSearchParams();
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
-    const res = await fetch(`/api/admin/returns?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/returns?${params.toString()}`);
     return res.json().catch(() => []);
   },
 
   async lookupReturnReceipt(query: string): Promise<any> {
-    const res = await fetch(`/api/admin/returns/lookup-receipt/${encodeURIComponent(query)}`);
+    const res = await fetchApi(`/api/admin/returns/lookup-receipt/${encodeURIComponent(query)}`);
     return res.json();
   },
 
@@ -1465,7 +1551,7 @@ export const apiClient = {
     slipText: string;
     message: string;
   }> {
-    const res = await fetch('/api/admin/returns', {
+    const res = await fetchApi('/api/admin/returns', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1481,7 +1567,7 @@ export const apiClient = {
   // MODULE 3: ADVANCED PROMOTION & LOYALTY ENGINE
   // -------------------------------------------------------------
   async getPromotions(): Promise<PromotionRule[]> {
-    const res = await fetch('/api/admin/promotions');
+    const res = await fetchApi('/api/admin/promotions');
     return res.json().catch(() => []);
   },
 
@@ -1490,7 +1576,7 @@ export const apiClient = {
     rule: PromotionRule;
     message: string;
   }> {
-    const res = await fetch('/api/admin/promotions', {
+    const res = await fetchApi('/api/admin/promotions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(rule),
@@ -1510,7 +1596,7 @@ export const apiClient = {
     rule: PromotionRule;
     message: string;
   }> {
-    const res = await fetch(`/api/admin/promotions/${id}`, {
+    const res = await fetchApi(`/api/admin/promotions/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -1523,7 +1609,7 @@ export const apiClient = {
   },
 
   async deletePromotion(id: string): Promise<{ success: boolean; message: string }> {
-    const res = await fetch(`/api/admin/promotions/${id}`, { method: 'DELETE' });
+    const res = await fetchApi(`/api/admin/promotions/${id}`, { method: 'DELETE' });
     return res.json();
   },
 
@@ -1533,7 +1619,7 @@ export const apiClient = {
     memberTier?: MemberLoyaltyTier;
     memberId?: string;
   }): Promise<PromotionEvaluationResult> {
-    const res = await fetch('/api/admin/promotions/evaluate', {
+    const res = await fetchApi('/api/admin/promotions/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1547,7 +1633,7 @@ export const apiClient = {
   async getReplenishmentPlan(storeId?: string): Promise<AutoReplenishmentConsolidatedPlan> {
     const params = new URLSearchParams();
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
-    const res = await fetch(`/api/admin/replenishment/plan?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/replenishment/plan?${params.toString()}`);
     return res.json();
   },
 
@@ -1559,7 +1645,7 @@ export const apiClient = {
     generatedOrders: any[];
     message: string;
   }> {
-    const res = await fetch('/api/admin/replenishment/generate-po', {
+    const res = await fetchApi('/api/admin/replenishment/generate-po', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1575,7 +1661,7 @@ export const apiClient = {
   // MODULE 12: ENTERPRISE SETTINGS, VALUATION, ROUTING, & QUOTES
   // -------------------------------------------------------------
   async getEnterpriseSettings(): Promise<EnterpriseSettingsConfig> {
-    const res = await fetch('/api/admin/settings/enterprise');
+    const res = await fetchApi('/api/admin/settings/enterprise');
     if (!res.ok) throw new Error('Failed to fetch enterprise settings');
     return res.json();
   },
@@ -1585,7 +1671,7 @@ export const apiClient = {
     settings: EnterpriseSettingsConfig;
     message: string;
   }> {
-    const res = await fetch('/api/admin/settings/enterprise', {
+    const res = await fetchApi('/api/admin/settings/enterprise', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
@@ -1598,7 +1684,7 @@ export const apiClient = {
   },
 
   async getLandedCosts(): Promise<LandedCostRecord[]> {
-    const res = await fetch('/api/admin/valuation/landed-costs');
+    const res = await fetchApi('/api/admin/valuation/landed-costs');
     return res.json().catch(() => []);
   },
 
@@ -1622,7 +1708,7 @@ export const apiClient = {
     journalEntryIds: string[];
     message: string;
   }> {
-    const res = await fetch('/api/admin/valuation/landed-costs', {
+    const res = await fetchApi('/api/admin/valuation/landed-costs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1639,7 +1725,7 @@ export const apiClient = {
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
     if (zoneId && zoneId !== 'ALL') params.append('zoneId', zoneId);
     if (status && status !== 'ALL') params.append('status', status);
-    const res = await fetch(`/api/admin/warehouse/bins?${params.toString()}`);
+    const res = await fetchApi(`/api/admin/warehouse/bins?${params.toString()}`);
     return res.json().catch(() => []);
   },
 
@@ -1648,7 +1734,7 @@ export const apiClient = {
     bin: WarehouseBinLocation;
     message: string;
   }> {
-    const res = await fetch('/api/admin/warehouse/bins', {
+    const res = await fetchApi('/api/admin/warehouse/bins', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bin),
@@ -1665,7 +1751,7 @@ export const apiClient = {
     bin: WarehouseBinLocation;
     message: string;
   }> {
-    const res = await fetch(`/api/admin/warehouse/bins/${encodeURIComponent(id)}`, {
+    const res = await fetchApi(`/api/admin/warehouse/bins/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -1678,7 +1764,7 @@ export const apiClient = {
   },
 
   async getWarehouseRoutes(): Promise<WarehouseMultiStepRoute[]> {
-    const res = await fetch('/api/admin/warehouse/routes');
+    const res = await fetchApi('/api/admin/warehouse/routes');
     return res.json().catch(() => []);
   },
 
@@ -1687,7 +1773,7 @@ export const apiClient = {
     route: WarehouseMultiStepRoute;
     message: string;
   }> {
-    const res = await fetch(`/api/admin/warehouse/routes/${encodeURIComponent(id)}`, {
+    const res = await fetchApi(`/api/admin/warehouse/routes/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -1700,7 +1786,7 @@ export const apiClient = {
   },
 
   async getAnalyticDepartments(): Promise<AnalyticDepartment[]> {
-    const res = await fetch('/api/admin/accounting/analytic-departments');
+    const res = await fetchApi('/api/admin/accounting/analytic-departments');
     return res.json().catch(() => []);
   },
 
@@ -1709,7 +1795,7 @@ export const apiClient = {
     department: AnalyticDepartment;
     message: string;
   }> {
-    const res = await fetch(`/api/admin/accounting/analytic-departments/${encodeURIComponent(id)}`, {
+    const res = await fetchApi(`/api/admin/accounting/analytic-departments/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
@@ -1722,12 +1808,12 @@ export const apiClient = {
   },
 
   async getMarginAnalysis(): Promise<ProductMarginRecord[]> {
-    const res = await fetch('/api/admin/accounting/margin-analysis');
+    const res = await fetchApi('/api/admin/accounting/margin-analysis');
     return res.json().catch(() => []);
   },
 
   async getEnterpriseQuotations(): Promise<EnterpriseQuotation[]> {
-    const res = await fetch('/api/admin/sales/quotations');
+    const res = await fetchApi('/api/admin/sales/quotations');
     return res.json().catch(() => []);
   },
 
@@ -1736,7 +1822,7 @@ export const apiClient = {
     quotation: EnterpriseQuotation;
     message: string;
   }> {
-    const res = await fetch('/api/admin/sales/quotations', {
+    const res = await fetchApi('/api/admin/sales/quotations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1753,7 +1839,7 @@ export const apiClient = {
     quotation: EnterpriseQuotation;
     message: string;
   }> {
-    const res = await fetch(`/api/admin/sales/quotations/${encodeURIComponent(id)}/sign`, {
+    const res = await fetchApi(`/api/admin/sales/quotations/${encodeURIComponent(id)}/sign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1771,7 +1857,7 @@ export const apiClient = {
     quotation: EnterpriseQuotation;
     message: string;
   }> {
-    const res = await fetch(`/api/admin/sales/quotations/${encodeURIComponent(id)}/convert-to-order`, {
+    const res = await fetchApi(`/api/admin/sales/quotations/${encodeURIComponent(id)}/convert-to-order`, {
       method: 'POST',
     });
     if (!res.ok) {
@@ -1786,7 +1872,7 @@ export const apiClient = {
   // -------------------------------------------------------------
   async getVendorCreditNotes(storeId?: string): Promise<VendorCreditNote[]> {
     try {
-      const res = await fetch(`/api/admin/vendor-credit-notes${storeId && storeId !== 'ALL' ? `?storeId=${encodeURIComponent(storeId)}` : ''}`);
+      const res = await fetchApi(`/api/admin/vendor-credit-notes${storeId && storeId !== 'ALL' ? `?storeId=${encodeURIComponent(storeId)}` : ''}`);
       if (res.ok) return await res.json();
     } catch {}
     const { MOCK_VENDOR_CREDIT_NOTES } = await import('../utils/groceryEngine.ts');
@@ -1799,7 +1885,7 @@ export const apiClient = {
     journalEntryId: string;
     message: string;
   }> {
-    const res = await fetch('/api/admin/vendor-credit-notes', {
+    const res = await fetchApi('/api/admin/vendor-credit-notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1817,7 +1903,7 @@ export const apiClient = {
     vendorBill: any;
     message: string;
   }> {
-    const res = await fetch(`/api/admin/vendor-credit-notes/${encodeURIComponent(creditNoteId)}/apply`, {
+    const res = await fetchApi(`/api/admin/vendor-credit-notes/${encodeURIComponent(creditNoteId)}/apply`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vendorBillId }),
@@ -1834,7 +1920,7 @@ export const apiClient = {
   // -------------------------------------------------------------
   async getDynamicMarkdownConfig(): Promise<DynamicMarkdownConfig> {
     try {
-      const res = await fetch('/api/admin/markdown-rules');
+      const res = await fetchApi('/api/admin/markdown-rules');
       if (res.ok) return await res.json();
     } catch {}
     const { DEFAULT_MARKDOWN_CONFIG } = await import('../utils/groceryEngine.ts');
@@ -1846,7 +1932,7 @@ export const apiClient = {
     config: DynamicMarkdownConfig;
     message: string;
   }> {
-    const res = await fetch('/api/admin/markdown-rules', {
+    const res = await fetchApi('/api/admin/markdown-rules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
@@ -1863,7 +1949,7 @@ export const apiClient = {
     appliedCount: number;
     message: string;
   }> {
-    const res = await fetch('/api/admin/markdown-rules/apply-batches', {
+    const res = await fetchApi('/api/admin/markdown-rules/apply-batches', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ batchIds }),
@@ -1879,7 +1965,7 @@ export const apiClient = {
   // MODULE 14: ENTERPRISE B2B WHOLESALE & GIRO APIS
   // -------------------------------------------------------------
   async getB2BCustomers(): Promise<B2BCustomer[]> {
-    const res = await fetch('/api/b2b/customers');
+    const res = await fetchApi('/api/b2b/customers');
     if (!res.ok) {
       const { INITIAL_B2B_CUSTOMERS } = await import('../data/b2bWholesaleData.ts');
       return INITIAL_B2B_CUSTOMERS;
@@ -1891,7 +1977,7 @@ export const apiClient = {
   },
 
   async updateB2BCustomer(customerId: string, update: Partial<B2BCustomer>): Promise<B2BCustomer> {
-    const res = await fetch(`/api/b2b/customers/${encodeURIComponent(customerId)}`, {
+    const res = await fetchApi(`/api/b2b/customers/${encodeURIComponent(customerId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(update),
@@ -1904,7 +1990,7 @@ export const apiClient = {
   },
 
   async getB2BProducts(): Promise<WholesaleProduct[]> {
-    const res = await fetch('/api/b2b/products');
+    const res = await fetchApi('/api/b2b/products');
     if (!res.ok) {
       const { WHOLESALE_PRODUCTS } = await import('../data/b2bWholesaleData.ts');
       return WHOLESALE_PRODUCTS;
@@ -1916,7 +2002,7 @@ export const apiClient = {
   },
 
   async getPWPRules(): Promise<PWPRule[]> {
-    const res = await fetch('/api/b2b/pwp-rules');
+    const res = await fetchApi('/api/b2b/pwp-rules');
     if (!res.ok) {
       const { INITIAL_PWP_RULES } = await import('../data/b2bWholesaleData.ts');
       return INITIAL_PWP_RULES;
@@ -1928,7 +2014,7 @@ export const apiClient = {
   },
 
   async getB2BOrders(): Promise<B2BWholesaleOrder[]> {
-    const res = await fetch('/api/b2b/orders');
+    const res = await fetchApi('/api/b2b/orders');
     if (!res.ok) {
       const { INITIAL_B2B_ORDERS } = await import('../data/b2bWholesaleData.ts');
       return INITIAL_B2B_ORDERS;
@@ -1958,7 +2044,7 @@ export const apiClient = {
     journalEntryIds: string[];
     customerUpdated: B2BCustomer;
   }> {
-    const res = await fetch('/api/b2b/checkout', {
+    const res = await fetchApi('/api/b2b/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1971,7 +2057,7 @@ export const apiClient = {
   },
 
   async getGiroRecords(): Promise<GiroPaymentRecord[]> {
-    const res = await fetch('/api/b2b/giro-records');
+    const res = await fetchApi('/api/b2b/giro-records');
     if (!res.ok) {
       const { INITIAL_GIRO_RECORDS } = await import('../data/b2bWholesaleData.ts');
       return INITIAL_GIRO_RECORDS;
@@ -1988,7 +2074,7 @@ export const apiClient = {
     journalEntryIds: string[];
     message: string;
   }> {
-    const res = await fetch(`/api/b2b/giro/${encodeURIComponent(giroId)}/clear`, {
+    const res = await fetchApi(`/api/b2b/giro/${encodeURIComponent(giroId)}/clear`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -2007,7 +2093,7 @@ export const apiClient = {
     journalEntryIds: string[];
     message: string;
   }> {
-    const res = await fetch(`/api/b2b/giro/${encodeURIComponent(giroId)}/bounce`, {
+    const res = await fetchApi(`/api/b2b/giro/${encodeURIComponent(giroId)}/bounce`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason }),
