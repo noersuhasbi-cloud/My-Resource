@@ -2486,6 +2486,154 @@ export function renderPrintDocument(
         );
       }
 
+      // =====================================================================
+      // FORMAT GROUP C: A4 RACK-LEVEL BLIND STOCK OPNAME COUNT SHEET
+      // =====================================================================
+      case 'blind_count_sheet': {
+        const sheet = activePrintPayload;
+        return (
+          <div className="print-page-a4 bg-white text-slate-900 p-2 font-sans space-y-5">
+            <div className="border-b-2 border-slate-900 pb-4 flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs tracking-wider">
+                    GROCEMART
+                  </span>
+                  <span className="text-sm font-black uppercase tracking-wider">
+                    PT GROCEMART RETAIL INDONESIA
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  Warehouse Cycle Count &amp; HACCP Lot Traceability Audit Division
+                </p>
+                <p className="text-[10px] font-mono text-slate-500">
+                  Anti-Fraud Blind Count Protocol · System On-Hand Quantities Strictly Masked
+                </p>
+              </div>
+              <div className="text-right">
+                <h3 className="text-base font-black uppercase tracking-wider text-[#0F4C3A]">
+                  BLIND STOCK OPNAME SHEET
+                </h3>
+                <p className="text-xs font-mono font-bold text-slate-900 mt-0.5">
+                  {sheet.rackBinCode === 'ALL' ? 'ALL RACKS / BINS' : sheet.rackBinCode}
+                </p>
+                <p className="text-[10px] font-mono text-slate-600">
+                  Generated: {printedAt}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs p-3 rounded-xl bg-slate-50 border border-slate-300">
+              <div>
+                <div className="text-[10px] uppercase font-bold text-slate-500">Outlet / Warehouse</div>
+                <div className="font-bold text-slate-900 mt-0.5">{sheet.storeName}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-bold text-slate-500">Storage Zone</div>
+                <div className="font-bold text-slate-900 mt-0.5">{sheet.storageZone || 'ALL ZONES'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-bold text-slate-500">Rack / Bin Scope</div>
+                <div className="font-mono font-bold text-[#0F4C3A] mt-0.5">{sheet.rackBinCode || 'ALL'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-bold text-slate-500">Rotation / Prepared By</div>
+                <div className="font-semibold text-slate-900 mt-0.5">
+                  {sheet.rotationPolicy || 'FEFO / FIFO'} · {sheet.preparedBy}
+                </div>
+              </div>
+            </div>
+
+            <table className="w-full text-left text-xs border border-slate-400 border-collapse">
+              <thead className="bg-slate-100 border-b border-slate-400 font-bold uppercase text-[10px] text-slate-800">
+                <tr>
+                  <th className="py-2 px-2 border-r border-slate-300 text-center w-8">#</th>
+                  <th className="py-2 px-2 border-r border-slate-300">SKU</th>
+                  <th className="py-2 px-2 border-r border-slate-300">Product Name</th>
+                  <th className="py-2 px-2 border-r border-slate-300">Rack / Bin</th>
+                  <th className="py-2 px-2 border-r border-slate-300">Lot / Batch #</th>
+                  <th className="py-2 px-2 border-r border-slate-300 text-center">Expiry Date</th>
+                  <th className="py-2 px-2 border-r border-slate-300 text-center">UOM</th>
+                  <th className="py-2 px-2 border-r border-slate-300 text-center w-28">Physical Count</th>
+                  <th className="py-2 px-2 w-28">Condition / Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-300">
+                {sheet.items.map((item, idx) => (
+                  <tr key={`${item.sku}-${item.lotNumber}-${idx}`} className="break-inside-avoid">
+                    <td className="py-2.5 px-2 border-r border-slate-300 text-center font-mono">
+                      {idx + 1}
+                    </td>
+                    <td className="py-2.5 px-2 border-r border-slate-300 font-mono font-bold text-slate-900">
+                      {item.sku}
+                    </td>
+                    <td className="py-2.5 px-2 border-r border-slate-300 font-semibold text-slate-900">
+                      {item.productName}
+                      {item.statusLabel && (
+                        <span className="block text-[9px] font-mono uppercase text-amber-700">
+                          {item.statusLabel}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-2 border-r border-slate-300 font-mono font-bold text-[#0F4C3A]">
+                      {item.rackBinCode}
+                    </td>
+                    <td className="py-2.5 px-2 border-r border-slate-300 font-mono">
+                      {item.lotNumber}
+                    </td>
+                    <td className="py-2.5 px-2 border-r border-slate-300 text-center font-mono">
+                      {item.expiryDate ? item.expiryDate.split('T')[0] : '-'}
+                    </td>
+                    <td className="py-2.5 px-2 border-r border-slate-300 text-center font-mono uppercase">
+                      {item.uom}
+                    </td>
+                    <td className="py-2.5 px-2 border-r border-slate-300">
+                      <div className="h-6 border border-slate-400 rounded bg-white" />
+                    </td>
+                    <td className="py-2.5 px-2">
+                      <div className="h-6 border-b border-dashed border-slate-400" />
+                    </td>
+                  </tr>
+                ))}
+                {sheet.items.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="py-6 text-center text-slate-500 italic">
+                      No active batches found in the selected Rack / Bin filter.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            <div className="grid grid-cols-3 gap-6 text-center text-xs pt-6 border-t border-slate-300 break-inside-avoid">
+              <div className="space-y-12">
+                <span className="font-semibold text-slate-600 block">Counted By (Warehouse Checker)</span>
+                <div className="border-b border-slate-500 mx-4 pb-1 font-bold text-slate-900">
+                  ( .................................... )
+                </div>
+              </div>
+              <div className="space-y-12">
+                <span className="font-semibold text-slate-600 block">Verified By (Store / WH Lead)</span>
+                <div className="border-b border-slate-500 mx-4 pb-1 font-bold text-slate-900">
+                  ( .................................... )
+                </div>
+              </div>
+              <div className="space-y-12">
+                <span className="font-semibold text-slate-600 block">Audit Sign-Off (Finance / COO)</span>
+                <div className="border-b border-slate-500 mx-4 pb-1 font-bold text-slate-900">
+                  ( .................................... )
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+              <span>GroceMart Enterprise ERP · Rack-Scoped Blind Cycle Count Sheet</span>
+              <span>Printed: {printedAt}</span>
+            </div>
+          </div>
+        );
+      }
+
       default:
         return null;
   }

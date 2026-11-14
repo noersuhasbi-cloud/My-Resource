@@ -59,14 +59,14 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
   const [internalRules, setInternalRules] = useState<ApprovalTierRule[]>(approvalRules || []);
   const [internalQueue, setInternalQueue] = useState<ApprovalRequest[]>(approvalQueue || []);
 
-  const loadApprovalData = async () => {
+  const loadApprovalData = async (forceFetch = false) => {
     try {
-      if (!approvalRules) {
+      if (forceFetch || !approvalRules) {
         const rules = await apiClient.getApprovalRules();
         setInternalRules(rules);
         setRulesState(rules);
       }
-      if (!approvalQueue) {
+      if (forceFetch || !approvalQueue) {
         const queue = await apiClient.getApprovalQueue(selectedStore);
         setInternalQueue(queue);
       }
@@ -92,14 +92,15 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
     }
   }, [approvalQueue]);
 
-  const activeRules = approvalRules || internalRules;
-  const activeQueue = approvalQueue || internalQueue;
+  const activeRules = internalRules.length > 0 ? internalRules : (approvalRules || []);
+  const activeQueue = internalQueue;
 
   // Action Modal State
   const [activeActionRequest, setActiveActionRequest] = useState<ApprovalRequest | null>(null);
   const [actionType, setActionType] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
   const [actionComment, setActionComment] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isSubmittingId, setIsSubmittingId] = useState<string | null>(null);
 
   // Editable rules state
   const [rulesState, setRulesState] = useState<ApprovalTierRule[]>(approvalRules || []);
@@ -112,23 +113,36 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
   };
 
   const handleExecuteAction = async () => {
-    if (!activeActionRequest) return;
+    if (!activeActionRequest || isProcessing) return;
+    const targetRequest = activeActionRequest;
     setIsProcessing(true);
+    setIsSubmittingId(targetRequest.id);
     try {
-      const res = await apiClient.processApprovalAction(
-        activeActionRequest.id,
-        actionType,
-        actionComment
-      );
+      const res = await apiClient.decideApprovalRequest(targetRequest.id, {
+        decision: actionType,
+        tier: targetRequest.currentTierLevel,
+        operatorName: activeStaffSession?.userName,
+        operatorRole: activeStaffSession?.userRole,
+        reason: actionComment,
+      });
+      if (res.request) {
+        setInternalQueue((prev) => {
+          const exists = prev.some((item) => item.id === res.request.id);
+          return exists
+            ? prev.map((item) => (item.id === res.request.id ? res.request : item))
+            : [res.request, ...prev];
+        });
+      }
       onShowToast('Approval Action Executed', res.message);
       setActiveActionRequest(null);
+      await loadApprovalData(true);
       if (onRefreshData) onRefreshData();
-      else loadApprovalData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       onShowToast('Action Failed', msg);
     } finally {
       setIsProcessing(false);
+      setIsSubmittingId(null);
     }
   };
 
@@ -262,6 +276,8 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                   <option value="procurement_pr">Procurement Requests (PR)</option>
                   <option value="procurement_po">Purchase Orders (PO)</option>
                   <option value="stock_adjustment">Stock Adjustments</option>
+                  <option value="rack_stocktake">Rack Stocktake Variances</option>
+                  <option value="blind_stock_opname">Blind Stock Opname</option>
                   <option value="waste_write_off">Waste Write-Offs</option>
                   <option value="b2b_credit_term">B2B Wholesale Credit Terms (&gt;10M)</option>
                   <option value="b2b_transfer_verification">B2B Bank Transfer Verification</option>
@@ -394,14 +410,16 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                       {req.status === 'PENDING' && canDecideAndEditRules && (
                         <div className="flex items-center gap-2">
                           <button
+                            disabled={isProcessing || isSubmittingId === req.id}
                             onClick={() => handleOpenAction(req, 'REJECTED')}
-                            className="px-3 py-1.5 rounded-xl border border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
+                            className="px-3 py-1.5 rounded-xl border border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                           >
                             Reject
                           </button>
                           <button
+                            disabled={isProcessing || isSubmittingId === req.id}
                             onClick={() => handleOpenAction(req, 'APPROVED')}
-                            className="px-4 py-1.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                            className="px-4 py-1.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
                           >
                             <Check className="w-3.5 h-3.5" />
                             <span>Approve Tier {req.currentTierLevel}</span>

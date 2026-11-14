@@ -79,11 +79,11 @@ const SKU_PROFILES: Record<string, Partial<OdooSkuProfile>> = {
     b2cImageUrl: B2C_PRODUCE_IMG,
     b2bImageUrl: b2bChilledCratesImg,
     retailPackagingSpec: 'Clamshell Perforated Retail Pack · 250g Head (Root-Intact)',
-    wholesalePackagingSpec: 'ReeferRPC Crate (24 Heads / 6.0 Kg Gross) · Breathable Liner',
+    wholesalePackagingSpec: 'ReeferRPC Crate (20 Heads / 5.0 Kg Gross) · Breathable Liner',
     outerBoxBarcode: '8997021001014',
-    grossWeightKg: 6.4,
+    grossWeightKg: 5.4,
     palletDimensions: '120 x 100 x 145 cm (40 Crates)',
-    uomConversion: { wholesaleUnitLabel: 'Crate', unitsPerCarton: 24, cartonsPerPallet: 40, baseUnitLabel: 'head' },
+    uomConversion: { wholesaleUnitLabel: 'Crate', unitsPerCarton: 20, cartonsPerPallet: 40, baseUnitLabel: 'head' },
     defaultRemovalStrategy: 'FEFO',
     defaultBinLocation: 'CDC-Chilled-Rack-A1',
   },
@@ -105,11 +105,11 @@ const SKU_PROFILES: Record<string, Partial<OdooSkuProfile>> = {
     b2cImageUrl: B2C_PRODUCE_IMG,
     b2bImageUrl: b2bChilledCratesImg,
     retailPackagingSpec: 'Cushioned Clear PET Berry Punnet · 250g–300g',
-    wholesalePackagingSpec: 'Insulated Foam Master Tray (12 Punnets / 3.6 Kg Net)',
+    wholesalePackagingSpec: 'Insulated Foam Master Tray (9 Punnets / 2.7 Kg Net)',
     outerBoxBarcode: '8997021001038',
-    grossWeightKg: 4.1,
+    grossWeightKg: 3.1,
     palletDimensions: '120 x 100 x 130 cm (60 Trays)',
-    uomConversion: { wholesaleUnitLabel: 'Tray', unitsPerCarton: 12, cartonsPerPallet: 60, baseUnitLabel: 'punnet' },
+    uomConversion: { wholesaleUnitLabel: 'Tray', unitsPerCarton: 9, cartonsPerPallet: 60, baseUnitLabel: 'punnet' },
     defaultRemovalStrategy: 'FEFO',
     defaultBinLocation: 'CDC-Chilled-Rack-A3',
   },
@@ -170,11 +170,11 @@ const SKU_PROFILES: Record<string, Partial<OdooSkuProfile>> = {
     b2cImageUrl: B2C_STORE_IMG,
     b2bImageUrl: b2bChilledCratesImg,
     retailPackagingSpec: 'Vacuum Skin-Pack Retail Tray · 250g Ribeye Cut',
-    wholesalePackagingSpec: 'HoReCa Cryovac Master Box (20 Cuts / 5.0 Kg Net)',
+    wholesalePackagingSpec: 'HoReCa Cryovac Master Box (12 Cuts / 3.0 Kg Net)',
     outerBoxBarcode: '8997021004015',
-    grossWeightKg: 5.6,
+    grossWeightKg: 3.4,
     palletDimensions: '120 x 100 x 135 cm (45 Master Boxes)',
-    uomConversion: { wholesaleUnitLabel: 'Master Box', unitsPerCarton: 20, cartonsPerPallet: 45, baseUnitLabel: 'cut' },
+    uomConversion: { wholesaleUnitLabel: 'Master Box', unitsPerCarton: 12, cartonsPerPallet: 45, baseUnitLabel: 'cut' },
     defaultRemovalStrategy: 'FEFO',
     defaultBinLocation: 'CDC-Freezer-Vault-F1',
   },
@@ -371,15 +371,15 @@ export function formatMultiUomStock(
   uom: UoMConversionMeta
 ): { wholesaleSummary: string; baseSummary: string } {
   const safeQty = Math.max(0, Number(baseQty) || 0);
-  const perCarton = Math.max(1, uom.unitsPerCarton || 1);
-  const fullCartons = Math.floor(safeQty / perCarton);
-  const remainder = Number((safeQty % perCarton).toFixed(1));
+  const uomConversionFactor = Math.max(1, uom.unitsPerCarton || 1);
+  const fullBulkUnits = Math.floor(safeQty / uomConversionFactor);
+  const looseBaseUnits = Number((safeQty - fullBulkUnits * uomConversionFactor).toFixed(2));
   const wholesaleSummary =
-    fullCartons > 0
-      ? remainder > 0
-        ? `${fullCartons} ${uom.wholesaleUnitLabel} + ${remainder}`
-        : `${fullCartons} ${uom.wholesaleUnitLabel}`
-      : `0 ${uom.wholesaleUnitLabel} (${safeQty} loose)`;
+    fullBulkUnits > 0 && looseBaseUnits > 0
+      ? `${fullBulkUnits} ${uom.wholesaleUnitLabel} + ${looseBaseUnits} loose`
+      : fullBulkUnits > 0 && looseBaseUnits === 0
+      ? `${fullBulkUnits} ${uom.wholesaleUnitLabel}`
+      : `0 ${uom.wholesaleUnitLabel} (${looseBaseUnits} loose)`;
   return {
     wholesaleSummary,
     baseSummary: `${safeQty.toLocaleString('id-ID')} ${uom.baseUnitLabel}`,
@@ -394,6 +394,7 @@ export interface TierLotResolution {
   tone: 'emerald' | 'amber' | 'rose' | 'slate';
   binLocation: string;
   activeBatchCount: number;
+  expiredBatchCount: number;
   isQuarantined: boolean;
 }
 
@@ -418,17 +419,36 @@ export function resolveLotAndFefoForTier(
   );
   const pool = skuBatches.length > 0 ? skuBatches : batches.filter((b) => b.sku === sku);
 
-  const quarantinedBatch = pool.find((b) => b.status === 'quarantined' || b.status === 'recalled');
-  const activePool = pool
-    .filter((b) => b.currentStock > 0 && b.status !== 'depleted')
-    .sort((a, b) => {
-      if (strategy === 'FIFO') {
-        return new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime();
-      }
-      return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
-    });
+  const nowMs = Date.now();
+  const isBatchExpired = (b: InventoryBatch): boolean => {
+    if (b.status === 'expired') return true;
+    if (typeof b.daysUntilExpiry === 'number' && b.daysUntilExpiry <= 0) return true;
+    if (b.expiryDate) {
+      const expMs = new Date(b.expiryDate).getTime();
+      if (!Number.isNaN(expMs) && expMs <= nowMs) return true;
+    }
+    return false;
+  };
+  const isBatchQuarantinedOrRecalled = (b: InventoryBatch): boolean =>
+    b.status === 'quarantined' || b.status === 'recalled';
 
-  const leadBatch = activePool[0] || quarantinedBatch || pool[0];
+  const sortByStrategy = (a: InventoryBatch, b: InventoryBatch) => {
+    if (strategy === 'FIFO') {
+      return new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime();
+    }
+    return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+  };
+
+  const nonDepletedPool = pool.filter((b) => b.currentStock > 0 && b.status !== 'depleted');
+  const sellablePool = nonDepletedPool
+    .filter((b) => !isBatchExpired(b) && !isBatchQuarantinedOrRecalled(b))
+    .sort(sortByStrategy);
+  const lockedPool = nonDepletedPool
+    .filter((b) => isBatchExpired(b) || isBatchQuarantinedOrRecalled(b))
+    .sort(sortByStrategy);
+  const quarantinedBatch = pool.find(isBatchQuarantinedOrRecalled);
+
+  const leadBatch = sellablePool[0] || lockedPool[0] || quarantinedBatch || pool[0];
   if (!leadBatch) {
     return {
       lotNumber: `LOT-${sku.replace(/[^A-Z0-9]/g, '').slice(-6)}`,
@@ -438,20 +458,23 @@ export function resolveLotAndFefoForTier(
       tone: 'slate',
       binLocation,
       activeBatchCount: 0,
+      expiredBatchCount: 0,
       isQuarantined: false,
     };
   }
 
   const days = typeof leadBatch.daysUntilExpiry === 'number' ? leadBatch.daysUntilExpiry : null;
-  const isQuarantined = leadBatch.status === 'quarantined' || leadBatch.status === 'recalled';
+  const leadIsQuarantined = isBatchQuarantinedOrRecalled(leadBatch);
+  const leadIsExpired = isBatchExpired(leadBatch);
+  const isQuarantined = sellablePool.length === 0 && (leadIsQuarantined || leadIsExpired);
 
   let statusLabel = 'Fresh';
   let tone: TierLotResolution['tone'] = 'emerald';
 
-  if (isQuarantined) {
+  if (leadIsQuarantined) {
     statusLabel = leadBatch.status === 'recalled' ? 'Recalled · Locked' : 'Quarantined · Locked';
     tone = 'rose';
-  } else if (leadBatch.status === 'expired' || (days !== null && days <= 0)) {
+  } else if (leadIsExpired) {
     statusLabel = 'Expired · Locked';
     tone = 'rose';
   } else if (leadBatch.status === 'critical' || leadBatch.status === 'near_expiry' || (days !== null && days <= 7)) {
@@ -472,7 +495,8 @@ export function resolveLotAndFefoForTier(
     statusLabel,
     tone,
     binLocation,
-    activeBatchCount: activePool.length,
+    activeBatchCount: nonDepletedPool.length,
+    expiredBatchCount: lockedPool.length,
     isQuarantined,
   };
 }

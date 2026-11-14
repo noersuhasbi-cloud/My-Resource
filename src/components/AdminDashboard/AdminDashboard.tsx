@@ -1771,6 +1771,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 setAdjustQty(0);
               }}
               onEditTier={(tier) => setEditingTier(tier)}
+              onRefreshData={() => refreshAllData()}
               onShowToast={onShowToast}
             />
 

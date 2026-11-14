@@ -151,6 +151,26 @@ export type PrintPayload =
       operatorName?: string;
       reportData: GroceryMetricsReport | null;
       recallTraceResult?: BatchRecallTraceResult | null;
+    }
+  | {
+      type: 'blind_count_sheet';
+      format: 'a4';
+      sheetTitle: string;
+      storeId: string;
+      storeName: string;
+      storageZone: string;
+      rackBinCode: string;
+      rotationPolicy?: string;
+      preparedBy: string;
+      items: Array<{
+        sku: string;
+        productName: string;
+        rackBinCode: string;
+        lotNumber: string;
+        expiryDate: string;
+        uom: string;
+        statusLabel?: string;
+      }>;
     };
 
 interface PrintTriggerOptions {

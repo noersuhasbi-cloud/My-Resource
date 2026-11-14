@@ -94,6 +94,15 @@ import type {
   CommunicationDispatchLog,
   SendDocumentDispatchPayload,
   SendDocumentDispatchResponse,
+  WarehouseRackConfig,
+  WarehouseRackStorageZone,
+  RackRotationPolicy,
+  RemovalStrategyType,
+  SkuCsvImportPayload,
+  SkuCsvImportResult,
+  RackStocktakeCommitPayload,
+  RackStocktakeCommitResponse,
+  RackStocktakePendingSubmission,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
@@ -1298,21 +1307,49 @@ export const apiClient = {
     return res.json().catch(() => []);
   },
 
-  async processApprovalAction(requestId: string, action: 'APPROVED' | 'REJECTED', comments?: string): Promise<{
+  async decideApprovalRequest(
+    requestId: string,
+    payload: {
+      decision: 'APPROVED' | 'REJECTED';
+      tier?: number;
+      operatorName?: string;
+      operatorRole?: string;
+      reason?: string;
+    }
+  ): Promise<{
     success: boolean;
     request: ApprovalRequest;
     message: string;
   }> {
-    const res = await fetchApi('/api/admin/approvals/action', {
+    const res = await fetchApi(`/api/admin/approvals/${encodeURIComponent(requestId)}/decide`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId, action, comments }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Approval action failed');
     }
     return res.json();
+  },
+
+  async processApprovalAction(
+    requestId: string,
+    action: 'APPROVED' | 'REJECTED',
+    comments?: string,
+    extra?: { tier?: number; operatorName?: string; operatorRole?: string }
+  ): Promise<{
+    success: boolean;
+    request: ApprovalRequest;
+    message: string;
+  }> {
+    return apiClient.decideApprovalRequest(requestId, {
+      decision: action,
+      tier: extra?.tier,
+      operatorName: extra?.operatorName,
+      operatorRole: extra?.operatorRole,
+      reason: comments,
+    });
   },
 
   // -------------------------------------------------------------
@@ -2765,7 +2802,118 @@ export const apiClient = {
     }
     return data;
   },
+
+  // -------------------------------------------------------------
+  // WAREHOUSE RACK TOPOLOGY, BULK CSV SKU/BATCH IMPORT & RACK BLIND OPNAME
+  // -------------------------------------------------------------
+  async getWarehouseRacks(storeId?: string): Promise<{
+    racks: WarehouseRackConfig[];
+  }> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      params.append('storeId', storeId);
+    }
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetchApi(`/api/admin/warehouse/racks${qs}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load warehouse rack topology');
+    }
+    return data;
+  },
+
+  async saveWarehouseRack(payload: {
+    id?: string;
+    rackBinCode: string;
+    storeId: string;
+    storageZone: WarehouseRackStorageZone;
+    rotationPolicy: RackRotationPolicy;
+    maxCapacity: number;
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    rack: WarehouseRackConfig;
+    racks: WarehouseRackConfig[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/warehouse/racks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to save warehouse rack configuration');
+    }
+    return data;
+  },
+
+  async assignSkuBatchToRack(payload: {
+    storeId: string;
+    sku: string;
+    rackBinCode: string;
+    rotationStrategy: RemovalStrategyType;
+    batchId?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    rack: WarehouseRackConfig;
+    updatedBatchesCount: number;
+    removalStrategies: RemovalStrategyConfig;
+  }> {
+    const res = await fetchApi('/api/admin/warehouse/racks/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to assign SKU/batch to rack');
+    }
+    return data;
+  },
+
+  async importSkusCsv(payload: SkuCsvImportPayload): Promise<SkuCsvImportResult> {
+    const res = await fetchApi('/api/admin/inventory/import-skus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to import SKUs and initial batches');
+    }
+    return data;
+  },
+
+  async getRackStocktakeSubmissions(storeId?: string): Promise<RackStocktakePendingSubmission[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      params.append('storeId', storeId);
+    }
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetchApi(`/api/admin/inventory/stocktake/submissions${qs}`);
+    const data = await res.json().catch(() => ([]));
+    if (!res.ok) {
+      throw new Error((data as any)?.error || 'Failed to load rack stocktake history');
+    }
+    return Array.isArray(data) ? data : [];
+  },
+
+  async commitRackStocktake(payload: RackStocktakeCommitPayload): Promise<RackStocktakeCommitResponse> {
+    const res = await fetchApi('/api/admin/inventory/stocktake/commit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to commit rack blind stock opname');
+    }
+    return data;
+  },
 };
+
 
 
 

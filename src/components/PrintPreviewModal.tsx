@@ -71,6 +71,11 @@ function getDocumentMeta(payload: PrintPayload): {
       };
     case 'grocery_analytics':
       return { ...base, title: 'Grocery Intelligence & Analytics Report' };
+    case 'blind_count_sheet':
+      return {
+        ...base,
+        title: `Blind Stock Opname Count Sheet — ${payload.rackBinCode || payload.storeName}`,
+      };
     default:
       return { ...base, title: 'Document Print Preview' };
   }

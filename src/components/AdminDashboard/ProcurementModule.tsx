@@ -248,7 +248,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       if (selectedStore !== 'CONSOLIDATED' && po.storeId && po.storeId !== selectedStore) return false;
       if (poFilter !== 'ALL') {
         if (poFilter === 'Pending') {
-          if (!['Pending', 'Sent', 'Draft', 'pending_approval'].includes(po.status)) return false;
+          if (!['Pending', 'Sent', 'Draft', 'pending_approval', 'PENDING_APPROVAL', 'APPROVED'].includes(po.status)) return false;
         } else if (po.status !== poFilter) {
           return false;
         }
@@ -1312,10 +1312,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       <td className="py-3.5 px-4">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            po.status === 'Completed'
+                            po.status === 'Completed' || po.status === 'APPROVED'
                               ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                               : po.status === 'Partially Received'
                               ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30'
+                              : po.status === 'REJECTED' || po.status === 'Cancelled'
+                              ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                              : po.status === 'PENDING_APPROVAL' || po.status === 'pending_approval'
+                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30'
                               : isLight
                               ? 'bg-gray-100 text-gray-700 border-gray-300'
                               : 'bg-zinc-800 text-zinc-300 border-zinc-700'
@@ -1326,9 +1330,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
-                        {po.status !== 'Completed' ? (
+                        {po.status !== 'Completed' && po.status !== 'Cancelled' && po.status !== 'REJECTED' ? (
                           <div className="flex items-center justify-end gap-1.5">
-                            {canReceiveGR && (
+                            {canReceiveGR && po.status !== 'PENDING_APPROVAL' && po.status !== 'pending_approval' && (
                               <button
                                 onClick={() => openReceivingModal(po)}
                                 className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"

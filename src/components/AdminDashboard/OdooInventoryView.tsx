@@ -19,7 +19,7 @@ import type {
 } from '../../types/index.ts';
 import type { AdminDashboardTab } from './AdminSidebar';
 import { formatIDR } from '../../utils/formatters';
-import { canSessionViewValuation } from '../../utils/rbac';
+import { canSessionViewValuation, normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   formatMultiUomStock,
   getOdooSkuProfile,
@@ -48,10 +48,14 @@ import {
   Tag,
   Trash2,
   Truck,
+  Upload,
   Warehouse,
   X,
 } from 'lucide-react';
 import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
+import { SkuImportModal } from './SkuImportModal';
+import { WarehouseRackSetupPanel } from './WarehouseRackSetupPanel';
+import { RackBlindOpnamePanel } from './RackBlindOpnamePanel';
 
 interface OdooInventoryViewProps {
   theme: 'light' | 'dark';
@@ -80,10 +84,11 @@ interface OdooInventoryViewProps {
   onNavigateTab: (tab: AdminDashboardTab) => void;
   onAuditSku: (sku: string) => void;
   onEditTier: (tier: StoreInventoryStock) => void;
+  onRefreshData?: () => Promise<void> | void;
   onShowToast: (title: string, message: string) => void;
 }
 
-type InventoryViewMode = 'kanban' | 'list';
+type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'blind_opname';
 type ChannelFilter = 'ALL' | 'B2C' | 'B2B' | 'BOTH';
 type HubScope = 'ALL' | 'CDC' | 'DARK_STORE' | 'RETAIL_FRONTS';
 
@@ -173,10 +178,17 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   onNavigateTab,
   onAuditSku,
   onEditTier,
+  onRefreshData,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
+  const canonicalRole = activeStaffSession ? normalizeEnterpriseRole(activeStaffSession.userRole) : 'super_admin';
+  const canManageWarehouseTopology =
+    canonicalRole === 'warehouse' ||
+    canonicalRole === 'store_manager' ||
+    canonicalRole === 'coo' ||
+    canonicalRole === 'super_admin';
   const [viewMode, setViewMode] = useState<InventoryViewMode>('kanban');
   const [hubFilter, setHubFilter] = useState<HubScope>('ALL');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('ALL');
@@ -184,6 +196,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   const [includeB2BCatalogRows, setIncludeB2BCatalogRows] = useState<boolean>(true);
   const [showStrategyModal, setShowStrategyModal] = useState<boolean>(false);
   const [showBarcodeLabelModal, setShowBarcodeLabelModal] = useState<boolean>(false);
+  const [showSkuImportModal, setShowSkuImportModal] = useState<boolean>(false);
   const [savingStrategy, setSavingStrategy] = useState<boolean>(false);
   const [mediaInspector, setMediaInspector] = useState<MediaInspectorTarget | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -319,11 +332,17 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
           strategy,
           profile.defaultBinLocation
         );
-        const uomBreakdown = formatMultiUomStock(row.physicalStock, profile.uomConversion);
-        const availableUom = formatMultiUomStock(row.availableStock, profile.uomConversion);
-        const totalValuation = (row.physicalStock || 0) * (row.unitCost || 0);
+        const safePhysical = Math.max(0, Number(row.physicalStock) || 0);
+        const safeReserved = Math.max(0, Number(row.reservedStock) || 0);
+        const safeAvailable = Math.max(0, Number((safePhysical - safeReserved).toFixed(2)));
+        const uomBreakdown = formatMultiUomStock(safePhysical, profile.uomConversion);
+        const availableUom = formatMultiUomStock(safeAvailable, profile.uomConversion);
+        const totalValuation = safePhysical * (row.unitCost || 0);
         return {
           row,
+          safePhysical,
+          safeReserved,
+          safeAvailable,
           profile,
           strategy,
           lotInfo,
@@ -360,7 +379,12 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
 
       // 1. Receipts (Inbound PO & QC)
       const poToProcess = hubPOs.filter(
-        (p) => p.status === 'Sent' || p.status === 'Partially Received' || p.status === 'pending_approval'
+        (p) =>
+          p.status === 'Sent' ||
+          p.status === 'Partially Received' ||
+          p.status === 'pending_approval' ||
+          p.status === 'PENDING_APPROVAL' ||
+          p.status === 'APPROVED'
       ).length;
       const poWaitingQc = hubQc.filter((q) => q.disposition === 'QUARANTINED').length;
       const poBackorderUnits = hubPOs
@@ -695,7 +719,58 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 <List className="w-3.5 h-3.5" />
                 Stock &amp; Lot List
               </button>
+              {canManageWarehouseTopology && (
+                <>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === 'racks'}
+                    onClick={() => setViewMode('racks')}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                      viewMode === 'racks'
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-slate-600 hover:text-slate-900'
+                        : 'text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <Warehouse className="w-3.5 h-3.5" />
+                    Warehouse Rack &amp; FEFO/FIFO Setup
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === 'blind_opname'}
+                    onClick={() => setViewMode('blind_opname')}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                      viewMode === 'blind_opname'
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-slate-600 hover:text-slate-900'
+                        : 'text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <ClipboardList className="w-3.5 h-3.5" />
+                    Rack Blind Opname
+                  </button>
+                </>
+              )}
             </div>
+
+            {canManageWarehouseTopology && (
+              <button
+                type="button"
+                onClick={() => setShowSkuImportModal(true)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                  isLight
+                    ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
+                Import SKU (CSV)
+              </button>
+            )}
 
             <button
               type="button"
@@ -1048,8 +1123,8 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-zinc-800'}`}>
-                  {enrichedListRows.map(({ row, profile, strategy, lotInfo, uomBreakdown, availableUom, totalValuation }) => {
-                    const isLowStock = !row.isWholesaleRow && 'minimumThreshold' in row && row.availableStock <= row.minimumThreshold;
+                  {enrichedListRows.map(({ row, safeReserved, safeAvailable, profile, strategy, lotInfo, uomBreakdown, availableUom, totalValuation }) => {
+                    const isLowStock = !row.isWholesaleRow && 'minimumThreshold' in row && safeAvailable <= row.minimumThreshold;
                     const displayThumb =
                       profile.salesChannel === 'B2B' ? profile.b2bImageUrl : profile.b2cImageUrl;
 
@@ -1111,16 +1186,17 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                         </td>
 
                         {/* 3. Lot / Batch & Expiry with FEFO Status */}
-                        <td className="py-3 px-3.5 min-w-[175px]">
+                        <td className="py-3 px-3.5 min-w-[200px]">
                           <div className="font-mono text-[11px] font-semibold text-slate-800 dark:text-zinc-200">
                             {lotInfo.lotNumber}
                           </div>
                           <div className={`text-[10px] font-mono ${textMuted} mt-0.5`}>
                             Exp: {lotInfo.expiryDate}
                             {lotInfo.activeBatchCount > 1 ? ` (+${lotInfo.activeBatchCount - 1} lots)` : ''}
+                            {lotInfo.expiredBatchCount > 0 && !lotInfo.isQuarantined ? ` · ${lotInfo.expiredBatchCount} exp` : ''}
                           </div>
                           <span
-                            className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                            className={`inline-flex items-center whitespace-nowrap leading-none mt-1 px-2 py-0.5 rounded text-[11px] font-semibold ${
                               lotInfo.tone === 'rose'
                                 ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
                                 : lotInfo.tone === 'amber'
@@ -1152,31 +1228,31 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                         </td>
 
                         {/* 5. Multi-UoM Stock Breakdown (On Hand | Reserved | Available ATP) */}
-                        <td className="py-3 px-3.5 min-w-[205px]">
+                        <td className="py-3 px-3.5 min-w-[230px]">
                           <div className="space-y-1 font-mono tabular-nums">
-                            <div className="flex items-center justify-between text-[11px]">
+                            <div className="flex items-center justify-between gap-2 text-[11px]">
                               <span className={textMuted}>On Hand:</span>
                               <span className={`font-bold ${textTitle}`}>
                                 {uomBreakdown.wholesaleSummary}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-[10px]">
+                            <div className="flex items-center justify-between gap-2 text-[10px]">
                               <span className={textMuted}>Base Units:</span>
                               <span className={textTitle}>{uomBreakdown.baseSummary}</span>
                             </div>
-                            <div className="flex items-center justify-between text-[10px] pt-0.5 border-t border-slate-100 dark:border-zinc-800">
+                            <div className="flex items-center justify-between gap-2 text-[10px] pt-0.5 border-t border-slate-100 dark:border-zinc-800">
                               <span className={textMuted}>
-                                Res: <strong>{row.reservedStock}</strong> · Inc:{' '}
+                                Res: <strong>{safeReserved}</strong> · Inc:{' '}
                                 <strong className="text-sky-600 dark:text-sky-400">+{row.incomingStock}</strong>
                               </span>
                               <span
-                                className={`font-bold ${
+                                className={`font-bold whitespace-nowrap ${
                                   isLowStock || lotInfo.isQuarantined
                                     ? 'text-amber-600 dark:text-amber-400'
                                     : 'text-[#0F4C3A] dark:text-emerald-400'
                                 }`}
                               >
-                                ATP: {row.availableStock} ({availableUom.wholesaleSummary.split(' ')[0]} {profile.uomConversion.wholesaleUnitLabel})
+                                ATP: {safeAvailable} · {availableUom.wholesaleSummary}
                               </span>
                             </div>
                           </div>
@@ -1269,6 +1345,42 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* VIEW 3: PER-OUTLET WAREHOUSE RACK / BIN & FEFO/FIFO TOPOLOGY */}
+      {/* ===================================================================== */}
+      {viewMode === 'racks' && canManageWarehouseTopology && (
+        <WarehouseRackSetupPanel
+          theme={theme}
+          activeStaffSession={activeStaffSession}
+          storeOutlets={storeOutlets}
+          selectedOutletFilter={selectedOutletFilter}
+          inventory={inventory}
+          batches={batches}
+          onRefreshAll={async () => {
+            if (onRefreshData) await onRefreshData();
+          }}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {/* ===================================================================== */}
+      {/* VIEW 4: RACK-LEVEL BLIND STOCK OPNAME (CYCLE COUNT) */}
+      {/* ===================================================================== */}
+      {viewMode === 'blind_opname' && canManageWarehouseTopology && (
+        <RackBlindOpnamePanel
+          theme={theme}
+          activeStaffSession={activeStaffSession}
+          storeOutlets={storeOutlets}
+          selectedOutletFilter={selectedOutletFilter}
+          inventory={inventory}
+          batches={batches}
+          onRefreshAll={async () => {
+            if (onRefreshData) await onRefreshData();
+          }}
+          onShowToast={onShowToast}
+        />
       )}
 
       {/* ===================================================================== */}
@@ -1562,6 +1674,19 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             isWeighted,
           };
         })}
+        onShowToast={onShowToast}
+      />
+
+      {/* Additive Bulk SKU & Initial Batch CSV Importer */}
+      <SkuImportModal
+        theme={theme}
+        isOpen={showSkuImportModal}
+        onClose={() => setShowSkuImportModal(false)}
+        activeStaffSession={activeStaffSession}
+        storeOutlets={storeOutlets}
+        onImported={async () => {
+          if (onRefreshData) await onRefreshData();
+        }}
         onShowToast={onShowToast}
       />
     </div>

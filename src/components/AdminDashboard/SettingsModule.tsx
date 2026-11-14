@@ -4378,7 +4378,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           approvalRules={approvalRules}
           approvalQueue={approvalQueue}
           onShowToast={onShowToast}
-          onRefreshData={onRefreshData || (() => {})}
+          onRefreshData={() => {
+            fetchAllSettings();
+            if (onRefreshData) onRefreshData();
+          }}
         />
       )}
 

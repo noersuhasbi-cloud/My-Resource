@@ -245,9 +245,11 @@ export interface StoreInventoryStock {
   updatedAt: string;
   // Optional Odoo Inventory & B2B/B2C Differentiation fields
   binLocation?: string;
+  rackBinCode?: string;
   lotNumber?: string;
   expiryDate?: string;
   removalStrategy?: 'FEFO' | 'FIFO';
+  rotationStrategy?: 'FEFO' | 'FIFO';
   salesChannel?: 'B2C' | 'B2B' | 'BOTH';
   b2cImageUrl?: string;
   b2bImageUrl?: string;
@@ -370,7 +372,7 @@ export interface PurchaseOrder {
   issueDate?: string;
   expectedDeliveryDate: string;
   actualDeliveryDate?: string;
-  status: 'Draft' | 'Sent' | 'Partially Received' | 'Completed' | 'Cancelled' | 'pending_approval';
+  status: 'Draft' | 'Sent' | 'Partially Received' | 'Completed' | 'Cancelled' | 'pending_approval' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   notes?: string;
   supplierRemarks?: string;
   paymentTerms?: 'Net 30' | 'COD' | 'Advance Payment';
@@ -411,7 +413,7 @@ export interface GoodsReceiptRecord {
 // -------------------------------------------------------------
 // Vendor Bills, 3-Way Matching & Accounts Payable (AP)
 // -------------------------------------------------------------
-export type VendorBillStatus = 'DRAFT' | 'MATCHED' | 'PRICE_VARIANCE' | 'QTY_VARIANCE' | 'APPROVED' | 'PAID' | 'PARTIALLY_PAID' | 'VOID';
+export type VendorBillStatus = 'DRAFT' | 'MATCHED' | 'PRICE_VARIANCE' | 'QTY_VARIANCE' | 'APPROVED' | 'PAID' | 'PARTIALLY_PAID' | 'VOID' | 'REJECTED' | 'DISPUTED';
 export type VendorBillPaymentStatus = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE';
 export type VendorBillPaymentMethod = 'BANK_TRANSFER' | 'GIRO' | 'CASH';
 
@@ -490,6 +492,8 @@ export interface InventoryBatch {
   storageZone: StorageZoneType;
   supplierName: string;
   sourcePoNumber?: string;
+  rackBinCode?: string;
+  rotationStrategy?: 'FEFO' | 'FIFO';
   notes?: string;
   markdownDiscountPercent?: number;
 }
@@ -622,6 +626,9 @@ export interface WasteRecord {
   supplierName?: string;
   reportedBy: string;
   reportedAt: string;
+  status?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  approvedBy?: string;
+  approvedAt?: string;
   glEntryId?: string;
   notes?: string;
 }
@@ -1359,7 +1366,8 @@ export type ApprovalModuleType =
   | 'waste_write_off'
   | 'b2b_credit_term'
   | 'b2b_transfer_verification'
-  | 'blind_stock_opname';
+  | 'blind_stock_opname'
+  | 'rack_stocktake';
 
 export interface ApprovalTierRule {
   id: string;
@@ -2236,6 +2244,7 @@ export type SalesChannelScope = 'B2C' | 'B2B' | 'BOTH';
 export interface RemovalStrategyConfig {
   categoryStrategies: Record<string, RemovalStrategyType>;
   skuOverrides: Record<string, RemovalStrategyType>;
+  outletSkuStrategies?: Record<string, Record<string, RemovalStrategyType>>;
   updatedAt: string;
   updatedBy?: string;
 }
@@ -2624,3 +2633,127 @@ export interface SendDocumentDispatchResponse {
   waMeUrl?: string;
   logs: CommunicationDispatchLog[];
 }
+
+// =============================================================
+// ADDITIVE WAREHOUSE RACK/BIN TOPOLOGY, BULK CSV IMPORT & RACK BLIND OPNAME
+// =============================================================
+export type WarehouseRackStorageZone =
+  | 'Ambient Dry'
+  | 'Chilled Walk-In (2°C–4°C)'
+  | 'Deep Freeze (-20°C)'
+  | 'Quarantine Hold Cage';
+
+export type RackRotationPolicy = 'STRICT_FEFO' | 'STRICT_FIFO';
+
+export interface WarehouseRackConfig {
+  id: string;
+  rackBinCode: string;
+  storeId: string;
+  storeName: string;
+  storageZone: WarehouseRackStorageZone;
+  rotationPolicy: RackRotationPolicy;
+  maxCapacity: number;
+  currentOccupancy: number;
+  assignedSkus: string[];
+  notes?: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export interface SkuCsvImportRow {
+  sku: string;
+  product_name: string;
+  category: string;
+  uom: string;
+  unit_cost_idr: number;
+  selling_price_idr: number;
+  tax_category: IndonesianTaxCategory;
+  rotation_strategy: RemovalStrategyType;
+  outlet_code: string;
+  rack_bin_code: string;
+  batch_lot_no: string;
+  expiry_date: string;
+  initial_qty: number;
+}
+
+export interface SkuCsvImportPayload {
+  rows: SkuCsvImportRow[];
+  postOpeningBalanceGl?: boolean;
+}
+
+export interface SkuCsvImportResult {
+  success: boolean;
+  importedCount: number;
+  createdSkusCount: number;
+  updatedSkusCount: number;
+  createdRacksCount: number;
+  totalImportedQty: number;
+  totalOpeningValuationIDR: number;
+  glVoucherIds: string[];
+  message: string;
+}
+
+export interface RackStocktakeLineInput {
+  batchId: string;
+  sku: string;
+  lotNumber: string;
+  rackBinCode: string;
+  physicalCount: number;
+  notes?: string;
+}
+
+export interface RackStocktakeLineResult {
+  batchId: string;
+  sku: string;
+  productName: string;
+  lotNumber: string;
+  rackBinCode: string;
+  systemOnHand: number;
+  physicalCount: number;
+  varianceQty: number;
+  unitCostIDR: number;
+  varianceValueIDR: number;
+  status: 'MATCHED' | 'SURPLUS' | 'SHORTAGE' | 'QUARANTINE_LOCKED';
+}
+
+export interface RackStocktakeCommitPayload {
+  storeId: string;
+  storageZone?: string;
+  rackBinCode?: string;
+  counts: RackStocktakeLineInput[];
+  tolerancePercent?: number;
+  toleranceValueIDR?: number;
+  supervisorAuthorized?: boolean;
+  notes?: string;
+}
+
+export interface RackStocktakePendingSubmission {
+  id: string;
+  sheetNumber: string;
+  storeId: string;
+  storeName: string;
+  storageZone: string;
+  rackBinCode: string;
+  submittedBy: string;
+  submittedAt: string;
+  status: 'COMMITTED' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  approvalRequestId?: string;
+  totalSurplusValueIDR: number;
+  totalShortageValueIDR: number;
+  netVarianceValueIDR: number;
+  glVoucherIds: string[];
+  lines: RackStocktakeLineResult[];
+  notes?: string;
+}
+
+export interface RackStocktakeCommitResponse {
+  success: boolean;
+  status: 'COMMITTED' | 'PENDING_APPROVAL';
+  routedToApproval: boolean;
+  stockMutated: boolean;
+  approvalRequestId?: string;
+  submission: RackStocktakePendingSubmission;
+  glVoucherIds: string[];
+  message: string;
+}
+

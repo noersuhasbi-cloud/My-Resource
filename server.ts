@@ -139,6 +139,12 @@ import type {
   CommunicationGatewayConfig,
   CommunicationDispatchLog,
   CommunicationDocType,
+  WarehouseRackConfig,
+  WarehouseRackStorageZone,
+  RackRotationPolicy,
+  SkuCsvImportRow,
+  RackStocktakePendingSubmission,
+  RackStocktakeLineResult,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -164,13 +170,68 @@ let warehouseZones: WarehouseZone[] = JSON.parse(JSON.stringify(INITIAL_WAREHOUS
 let storeInventoryTiers: StoreInventoryStock[] = JSON.parse(JSON.stringify(INITIAL_STORE_INVENTORY_TIERS));
 let inventoryList: InventoryItem[] = JSON.parse(JSON.stringify(INITIAL_INVENTORY));
 let purchaseRequests: PurchaseRequest[] = JSON.parse(JSON.stringify(INITIAL_PURCHASE_REQUESTS));
-let purchaseOrders: PurchaseOrder[] = JSON.parse(JSON.stringify(INITIAL_PURCHASE_ORDERS));
+let purchaseOrders: PurchaseOrder[] = [
+  ...JSON.parse(JSON.stringify(INITIAL_PURCHASE_ORDERS)),
+  {
+    id: 'PO-2026-0042',
+    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    warehouseZoneId: 'WH-JKT-SEN-COLD',
+    supplierName: 'Kebun Sari Bumi Eco-Farm (Lembang)',
+    supplierContact: 'Pak Dedi (+62 812 7788 9900)',
+    items: [
+      {
+        sku: 'SKU-PRD-001',
+        productName: 'Hydroponic Romaine Lettuce',
+        orderedQuantity: 150,
+        receivedQuantity: 0,
+        remainingBackorder: 150,
+        unitCost: 111111,
+        totalCost: 16666667,
+        handlingNotes: 'Weekend fresh produce seasonal surge replenishment.',
+      },
+    ],
+    subtotalCost: 16666667,
+    taxPercent: 11,
+    taxAmount: 1833333,
+    totalCost: 18500000,
+    expectedDeliveryDate: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
+    status: 'PENDING_APPROVAL',
+    notes: 'Weekend fresh produce seasonal surge replenishment — awaiting Approval Matrix clearance.',
+    paymentTerms: 'Net 30',
+    goodsReceiptIds: [],
+  },
+];
 let goodsReceipts: GoodsReceiptRecord[] = JSON.parse(JSON.stringify(INITIAL_GOODS_RECEIPTS));
 let chartOfAccounts: ChartOfAccount[] = JSON.parse(JSON.stringify(INITIAL_COA));
 let generalLedger: GeneralLedgerEntry[] = JSON.parse(JSON.stringify(INITIAL_GENERAL_LEDGER));
 let auditTrail: TransactionAuditRecord[] = JSON.parse(JSON.stringify(INITIAL_AUDIT_TRAIL));
 let inventoryBatches: InventoryBatch[] = JSON.parse(JSON.stringify(INITIAL_BATCHES));
-let wasteRecords: WasteRecord[] = JSON.parse(JSON.stringify(INITIAL_WASTE_RECORDS));
+let wasteRecords: WasteRecord[] = [
+  {
+    id: 'WST-2026-0018',
+    sku: 'SKU-DRY-002',
+    productName: 'Organic Greek Yogurt 500g',
+    storeId: 'store-jkt-pik',
+    storeName: 'GroceMart PIK 2 The Avenue',
+    warehouseZoneId: 'WH-JKT-PIK-COLD',
+    batchId: 'BAT-2026-077',
+    lotNumber: 'BAT-2026-077',
+    quantityScrapped: 45,
+    unit: 'tub',
+    unitCost: Math.round(3400000 / 45),
+    totalShrinkageCost: 3400000,
+    reason: 'chiller_temp_breach',
+    actionTaken: 'safe_disposal',
+    disposition: 'unsalvageable_scrap',
+    reportedBy: 'Siti Rahma (Quality Inspector)',
+    reportedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    status: 'PENDING_APPROVAL',
+    notes: 'Cold-chain display shelf compressor temp excursion exceeding 4h.',
+  },
+  ...JSON.parse(JSON.stringify(INITIAL_WASTE_RECORDS)),
+];
 let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDERS));
 let customerOrders: Order[] = JSON.parse(JSON.stringify(INITIAL_ORDERS));
 let enterpriseSettings: EnterpriseSettingsConfig = JSON.parse(JSON.stringify(INITIAL_ENTERPRISE_SETTINGS));
@@ -242,9 +303,236 @@ let removalStrategiesConfig: RemovalStrategyConfig = {
     household_hygiene: 'FIFO',
   },
   skuOverrides: {},
+  outletSkuStrategies: {},
   updatedAt: new Date().toISOString(),
   updatedBy: 'ERP System Default',
 };
+
+function createInitialWarehouseRacks(): WarehouseRackConfig[] {
+  const nowIso = new Date().toISOString();
+  return [
+    {
+      id: 'RACK-SEN-CHL-01',
+      rackBinCode: 'SEN-CHL-R01-B01',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rotationPolicy: 'STRICT_FEFO',
+      maxCapacity: 300,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-PRD-001', 'SKU-PRD-002'],
+      notes: 'Primary Hydroponic & Fresh Produce Chiller Rack',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
+      id: 'RACK-SEN-CHL-02',
+      rackBinCode: 'SEN-CHL-R01-B02',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rotationPolicy: 'STRICT_FEFO',
+      maxCapacity: 250,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-PRD-003'],
+      notes: 'Secondary Berries & Delicate Chilled Bin',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
+      id: 'RACK-SEN-AMB-01',
+      rackBinCode: 'SEN-AMB-R02-B01',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      storageZone: 'Ambient Dry',
+      rotationPolicy: 'STRICT_FIFO',
+      maxCapacity: 400,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-DAI-001', 'SKU-BAK-001'],
+      notes: 'Dry & Ambient Bakery / Egg Staging Rack',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
+      id: 'RACK-SEN-FRZ-01',
+      rackBinCode: 'SEN-FRZ-R01-B01',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      storageZone: 'Deep Freeze (-20°C)',
+      rotationPolicy: 'STRICT_FEFO',
+      maxCapacity: 200,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-MEA-001'],
+      notes: 'Sub-Zero Protein & Imported Meat Freezer',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
+      id: 'RACK-SEN-QRT-01',
+      rackBinCode: 'SEN-QRT-R01-C01',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      storageZone: 'Quarantine Hold Cage',
+      rotationPolicy: 'STRICT_FEFO',
+      maxCapacity: 120,
+      currentOccupancy: 0,
+      assignedSkus: [],
+      notes: 'HACCP Quarantine / Expired / RTV Hold Cage',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
+      id: 'RACK-PIK-FRZ-01',
+      rackBinCode: 'PIK-FRZ-R03-B01',
+      storeId: 'store-jkt-pik',
+      storeName: 'GroceMart PIK 2 The Avenue',
+      storageZone: 'Deep Freeze (-20°C)',
+      rotationPolicy: 'STRICT_FEFO',
+      maxCapacity: 240,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-MEA-001'],
+      notes: 'PIK 2 Dark-Store Frozen Protein Vault',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
+      id: 'RACK-PIK-CHL-01',
+      rackBinCode: 'PIK-CHL-R01-B01',
+      storeId: 'store-jkt-pik',
+      storeName: 'GroceMart PIK 2 The Avenue',
+      storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rotationPolicy: 'STRICT_FEFO',
+      maxCapacity: 300,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-PRD-001', 'SKU-PRD-002'],
+      notes: 'PIK 2 Chilled Produce Picking Rack',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
+      id: 'RACK-CDC-AMB-01',
+      rackBinCode: 'CDC-AMB-R05-B04',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      storageZone: 'Ambient Dry',
+      rotationPolicy: 'STRICT_FIFO',
+      maxCapacity: 600,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-PAN-001', 'SKU-PAN-002'],
+      notes: 'CDC Ambient Bulk Pallet Rack (FIFO)',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
+      id: 'RACK-BDG-CHL-01',
+      rackBinCode: 'BDG-CHL-R01-B01',
+      storeId: 'store-bdg-dago',
+      storeName: 'GroceMart Bandung Dago Heritage',
+      storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rotationPolicy: 'STRICT_FEFO',
+      maxCapacity: 220,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-PRD-001'],
+      notes: 'Bandung Dago Fresh Produce Chiller',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
+      id: 'RACK-MTG-CHL-01',
+      rackBinCode: 'MTG-CHL-R01-B01',
+      storeId: 'store-jkt-menteng',
+      storeName: 'GroceMart Menteng Pavilion',
+      storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rotationPolicy: 'STRICT_FEFO',
+      maxCapacity: 220,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-PRD-001'],
+      notes: 'Menteng Flagship Chilled Produce Display Bay',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+  ];
+}
+
+let warehouseRacks: WarehouseRackConfig[] = createInitialWarehouseRacks();
+let rackStocktakeSubmissions: RackStocktakePendingSubmission[] = [];
+
+function mapRackZoneToStorageType(zone: WarehouseRackStorageZone | string): StorageZoneType {
+  const lower = String(zone || '').toLowerCase();
+  if (lower.includes('freeze') || lower.includes('-20')) return 'freezer';
+  if (lower.includes('chill') || lower.includes('cold')) return 'cold_chilled';
+  return 'ambient';
+}
+
+function defaultRackForBatch(batch: InventoryBatch): string {
+  if (batch.rackBinCode) return batch.rackBinCode;
+  if (batch.status === 'quarantined' || batch.status === 'recalled') {
+    const qRack = warehouseRacks.find(
+      (r) => r.storeId === batch.storeId && r.storageZone === 'Quarantine Hold Cage'
+    );
+    if (qRack) return qRack.rackBinCode;
+  }
+  const bySku = warehouseRacks.find(
+    (r) => r.storeId === batch.storeId && r.assignedSkus.includes(batch.sku)
+  );
+  if (bySku) return bySku.rackBinCode;
+  const targetZone: WarehouseRackStorageZone =
+    batch.storageZone === 'freezer'
+      ? 'Deep Freeze (-20°C)'
+      : batch.storageZone === 'cold_chilled'
+      ? 'Chilled Walk-In (2°C–4°C)'
+      : 'Ambient Dry';
+  const byZone = warehouseRacks.find(
+    (r) => r.storeId === batch.storeId && r.storageZone === targetZone
+  );
+  if (byZone) return byZone.rackBinCode;
+  const prefix = batch.storeId.includes('pik')
+    ? 'PIK'
+    : batch.storeId.includes('dago')
+    ? 'BDG'
+    : batch.storeId.includes('menteng')
+    ? 'MTG'
+    : batch.storeId.includes('gubeng')
+    ? 'SBY'
+    : batch.storeId.includes('canggu')
+    ? 'DPS'
+    : 'SEN';
+  const zoneTag = batch.storageZone === 'freezer' ? 'FRZ' : batch.storageZone === 'cold_chilled' ? 'CHL' : 'AMB';
+  return `${prefix}-${zoneTag}-R01-B01`;
+}
+
+function syncWarehouseRackOccupancy() {
+  inventoryBatches.forEach((b) => {
+    if (!b.rackBinCode) {
+      b.rackBinCode = defaultRackForBatch(b);
+    }
+  });
+  warehouseRacks.forEach((rack) => {
+    const matchingBatches = inventoryBatches.filter(
+      (b) => b.storeId === rack.storeId && b.rackBinCode === rack.rackBinCode && b.currentStock > 0
+    );
+    const batchSum = matchingBatches.reduce((sum, b) => sum + Math.max(0, b.currentStock), 0);
+    // Also count tiers explicitly assigned to this rack that do not have batch rows
+    const batchSkus = new Set(matchingBatches.map((b) => b.sku));
+    const tierFallbackSum = storeInventoryTiers
+      .filter(
+        (t) =>
+          t.storeId === rack.storeId &&
+          (t.rackBinCode === rack.rackBinCode || t.binLocation === rack.rackBinCode) &&
+          !batchSkus.has(t.sku) &&
+          t.physicalStock > 0
+      )
+      .reduce((sum, t) => sum + Math.max(0, t.physicalStock), 0);
+    rack.currentOccupancy = Number((batchSum + tierFallbackSum).toFixed(2));
+    const activeSkus = Array.from(
+      new Set([
+        ...(rack.assignedSkus || []),
+        ...matchingBatches.map((b) => b.sku),
+      ])
+    );
+    rack.assignedSkus = activeSkus;
+  });
+}
 
 // =============================================================
 // INDONESIAN REGULATORY COMPLIANCE RUNTIME STORES (ADDITIVE)
@@ -340,6 +628,33 @@ function ensureRegulatoryCoaAccounts() {
       storeId: 'CONSOLIDATED',
       balance: 48000000,
       description: 'Fixed assets: POS terminals, scales, and RF scanners',
+    },
+    {
+      accountCode: '3010',
+      accountName: 'Opening Balance & Paid-In Capital Equity',
+      category: 'Equity',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 1049630000,
+      description: 'Paid-in equity and initial warehouse SKU opening stock balance',
+    },
+    {
+      accountCode: '4090',
+      accountName: 'Inventory Overstock Adjustment & Other Income',
+      category: 'Revenue',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 450000,
+      description: 'Cycle-count inventory surplus adjustments and surcharge income',
+    },
+    {
+      accountCode: '6030',
+      accountName: 'Inventory Shrinkage & Store Operations Expense',
+      category: 'Expense',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 24800000,
+      description: 'Inventory shrinkage variance write-offs and storekeeping operations',
     },
   ];
   requiredAccounts.forEach((acc) => {
@@ -670,9 +985,46 @@ function applyBlindOpnameApproval(sheet: BlindOpnameSheet, approverName: string)
   return glIds;
 }
 
-function getEffectiveRemovalStrategy(sku: string, category?: string): RemovalStrategyType {
+function getEffectiveRemovalStrategy(
+  sku: string,
+  category?: string,
+  storeId?: string,
+  rackBinCode?: string
+): RemovalStrategyType {
+  if (storeId && removalStrategiesConfig.outletSkuStrategies?.[storeId]?.[sku]) {
+    return removalStrategiesConfig.outletSkuStrategies[storeId][sku];
+  }
   if (removalStrategiesConfig.skuOverrides[sku]) {
     return removalStrategiesConfig.skuOverrides[sku];
+  }
+  if (rackBinCode) {
+    const rack = warehouseRacks.find(
+      (r) =>
+        r.rackBinCode === rackBinCode &&
+        (!storeId || storeId === 'ALL' || storeId === 'CONSOLIDATED' || r.storeId === storeId)
+    );
+    if (rack) {
+      return rack.rotationPolicy === 'STRICT_FIFO' ? 'FIFO' : 'FEFO';
+    }
+  }
+  if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+    const matchingBatch = inventoryBatches.find(
+      (b) => b.sku === sku && b.storeId === storeId && b.currentStock > 0 && b.rotationStrategy
+    );
+    if (matchingBatch?.rotationStrategy) {
+      return matchingBatch.rotationStrategy;
+    }
+    const matchingRackBatch = inventoryBatches.find(
+      (b) => b.sku === sku && b.storeId === storeId && b.currentStock > 0 && b.rackBinCode
+    );
+    if (matchingRackBatch?.rackBinCode) {
+      const rack = warehouseRacks.find(
+        (r) => r.storeId === storeId && r.rackBinCode === matchingRackBatch.rackBinCode
+      );
+      if (rack) {
+        return rack.rotationPolicy === 'STRICT_FIFO' ? 'FIFO' : 'FEFO';
+      }
+    }
   }
   const matchedInv = inventoryList.find((i) => i.sku === sku);
   const resolvedCategory = category || matchedInv?.category;
@@ -1138,7 +1490,7 @@ function deductBatchesByStrategy(
   fallbackUnitCost: number = 15000,
   strictBatchCheck: boolean = false
 ) {
-  const strategy = getEffectiveRemovalStrategy(sku);
+  const strategy = getEffectiveRemovalStrategy(sku, undefined, storeId);
   const nowMs = Date.now();
   const matchingAll = inventoryBatches.filter(
     (b) =>
@@ -1159,9 +1511,13 @@ function deductBatchesByStrategy(
     )
     .sort((a, b) => {
       if (strategy === 'FIFO') {
-        return new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime();
+        const recDiff = new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime();
+        if (recDiff !== 0) return recDiff;
+        return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
       }
-      return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+      const expDiff = new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+      if (expDiff !== 0) return expDiff;
+      return new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime();
     });
 
   const totalAvailableSellableQty = Number(
@@ -2913,6 +3269,8 @@ function captureServerState() {
     operatorBranchAssignments,
     communicationGatewayConfig,
     communicationLogs,
+    warehouseRacks,
+    rackStocktakeSubmissions,
     qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
     idempotencyStoreEntries: Array.from(idempotencyStore.entries()),
     inTransitTransferLotsEntries: Array.from(inTransitTransferLots.entries()),
@@ -2994,6 +3352,16 @@ function applyServerState(snap: any) {
   } else {
     communicationLogs = [];
   }
+  if (Array.isArray(snap.warehouseRacks) && snap.warehouseRacks.length > 0) {
+    warehouseRacks = snap.warehouseRacks;
+  } else {
+    warehouseRacks = createInitialWarehouseRacks();
+  }
+  if (Array.isArray(snap.rackStocktakeSubmissions)) {
+    rackStocktakeSubmissions = snap.rackStocktakeSubmissions;
+  } else {
+    rackStocktakeSubmissions = [];
+  }
   qrisTransactions.clear();
   if (Array.isArray(snap.qrisTransactionsEntries)) {
     snap.qrisTransactionsEntries.forEach(([k, v]: [string, any]) => qrisTransactions.set(k, v));
@@ -3064,6 +3432,7 @@ function hydrateStateFromSnapshot() {
         applyServerState(parsed);
         ensureRegulatoryCoaAccounts();
         syncAllBatchesExpiryStatus(Date.now());
+        syncWarehouseRackOccupancy();
         console.log(`[GroceMart Snapshot] Hydrated persistent state from ${STATE_SNAPSHOT_PATH}`);
         return;
       }
@@ -3073,6 +3442,7 @@ function hydrateStateFromSnapshot() {
   }
   inventoryBatches = createInitialBatches();
   ensureRegulatoryCoaAccounts();
+  syncWarehouseRackOccupancy();
   seedBaselineEnterpriseNotifications();
 }
 
@@ -3087,7 +3457,10 @@ async function resetDemoStateToBaseline() {
     const baseline = JSON.parse(INITIAL_STATE_BASELINE_JSON);
     applyServerState(baseline);
     inventoryBatches = createInitialBatches();
+    warehouseRacks = createInitialWarehouseRacks();
+    rackStocktakeSubmissions = [];
     ensureRegulatoryCoaAccounts();
+    syncWarehouseRackOccupancy();
     enterpriseNotificationsList = [];
     seedBaselineEnterpriseNotifications();
     if (fs.existsSync(STATE_SNAPSHOT_TMP_PATH)) {
@@ -3284,8 +3657,15 @@ async function startServer() {
         if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
       }
 
-      // 3. Confirm Arrival on Incoming Transfers/POs
-      if (urlPath === '/admin/settings/confirm-arrival' && method === 'POST') {
+      // 3. Confirm Arrival on Incoming Transfers/POs & Warehouse Rack / Import / Stocktake Ops
+      if (
+        (urlPath === '/admin/settings/confirm-arrival' ||
+          urlPath === '/admin/warehouse/racks' ||
+          urlPath === '/admin/warehouse/racks/assign' ||
+          urlPath === '/admin/inventory/import-skus' ||
+          urlPath === '/admin/inventory/stocktake/commit') &&
+        method === 'POST'
+      ) {
         const allowed: CanonicalServerRole[] = ['warehouse', 'store_manager', 'coo', 'super_admin'];
         if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
       }
@@ -4745,6 +5125,7 @@ async function startServer() {
     const byStore: { [store: string]: number } = {};
 
     records.forEach((r) => {
+      if (r.status === 'PENDING_APPROVAL' || r.status === 'REJECTED') return;
       totalShrinkageCost += r.totalShrinkageCost;
       byReason[r.reason] = (byReason[r.reason] || 0) + r.totalShrinkageCost;
       byStore[r.storeName] = (byStore[r.storeName] || 0) + r.totalShrinkageCost;
@@ -9299,7 +9680,7 @@ async function startServer() {
 
     if (
       enterpriseSettings.threeWayMatching.blockPaymentOnMismatch !== false &&
-      (bill.status === 'PRICE_VARIANCE' || bill.status === 'QTY_VARIANCE' || bill.status === 'VOID')
+      (bill.status === 'PRICE_VARIANCE' || bill.status === 'QTY_VARIANCE' || bill.status === 'VOID' || bill.status === 'REJECTED' || bill.status === 'DISPUTED')
     ) {
       return res.status(403).json({
         error: `Payment Blocked by 3-Way Matching Policy: Vendor Bill #${bill.billNumber} has status [${bill.status}] and must be authorized in the Approval Matrix before disbursement.`,
@@ -10398,6 +10779,7 @@ async function startServer() {
       status: 'AUTHORIZED_EXECUTED',
       metadata: { ruleCount: approvalRulesList.length },
     });
+    scheduleStateSave();
     res.json({ success: true, rules: approvalRulesList, message: 'Approval tier matrix synchronized.' });
   });
 
@@ -10413,35 +10795,158 @@ async function startServer() {
     res.json(result);
   });
 
-  app.post('/api/admin/approvals/action', (req: Request, res: Response) => {
-    const { requestId, action, comments } = req.body as {
-      requestId: string;
-      action: 'APPROVED' | 'REJECTED';
+  const handleApprovalDecision = (req: Request, res: Response) => {
+    const effectiveRole = getEffectiveRequestRole(req);
+    if (!['store_manager', 'coo', 'super_admin'].includes(effectiveRole)) {
+      return res.status(403).json({
+        error: 'Forbidden: Only Store Manager, COO, or Super Admin can approve or reject items.',
+      });
+    }
+
+    const body = (req.body || {}) as {
+      requestId?: string;
+      decision?: 'APPROVED' | 'REJECTED';
+      action?: 'APPROVED' | 'REJECTED';
+      tier?: number;
+      operatorName?: string;
+      operatorRole?: string;
+      reason?: string;
       comments?: string;
     };
+
+    const requestId = req.params.id || body.requestId;
+    const rawDecision = body.decision || body.action;
+    const reasonText = body.reason ?? body.comments;
+
+    if (!requestId) {
+      return res.status(400).json({ error: 'Approval request id is required.' });
+    }
+    if (rawDecision !== 'APPROVED' && rawDecision !== 'REJECTED') {
+      return res.status(400).json({ error: 'Decision must be APPROVED or REJECTED.' });
+    }
+
     const reqItem = approvalQueueList.find((q) => q.id === requestId);
-    if (!reqItem) return res.status(404).json({ error: 'Approval request not found.' });
+    if (!reqItem) {
+      return res.status(404).json({ error: 'Approval request not found.' });
+    }
+    if (reqItem.status !== 'PENDING') {
+      return res.status(400).json({
+        error: `Approval request ${reqItem.id} is already ${reqItem.status}.`,
+      });
+    }
+
+    const actorName = getEffectiveOperatorName(req) || body.operatorName || currentActiveStaffSession.userName;
+    const timestamp = new Date().toISOString();
+    const decisionTier = Number(body.tier) || reqItem.currentTierLevel;
 
     const newLog = {
-      tierLevel: reqItem.currentTierLevel,
-      tierName: `Tier ${reqItem.currentTierLevel}`,
+      tierLevel: decisionTier,
+      tierName: `Tier ${decisionTier}`,
       approverId: currentActiveStaffSession.userId,
-      approverName: currentActiveStaffSession.userName,
-      approverRole: currentActiveStaffSession.userRole,
-      action,
-      timestamp: new Date().toISOString(),
-      comments: comments || `${action} by ${currentActiveStaffSession.userName}`,
+      approverName: actorName,
+      approverRole: effectiveRole,
+      action: rawDecision,
+      timestamp,
+      comments: reasonText || `${rawDecision} by ${actorName}`,
     };
     reqItem.history.push(newLog);
 
-    if (action === 'REJECTED') {
+    if (rawDecision === 'REJECTED') {
       reqItem.status = 'REJECTED';
-      if (reqItem.module === 'blind_stock_opname') {
-        const sheet = blindOpnameSheetsList.find((s) => s.id === reqItem.documentId || s.approvalRequestId === reqItem.id);
-        if (sheet) sheet.status = 'REJECTED';
-      } else if (reqItem.module === 'procurement_po' && reqItem.documentId.startsWith('VB-')) {
-        const bill = vendorBillsList.find((b) => b.id === reqItem.documentId);
-        if (bill) bill.status = 'VOID';
+
+      const matchingRackSub = rackStocktakeSubmissions.find(
+        (s) => s.id === reqItem.documentId || s.sheetNumber === reqItem.documentId || s.approvalRequestId === reqItem.id
+      );
+      const matchingBlindSheet = blindOpnameSheetsList.find(
+        (s) => s.id === reqItem.documentId || s.sheetNumber === reqItem.documentId || s.approvalRequestId === reqItem.id
+      );
+
+      if (matchingRackSub) {
+        matchingRackSub.status = 'REJECTED';
+      } else if (matchingBlindSheet) {
+        matchingBlindSheet.status = 'REJECTED';
+      } else if (reqItem.documentId.startsWith('VB-')) {
+        const bill = vendorBillsList.find(
+          (b) => b.id === reqItem.documentId || b.billNumber === reqItem.documentId
+        );
+        if (bill) bill.status = 'REJECTED';
+      } else if (reqItem.module === 'procurement_po' || reqItem.documentId.startsWith('PO-')) {
+        let po = purchaseOrders.find(
+          (p) => p.id === reqItem.documentId || p.poNumber === reqItem.documentId
+        );
+        if (!po) {
+          const qty = Math.max(1, Number(reqItem.payloadSummary?.quantity) || 1);
+          const sku = reqItem.payloadSummary?.sku || 'SKU-PRD-001';
+          const prodName = reqItem.payloadSummary?.productName || reqItem.documentTitle;
+          const subtotal = Math.round((reqItem.amountIDR || 0) / 1.11);
+          const taxAmount = Math.max(0, (reqItem.amountIDR || 0) - subtotal);
+          po = {
+            id: reqItem.documentId,
+            createdAt: reqItem.requestedAt || timestamp,
+            storeId: reqItem.storeId,
+            storeName: reqItem.storeName,
+            supplierName: 'Approved Farm Partner',
+            items: [
+              {
+                sku,
+                productName: prodName,
+                orderedQuantity: qty,
+                receivedQuantity: 0,
+                remainingBackorder: qty,
+                unitCost: Math.round(subtotal / qty),
+                totalCost: subtotal,
+              },
+            ],
+            subtotalCost: subtotal,
+            taxPercent: 11,
+            taxAmount,
+            totalCost: reqItem.amountIDR || subtotal,
+            expectedDeliveryDate: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
+            status: 'REJECTED',
+            notes: reqItem.payloadSummary?.reason || reqItem.documentTitle,
+            paymentTerms: 'Net 30',
+            goodsReceiptIds: [],
+          };
+          purchaseOrders.unshift(po);
+        } else {
+          po.status = 'REJECTED';
+          po.updatedAt = timestamp;
+        }
+      } else if (reqItem.module === 'procurement_pr' || reqItem.documentId.startsWith('PR-')) {
+        const pr = purchaseRequests.find((p) => p.id === reqItem.documentId);
+        if (pr) pr.status = 'rejected';
+      } else if (reqItem.module === 'waste_write_off' || reqItem.documentId.startsWith('WST-')) {
+        let wasteRec = wasteRecords.find((w) => w.id === reqItem.documentId);
+        if (!wasteRec) {
+          const qty = Math.max(0, Number(reqItem.payloadSummary?.quantity) || 0);
+          const sku = reqItem.payloadSummary?.sku || 'SKU-DRY-002';
+          wasteRec = {
+            id: reqItem.documentId,
+            sku,
+            productName: reqItem.payloadSummary?.productName || reqItem.documentTitle,
+            storeId: reqItem.storeId,
+            storeName: reqItem.storeName,
+            warehouseZoneId: `${reqItem.storeId}-COLD`,
+            quantityScrapped: qty,
+            unit: 'unit',
+            unitCost: qty > 0 ? Math.round((reqItem.amountIDR || 0) / qty) : reqItem.amountIDR || 0,
+            totalShrinkageCost: roundIDR(reqItem.amountIDR || 0),
+            reason: 'chiller_temp_breach',
+            actionTaken: 'safe_disposal',
+            disposition: 'unsalvageable_scrap',
+            reportedBy: reqItem.requestedBy,
+            reportedAt: reqItem.requestedAt || timestamp,
+            status: 'REJECTED',
+            approvedBy: actorName,
+            approvedAt: timestamp,
+            notes: reasonText || reqItem.payloadSummary?.reason,
+          };
+          wasteRecords.unshift(wasteRec);
+        } else {
+          wasteRec.status = 'REJECTED';
+          wasteRec.approvedBy = actorName;
+          wasteRec.approvedAt = timestamp;
+        }
       } else if (reqItem.module === 'b2b_credit_term' || reqItem.module === 'b2b_transfer_verification') {
         const order = b2bOrdersList.find((o) => o.id === reqItem.documentId);
         if (order) {
@@ -10450,22 +10955,324 @@ async function startServer() {
         }
       }
     } else {
-      if (reqItem.currentTierLevel < reqItem.requiredTierLevel) {
+      const isExecutiveOverride = effectiveRole === 'coo' || effectiveRole === 'super_admin';
+      if (!isExecutiveOverride && reqItem.currentTierLevel < reqItem.requiredTierLevel) {
         reqItem.currentTierLevel += 1;
       } else {
+        reqItem.currentTierLevel = reqItem.requiredTierLevel;
         reqItem.status = 'APPROVED';
-        if (reqItem.module === 'blind_stock_opname') {
-          const sheet = blindOpnameSheetsList.find((s) => s.id === reqItem.documentId || s.approvalRequestId === reqItem.id);
-          if (sheet && sheet.status !== 'APPROVED') {
-            applyBlindOpnameApproval(sheet, currentActiveStaffSession.userName);
+
+        const matchingRackSub = rackStocktakeSubmissions.find(
+          (s) => s.id === reqItem.documentId || s.sheetNumber === reqItem.documentId || s.approvalRequestId === reqItem.id
+        );
+        const matchingBlindSheet = blindOpnameSheetsList.find(
+          (s) => s.id === reqItem.documentId || s.sheetNumber === reqItem.documentId || s.approvalRequestId === reqItem.id
+        );
+
+        if (matchingRackSub) {
+          if (matchingRackSub.status !== 'APPROVED' && matchingRackSub.status !== 'COMMITTED') {
+            commitRackStocktakeSubmission(matchingRackSub, actorName);
+            matchingRackSub.status = 'APPROVED';
           }
-        } else if (reqItem.module === 'procurement_po' && reqItem.documentId.startsWith('VB-')) {
-          const bill = vendorBillsList.find((b) => b.id === reqItem.documentId);
+        } else if (matchingBlindSheet) {
+          if (matchingBlindSheet.status !== 'APPROVED') {
+            applyBlindOpnameApproval(matchingBlindSheet, actorName);
+          }
+        } else if (
+          reqItem.module === 'stock_adjustment' ||
+          reqItem.documentId.startsWith('STK-')
+        ) {
+          const targetSku = reqItem.payloadSummary?.sku;
+          const deltaQty = Number(reqItem.payloadSummary?.quantity || 0);
+          const absVal = Math.abs(roundIDR(reqItem.amountIDR || 0));
+          if (targetSku && deltaQty !== 0) {
+            const tier = storeInventoryTiers.find(
+              (t) => t.sku === targetSku && (t.storeId === reqItem.storeId || reqItem.storeId === 'CONSOLIDATED')
+            );
+            const unitCost = tier?.unitCost || 15000;
+            if (tier) {
+              tier.physicalStock = Math.max(0, Number((tier.physicalStock + deltaQty).toFixed(2)));
+              tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+              tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+              tier.totalValuation = Math.round(tier.physicalStock * (tier.unitCost || unitCost));
+              tier.updatedAt = timestamp;
+            }
+            const inv = inventoryList.find((i) => i.sku === targetSku);
+            if (inv) {
+              inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) + deltaQty).toFixed(2)));
+              inv.stockLevel = inv.currentStock;
+            }
+            syncBatchesForStockVariance(targetSku, reqItem.storeId, deltaQty, unitCost);
+          }
+          if (absVal > 0) {
+            ensureRegulatoryCoaAccounts();
+            const tag = Date.now().toString().slice(-6);
+            const isShortage = deltaQty <= 0;
+            commitBalancedGlBatch(
+              isShortage
+                ? [
+                    {
+                      id: `GLE-STK-${tag}-1`,
+                      timestamp,
+                      storeId: reqItem.storeId,
+                      storeName: reqItem.storeName,
+                      accountCode: '6030',
+                      accountName: 'Inventory Shrinkage Expense',
+                      category: 'Expense',
+                      debit: absVal,
+                      credit: 0,
+                      referenceType: 'STOCK_OPNAME',
+                      referenceId: reqItem.documentId,
+                      description: `Stocktake Adjustment Shortage (${reqItem.documentId}) approved by ${actorName}`,
+                    },
+                    {
+                      id: `GLE-STK-${tag}-2`,
+                      timestamp,
+                      storeId: reqItem.storeId,
+                      storeName: reqItem.storeName,
+                      accountCode: '1040',
+                      accountName: 'Merchandise Inventory Asset',
+                      category: 'Asset',
+                      debit: 0,
+                      credit: absVal,
+                      referenceType: 'STOCK_OPNAME',
+                      referenceId: reqItem.documentId,
+                      description: `Inventory Asset write-down for ${reqItem.documentId}`,
+                    },
+                  ]
+                : [
+                    {
+                      id: `GLE-STK-${tag}-1`,
+                      timestamp,
+                      storeId: reqItem.storeId,
+                      storeName: reqItem.storeName,
+                      accountCode: '1040',
+                      accountName: 'Merchandise Inventory Asset',
+                      category: 'Asset',
+                      debit: absVal,
+                      credit: 0,
+                      referenceType: 'STOCK_OPNAME',
+                      referenceId: reqItem.documentId,
+                      description: `Stocktake Adjustment Surplus (${reqItem.documentId}) approved by ${actorName}`,
+                    },
+                    {
+                      id: `GLE-STK-${tag}-2`,
+                      timestamp,
+                      storeId: reqItem.storeId,
+                      storeName: reqItem.storeName,
+                      accountCode: '4090',
+                      accountName: 'Inventory Overstock Adjustment',
+                      category: 'Revenue',
+                      debit: 0,
+                      credit: absVal,
+                      referenceType: 'STOCK_OPNAME',
+                      referenceId: reqItem.documentId,
+                      description: `Inventory overstock adjustment credit for ${reqItem.documentId}`,
+                    },
+                  ],
+              true
+            );
+          }
+        } else if (reqItem.documentId.startsWith('VB-')) {
+          const bill = vendorBillsList.find(
+            (b) => b.id === reqItem.documentId || b.billNumber === reqItem.documentId
+          );
           if (bill && bill.status !== 'APPROVED' && bill.status !== 'PAID') {
             bill.status = 'APPROVED';
-            bill.approvedBy = currentActiveStaffSession.userName;
-            bill.approvedAt = new Date().toISOString();
-            postVendorBillApprovalGL(bill, currentActiveStaffSession.userName);
+            bill.approvedBy = actorName;
+            bill.approvedAt = timestamp;
+            postVendorBillApprovalGL(bill, actorName);
+          }
+        } else if (reqItem.module === 'procurement_po' || reqItem.documentId.startsWith('PO-')) {
+          let po = purchaseOrders.find(
+            (p) => p.id === reqItem.documentId || p.poNumber === reqItem.documentId
+          );
+          if (!po) {
+            const qty = Math.max(1, Number(reqItem.payloadSummary?.quantity) || 1);
+            const sku = reqItem.payloadSummary?.sku || 'SKU-PRD-001';
+            const prodName = reqItem.payloadSummary?.productName || reqItem.documentTitle;
+            const subtotal = Math.round((reqItem.amountIDR || 0) / 1.11);
+            const taxAmount = Math.max(0, (reqItem.amountIDR || 0) - subtotal);
+            po = {
+              id: reqItem.documentId,
+              createdAt: reqItem.requestedAt || timestamp,
+              storeId: reqItem.storeId,
+              storeName: reqItem.storeName,
+              supplierName: 'Official Farm Partner',
+              items: [
+                {
+                  sku,
+                  productName: prodName,
+                  orderedQuantity: qty,
+                  receivedQuantity: 0,
+                  remainingBackorder: qty,
+                  unitCost: Math.round(subtotal / qty),
+                  totalCost: subtotal,
+                },
+              ],
+              subtotalCost: subtotal,
+              taxPercent: 11,
+              taxAmount,
+              totalCost: reqItem.amountIDR || subtotal,
+              expectedDeliveryDate: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
+              status: 'PENDING_APPROVAL',
+              notes: reqItem.payloadSummary?.reason || reqItem.documentTitle,
+              paymentTerms: 'Net 30',
+              goodsReceiptIds: [],
+            };
+            purchaseOrders.unshift(po);
+          }
+
+          if (po.status !== 'APPROVED') {
+            po.status = 'APPROVED';
+            po.updatedAt = timestamp;
+            po.items.forEach((poItem) => {
+              const orderQty = Math.max(0, Number(poItem.orderedQuantity) || 0);
+              if (orderQty <= 0) return;
+              const tier =
+                storeInventoryTiers.find(
+                  (t) => t.sku === poItem.sku && (t.storeId === po!.storeId || po!.storeId === 'CONSOLIDATED')
+                ) || storeInventoryTiers.find((t) => t.sku === poItem.sku);
+              if (tier) {
+                tier.incomingStock = Number(((tier.incomingStock || 0) + orderQty).toFixed(2));
+                tier.updatedAt = timestamp;
+              }
+              const inv = inventoryList.find((i) => i.sku === poItem.sku);
+              if (inv) {
+                inv.incomingStock = Number(((inv.incomingStock || 0) + orderQty).toFixed(2));
+              }
+            });
+          }
+        } else if (reqItem.module === 'procurement_pr' || reqItem.documentId.startsWith('PR-')) {
+          const pr = purchaseRequests.find((p) => p.id === reqItem.documentId);
+          if (pr && pr.status !== 'approved') {
+            pr.status = 'approved';
+            pr.approvedAt = timestamp;
+          }
+        } else if (reqItem.module === 'waste_write_off' || reqItem.documentId.startsWith('WST-')) {
+          let wasteRec = wasteRecords.find((w) => w.id === reqItem.documentId);
+          if (!wasteRec) {
+            const qty = Math.max(0, Number(reqItem.payloadSummary?.quantity) || 0);
+            const sku = reqItem.payloadSummary?.sku || 'SKU-DRY-002';
+            wasteRec = {
+              id: reqItem.documentId,
+              sku,
+              productName: reqItem.payloadSummary?.productName || reqItem.documentTitle,
+              storeId: reqItem.storeId,
+              storeName: reqItem.storeName,
+              warehouseZoneId: `${reqItem.storeId}-COLD`,
+              quantityScrapped: qty,
+              unit: 'unit',
+              unitCost: qty > 0 ? Math.round((reqItem.amountIDR || 0) / qty) : reqItem.amountIDR || 0,
+              totalShrinkageCost: roundIDR(reqItem.amountIDR || 0),
+              reason: 'chiller_temp_breach',
+              actionTaken: 'safe_disposal',
+              disposition: 'unsalvageable_scrap',
+              reportedBy: reqItem.requestedBy,
+              reportedAt: reqItem.requestedAt || timestamp,
+              status: 'PENDING_APPROVAL',
+              notes: reqItem.payloadSummary?.reason,
+            };
+            wasteRecords.unshift(wasteRec);
+          }
+
+          if (wasteRec.status !== 'APPROVED') {
+            const targetSku = wasteRec.sku || reqItem.payloadSummary?.sku || '';
+            const targetStore = wasteRec.storeId || reqItem.storeId;
+            const qty = Math.max(0, Number(wasteRec.quantityScrapped || reqItem.payloadSummary?.quantity) || 0);
+
+            if (targetSku && qty > 0) {
+              let remainingToDeduct = qty;
+              if (wasteRec.batchId) {
+                const exactBatch = inventoryBatches.find((b) => b.batchId === wasteRec!.batchId);
+                if (exactBatch && exactBatch.currentStock > 0) {
+                  const take = Math.min(exactBatch.currentStock, remainingToDeduct);
+                  exactBatch.currentStock = Math.max(0, Number((exactBatch.currentStock - take).toFixed(2)));
+                  if (exactBatch.currentStock === 0) exactBatch.status = 'depleted';
+                  remainingToDeduct = Math.max(0, Number((remainingToDeduct - take).toFixed(2)));
+                }
+              }
+              if (remainingToDeduct > 0) {
+                const candidateBatches = inventoryBatches
+                  .filter(
+                    (b) =>
+                      b.sku === targetSku &&
+                      (b.storeId === targetStore || targetStore === 'CONSOLIDATED') &&
+                      b.currentStock > 0
+                  )
+                  .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+                for (const b of candidateBatches) {
+                  if (remainingToDeduct <= 0) break;
+                  const take = Math.min(b.currentStock, remainingToDeduct);
+                  b.currentStock = Math.max(0, Number((b.currentStock - take).toFixed(2)));
+                  if (b.currentStock === 0) b.status = 'depleted';
+                  remainingToDeduct = Math.max(0, Number((remainingToDeduct - take).toFixed(2)));
+                }
+              }
+
+              const tier = storeInventoryTiers.find(
+                (t) => t.sku === targetSku && (t.storeId === targetStore || targetStore === 'CONSOLIDATED')
+              );
+              if (tier) {
+                tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
+                tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+                tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+                tier.totalValuation = Math.round(tier.physicalStock * (tier.unitCost || 0));
+                tier.updatedAt = timestamp;
+              }
+
+              const inv = inventoryList.find((i) => i.sku === targetSku);
+              if (inv) {
+                inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) - qty).toFixed(2)));
+                inv.stockLevel = inv.currentStock;
+              }
+            }
+
+            const shrinkageIDR = roundIDR(wasteRec.totalShrinkageCost || reqItem.amountIDR || 0);
+            if (shrinkageIDR > 0 && !wasteRec.glEntryId) {
+              ensureRegulatoryCoaAccounts();
+              const tag = Date.now().toString().slice(-6);
+              const gle1 = `GLE-WST-${tag}-1`;
+              const gle2 = `GLE-WST-${tag}-2`;
+              commitBalancedGlBatch(
+                [
+                  {
+                    id: gle1,
+                    timestamp,
+                    storeId: targetStore,
+                    storeName: wasteRec.storeName || reqItem.storeName,
+                    accountCode: '6030',
+                    accountName: 'Inventory Shrinkage & Spoilage Expense',
+                    category: 'Expense',
+                    debit: shrinkageIDR,
+                    credit: 0,
+                    referenceType: 'WASTE_SHRINKAGE',
+                    referenceId: wasteRec.id,
+                    description: `Approved waste write-off (${wasteRec.id}): ${qty} units of ${wasteRec.productName} (${actorName})`,
+                  },
+                  {
+                    id: gle2,
+                    timestamp,
+                    storeId: targetStore,
+                    storeName: wasteRec.storeName || reqItem.storeName,
+                    accountCode: '1040',
+                    accountName: 'Merchandise Inventory Asset',
+                    category: 'Asset',
+                    debit: 0,
+                    credit: shrinkageIDR,
+                    referenceType: 'WASTE_SHRINKAGE',
+                    referenceId: wasteRec.id,
+                    description: `Inventory asset write-off for approved waste ${wasteRec.id}`,
+                  },
+                ],
+                true
+              );
+              wasteRec.glEntryId = gle1;
+            }
+
+            wasteRec.status = 'APPROVED';
+            wasteRec.approvedBy = actorName;
+            wasteRec.approvedAt = timestamp;
           }
         } else if (reqItem.module === 'b2b_credit_term' || reqItem.module === 'b2b_transfer_verification') {
           const order = b2bOrdersList.find((o) => o.id === reqItem.documentId);
@@ -10526,28 +11333,39 @@ async function startServer() {
 
     securityAuditTrail.unshift({
       id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp: new Date().toISOString(),
+      timestamp,
       actionType: reqItem.module === 'procurement_po' ? 'PURCHASE_ORDER_APPROVAL' : 'GOODS_RECEIPT_APPROVAL',
       resourceId: reqItem.documentId,
       userId: currentActiveStaffSession.userId,
-      userName: currentActiveStaffSession.userName,
-      userRole: currentActiveStaffSession.userRole,
+      userName: actorName,
+      userRole: effectiveRole,
       storeId: reqItem.storeId,
       shiftId: currentActiveStaffSession.activeShiftId,
       status: 'AUTHORIZED_EXECUTED',
-      metadata: { requestId, action, finalStatus: reqItem.status, amountIDR: reqItem.amountIDR },
+      metadata: {
+        requestId,
+        decision: rawDecision,
+        tier: decisionTier,
+        finalStatus: reqItem.status,
+        amountIDR: reqItem.amountIDR,
+      },
     });
 
     if (reqItem.status === 'APPROVED' || reqItem.status === 'REJECTED') {
       markEnterpriseNotificationReadByDedupeKey(`APR_QUEUE:${reqItem.id}`);
     }
 
+    scheduleStateSave();
+
     res.json({
       success: true,
       request: reqItem,
-      message: `Request ${reqItem.documentId} ${action === 'APPROVED' ? (reqItem.status === 'APPROVED' ? 'fully authorized' : `advanced to Tier ${reqItem.currentTierLevel}`) : 'rejected'}.`,
+      message: `Request ${reqItem.documentId} ${rawDecision === 'APPROVED' ? (reqItem.status === 'APPROVED' ? 'fully authorized' : `advanced to Tier ${reqItem.currentTierLevel}`) : 'rejected'}.`,
     });
-  });
+  };
+
+  app.post('/api/admin/approvals/:id/decide', handleApprovalDecision);
+  app.post('/api/admin/approvals/action', handleApprovalDecision);
 
   // --- 10. LOGISTICS & SHIPPING DOCUMENTS APIS ---
   app.get('/api/admin/logistics/surat-jalan', (req: Request, res: Response) => {
@@ -14628,6 +15446,1119 @@ async function startServer() {
         error: err?.message || 'Document dispatch failed.',
       });
     }
+  });
+
+  // =============================================================
+  // WAREHOUSE RACK TOPOLOGY, BULK CSV SKU/BATCH IMPORT & RACK BLIND OPNAME
+  // =============================================================
+  function resolveRequestBranchScope(req: Request): { isBranchScoped: boolean; storeId: string } {
+    const role = getEffectiveRequestRole(req);
+    const isBranchScoped = role === 'cashier' || role === 'warehouse' || role === 'store_manager';
+    const rawHeaderBranch =
+      typeof req.headers['x-operator-branch'] === 'string'
+        ? req.headers['x-operator-branch'].trim()
+        : undefined;
+    const rawHeaderOpId =
+      typeof req.headers['x-operator-id'] === 'string'
+        ? req.headers['x-operator-id'].trim()
+        : undefined;
+    const assigned = rawHeaderOpId ? operatorBranchAssignments[rawHeaderOpId] : undefined;
+    const storeId =
+      rawHeaderBranch ||
+      assigned?.storeId ||
+      currentActiveStaffSession.assignedBranchId ||
+      currentActiveStaffSession.storeId ||
+      'store-jkt-senopati';
+    return { isBranchScoped, storeId };
+  }
+
+  function resolveOutletFromCodeOrId(outletCodeOrId: string): StoreOutletSchedule | undefined {
+    const raw = String(outletCodeOrId || '').trim();
+    if (!raw) return undefined;
+    const upper = raw.toUpperCase();
+    const direct = storeSchedules.find((s) => s.storeId.toLowerCase() === raw.toLowerCase());
+    if (direct) return direct;
+    const aliasMap: Record<string, string> = {
+      SEN: 'store-jkt-senopati',
+      'JKT-SEN': 'store-jkt-senopati',
+      SENOPATI: 'store-jkt-senopati',
+      CDC: 'store-jkt-senopati',
+      'WH-CDC-01': 'store-jkt-senopati',
+      PIK: 'store-jkt-pik',
+      'JKT-PIK': 'store-jkt-pik',
+      PIK2: 'store-jkt-pik',
+      MTG: 'store-jkt-menteng',
+      MENTENG: 'store-jkt-menteng',
+      BDG: 'store-bdg-dago',
+      DAGO: 'store-bdg-dago',
+      SBY: 'store-sby-gubeng',
+      GUBENG: 'store-sby-gubeng',
+      DPS: 'store-dps-canggu',
+      CANGGU: 'store-dps-canggu',
+    };
+    if (aliasMap[upper]) {
+      return storeSchedules.find((s) => s.storeId === aliasMap[upper]);
+    }
+    return storeSchedules.find(
+      (s) =>
+        s.storeName.toUpperCase().includes(upper) ||
+        s.city.toUpperCase().includes(upper)
+    );
+  }
+
+  function inferWarehouseZoneId(storeId: string, storageZone: WarehouseRackStorageZone | string): string {
+    const zoneType = mapRackZoneToStorageType(storageZone);
+    const found = warehouseZones.find((z) => z.storeId === storeId && z.type === zoneType);
+    if (found) return found.id;
+    const anyForStore = warehouseZones.find((z) => z.storeId === storeId);
+    if (anyForStore) return anyForStore.id;
+    const prefix = storeId.includes('pik') ? 'WH-JKT-PIK' : storeId.includes('dago') ? 'WH-BDG-DAG' : 'WH-JKT-SEN';
+    return `${prefix}-${zoneType === 'freezer' ? 'FRZ' : zoneType === 'cold_chilled' ? 'COLD' : 'AMB'}`;
+  }
+
+  function inferRackZoneFromCodeOrCategory(rackBinCode: string, category: string): WarehouseRackStorageZone {
+    const code = rackBinCode.toUpperCase();
+    const cat = category.toLowerCase();
+    if (code.includes('QRT') || code.includes('QUAR')) return 'Quarantine Hold Cage';
+    if (code.includes('FRZ') || code.includes('FROZ') || cat.includes('meat') || cat.includes('seafood')) {
+      return 'Deep Freeze (-20°C)';
+    }
+    if (
+      code.includes('CHL') ||
+      code.includes('COLD') ||
+      cat.includes('produce') ||
+      cat.includes('dairy') ||
+      cat.includes('egg')
+    ) {
+      return 'Chilled Walk-In (2°C–4°C)';
+    }
+    return 'Ambient Dry';
+  }
+
+  function commitRackStocktakeSubmission(
+    sub: RackStocktakePendingSubmission,
+    approverName: string
+  ): string[] {
+    const timestamp = new Date().toISOString();
+    const glIds: string[] = [];
+    const skuDeltas: Record<string, number> = {};
+
+    sub.lines.forEach((line) => {
+      if (line.status === 'QUARANTINE_LOCKED') return;
+      const batch = inventoryBatches.find((b) => b.batchId === line.batchId);
+      if (batch) {
+        if (batch.status === 'quarantined' || batch.status === 'recalled' || batch.status === 'expired') {
+          return;
+        }
+        batch.currentStock = Math.max(0, Number(line.physicalCount.toFixed(2)));
+        if (batch.currentStock === 0) {
+          batch.status = 'depleted';
+        } else if (batch.status === 'depleted') {
+          syncBatchExpiryStatus(batch, Date.now());
+        }
+      }
+      if (line.varianceQty !== 0) {
+        skuDeltas[line.sku] = Number(((skuDeltas[line.sku] || 0) + line.varianceQty).toFixed(2));
+      }
+    });
+
+    Object.entries(skuDeltas).forEach(([sku, delta]) => {
+      if (delta === 0) return;
+      const tier = storeInventoryTiers.find(
+        (t) => t.sku === sku && t.storeId === sub.storeId
+      );
+      if (tier) {
+        tier.physicalStock = Math.max(tier.reservedStock, Number((tier.physicalStock + delta).toFixed(2)));
+        tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+        tier.totalValuation = Math.round(tier.physicalStock * (tier.unitCost || 0));
+        tier.updatedAt = timestamp;
+      }
+      const inv = inventoryList.find((i) => i.sku === sku);
+      if (inv) {
+        inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) + delta).toFixed(2)));
+        inv.stockLevel = inv.currentStock;
+      }
+    });
+
+    ensureRegulatoryCoaAccounts();
+    const batchTag = Date.now().toString().slice(-6);
+    if (sub.totalShortageValueIDR > 0) {
+      const g1 = `GLE-STK-SH-${batchTag}-1`;
+      const g2 = `GLE-STK-SH-${batchTag}-2`;
+      glIds.push(g1, g2);
+      commitBalancedGlBatch(
+        [
+          {
+            id: g1,
+            timestamp,
+            storeId: sub.storeId,
+            storeName: sub.storeName,
+            accountCode: '6030',
+            accountName: 'Inventory Shrinkage Expense',
+            category: 'Expense',
+            debit: sub.totalShortageValueIDR,
+            credit: 0,
+            referenceType: 'STOCK_OPNAME',
+            referenceId: sub.sheetNumber,
+            description: `Rack Blind Opname Shortage (${sub.rackBinCode} · ${sub.sheetNumber}) authorized by ${approverName}`,
+          },
+          {
+            id: g2,
+            timestamp,
+            storeId: sub.storeId,
+            storeName: sub.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: 0,
+            credit: sub.totalShortageValueIDR,
+            referenceType: 'STOCK_OPNAME',
+            referenceId: sub.sheetNumber,
+            description: `Inventory Asset write-down for Rack Opname Shortage (${sub.rackBinCode})`,
+          },
+        ],
+        true
+      );
+    }
+
+    if (sub.totalSurplusValueIDR > 0) {
+      const g3 = `GLE-STK-SU-${batchTag}-1`;
+      const g4 = `GLE-STK-SU-${batchTag}-2`;
+      glIds.push(g3, g4);
+      commitBalancedGlBatch(
+        [
+          {
+            id: g3,
+            timestamp,
+            storeId: sub.storeId,
+            storeName: sub.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: sub.totalSurplusValueIDR,
+            credit: 0,
+            referenceType: 'STOCK_OPNAME',
+            referenceId: sub.sheetNumber,
+            description: `Rack Blind Opname Surplus (${sub.rackBinCode} · ${sub.sheetNumber}) authorized by ${approverName}`,
+          },
+          {
+            id: g4,
+            timestamp,
+            storeId: sub.storeId,
+            storeName: sub.storeName,
+            accountCode: '4090',
+            accountName: 'Inventory Overstock Adjustment',
+            category: 'Revenue',
+            debit: 0,
+            credit: sub.totalSurplusValueIDR,
+            referenceType: 'STOCK_OPNAME',
+            referenceId: sub.sheetNumber,
+            description: `Inventory overstock adjustment credit for Rack Opname (${sub.rackBinCode})`,
+          },
+        ],
+        true
+      );
+    }
+
+    sub.glVoucherIds = glIds;
+    sub.status = 'COMMITTED';
+    syncWarehouseRackOccupancy();
+
+    stockOpnameSessions.unshift({
+      id: sub.sheetNumber,
+      date: timestamp.split('T')[0],
+      storeId: sub.storeId,
+      storeName: sub.storeName,
+      warehouseZoneId: inferWarehouseZoneId(sub.storeId, sub.storageZone),
+      auditorId: sub.submittedBy,
+      auditorName: `${sub.submittedBy} (Approved: ${approverName})`,
+      status: 'reconciled',
+      items: sub.lines.map((l) => ({
+        sku: l.sku,
+        productName: l.productName,
+        category: inventoryList.find((i) => i.sku === l.sku)?.category || 'general',
+        storeId: sub.storeId,
+        storeName: sub.storeName,
+        warehouseZoneId: inferWarehouseZoneId(sub.storeId, sub.storageZone),
+        systemStock: l.systemOnHand,
+        countedStock: l.physicalCount,
+        varianceQty: l.varianceQty,
+        unitCost: l.unitCostIDR,
+        financialVarianceIDR: l.varianceValueIDR,
+        notes: `Rack ${l.rackBinCode} · Lot ${l.lotNumber}`,
+        status: l.varianceQty === 0 ? 'matched' : l.varianceQty < 0 ? 'shortage' : 'surplus',
+      })),
+      totalSystemUnits: sub.lines.reduce((s, l) => s + l.systemOnHand, 0),
+      totalCountedUnits: sub.lines.reduce((s, l) => s + l.physicalCount, 0),
+      totalVarianceUnits: sub.lines.reduce((s, l) => s + l.varianceQty, 0),
+      netFinancialVarianceIDR: sub.netVarianceValueIDR,
+      glEntryIds: glIds,
+      notes: sub.notes || `Rack Blind Opname (${sub.rackBinCode})`,
+      completedAt: timestamp,
+    });
+
+    return glIds;
+  }
+
+  app.get('/api/admin/warehouse/racks', (req: Request, res: Response) => {
+    syncWarehouseRackOccupancy();
+    const { storeId } = req.query as { storeId?: string };
+    const scope = resolveRequestBranchScope(req);
+    let filtered = [...warehouseRacks];
+    if (scope.isBranchScoped && scope.storeId !== 'ALL' && scope.storeId !== 'CONSOLIDATED') {
+      filtered = filtered.filter((r) => r.storeId === scope.storeId);
+    } else if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      filtered = filtered.filter((r) => r.storeId === storeId);
+    }
+    res.json({ racks: filtered });
+  });
+
+  app.post('/api/admin/warehouse/racks', (req: Request, res: Response) => {
+    const {
+      id,
+      rackBinCode,
+      storeId,
+      storageZone,
+      rotationPolicy,
+      maxCapacity,
+      notes,
+    } = req.body as {
+      id?: string;
+      rackBinCode?: string;
+      storeId?: string;
+      storageZone?: WarehouseRackStorageZone;
+      rotationPolicy?: RackRotationPolicy;
+      maxCapacity?: number;
+      notes?: string;
+    };
+
+    const cleanCode = String(rackBinCode || '').trim().toUpperCase();
+    if (!cleanCode) {
+      return res.status(400).json({ error: 'Rack / Bin Code is required.' });
+    }
+    const outlet = resolveOutletFromCodeOrId(storeId || 'store-jkt-senopati');
+    if (!outlet) {
+      return res.status(400).json({ error: `Unknown outlet/storeId '${storeId}'.` });
+    }
+    const scope = resolveRequestBranchScope(req);
+    if (
+      scope.isBranchScoped &&
+      scope.storeId !== 'ALL' &&
+      scope.storeId !== 'CONSOLIDATED' &&
+      outlet.storeId !== scope.storeId
+    ) {
+      return res.status(403).json({
+        error: `Branch-scoped operator is locked to outlet '${scope.storeId}' and cannot configure racks for '${outlet.storeId}'.`,
+      });
+    }
+
+    const cap = Math.max(1, Math.round(Number(maxCapacity) || 200));
+    const resolvedZone: WarehouseRackStorageZone =
+      storageZone &&
+      ['Ambient Dry', 'Chilled Walk-In (2°C–4°C)', 'Deep Freeze (-20°C)', 'Quarantine Hold Cage'].includes(
+        storageZone
+      )
+        ? storageZone
+        : 'Ambient Dry';
+    const resolvedPolicy: RackRotationPolicy =
+      rotationPolicy === 'STRICT_FIFO' ? 'STRICT_FIFO' : 'STRICT_FEFO';
+    const actorName = getEffectiveOperatorName(req);
+    const nowIso = new Date().toISOString();
+
+    let target = warehouseRacks.find(
+      (r) =>
+        (id && r.id === id) ||
+        (r.storeId === outlet.storeId && r.rackBinCode.toUpperCase() === cleanCode)
+    );
+    if (target) {
+      target.rackBinCode = cleanCode;
+      target.storeId = outlet.storeId;
+      target.storeName = outlet.storeName;
+      target.storageZone = resolvedZone;
+      target.rotationPolicy = resolvedPolicy;
+      target.maxCapacity = cap;
+      target.notes = notes !== undefined ? notes : target.notes;
+      target.updatedAt = nowIso;
+      target.updatedBy = actorName;
+    } else {
+      target = {
+        id: `RACK-${Date.now().toString().slice(-6)}-${warehouseRacks.length + 1}`,
+        rackBinCode: cleanCode,
+        storeId: outlet.storeId,
+        storeName: outlet.storeName,
+        storageZone: resolvedZone,
+        rotationPolicy: resolvedPolicy,
+        maxCapacity: cap,
+        currentOccupancy: 0,
+        assignedSkus: [],
+        notes: notes || '',
+        updatedAt: nowIso,
+        updatedBy: actorName,
+      };
+      warehouseRacks.push(target);
+    }
+
+    syncWarehouseRackOccupancy();
+    scheduleStateSave();
+    res.json({
+      success: true,
+      rack: target,
+      racks: warehouseRacks.filter((r) => r.storeId === outlet.storeId),
+      message: `Rack/Bin ${target.rackBinCode} saved for ${outlet.storeName} (${target.rotationPolicy}).`,
+    });
+  });
+
+  app.post('/api/admin/warehouse/racks/assign', (req: Request, res: Response) => {
+    const { storeId, sku, rackBinCode, rotationStrategy, batchId } = req.body as {
+      storeId?: string;
+      sku?: string;
+      rackBinCode?: string;
+      rotationStrategy?: RemovalStrategyType;
+      batchId?: string;
+    };
+
+    const cleanSku = String(sku || '').trim();
+    const cleanCode = String(rackBinCode || '').trim().toUpperCase();
+    if (!cleanSku || !cleanCode) {
+      return res.status(400).json({ error: 'sku and rackBinCode are required.' });
+    }
+    const outlet = resolveOutletFromCodeOrId(storeId || 'store-jkt-senopati');
+    if (!outlet) {
+      return res.status(400).json({ error: `Unknown outlet '${storeId}'.` });
+    }
+    const scope = resolveRequestBranchScope(req);
+    if (
+      scope.isBranchScoped &&
+      scope.storeId !== 'ALL' &&
+      scope.storeId !== 'CONSOLIDATED' &&
+      outlet.storeId !== scope.storeId
+    ) {
+      return res.status(403).json({
+        error: `Branch-scoped operator cannot reassign racks for '${outlet.storeId}'.`,
+      });
+    }
+
+    const rack = warehouseRacks.find(
+      (r) => r.storeId === outlet.storeId && r.rackBinCode.toUpperCase() === cleanCode
+    );
+    if (!rack) {
+      return res.status(404).json({ error: `Rack/Bin '${cleanCode}' not found at ${outlet.storeName}.` });
+    }
+
+    const strategy: RemovalStrategyType =
+      rotationStrategy === 'FIFO' || rotationStrategy === 'FEFO'
+        ? rotationStrategy
+        : rack.rotationPolicy === 'STRICT_FIFO'
+        ? 'FIFO'
+        : 'FEFO';
+    const actorName = getEffectiveOperatorName(req);
+    const nowIso = new Date().toISOString();
+
+    let updatedBatchesCount = 0;
+    inventoryBatches.forEach((b) => {
+      const matchesBatch = batchId ? b.batchId === batchId : b.sku === cleanSku && b.storeId === outlet.storeId;
+      if (matchesBatch) {
+        b.rackBinCode = rack.rackBinCode;
+        b.rotationStrategy = strategy;
+        b.storageZone = mapRackZoneToStorageType(rack.storageZone);
+        b.warehouseZoneId = inferWarehouseZoneId(outlet.storeId, rack.storageZone);
+        updatedBatchesCount += 1;
+      }
+    });
+
+    const tier = storeInventoryTiers.find(
+      (t) => t.sku === cleanSku && t.storeId === outlet.storeId
+    );
+    if (tier) {
+      tier.rackBinCode = rack.rackBinCode;
+      tier.binLocation = rack.rackBinCode;
+      tier.rotationStrategy = strategy;
+      tier.removalStrategy = strategy;
+      tier.storageType = mapRackZoneToStorageType(rack.storageZone);
+      tier.warehouseZoneId = inferWarehouseZoneId(outlet.storeId, rack.storageZone);
+      tier.updatedAt = nowIso;
+    }
+
+    const inv = inventoryList.find((i) => i.sku === cleanSku);
+    if (inv) {
+      inv.removalStrategy = strategy;
+      inv.binLocation = rack.rackBinCode;
+    }
+
+    if (!removalStrategiesConfig.outletSkuStrategies) {
+      removalStrategiesConfig.outletSkuStrategies = {};
+    }
+    if (!removalStrategiesConfig.outletSkuStrategies[outlet.storeId]) {
+      removalStrategiesConfig.outletSkuStrategies[outlet.storeId] = {};
+    }
+    removalStrategiesConfig.outletSkuStrategies[outlet.storeId][cleanSku] = strategy;
+    removalStrategiesConfig.skuOverrides[cleanSku] = strategy;
+    removalStrategiesConfig.updatedAt = nowIso;
+    removalStrategiesConfig.updatedBy = actorName;
+
+    // Move SKU into target rack assignedSkus and out of previous racks at this store (when assigning SKU-wide)
+    if (!batchId) {
+      warehouseRacks.forEach((r) => {
+        if (r.storeId === outlet.storeId && r.rackBinCode !== rack.rackBinCode) {
+          r.assignedSkus = r.assignedSkus.filter((s) => s !== cleanSku);
+        }
+      });
+    }
+    if (!rack.assignedSkus.includes(cleanSku)) {
+      rack.assignedSkus.push(cleanSku);
+    }
+
+    syncWarehouseRackOccupancy();
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      message: `${cleanSku} assigned to ${rack.rackBinCode} (${outlet.storeName}) with ${strategy} rotation.`,
+      rack,
+      updatedBatchesCount,
+      removalStrategies: removalStrategiesConfig,
+    });
+  });
+
+  app.post('/api/admin/inventory/import-skus', (req: Request, res: Response) => {
+    const { rows, postOpeningBalanceGl = true } = (req.body || {}) as {
+      rows?: SkuCsvImportRow[];
+      postOpeningBalanceGl?: boolean;
+    };
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'rows array with at least 1 SKU/Batch entry is required.' });
+    }
+
+    const scope = resolveRequestBranchScope(req);
+    const actorName = getEffectiveOperatorName(req);
+    const nowMs = Date.now();
+    const todayStr = new Date(nowMs).toISOString().split('T')[0];
+
+    // Pre-validate every row atomically before mutating state
+    const validatedRows: Array<{
+      sku: string;
+      productName: string;
+      category: string;
+      uom: string;
+      unitCost: number;
+      sellingPrice: number;
+      taxCategory: IndonesianTaxCategory;
+      rotationStrategy: RemovalStrategyType;
+      outlet: StoreOutletSchedule;
+      rackBinCode: string;
+      batchLotNo: string;
+      expiryDateIso: string;
+      daysUntilExpiry: number;
+      initialQty: number;
+    }> = [];
+
+    for (let idx = 0; idx < rows.length; idx++) {
+      const r = rows[idx];
+      const rowNo = idx + 1;
+      const sku = String(r.sku || '').trim().toUpperCase();
+      const productName = String(r.product_name || '').trim();
+      const category = String(r.category || 'pantry_staples').trim();
+      const uom = String(r.uom || 'pcs').trim();
+      const unitCost = Math.round(Number(r.unit_cost_idr));
+      const sellingPrice = Math.round(Number(r.selling_price_idr));
+      const initialQty = Number(r.initial_qty);
+      const rackBinCode = String(r.rack_bin_code || '').trim().toUpperCase();
+      const batchLotNo = String(r.batch_lot_no || '').trim();
+      const expiryRaw = String(r.expiry_date || '').trim();
+      const rawRot = String(r.rotation_strategy || 'FEFO').trim().toUpperCase();
+      const rawTax = String(r.tax_category || 'BKP_STANDARD').trim().toUpperCase();
+
+      if (!sku || !productName || !rackBinCode || !batchLotNo) {
+        return res.status(400).json({
+          error: `Row ${rowNo}: sku, product_name, rack_bin_code, and batch_lot_no are required.`,
+        });
+      }
+      if (!Number.isFinite(unitCost) || unitCost <= 0 || !Number.isFinite(sellingPrice) || sellingPrice < 0) {
+        return res.status(400).json({
+          error: `Row ${rowNo} (${sku}): unit_cost_idr (>0) and selling_price_idr (>=0) must be valid IDR integers.`,
+        });
+      }
+      if (!Number.isFinite(initialQty) || initialQty <= 0) {
+        return res.status(400).json({
+          error: `Row ${rowNo} (${sku}): initial_qty must be greater than 0.`,
+        });
+      }
+      if (!['FEFO', 'FIFO', 'STRICT_FEFO', 'STRICT_FIFO'].includes(rawRot)) {
+        return res.status(400).json({
+          error: `Row ${rowNo} (${sku}): rotation_strategy must be FEFO or FIFO.`,
+        });
+      }
+      const rotationStrategy: RemovalStrategyType = rawRot.includes('FIFO') ? 'FIFO' : 'FEFO';
+      if (!['BKP_STANDARD', 'BKP_DIBEBASKAN', 'NON_BKP_PB1'].includes(rawTax)) {
+        return res.status(400).json({
+          error: `Row ${rowNo} (${sku}): tax_category must be BKP_STANDARD, BKP_DIBEBASKAN, or NON_BKP_PB1.`,
+        });
+      }
+      const outlet = resolveOutletFromCodeOrId(r.outlet_code || '');
+      if (!outlet) {
+        return res.status(400).json({
+          error: `Row ${rowNo} (${sku}): Unknown outlet_code '${r.outlet_code}'.`,
+        });
+      }
+      if (
+        scope.isBranchScoped &&
+        scope.storeId !== 'ALL' &&
+        scope.storeId !== 'CONSOLIDATED' &&
+        outlet.storeId !== scope.storeId
+      ) {
+        return res.status(403).json({
+          error: `Row ${rowNo} (${sku}): Branch-scoped operator is locked to '${scope.storeId}' and cannot import into '${outlet.storeId}'.`,
+        });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(expiryRaw) || Number.isNaN(Date.parse(`${expiryRaw}T23:59:59.000Z`))) {
+        return res.status(400).json({
+          error: `Row ${rowNo} (${sku}): expiry_date must be valid YYYY-MM-DD format.`,
+        });
+      }
+      if (expiryRaw < todayStr) {
+        return res.status(400).json({
+          error: `Row ${rowNo} (${sku}): expiry_date '${expiryRaw}' is already expired (before ${todayStr}).`,
+        });
+      }
+      const expTs = Date.parse(`${expiryRaw}T23:59:59.000Z`);
+      const daysUntilExpiry = Math.max(0, Math.ceil((expTs - nowMs) / 86400000));
+
+      validatedRows.push({
+        sku,
+        productName,
+        category,
+        uom,
+        unitCost,
+        sellingPrice,
+        taxCategory: rawTax as IndonesianTaxCategory,
+        rotationStrategy,
+        outlet,
+        rackBinCode,
+        batchLotNo,
+        expiryDateIso: new Date(expTs).toISOString(),
+        daysUntilExpiry,
+        initialQty,
+      });
+    }
+
+    const timestamp = new Date().toISOString();
+    let createdSkusCount = 0;
+    let updatedSkusCount = 0;
+    let createdRacksCount = 0;
+    let totalImportedQty = 0;
+    let totalOpeningValuationIDR = 0;
+
+    validatedRows.forEach((row, idx) => {
+      // 1. Ensure or auto-create rack/bin
+      let rack = warehouseRacks.find(
+        (r) => r.storeId === row.outlet.storeId && r.rackBinCode === row.rackBinCode
+      );
+      if (!rack) {
+        const inferredZone = inferRackZoneFromCodeOrCategory(row.rackBinCode, row.category);
+        rack = {
+          id: `RACK-${Date.now().toString().slice(-5)}-${warehouseRacks.length + 1}`,
+          rackBinCode: row.rackBinCode,
+          storeId: row.outlet.storeId,
+          storeName: row.outlet.storeName,
+          storageZone: inferredZone,
+          rotationPolicy: row.rotationStrategy === 'FIFO' ? 'STRICT_FIFO' : 'STRICT_FEFO',
+          maxCapacity: Math.max(500, Math.ceil(row.initialQty * 2)),
+          currentOccupancy: 0,
+          assignedSkus: [row.sku],
+          notes: `Auto-provisioned via Bulk CSV SKU Import by ${actorName}`,
+          updatedAt: timestamp,
+          updatedBy: actorName,
+        };
+        warehouseRacks.push(rack);
+        createdRacksCount += 1;
+      } else if (!rack.assignedSkus.includes(row.sku)) {
+        rack.assignedSkus.push(row.sku);
+      }
+
+      const storageType = mapRackZoneToStorageType(rack.storageZone);
+      const warehouseZoneId = inferWarehouseZoneId(row.outlet.storeId, rack.storageZone);
+
+      // 2. Upsert inventoryList + recalculate Moving Average Cost (WAC)
+      let inv = inventoryList.find((i) => i.sku === row.sku);
+      let resolvedWac = row.unitCost;
+      if (inv) {
+        const oldQty = Math.max(0, Number(inv.currentStock || 0));
+        const oldCost = Math.round(Number(inv.unitCost || row.unitCost));
+        resolvedWac =
+          oldQty + row.initialQty > 0
+            ? Math.round((oldQty * oldCost + row.initialQty * row.unitCost) / (oldQty + row.initialQty))
+            : row.unitCost;
+        inv.currentStock = Number((oldQty + row.initialQty).toFixed(2));
+        inv.stockLevel = inv.currentStock;
+        inv.unitCost = resolvedWac;
+        inv.wacUnitCost = resolvedWac;
+        if (row.sellingPrice > 0) inv.sellingPrice = row.sellingPrice;
+        inv.removalStrategy = row.rotationStrategy;
+        inv.binLocation = row.rackBinCode;
+        inv.lastRestockedAt = timestamp;
+        updatedSkusCount += 1;
+      } else {
+        inv = {
+          sku: row.sku,
+          productId: `PROD-${row.sku}`,
+          productName: row.productName,
+          name: row.productName,
+          category: row.category,
+          currentStock: row.initialQty,
+          stockLevel: row.initialQty,
+          minimumThreshold: Math.max(5, Math.round(row.initialQty * 0.2)),
+          unitCost: row.unitCost,
+          wacUnitCost: row.unitCost,
+          sellingPrice: row.sellingPrice,
+          unit: row.uom,
+          supplierId: 'SUP-CSV-IMPORT',
+          supplierName: 'Opening Balance / CSV Master Import',
+          lastRestockedAt: timestamp,
+          incomingStock: 0,
+          outgoingStock: 0,
+          reorderQuantity: Math.max(20, Math.round(row.initialQty * 0.5)),
+          valuationMethod: 'Weighted Average',
+          storageType,
+          removalStrategy: row.rotationStrategy,
+          binLocation: row.rackBinCode,
+          salesChannel: 'BOTH',
+        };
+        inventoryList.push(inv);
+        createdSkusCount += 1;
+      }
+
+      // 3. Upsert SKU Tax Rule & Removal Strategy
+      const existingTax = skuTaxRulesList.find((t) => t.sku === row.sku);
+      const taxRatePercent = getTaxRateForCategory(row.taxCategory, 11);
+      if (existingTax) {
+        existingTax.taxCategory = row.taxCategory;
+        existingTax.taxRatePercent = taxRatePercent;
+        existingTax.updatedAt = timestamp;
+      } else {
+        skuTaxRulesList.push({
+          sku: row.sku,
+          productName: row.productName,
+          category: row.category,
+          taxCategory: row.taxCategory,
+          taxRatePercent,
+          b2cTaxInclusive: true,
+          b2bTaxExclusive: true,
+          updatedAt: timestamp,
+        });
+      }
+
+      if (!removalStrategiesConfig.outletSkuStrategies) {
+        removalStrategiesConfig.outletSkuStrategies = {};
+      }
+      if (!removalStrategiesConfig.outletSkuStrategies[row.outlet.storeId]) {
+        removalStrategiesConfig.outletSkuStrategies[row.outlet.storeId] = {};
+      }
+      removalStrategiesConfig.outletSkuStrategies[row.outlet.storeId][row.sku] = row.rotationStrategy;
+      removalStrategiesConfig.skuOverrides[row.sku] = row.rotationStrategy;
+      removalStrategiesConfig.updatedAt = timestamp;
+      removalStrategiesConfig.updatedBy = actorName;
+
+      // 4. Upsert StoreInventoryStock tier for target outlet
+      let tier = storeInventoryTiers.find(
+        (t) => t.sku === row.sku && t.storeId === row.outlet.storeId
+      );
+      if (tier) {
+        tier.physicalStock = Number((tier.physicalStock + row.initialQty).toFixed(2));
+        tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+        tier.unitCost = resolvedWac;
+        if (row.sellingPrice > 0) tier.sellingPrice = row.sellingPrice;
+        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+        tier.rackBinCode = row.rackBinCode;
+        tier.binLocation = row.rackBinCode;
+        tier.lotNumber = row.batchLotNo;
+        tier.expiryDate = row.expiryDateIso;
+        tier.removalStrategy = row.rotationStrategy;
+        tier.rotationStrategy = row.rotationStrategy;
+        tier.storageType = storageType;
+        tier.warehouseZoneId = warehouseZoneId;
+        tier.lastRestockedAt = timestamp;
+        tier.updatedAt = timestamp;
+      } else {
+        tier = {
+          id: `TIER-${row.outlet.storeId.slice(-3).toUpperCase()}-${row.sku}`,
+          sku: row.sku,
+          productId: inv.productId,
+          productName: row.productName,
+          category: row.category,
+          storeId: row.outlet.storeId,
+          storeName: row.outlet.storeName,
+          warehouseZoneId,
+          storageType,
+          physicalStock: row.initialQty,
+          availableStock: row.initialQty,
+          reservedStock: 0,
+          incomingStock: 0,
+          minimumThreshold: inv.minimumThreshold,
+          safetyStockBuffer: Math.max(2, Math.round(row.initialQty * 0.1)),
+          maxCapacity: Math.max(200, Math.round(row.initialQty * 3)),
+          reorderQuantity: inv.reorderQuantity,
+          unitCost: resolvedWac,
+          sellingPrice: row.sellingPrice,
+          totalValuation: Math.round(row.initialQty * resolvedWac),
+          unit: row.uom,
+          supplierId: inv.supplierId,
+          supplierName: inv.supplierName,
+          lastRestockedAt: timestamp,
+          updatedAt: timestamp,
+          binLocation: row.rackBinCode,
+          rackBinCode: row.rackBinCode,
+          lotNumber: row.batchLotNo,
+          expiryDate: row.expiryDateIso,
+          removalStrategy: row.rotationStrategy,
+          rotationStrategy: row.rotationStrategy,
+          salesChannel: 'BOTH',
+        };
+        storeInventoryTiers.push(tier);
+      }
+
+      // 5. Create InventoryBatch tagged with rackBinCode & rotationStrategy
+      const batchStatus =
+        row.daysUntilExpiry <= 1 ? 'critical' : row.daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh';
+      const newBatch: InventoryBatch = {
+        batchId: `BAT-CSV-${Date.now().toString().slice(-5)}-${idx + 1}-${inventoryBatches.length + 1}`,
+        sku: row.sku,
+        productName: row.productName,
+        storeId: row.outlet.storeId,
+        storeName: row.outlet.storeName,
+        warehouseZoneId,
+        lotNumber: row.batchLotNo,
+        initialQuantity: row.initialQty,
+        currentStock: row.initialQty,
+        unitCost: row.unitCost,
+        sellingPrice: row.sellingPrice,
+        receivedDate: timestamp,
+        expiryDate: row.expiryDateIso,
+        daysUntilExpiry: row.daysUntilExpiry,
+        status: batchStatus,
+        storageZone: storageType,
+        supplierName: 'CSV Opening Stock Import',
+        rackBinCode: row.rackBinCode,
+        rotationStrategy: row.rotationStrategy,
+        notes: `Imported via Bulk SKU CSV into ${row.rackBinCode}`,
+      };
+      inventoryBatches.push(newBatch);
+
+      totalImportedQty += row.initialQty;
+      totalOpeningValuationIDR += Math.round(row.initialQty * row.unitCost);
+    });
+
+    // 6. Optional Opening Inventory Balance GL Posting (DR 1040 / CR 3010)
+    const glVoucherIds: string[] = [];
+    if (postOpeningBalanceGl && totalOpeningValuationIDR > 0) {
+      ensureRegulatoryCoaAccounts();
+      const refId = `CSV-IMP-${Date.now().toString().slice(-6)}`;
+      const g1 = `GLE-IMP-${Date.now().toString().slice(-5)}-1`;
+      const g2 = `GLE-IMP-${Date.now().toString().slice(-5)}-2`;
+      glVoucherIds.push(g1, g2);
+      const primaryStore = validatedRows[0].outlet;
+      commitBalancedGlBatch(
+        [
+          {
+            id: g1,
+            timestamp,
+            storeId: primaryStore.storeId,
+            storeName: primaryStore.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: totalOpeningValuationIDR,
+            credit: 0,
+            referenceType: 'INVENTORY_ADJUSTMENT',
+            referenceId: refId,
+            description: `Bulk CSV Opening Stock Import (${validatedRows.length} batch lots, ${totalImportedQty} units) by ${actorName}`,
+          },
+          {
+            id: g2,
+            timestamp,
+            storeId: primaryStore.storeId,
+            storeName: primaryStore.storeName,
+            accountCode: '3010',
+            accountName: 'Opening Balance & Paid-In Capital Equity',
+            category: 'Equity',
+            debit: 0,
+            credit: totalOpeningValuationIDR,
+            referenceType: 'INVENTORY_ADJUSTMENT',
+            referenceId: refId,
+            description: `Opening Inventory Equity offset for Bulk CSV Import ${refId}`,
+          },
+        ],
+        true
+      );
+    }
+
+    syncWarehouseRackOccupancy();
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      importedCount: validatedRows.length,
+      createdSkusCount,
+      updatedSkusCount,
+      createdRacksCount,
+      totalImportedQty: Number(totalImportedQty.toFixed(2)),
+      totalOpeningValuationIDR,
+      glVoucherIds,
+      message: `Imported ${validatedRows.length} SKU/Batch rows (${totalImportedQty} units, Rp ${totalOpeningValuationIDR.toLocaleString('id-ID')}).`,
+    });
+  });
+
+  app.get('/api/admin/inventory/stocktake/submissions', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    const scope = resolveRequestBranchScope(req);
+    let list = [...rackStocktakeSubmissions];
+    if (scope.isBranchScoped && scope.storeId !== 'ALL' && scope.storeId !== 'CONSOLIDATED') {
+      list = list.filter((s) => s.storeId === scope.storeId);
+    } else if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((s) => s.storeId === storeId);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/admin/inventory/stocktake/commit', (req: Request, res: Response) => {
+    const {
+      storeId,
+      storageZone = 'ALL',
+      rackBinCode = 'ALL',
+      counts,
+      tolerancePercent = 5,
+      toleranceValueIDR = 500000,
+      supervisorAuthorized,
+      notes,
+    } = (req.body || {}) as {
+      storeId?: string;
+      storageZone?: string;
+      rackBinCode?: string;
+      counts?: Array<{
+        batchId: string;
+        sku: string;
+        lotNumber: string;
+        rackBinCode: string;
+        physicalCount: number;
+        notes?: string;
+      }>;
+      tolerancePercent?: number;
+      toleranceValueIDR?: number;
+      supervisorAuthorized?: boolean;
+      notes?: string;
+    };
+
+    const outlet = resolveOutletFromCodeOrId(storeId || 'store-jkt-senopati');
+    if (!outlet) {
+      return res.status(400).json({ error: `Unknown outlet '${storeId}'.` });
+    }
+    const scope = resolveRequestBranchScope(req);
+    if (
+      scope.isBranchScoped &&
+      scope.storeId !== 'ALL' &&
+      scope.storeId !== 'CONSOLIDATED' &&
+      outlet.storeId !== scope.storeId
+    ) {
+      return res.status(403).json({
+        error: `Branch-scoped operator cannot commit stocktake for '${outlet.storeId}'.`,
+      });
+    }
+    if (!Array.isArray(counts) || counts.length === 0) {
+      return res.status(400).json({ error: 'counts array with at least 1 batch line is required.' });
+    }
+
+    const effectiveRole = getEffectiveRequestRole(req);
+    const actorName = getEffectiveOperatorName(req);
+    const isSupervisorRole =
+      effectiveRole === 'store_manager' ||
+      effectiveRole === 'coo' ||
+      effectiveRole === 'super_admin';
+
+    const lines: RackStocktakeLineResult[] = [];
+    const skuDeltaTracker: Record<string, number> = {};
+    let totalSurplusValueIDR = 0;
+    let totalShortageValueIDR = 0;
+    let exceedsThreshold = false;
+
+    for (const c of counts) {
+      const physicalCount = Number(c.physicalCount);
+      if (!Number.isFinite(physicalCount) || physicalCount < 0) {
+        return res.status(400).json({ error: `Invalid physicalCount for SKU ${c.sku}. Must be >= 0.` });
+      }
+      const batch = inventoryBatches.find(
+        (b) =>
+          b.batchId === c.batchId ||
+          (b.sku === c.sku && b.lotNumber === c.lotNumber && b.storeId === outlet.storeId)
+      );
+      if (!batch) {
+        return res.status(404).json({ error: `Batch '${c.batchId || c.lotNumber}' not found at ${outlet.storeName}.` });
+      }
+      if (batch.storeId !== outlet.storeId) {
+        return res.status(400).json({ error: `Batch '${batch.batchId}' belongs to ${batch.storeId}, not ${outlet.storeId}.` });
+      }
+
+      const systemOnHand = Number(batch.currentStock || 0);
+      const unitCostIDR = Math.round(batch.unitCost || 0);
+
+      // Protect Quarantine / Recall / Expired locks
+      if (batch.status === 'quarantined' || batch.status === 'recalled' || batch.status === 'expired') {
+        lines.push({
+          batchId: batch.batchId,
+          sku: batch.sku,
+          productName: batch.productName,
+          lotNumber: batch.lotNumber,
+          rackBinCode: batch.rackBinCode || c.rackBinCode || rackBinCode,
+          systemOnHand,
+          physicalCount: systemOnHand,
+          varianceQty: 0,
+          unitCostIDR,
+          varianceValueIDR: 0,
+          status: 'QUARANTINE_LOCKED',
+        });
+        continue;
+      }
+
+      const varianceQty = Number((physicalCount - systemOnHand).toFixed(2));
+      const varianceValueIDR = Math.round(varianceQty * unitCostIDR);
+
+      if (varianceValueIDR > 0) totalSurplusValueIDR += varianceValueIDR;
+      if (varianceValueIDR < 0) totalShortageValueIDR += Math.abs(varianceValueIDR);
+
+      const linePct =
+        systemOnHand > 0
+          ? (Math.abs(varianceQty) / systemOnHand) * 100
+          : Math.abs(varianceQty) > 0
+          ? 100
+          : 0;
+      if (linePct > Number(tolerancePercent) && Math.abs(varianceQty) > 2) {
+        exceedsThreshold = true;
+      }
+
+      skuDeltaTracker[batch.sku] = Number(((skuDeltaTracker[batch.sku] || 0) + varianceQty).toFixed(2));
+
+      lines.push({
+        batchId: batch.batchId,
+        sku: batch.sku,
+        productName: batch.productName,
+        lotNumber: batch.lotNumber,
+        rackBinCode: batch.rackBinCode || c.rackBinCode || rackBinCode,
+        systemOnHand,
+        physicalCount,
+        varianceQty,
+        unitCostIDR,
+        varianceValueIDR,
+        status: varianceQty === 0 ? 'MATCHED' : varianceQty > 0 ? 'SURPLUS' : 'SHORTAGE',
+      });
+    }
+
+    // Protect reservedStock invariant before mutating or queueing
+    for (const [sku, delta] of Object.entries(skuDeltaTracker)) {
+      if (delta < 0) {
+        const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === outlet.storeId);
+        if (tier && tier.physicalStock + delta < tier.reservedStock) {
+          return res.status(409).json({
+            error: `Cannot reduce ${sku} below reserved stock (${tier.reservedStock} units currently locked in active orders/carts).`,
+          });
+        }
+      }
+    }
+
+    const totalAbsVarianceIDR = totalSurplusValueIDR + totalShortageValueIDR;
+    if (totalAbsVarianceIDR > Number(toleranceValueIDR)) {
+      exceedsThreshold = true;
+    }
+
+    const netVarianceValueIDR = totalSurplusValueIDR - totalShortageValueIDR;
+    const seq = (rackStocktakeSubmissions.length + 1).toString().padStart(3, '0');
+    const subId = `RSTK-${Date.now().toString().slice(-6)}-${seq}`;
+    const sheetNumber = `OPN-RACK-2026-${seq}`;
+    const timestamp = new Date().toISOString();
+
+    const submission: RackStocktakePendingSubmission = {
+      id: subId,
+      sheetNumber,
+      storeId: outlet.storeId,
+      storeName: outlet.storeName,
+      storageZone,
+      rackBinCode,
+      submittedBy: actorName,
+      submittedAt: timestamp,
+      status: 'COMMITTED',
+      totalSurplusValueIDR,
+      totalShortageValueIDR,
+      netVarianceValueIDR,
+      glVoucherIds: [],
+      lines,
+      notes,
+    };
+
+    const mustRouteToApproval =
+      exceedsThreshold && (!isSupervisorRole || supervisorAuthorized === false);
+
+    if (mustRouteToApproval) {
+      submission.status = 'PENDING_APPROVAL';
+      const approvalId = `APR-RSTK-${Date.now().toString().slice(-5)}`;
+      submission.approvalRequestId = approvalId;
+      rackStocktakeSubmissions.unshift(submission);
+
+      approvalQueueList.unshift({
+        id: approvalId,
+        module: 'rack_stocktake',
+        documentId: submission.id,
+        documentTitle: `Rack Blind Opname Variance (${rackBinCode} · ${outlet.storeName})`,
+        requestedBy: actorName,
+        requestedAt: timestamp,
+        storeId: outlet.storeId,
+        storeName: outlet.storeName,
+        amountIDR: totalAbsVarianceIDR,
+        currentTierLevel: 1,
+        requiredTierLevel: 1,
+        status: 'PENDING',
+        history: [],
+        payloadSummary: {
+          sku: lines[0]?.sku,
+          productName: `${lines.length} Lot(s) in ${rackBinCode}`,
+          quantity: lines.length,
+          reason: `Surplus Rp ${totalSurplusValueIDR.toLocaleString('id-ID')} / Shortage Rp ${totalShortageValueIDR.toLocaleString('id-ID')} exceeds tolerance (Rp ${Number(toleranceValueIDR).toLocaleString('id-ID')} / ${tolerancePercent}%)`,
+        },
+      });
+
+      emitEnterpriseNotification({
+        dedupeKey: `APR_QUEUE:${approvalId}`,
+        category: 'PROCUREMENT_FINANCE',
+        severity: 'ACTION_REQUIRED',
+        title: `Rack Opname Approval Required (${sheetNumber})`,
+        message: `${outlet.storeName} (${rackBinCode}) variance Rp ${totalAbsVarianceIDR.toLocaleString('id-ID')} routed to Approval Matrix before stock/GL commit.`,
+        metadataLabel: `${sheetNumber} • ${rackBinCode}`,
+        targetTab: 'approvals',
+      });
+
+      scheduleStateSave();
+      return res.json({
+        success: true,
+        status: 'PENDING_APPROVAL',
+        routedToApproval: true,
+        stockMutated: false,
+        approvalRequestId: approvalId,
+        submission,
+        glVoucherIds: [],
+        message: `Variance exceeds tolerance. Routed to Approval Matrix (${approvalId}) — stock & GL unchanged until approved.`,
+      });
+    }
+
+    rackStocktakeSubmissions.unshift(submission);
+    const glVoucherIds = commitRackStocktakeSubmission(submission, actorName);
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      status: 'COMMITTED',
+      routedToApproval: false,
+      stockMutated: true,
+      submission,
+      glVoucherIds,
+      message: `Rack Blind Opname ${sheetNumber} committed. Stock & balanced GL (${glVoucherIds.length} vouchers) synchronized.`,
+    });
   });
 
   // -------------------------------------------------------------
