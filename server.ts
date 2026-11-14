@@ -161,6 +161,19 @@ import type {
   CrmPredictiveRestockAlert,
   CrmSegmentBreakdown,
   CrmOverviewResponse,
+  VendorSrmGrade,
+  VendorScorecardRecord,
+  VendorScorecardResponse,
+  AuditTrailModuleType,
+  AuditTrailLogEntry,
+  OperatorKpiSummary,
+  AuditTrailOverviewResponse,
+  DemandForecastHorizon,
+  DemandSeasonalityProfile,
+  DemandForecastItem,
+  DemandForecastResponse,
+  PosValidatePromoResponse,
+  AppliedPromotionSummary,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -2907,48 +2920,117 @@ let qcInspectionsList: QCInspectionRecord[] = [
     notes: 'Intake temp 5.8°C exceeds 4.0°C limit; held under secondary microbiological testing.',
   },
 ];
-let promotionRulesList: PromotionRule[] = [
-  {
-    id: 'PRM-2026-01',
-    name: 'Organic Fresh Produce Welcome',
-    code: 'ORGANIC20',
-    type: 'PERCENTAGE_DISCOUNT',
-    targetType: 'CATEGORY',
-    targetValue: 'produce',
-    discountPercent: 20,
-    minOrderSubtotalIDR: 50000,
-    active: true,
-    description: '20% off all crisp greens and heirloom produce',
-    usageCount: 42,
-  },
-  {
-    id: 'PRM-2026-02',
-    name: 'Gold Member VIP Fresh Bonus',
-    code: 'VIPGOLD10',
-    type: 'MEMBER_TIER',
-    targetType: 'ALL',
-    targetValue: 'ALL',
-    discountPercent: 10,
-    memberTier: 'GOLD',
-    active: true,
-    description: 'Exclusive 10% discount for Gold tier cardholders',
-    usageCount: 88,
-  },
-  {
-    id: 'PRM-2026-03',
-    name: 'Butterhead Lettuce B2G1 Harvest Festival',
-    code: 'B2G1_LETTUCE',
-    type: 'BOGO',
-    targetType: 'SKU',
-    targetValue: 'SKU-PRD-001',
-    buyQty: 2,
-    getQty: 1,
-    getDiscountPercent: 100,
-    active: true,
-    description: 'Buy 2 Butterhead heads, get 1 free',
-    usageCount: 15,
-  },
-];
+function createInitialPromotionRules(): PromotionRule[] {
+  return [
+    {
+      id: 'PRM-2026-01',
+      name: 'Buy 2 Get 1 Free: Organic Butterhead Lettuce',
+      code: 'B2G1_LETTUCE',
+      type: 'BOGO',
+      targetType: 'SKU',
+      targetValue: 'SKU-PRD-001',
+      buyQty: 2,
+      getQty: 1,
+      getDiscountPercent: 100,
+      active: true,
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      description: 'Buy 2 units of Organic Hydroponic Butterhead Lettuce and get the 3rd unit 100% free.',
+      usageCount: 15,
+    },
+    {
+      id: 'PRM-2026-02',
+      name: 'Mix & Match Produce Bundle (Buy Any 3 → 15% Off)',
+      code: 'MIX_PRODUCE3',
+      type: 'MIX_AND_MATCH',
+      targetType: 'CATEGORY',
+      targetValue: 'produce',
+      minQty: 3,
+      discountPercent: 15,
+      active: true,
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      description: 'Buy any 3 items from Produce (e.g. Lettuce + Tomatoes + Strawberries) and receive 15% bundle discount.',
+      usageCount: 28,
+    },
+    {
+      id: 'PRM-2026-03',
+      name: 'Perishables Happy Hour (19:00–21:00 · 25% Off Bakery & Produce)',
+      code: 'HAPPYHOUR25',
+      type: 'HAPPY_HOUR',
+      targetType: 'CATEGORY',
+      targetValue: 'bakery,produce',
+      discountPercent: 25,
+      happyHourStart: '19:00',
+      happyHourEnd: '21:00',
+      simulateHappyHourActive: false,
+      active: true,
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      description: 'Daily evening markdown clearance window (19:00–21:00 WIB) on fresh Bakery & Produce.',
+      usageCount: 61,
+    },
+    {
+      id: 'PRM-2026-04',
+      name: 'VIP Campaign Voucher — 20% Off Orders ≥ Rp 100.000',
+      code: 'VIPHEMAT20',
+      type: 'CRM_VOUCHER',
+      targetType: 'ALL',
+      targetValue: 'ALL',
+      discountPercent: 20,
+      minOrderSubtotalIDR: 100000,
+      active: true,
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      description: 'Redeemable CRM campaign voucher code VIPHEMAT20 for 20% basket discount on orders Rp 100.000+.',
+      usageCount: 42,
+    },
+    {
+      id: 'PRM-2026-05',
+      name: 'Restock Loyalty Voucher — 15% Off Orders ≥ Rp 150.000',
+      code: 'RESTOCK15',
+      type: 'CRM_VOUCHER',
+      targetType: 'ALL',
+      targetValue: 'ALL',
+      discountPercent: 15,
+      minOrderSubtotalIDR: 150000,
+      active: true,
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      description: 'Repeat restock campaign voucher code RESTOCK15 (15% off baskets Rp 150.000+).',
+      usageCount: 19,
+    },
+    {
+      id: 'PRM-2026-06',
+      name: 'Welcome Voucher — Rp 10.000 Off Orders ≥ Rp 50.000',
+      code: 'WELCOME10K',
+      type: 'CRM_VOUCHER',
+      targetType: 'ALL',
+      targetValue: 'ALL',
+      discountAmountIDR: 10000,
+      minOrderSubtotalIDR: 50000,
+      active: true,
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      description: 'New member fixed IDR Rp 10.000 discount voucher on orders Rp 50.000+.',
+      usageCount: 84,
+    },
+    {
+      id: 'PRM-2026-07',
+      name: 'Gold Member VIP Fresh Bonus',
+      code: 'VIPGOLD10',
+      type: 'MEMBER_TIER',
+      targetType: 'ALL',
+      targetValue: 'ALL',
+      discountPercent: 10,
+      memberTier: 'GOLD',
+      active: true,
+      description: 'Exclusive 10% automatic discount for Gold tier cardholders.',
+      usageCount: 88,
+    },
+  ];
+}
+let promotionRulesList: PromotionRule[] = createInitialPromotionRules();
 let posTransactionsHistory: POSTransactionReceipt[] = [
   {
     receiptNumber: 'RCP-SEN-882104',
@@ -4053,6 +4135,994 @@ function seedBaselineEnterpriseNotifications() {
 
 seedBaselineEnterpriseNotifications();
 
+// =============================================================
+// IMMUTABLE GOVERNANCE AUDIT TRAIL & SRM SCORING ENGINE
+// =============================================================
+function createInitialAuditTrailLogs(): AuditTrailLogEntry[] {
+  const nowMs = Date.now();
+  return [
+    {
+      id: 'AUD-LOG-2026-0006',
+      timestamp: new Date(nowMs - 1000 * 60 * 18).toISOString(),
+      actorName: 'Hendra Kusuma (COO)',
+      actorRole: 'coo',
+      branchScope: 'CONSOLIDATED',
+      module: 'SECURITY',
+      action: 'ENTERPRISE_SETTINGS_VERIFIED',
+      referenceId: 'CFG-3WAY-TOL-0.5',
+      summary: 'Confirmed 3-Way Match 0.5% tolerance & blockPaymentOnMismatch enforcement across all outlets.',
+    },
+    {
+      id: 'AUD-LOG-2026-0005',
+      timestamp: new Date(nowMs - 1000 * 60 * 52).toISOString(),
+      actorName: 'Budi Santoso (Financial Controller)',
+      actorRole: 'admin',
+      branchScope: 'store-jkt-senopati',
+      module: 'FINANCE',
+      action: 'VENDOR_BILL_APPROVED',
+      referenceId: 'VB-2026-002',
+      summary: 'Approved Vendor Bill INV-BLC-2026-9921 (Rp 804.750) for Bumi Lestari Cooperative after 3-Way Match.',
+    },
+    {
+      id: 'AUD-LOG-2026-0004',
+      timestamp: new Date(nowMs - 1000 * 3600 * 2).toISOString(),
+      actorName: 'Siti Rahmawati (Inventory Audit)',
+      actorRole: 'warehouse',
+      branchScope: 'store-jkt-senopati',
+      module: 'INVENTORY',
+      action: 'STOCKTAKE_SESSION_OPENED',
+      referenceId: 'SO-BLIND-2026-001',
+      summary: 'Initiated Cold-Chain Blind Opname cycle count for zone WH-JKT-SEN-COLD (Senopati Flagship).',
+    },
+    {
+      id: 'AUD-LOG-2026-0003',
+      timestamp: new Date(nowMs - 1000 * 3600 * 4).toISOString(),
+      actorName: 'Budi Santoso (QC Lead)',
+      actorRole: 'warehouse',
+      branchScope: 'store-jkt-senopati',
+      module: 'QUALITY',
+      action: 'QC_RTV_DEBIT_NOTE_ISSUED',
+      referenceId: 'RTV-2026-0001',
+      summary: 'Issued Nota Retur Pembelian NRP-2026-0001 (Rp 213.120) for PT Lembang Agro Sejahtera due to 6.5°C cold breach.',
+    },
+    {
+      id: 'AUD-LOG-2026-0002',
+      timestamp: new Date(nowMs - 1000 * 3600 * 7).toISOString(),
+      actorName: 'Dewi Lestari (Frontline Cashier)',
+      actorRole: 'cashier',
+      branchScope: 'store-jkt-senopati',
+      module: 'POS',
+      action: 'POS_SHIFT_RECONCILED',
+      referenceId: 'Z-RPT-2026-0000',
+      summary: 'Closed register shift SHF-2026-0000 with Rp 0 cash variance (Rp 1.950.000 verified in drawer).',
+    },
+    {
+      id: 'AUD-LOG-2026-0001',
+      timestamp: new Date(nowMs - 1000 * 3600 * 12).toISOString(),
+      actorName: 'Andi Wijaya (Procurement Lead)',
+      actorRole: 'purchasing',
+      branchScope: 'store-jkt-senopati',
+      module: 'PROCUREMENT',
+      action: 'PURCHASE_ORDER_ISSUED',
+      referenceId: 'PO-2026-088',
+      summary: 'Issued PO-2026-088 (Rp 610.500) to Kebun Sari Bumi Eco-Farm (Lembang) for Hydroponic Butterhead Lettuce.',
+    },
+  ];
+}
+
+let auditTrailLogs: AuditTrailLogEntry[] = createInitialAuditTrailLogs();
+
+function appendAuditTrailLog(params: {
+  req?: Request;
+  actorName?: string;
+  actorRole?: string;
+  branchScope?: string;
+  module: AuditTrailModuleType;
+  action: string;
+  referenceId: string;
+  summary: string;
+  timestamp?: string;
+}): AuditTrailLogEntry {
+  const reqHeaders = params.req?.headers;
+  const rawRole = typeof reqHeaders?.['x-operator-role'] === 'string' ? reqHeaders['x-operator-role'].trim() : undefined;
+  const rawBranch = typeof reqHeaders?.['x-operator-branch'] === 'string' ? reqHeaders['x-operator-branch'].trim() : undefined;
+  const rawOpId = typeof reqHeaders?.['x-operator-id'] === 'string' ? reqHeaders['x-operator-id'].trim() : undefined;
+
+  const matchedOp = rawOpId ? AVAILABLE_STAFF_USERS.find((u) => u.userId === rawOpId) : undefined;
+  const resolvedRole = params.actorRole || (rawRole ? normalizeServerRole(rawRole) : normalizeServerRole(currentActiveStaffSession.userRole));
+  const resolvedActor = params.actorName || matchedOp?.userName || currentActiveStaffSession.userName;
+  const resolvedBranch = params.branchScope || (rawBranch && rawBranch !== 'ALL' ? rawBranch : matchedOp?.storeId || currentActiveStaffSession.storeId || 'CONSOLIDATED');
+
+  const seq = (auditTrailLogs.length + 1).toString().padStart(4, '0');
+  const entry: AuditTrailLogEntry = {
+    id: `AUD-LOG-2026-${seq}`,
+    timestamp: params.timestamp || new Date().toISOString(),
+    actorName: resolvedActor,
+    actorRole: resolvedRole,
+    branchScope: resolvedBranch === 'ALL' ? 'CONSOLIDATED' : resolvedBranch,
+    module: params.module,
+    action: params.action,
+    referenceId: params.referenceId,
+    summary: params.summary,
+  };
+  auditTrailLogs.unshift(entry);
+  return entry;
+}
+
+function normalizeSrmVendorKey(rawName?: string): string {
+  return String(rawName || '')
+    .toLowerCase()
+    .replace(/\b(eco-farm|pt|cv|ud)\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function resolveCanonicalVendorName(rawName?: string, linkedPoId?: string): string {
+  if (linkedPoId) {
+    const linkedPo = purchaseOrders.find((p) => p.id === linkedPoId || p.poNumber === linkedPoId);
+    if (linkedPo?.supplierName) return linkedPo.supplierName;
+  }
+  const cleaned = String(rawName || '').trim();
+  if (!cleaned) return 'Official Farm Partner';
+
+  const norm = normalizeSrmVendorKey(cleaned);
+  const poMatch = purchaseOrders.find((p) => {
+    const pNorm = normalizeSrmVendorKey(p.supplierName);
+    return pNorm === norm || pNorm.includes(norm) || norm.includes(pNorm);
+  });
+  if (poMatch) return poMatch.supplierName;
+
+  const invMatch = inventoryList.find((i) => {
+    const iNorm = normalizeSrmVendorKey(i.supplierName);
+    return iNorm === norm || iNorm.includes(norm) || norm.includes(iNorm);
+  });
+  if (invMatch) return invMatch.supplierName;
+
+  return cleaned;
+}
+
+function computeVendorScorecards(): VendorScorecardResponse {
+  const vendorBuckets = new Map<
+    string,
+    {
+      supplierName: string;
+      totalPOs: number;
+      completedGRs: number;
+      onTimeGRs: number;
+      inspectedLots: number;
+      totalInspectedQty: number;
+      passedInspectedQty: number;
+      rtvCount: number;
+      totalBills: number;
+      matchedBills: number;
+      totalSpendIDR: number;
+    }
+  >();
+
+  const getBucket = (canonicalName: string) => {
+    let b = vendorBuckets.get(canonicalName);
+    if (!b) {
+      b = {
+        supplierName: canonicalName,
+        totalPOs: 0,
+        completedGRs: 0,
+        onTimeGRs: 0,
+        inspectedLots: 0,
+        totalInspectedQty: 0,
+        passedInspectedQty: 0,
+        rtvCount: 0,
+        totalBills: 0,
+        matchedBills: 0,
+        totalSpendIDR: 0,
+      };
+      vendorBuckets.set(canonicalName, b);
+    }
+    return b;
+  };
+
+  // Seed catalog suppliers so Create PO / PR selectors have every active catalog vendor represented
+  inventoryList.forEach((inv) => {
+    if (inv.supplierName) {
+      getBucket(resolveCanonicalVendorName(inv.supplierName));
+    }
+  });
+
+  // 1. Purchase Orders
+  purchaseOrders.forEach((po) => {
+    const vendorName = resolveCanonicalVendorName(po.supplierName);
+    const b = getBucket(vendorName);
+    b.totalPOs += 1;
+    b.totalSpendIDR += roundIDR(po.totalCost || 0);
+  });
+
+  // 2. Goods Receipts -> OTD % (35%)
+  goodsReceipts.forEach((gr) => {
+    const linkedPo = purchaseOrders.find((p) => p.id === gr.poId || p.poNumber === gr.poId);
+    const vendorName = resolveCanonicalVendorName(gr.vendorName, gr.poId);
+    const b = getBucket(vendorName);
+    b.completedGRs += 1;
+
+    const receivedDateStr = String(gr.receivedAt || '').slice(0, 10);
+    const expectedDateStr = String(linkedPo?.expectedDeliveryDate || receivedDateStr).slice(0, 10);
+    const isOnTime = !expectedDateStr || receivedDateStr <= expectedDateStr;
+    if (isOnTime) {
+      b.onTimeGRs += 1;
+    }
+  });
+
+  // Fallback OTD for Completed POs without an explicit GR record
+  purchaseOrders.forEach((po) => {
+    if (po.status === 'Completed' && (!po.goodsReceiptIds || po.goodsReceiptIds.length === 0)) {
+      const hasGr = goodsReceipts.some((gr) => gr.poId === po.id);
+      if (!hasGr) {
+        const b = getBucket(resolveCanonicalVendorName(po.supplierName));
+        b.completedGRs += 1;
+        const actualStr = String(po.actualDeliveryDate || po.updatedAt || po.createdAt).slice(0, 10);
+        const expectedStr = String(po.expectedDeliveryDate || actualStr).slice(0, 10);
+        if (actualStr <= expectedStr) b.onTimeGRs += 1;
+      }
+    }
+  });
+
+  // 3. QC Quality Pass Rate (40%) + RTV Rejections
+  const countedQcIds = new Set<string>();
+  qcInspectionsList.forEach((qc) => {
+    let supplierName: string | undefined;
+    if (qc.referenceType === 'INCOMING_PO') {
+      const po = purchaseOrders.find((p) => p.id === qc.referenceId || p.poNumber === qc.referenceId);
+      if (po) supplierName = po.supplierName;
+    }
+    if (!supplierName && qc.batchNumber) {
+      const batch = inventoryBatches.find((bat) => bat.lotNumber === qc.batchNumber || bat.batchId === qc.batchNumber);
+      if (batch?.supplierName) supplierName = batch.supplierName;
+    }
+    if (!supplierName) {
+      const inv = inventoryList.find((i) => i.sku === qc.sku);
+      if (inv?.supplierName) supplierName = inv.supplierName;
+    }
+    const canonical = resolveCanonicalVendorName(supplierName);
+    const b = getBucket(canonical);
+    const batchQty = Math.max(1, Number(qc.totalBatchQuantity || qc.sampleQuantity || 1));
+    const isPassed = qc.disposition === 'PASSED' && qc.parameters?.coldChainCompliant !== false;
+
+    b.inspectedLots += 1;
+    b.totalInspectedQty += batchQty;
+    if (isPassed) {
+      b.passedInspectedQty += batchQty;
+    }
+    countedQcIds.add(qc.id);
+  });
+
+  vendorRtvList.forEach((rtv) => {
+    const canonical = resolveCanonicalVendorName(rtv.supplierName);
+    const b = getBucket(canonical);
+    b.rtvCount += 1;
+    const rejQty = Math.max(1, Number(rtv.quantityReturned || 1));
+    if (!rtv.qcInspectionId || !countedQcIds.has(rtv.qcInspectionId)) {
+      b.inspectedLots += 1;
+      b.totalInspectedQty += rejQty;
+    } else {
+      b.passedInspectedQty = Math.max(0, b.passedInspectedQty - rejQty);
+    }
+  });
+
+  // 4. 3-Way Match Billing Accuracy % (25%) — within 0.5% tolerance threshold
+  vendorBillsList
+    .filter((bill) => bill.status !== 'VOID')
+    .forEach((bill) => {
+      const canonical = resolveCanonicalVendorName(bill.supplierName, bill.poId);
+      const b = getBucket(canonical);
+      b.totalBills += 1;
+
+      const itemsWithinTolerance =
+        Array.isArray(bill.items) && bill.items.length > 0
+          ? bill.items.every((item) => {
+              if (item.hasQuantityVariance || item.hasPriceVariance) return false;
+              const baseQty = Math.max(1, Number(item.grQuantity || item.poQuantity || 1));
+              const qtyDiffRatio = Math.abs(Number(item.billedQuantity || 0) - Number(item.grQuantity || 0)) / baseQty;
+              return qtyDiffRatio <= 0.005;
+            })
+          : true;
+
+      const statusClean = !['PRICE_VARIANCE', 'QTY_VARIANCE', 'DISPUTED', 'REJECTED'].includes(bill.status);
+      if (itemsWithinTolerance && statusClean) {
+        b.matchedBills += 1;
+      }
+    });
+
+  // 5. Dynamic Weighted Score (Normalized across available metrics)
+  const scorecards: VendorScorecardRecord[] = Array.from(vendorBuckets.values()).map((b) => {
+    const otdRate = b.completedGRs > 0 ? Number(((b.onTimeGRs / b.completedGRs) * 100).toFixed(1)) : null;
+    const qcRate = b.totalInspectedQty > 0 ? Number(((b.passedInspectedQty / b.totalInspectedQty) * 100).toFixed(1)) : null;
+    const billingRate = b.totalBills > 0 ? Number(((b.matchedBills / b.totalBills) * 100).toFixed(1)) : null;
+
+    const components = [
+      { weight: 0.35, value: otdRate },
+      { weight: 0.4, value: qcRate },
+      { weight: 0.25, value: billingRate },
+    ].filter((c): c is { weight: number; value: number } => c.value !== null);
+
+    const availableMetricsCount = components.length;
+    let compositeScore = 85; // Standard baseline when catalog vendor has no transactions yet
+    if (availableMetricsCount > 0) {
+      const weightSum = components.reduce((s, c) => s + c.weight, 0);
+      const weightedSum = components.reduce((s, c) => s + c.value * c.weight, 0);
+      compositeScore = Math.max(0, Math.min(100, Math.round(weightedSum / weightSum)));
+    }
+
+    let grade: VendorSrmGrade = 'B';
+    let gradeLabel: VendorScorecardRecord['gradeLabel'] = 'GRADE B • STANDARD VENDOR';
+    if (compositeScore >= 90) {
+      grade = 'A';
+      gradeLabel = 'GRADE A • PREFERRED PARTNER';
+    } else if (compositeScore < 75) {
+      grade = 'C';
+      gradeLabel = 'GRADE C • PROBATION / REVIEW';
+    }
+
+    let advisoryNote = 'Standard vendor profile; monitor cold-chain & invoice adherence.';
+    if (availableMetricsCount === 0) {
+      advisoryNote = 'Catalog partner awaiting first closed GR, QC inspection, or AP match.';
+    } else if (grade === 'A') {
+      advisoryNote = `Preferred partner (${qcRate !== null ? `${qcRate}% QC Pass` : `${otdRate ?? billingRate}% SLA`}). Eligible for automated restock.`;
+    } else if (grade === 'C') {
+      const reasons: string[] = [];
+      if (qcRate !== null && qcRate < 75) reasons.push(`Low QC Pass (${qcRate}%)`);
+      if (otdRate !== null && otdRate < 75) reasons.push(`Late Delivery (${otdRate}% OTD)`);
+      if (billingRate !== null && billingRate < 75) reasons.push(`Billing Variance (${billingRate}%)`);
+      if (b.rtvCount > 0) reasons.push(`${b.rtvCount} RTV rejection(s)`);
+      advisoryNote = `${reasons.join(' · ') || 'Performance below threshold'} — Review terms before PO issue.`;
+    }
+
+    return {
+      supplierName: b.supplierName,
+      totalPOs: b.totalPOs,
+      completedGRs: b.completedGRs,
+      onTimeGRs: b.onTimeGRs,
+      inspectedLots: b.inspectedLots,
+      totalInspectedQty: b.totalInspectedQty,
+      passedInspectedQty: b.passedInspectedQty,
+      rtvCount: b.rtvCount,
+      totalBills: b.totalBills,
+      matchedBills: b.matchedBills,
+      totalSpendIDR: b.totalSpendIDR,
+      onTimeDeliveryRate: otdRate,
+      qcPassRate: qcRate,
+      billingAccuracyRate: billingRate,
+      compositeScore,
+      grade,
+      gradeLabel,
+      advisoryNote,
+      availableMetricsCount,
+    };
+  });
+
+  scorecards.sort((a, b) => {
+    const aHasTxn = a.availableMetricsCount > 0 || a.totalPOs > 0 ? 1 : 0;
+    const bHasTxn = b.availableMetricsCount > 0 || b.totalPOs > 0 ? 1 : 0;
+    if (aHasTxn !== bHasTxn) return bHasTxn - aHasTxn;
+    if (b.compositeScore !== a.compositeScore) return b.compositeScore - a.compositeScore;
+    return b.totalSpendIDR - a.totalSpendIDR;
+  });
+
+  const scoredVendors = scorecards.filter((s) => s.availableMetricsCount > 0);
+  const otdList = scorecards.map((s) => s.onTimeDeliveryRate).filter((v): v is number => v !== null);
+  const qcList = scorecards.map((s) => s.qcPassRate).filter((v): v is number => v !== null);
+  const billList = scorecards.map((s) => s.billingAccuracyRate).filter((v): v is number => v !== null);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    scorecards,
+    summary: {
+      totalVendors: scorecards.length,
+      gradeACount: scorecards.filter((s) => s.grade === 'A').length,
+      gradeBCount: scorecards.filter((s) => s.grade === 'B').length,
+      gradeCCount: scorecards.filter((s) => s.grade === 'C').length,
+      avgCompositeScore:
+        scoredVendors.length > 0
+          ? Math.round(scoredVendors.reduce((s, v) => s + v.compositeScore, 0) / scoredVendors.length)
+          : 85,
+      avgOtdRate: otdList.length > 0 ? Number((otdList.reduce((a, b) => a + b, 0) / otdList.length).toFixed(1)) : null,
+      avgQcPassRate: qcList.length > 0 ? Number((qcList.reduce((a, b) => a + b, 0) / qcList.length).toFixed(1)) : null,
+      avgBillingAccuracyRate:
+        billList.length > 0 ? Number((billList.reduce((a, b) => a + b, 0) / billList.length).toFixed(1)) : null,
+    },
+  };
+}
+
+function computeOperatorKpiSummary(): OperatorKpiSummary {
+  // 1. Frontline Cashiers
+  const totalReceiptsProcessed = posTransactionsHistory.length;
+  const totalNetSalesIDR = posTransactionsHistory.reduce((s, r) => s + roundIDR(r.total || 0), 0);
+  const avgBasketSizeIDR = totalReceiptsProcessed > 0 ? Math.round(totalNetSalesIDR / totalReceiptsProcessed) : 0;
+  const closedShifts = posShiftsList.filter((sh) => sh.status === 'CLOSED');
+  const zeroVarianceShifts = closedShifts.filter((sh) => Math.abs(sh.cashVarianceIDR || 0) === 0);
+  const shiftVarianceAccuracyPct =
+    closedShifts.length > 0 ? Number(((zeroVarianceShifts.length / closedShifts.length) * 100).toFixed(1)) : 100;
+  const totalCashVarianceIDR = closedShifts.reduce((s, sh) => s + Math.round(sh.cashVarianceIDR || 0), 0);
+  const safeDropsCount = safeDropsList.length;
+  const safeDropsTotalIDR = safeDropsList.reduce((s, d) => s + roundIDR(d.amountIDR || 0), 0);
+
+  // 2. Warehouse & QC Team
+  const totalGoodsReceiptsProcessed = goodsReceipts.length;
+  const totalQcInspectionsProcessed = qcInspectionsList.length;
+  const passedQcCount = qcInspectionsList.filter(
+    (q) => q.disposition === 'PASSED' && q.parameters?.coldChainCompliant !== false
+  ).length;
+  const qcPassRatePct =
+    totalQcInspectionsProcessed > 0
+      ? Number(((passedQcCount / totalQcInspectionsProcessed) * 100).toFixed(1))
+      : 100;
+
+  let stocktakeMatchedLines = 0;
+  let stocktakeTotalLines = 0;
+  stockOpnameSessions.forEach((sess) => {
+    (sess.items || []).forEach((it: any) => {
+      stocktakeTotalLines += 1;
+      if (Math.abs((it.countedStock ?? it.systemStock ?? 0) - (it.systemStock ?? 0)) <= 0.01) {
+        stocktakeMatchedLines += 1;
+      }
+    });
+  });
+  rackStocktakeSubmissions.forEach((sub) => {
+    (sub.lines || []).forEach((ln) => {
+      stocktakeTotalLines += 1;
+      if (ln.status === 'MATCHED' || Math.abs(ln.varianceQty || 0) <= 0.01) {
+        stocktakeMatchedLines += 1;
+      }
+    });
+  });
+  blindOpnameSheetsList.forEach((sh) => {
+    if (sh.status === 'APPROVED') {
+      (sh.items || []).forEach((ln: any) => {
+        stocktakeTotalLines += 1;
+        if (Math.abs((ln.varianceQty ?? 0)) <= 0.01) {
+          stocktakeMatchedLines += 1;
+        }
+      });
+    }
+  });
+  const stocktakeSessionsCount =
+    stockOpnameSessions.length + rackStocktakeSubmissions.length + blindOpnameSheetsList.length;
+  const stocktakeCountAccuracyPct =
+    stocktakeTotalLines > 0 ? Number(((stocktakeMatchedLines / stocktakeTotalLines) * 100).toFixed(1)) : 100;
+
+  const crossDockDispatchesCount = stockTransfersList.filter((t) =>
+    String(t.id || '').startsWith('TRF-XDK') || String(t.notes || '').toLowerCase().includes('cross-dock')
+  ).length;
+  const totalTransfersCount = stockTransfersList.length;
+
+  // 3. Procurement & Finance
+  const totalPOsIssued = purchaseOrders.length;
+  const activeBills = vendorBillsList.filter((b) => b.status !== 'VOID');
+  const totalVendorBillsCount = activeBills.length;
+  const cleanMatchedBills = activeBills.filter((b) =>
+    ['MATCHED', 'APPROVED', 'PAID', 'PARTIALLY_PAID'].includes(b.status)
+  ).length;
+  const threeWayMatchAutoApprovalRatePct =
+    totalVendorBillsCount > 0 ? Number(((cleanMatchedBills / totalVendorBillsCount) * 100).toFixed(1)) : 100;
+  const approvalMatrixTurnaroundCount = approvalQueueList.filter(
+    (q) => q.status === 'APPROVED' || q.status === 'REJECTED'
+  ).length;
+  const approvalMatrixPendingCount = approvalQueueList.filter((q) => q.status === 'PENDING').length;
+
+  return {
+    cashiers: {
+      totalReceiptsProcessed,
+      totalNetSalesIDR,
+      avgBasketSizeIDR,
+      shiftsClosedCount: closedShifts.length,
+      zeroVarianceShiftsCount: zeroVarianceShifts.length,
+      shiftVarianceAccuracyPct,
+      totalCashVarianceIDR,
+      safeDropsCount,
+      safeDropsTotalIDR,
+    },
+    warehouseQc: {
+      totalGoodsReceiptsProcessed,
+      totalQcInspectionsProcessed,
+      qcPassRatePct,
+      stocktakeCountAccuracyPct,
+      stocktakeSessionsCount,
+      crossDockDispatchesCount,
+      totalTransfersCount,
+    },
+    procurementFinance: {
+      totalPOsIssued,
+      totalVendorBillsCount,
+      threeWayMatchAutoApprovalRatePct,
+      approvalMatrixTurnaroundCount,
+      approvalMatrixPendingCount,
+    },
+  };
+}
+
+// -------------------------------------------------------------
+// SMART DEMAND FORECASTING & PROMOTIONAL VOUCHER ENGINES
+// -------------------------------------------------------------
+function normalizePromoCategoryToken(raw: string): string {
+  const s = String(raw || '').trim().toLowerCase();
+  if (s === 'dairy & eggs' || s === 'dairy') return 'dairy_eggs';
+  if (s === 'meat & seafood' || s === 'meat') return 'meat_seafood';
+  if (s === 'pantry & coffee' || s === 'pantry') return 'pantry_coffee';
+  return s.replace(/\s*&\s*/g, '_').replace(/\s+/g, '_');
+}
+
+function isRuleTargetMatch(
+  rule: Pick<PromotionRule, 'targetType' | 'targetValue'>,
+  item: { sku: string; category: string }
+): boolean {
+  if (rule.targetType === 'ALL' || String(rule.targetValue || '').toUpperCase() === 'ALL') {
+    return true;
+  }
+  if (rule.targetType === 'SKU') {
+    const allowedSkus = String(rule.targetValue || '')
+      .split(',')
+      .map((v) => v.trim().toUpperCase())
+      .filter(Boolean);
+    return allowedSkus.includes(String(item.sku || '').trim().toUpperCase());
+  }
+  if (rule.targetType === 'CATEGORY') {
+    const allowedCats = String(rule.targetValue || '')
+      .split(',')
+      .map((v) => normalizePromoCategoryToken(v))
+      .filter(Boolean);
+    const itemCat = normalizePromoCategoryToken(item.category);
+    return allowedCats.includes(itemCat);
+  }
+  return false;
+}
+
+function isHappyHourWindowActive(rule: PromotionRule, overrideSimulate?: boolean): boolean {
+  if (overrideSimulate === true || rule.simulateHappyHourActive === true) return true;
+  const start = rule.happyHourStart || '19:00';
+  const end = rule.happyHourEnd || '21:00';
+  // Current WIB (UTC+7) HH:MM string
+  const wibNow = new Date(Date.now() + 7 * 3600000);
+  const hhmm = wibNow.toISOString().slice(11, 16);
+  if (start <= end) {
+    return hhmm >= start && hhmm <= end;
+  }
+  return hhmm >= start || hhmm <= end;
+}
+
+function evaluatePromosServer(
+  rawCartItems: any[],
+  options?: {
+    promoCode?: string;
+    memberTier?: string;
+    memberId?: string;
+    simulateHappyHourActive?: boolean;
+  }
+): PosValidatePromoResponse {
+  const activeRules = promotionRulesList.filter((r) => r.active);
+  const normalizedCoupon = String(options?.promoCode || '').trim().toUpperCase();
+  const upperMember = String(options?.memberId || '').toUpperCase();
+  const effectiveTier =
+    options?.memberTier ||
+    (upperMember.includes('VIP') || upperMember.includes('PLAT') || upperMember.endsWith('99')
+      ? 'PLATINUM'
+      : upperMember.includes('GOLD') || upperMember.endsWith('88')
+      ? 'GOLD'
+      : upperMember.includes('SILV') || upperMember.endsWith('77')
+      ? 'SILVER'
+      : undefined);
+
+  const normalizedCart = (Array.isArray(rawCartItems) ? rawCartItems : []).map((it: any) => {
+    const sku = String(it.sku || it.product?.sku || '').trim();
+    const inv = inventoryList.find((i) => i.sku === sku);
+    const unitPrice = Math.max(0, roundIDR(Number(it.unitPrice ?? it.product?.price ?? it.price ?? inv?.sellingPrice ?? 0)));
+    const quantity = Math.max(0, Number(it.quantity) || 0);
+    const lineTotal = roundIDR(
+      Number(it.lineTotal !== undefined ? it.lineTotal : Math.round(unitPrice * quantity))
+    );
+    return {
+      sku,
+      name: String(it.name || it.product?.name || inv?.productName || sku),
+      category: String(it.category || it.product?.category || inv?.category || 'produce'),
+      quantity,
+      unitPrice,
+      lineTotal,
+    };
+  });
+
+  const cartSubtotal = roundIDR(normalizedCart.reduce((sum, it) => sum + it.lineTotal, 0));
+  let totalPromoDiscountIDR = 0;
+  let autoPromoDiscountIDR = 0;
+  let voucherDiscountIDR = 0;
+  let happyHourActive = false;
+  const appliedPromos: AppliedPromotionSummary[] = [];
+  const lineDiscounts: Record<string, number> = {};
+
+  const capAdd = (rawAmt: number) => {
+    const remaining = Math.max(0, cartSubtotal - totalPromoDiscountIDR);
+    return Math.min(remaining, Math.max(0, roundIDR(rawAmt)));
+  };
+
+  // 1. BUY X GET Y (BOGO)
+  for (const rule of activeRules.filter((r) => r.type === 'BOGO')) {
+    const buyQty = Math.max(1, Number(rule.buyQty || 2));
+    const getQty = Math.max(1, Number(rule.getQty || 1));
+    const bundleSize = buyQty + getQty;
+    normalizedCart.forEach((item) => {
+      if (isRuleTargetMatch(rule, item) && item.quantity >= bundleSize) {
+        const freeUnits = Math.floor(item.quantity / bundleSize) * getQty;
+        const pct = Math.min(100, Math.max(1, Number(rule.getDiscountPercent ?? 100)));
+        const discount = capAdd(Math.round(freeUnits * item.unitPrice * (pct / 100)));
+        if (discount > 0) {
+          totalPromoDiscountIDR += discount;
+          autoPromoDiscountIDR += discount;
+          lineDiscounts[item.sku] = (lineDiscounts[item.sku] || 0) + discount;
+          appliedPromos.push({
+            ruleId: rule.id,
+            ruleCode: rule.code,
+            name: rule.name,
+            discountAmountIDR: discount,
+            promoType: 'BOGO',
+            appliedSku: item.sku,
+            badgeLabel: `Buy ${buyQty} Get ${getQty} (${freeUnits} Free)`,
+          });
+        }
+      }
+    });
+  }
+
+  // 2. MIX & MATCH (Any N units across matching category)
+  for (const rule of activeRules.filter((r) => r.type === 'MIX_AND_MATCH')) {
+    const reqQty = Math.max(2, Number(rule.minQty || rule.buyQty || 3));
+    const eligibleItems = normalizedCart.filter((it) => isRuleTargetMatch(rule, it));
+    const totalEligibleUnits = eligibleItems.reduce((s, it) => s + it.quantity, 0);
+    if (totalEligibleUnits >= reqQty) {
+      const eligibleSubtotal = eligibleItems.reduce((s, it) => s + it.lineTotal, 0);
+      const pct = Math.min(90, Math.max(1, Number(rule.discountPercent || 15)));
+      const discount = capAdd(Math.round(eligibleSubtotal * (pct / 100)));
+      if (discount > 0) {
+        totalPromoDiscountIDR += discount;
+        autoPromoDiscountIDR += discount;
+        appliedPromos.push({
+          ruleId: rule.id,
+          ruleCode: rule.code,
+          name: rule.name,
+          discountAmountIDR: discount,
+          promoType: 'MIX_AND_MATCH',
+          badgeLabel: `Mix & Match ${reqQty}+ (-${pct}%)`,
+        });
+      }
+    }
+  }
+
+  // 3. HAPPY HOUR PERISHABLES
+  for (const rule of activeRules.filter((r) => r.type === 'HAPPY_HOUR')) {
+    if (!isHappyHourWindowActive(rule, options?.simulateHappyHourActive)) continue;
+    happyHourActive = true;
+    const eligibleItems = normalizedCart.filter((it) => isRuleTargetMatch(rule, it));
+    const eligibleSubtotal = eligibleItems.reduce((s, it) => s + it.lineTotal, 0);
+    const pct = Math.min(90, Math.max(1, Number(rule.discountPercent || 25)));
+    const discount = capAdd(Math.round(eligibleSubtotal * (pct / 100)));
+    if (discount > 0) {
+      totalPromoDiscountIDR += discount;
+      autoPromoDiscountIDR += discount;
+      appliedPromos.push({
+        ruleId: rule.id,
+        ruleCode: rule.code,
+        name: rule.name,
+        discountAmountIDR: discount,
+        promoType: 'HAPPY_HOUR',
+        badgeLabel: `Happy Hour -${pct}%`,
+      });
+    }
+  }
+
+  // 4. MEMBER TIER AUTOMATIC PERK
+  if (effectiveTier) {
+    const tierRule = activeRules.find((r) => r.type === 'MEMBER_TIER' && r.memberTier === effectiveTier);
+    if (tierRule && tierRule.discountPercent) {
+      const discount = capAdd(Math.round(cartSubtotal * (tierRule.discountPercent / 100)));
+      if (discount > 0) {
+        totalPromoDiscountIDR += discount;
+        autoPromoDiscountIDR += discount;
+        appliedPromos.push({
+          ruleId: tierRule.id,
+          ruleCode: tierRule.code,
+          name: tierRule.name,
+          discountAmountIDR: discount,
+          promoType: 'MEMBER_TIER',
+          badgeLabel: `${effectiveTier} VIP -${tierRule.discountPercent}%`,
+        });
+      }
+    }
+  }
+
+  // 5. CRM VOUCHER / COUPON CODE VALIDATION
+  let valid = true;
+  let message =
+    appliedPromos.length > 0
+      ? `${appliedPromos.length} automatic promo rule(s) active.`
+      : 'No promo code entered.';
+
+  if (normalizedCoupon) {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const matchedCoupon = promotionRulesList.find((r) => r.code.toUpperCase() === normalizedCoupon);
+
+    if (!matchedCoupon) {
+      if (normalizedCoupon === 'GROCEFRESH' && cartSubtotal > 0) {
+        const d = capAdd(10000);
+        if (d > 0) {
+          totalPromoDiscountIDR += d;
+          voucherDiscountIDR += d;
+          appliedPromos.push({
+            ruleId: 'PRM-STORE-GROCEFRESH',
+            ruleCode: 'GROCEFRESH',
+            name: 'GroceMart Fresh Welcome Rp 10.000',
+            discountAmountIDR: d,
+            promoType: 'FIXED_DISCOUNT',
+            badgeLabel: 'Voucher [GROCEFRESH]',
+          });
+          message = 'Voucher GROCEFRESH applied.';
+        }
+      } else if (normalizedCoupon === 'FREEDELIVERY' && cartSubtotal > 0) {
+        const d = capAdd(15000);
+        if (d > 0) {
+          totalPromoDiscountIDR += d;
+          voucherDiscountIDR += d;
+          appliedPromos.push({
+            ruleId: 'PRM-STORE-FREEDELIVERY',
+            ruleCode: 'FREEDELIVERY',
+            name: 'Free Courier Delivery Waiver',
+            discountAmountIDR: d,
+            promoType: 'FIXED_DISCOUNT',
+            badgeLabel: 'Voucher [FREEDELIVERY]',
+          });
+          message = 'Voucher FREEDELIVERY applied.';
+        }
+      } else {
+        valid = false;
+        message = `Promo / voucher code "${normalizedCoupon}" was not found.`;
+      }
+    } else if (!matchedCoupon.active) {
+      valid = false;
+      message = `Promo code "${normalizedCoupon}" is currently paused.`;
+    } else if (matchedCoupon.endDate && todayIso > matchedCoupon.endDate) {
+      valid = false;
+      message = `Voucher "${normalizedCoupon}" expired on ${matchedCoupon.endDate}.`;
+    } else if (matchedCoupon.minOrderSubtotalIDR && cartSubtotal < matchedCoupon.minOrderSubtotalIDR) {
+      valid = false;
+      message = `Minimum spend of Rp ${matchedCoupon.minOrderSubtotalIDR.toLocaleString('id-ID')} required for ${normalizedCoupon}.`;
+    } else if (matchedCoupon.type === 'BOGO' || matchedCoupon.type === 'MIX_AND_MATCH' || matchedCoupon.type === 'HAPPY_HOUR') {
+      const alreadyApplied = appliedPromos.some((p) => p.ruleId === matchedCoupon.id);
+      if (alreadyApplied) {
+        message = `Promo ${normalizedCoupon} is already active on eligible cart items.`;
+      } else {
+        valid = false;
+        message = `Cart items do not yet qualify for ${matchedCoupon.name}.`;
+      }
+    } else if (matchedCoupon.type === 'MEMBER_TIER') {
+      const alreadyApplied = appliedPromos.some((p) => p.ruleId === matchedCoupon.id);
+      if (!alreadyApplied && matchedCoupon.discountPercent) {
+        const d = capAdd(Math.round(cartSubtotal * (matchedCoupon.discountPercent / 100)));
+        if (d > 0) {
+          totalPromoDiscountIDR += d;
+          voucherDiscountIDR += d;
+          appliedPromos.push({
+            ruleId: matchedCoupon.id,
+            ruleCode: matchedCoupon.code,
+            name: matchedCoupon.name,
+            discountAmountIDR: d,
+            promoType: matchedCoupon.type,
+            badgeLabel: `Voucher [${matchedCoupon.code}]`,
+          });
+          message = `Voucher ${matchedCoupon.code} applied (-Rp ${d.toLocaleString('id-ID')}).`;
+        }
+      } else {
+        message = `Tier voucher ${normalizedCoupon} is already applied.`;
+      }
+    } else {
+      const eligibleItems = normalizedCart.filter((it) => isRuleTargetMatch(matchedCoupon, it));
+      const eligibleSubtotal = eligibleItems.reduce((sum, it) => sum + it.lineTotal, 0);
+      let rawDiscount = 0;
+      if (matchedCoupon.discountPercent) {
+        rawDiscount = Math.round(eligibleSubtotal * (matchedCoupon.discountPercent / 100));
+      } else if (matchedCoupon.discountAmountIDR) {
+        rawDiscount = Math.min(eligibleSubtotal, matchedCoupon.discountAmountIDR);
+      }
+      const d = capAdd(rawDiscount);
+      if (d > 0) {
+        totalPromoDiscountIDR += d;
+        voucherDiscountIDR += d;
+        appliedPromos.push({
+          ruleId: matchedCoupon.id,
+          ruleCode: matchedCoupon.code,
+          name: matchedCoupon.name,
+          discountAmountIDR: d,
+          promoType: matchedCoupon.type,
+          badgeLabel: `Voucher [${matchedCoupon.code}]`,
+        });
+        message = `Voucher ${matchedCoupon.code} applied (-Rp ${d.toLocaleString('id-ID')}).`;
+      } else {
+        valid = false;
+        message = `No eligible cart items found for voucher ${normalizedCoupon}.`;
+      }
+    }
+  }
+
+  totalPromoDiscountIDR = Math.min(cartSubtotal, roundIDR(totalPromoDiscountIDR));
+  return {
+    valid,
+    promoCode: normalizedCoupon,
+    message,
+    totalPromoDiscountIDR,
+    autoPromoDiscountIDR: Math.min(cartSubtotal, roundIDR(autoPromoDiscountIDR)),
+    voucherDiscountIDR: Math.min(cartSubtotal, roundIDR(voucherDiscountIDR)),
+    appliedPromos,
+    lineDiscounts,
+    happyHourActive,
+  };
+}
+
+function computeDemandForecast(params?: {
+  storeId?: string;
+  horizonDays?: number;
+  seasonalityProfile?: DemandSeasonalityProfile;
+}): DemandForecastResponse {
+  syncAllBatchesExpiryStatus(Date.now());
+  const rawStore = params?.storeId;
+  const isSpecificStore = Boolean(rawStore && rawStore !== 'ALL' && rawStore !== 'CONSOLIDATED');
+  const targetStore = isSpecificStore ? rawStore! : 'CONSOLIDATED';
+  const storeInfo = isSpecificStore ? storeSchedules.find((s) => s.storeId === targetStore) : undefined;
+  const storeName = isSpecificStore
+    ? storeInfo?.storeName || 'GroceMart Regional Outlet'
+    : 'All Store Outlets (Consolidated Network)';
+
+  const rawHorizon = Number(params?.horizonDays || 14);
+  const horizonDays: DemandForecastHorizon = rawHorizon === 7 || rawHorizon === 30 ? rawHorizon : 14;
+
+  const profile: DemandSeasonalityProfile =
+    params?.seasonalityProfile === 'WEEKEND_PEAK' || params?.seasonalityProfile === 'FESTIVE_SURGE'
+      ? params.seasonalityProfile
+      : 'NORMAL';
+  const seasonalityMultiplier =
+    profile === 'FESTIVE_SURGE' ? 1.4 : profile === 'WEEKEND_PEAK' ? 1.25 : 1.0;
+
+  // Aggregate live velocity from settled POS receipts & B2B orders
+  const posUnitsBySku = new Map<string, number>();
+  posTransactionsHistory.forEach((rcpt) => {
+    if (isSpecificStore && rcpt.storeId !== targetStore) return;
+    (rcpt.items || []).forEach((it) => {
+      posUnitsBySku.set(it.sku, (posUnitsBySku.get(it.sku) || 0) + Number(it.quantity || 0));
+    });
+  });
+
+  const b2bUnitsBySku = new Map<string, number>();
+  b2bOrdersList.forEach((ord) => {
+    (ord.items || []).forEach((it) => {
+      const skuKey = it.product?.sku;
+      if (!skuKey) return;
+      b2bUnitsBySku.set(skuKey, (b2bUnitsBySku.get(skuKey) || 0) + Number(it.baseUnitsCalculated || it.quantity || 0));
+    });
+  });
+
+  const srmResult = computeVendorScorecards();
+  const bestGradeAVendor = srmResult.scorecards.find((v) => v.grade === 'A');
+
+  const items: DemandForecastItem[] = inventoryList.map((inv) => {
+    const tier = isSpecificStore
+      ? storeInventoryTiers.find((t) => t.sku === inv.sku && t.storeId === targetStore)
+      : undefined;
+    const matchingTiers = storeInventoryTiers.filter((t) => t.sku === inv.sku);
+    const availableStock = isSpecificStore
+      ? tier
+        ? tier.availableStock
+        : 0
+      : inv.currentStock !== undefined
+      ? Math.max(0, inv.currentStock)
+      : matchingTiers.reduce((s, t) => s + (t.availableStock || 0), 0);
+
+    const incomingStock = isSpecificStore
+      ? tier?.incomingStock || 0
+      : inv.incomingStock || 0;
+
+    // Combine real POS & B2B observed throughput with catalog velocity baseline (30d window)
+    const posSold = posUnitsBySku.get(inv.sku) || 0;
+    const b2bSold = b2bUnitsBySku.get(inv.sku) || 0;
+    const catalogBaseline30d = Math.max(36, Number(inv.outgoingStock || 60));
+    const observedDaily = (posSold + b2bSold * 0.25) / 14;
+    const catalogDaily = catalogBaseline30d / 30;
+    const baseDailySales = Number(Math.max(1.2, catalogDaily + observedDaily * 0.35).toFixed(1));
+    const adjustedDailySales = Number((baseDailySales * seasonalityMultiplier).toFixed(2));
+    const horizonDemandUnits = Math.ceil(adjustedDailySales * horizonDays);
+
+    const leadTimeDays =
+      inv.category === 'pantry_coffee' ? 4 : inv.category === 'meat_seafood' ? 2 : 3;
+    const safetyStockDays = 2;
+
+    const daysOfSupply =
+      adjustedDailySales > 0 ? Math.floor(availableStock / adjustedDailySales) : 999;
+
+    const projectedStockoutDate =
+      adjustedDailySales > 0 && daysOfSupply < 365
+        ? new Date(Date.now() + daysOfSupply * 86400000).toISOString().split('T')[0]
+        : null;
+
+    const recommendedReorderQty = Math.max(
+      0,
+      Math.ceil(adjustedDailySales * (leadTimeDays + safetyStockDays) - (availableStock + incomingStock))
+    );
+
+    const estimatedUnitCostIDR = roundIDR(inv.wacUnitCost || inv.unitCost || Math.round(inv.sellingPrice * 0.68));
+    const estimatedOrderValueIDR = roundIDR(recommendedReorderQty * estimatedUnitCostIDR);
+
+    const urgencyStatus: DemandForecastItem['urgencyStatus'] =
+      daysOfSupply <= 2
+        ? 'STOCKOUT_IMMINENT'
+        : daysOfSupply <= 5
+        ? 'REORDER_SOON'
+        : 'HEALTHY';
+
+    const urgencyLabel =
+      urgencyStatus === 'STOCKOUT_IMMINENT'
+        ? 'STOCKOUT IMMINENT (<= 2d)'
+        : urgencyStatus === 'REORDER_SOON'
+        ? 'REORDER SOON (3-5d)'
+        : 'HEALTHY (> 5d)';
+
+    // Link preferred Grade A SRM Vendor when available
+    const canonicalMapped = resolveCanonicalVendorName(inv.supplierName || 'Kebun Sari Bumi Eco-Farm (Lembang)');
+    const mappedSrm = srmResult.scorecards.find(
+      (v) => normalizeSrmVendorKey(v.supplierName) === normalizeSrmVendorKey(canonicalMapped)
+    );
+    const chosenVendor =
+      mappedSrm && mappedSrm.grade === 'A'
+        ? mappedSrm
+        : bestGradeAVendor || mappedSrm;
+
+    return {
+      sku: inv.sku,
+      productName: inv.productName || inv.name || inv.sku,
+      category: inv.category,
+      storeId: isSpecificStore ? targetStore : 'store-jkt-senopati',
+      storeName,
+      availableStock: Number(availableStock.toFixed(1)),
+      incomingStock: Number(incomingStock.toFixed(1)),
+      baseDailySales,
+      adjustedDailySales,
+      seasonalityMultiplier,
+      horizonDemandUnits,
+      leadTimeDays,
+      safetyStockDays,
+      daysOfSupply,
+      projectedStockoutDate,
+      recommendedReorderQty,
+      estimatedUnitCostIDR,
+      estimatedOrderValueIDR,
+      urgencyStatus,
+      urgencyLabel,
+      recommendedSupplierName: chosenVendor?.supplierName || canonicalMapped,
+      recommendedSupplierSrmGrade: chosenVendor?.grade || 'B',
+      recommendedSupplierSrmScore: chosenVendor?.compositeScore || 85,
+      isGradeARecommended: chosenVendor?.grade === 'A',
+    };
+  });
+
+  items.sort((a, b) => a.daysOfSupply - b.daysOfSupply || b.recommendedReorderQty - a.recommendedReorderQty);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    storeId: targetStore,
+    storeName,
+    horizonDays,
+    seasonalityProfile: profile,
+    seasonalityMultiplier,
+    items,
+    summary: {
+      totalSkus: items.length,
+      stockoutImminentCount: items.filter((i) => i.urgencyStatus === 'STOCKOUT_IMMINENT').length,
+      reorderSoonCount: items.filter((i) => i.urgencyStatus === 'REORDER_SOON').length,
+      healthyCount: items.filter((i) => i.urgencyStatus === 'HEALTHY').length,
+      totalRecommendedOrderValueIDR: items.reduce((s, i) => s + i.estimatedOrderValueIDR, 0),
+    },
+  };
+}
+
 // -------------------------------------------------------------
 // NON-VOLATILE STATE PERSISTENCE SNAPSHOT (.grocematrix-state.json)
 // -------------------------------------------------------------
@@ -4128,6 +5198,7 @@ function captureServerState() {
     crmAccounts,
     crmDeals,
     crmActivities,
+    auditTrailLogs,
     qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
     idempotencyStoreEntries: Array.from(idempotencyStore.entries()),
     inTransitTransferLotsEntries: Array.from(inTransitTransferLots.entries()),
@@ -4225,6 +5296,10 @@ function applyServerState(snap: any) {
   crmAccounts = Array.isArray(snap.crmAccounts) && snap.crmAccounts.length > 0 ? snap.crmAccounts : createInitialCrmAccounts();
   crmDeals = Array.isArray(snap.crmDeals) && snap.crmDeals.length > 0 ? snap.crmDeals : createInitialCrmDeals();
   crmActivities = Array.isArray(snap.crmActivities) && snap.crmActivities.length > 0 ? snap.crmActivities : createInitialCrmActivities();
+  auditTrailLogs =
+    Array.isArray(snap.auditTrailLogs) && snap.auditTrailLogs.length > 0
+      ? snap.auditTrailLogs
+      : createInitialAuditTrailLogs();
   qrisTransactions.clear();
   if (Array.isArray(snap.qrisTransactionsEntries)) {
     snap.qrisTransactionsEntries.forEach(([k, v]: [string, any]) => qrisTransactions.set(k, v));
@@ -4330,8 +5405,11 @@ async function resetDemoStateToBaseline() {
     crmAccounts = createInitialCrmAccounts();
     crmDeals = createInitialCrmDeals();
     crmActivities = createInitialCrmActivities();
+    auditTrailLogs = createInitialAuditTrailLogs();
+    promotionRulesList = createInitialPromotionRules();
     ensureRegulatoryCoaAccounts();
     ensureConsignmentSeedItems();
+    syncAllBatchesExpiryStatus(Date.now());
     syncWarehouseRackOccupancy();
     enterpriseNotificationsList = [];
     seedBaselineEnterpriseNotifications();
@@ -4574,7 +5652,12 @@ async function startServer() {
         }
       }
 
-      // 6. Enterprise Settings, POS Config, Communication Gateway, COA Writes
+      // 6. Enterprise Settings, POS Config, Communication Gateway, COA Writes & Immutable Audit Trail
+      if (urlPath === '/admin/settings/audit-trail') {
+        const allowed: CanonicalServerRole[] = ['coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
       if (
         (urlPath === '/admin/settings/enterprise' ||
           urlPath === '/admin/settings/pos-config' ||
@@ -4640,9 +5723,15 @@ async function startServer() {
       }
 
       // 7. Procurement PR/PO vs Dock Goods Receipt (GR) & QC
+      if (urlPath === '/admin/procurement/vendor-scorecard' || urlPath === '/admin/procurement/demand-forecast') {
+        const allowed: CanonicalServerRole[] = ['purchasing', 'warehouse', 'store_manager', 'admin', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
       if (
         urlPath.startsWith('/admin/procurement/requests') ||
         urlPath.startsWith('/admin/procurement/orders') ||
+        urlPath === '/admin/procurement/demand-forecast/create-pr' ||
         urlPath === '/admin/replenishment/generate-po' ||
         urlPath.startsWith('/admin/vendor-credit-notes') ||
         urlPath === '/admin/compliance/rtv' ||
@@ -6504,6 +7593,15 @@ async function startServer() {
       prTier.incomingStock += pr.suggestedQuantity;
     }
 
+    appendAuditTrailLog({
+      req,
+      branchScope: newPO.storeId,
+      module: 'PROCUREMENT',
+      action: 'PURCHASE_ORDER_FROM_PR',
+      referenceId: newPO.id,
+      summary: `Approved PR ${pr.id} and generated PO ${newPO.id} to ${newPO.supplierName} (Rp ${newPO.totalCost.toLocaleString('id-ID')}).`,
+    });
+
     res.json({ success: true, purchaseRequest: pr, purchaseOrder: newPO });
   });
 
@@ -7881,6 +8979,14 @@ async function startServer() {
       ...target,
       loginTimestamp: new Date().toISOString(),
     };
+    appendAuditTrailLog({
+      req,
+      branchScope: target.storeId || 'CONSOLIDATED',
+      module: 'SECURITY',
+      action: 'RBAC_SESSION_SWITCHED',
+      referenceId: target.userId,
+      summary: `Operator session switched to ${target.userName} (${target.userRole}).`,
+    });
     res.json({
       success: true,
       message: `Active session switched to ${currentActiveStaffSession.userName} (${currentActiveStaffSession.userRole})`,
@@ -8174,6 +9280,8 @@ async function startServer() {
       customerMemberId,
       crmAccountId,
       redeemPoints = 0,
+      promoCode,
+      simulateHappyHourActive,
     } = req.body as POSTransactionRequest;
 
     if (!items || items.length === 0) {
@@ -8384,13 +9492,37 @@ async function startServer() {
       };
     });
 
-    // 2. Post-Markdown Net VAT (PPN) Calculation Accuracy (strict integer IDR)
+    // 2. Post-Markdown & Post-Promo Net VAT (PPN) Calculation Accuracy (strict integer IDR)
     const resolvedSubtotal = roundIDR(computedSubtotal);
     const baseDiscountAmount = Math.min(resolvedSubtotal, Math.max(0, roundIDR(Number(discount) || 0)));
-    const maxRedeemablePts = Math.floor(Math.max(0, resolvedSubtotal - baseDiscountAmount) / 100);
+
+    const promoEval = evaluatePromosServer(normalizedItems, {
+      promoCode,
+      memberTier: matchedCrmAccount?.tier,
+      memberId: customerMemberId || crmAccountId,
+      simulateHappyHourActive,
+    });
+    if (promoCode && String(promoCode).trim() && !promoEval.valid) {
+      return res.status(400).json({
+        error: promoEval.message || `Promo voucher "${promoCode}" is invalid for this cart.`,
+      });
+    }
+    const promoDiscountIDR = Math.min(
+      Math.max(0, resolvedSubtotal - baseDiscountAmount),
+      roundIDR(promoEval.totalPromoDiscountIDR)
+    );
+    const appliedPromos = promoEval.appliedPromos;
+    if (appliedPromos.length > 0) {
+      appliedPromos.forEach((ap) => {
+        const r = promotionRulesList.find((rule) => rule.id === ap.ruleId);
+        if (r) r.usageCount = (r.usageCount || 0) + 1;
+      });
+    }
+
+    const maxRedeemablePts = Math.floor(Math.max(0, resolvedSubtotal - baseDiscountAmount - promoDiscountIDR) / 100);
     const effectivePosRedeemPoints = matchedCrmAccount ? Math.min(requestedRedeemPoints, maxRedeemablePts) : 0;
     const loyaltyPointsDiscountIDR = effectivePosRedeemPoints * 100;
-    const discountAmount = Math.min(resolvedSubtotal, baseDiscountAmount + loyaltyPointsDiscountIDR);
+    const discountAmount = Math.min(resolvedSubtotal, baseDiscountAmount + promoDiscountIDR + loyaltyPointsDiscountIDR);
     const netRevenueIDR = Math.max(0, resolvedSubtotal - discountAmount);
 
     let remainingCartDiscount = discountAmount;
@@ -8691,6 +9823,9 @@ async function startServer() {
       loyaltyPointsEarned: crmLoyaltySummary?.pointsEarned,
       loyaltyPointsRedeemed: crmLoyaltySummary?.pointsRedeemed,
       loyaltyPointsDiscountIDR: crmLoyaltySummary?.pointsDiscountIDR,
+      promoCode: promoCode ? String(promoCode).trim().toUpperCase() : undefined,
+      appliedPromos: appliedPromos.length > 0 ? appliedPromos : undefined,
+      promoDiscountIDR: promoDiscountIDR > 0 ? promoDiscountIDR : undefined,
     };
 
     posTransactionsHistory.unshift(receipt);
@@ -8721,6 +9856,19 @@ async function startServer() {
       storeId
     );
     syncWarehouseRackOccupancy();
+    if (discountAmount > 0) {
+      appendAuditTrailLog({
+        req,
+        actorName: cashierName,
+        branchScope: storeId,
+        module: 'POS',
+        action: promoDiscountIDR > 0 ? 'POS_PROMO_VOUCHER_APPLIED' : 'POS_DISCOUNT_MARKDOWN_OVERRIDE',
+        referenceId: receiptNumber,
+        summary: `POS Checkout #${receiptNumber} processed with Rp ${discountAmount.toLocaleString('id-ID')} discount${
+          promoCode ? ` (Voucher: ${String(promoCode).toUpperCase()})` : ''
+        }.`,
+      });
+    }
     scheduleStateSave();
 
     res.json({
@@ -8784,6 +9932,15 @@ async function startServer() {
       shiftId: currentActiveStaffSession.activeShiftId,
       status: 'AUTHORIZED_EXECUTED',
       metadata: { updatedBy: currentActiveStaffSession.userName },
+    });
+
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'SECURITY',
+      action: 'ENTERPRISE_SETTINGS_UPDATED',
+      referenceId: 'ENTERPRISE_SETTINGS',
+      summary: `Updated Enterprise SaaS Settings (${Object.keys(updates || {}).join(', ') || 'policy rules'}).`,
     });
 
     res.json({
@@ -9301,6 +10458,17 @@ async function startServer() {
       },
     });
 
+    appendAuditTrailLog({
+      req,
+      actorName,
+      actorRole: 'super_admin',
+      branchScope: option.storeId,
+      module: 'SECURITY',
+      action: 'RBAC_OPERATOR_UPDATED',
+      referenceId: userId,
+      summary: `Updated ${targetProfile.userName}: role=${nextRole}, branch=${option.storeName}, active=${nextIsActive}${loginPin !== undefined ? ', PIN updated' : ''}.`,
+    });
+
     const assignments: OperatorBranchAssignment[] = AVAILABLE_STAFF_USERS.map((u) => {
       const assigned = operatorBranchAssignments[u.userId];
       const pinVal = assigned?.loginPin || '8821';
@@ -9348,6 +10516,14 @@ async function startServer() {
       updatedAt: new Date().toISOString(),
       updatedBy: currentActiveStaffSession.userName,
     };
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'FINANCE',
+      action: 'COA_MAPPING_UPDATED',
+      referenceId: 'COA_MAPPING',
+      summary: 'Updated automated General Ledger COA account mapping policy.',
+    });
     res.json({ success: true, config: coaMappingConfig, message: 'COA mapping updated successfully.' });
   });
 
@@ -9362,6 +10538,14 @@ async function startServer() {
       updatedAt: new Date().toISOString(),
       updatedBy: currentActiveStaffSession.userName,
     };
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'POS',
+      action: 'POS_CONFIG_UPDATED',
+      referenceId: 'POS_CHECKOUT_RULES',
+      summary: `Updated POS checkout policy (PPN ${posCheckoutConfig.ppnTaxPercent}%, Max Cashier Discount ${posCheckoutConfig.maxCashierDiscountPercent}%).`,
+    });
     res.json({ success: true, config: posCheckoutConfig, message: 'POS configuration updated successfully.' });
   });
 
@@ -10247,6 +11431,15 @@ async function startServer() {
       }
     }
 
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'FINANCE',
+      action: 'BILYET_GIRO_CLEARED',
+      referenceId: giro.giroNumber,
+      summary: `Cleared Bilyet Giro #${giro.giroNumber} (Rp ${giro.amountIDR.toLocaleString('id-ID')}) from ${giro.customerName} into Bank BCA (#1020).`,
+    });
+
     res.json({
       success: true,
       giro,
@@ -10369,6 +11562,15 @@ async function startServer() {
       ],
       true
     );
+
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'FINANCE',
+      action: 'BILYET_GIRO_BOUNCED',
+      referenceId: giro.giroNumber,
+      summary: `Marked Bilyet Giro #${giro.giroNumber} (Rp ${giro.amountIDR.toLocaleString('id-ID')}) BOUNCED for ${giro.customerName}; Rp 150.000 penalty booked & credit frozen.`,
+    });
 
     res.json({
       success: true,
@@ -10867,6 +12069,16 @@ async function startServer() {
 
     postVendorBillApprovalGL(bill, approverName);
 
+    appendAuditTrailLog({
+      req,
+      actorName: approverName,
+      branchScope: bill.storeId,
+      module: 'FINANCE',
+      action: 'VENDOR_BILL_APPROVED',
+      referenceId: bill.id,
+      summary: `Approved Vendor Bill #${bill.billNumber} (${bill.supplierName}) for Rp ${bill.grandTotalIDR.toLocaleString('id-ID')}.`,
+    });
+
     res.json({ success: true, vendorBill: bill, message: `Vendor Bill #${id} approved.` });
   });
 
@@ -10957,18 +12169,20 @@ async function startServer() {
 
     const timestamp = new Date().toISOString();
     const reversingIds: string[] = [];
+    const reversingEntries: GeneralLedgerEntry[] = [];
 
-    // Reverse any GL entries previously posted when the bill was approved
+    // Reverse any GL entries previously posted when the bill was approved (or offset)
     if (bill.glEntryIds && bill.glEntryIds.length > 0) {
-      bill.glEntryIds.forEach((origId, idx) => {
+      let seqOffset = 1;
+      bill.glEntryIds.forEach((origId) => {
         const orig = generalLedger.find((g) => g.id === origId);
         if (orig && !orig.isReversed) {
-          const revId = `GLE-2026-${(generalLedger.length + idx + 1).toString().padStart(4, '0')}`;
+          const revId = `GLE-2026-${(generalLedger.length + seqOffset++).toString().padStart(4, '0')}`;
           reversingIds.push(revId);
           orig.isReversed = true;
           orig.reversedByVoucherId = revId;
           orig.reversalReason = reason;
-          const revEntry: GeneralLedgerEntry = {
+          reversingEntries.push({
             id: revId,
             timestamp,
             storeId: orig.storeId,
@@ -10984,11 +12198,12 @@ async function startServer() {
             isReversal: true,
             reversesVoucherId: orig.id,
             reversalReason: reason,
-          };
-          generalLedger.unshift(revEntry);
-          updateCoaLedgerBalance(revEntry.accountCode, revEntry.debit, revEntry.credit);
+          });
         }
       });
+      if (reversingEntries.length > 0) {
+        commitBalancedGlBatch(reversingEntries, true);
+      }
     }
 
     // Clear pending variance items in Approval Matrix for this bill
@@ -11010,7 +12225,17 @@ async function startServer() {
 
     bill.status = 'VOID';
     bill.remainingDue = 0;
+    bill.remainingBalanceIDR = 0;
     bill.notes = bill.notes ? `${bill.notes} | VOIDED: ${reason}` : `VOIDED: ${reason}`;
+
+    appendAuditTrailLog({
+      req,
+      branchScope: bill.storeId,
+      module: 'FINANCE',
+      action: 'VENDOR_BILL_VOIDED',
+      referenceId: bill.id,
+      summary: `Voided Vendor Bill #${bill.billNumber} (${bill.supplierName}) with ${reversingIds.length} GL reversal(s): ${reason}`,
+    });
 
     res.json({
       success: true,
@@ -11345,166 +12570,17 @@ async function startServer() {
   });
 
   app.post('/api/admin/promotions/evaluate', (req: Request, res: Response) => {
-    const { cartItems = [], couponCode = '', memberTier, memberId } = req.body || {};
-    const activeRules = promotionRulesList.filter((r) => r.active);
-    const normalizedCoupon = String(couponCode || '').trim().toUpperCase();
-    const upperMember = String(memberId || '').toUpperCase();
-    const effectiveTier =
-      memberTier ||
-      (upperMember.includes('VIP') || upperMember.includes('PLAT') || upperMember.endsWith('99')
-        ? 'PLATINUM'
-        : upperMember.includes('GOLD') || upperMember.endsWith('88')
-        ? 'GOLD'
-        : upperMember.includes('SILV') || upperMember.endsWith('77')
-        ? 'SILVER'
-        : undefined);
-
-    const normalizedCart = (Array.isArray(cartItems) ? cartItems : []).map((it: any) => {
-      const unitPrice = Number(it.unitPrice ?? it.product?.price ?? it.price ?? 0);
-      const quantity = Math.max(0, Number(it.quantity) || 1);
-      return {
-        sku: String(it.sku || it.product?.sku || ''),
-        name: String(it.name || it.product?.name || ''),
-        category: String(it.category || it.product?.category || ''),
-        quantity,
-        unitPrice,
-        lineTotal: Number(it.lineTotal ?? Math.round(unitPrice * quantity)),
-      };
+    const { cartItems = [], couponCode = '', memberTier, memberId, simulateHappyHourActive } = req.body || {};
+    const evalResult = evaluatePromosServer(cartItems, {
+      promoCode: couponCode,
+      memberTier,
+      memberId,
+      simulateHappyHourActive,
     });
-
-    const cartSubtotal = normalizedCart.reduce((sum, it) => sum + it.lineTotal, 0);
-    let totalPromoDiscountIDR = 0;
-    const appliedPromotions: any[] = [];
-    const lineDiscounts: Record<string, number> = {};
-
-    // 1. BOGO rules (apply automatically if eligible or when coupon matches)
-    for (const rule of activeRules.filter((r) => r.type === 'BOGO')) {
-      if (!rule.buyQty || !rule.getQty) continue;
-      const bundleSize = rule.buyQty + rule.getQty;
-      normalizedCart.forEach((item) => {
-        const isTarget =
-          rule.targetType === 'ALL' ||
-          (rule.targetType === 'SKU' && item.sku === rule.targetValue) ||
-          (rule.targetType === 'CATEGORY' && item.category === rule.targetValue);
-        if (isTarget && item.quantity >= bundleSize) {
-          const freeUnits = Math.floor(item.quantity / bundleSize) * rule.getQty!;
-          const discount = Math.round(freeUnits * item.unitPrice * ((rule.getDiscountPercent || 100) / 100));
-          if (discount > 0) {
-            totalPromoDiscountIDR += discount;
-            lineDiscounts[item.sku] = (lineDiscounts[item.sku] || 0) + discount;
-            appliedPromotions.push({
-              ruleId: rule.id,
-              ruleCode: rule.code,
-              name: rule.name,
-              discountAmountIDR: discount,
-              promoType: 'BOGO',
-              appliedSku: item.sku,
-              badgeLabel: `B${rule.buyQty}G${rule.getQty} (${freeUnits} Free)`,
-            });
-          }
-        }
-      });
-    }
-
-    // 2. Member tier automatic rules
-    if (effectiveTier) {
-      const tierRule = activeRules.find((r) => r.type === 'MEMBER_TIER' && r.memberTier === effectiveTier);
-      if (tierRule && tierRule.discountPercent) {
-        const discount = Math.round(cartSubtotal * (tierRule.discountPercent / 100));
-        if (discount > 0) {
-          totalPromoDiscountIDR += discount;
-          appliedPromotions.push({
-            ruleId: tierRule.id,
-            ruleCode: tierRule.code,
-            name: tierRule.name,
-            discountAmountIDR: discount,
-            promoType: 'MEMBER_TIER',
-            badgeLabel: `${effectiveTier} VIP -${tierRule.discountPercent}%`,
-          });
-        }
-      }
-    }
-
-    // 3. Explicit coupon code evaluation
-    if (normalizedCoupon) {
-      const matchedCoupon = activeRules.find((r) => r.code.toUpperCase() === normalizedCoupon);
-      if (matchedCoupon && matchedCoupon.type !== 'BOGO' && matchedCoupon.type !== 'MEMBER_TIER') {
-        const meetsMinSpend = !matchedCoupon.minOrderSubtotalIDR || cartSubtotal >= matchedCoupon.minOrderSubtotalIDR;
-        if (meetsMinSpend) {
-          let eligibleSubtotal = cartSubtotal;
-          if (matchedCoupon.targetType === 'CATEGORY') {
-            eligibleSubtotal = normalizedCart
-              .filter((it) => it.category === matchedCoupon.targetValue)
-              .reduce((sum, it) => sum + it.lineTotal, 0);
-          } else if (matchedCoupon.targetType === 'SKU') {
-            eligibleSubtotal = normalizedCart
-              .filter((it) => it.sku === matchedCoupon.targetValue)
-              .reduce((sum, it) => sum + it.lineTotal, 0);
-          }
-          let couponDiscount = 0;
-          if (matchedCoupon.discountPercent) {
-            couponDiscount = Math.round(eligibleSubtotal * (matchedCoupon.discountPercent / 100));
-          } else if (matchedCoupon.discountAmountIDR) {
-            couponDiscount = Math.min(eligibleSubtotal, matchedCoupon.discountAmountIDR);
-          }
-          if (couponDiscount > 0) {
-            totalPromoDiscountIDR += couponDiscount;
-            appliedPromotions.push({
-              ruleId: matchedCoupon.id,
-              ruleCode: matchedCoupon.code,
-              name: matchedCoupon.name,
-              discountAmountIDR: couponDiscount,
-              promoType: matchedCoupon.type,
-              badgeLabel: `Promo [${matchedCoupon.code}]`,
-            });
-          }
-        }
-      } else if (matchedCoupon && matchedCoupon.type === 'MEMBER_TIER' && matchedCoupon.discountPercent) {
-        const alreadyApplied = appliedPromotions.some((p) => p.ruleId === matchedCoupon.id);
-        if (!alreadyApplied) {
-          const couponDiscount = Math.round(cartSubtotal * (matchedCoupon.discountPercent / 100));
-          if (couponDiscount > 0) {
-            totalPromoDiscountIDR += couponDiscount;
-            appliedPromotions.push({
-              ruleId: matchedCoupon.id,
-              ruleCode: matchedCoupon.code,
-              name: matchedCoupon.name,
-              discountAmountIDR: couponDiscount,
-              promoType: matchedCoupon.type,
-              badgeLabel: `Promo [${matchedCoupon.code}]`,
-            });
-          }
-        }
-      } else if (normalizedCoupon === 'GROCEFRESH' && cartSubtotal > 0) {
-        const d = Math.min(cartSubtotal, 10000);
-        totalPromoDiscountIDR += d;
-        appliedPromotions.push({
-          ruleId: 'PRM-STORE-GROCEFRESH',
-          ruleCode: 'GROCEFRESH',
-          name: 'GroceMart Fresh Welcome Rp 10.000',
-          discountAmountIDR: d,
-          promoType: 'FIXED_DISCOUNT',
-          badgeLabel: 'Promo [GROCEFRESH]',
-        });
-      } else if (normalizedCoupon === 'FREEDELIVERY' && cartSubtotal > 0) {
-        const d = Math.min(cartSubtotal, 15000);
-        totalPromoDiscountIDR += d;
-        appliedPromotions.push({
-          ruleId: 'PRM-STORE-FREEDELIVERY',
-          ruleCode: 'FREEDELIVERY',
-          name: 'Free Courier Delivery Waiver',
-          discountAmountIDR: d,
-          promoType: 'FIXED_DISCOUNT',
-          badgeLabel: 'Promo [FREEDELIVERY]',
-        });
-      }
-    }
-
-    totalPromoDiscountIDR = Math.min(cartSubtotal, roundIDR(totalPromoDiscountIDR));
     res.json({
-      totalPromoDiscountIDR,
-      appliedPromotions,
-      lineDiscounts,
+      totalPromoDiscountIDR: evalResult.totalPromoDiscountIDR,
+      appliedPromotions: evalResult.appliedPromos,
+      lineDiscounts: evalResult.lineDiscounts,
     });
   });
 
@@ -11672,6 +12748,15 @@ async function startServer() {
       completedAt: rawSession.completedAt || timestamp,
     };
     stockOpnameSessions.unshift(session);
+    appendAuditTrailLog({
+      req,
+      actorName: session.auditorName,
+      branchScope: storeId,
+      module: 'INVENTORY',
+      action: 'STOCKTAKE_VARIANCE_COMMITTED',
+      referenceId: sessionId,
+      summary: `Reconciled Stock Opname ${sessionId} across ${items.length} SKU(s) with net variance Rp ${roundIDR(netFinancialVarianceIDR).toLocaleString('id-ID')}.`,
+    });
     res.json({
       success: true,
       session,
@@ -11981,6 +13066,14 @@ async function startServer() {
       metadata: { ruleCount: approvalRulesList.length },
     });
     scheduleStateSave();
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'SECURITY',
+      action: 'APPROVAL_MATRIX_RULES_UPDATED',
+      referenceId: 'APPROVAL_RULES',
+      summary: `Updated ${approvalRulesList.length} Approval Matrix escalation threshold rule(s).`,
+    });
     res.json({ success: true, rules: approvalRulesList, message: 'Approval tier matrix synchronized.' });
   });
 
@@ -12555,6 +13648,25 @@ async function startServer() {
     if (reqItem.status === 'APPROVED' || reqItem.status === 'REJECTED') {
       markEnterpriseNotificationReadByDedupeKey(`APR_QUEUE:${reqItem.id}`);
     }
+
+    appendAuditTrailLog({
+      req,
+      actorName,
+      actorRole: effectiveRole,
+      branchScope: reqItem.storeId || 'CONSOLIDATED',
+      module:
+        reqItem.module === 'procurement_po' || reqItem.module === 'procurement_pr'
+          ? 'PROCUREMENT'
+          : reqItem.module === 'rack_stocktake' ||
+            reqItem.module === 'blind_stock_opname' ||
+            reqItem.module === 'stock_adjustment' ||
+            reqItem.module === 'waste_write_off'
+          ? 'INVENTORY'
+          : 'FINANCE',
+      action: `APPROVAL_MATRIX_${rawDecision}`,
+      referenceId: reqItem.documentId,
+      summary: `Approval Matrix ${rawDecision} on ${reqItem.documentTitle} (#${reqItem.documentId}, Rp ${(reqItem.amountIDR || 0).toLocaleString('id-ID')}) — Status: ${reqItem.status}.`,
+    });
 
     scheduleStateSave();
 
@@ -13201,6 +14313,14 @@ async function startServer() {
       metadataLabel: `${batch.sku} • Lot ${batch.lotNumber}`,
       targetTab: 'qc',
     });
+    appendAuditTrailLog({
+      req,
+      branchScope: batch.storeId,
+      module: 'QUALITY',
+      action: 'BATCH_RECALL_QUARANTINE',
+      referenceId: batch.lotNumber || batchId,
+      summary: `Quarantined batch ${batchId} (${batch.productName}, ${quarantinedUnits} units) — ${reason || recallClassification || 'Safety hold'}.`,
+    });
     res.json({
       success: true,
       message: `Batch ${batchId} has been locked and quarantined from all picking & POS sales.`,
@@ -13243,6 +14363,14 @@ async function startServer() {
     }
     batch.status = (batch.daysUntilExpiry ?? 14) <= 7 ? 'near_expiry' : 'fresh';
     batch.notes = 'Released from quarantine after lab clearance verified.';
+    appendAuditTrailLog({
+      req,
+      branchScope: batch.storeId,
+      module: 'QUALITY',
+      action: 'BATCH_RECALL_RELEASED',
+      referenceId: batch.lotNumber || batchId,
+      summary: `Released batch ${batchId} (${batch.productName}) from quarantine lock after lab clearance.`,
+    });
     res.json({
       success: true,
       message: `Batch ${batchId} cleared and returned to active sellable inventory.`,
@@ -14306,6 +15434,14 @@ async function startServer() {
       updatedAt: new Date().toISOString(),
       updatedBy: 'Admin Markdown Manager',
     };
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'POS',
+      action: 'MARKDOWN_POLICY_UPDATED',
+      referenceId: 'MARKDOWN_RULES',
+      summary: 'Updated shelf-life dynamic markdown pricing override tiers.',
+    });
     res.json({
       success: true,
       config: dynamicMarkdownConfig,
@@ -14340,6 +15476,15 @@ async function startServer() {
           count++;
         }
       }
+    });
+
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'POS',
+      action: 'BATCH_MARKDOWN_OVERRIDE',
+      referenceId: `MD-BATCH-${count}`,
+      summary: `Applied dynamic shelf-life markdown price overrides across ${count} batch lot(s).`,
     });
 
     res.json({
@@ -16565,6 +17710,16 @@ async function startServer() {
       updatedBy: actorName,
     };
 
+    appendAuditTrailLog({
+      req,
+      actorName,
+      actorRole: role,
+      branchScope: 'CONSOLIDATED',
+      module: 'SECURITY',
+      action: 'COMMUNICATION_GATEWAY_UPDATED',
+      referenceId: 'SMTP_WHATSAPP_GW',
+      summary: `Updated SMTP (${communicationGatewayConfig.smtp.providerPreset}) & WhatsApp (${communicationGatewayConfig.whatsapp.providerType}) gateway settings.`,
+    });
     scheduleStateSave();
     res.json({
       success: true,
@@ -16779,8 +17934,8 @@ async function startServer() {
       DAGO: 'store-bdg-dago',
       SBY: 'store-sby-gubeng',
       GUBENG: 'store-sby-gubeng',
-      DPS: 'store-dps-canggu',
-      CANGGU: 'store-dps-canggu',
+      DPS: 'store-bali-canggu',
+      CANGGU: 'store-bali-canggu',
     };
     if (aliasMap[upper]) {
       return storeSchedules.find((s) => s.storeId === aliasMap[upper]);
@@ -17834,6 +18989,16 @@ async function startServer() {
 
     rackStocktakeSubmissions.unshift(submission);
     const glVoucherIds = commitRackStocktakeSubmission(submission, actorName);
+    appendAuditTrailLog({
+      req,
+      actorName,
+      actorRole: effectiveRole,
+      branchScope: outlet.storeId,
+      module: 'INVENTORY',
+      action: 'RACK_STOCKTAKE_COMMITTED',
+      referenceId: sheetNumber,
+      summary: `Committed Rack Blind Opname ${sheetNumber} (${rackBinCode} @ ${outlet.storeName}), net variance Rp ${netVarianceValueIDR.toLocaleString('id-ID')}.`,
+    });
     scheduleStateSave();
 
     res.json({
@@ -19237,6 +20402,16 @@ async function startServer() {
     });
 
     syncWarehouseRackOccupancy();
+    appendAuditTrailLog({
+      req,
+      actorName,
+      actorRole: getEffectiveRequestRole(req),
+      branchScope: 'CONSOLIDATED',
+      module: 'QUALITY',
+      action: 'BPOM_BATCH_RECALL_FROZEN',
+      referenceId: primary.lotNumber,
+      summary: `Executed BPOM/HACCP Batch Recall freeze on Lot ${primary.lotNumber} (${primary.productName}, ${affectedUnits} units across ${matchingBatches.length} lot(s)).`,
+    });
     scheduleStateSave();
     const trace = buildLiveRecallTrace(primary.lotNumber);
     res.json({
@@ -19621,6 +20796,17 @@ async function startServer() {
       message: `${activeShift.cashierName} dropped Rp ${amount.toLocaleString('id-ID')} from ${activeShift.registerId} to Main Safe Vault. Drawer balance: Rp ${afterBalance.toLocaleString('id-ID')}.`,
       metadataLabel: `${slipNumber} • Shift ${activeShift.id}`,
       targetTab: 'pos',
+    });
+
+    appendAuditTrailLog({
+      req,
+      actorName: activeShift.cashierName,
+      actorRole: 'cashier',
+      branchScope: activeShift.storeId,
+      module: 'POS',
+      action: 'POS_SAFE_DROP_POSTED',
+      referenceId: slipNumber,
+      summary: `Posted Safe Drop ${slipNumber} (Rp ${amount.toLocaleString('id-ID')}) from ${activeShift.registerId}; remaining drawer Rp ${afterBalance.toLocaleString('id-ID')}.`,
     });
 
     scheduleStateSave();
@@ -20303,6 +21489,437 @@ async function startServer() {
         error: err?.message || 'Campaign dispatch failed.',
       });
     }
+  });
+
+  // =============================================================
+  // SUPPLIER SCORECARD (SRM), DIRECT PO & AUDIT TRAIL EXPLORER
+  // =============================================================
+  app.get('/api/admin/procurement/vendor-scorecard', (req: Request, res: Response) => {
+    const gradeFilter = String(req.query?.grade || 'ALL').toUpperCase();
+    const q = String(req.query?.q || '').trim().toLowerCase();
+    const payload = computeVendorScorecards();
+
+    let filtered = payload.scorecards;
+    if (gradeFilter === 'A' || gradeFilter === 'B' || gradeFilter === 'C') {
+      filtered = filtered.filter((s) => s.grade === gradeFilter);
+    }
+    if (q) {
+      filtered = filtered.filter(
+        (s) =>
+          s.supplierName.toLowerCase().includes(q) ||
+          s.advisoryNote.toLowerCase().includes(q) ||
+          s.gradeLabel.toLowerCase().includes(q)
+      );
+    }
+
+    res.json({
+      generatedAt: payload.generatedAt,
+      scorecards: filtered,
+      summary: payload.summary,
+    });
+  });
+
+  app.post('/api/admin/procurement/orders', (req: Request, res: Response) => {
+    const {
+      storeId = 'store-jkt-senopati',
+      supplierName,
+      sku,
+      quantity,
+      expectedDeliveryDate,
+      paymentTerms = 'Net 30',
+      notes,
+    } = (req.body || {}) as {
+      storeId?: string;
+      supplierName?: string;
+      sku?: string;
+      quantity?: number;
+      expectedDeliveryDate?: string;
+      paymentTerms?: 'Net 30' | 'COD' | 'Advance Payment';
+      notes?: string;
+    };
+
+    const cleanSupplier = String(supplierName || '').trim();
+    const cleanSku = String(sku || '').trim();
+    const qty = Math.floor(Number(quantity));
+    if (!cleanSupplier || !cleanSku || !Number.isFinite(qty) || qty <= 0) {
+      return res.status(400).json({
+        error: 'Supplier, product SKU, and positive quantity are required to issue a Purchase Order.',
+      });
+    }
+
+    const outlet = resolveOutletFromCodeOrId(storeId) || {
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+    };
+    const inv = inventoryList.find((i) => i.sku === cleanSku);
+    const tier = storeInventoryTiers.find((t) => t.sku === cleanSku && t.storeId === outlet.storeId);
+    const unitCost = Math.max(1000, roundIDR(inv?.unitCost || tier?.unitCost || 25000));
+    const subtotalCost = roundIDR(unitCost * qty);
+    const taxPercent = 11;
+    const taxAmount = Math.round(subtotalCost * 0.11);
+    const totalCost = subtotalCost + taxAmount;
+    const poSeq = (purchaseOrders.length + 1).toString().padStart(3, '0');
+    const poId = `PO-2026-${poSeq}`;
+    const createdAt = new Date().toISOString();
+    const expectedDate =
+      expectedDeliveryDate && /^\d{4}-\d{2}-\d{2}$/.test(expectedDeliveryDate)
+        ? expectedDeliveryDate
+        : new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+
+    const newPO: PurchaseOrder = {
+      id: poId,
+      createdAt,
+      storeId: outlet.storeId,
+      storeName: outlet.storeName,
+      warehouseZoneId: `${outlet.storeId.toUpperCase()}-COLD`,
+      supplierName: cleanSupplier,
+      supplierContact: 'Vendor Commercial Desk',
+      items: [
+        {
+          sku: cleanSku,
+          productName: inv?.productName || tier?.productName || cleanSku,
+          orderedQuantity: qty,
+          receivedQuantity: 0,
+          remainingBackorder: qty,
+          unitCost,
+          totalCost: subtotalCost,
+          handlingNotes: inv?.handlingInstructions || 'Standard cold-chain delivery inspection required',
+        },
+      ],
+      subtotalCost,
+      taxPercent,
+      taxAmount,
+      totalCost,
+      expectedDeliveryDate: expectedDate,
+      status: 'Sent',
+      notes: notes?.trim() || `Direct PO issued to ${cleanSupplier}`,
+      paymentTerms,
+      goodsReceiptIds: [],
+    };
+
+    purchaseOrders.unshift(newPO);
+    if (inv) {
+      inv.incomingStock = Number(((inv.incomingStock || 0) + qty).toFixed(2));
+    }
+    if (tier) {
+      tier.incomingStock = Number(((tier.incomingStock || 0) + qty).toFixed(2));
+    }
+
+    appendAuditTrailLog({
+      req,
+      branchScope: outlet.storeId,
+      module: 'PROCUREMENT',
+      action: 'DIRECT_PO_ISSUED',
+      referenceId: poId,
+      summary: `Issued Direct PO ${poId} (${qty}x ${cleanSku}) to ${cleanSupplier} (Rp ${totalCost.toLocaleString('id-ID')}).`,
+    });
+
+    scheduleStateSave();
+    res.json({
+      success: true,
+      purchaseOrder: newPO,
+      message: `Purchase Order ${poId} issued to ${cleanSupplier} (Rp ${totalCost.toLocaleString('id-ID')}).`,
+    });
+  });
+
+  app.get('/api/admin/settings/audit-trail', (req: Request, res: Response) => {
+    const role = getEffectiveRequestRole(req);
+    if (role !== 'super_admin' && role !== 'coo') {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Access Denied (403): Only Super Admin or COO may access Audit Trail & Operator KPIs.',
+      });
+    }
+
+    const moduleFilter = String(req.query?.module || 'ALL').toUpperCase();
+    const q = String(req.query?.q || '').trim().toLowerCase();
+
+    let logs = [...auditTrailLogs];
+    if (moduleFilter !== 'ALL') {
+      logs = logs.filter((l) => l.module === moduleFilter);
+    }
+    if (q) {
+      logs = logs.filter(
+        (l) =>
+          l.actorName.toLowerCase().includes(q) ||
+          l.actorRole.toLowerCase().includes(q) ||
+          l.referenceId.toLowerCase().includes(q) ||
+          l.action.toLowerCase().includes(q) ||
+          l.summary.toLowerCase().includes(q)
+      );
+    }
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      logs,
+      totalLogs: auditTrailLogs.length,
+      operatorKpis: computeOperatorKpiSummary(),
+    });
+  });
+
+  // =============================================================
+  // SMART DEMAND FORECASTING & PROMOTIONAL VOUCHER ENGINE ROUTES
+  // =============================================================
+  app.get('/api/admin/procurement/demand-forecast', (req: Request, res: Response) => {
+    const storeId = typeof req.query?.storeId === 'string' ? req.query.storeId : undefined;
+    const horizon = Number(req.query?.horizon || 14);
+    const profileRaw = String(req.query?.profile || 'NORMAL').toUpperCase();
+    const seasonalityProfile: DemandSeasonalityProfile =
+      profileRaw === 'WEEKEND_PEAK' || profileRaw === 'FESTIVE_SURGE'
+        ? (profileRaw as DemandSeasonalityProfile)
+        : 'NORMAL';
+
+    const forecast = computeDemandForecast({
+      storeId,
+      horizonDays: horizon,
+      seasonalityProfile,
+    });
+    res.json(forecast);
+  });
+
+  app.post('/api/admin/procurement/demand-forecast/create-pr', (req: Request, res: Response) => {
+    const {
+      storeId = 'store-jkt-senopati',
+      items = [],
+      horizonDays = 14,
+      seasonalityProfile = 'NORMAL',
+    } = (req.body || {}) as {
+      storeId?: string;
+      items?: Array<{ sku: string; quantity?: number; supplierName?: string }>;
+      horizonDays?: number;
+      seasonalityProfile?: DemandSeasonalityProfile;
+    };
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Select at least one SKU to generate a Smart Purchase Request.' });
+    }
+
+    const effectiveStore =
+      storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED' ? storeId : 'store-jkt-senopati';
+    const outlet = resolveOutletFromCodeOrId(effectiveStore) || {
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+    };
+    const forecast = computeDemandForecast({
+      storeId: effectiveStore,
+      horizonDays,
+      seasonalityProfile,
+    });
+
+    const createdPRs: PurchaseRequest[] = [];
+    const createdAt = new Date().toISOString();
+    const operatorName = getEffectiveOperatorName(req);
+
+    for (const reqLine of items) {
+      const cleanSku = String(reqLine?.sku || '').trim();
+      if (!cleanSku) continue;
+      const inv = inventoryList.find((i) => i.sku === cleanSku);
+      const fcItem = forecast.items.find((f) => f.sku === cleanSku);
+      if (!inv && !fcItem) continue;
+
+      const qty = Math.max(
+        1,
+        Math.ceil(Number(reqLine.quantity || fcItem?.recommendedReorderQty || inv?.reorderQuantity || 25))
+      );
+      const unitCost = roundIDR(inv?.unitCost || fcItem?.estimatedUnitCostIDR || 25000);
+      const prId = `PR-2026-${(purchaseRequests.length + 1).toString().padStart(3, '0')}`;
+      const chosenVendor =
+        reqLine.supplierName || fcItem?.recommendedSupplierName || inv?.supplierName || 'Kebun Sari Bumi Eco-Farm (Lembang)';
+      const priority: PurchaseRequest['priority'] =
+        fcItem && fcItem.daysOfSupply <= 2 ? 'high' : fcItem && fcItem.daysOfSupply <= 5 ? 'medium' : 'low';
+
+      const newPR: PurchaseRequest = {
+        id: prId,
+        createdAt,
+        requestedBy: `${operatorName} (Smart Forecast · ${chosenVendor}${
+          fcItem?.isGradeARecommended ? ' [Grade A]' : ''
+        })`,
+        sku: cleanSku,
+        productId: inv?.productId || cleanSku.toLowerCase(),
+        productName: inv?.productName || fcItem?.productName || cleanSku,
+        storeId: outlet.storeId,
+        storeName: outlet.storeName,
+        suggestedQuantity: qty,
+        estimatedUnitCost: unitCost,
+        totalEstimatedCost: roundIDR(qty * unitCost),
+        status: 'pending',
+        reason: seasonalityProfile === 'NORMAL' ? 'low_stock_auto_trigger' : 'seasonal_demand',
+        priority,
+      };
+      purchaseRequests.unshift(newPR);
+      createdPRs.push(newPR);
+
+      emitEnterpriseNotification({
+        dedupeKey: `PR_APPROVAL:${newPR.id}`,
+        category: 'PROCUREMENT_FINANCE',
+        severity: priority === 'high' ? 'CRITICAL' : 'ACTION_REQUIRED',
+        title: `Smart Forecast PR Queued (${newPR.id})`,
+        message: `${newPR.productName} (${qty} units via ${chosenVendor}) for ${outlet.storeName}.`,
+        metadataLabel: `${newPR.id} • ${cleanSku}`,
+        targetTab: 'procurement',
+      });
+    }
+
+    if (createdPRs.length === 0) {
+      return res.status(400).json({ error: 'No valid SKUs provided to create Purchase Requests.' });
+    }
+
+    appendAuditTrailLog({
+      req,
+      branchScope: outlet.storeId,
+      module: 'PROCUREMENT',
+      action: 'SMART_FORECAST_PR_CREATED',
+      referenceId: createdPRs.map((p) => p.id).join(', '),
+      summary: `Generated ${createdPRs.length} Smart Demand Forecast Purchase Request(s) (${horizonDays}d horizon, ${seasonalityProfile}) for ${outlet.storeName}.`,
+    });
+
+    scheduleStateSave();
+    res.json({
+      success: true,
+      purchaseRequests: createdPRs,
+      message: `Generated ${createdPRs.length} Smart Purchase Request(s) linked to preferred Grade A SRM suppliers.`,
+    });
+  });
+
+  app.get('/api/admin/crm/promotions', (_req: Request, res: Response) => {
+    const activeCount = promotionRulesList.filter((r) => r.active).length;
+    const totalRedemptions = promotionRulesList.reduce((s, r) => s + Number(r.usageCount || 0), 0);
+    const happyHourActiveCount = promotionRulesList.filter(
+      (r) => r.active && r.type === 'HAPPY_HOUR' && isHappyHourWindowActive(r)
+    ).length;
+
+    res.json({
+      promotions: promotionRulesList,
+      stats: {
+        activeCount,
+        totalRedemptions,
+        happyHourActiveCount,
+      },
+    });
+  });
+
+  app.post('/api/admin/crm/promotions', (req: Request, res: Response) => {
+    const body = (req.body || {}) as Partial<PromotionRule>;
+    const existing = body.id ? promotionRulesList.find((r) => r.id === body.id) : undefined;
+
+    if (existing) {
+      if (body.name !== undefined) existing.name = String(body.name).trim() || existing.name;
+      if (body.code !== undefined) existing.code = String(body.code).trim().toUpperCase() || existing.code;
+      if (body.type !== undefined) existing.type = body.type;
+      if (body.targetType !== undefined) existing.targetType = body.targetType;
+      if (body.targetValue !== undefined) existing.targetValue = body.targetValue;
+      if (body.discountPercent !== undefined) existing.discountPercent = Number(body.discountPercent);
+      if (body.discountAmountIDR !== undefined) existing.discountAmountIDR = Number(body.discountAmountIDR);
+      if (body.minOrderSubtotalIDR !== undefined) existing.minOrderSubtotalIDR = Number(body.minOrderSubtotalIDR);
+      if (body.minQty !== undefined) existing.minQty = Number(body.minQty);
+      if (body.buyQty !== undefined) existing.buyQty = Number(body.buyQty);
+      if (body.getQty !== undefined) existing.getQty = Number(body.getQty);
+      if (body.getDiscountPercent !== undefined) existing.getDiscountPercent = Number(body.getDiscountPercent);
+      if (body.happyHourStart !== undefined) existing.happyHourStart = body.happyHourStart;
+      if (body.happyHourEnd !== undefined) existing.happyHourEnd = body.happyHourEnd;
+      if (body.simulateHappyHourActive !== undefined) {
+        existing.simulateHappyHourActive = Boolean(body.simulateHappyHourActive);
+      }
+      if (body.active !== undefined) existing.active = Boolean(body.active);
+      if (body.endDate !== undefined) existing.endDate = body.endDate;
+      if (body.description !== undefined) existing.description = body.description;
+
+      appendAuditTrailLog({
+        req,
+        branchScope: 'CONSOLIDATED',
+        module: 'POS',
+        action: 'CRM_PROMO_RULE_UPDATED',
+        referenceId: existing.code,
+        summary: `Updated promo rule "${existing.name}" (${existing.code}, active=${existing.active}${
+          existing.type === 'HAPPY_HOUR' ? `, simulate=${Boolean(existing.simulateHappyHourActive)}` : ''
+        }).`,
+      });
+      scheduleStateSave();
+      return res.json({
+        success: true,
+        rule: existing,
+        message: `Promotional rule "${existing.code}" updated.`,
+      });
+    }
+
+    const cleanName = String(body.name || '').trim();
+    const cleanCode = String(body.code || '')
+      .trim()
+      .toUpperCase();
+    if (!cleanName || !cleanCode) {
+      return res.status(400).json({ error: 'Promotion Name and Code are required.' });
+    }
+
+    const dup = promotionRulesList.find((r) => r.code.toUpperCase() === cleanCode);
+    if (dup) {
+      return res.status(400).json({ error: `Promo code "${cleanCode}" already exists.` });
+    }
+
+    const newRule: PromotionRule = {
+      id: `PRM-2026-${(promotionRulesList.length + 1).toString().padStart(2, '0')}`,
+      name: cleanName,
+      code: cleanCode,
+      type: body.type || 'CRM_VOUCHER',
+      targetType: body.targetType || 'ALL',
+      targetValue: body.targetValue || 'ALL',
+      discountPercent: body.discountPercent !== undefined ? Number(body.discountPercent) : undefined,
+      discountAmountIDR: body.discountAmountIDR !== undefined ? Number(body.discountAmountIDR) : undefined,
+      minOrderSubtotalIDR: body.minOrderSubtotalIDR !== undefined ? Number(body.minOrderSubtotalIDR) : undefined,
+      minQty: body.minQty !== undefined ? Number(body.minQty) : undefined,
+      buyQty: body.buyQty !== undefined ? Number(body.buyQty) : undefined,
+      getQty: body.getQty !== undefined ? Number(body.getQty) : undefined,
+      getDiscountPercent: body.getDiscountPercent !== undefined ? Number(body.getDiscountPercent) : 100,
+      happyHourStart: body.happyHourStart,
+      happyHourEnd: body.happyHourEnd,
+      simulateHappyHourActive: Boolean(body.simulateHappyHourActive),
+      memberTier: body.memberTier,
+      active: body.active !== undefined ? Boolean(body.active) : true,
+      startDate: body.startDate || new Date().toISOString().slice(0, 10),
+      endDate: body.endDate || '2026-12-31',
+      description: body.description || `${cleanName} (${cleanCode})`,
+      usageCount: 0,
+    };
+
+    promotionRulesList.unshift(newRule);
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'POS',
+      action: 'CRM_PROMO_RULE_CREATED',
+      referenceId: newRule.code,
+      summary: `Created promotional rule "${newRule.name}" (${newRule.type} · ${newRule.code}).`,
+    });
+    scheduleStateSave();
+    res.json({
+      success: true,
+      rule: newRule,
+      message: `Promotional rule "${newRule.code}" created and live at POS.`,
+    });
+  });
+
+  app.post('/api/pos/validate-promo', (req: Request, res: Response) => {
+    const {
+      cartItems = [],
+      promoCode = '',
+      memberTier,
+      memberId,
+      simulateHappyHourActive,
+    } = (req.body || {}) as {
+      cartItems?: any[];
+      promoCode?: string;
+      memberTier?: string;
+      memberId?: string;
+      simulateHappyHourActive?: boolean;
+    };
+
+    const result = evaluatePromosServer(cartItems, {
+      promoCode,
+      memberTier,
+      memberId,
+      simulateHappyHourActive,
+    });
+    res.json(result);
   });
 
   // -------------------------------------------------------------

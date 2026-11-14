@@ -1230,6 +1230,10 @@ export interface POSTransactionRequest {
   customerMemberId?: string;
   crmAccountId?: string;
   redeemPoints?: number;
+  promoCode?: string;
+  appliedPromos?: AppliedPromotionSummary[];
+  promoDiscountIDR?: number;
+  simulateHappyHourActive?: boolean;
   notes?: string;
 }
 
@@ -1264,6 +1268,9 @@ export interface POSTransactionReceipt {
   loyaltyPointsEarned?: number;
   loyaltyPointsRedeemed?: number;
   loyaltyPointsDiscountIDR?: number;
+  promoCode?: string;
+  appliedPromos?: AppliedPromotionSummary[];
+  promoDiscountIDR?: number;
 }
 
 // -------------------------------------------------------------
@@ -1826,6 +1833,9 @@ export interface POSReturnRecord {
 // =============================================================
 export type PromotionType =
   | 'BOGO'
+  | 'MIX_AND_MATCH'
+  | 'HAPPY_HOUR'
+  | 'CRM_VOUCHER'
   | 'PERCENTAGE_DISCOUNT'
   | 'FIXED_DISCOUNT'
   | 'MEMBER_TIER'
@@ -1843,9 +1853,13 @@ export interface PromotionRule {
   discountPercent?: number; // e.g. 20 for 20%
   discountAmountIDR?: number; // e.g. 50000
   minOrderSubtotalIDR?: number; // e.g. 100000
+  minQty?: number; // e.g. 3 items for MIX_AND_MATCH
   buyQty?: number; // e.g. 2 for Buy 2 Get 1 Free
   getQty?: number; // e.g. 1
   getDiscountPercent?: number; // 100 for 100% free, 50 for 50% off
+  happyHourStart?: string; // HH:MM (e.g. '19:00')
+  happyHourEnd?: string; // HH:MM (e.g. '21:00')
+  simulateHappyHourActive?: boolean;
   memberTier?: MemberLoyaltyTier;
   active: boolean;
   startDate?: string;
@@ -3157,5 +3171,164 @@ export interface CrmOverviewResponse {
   predictiveRestocks: CrmPredictiveRestockAlert[];
 }
 
+// =============================================================
+// SUPPLIER RELATIONSHIP MANAGEMENT (SRM) & AUDIT TRAIL EXPLORER
+// =============================================================
+export type VendorSrmGrade = 'A' | 'B' | 'C';
 
+export interface VendorScorecardRecord {
+  supplierName: string;
+  totalPOs: number;
+  completedGRs: number;
+  onTimeGRs: number;
+  inspectedLots: number;
+  totalInspectedQty: number;
+  passedInspectedQty: number;
+  rtvCount: number;
+  totalBills: number;
+  matchedBills: number;
+  totalSpendIDR: number;
+  onTimeDeliveryRate: number | null; // Weight 35%
+  qcPassRate: number | null; // Weight 40%
+  billingAccuracyRate: number | null; // Weight 25%
+  compositeScore: number; // 0 - 100
+  grade: VendorSrmGrade;
+  gradeLabel: 'GRADE A • PREFERRED PARTNER' | 'GRADE B • STANDARD VENDOR' | 'GRADE C • PROBATION / REVIEW';
+  advisoryNote: string;
+  availableMetricsCount: number;
+}
 
+export interface VendorScorecardResponse {
+  generatedAt: string;
+  scorecards: VendorScorecardRecord[];
+  summary: {
+    totalVendors: number;
+    gradeACount: number;
+    gradeBCount: number;
+    gradeCCount: number;
+    avgCompositeScore: number;
+    avgOtdRate: number | null;
+    avgQcPassRate: number | null;
+    avgBillingAccuracyRate: number | null;
+  };
+}
+
+export type AuditTrailModuleType =
+  | 'FINANCE'
+  | 'INVENTORY'
+  | 'POS'
+  | 'PROCUREMENT'
+  | 'QUALITY'
+  | 'SECURITY';
+
+export interface AuditTrailLogEntry {
+  id: string;
+  timestamp: string;
+  actorName: string;
+  actorRole: string;
+  branchScope: string;
+  module: AuditTrailModuleType;
+  action: string;
+  referenceId: string;
+  summary: string;
+}
+
+export interface OperatorKpiSummary {
+  cashiers: {
+    totalReceiptsProcessed: number;
+    totalNetSalesIDR: number;
+    avgBasketSizeIDR: number;
+    shiftsClosedCount: number;
+    zeroVarianceShiftsCount: number;
+    shiftVarianceAccuracyPct: number;
+    totalCashVarianceIDR: number;
+    safeDropsCount: number;
+    safeDropsTotalIDR: number;
+  };
+  warehouseQc: {
+    totalGoodsReceiptsProcessed: number;
+    totalQcInspectionsProcessed: number;
+    qcPassRatePct: number;
+    stocktakeCountAccuracyPct: number;
+    stocktakeSessionsCount: number;
+    crossDockDispatchesCount: number;
+    totalTransfersCount: number;
+  };
+  procurementFinance: {
+    totalPOsIssued: number;
+    totalVendorBillsCount: number;
+    threeWayMatchAutoApprovalRatePct: number;
+    approvalMatrixTurnaroundCount: number;
+    approvalMatrixPendingCount: number;
+  };
+}
+
+export interface AuditTrailOverviewResponse {
+  generatedAt: string;
+  logs: AuditTrailLogEntry[];
+  totalLogs: number;
+  operatorKpis: OperatorKpiSummary;
+}
+
+// =============================================================
+// SMART DEMAND FORECASTING & PROMOTIONAL VOUCHER RULES ENGINE
+// =============================================================
+export type DemandForecastHorizon = 7 | 14 | 30;
+export type DemandSeasonalityProfile = 'NORMAL' | 'WEEKEND_PEAK' | 'FESTIVE_SURGE';
+export type DemandForecastUrgency = 'STOCKOUT_IMMINENT' | 'REORDER_SOON' | 'HEALTHY';
+
+export interface DemandForecastItem {
+  sku: string;
+  productName: string;
+  category: string;
+  storeId: string;
+  storeName: string;
+  availableStock: number;
+  incomingStock: number;
+  baseDailySales: number;
+  adjustedDailySales: number;
+  seasonalityMultiplier: number;
+  horizonDemandUnits: number;
+  leadTimeDays: number;
+  safetyStockDays: number;
+  daysOfSupply: number;
+  projectedStockoutDate: string | null;
+  recommendedReorderQty: number;
+  estimatedUnitCostIDR: number;
+  estimatedOrderValueIDR: number;
+  urgencyStatus: DemandForecastUrgency;
+  urgencyLabel: string;
+  recommendedSupplierName: string;
+  recommendedSupplierSrmGrade: 'A' | 'B' | 'C';
+  recommendedSupplierSrmScore: number;
+  isGradeARecommended: boolean;
+}
+
+export interface DemandForecastResponse {
+  generatedAt: string;
+  storeId: string;
+  storeName: string;
+  horizonDays: DemandForecastHorizon;
+  seasonalityProfile: DemandSeasonalityProfile;
+  seasonalityMultiplier: number;
+  items: DemandForecastItem[];
+  summary: {
+    totalSkus: number;
+    stockoutImminentCount: number;
+    reorderSoonCount: number;
+    healthyCount: number;
+    totalRecommendedOrderValueIDR: number;
+  };
+}
+
+export interface PosValidatePromoResponse {
+  valid: boolean;
+  promoCode: string;
+  message: string;
+  totalPromoDiscountIDR: number;
+  autoPromoDiscountIDR: number;
+  voucherDiscountIDR: number;
+  appliedPromos: AppliedPromotionSummary[];
+  lineDiscounts: Record<string, number>;
+  happyHourActive: boolean;
+}

@@ -10,6 +10,8 @@ import type {
   VendorBill,
   StoreOutletSchedule,
   StaffShiftSession,
+  VendorScorecardResponse,
+  VendorScorecardRecord,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -41,9 +43,13 @@ import {
   FileCheck,
   Mail,
   MessageCircle,
+  Award,
+  TrendingUp,
 } from 'lucide-react';
 import { VendorBillModule } from './VendorBillModule';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
+import { VendorScorecardTab } from './VendorScorecardTab';
+import { SmartDemandForecastTab } from './SmartDemandForecastTab';
 
 interface ProcurementModuleProps {
   theme: 'light' | 'dark';
@@ -118,15 +124,32 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [crossDockPlate, setCrossDockPlate] = useState<string>('B 9124 KXC');
   const [crossDockAllocations, setCrossDockAllocations] = useState<Record<string, Record<string, number>>>({});
 
+  // Direct Purchase Order Modal State
+  const [isCreatingDirectPO, setIsCreatingDirectPO] = useState<boolean>(false);
+  const [directPoStoreId, setDirectPoStoreId] = useState<string>('store-jkt-senopati');
+  const [directPoSupplier, setDirectPoSupplier] = useState<string>('');
+  const [directPoSku, setDirectPoSku] = useState<string>('');
+  const [directPoQty, setDirectPoQty] = useState<number>(25);
+  const [directPoExpectedDate, setDirectPoExpectedDate] = useState<string>(() =>
+    new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0]
+  );
+  const [directPoPaymentTerms, setDirectPoPaymentTerms] = useState<'Net 30' | 'COD' | 'Advance Payment'>('Net 30');
+  const [directPoNotes, setDirectPoNotes] = useState<string>('');
+  const [isSubmittingDirectPO, setIsSubmittingDirectPO] = useState<boolean>(false);
+
+  // Vendor Scorecard (SRM) State
+  const [scorecardData, setScorecardData] = useState<VendorScorecardResponse | null>(null);
+  const [isLoadingScorecard, setIsLoadingScorecard] = useState<boolean>(false);
+
   // Active Module Sub-Tab
-  const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'pr' | 'po' | 'gr' | 'vendor_bills'>(
+  const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'smart_forecast' | 'pr' | 'po' | 'gr' | 'vendor_bills' | 'vendor_scorecard'>(
     canonicalRole === 'warehouse' ? 'gr' : 'auto_replenishment'
   );
   const [preselectedPoId, setPreselectedPoId] = useState<string>('');
   const [preselectedGrId, setPreselectedGrId] = useState<string>('');
 
   React.useEffect(() => {
-    if (isWarehouseRole && (activeTab === 'auto_replenishment' || activeTab === 'vendor_bills')) {
+    if (isWarehouseRole && (activeTab === 'auto_replenishment' || activeTab === 'smart_forecast' || activeTab === 'vendor_bills')) {
       setActiveTab('gr');
     }
   }, [isWarehouseRole, activeTab]);
@@ -169,6 +192,102 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   React.useEffect(() => {
     loadReplenishmentPlan();
   }, [loadReplenishmentPlan]);
+
+  // Fetch Vendor Scorecard (SRM)
+  const loadVendorScorecard = React.useCallback(async () => {
+    setIsLoadingScorecard(true);
+    try {
+      const res = await apiClient.getVendorScorecard();
+      setScorecardData(res);
+    } catch (e: any) {
+      console.warn('Could not load vendor scorecard:', e);
+    } finally {
+      setIsLoadingScorecard(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadVendorScorecard();
+  }, [loadVendorScorecard, purchaseOrders.length, goodsReceipts.length, vendorBills.length]);
+
+  const supplierOptions = useMemo(() => {
+    const names = new Set<string>();
+    (scorecardData?.scorecards || []).forEach((s) => {
+      if (s.supplierName) names.add(s.supplierName);
+    });
+    inventory.forEach((it) => {
+      if (it.supplierName) names.add(it.supplierName);
+    });
+    purchaseOrders.forEach((po) => {
+      if (po.supplierName) names.add(po.supplierName);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [scorecardData, inventory, purchaseOrders]);
+
+  const getSrmRecord = React.useCallback(
+    (supplierName?: string): VendorScorecardRecord | null => {
+      if (!supplierName || !scorecardData?.scorecards?.length) return null;
+      const normalize = (v: string) =>
+        v
+          .toLowerCase()
+          .replace(/eco-farm/g, '')
+          .replace(/[^a-z0-9]+/g, ' ')
+          .trim();
+      const target = normalize(supplierName);
+      if (!target) return null;
+      return (
+        scorecardData.scorecards.find((s) => {
+          const cand = normalize(s.supplierName);
+          return cand === target || cand.includes(target) || target.includes(cand);
+        }) || null
+      );
+    },
+    [scorecardData]
+  );
+
+  const openDirectPoModal = (preselectedSupplier?: string) => {
+    const fallbackSupplier = preselectedSupplier || supplierOptions[0] || '';
+    const matchingInv =
+      inventory.find((i) => i.supplierName && fallbackSupplier && i.supplierName.toLowerCase().includes(fallbackSupplier.toLowerCase().split(' ')[0])) ||
+      inventory[0];
+    setDirectPoStoreId(selectedStore !== 'CONSOLIDATED' ? selectedStore : 'store-jkt-senopati');
+    setDirectPoSupplier(fallbackSupplier);
+    setDirectPoSku(matchingInv?.sku || '');
+    setDirectPoQty(25);
+    setDirectPoExpectedDate(new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0]);
+    setDirectPoPaymentTerms('Net 30');
+    setDirectPoNotes('');
+    setIsCreatingDirectPO(true);
+  };
+
+  const handleCreateDirectPO = async () => {
+    if (!directPoSupplier || !directPoSku || directPoQty <= 0) {
+      onShowToast('Missing Order Fields', 'Select a Supplier, Product SKU, and positive quantity.');
+      return;
+    }
+    setIsSubmittingDirectPO(true);
+    try {
+      const res = await apiClient.createDirectPurchaseOrder({
+        storeId: directPoStoreId,
+        supplierName: directPoSupplier,
+        sku: directPoSku,
+        quantity: directPoQty,
+        expectedDeliveryDate: directPoExpectedDate,
+        paymentTerms: directPoPaymentTerms,
+        notes: directPoNotes,
+      });
+      setIsCreatingDirectPO(false);
+      onShowToast('Direct Purchase Order Issued', res.message || `PO ${res.purchaseOrder.id} created.`);
+      onRefreshData();
+      await loadVendorScorecard();
+      setActiveTab('po');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Direct PO Failed', msg);
+    } finally {
+      setIsSubmittingDirectPO(false);
+    }
+  };
 
   // Filtered Auto-Replenishment Items
   const filteredReplenishmentItems = useMemo(() => {
@@ -522,17 +641,33 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
           <div className="flex items-center gap-2 flex-wrap">
             {canManagePrPo && (
-              <button
-                onClick={() => setIsCreatingPR(true)}
-                className="px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl flex items-center gap-2 transition-all shadow-sm"
-              >
-                <Plus className="w-4 h-4" />
-                New Restock PR
-              </button>
+              <>
+                <button
+                  onClick={() => openDirectPoModal()}
+                  className={`px-3.5 py-2 text-xs font-semibold rounded-xl border flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isLight
+                      ? 'bg-white border-[#0F4C3A]/30 text-[#0F4C3A] hover:bg-emerald-50 shadow-2xs'
+                      : 'bg-zinc-800 border-emerald-500/40 text-emerald-300 hover:bg-zinc-700'
+                  }`}
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Direct PO
+                </button>
+                <button
+                  onClick={() => setIsCreatingPR(true)}
+                  className="px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Restock PR
+                </button>
+              </>
             )}
             <button
-              onClick={onRefreshData}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+              onClick={() => {
+                onRefreshData();
+                loadVendorScorecard();
+              }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
                 isLight
                   ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs'
                   : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
@@ -633,6 +768,23 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 {replenishmentPlan.skusNeedingRestockCount}
               </span>
             )}
+          </button>
+        )}
+
+        {!isWarehouseRole && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('smart_forecast')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'smart_forecast'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4 text-indigo-500" />
+            <span>Smart Demand Forecast</span>
           </button>
         )}
 
@@ -739,6 +891,32 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             )}
           </button>
         )}
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('vendor_scorecard')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'vendor_scorecard'
+              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              : isLight
+              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+          }`}
+        >
+          <Award className="w-4 h-4 text-amber-500" />
+          <span>Vendor Scorecard (SRM)</span>
+          {scorecardData && (
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                activeTab === 'vendor_scorecard'
+                  ? 'bg-white/15 text-amber-100 border-white/25'
+                  : 'bg-amber-500/15 text-amber-800 border-amber-500/25 dark:text-amber-300'
+              }`}
+            >
+              {scorecardData.summary.totalVendors}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* SECTION 0: PREDICTIVE AUTO-REPLENISHMENT & MIN-MAX PLANNING */}
@@ -874,26 +1052,42 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   Draft PO Vendor Grouping Preview ({replenishmentPlan.bySupplier.length} Vendors):
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {replenishmentPlan.bySupplier.map((sup) => (
-                    <div
-                      key={sup.supplierId}
-                      className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${
-                        isLight ? 'bg-white/80 border-gray-200' : 'bg-zinc-800/40 border-zinc-700'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-bold text-slate-800 dark:text-zinc-200 truncate max-w-[150px]">
-                          {sup.supplierName}
+                  {replenishmentPlan.bySupplier.map((sup) => {
+                    const srm = getSrmRecord(sup.supplierName);
+                    return (
+                      <div
+                        key={sup.supplierId}
+                        className={`p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                          isLight ? 'bg-white/80 border-gray-200' : 'bg-zinc-800/40 border-zinc-700'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-800 dark:text-zinc-200 truncate max-w-[170px]">
+                            {sup.supplierName}
+                          </div>
+                          <div className="text-[10px] text-zinc-400 font-mono">
+                            {sup.suggestedPoId} • {sup.skuCount} SKUs ({sup.totalOrderQty} units)
+                          </div>
+                          {srm && (
+                            <div
+                              className={`text-[10px] font-semibold mt-0.5 truncate ${
+                                srm.grade === 'A'
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : srm.grade === 'B'
+                                  ? 'text-amber-600 dark:text-amber-400'
+                                  : 'text-rose-600 dark:text-rose-400'
+                              }`}
+                            >
+                              SRM {srm.compositeScore}/100 ({srm.gradeLabel})
+                            </div>
+                          )}
                         </div>
-                        <div className="text-[10px] text-zinc-400 font-mono">
-                          {sup.suggestedPoId} • {sup.skuCount} SKUs ({sup.totalOrderQty} units)
+                        <div className="text-right font-mono font-bold text-[#0F4C3A] dark:text-emerald-400 text-xs shrink-0">
+                          {formatIDR(sup.totalAmountIDR)}
                         </div>
                       </div>
-                      <div className="text-right font-mono font-bold text-[#0F4C3A] dark:text-emerald-400 text-xs">
-                        {formatIDR(sup.totalAmountIDR)}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1734,7 +1928,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       </div>
       )}
 
-      {/* SECTION 4: VENDOR BILLS (3-WAY MATCH AP) */}
+      {/* SECTION 4: VENDOR BILLS (3-Way Match AP) */}
       {activeTab === 'vendor_bills' && !isWarehouseRole && (
         <VendorBillModule
           theme={theme}
@@ -1747,6 +1941,30 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           initialPreselectedPoId={preselectedPoId}
           initialPreselectedGrId={preselectedGrId}
           activeStaffSession={activeStaffSession}
+        />
+      )}
+
+      {/* SECTION 5: AUTOMATED VENDOR SCORECARD & SRM INTELLIGENCE */}
+      {activeTab === 'vendor_scorecard' && (
+        <VendorScorecardTab
+          theme={theme}
+          data={scorecardData}
+          isLoading={isLoadingScorecard}
+          canCreateDirectPO={canManagePrPo}
+          onRefresh={loadVendorScorecard}
+          onIssueDirectPO={(supName) => openDirectPoModal(supName)}
+        />
+      )}
+
+      {/* SECTION 6: VELOCITY & SEASONALITY SMART DEMAND FORECAST */}
+      {activeTab === 'smart_forecast' && !isWarehouseRole && (
+        <SmartDemandForecastTab
+          theme={theme}
+          selectedStore={selectedStore}
+          canGeneratePR={canManagePrPo}
+          onShowToast={onShowToast}
+          onRefreshData={onRefreshData}
+          onPRCreated={() => setActiveTab('pr')}
         />
       )}
 
@@ -2222,6 +2440,25 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   </option>
                 ))}
               </select>
+              {(() => {
+                const selectedInv = inventory.find((i) => i.sku === selectedPrSku);
+                const srm = getSrmRecord(selectedInv?.supplierName);
+                if (!selectedInv?.supplierName) return null;
+                return (
+                  <p
+                    className={`mt-1.5 text-[11px] font-medium ${
+                      srm?.grade === 'C'
+                        ? 'text-rose-600 dark:text-rose-400'
+                        : srm?.grade === 'B'
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-emerald-600 dark:text-emerald-400'
+                    }`}
+                  >
+                    Vendor: {selectedInv.supplierName}
+                    {srm ? ` · SRM Score: ${srm.compositeScore}/100 (${srm.gradeLabel})` : ''}
+                  </p>
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -2298,6 +2535,201 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 className="px-4 py-2 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 Submit Purchase Request
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL: CREATE DIRECT PURCHASE ORDER */}
+      {isCreatingDirectPO && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div
+            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-lg p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+            }`}
+          >
+            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+              <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <FileCheck2 className="w-5 h-5 text-[#0F4C3A] dark:text-emerald-400" />
+                Create Direct Purchase Order (PO)
+              </h3>
+              <button
+                onClick={() => setIsCreatingDirectPO(false)}
+                className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors ${
+                  isLight ? 'text-gray-500' : 'text-zinc-300'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                Destination Store / Hub
+              </label>
+              <select
+                value={directPoStoreId}
+                onChange={(e) => setDirectPoStoreId(e.target.value)}
+                className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
+                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                }`}
+              >
+                {storeOutlets.length > 0 ? (
+                  storeOutlets.map((st) => (
+                    <option key={st.storeId} value={st.storeId}>
+                      {st.storeName} ({st.city})
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="store-jkt-senopati">GroceMart Senopati Flagship (Jakarta)</option>
+                    <option value="store-jkt-pik">GroceMart PIK 2 The Avenue (Jakarta)</option>
+                    <option value="store-bdg-dago">GroceMart Dago Green Market (Bandung)</option>
+                    <option value="store-sby-gubeng">GroceMart Gubeng Central Hub (Surabaya)</option>
+                    <option value="store-bali-canggu">GroceMart Batu Bolong Organic (Bali)</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                Supplier / Vendor
+              </label>
+              <select
+                value={directPoSupplier}
+                onChange={(e) => setDirectPoSupplier(e.target.value)}
+                className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
+                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                }`}
+              >
+                <option value="">-- Select Registered Supplier --</option>
+                {supplierOptions.map((supName) => (
+                  <option key={supName} value={supName}>
+                    {supName}
+                  </option>
+                ))}
+              </select>
+              {(() => {
+                const srm = getSrmRecord(directPoSupplier);
+                if (!srm) return null;
+                return (
+                  <p
+                    className={`mt-1.5 text-[11px] font-semibold ${
+                      srm.grade === 'C'
+                        ? 'text-rose-600 dark:text-rose-400'
+                        : srm.grade === 'B'
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-emerald-600 dark:text-emerald-400'
+                    }`}
+                  >
+                    SRM Score: {srm.compositeScore}/100 ({srm.gradeLabel})
+                    {srm.grade === 'C' ? ' — Probation Warning: Review SLA & QC before ordering' : ''}
+                  </p>
+                );
+              })()}
+            </div>
+
+            <div>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                Product / SKU
+              </label>
+              <select
+                value={directPoSku}
+                onChange={(e) => setDirectPoSku(e.target.value)}
+                className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
+                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                }`}
+              >
+                <option value="">-- Choose Product SKU --</option>
+                {inventory.map((item, idx) => (
+                  <option key={`${item.sku}-${idx}`} value={item.sku}>
+                    {item.productName} ({item.sku}) · {formatIDR(item.unitCost || 25000)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  Order Qty
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={directPoQty}
+                  onChange={(e) => setDirectPoQty(Math.max(1, Number(e.target.value) || 1))}
+                  className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  }`}
+                />
+              </div>
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  Expected ETA
+                </label>
+                <input
+                  type="date"
+                  value={directPoExpectedDate}
+                  onChange={(e) => setDirectPoExpectedDate(e.target.value)}
+                  className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  }`}
+                />
+              </div>
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  Payment Terms
+                </label>
+                <select
+                  value={directPoPaymentTerms}
+                  onChange={(e) => setDirectPoPaymentTerms(e.target.value as 'Net 30' | 'COD' | 'Advance Payment')}
+                  className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  }`}
+                >
+                  <option value="Net 30">Net 30</option>
+                  <option value="COD">COD</option>
+                  <option value="Advance Payment">Advance Payment</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                Commercial Notes (Optional)
+              </label>
+              <input
+                type="text"
+                value={directPoNotes}
+                onChange={(e) => setDirectPoNotes(e.target.value)}
+                placeholder="e.g. Maintain cold chain ≤4°C on arrival"
+                className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
+                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                }`}
+              />
+            </div>
+
+            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+              <button
+                type="button"
+                onClick={() => setIsCreatingDirectPO(false)}
+                className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
+                  isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateDirectPO}
+                disabled={isSubmittingDirectPO || !directPoSupplier || !directPoSku}
+                className="px-4 py-2 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingDirectPO ? 'Issuing PO...' : 'Issue Direct Purchase Order'}
               </button>
             </div>
           </div>

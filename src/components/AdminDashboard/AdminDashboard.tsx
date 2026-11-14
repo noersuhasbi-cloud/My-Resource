@@ -712,6 +712,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     switch (activeTab) {
       case 'overview':
         return 'Executive Omzet & Key Metrics';
+      case 'pos':
+        return 'POS Cashier Station & Terminal';
+      case 'crm':
+        return 'CRM & Loyalty 360°';
       case 'operations':
         return 'Store & Multi-Outlet Operations';
       case 'inventory':

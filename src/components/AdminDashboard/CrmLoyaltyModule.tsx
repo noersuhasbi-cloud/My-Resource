@@ -41,11 +41,13 @@ import {
   ShieldCheck,
   Sparkles,
   Store,
+  Ticket,
   TrendingUp,
   UserCheck,
   Users,
   X,
 } from 'lucide-react';
+import { PromoVoucherRulesTab } from './PromoVoucherRulesTab';
 
 interface CrmLoyaltyModuleProps {
   theme: 'light' | 'dark';
@@ -57,7 +59,7 @@ interface CrmLoyaltyModuleProps {
   onRefreshData?: () => void;
 }
 
-type CrmSubTab = 'pipeline' | 'directory' | 'rfm_campaigns' | 'predictive_restock';
+type CrmSubTab = 'pipeline' | 'directory' | 'rfm_campaigns' | 'predictive_restock' | 'promo_rules';
 
 const PIPELINE_STAGES: Array<{
   key: CrmDealStage;
@@ -579,6 +581,11 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
               label: 'Predictive Restock Radar',
               icon: Sparkles,
               badge: overview?.predictiveRestocks.length,
+            },
+            {
+              id: 'promo_rules',
+              label: 'Promo & Voucher Rules',
+              icon: Ticket,
             },
           ] as Array<{ id: CrmSubTab; label: string; icon: any; badge?: number }>
         ).map((tab) => {
@@ -1105,6 +1112,13 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
             ))}
           </div>
         </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* SUB-TAB 5: PROMO & VOUCHER RULES ENGINE                      */}
+      {/* ============================================================ */}
+      {subTab === 'promo_rules' && (
+        <PromoVoucherRulesTab theme={theme} onShowToast={onShowToast} />
       )}
 
       {/* ============================================================ */}

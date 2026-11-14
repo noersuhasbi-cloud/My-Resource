@@ -18,6 +18,7 @@ import type {
   SkuTaxRule,
   CrmAccountType,
   CrmLoyaltyTier,
+  PosValidatePromoResponse,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -66,6 +67,7 @@ import {
   MessageCircle,
   Lock,
   Award,
+  Ticket,
 } from 'lucide-react';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
 
@@ -164,6 +166,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
     }>
   >([]);
   const [redeemPointsInput, setRedeemPointsInput] = useState<number>(0);
+
+  // Promotional & CRM Voucher Engine State
+  const [promoInput, setPromoInput] = useState<string>('');
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string>('');
+  const [promoValidation, setPromoValidation] = useState<PosValidatePromoResponse | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState<boolean>(false);
+  const [promoStatusError, setPromoStatusError] = useState<string>('');
 
   // 4. Barcode Quick Scanner State
   const [barcodeInput, setBarcodeInput] = useState<string>('');
@@ -275,6 +284,91 @@ export const PosModule: React.FC<PosModuleProps> = ({
     };
   }, [isMemberLookupOpen, memberSearchQuery]);
 
+  useEffect(() => {
+    if (cart.length === 0) {
+      setPromoValidation(null);
+      setPromoStatusError('');
+      return;
+    }
+    let active = true;
+    setIsValidatingPromo(true);
+    apiClient
+      .validatePosPromo({
+        cartItems: cart.map((c) => ({
+          sku: c.sku,
+          name: c.name,
+          category: c.category,
+          quantity: c.quantity,
+          unitPrice: c.unitPrice,
+          lineTotal: c.lineTotal,
+        })),
+        promoCode: appliedPromoCode || undefined,
+        memberId: selectedCrmMember?.id,
+        memberTier: selectedCrmMember?.tier,
+      })
+      .then((res) => {
+        if (!active) return;
+        setPromoValidation(res);
+        if (appliedPromoCode && !res.valid) {
+          setPromoStatusError(res.message || `Voucher "${appliedPromoCode}" is not eligible.`);
+        } else {
+          setPromoStatusError('');
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setIsValidatingPromo(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [cart, appliedPromoCode, selectedCrmMember]);
+
+  const handleApplyPromoCode = async () => {
+    const clean = promoInput.trim().toUpperCase();
+    if (!clean) {
+      setAppliedPromoCode('');
+      setPromoStatusError('');
+      return;
+    }
+    if (cart.length === 0) {
+      setPromoStatusError('Add items to the register ticket before applying a voucher.');
+      return;
+    }
+    setIsValidatingPromo(true);
+    setPromoStatusError('');
+    try {
+      const res = await apiClient.validatePosPromo({
+        cartItems: cart.map((c) => ({
+          sku: c.sku,
+          name: c.name,
+          category: c.category,
+          quantity: c.quantity,
+          unitPrice: c.unitPrice,
+          lineTotal: c.lineTotal,
+        })),
+        promoCode: clean,
+        memberId: selectedCrmMember?.id,
+        memberTier: selectedCrmMember?.tier,
+      });
+      if (!res.valid) {
+        setPromoStatusError(res.message || `Voucher "${clean}" is invalid.`);
+        onShowToast('Voucher Rejected', res.message || `Code "${clean}" cannot be applied.`);
+      } else {
+        setAppliedPromoCode(clean);
+        setPromoValidation(res);
+        setPromoStatusError('');
+        onShowToast('Promo / Voucher Applied', res.message || `Code ${clean} applied pre-PPN.`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setPromoStatusError(msg);
+      onShowToast('Voucher Validation Error', msg);
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
   // Calculations (matching backend computeIndonesianTax per SKU)
   const subtotal = useMemo(() => {
     return cart.reduce((acc, item) => acc + item.lineTotal, 0);
@@ -284,11 +378,16 @@ export const PosModule: React.FC<PosModuleProps> = ({
     return Math.round((subtotal * discountPercent) / 100);
   }, [subtotal, discountPercent]);
 
+  const promoDiscountIDR = useMemo(() => {
+    const raw = promoValidation?.totalPromoDiscountIDR || 0;
+    return Math.min(Math.max(0, subtotal - baseDiscountAmount), Math.max(0, Math.round(raw)));
+  }, [promoValidation, subtotal, baseDiscountAmount]);
+
   const maxRedeemablePoints = useMemo(() => {
     if (!selectedCrmMember || selectedCrmMember.pointsBalance <= 0) return 0;
-    const maxByBill = Math.floor(Math.max(0, subtotal - baseDiscountAmount) / 100);
+    const maxByBill = Math.floor(Math.max(0, subtotal - baseDiscountAmount - promoDiscountIDR) / 100);
     return Math.min(selectedCrmMember.pointsBalance, maxByBill);
-  }, [selectedCrmMember, subtotal, baseDiscountAmount]);
+  }, [selectedCrmMember, subtotal, baseDiscountAmount, promoDiscountIDR]);
 
   const effectiveRedeemPoints = useMemo(() => {
     if (!selectedCrmMember) return 0;
@@ -298,8 +397,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const pointsDiscountIDR = effectiveRedeemPoints * 100;
 
   const discountAmount = useMemo(() => {
-    return Math.min(subtotal, baseDiscountAmount + pointsDiscountIDR);
-  }, [subtotal, baseDiscountAmount, pointsDiscountIDR]);
+    return Math.min(subtotal, baseDiscountAmount + promoDiscountIDR + pointsDiscountIDR);
+  }, [subtotal, baseDiscountAmount, promoDiscountIDR, pointsDiscountIDR]);
 
   const { taxAmount, totalAmount } = useMemo(() => {
     const netRevenue = Math.max(0, subtotal - discountAmount);
@@ -447,6 +546,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
     setRedeemPointsInput(0);
     setIsMemberLookupOpen(false);
     setMemberSearchQuery('');
+    setPromoInput('');
+    setAppliedPromoCode('');
+    setPromoValidation(null);
+    setPromoStatusError('');
   };
 
   // Barcode search and instant add (including Variable-Weight embedded scale barcodes)
@@ -553,6 +656,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
         customerMemberId,
         crmAccountId: selectedCrmMember?.id,
         redeemPoints: effectiveRedeemPoints > 0 ? effectiveRedeemPoints : undefined,
+        promoCode: appliedPromoCode || undefined,
+        appliedPromos: promoValidation?.appliedPromos,
+        promoDiscountIDR: promoDiscountIDR > 0 ? promoDiscountIDR : undefined,
       };
 
       const res = await apiClient.posCheckout(payload);
@@ -1097,6 +1203,73 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 </div>
               )}
 
+              {/* Compact Promo / CRM Voucher Code Bar */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex-1 min-w-0">
+                    <Ticket className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={promoInput}
+                      onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleApplyPromoCode();
+                        }
+                      }}
+                      placeholder="Promo / Voucher Code (e.g. VIPHEMAT20)..."
+                      className={`w-full pl-8 pr-2.5 py-1.5 rounded-xl border text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                        isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                      }`}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isValidatingPromo || cart.length === 0}
+                    onClick={handleApplyPromoCode}
+                    className="px-3 py-1.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-40 text-white text-xs font-bold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
+                  >
+                    {isValidatingPromo ? '...' : 'Apply'}
+                  </button>
+                  {appliedPromoCode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPromoInput('');
+                        setAppliedPromoCode('');
+                        setPromoStatusError('');
+                      }}
+                      className="p-1.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-zinc-400 hover:text-rose-500 cursor-pointer"
+                      title="Remove Voucher Code"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {promoStatusError && (
+                  <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400 px-1">
+                    {promoStatusError}
+                  </p>
+                )}
+
+                {promoValidation && promoValidation.appliedPromos.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {promoValidation.appliedPromos.map((ap, i) => (
+                      <span
+                        key={`${ap.ruleId}-${i}`}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                      >
+                        <Ticket className="w-2.5 h-2.5" />
+                        <span>{ap.badgeLabel}</span>
+                        <span className="font-mono">-{formatIDR(ap.discountAmountIDR)}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {isMemberLookupOpen && (
                 <div
                   className={`absolute left-0 right-0 top-10 z-30 rounded-xl border p-2.5 shadow-xl space-y-2 ${
@@ -1234,12 +1407,21 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <span className="font-mono">{formatCurrency(subtotal)}</span>
             </div>
 
-            {discountAmount > 0 && (
+            {baseDiscountAmount + pointsDiscountIDR > 0 && (
               <div className="flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400">
                 <span>
                   Discount ({discountPercent}%{pointsDiscountIDR > 0 ? ` + ${effectiveRedeemPoints} pts` : ''}):
                 </span>
-                <span className="font-mono">-{formatCurrency(discountAmount)}</span>
+                <span className="font-mono">-{formatCurrency(baseDiscountAmount + pointsDiscountIDR)}</span>
+              </div>
+            )}
+
+            {promoDiscountIDR > 0 && (
+              <div className="flex items-center justify-between text-xs text-indigo-600 dark:text-indigo-400 font-semibold">
+                <span>
+                  Promo / Voucher{appliedPromoCode ? ` (${appliedPromoCode})` : ''}:
+                </span>
+                <span className="font-mono">-{formatCurrency(promoDiscountIDR)}</span>
               </div>
             )}
 
@@ -1703,10 +1885,18 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 </div>
                 {completedReceipt.discount > 0 && (
                   <div className="flex justify-between text-emerald-700">
-                    <span>Discount:</span>
+                    <span>Discount &amp; Promos:</span>
                     <span>-{formatIDR(completedReceipt.discount)}</span>
                   </div>
                 )}
+                {completedReceipt.promoDiscountIDR && completedReceipt.promoDiscountIDR > 0 ? (
+                  <div className="flex justify-between text-[9px] text-indigo-700">
+                    <span>
+                      ↳ Saved via {completedReceipt.promoCode || completedReceipt.appliedPromos?.map((p) => p.ruleCode).join(', ') || 'Promo'}:
+                    </span>
+                    <span>{formatIDR(completedReceipt.promoDiscountIDR)}</span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between">
                   <span>Tax (PPN/PB1):</span>
                   <span>{formatIDR(completedReceipt.tax)}</span>

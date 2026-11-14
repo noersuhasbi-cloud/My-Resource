@@ -88,6 +88,7 @@ import {
   PackageCheck,
   MapPin,
   Mail,
+  History,
 } from 'lucide-react';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { ValuationCostingSettingsTab } from './ValuationCostingSettingsTab';
@@ -96,6 +97,7 @@ import { ThreeWayMatchingSettingsTab } from './ThreeWayMatchingSettingsTab';
 import { BlindOpnamePanel } from './BlindOpnamePanel';
 import { IndonesianTaxRulesPanel } from './IndonesianTaxRulesPanel';
 import { CommunicationGatewaySettingsTab } from './CommunicationGatewaySettingsTab';
+import { AuditTrailKpiTab } from './AuditTrailKpiTab';
 
 export type SettingsSubTab =
   | 'enterprise'
@@ -109,7 +111,8 @@ export type SettingsSubTab =
   | 'import_opname'
   | 'transfer'
   | 'approval_matrix'
-  | 'communication_gateway';
+  | 'communication_gateway'
+  | 'audit_kpis';
 
 interface SettingsModuleProps {
   theme: 'light' | 'dark';
@@ -153,6 +156,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const isCoo = currentRole === 'coo';
   const isAdminRole = currentRole === 'admin';
   const canViewBranchMonitor = isSuperAdmin || isCoo || isAdminRole;
+  const canViewAuditAndKpis = isSuperAdmin || isCoo;
   const canConfirmArrivals = isSuperAdmin || isCoo || currentRole === 'warehouse' || currentRole === 'store_manager';
   const isReadOnlyPolicyRole = isAdminRole;
 
@@ -166,6 +170,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       setActiveSubTab(initialSubTab);
     }
   }, [initialSubTab]);
+
+  useEffect(() => {
+    if (activeSubTab === 'audit_kpis' && !canViewAuditAndKpis) {
+      setActiveSubTab('enterprise');
+    }
+  }, [activeSubTab, canViewAuditAndKpis]);
 
   const [opnameSubTab, setOpnameSubTab] = useState<'stocktake' | 'bulk_import'>('stocktake');
   const [opnameAuditMode, setOpnameAuditMode] = useState<'standard' | 'blind'>('standard');
@@ -1162,6 +1172,22 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             <Mail className="w-4 h-4 text-emerald-500" />
             <span>Email (SMTP) &amp; WhatsApp Gateway</span>
           </button>
+
+          {canViewAuditAndKpis && (
+            <button
+              onClick={() => setActiveSubTab('audit_kpis')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeSubTab === 'audit_kpis'
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : isLight
+                  ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+              }`}
+            >
+              <History className="w-4 h-4 text-amber-500" />
+              <span>Audit Trail &amp; Operator KPIs</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -4394,6 +4420,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           canEditConfig={isSuperAdmin || isCoo}
           onShowToast={onShowToast}
         />
+      )}
+
+      {/* ========================================================================= */}
+      {/* 7. IMMUTABLE AUDIT TRAIL & OPERATOR PRODUCTIVITY KPIs (COO / SUPER ADMIN) */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'audit_kpis' && canViewAuditAndKpis && (
+        <AuditTrailKpiTab theme={theme} onShowToast={onShowToast} />
       )}
     </div>
   );

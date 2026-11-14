@@ -101,10 +101,8 @@ export function generateEscPosReceipt(payload: ThermalPrintReceiptPayload, paper
 export function executeThermalReceiptPrint(payload: ThermalPrintReceiptPayload): EscPosCommandResult {
   const result = generateEscPosReceipt(payload);
 
-  // Trigger browser print window with monospace thermal styling
-  const printWindow = window.open('', '_blank', 'width=380,height=600');
-  if (printWindow) {
-    printWindow.document.write(`
+  if (typeof document !== 'undefined') {
+    const htmlContent = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -126,22 +124,43 @@ export function executeThermalReceiptPrint(payload: ThermalPrintReceiptPayload):
               white-space: pre-wrap;
               word-wrap: break-word;
             }
-            .center { text-align: center; }
-            .bold { font-weight: bold; }
           </style>
         </head>
         <body>
-          <pre>${result.formattedTextLines.join('\n')}</pre>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
+          <pre>${result.formattedTextLines.join('\n').replace(/[<>&]/g, (ch) => (ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : '&amp;'))}</pre>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+    const printFrame = document.createElement('iframe');
+    printFrame.setAttribute('aria-hidden', 'true');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    document.body.appendChild(printFrame);
+
+    const frameDoc = printFrame.contentDocument || printFrame.contentWindow?.document;
+    if (frameDoc) {
+      frameDoc.open();
+      frameDoc.write(htmlContent);
+      frameDoc.close();
+      setTimeout(() => {
+        try {
+          printFrame.contentWindow?.focus();
+          printFrame.contentWindow?.print();
+        } finally {
+          setTimeout(() => {
+            if (printFrame.parentNode) {
+              printFrame.parentNode.removeChild(printFrame);
+            }
+          }, 1000);
+        }
+      }, 100);
+    } else if (printFrame.parentNode) {
+      printFrame.parentNode.removeChild(printFrame);
+    }
   }
 
   // If cash settlement, automatically trigger drawer kick

@@ -98,8 +98,8 @@ function resolveOutletIdClient(codeOrId: string, outlets: StoreOutletSchedule[])
     DAGO: 'store-bdg-dago',
     SBY: 'store-sby-gubeng',
     GUBENG: 'store-sby-gubeng',
-    DPS: 'store-dps-canggu',
-    CANGGU: 'store-dps-canggu',
+    DPS: 'store-bali-canggu',
+    CANGGU: 'store-bali-canggu',
   };
   if (aliasMap[upper]) {
     return outlets.find((s) => s.storeId === aliasMap[upper]);

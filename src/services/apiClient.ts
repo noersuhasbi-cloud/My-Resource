@@ -119,9 +119,15 @@ import type {
   CrmOverviewResponse,
   CrmLoyaltyTier,
   CrmRfmSegment,
-  EnterpriseQuotation,
+  VendorScorecardResponse,
+  AuditTrailOverviewResponse,
+  DemandForecastHorizon,
+  DemandSeasonalityProfile,
+  DemandForecastResponse,
+  PosValidatePromoResponse,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
+import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -2095,7 +2101,6 @@ export const apiClient = {
       const res = await fetchApi(`/api/admin/vendor-credit-notes${storeId && storeId !== 'ALL' ? `?storeId=${encodeURIComponent(storeId)}` : ''}`);
       if (res.ok) return await res.json();
     } catch {}
-    const { MOCK_VENDOR_CREDIT_NOTES } = await import('../utils/groceryEngine.ts');
     return MOCK_VENDOR_CREDIT_NOTES;
   },
 
@@ -2143,7 +2148,6 @@ export const apiClient = {
       const res = await fetchApi('/api/admin/markdown-rules');
       if (res.ok) return await res.json();
     } catch {}
-    const { DEFAULT_MARKDOWN_CONFIG } = await import('../utils/groceryEngine.ts');
     return DEFAULT_MARKDOWN_CONFIG;
   },
 
@@ -3297,8 +3301,135 @@ export const apiClient = {
     if (!res.ok) throw new Error(data.error || 'Failed to dispatch CRM campaign');
     return data;
   },
+
+  // -------------------------------------------------------------
+  // SRM VENDOR SCORECARD, DIRECT PO & GOVERNANCE AUDIT TRAIL APIS
+  // -------------------------------------------------------------
+  async getVendorScorecard(params?: {
+    grade?: string;
+    q?: string;
+  }): Promise<VendorScorecardResponse> {
+    const qs = new URLSearchParams();
+    if (params?.grade && params.grade !== 'ALL') qs.set('grade', params.grade);
+    if (params?.q && params.q.trim()) qs.set('q', params.q.trim());
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    const res = await fetchApi(`/api/admin/procurement/vendor-scorecard${suffix}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load vendor scorecard metrics');
+    return data;
+  },
+
+  async createDirectPurchaseOrder(payload: {
+    storeId: string;
+    supplierName: string;
+    sku: string;
+    quantity: number;
+    expectedDeliveryDate?: string;
+    paymentTerms?: 'Net 30' | 'COD' | 'Advance Payment';
+    notes?: string;
+  }): Promise<{ success: boolean; purchaseOrder: PurchaseOrder; message?: string }> {
+    const res = await fetchApi('/api/admin/procurement/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to create direct Purchase Order');
+    return data;
+  },
+
+  async getSettingsAuditTrail(params?: {
+    module?: string;
+    q?: string;
+  }): Promise<AuditTrailOverviewResponse> {
+    const qs = new URLSearchParams();
+    if (params?.module && params.module !== 'ALL') qs.set('module', params.module);
+    if (params?.q && params.q.trim()) qs.set('q', params.q.trim());
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    const res = await fetchApi(`/api/admin/settings/audit-trail${suffix}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to retrieve audit trail & operator KPIs');
+    return data;
+  },
+
+  // -------------------------------------------------------------
+  // SMART DEMAND FORECASTING & PROMOTIONAL VOUCHER RULES ENGINE
+  // -------------------------------------------------------------
+  async getDemandForecast(params?: {
+    storeId?: string;
+    horizon?: DemandForecastHorizon;
+    profile?: DemandSeasonalityProfile;
+  }): Promise<DemandForecastResponse> {
+    const qs = new URLSearchParams();
+    if (params?.storeId) qs.set('storeId', params.storeId);
+    if (params?.horizon) qs.set('horizon', String(params.horizon));
+    if (params?.profile) qs.set('profile', params.profile);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    const res = await fetchApi(`/api/admin/procurement/demand-forecast${suffix}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to compute smart demand forecast');
+    return data;
+  },
+
+  async createSmartForecastPRs(payload: {
+    storeId?: string;
+    horizonDays?: DemandForecastHorizon;
+    seasonalityProfile?: DemandSeasonalityProfile;
+    items: Array<{ sku: string; quantity?: number; supplierName?: string }>;
+  }): Promise<{
+    success: boolean;
+    purchaseRequests: PurchaseRequest[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/procurement/demand-forecast/create-pr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to generate Smart Purchase Requests');
+    return data;
+  },
+
+  async getCrmPromotions(): Promise<{
+    promotions: PromotionRule[];
+    stats: { activeCount: number; totalRedemptions: number; happyHourActiveCount: number };
+  }> {
+    const res = await fetchApi('/api/admin/crm/promotions');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load CRM promo & voucher rules');
+    return data;
+  },
+
+  async saveCrmPromotion(rule: Partial<PromotionRule>): Promise<{
+    success: boolean;
+    rule: PromotionRule;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/crm/promotions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rule),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to save promotional rule');
+    return data;
+  },
+
+  async validatePosPromo(payload: {
+    cartItems: Array<{ sku: string; name?: string; category?: string; quantity: number; unitPrice: number; lineTotal?: number }>;
+    promoCode?: string;
+    memberId?: string;
+    memberTier?: string;
+    simulateHappyHourActive?: boolean;
+  }): Promise<PosValidatePromoResponse> {
+    const res = await fetchApi('/api/pos/validate-promo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to validate promo / voucher');
+    return data;
+  },
 };
-
-
-
-
