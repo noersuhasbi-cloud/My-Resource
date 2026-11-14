@@ -103,6 +103,23 @@ import type {
   RackStocktakeCommitPayload,
   RackStocktakeCommitResponse,
   RackStocktakePendingSubmission,
+  PutawaySuggestionResponse,
+  CrossDockRequest,
+  CrossDockResponse,
+  RepackBundleRequest,
+  RepackBundleResponse,
+  ComplianceRecallTraceResponse,
+  ConsignmentLedgerEntry,
+  SafeDropRecord,
+  CrmAccount,
+  CrmAccountType,
+  CrmDeal,
+  CrmDealStage,
+  CrmActivity,
+  CrmOverviewResponse,
+  CrmLoyaltyTier,
+  CrmRfmSegment,
+  EnterpriseQuotation,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
@@ -2910,6 +2927,374 @@ export const apiClient = {
     if (!res.ok) {
       throw new Error(data.error || 'Failed to commit rack blind stock opname');
     }
+    return data;
+  },
+
+  // -------------------------------------------------------------
+  // PUTAWAY, CROSS-DOCK, REPACK/BUNDLE, RECALL, CONSIGNMENT & SAFE DROP
+  // -------------------------------------------------------------
+  async getQcPutawaySuggestion(payload: {
+    sku: string;
+    storeId: string;
+    qty?: number;
+    lotNumber?: string;
+    storageZone?: string;
+    category?: string;
+  }): Promise<PutawaySuggestionResponse> {
+    const res = await fetchApi('/api/admin/qc/putaway-suggestion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to compute directed putaway suggestion');
+    return data;
+  },
+
+  async executeCrossDock(payload: CrossDockRequest): Promise<CrossDockResponse> {
+    const res = await fetchApi('/api/admin/procurement/cross-dock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Cross-dock direct fulfillment failed');
+    return data;
+  },
+
+  async executeRepackOrBundle(payload: RepackBundleRequest): Promise<RepackBundleResponse> {
+    const res = await fetchApi('/api/admin/inventory/repack-bundle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Repack/Bundle operation failed');
+    return data;
+  },
+
+  async getComplianceRecallTrace(lotNumber: string): Promise<ComplianceRecallTraceResponse> {
+    const res = await fetchApi(`/api/admin/compliance/recall-trace/${encodeURIComponent(lotNumber)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to trace batch lot');
+    return data;
+  },
+
+  async executeComplianceRecall(
+    lotNumber: string,
+    reason?: string
+  ): Promise<{
+    success: boolean;
+    trace: ComplianceRecallTraceResponse;
+    quarantinedBatchesCount: number;
+    affectedUnits: number;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/compliance/recall-execute/${encodeURIComponent(lotNumber)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to execute batch recall freeze');
+    return data;
+  },
+
+  async getConsignmentDashboard(
+    storeId?: string,
+    supplierName?: string
+  ): Promise<{
+    summary: {
+      unsettledPayableIDR: number;
+      settledTotalIDR: number;
+      totalStoreCommissionIDR: number;
+      totalUnsoldUnits: number;
+      activeBatchesCount: number;
+    };
+    suppliers: string[];
+    activeStock: InventoryBatch[];
+    salesLedger: ConsignmentLedgerEntry[];
+  }> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    if (supplierName && supplierName !== 'ALL') params.append('supplierName', supplierName);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetchApi(`/api/admin/accounting/consignment${qs}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load consignment ledger');
+    return data;
+  },
+
+  async settleConsignmentSupplier(payload: {
+    supplierName?: string;
+    ledgerIds?: string[];
+  }): Promise<{
+    success: boolean;
+    vendorBill: VendorBill;
+    settledCount: number;
+    totalPayableIDR: number;
+    glVoucherIds: string[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/accounting/consignment/settle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to settle consignment payables');
+    return data;
+  },
+
+  async returnConsignmentStockRtv(payload: {
+    batchId: string;
+    quantity?: number;
+    reason?: string;
+  }): Promise<{
+    success: boolean;
+    batch: InventoryBatch;
+    returnedQuantity: number;
+    glImpactIDR: number;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/accounting/consignment/rtv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to return consignment stock');
+    return data;
+  },
+
+  async getPosSafeDrops(storeId?: string, shiftId?: string): Promise<SafeDropRecord[]> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    if (shiftId) params.append('shiftId', shiftId);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetchApi(`/api/pos/safe-drops${qs}`);
+    if (!res.ok) return [];
+    return res.json().catch(() => []);
+  },
+
+  async createPosSafeDrop(payload: {
+    storeId: string;
+    shiftId?: string;
+    amountIDR: number;
+    supervisorName?: string;
+    sealBagNumber?: string;
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    safeDrop: SafeDropRecord;
+    shift: PosRegisterShiftSession;
+    glVoucherIds: string[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/pos/safe-drop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to log POS safe drop');
+    return data;
+  },
+
+  // =============================================================
+  // STANDALONE CRM, LOYALTY & B2B CUSTOMER 360 ENDPOINTS
+  // =============================================================
+  async searchPosCrmMembers(q?: string): Promise<
+    Array<{
+      id: string;
+      accountType: CrmAccountType;
+      name: string;
+      companyName?: string;
+      phone: string;
+      email: string;
+      tier: CrmLoyaltyTier;
+      pointsBalance: number;
+      contractDiscountPct: number;
+    }>
+  > {
+    const qs = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : '';
+    const res = await fetchApi(`/api/pos/crm-members${qs}`);
+    if (!res.ok) return [];
+    return res.json().catch(() => []);
+  },
+
+  async getCrmOverview(storeId?: string): Promise<CrmOverviewResponse> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      params.append('storeId', storeId);
+    }
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetchApi(`/api/admin/crm/overview${qs}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load CRM & Loyalty 360 overview');
+    return data;
+  },
+
+  async getCrmAccountHistory(id: string): Promise<{
+    account: CrmAccount;
+    posOrders: POSTransactionReceipt[];
+    b2bOrders: B2BWholesaleOrder[];
+    quotations: EnterpriseQuotation[];
+    communications: CommunicationDispatchLog[];
+    activities: CrmActivity[];
+  }> {
+    const res = await fetchApi(`/api/admin/crm/accounts/${encodeURIComponent(id)}/history`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load customer 360 history');
+    return data;
+  },
+
+  async createCrmAccount(payload: {
+    accountType: CrmAccountType;
+    name: string;
+    companyName?: string;
+    storeId?: string;
+    phone: string;
+    email?: string;
+    tier?: CrmLoyaltyTier;
+    pointsBalance?: number;
+    contractDiscountPct?: number;
+    creditLimitIDR?: number;
+    paymentTerms?: 'CASH' | 'NET_7' | 'NET_14' | 'NET_30';
+    preferredCategories?: string[];
+    notes?: string;
+  }): Promise<{ success: boolean; account: CrmAccount; message: string }> {
+    const res = await fetchApi('/api/admin/crm/accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to create CRM account');
+    return data;
+  },
+
+  async updateCrmAccount(
+    id: string,
+    payload: Partial<
+      Pick<
+        CrmAccount,
+        | 'name'
+        | 'companyName'
+        | 'phone'
+        | 'email'
+        | 'tier'
+        | 'contractDiscountPct'
+        | 'creditLimitIDR'
+        | 'paymentTerms'
+        | 'preferredCategories'
+        | 'notes'
+      >
+    >
+  ): Promise<{ success: boolean; account: CrmAccount; message: string }> {
+    const res = await fetchApi(`/api/admin/crm/accounts/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to update CRM account');
+    return data;
+  },
+
+  async createCrmDeal(payload: {
+    title: string;
+    crmAccountId?: string;
+    companyName?: string;
+    contactName?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    storeId?: string;
+    stage?: CrmDealStage;
+    estimatedMonthlyValueIDR: number;
+    nextActivity?: string;
+    nextActivityDate?: string;
+    notes?: string;
+  }): Promise<{ success: boolean; deal: CrmDeal; message: string }> {
+    const res = await fetchApi('/api/admin/crm/deals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to create CRM deal');
+    return data;
+  },
+
+  async updateCrmDealStage(
+    id: string,
+    stage: CrmDealStage
+  ): Promise<{ success: boolean; deal: CrmDeal; onboardedAccount?: CrmAccount; message: string }> {
+    const res = await fetchApi(`/api/admin/crm/deals/${encodeURIComponent(id)}/stage`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to update deal stage');
+    return data;
+  },
+
+  async convertCrmDealToQuotation(id: string): Promise<{
+    success: boolean;
+    deal: CrmDeal;
+    quotation: EnterpriseQuotation;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/crm/deals/${encodeURIComponent(id)}/convert-quotation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to convert deal to quotation');
+    return data;
+  },
+
+  async createCrmActivity(payload: {
+    crmAccountId?: string;
+    dealId?: string;
+    type: CrmActivity['type'];
+    subject: string;
+    outcome?: string;
+  }): Promise<{ success: boolean; activity: CrmActivity; message: string }> {
+    const res = await fetchApi('/api/admin/crm/activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to log CRM activity');
+    return data;
+  },
+
+  async dispatchCrmCampaign(payload: {
+    channel: 'email' | 'whatsapp' | 'both';
+    segment?: CrmRfmSegment | 'ALL';
+    accountIds?: string[];
+    campaignTitle: string;
+    messageTemplate: string;
+    voucherCode?: string;
+  }): Promise<{
+    success: boolean;
+    campaignRef: string;
+    recipientCount: number;
+    dispatchCount: number;
+    waMeUrl?: string;
+    logs: CommunicationDispatchLog[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/crm/campaigns/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to dispatch CRM campaign');
     return data;
   },
 };

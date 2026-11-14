@@ -46,11 +46,13 @@ import {
   Printer,
   PieChart,
   BarChart3,
+  Handshake,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { VendorBillModule } from './VendorBillModule';
 import { ComplianceAccountingPanels } from './ComplianceAccountingPanels';
 import { AnalyticMarginModule } from './AnalyticMarginModule';
+import { ConsignmentSettlementPanel } from './ConsignmentSettlementPanel';
 import { usePrint } from '../../context/PrintContext';
 import type { AccountingSubTab } from './AdminSidebar';
 import { isBranchScopedRole, normalizeEnterpriseRole } from '../../utils/rbac';
@@ -388,6 +390,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             { id: 'b2b_ar', label: 'B2B AR & Giro Clearing', icon: CreditCard },
             { id: 'analytic_budgets', label: 'Analytic Budgets', icon: PieChart },
             { id: 'margin_analysis', label: 'Margin Analysis', icon: BarChart3 },
+            { id: 'consignment', label: 'Consignment (Titip Jual)', icon: Handshake },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = !complianceSubView && subTab === tab.id;
@@ -834,6 +837,11 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   <option value="PURCHASE_AP">Purchase AP</option>
                   <option value="INVENTORY_ADJUSTMENT">Stock Adjustments</option>
                   <option value="WASTE_SHRINKAGE">Waste Shrinkage</option>
+                  <option value="POS_SAFE_DROP">POS Safe Drops (Brankas)</option>
+                  <option value="CONSIGNMENT_SALE">Consignment Sales (2015)</option>
+                  <option value="CONSIGNMENT_SETTLEMENT">Consignment Settlement</option>
+                  <option value="REPACK_BUNDLE">Repack / Bundle Packaging</option>
+                  <option value="CROSS_DOCK">Cross-Dock Allocation</option>
                   <option value="REVERSING_ENTRY">Reversing Counter-Entries</option>
                 </select>
               </div>
@@ -1356,6 +1364,16 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           mode={subTab}
           enterpriseSettings={enterpriseSettings}
           onRefreshData={onRefreshData}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {/* SUB-TAB 10: CONSIGNMENT (TITIP JUAL) SETTLEMENT ENGINE */}
+      {!complianceSubView && subTab === 'consignment' && (
+        <ConsignmentSettlementPanel
+          theme={theme}
+          selectedStore={selectedStore}
+          onSettled={onRefreshData}
           onShowToast={onShowToast}
         />
       )}

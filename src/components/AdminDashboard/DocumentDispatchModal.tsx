@@ -41,6 +41,8 @@ const DOC_TYPE_LABELS: Record<CommunicationDocType, string> = {
   POS_RECEIPT: 'Customer POS Receipt',
   B2B_INVOICE: 'B2B Wholesale Invoice',
   SURAT_JALAN: 'Surat Jalan (Delivery Waybill)',
+  RECALL_ALERT: 'BPOM / HACCP Batch Recall Alert',
+  CRM_CAMPAIGN: 'CRM Promo & Restock Campaign',
 };
 
 function normalizeIndoPhonePreview(raw: string): string {

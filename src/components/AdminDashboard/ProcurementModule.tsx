@@ -112,6 +112,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     >
   >({});
 
+  // Cross-Dock Direct Fulfillment State (inside Receive Goods Modal)
+  const [receiveMode, setReceiveMode] = useState<'standard' | 'cross_dock'>('standard');
+  const [crossDockDriver, setCrossDockDriver] = useState<string>('Budi Santoso');
+  const [crossDockPlate, setCrossDockPlate] = useState<string>('B 9124 KXC');
+  const [crossDockAllocations, setCrossDockAllocations] = useState<Record<string, Record<string, number>>>({});
+
   // Active Module Sub-Tab
   const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'pr' | 'po' | 'gr' | 'vendor_bills'>(
     canonicalRole === 'warehouse' ? 'gr' : 'auto_replenishment'
@@ -325,13 +331,31 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     }
   };
 
+  const crossDockTargetBranches = useMemo(() => {
+    const defaults = [
+      { storeId: 'store-jkt-pik', storeName: 'GroceMart PIK 2 The Avenue' },
+      { storeId: 'store-jkt-menteng', storeName: 'GroceMart Menteng Heritage' },
+      { storeId: 'store-bdg-dago', storeName: 'GroceMart Dago Green Market' },
+      { storeId: 'store-sby-gubeng', storeName: 'GroceMart Gubeng Central' },
+    ];
+    if (storeOutlets && storeOutlets.length > 0) {
+      const branches = storeOutlets.filter((s) => s.storeId !== 'store-jkt-senopati');
+      if (branches.length > 0) {
+        return branches.map((b) => ({ storeId: b.storeId, storeName: b.storeName }));
+      }
+    }
+    return defaults;
+  }, [storeOutlets]);
+
   const openReceivingModal = (po: PurchaseOrder) => {
     setActiveReceivingPO(po);
+    setReceiveMode('standard');
     setDeliveryNoteInput(`SJ-VND-${Date.now().toString().slice(-5)}`);
     setReceivedByInput('Siti Rahmawati (Receiving Clerk)');
     setReceiverNotesInput('');
 
     const initialMap: typeof receivingItemsState = {};
+    const initialCdMap: Record<string, Record<string, number>> = {};
     po.items.forEach((item) => {
       initialMap[item.sku] = {
         quantityReceived: item.remainingBackorder > 0 ? item.remainingBackorder : item.orderedQuantity,
@@ -340,8 +364,15 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         qualityCondition: 'Cold-Chain Verified',
         tempCheckCelsius: 3.8,
       };
+      const allocRow: Record<string, number> = {};
+      crossDockTargetBranches.forEach((b, bIdx) => {
+        allocRow[b.storeId] =
+          bIdx === 0 ? (item.remainingBackorder > 0 ? item.remainingBackorder : item.orderedQuantity) : 0;
+      });
+      initialCdMap[item.sku] = allocRow;
     });
     setReceivingItemsState(initialMap);
+    setCrossDockAllocations(initialCdMap);
   };
 
   const handleSubmitPartialGR = async () => {
@@ -361,6 +392,51 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
     setIsSubmittingGR(true);
     try {
+      if (receiveMode === 'cross_dock') {
+        const cdItems = activeReceivingPO.items
+          .map((item) => {
+            const itemState = receivingItemsState[item.sku];
+            const branchMap = crossDockAllocations[item.sku] || {};
+            const allocations = Object.entries(branchMap)
+              .filter(([, q]) => Number(q) > 0)
+              .map(([targetStoreId, qty]) => ({
+                targetStoreId,
+                targetStoreName:
+                  crossDockTargetBranches.find((b) => b.storeId === targetStoreId)?.storeName || targetStoreId,
+                qty: Number(qty),
+              }));
+            return {
+              sku: item.sku,
+              batchNumber: itemState?.batchNumber,
+              expiryDate: itemState?.expiryDate,
+              tempCheckCelsius: itemState?.tempCheckCelsius,
+              allocations,
+            };
+          })
+          .filter((it) => it.allocations.length > 0);
+
+        if (cdItems.length === 0) {
+          onShowToast('Cross-Dock Allocations Needed', 'Allocate at least 1 unit to a destination branch.');
+          setIsSubmittingGR(false);
+          return;
+        }
+
+        const res = await apiClient.executeCrossDock({
+          poId: activeReceivingPO.id,
+          deliveryNoteNumber: deliveryNoteInput,
+          receivedBy: receivedByInput,
+          driverName: crossDockDriver,
+          vehiclePlateNumber: crossDockPlate,
+          receiverNotes: receiverNotesInput,
+          items: cdItems,
+        });
+
+        onShowToast('Cross-Dock Dispatched (Zero CDC Putaway)', res.message);
+        setActiveReceivingPO(null);
+        onRefreshData();
+        return;
+      }
+
       const itemsPayload = Object.entries(receivingItemsState).map(([sku, data]) => ({
         sku,
         quantityReceived: data.quantityReceived,
@@ -1702,6 +1778,74 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               </button>
             </div>
 
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50/70 dark:bg-zinc-800/50">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setReceiveMode('standard')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    receiveMode === 'standard'
+                      ? 'bg-[#0F4C3A] text-white shadow-xs'
+                      : isLight
+                      ? 'bg-white text-gray-700 border border-gray-200'
+                      : 'bg-zinc-900 text-zinc-300 border border-zinc-700'
+                  }`}
+                >
+                  Standard CDC Putaway (GR)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReceiveMode('cross_dock')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    receiveMode === 'cross_dock'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : isLight
+                      ? 'bg-white text-gray-700 border border-gray-200'
+                      : 'bg-zinc-900 text-zinc-300 border border-zinc-700'
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Cross-Dock Direct to Branch</span>
+                </button>
+              </div>
+              {activeReceivingPO.items.some((it) => it.isConsignment) && (
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  Consignment (Titip Jual · Zero GL #1040/#2010)
+                </span>
+              )}
+            </div>
+
+            {receiveMode === 'cross_dock' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/50 dark:bg-indigo-950/20">
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1 text-indigo-900 dark:text-indigo-200">
+                    Dispatch Driver Name
+                  </label>
+                  <input
+                    type="text"
+                    value={crossDockDriver}
+                    onChange={(e) => setCrossDockDriver(e.target.value)}
+                    className={`w-full px-3 py-1.5 text-xs rounded-lg border ${
+                      isLight ? 'bg-white border-indigo-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1 text-indigo-900 dark:text-indigo-200">
+                    Fleet Vehicle Plate #
+                  </label>
+                  <input
+                    type="text"
+                    value={crossDockPlate}
+                    onChange={(e) => setCrossDockPlate(e.target.value)}
+                    className={`w-full px-3 py-1.5 text-xs rounded-lg border font-mono ${
+                      isLight ? 'bg-white border-indigo-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    }`}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
@@ -1740,7 +1884,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             {/* Items with partial quantity inputs */}
             <div className="space-y-3">
               <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
-                Specify Received Items (Partial Fulfillment Supported)
+                {receiveMode === 'cross_dock'
+                  ? 'Cross-Dock Branch Allocation (Zero CDC Shelf Putaway)'
+                  : 'Specify Received Items (Partial Fulfillment Supported)'}
               </h4>
 
               {activeReceivingPO.items.map((item, idx) => {
@@ -1873,6 +2019,48 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       </div>
                     </div>
 
+                    {receiveMode === 'cross_dock' && (
+                      <div className="pt-2 border-t border-indigo-200/70 dark:border-zinc-700 space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
+                          <span>Direct Branch Allocations (Zero CDC Storage):</span>
+                          <span className="font-mono">
+                            Allocated:{' '}
+                            {Object.values(crossDockAllocations[item.sku] || {}).reduce(
+                              (sum, v) => sum + (Number(v) || 0),
+                              0
+                            )}{' '}
+                            / {item.remainingBackorder} max
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {crossDockTargetBranches.map((br) => (
+                            <div key={br.storeId}>
+                              <label className="block text-[10px] truncate opacity-80 mb-0.5">{br.storeName}</label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={item.remainingBackorder}
+                                value={crossDockAllocations[item.sku]?.[br.storeId] ?? 0}
+                                onChange={(e) => {
+                                  const q = Math.max(0, Number(e.target.value) || 0);
+                                  setCrossDockAllocations((prev) => ({
+                                    ...prev,
+                                    [item.sku]: {
+                                      ...(prev[item.sku] || {}),
+                                      [br.storeId]: q,
+                                    },
+                                  }));
+                                }}
+                                className={`w-full px-2 py-1 text-xs font-mono font-bold rounded-lg border ${
+                                  isLight ? 'bg-white border-indigo-200 text-gray-900' : 'bg-zinc-900 border-zinc-600 text-white'
+                                }`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between text-[11px] pt-1">
                       <span className={isLight ? 'text-gray-500' : 'text-zinc-300'}>
                         Resulting Backorder on PO:
@@ -1908,10 +2096,25 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             }`}>
               <p className="font-semibold flex items-center gap-1.5 text-[#0F4C3A] dark:text-emerald-400">
                 <Scale className="w-3.5 h-3.5" />
-                Automated Double-Entry Accounting Posting:
+                {receiveMode === 'cross_dock'
+                  ? 'Cross-Dock GL & Logistics Automation:'
+                  : activeReceivingPO.items.every((it) => it.isConsignment)
+                  ? 'Consignment (Titip Jual) Zero-Valuation Entry:'
+                  : 'Automated Double-Entry Accounting Posting:'}
               </p>
-              <p>• <strong>Debit 1040 Merchandise Inventory Asset</strong>: +Value of received items into store warehouse</p>
-              <p>• <strong>Credit 2010 Trade Accounts Payable</strong>: +Liability recognized for vendor settlement</p>
+              {receiveMode === 'cross_dock' ? (
+                <>
+                  <p>• <strong>Bypass CDC Putaway</strong>: Creates GR + auto-issues Inter-Warehouse Transfers (`in_transit`) &amp; Surat Jalan directly to destination branches.</p>
+                  <p>• <strong>Debit 1040 / Credit 2010</strong>: Recognized for owned goods (skipped for consignment SKUs).</p>
+                </>
+              ) : activeReceivingPO.items.every((it) => it.isConsignment) ? (
+                <p>• <strong>Rp 0 GL Impact</strong>: Consignment items enter physical shelf tracking only; COGS &amp; Payable (#2015) are recognized only when sold at POS.</p>
+              ) : (
+                <>
+                  <p>• <strong>Debit 1040 Merchandise Inventory Asset</strong>: +Value of received items into store warehouse</p>
+                  <p>• <strong>Credit 2010 Trade Accounts Payable</strong>: +Liability recognized for vendor settlement</p>
+                </>
+              )}
             </div>
 
             <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
@@ -1928,9 +2131,17 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               <button
                 onClick={handleSubmitPartialGR}
                 disabled={isSubmittingGR}
-                className="px-5 py-2 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
+                className={`px-5 py-2 text-xs font-semibold text-white rounded-xl shadow-sm transition-all disabled:opacity-50 ${
+                  receiveMode === 'cross_dock'
+                    ? 'bg-indigo-600 hover:bg-indigo-500'
+                    : 'bg-[#0F4C3A] hover:bg-[#0b382b]'
+                }`}
               >
-                {isSubmittingGR ? 'Posting GR & Inventory...' : 'Confirm Goods Receipt & Update Stock'}
+                {isSubmittingGR
+                  ? 'Processing...'
+                  : receiveMode === 'cross_dock'
+                  ? 'Dispatch Cross-Dock Direct to Branches'
+                  : 'Confirm Goods Receipt & Update Stock'}
               </button>
             </div>
           </div>

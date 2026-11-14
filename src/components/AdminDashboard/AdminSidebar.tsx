@@ -42,11 +42,13 @@ import {
   PieChart,
   Sliders,
   Settings,
+  HeartHandshake,
 } from 'lucide-react';
 
 export type AdminDashboardTab =
   | 'overview'
   | 'pos'
+  | 'crm'
   | 'operations'
   | 'inventory'
   | 'fefo'
@@ -75,7 +77,8 @@ export type AccountingSubTab =
   | 'vendor_bills'
   | 'b2b_ar'
   | 'analytic_budgets'
-  | 'margin_analysis';
+  | 'margin_analysis'
+  | 'consignment';
 
 interface AdminSidebarProps {
   theme: 'light' | 'dark';
@@ -214,7 +217,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         }`}
       >
         {/* SECTION 1: CORE OPERATIONS */}
-        {(allow('overview') || allow('pos') || allow('operations') || allow('inventory')) && (
+        {(allow('overview') || allow('pos') || allow('crm') || allow('operations') || allow('inventory')) && (
         <div>
           {!isCollapsed && (
             <div className="px-3 mb-2 flex items-center justify-between">
@@ -285,6 +288,44 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
               {isCollapsed && activeTab === 'pos' && (
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              )}
+            </button>
+            )}
+
+            {/* CRM & Loyalty 360 */}
+            {allow('crm') && (
+            <button
+              onClick={() => handleTabClick('crm')}
+              title={isCollapsed ? 'CRM & Loyalty 360' : undefined}
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
+                activeTab === 'crm'
+                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
+                  : isLight
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
+              }`}
+            >
+              <HeartHandshake className={`w-4 h-4 flex-shrink-0 ${activeTab === 'crm' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">CRM &amp; Loyalty 360</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'crm'
+                        ? 'bg-white/15 text-emerald-100 border-white/25'
+                        : 'bg-emerald-500/15 text-emerald-700 border-emerald-500/25 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25'
+                    }`}
+                  >
+                    360°
+                  </span>
+                </>
+              )}
+              {isCollapsed && activeTab === 'crm' && (
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
               )}
             </button>

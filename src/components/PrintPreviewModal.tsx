@@ -34,6 +34,11 @@ function getDocumentMeta(payload: PrintPayload): {
         ...base,
         title: `POS Shift Z-Report — ${payload.shift.zReportNumber || payload.shift.id}`,
       };
+    case 'pos_safe_drop':
+      return {
+        ...base,
+        title: `Slip Setor Brankas (Safe Drop) — ${payload.safeDrop.slipNumber}`,
+      };
     case 'b2c_receipt':
       return { ...base, title: `Customer Order Receipt — ${payload.order.id}` };
     case 'clearance_sticker':

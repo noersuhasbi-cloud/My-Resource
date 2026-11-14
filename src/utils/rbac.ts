@@ -42,11 +42,12 @@ const ROLE_ALLOWED_TABS: Record<CanonicalEnterpriseRole, AdminDashboardTab[]> = 
   cashier: ['pos'],
   warehouse: ['inventory', 'fefo', 'picker', 'procurement', 'qc', 'logistics', 'transfers'],
   purchasing: ['procurement', 'qc', 'inventory'],
-  store_manager: ['overview', 'pos', 'inventory', 'fefo', 'waste', 'picker', 'reports'],
-  admin: ['overview', 'operations', 'inventory', 'procurement', 'logistics', 'reports', 'accounting', 'settings'],
+  store_manager: ['overview', 'pos', 'crm', 'inventory', 'fefo', 'waste', 'picker', 'reports'],
+  admin: ['overview', 'crm', 'operations', 'inventory', 'procurement', 'logistics', 'reports', 'accounting', 'settings'],
   coo: [
     'overview',
     'pos',
+    'crm',
     'operations',
     'inventory',
     'fefo',
@@ -69,6 +70,7 @@ const ROLE_ALLOWED_TABS: Record<CanonicalEnterpriseRole, AdminDashboardTab[]> = 
   super_admin: [
     'overview',
     'pos',
+    'crm',
     'operations',
     'inventory',
     'fefo',

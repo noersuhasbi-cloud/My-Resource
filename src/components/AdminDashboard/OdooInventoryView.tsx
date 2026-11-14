@@ -16,8 +16,10 @@ import type {
   WholesaleProduct,
   StoreOutletSchedule,
   StaffShiftSession,
+  WarehouseRackConfig,
 } from '../../types/index.ts';
 import type { AdminDashboardTab } from './AdminSidebar';
+import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import { canSessionViewValuation, normalizeEnterpriseRole } from '../../utils/rbac';
 import {
@@ -51,11 +53,13 @@ import {
   Upload,
   Warehouse,
   X,
+  Scissors,
 } from 'lucide-react';
 import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
 import { SkuImportModal } from './SkuImportModal';
 import { WarehouseRackSetupPanel } from './WarehouseRackSetupPanel';
 import { RackBlindOpnamePanel } from './RackBlindOpnamePanel';
+import { RepackBundlePanel } from './RepackBundlePanel';
 
 interface OdooInventoryViewProps {
   theme: 'light' | 'dark';
@@ -88,7 +92,7 @@ interface OdooInventoryViewProps {
   onShowToast: (title: string, message: string) => void;
 }
 
-type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'blind_opname';
+type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'blind_opname' | 'repack_bundle';
 type ChannelFilter = 'ALL' | 'B2C' | 'B2B' | 'BOTH';
 type HubScope = 'ALL' | 'CDC' | 'DARK_STORE' | 'RETAIL_FRONTS';
 
@@ -200,6 +204,15 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   const [savingStrategy, setSavingStrategy] = useState<boolean>(false);
   const [mediaInspector, setMediaInspector] = useState<MediaInspectorTarget | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [warehouseRacks, setWarehouseRacks] = useState<WarehouseRackConfig[]>([]);
+
+  React.useEffect(() => {
+    if (viewMode !== 'repack_bundle') return;
+    apiClient
+      .getWarehouseRacks(selectedOutletFilter)
+      .then((res) => setWarehouseRacks(res.racks || []))
+      .catch(() => {});
+  }, [viewMode, selectedOutletFilter]);
 
   const cardClass = isLight
     ? 'bg-white border border-slate-200 shadow-sm text-slate-900 rounded-2xl'
@@ -752,6 +765,22 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   >
                     <ClipboardList className="w-3.5 h-3.5" />
                     Rack Blind Opname
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === 'repack_bundle'}
+                    onClick={() => setViewMode('repack_bundle')}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                      viewMode === 'repack_bundle'
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-slate-600 hover:text-slate-900'
+                        : 'text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <Scissors className="w-3.5 h-3.5" />
+                    Repacking &amp; Bundling
                   </button>
                 </>
               )}
@@ -1378,6 +1407,27 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
           batches={batches}
           onRefreshAll={async () => {
             if (onRefreshData) await onRefreshData();
+          }}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {/* ===================================================================== */}
+      {/* VIEW 5: WAREHOUSE REPACKING (BREAK-BULK) & BUNDLING / HAMPERS */}
+      {/* ===================================================================== */}
+      {viewMode === 'repack_bundle' && canManageWarehouseTopology && (
+        <RepackBundlePanel
+          theme={theme}
+          selectedStore={selectedOutletFilter}
+          inventoryTiers={allTiers}
+          batches={batches}
+          racks={warehouseRacks}
+          onCompleted={async () => {
+            if (onRefreshData) await onRefreshData();
+            apiClient
+              .getWarehouseRacks(selectedOutletFilter)
+              .then((res) => setWarehouseRacks(res.racks || []))
+              .catch(() => {});
           }}
           onShowToast={onShowToast}
         />

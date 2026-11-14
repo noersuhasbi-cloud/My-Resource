@@ -264,6 +264,10 @@ export interface StoreInventoryStock {
     cartonsPerPallet?: number;
     baseUnitLabel: string;
   };
+  isConsignment?: boolean;
+  consignmentSupplier?: string;
+  consignmentCommissionPercent?: number;
+  consignmentCostIDR?: number;
 }
 
 export interface InventoryItem {
@@ -315,6 +319,10 @@ export interface InventoryItem {
     cartonsPerPallet?: number;
     baseUnitLabel: string;
   };
+  isConsignment?: boolean;
+  consignmentSupplier?: string;
+  consignmentCommissionPercent?: number;
+  consignmentCostIDR?: number;
 }
 
 // -------------------------------------------------------------
@@ -350,6 +358,9 @@ export interface PurchaseOrderItem {
   totalCost: number;
   lineTotal?: number;
   handlingNotes?: string;
+  isConsignment?: boolean;
+  consignmentSupplier?: string;
+  consignmentCommissionPercent?: number;
 }
 
 export interface PurchaseOrder {
@@ -392,6 +403,7 @@ export interface GoodsReceiptItem {
   expiryDate?: string;
   qualityCondition: 'Passed - Grade A' | 'Minor Discrepancy' | 'Cold-Chain Verified';
   tempCheckCelsius?: number; // e.g. 3.8°C for cold produce
+  isConsignment?: boolean;
 }
 
 export interface GoodsReceiptRecord {
@@ -496,6 +508,10 @@ export interface InventoryBatch {
   rotationStrategy?: 'FEFO' | 'FIFO';
   notes?: string;
   markdownDiscountPercent?: number;
+  isConsignment?: boolean;
+  consignmentSupplier?: string;
+  consignmentCommissionPercent?: number;
+  consignmentCostIDR?: number;
 }
 
 export interface FEFOAllocationTrace {
@@ -764,7 +780,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -1161,6 +1177,9 @@ export interface POSProductItem {
   expiryDate?: string;
   daysUntilExpiry?: number;
   batchStatus?: 'fresh' | 'near_expiry' | 'critical';
+  isConsignment?: boolean;
+  consignmentSupplier?: string;
+  consignmentCommissionPercent?: number;
 }
 
 export interface POSCartItem {
@@ -1183,6 +1202,8 @@ export interface POSCartItem {
   daysUntilExpiry?: number;
   lineTotal: number; // in IDR
   image?: string;
+  isConsignment?: boolean;
+  consignmentSupplier?: string;
 }
 
 export type POSPaymentMethod = 'cash' | 'qris' | 'debit_card' | 'credit_card';
@@ -1207,6 +1228,8 @@ export interface POSTransactionRequest {
   customerName?: string;
   customerPhone?: string;
   customerMemberId?: string;
+  crmAccountId?: string;
+  redeemPoints?: number;
   notes?: string;
 }
 
@@ -1236,6 +1259,11 @@ export interface POSTransactionReceipt {
   journalEntryIds: string[];
   inventoryDeductedCount: number;
   totalCogsCost: number;
+  crmAccountId?: string;
+  crmMemberTier?: 'SILVER' | 'GOLD' | 'PLATINUM';
+  loyaltyPointsEarned?: number;
+  loyaltyPointsRedeemed?: number;
+  loyaltyPointsDiscountIDR?: number;
 }
 
 // -------------------------------------------------------------
@@ -1548,6 +1576,7 @@ export interface QCInspectionRecord {
   };
   disposition: QCDisposition;
   actionTaken: QCDispositionAction;
+  putawayRackBinCode?: string;
   notes?: string;
 }
 
@@ -2398,8 +2427,9 @@ export interface PosRegisterShiftSession {
   expectedCashSalesIDR: number;
   expectedQrisSalesIDR: number;
   expectedEdcSalesIDR: number;
-  expectedTotalCashInDrawerIDR: number; // openingFloatIDR + expectedCashSalesIDR - cashRefundsIDR
+  expectedTotalCashInDrawerIDR: number; // openingFloatIDR + expectedCashSalesIDR - cashRefundsIDR - safeDropsTotalIDR
   cashRefundsIDR: number;
+  safeDropsTotalIDR?: number;
   // Blind count submitted at shift close
   denominations?: PosShiftDenominationCount[];
   countedCashIDR?: number;
@@ -2557,7 +2587,9 @@ export type CommunicationDocType =
   | 'QC_REPORT'
   | 'POS_RECEIPT'
   | 'B2B_INVOICE'
-  | 'SURAT_JALAN';
+  | 'SURAT_JALAN'
+  | 'RECALL_ALERT'
+  | 'CRM_CAMPAIGN';
 
 export type SmtpProviderPreset =
   | 'custom'
@@ -2756,4 +2788,374 @@ export interface RackStocktakeCommitResponse {
   glVoucherIds: string[];
   message: string;
 }
+
+// =============================================================
+// ADDITIVE MODULES: PUTAWAY, CROSS-DOCK, REPACK/BUNDLE,
+// BATCH RECALL, CONSIGNMENT TITIP JUAL & POS SAFE DROP
+// =============================================================
+export interface PutawayCandidateRack {
+  rackBinCode: string;
+  storeId: string;
+  storageZone: WarehouseRackStorageZone;
+  rotationPolicy: RackRotationPolicy;
+  maxCapacity: number;
+  currentOccupancy: number;
+  remainingCapacity: number;
+  score: number;
+  reason: string;
+  hasSameSkuDifferentLot: boolean;
+  hasSameLot: boolean;
+}
+
+export interface PutawaySuggestionResponse {
+  sku: string;
+  storeId: string;
+  lotNumber?: string;
+  requiredStorageZone: WarehouseRackStorageZone;
+  recommendedRack: PutawayCandidateRack | null;
+  alternatives: PutawayCandidateRack[];
+  reason: string;
+}
+
+export interface CrossDockAllocationInput {
+  targetStoreId: string;
+  targetStoreName?: string;
+  qty: number;
+}
+
+export interface CrossDockRequest {
+  poId: string;
+  deliveryNoteNumber?: string;
+  receivedBy?: string;
+  driverName?: string;
+  vehiclePlateNumber?: string;
+  receiverNotes?: string;
+  items: Array<{
+    sku: string;
+    batchNumber?: string;
+    expiryDate?: string;
+    tempCheckCelsius?: number;
+    allocations: CrossDockAllocationInput[];
+  }>;
+}
+
+export interface CrossDockResponse {
+  success: boolean;
+  goodsReceipt: GoodsReceiptRecord;
+  transfers: any[];
+  suratJalans: any[];
+  glVoucherIds: string[];
+  message: string;
+}
+
+export interface RepackBundleRequest {
+  mode: 'REPACK' | 'BUNDLE';
+  storeId: string;
+  // REPACK fields
+  sourceSku?: string;
+  sourceBatchId?: string;
+  sourceQty?: number;
+  targetSku?: string;
+  targetName?: string;
+  targetUnit?: string;
+  targetQtyProduced?: number;
+  targetSellingPriceIDR?: number;
+  targetRackBinCode?: string;
+  packagingFeeIDR?: number;
+  // BUNDLE fields
+  bundleSku?: string;
+  bundleName?: string;
+  bundleCategory?: string;
+  bundleUnit?: string;
+  bundleQty?: number;
+  bundleSellingPriceIDR?: number;
+  bundleRackBinCode?: string;
+  components?: Array<{
+    sku: string;
+    qtyPerBundle: number;
+  }>;
+  notes?: string;
+}
+
+export interface RepackBundleResponse {
+  success: boolean;
+  mode: 'REPACK' | 'BUNDLE';
+  producedSku: string;
+  producedBatch: InventoryBatch;
+  totalSourceCogsIDR: number;
+  unitCostIDR: number;
+  glVoucherIds: string[];
+  message: string;
+}
+
+export interface ComplianceRecallTraceResponse {
+  lotNumber: string;
+  sku: string;
+  productName: string;
+  isQuarantined: boolean;
+  recalledAt?: string;
+  recalledBy?: string;
+  origin: {
+    poNumbers: string[];
+    supplierNames: string[];
+    goodsReceipts: Array<{
+      id: string;
+      poId: string;
+      receivedAt: string;
+      storeName: string;
+      deliveryNoteNumber: string;
+      qtyReceived: number;
+    }>;
+    qcInspections: Array<{
+      id: string;
+      timestamp: string;
+      disposition: string;
+      actionTaken: string;
+      inspectorName: string;
+      temperatureCelsius: number;
+    }>;
+  };
+  currentHoldings: Array<{
+    batchId: string;
+    sku: string;
+    productName: string;
+    storeId: string;
+    storeName: string;
+    rackBinCode: string;
+    currentStock: number;
+    status: string;
+    expiryDate: string;
+    unitCost: number;
+  }>;
+  totalRemainingUnits: number;
+  downstreamImpact: {
+    b2bOrders: Array<{
+      orderId: string;
+      companyName: string;
+      customerName: string;
+      orderDate: string;
+      qty: number;
+      status: string;
+    }>;
+    posReceipts: Array<{
+      receiptNumber: string;
+      timestamp: string;
+      storeName: string;
+      cashierName: string;
+      qty: number;
+      totalIDR: number;
+    }>;
+    b2cOrders: Array<{
+      orderId: string;
+      customerName: string;
+      customerEmail: string;
+      createdAt: string;
+      qty: number;
+      status: string;
+    }>;
+    transfers: Array<{
+      transferId: string;
+      suratJalanNumber?: string;
+      fromStoreName: string;
+      toStoreName: string;
+      qty: number;
+      status: string;
+      requestedAt: string;
+    }>;
+  };
+}
+
+export interface ConsignmentLedgerEntry {
+  id: string;
+  timestamp: string;
+  storeId: string;
+  storeName: string;
+  channel: 'POS' | 'B2B';
+  referenceId: string; // receiptNumber or B2B orderId
+  sku: string;
+  productName: string;
+  supplierName: string;
+  lotNumber?: string;
+  quantitySold: number;
+  sellingPriceIDR: number;
+  grossSalesIDR: number;
+  commissionPercent: number;
+  storeMarginIDR: number;
+  payableToVendorIDR: number;
+  status: 'UNSETTLED' | 'SETTLED';
+  vendorBillId?: string;
+  settledAt?: string;
+  glVoucherIds: string[];
+}
+
+export interface SafeDropRecord {
+  id: string;
+  slipNumber: string;
+  timestamp: string;
+  storeId: string;
+  storeName: string;
+  shiftId: string;
+  registerId: string;
+  cashierId: string;
+  cashierName: string;
+  supervisorName?: string;
+  amountIDR: number;
+  drawerBalanceBeforeIDR: number;
+  drawerBalanceAfterIDR: number;
+  sealBagNumber?: string;
+  notes?: string;
+  glVoucherIds: string[];
+}
+
+// =============================================================
+// STANDALONE CRM, LOYALTY & B2B CUSTOMER 360 MODULE
+// =============================================================
+export type CrmAccountType = 'B2C_MEMBER' | 'B2B_ACCOUNT';
+export type CrmLoyaltyTier = 'SILVER' | 'GOLD' | 'PLATINUM';
+export type CrmRfmSegment = 'VIP_CHAMPION' | 'LOYAL_REGULAR' | 'NEW_SIGNUP' | 'AT_RISK_CHURN';
+export type CrmDealStage =
+  | 'NEW_LEAD'
+  | 'COLD_CHAIN_TRIAL'
+  | 'QUOTATION_SENT'
+  | 'NEGOTIATION'
+  | 'WON'
+  | 'LOST';
+
+export interface CrmPointsLedgerEntry {
+  id: string;
+  timestamp: string;
+  type: 'EARN' | 'REDEEM' | 'BONUS';
+  pointsDelta: number;
+  balanceAfter: number;
+  referenceId: string;
+  channel: 'POS' | 'B2B' | 'CAMPAIGN';
+  note: string;
+}
+
+export interface CrmAccount {
+  id: string;
+  accountType: CrmAccountType;
+  name: string;
+  companyName?: string;
+  linkedB2bCustomerId?: string;
+  storeId: string;
+  storeName: string;
+  phone: string;
+  email: string;
+  tier: CrmLoyaltyTier;
+  pointsBalance: number;
+  lifetimeSpendIDR: number;
+  orderCount: number;
+  lastOrderAt?: string;
+  avgOrderCadenceDays: number;
+  contractDiscountPct: number;
+  creditLimitIDR: number;
+  paymentTerms: 'CASH' | 'NET_7' | 'NET_14' | 'NET_30';
+  preferredCategories: string[];
+  topRecurringSkus: Array<{
+    sku: string;
+    name: string;
+    unit: string;
+    avgQty: number;
+    unitPriceIDR: number;
+  }>;
+  rfmSegment: CrmRfmSegment;
+  pointsLedger: CrmPointsLedgerEntry[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmDeal {
+  id: string;
+  title: string;
+  crmAccountId: string;
+  companyName: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  storeId: string;
+  storeName: string;
+  stage: CrmDealStage;
+  estimatedMonthlyValueIDR: number;
+  probabilityPct: number;
+  nextActivity: string;
+  nextActivityDate: string;
+  linkedQuotationId?: string;
+  ownerName: string;
+  suggestedItems?: Array<{
+    sku: string;
+    productName: string;
+    category: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+  }>;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmActivity {
+  id: string;
+  crmAccountId?: string;
+  dealId?: string;
+  type: 'CALL' | 'TASTING' | 'COLD_CHAIN_DEMO' | 'FOLLOW_UP' | 'CAMPAIGN';
+  subject: string;
+  outcome: string;
+  performedBy: string;
+  timestamp: string;
+}
+
+export interface CrmPredictiveRestockAlert {
+  crmAccountId: string;
+  accountName: string;
+  accountType: CrmAccountType;
+  companyName?: string;
+  phone: string;
+  email: string;
+  storeId: string;
+  storeName: string;
+  avgCadenceDays: number;
+  daysSinceLastOrder: number;
+  overdueDays: number;
+  urgency: 'OVERDUE' | 'DUE_TODAY' | 'UPCOMING';
+  topSkus: Array<{
+    sku: string;
+    name: string;
+    unit: string;
+    suggestedQty: number;
+    unitPriceIDR: number;
+  }>;
+  suggestedOfferMessage: string;
+}
+
+export interface CrmSegmentBreakdown {
+  segment: CrmRfmSegment;
+  label: string;
+  description: string;
+  count: number;
+  totalLifetimeSpendIDR: number;
+  avgOrderValueIDR: number;
+}
+
+export interface CrmOverviewResponse {
+  kpis: {
+    totalActiveMembers: number;
+    b2cMembersCount: number;
+    b2bAccountsCount: number;
+    b2bPipelineValueIDR: number;
+    weightedPipelineValueIDR: number;
+    atRiskChurnCount: number;
+    loyaltyPointsLiabilityCount: number;
+    loyaltyPointsLiabilityIDR: number;
+  };
+  accounts: CrmAccount[];
+  deals: CrmDeal[];
+  activities: CrmActivity[];
+  segmentBreakdown: CrmSegmentBreakdown[];
+  predictiveRestocks: CrmPredictiveRestockAlert[];
+}
+
+
 

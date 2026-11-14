@@ -145,6 +145,22 @@ import type {
   SkuCsvImportRow,
   RackStocktakePendingSubmission,
   RackStocktakeLineResult,
+  PutawayCandidateRack,
+  PutawaySuggestionResponse,
+  CrossDockRequest,
+  RepackBundleRequest,
+  ComplianceRecallTraceResponse,
+  ConsignmentLedgerEntry,
+  SafeDropRecord,
+  CrmAccount,
+  CrmDeal,
+  CrmActivity,
+  CrmDealStage,
+  CrmLoyaltyTier,
+  CrmRfmSegment,
+  CrmPredictiveRestockAlert,
+  CrmSegmentBreakdown,
+  CrmOverviewResponse,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -456,6 +472,822 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
 
 let warehouseRacks: WarehouseRackConfig[] = createInitialWarehouseRacks();
 let rackStocktakeSubmissions: RackStocktakePendingSubmission[] = [];
+let consignmentLedger: ConsignmentLedgerEntry[] = [];
+let safeDropsList: SafeDropRecord[] = [];
+let recallEventsList: Array<{
+  lotNumber: string;
+  sku: string;
+  productName: string;
+  recalledAt: string;
+  recalledBy: string;
+  quarantinedBatchesCount: number;
+  affectedUnits: number;
+  reason?: string;
+}> = [];
+
+// =============================================================
+// STANDALONE CRM, LOYALTY & B2B CUSTOMER 360 DATA STORE
+// =============================================================
+function resolveCrmLoyaltyTier(lifetimeSpendIDR: number): CrmLoyaltyTier {
+  if (lifetimeSpendIDR >= 20000000) return 'PLATINUM';
+  if (lifetimeSpendIDR >= 5000000) return 'GOLD';
+  return 'SILVER';
+}
+
+function computeCrmRfmSegment(account: Pick<CrmAccount, 'lifetimeSpendIDR' | 'orderCount' | 'lastOrderAt'>): CrmRfmSegment {
+  const daysSince = account.lastOrderAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(account.lastOrderAt).getTime()) / 86400000))
+    : 999;
+  if (daysSince > 30 && account.orderCount > 0) return 'AT_RISK_CHURN';
+  if (account.lifetimeSpendIDR >= 15000000 || (account.orderCount >= 8 && account.lifetimeSpendIDR >= 5000000)) {
+    return 'VIP_CHAMPION';
+  }
+  if (account.orderCount <= 2 && daysSince <= 21) return 'NEW_SIGNUP';
+  return 'LOYAL_REGULAR';
+}
+
+function createInitialCrmAccounts(): CrmAccount[] {
+  const now = Date.now();
+  const daysAgo = (d: number) => new Date(now - d * 86400000).toISOString();
+  return [
+    {
+      id: 'CRM-ACC-001',
+      accountType: 'B2B_ACCOUNT',
+      name: 'Ibu Ratna / Chef Alessandro Rossi',
+      companyName: 'Grand Grandeur Hotel & Bistro Jakarta',
+      linkedB2bCustomerId: 'B2B-CUST-003',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      phone: '+62 813-1122-3344',
+      email: 'purchasing@grandgrandeurhotel.com',
+      tier: 'PLATINUM',
+      pointsBalance: 4850,
+      lifetimeSpendIDR: 84500000,
+      orderCount: 16,
+      lastOrderAt: daysAgo(7),
+      avgOrderCadenceDays: 7,
+      contractDiscountPct: 8,
+      creditLimitIDR: 85000000,
+      paymentTerms: 'NET_30',
+      preferredCategories: ['produce', 'dairy_eggs', 'meat_seafood'],
+      topRecurringSkus: [
+        { sku: 'SKU-PRD-001', name: 'Organic Baby Romaine Lettuce', unit: 'pack', avgQty: 24, unitPriceIDR: 26000 },
+        { sku: 'SKU-DRY-001', name: 'Grass-Fed Pasteurized Fresh Milk 1L', unit: 'carton', avgQty: 18, unitPriceIDR: 34000 },
+      ],
+      rfmSegment: 'VIP_CHAMPION',
+      pointsLedger: [
+        {
+          id: 'PTS-2026-001',
+          timestamp: daysAgo(7),
+          type: 'EARN',
+          pointsDelta: 850,
+          balanceAfter: 4850,
+          referenceId: 'B2B-2026-0071',
+          channel: 'B2B',
+          note: 'Weekly banquet cold-chain replenishment',
+        },
+      ],
+      notes: 'Executive HORECA account — strict 2°C–4°C delivery dock slot at 06:30 WIB.',
+      createdAt: daysAgo(140),
+      updatedAt: daysAgo(7),
+    },
+    {
+      id: 'CRM-ACC-002',
+      accountType: 'B2B_ACCOUNT',
+      name: 'Ibu Maryam Wijaya',
+      companyName: 'Resto Sambal Nusantara (5 Branches)',
+      linkedB2bCustomerId: 'B2B-CUST-004',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      phone: '+62 815-4433-2211',
+      email: 'maryam@sambalnusantara.id',
+      tier: 'PLATINUM',
+      pointsBalance: 3120,
+      lifetimeSpendIDR: 42300000,
+      orderCount: 12,
+      lastOrderAt: daysAgo(6),
+      avgOrderCadenceDays: 5,
+      contractDiscountPct: 6,
+      creditLimitIDR: 45000000,
+      paymentTerms: 'NET_14',
+      preferredCategories: ['produce', 'pantry_coffee'],
+      topRecurringSkus: [
+        { sku: 'SKU-PRD-002', name: 'Heirloom Vine-Ripened Sweet Tomatoes', unit: '500g pack', avgQty: 30, unitPriceIDR: 22000 },
+      ],
+      rfmSegment: 'VIP_CHAMPION',
+      pointsLedger: [
+        {
+          id: 'PTS-2026-002',
+          timestamp: daysAgo(6),
+          type: 'EARN',
+          pointsDelta: 620,
+          balanceAfter: 3120,
+          referenceId: 'B2B-2026-0074',
+          channel: 'B2B',
+          note: 'Senopati central kitchen fresh tomatoes & chili drop',
+        },
+      ],
+      notes: 'Due for 5-day replenishment cycle across 5 Jakarta branches.',
+      createdAt: daysAgo(95),
+      updatedAt: daysAgo(6),
+    },
+    {
+      id: 'CRM-ACC-003',
+      accountType: 'B2B_ACCOUNT',
+      name: 'H. Sudirman Santoso',
+      companyName: 'Toko Berkah Mandiri',
+      linkedB2bCustomerId: 'B2B-CUST-001',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      phone: '+62 812-8822-9011',
+      email: 'sudirman@tokoberkahmandiri.id',
+      tier: 'GOLD',
+      pointsBalance: 1640,
+      lifetimeSpendIDR: 18400000,
+      orderCount: 9,
+      lastOrderAt: daysAgo(11),
+      avgOrderCadenceDays: 10,
+      contractDiscountPct: 4,
+      creditLimitIDR: 30000000,
+      paymentTerms: 'NET_14',
+      preferredCategories: ['pantry_coffee', 'bakery'],
+      topRecurringSkus: [
+        { sku: 'SKU-PNT-001', name: 'Beras Pandan Wangi Organic 5kg', unit: 'bag', avgQty: 15, unitPriceIDR: 92000 },
+      ],
+      rfmSegment: 'LOYAL_REGULAR',
+      pointsLedger: [
+        {
+          id: 'PTS-2026-003',
+          timestamp: daysAgo(11),
+          type: 'EARN',
+          pointsDelta: 410,
+          balanceAfter: 1640,
+          referenceId: 'B2B-2026-0069',
+          channel: 'B2B',
+          note: 'Wholesale rice & cooking oil pallet restock',
+        },
+      ],
+      createdAt: daysAgo(120),
+      updatedAt: daysAgo(11),
+    },
+    {
+      id: 'CRM-ACC-004',
+      accountType: 'B2B_ACCOUNT',
+      name: 'Kevin Gunawan (Procurement Lead)',
+      companyName: 'Kopi Kenangan Senopati Hub',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      phone: '+62 811-7788-9900',
+      email: 'supply.senopati@kopikenangan.example.id',
+      tier: 'GOLD',
+      pointsBalance: 920,
+      lifetimeSpendIDR: 9600000,
+      orderCount: 4,
+      lastOrderAt: daysAgo(9),
+      avgOrderCadenceDays: 7,
+      contractDiscountPct: 5,
+      creditLimitIDR: 40000000,
+      paymentTerms: 'NET_14',
+      preferredCategories: ['dairy_eggs', 'pantry_coffee'],
+      topRecurringSkus: [
+        { sku: 'SKU-DRY-001', name: 'Grass-Fed Pasteurized Fresh Milk 1L', unit: 'carton', avgQty: 40, unitPriceIDR: 34000 },
+      ],
+      rfmSegment: 'LOYAL_REGULAR',
+      pointsLedger: [
+        {
+          id: 'PTS-2026-004',
+          timestamp: daysAgo(9),
+          type: 'EARN',
+          pointsDelta: 340,
+          balanceAfter: 920,
+          referenceId: 'POS-2026-0812',
+          channel: 'POS',
+          note: 'Cold-chain fresh milk emergency pickup',
+        },
+      ],
+      createdAt: daysAgo(45),
+      updatedAt: daysAgo(9),
+    },
+    {
+      id: 'CRM-ACC-005',
+      accountType: 'B2C_MEMBER',
+      name: 'Clarissa Tanuwijaya',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      phone: '+62 818-9911-2233',
+      email: 'clarissa.tan@gmail.com',
+      tier: 'PLATINUM',
+      pointsBalance: 2450,
+      lifetimeSpendIDR: 26800000,
+      orderCount: 19,
+      lastOrderAt: daysAgo(4),
+      avgOrderCadenceDays: 5,
+      contractDiscountPct: 5,
+      creditLimitIDR: 0,
+      paymentTerms: 'CASH',
+      preferredCategories: ['produce', 'meat_seafood', 'bakery'],
+      topRecurringSkus: [
+        { sku: 'SKU-PRD-001', name: 'Organic Baby Romaine Lettuce', unit: 'pack', avgQty: 3, unitPriceIDR: 26000 },
+        { sku: 'SKU-CSG-001', name: 'Artisanal Sourdough Croissant Box (4 pcs)', unit: 'box', avgQty: 2, unitPriceIDR: 68000 },
+      ],
+      rfmSegment: 'VIP_CHAMPION',
+      pointsLedger: [
+        {
+          id: 'PTS-2026-005',
+          timestamp: daysAgo(4),
+          type: 'EARN',
+          pointsDelta: 145,
+          balanceAfter: 2450,
+          referenceId: 'RCP-SEN-90211',
+          channel: 'POS',
+          note: 'Weekend organic produce & artisanal pastry basket',
+        },
+      ],
+      createdAt: daysAgo(210),
+      updatedAt: daysAgo(4),
+    },
+    {
+      id: 'CRM-ACC-006',
+      accountType: 'B2C_MEMBER',
+      name: 'Dewi Kartika Sari',
+      storeId: 'store-jkt-pik',
+      storeName: 'GroceMart PIK 2 The Avenue',
+      phone: '+62 812-3344-5566',
+      email: 'dewi.kartika@outlook.co.id',
+      tier: 'GOLD',
+      pointsBalance: 1180,
+      lifetimeSpendIDR: 7850000,
+      orderCount: 7,
+      lastOrderAt: daysAgo(36),
+      avgOrderCadenceDays: 14,
+      contractDiscountPct: 3,
+      creditLimitIDR: 0,
+      paymentTerms: 'CASH',
+      preferredCategories: ['dairy_eggs', 'produce'],
+      topRecurringSkus: [
+        { sku: 'SKU-DRY-001', name: 'Grass-Fed Pasteurized Fresh Milk 1L', unit: 'carton', avgQty: 4, unitPriceIDR: 34000 },
+      ],
+      rfmSegment: 'AT_RISK_CHURN',
+      pointsLedger: [
+        {
+          id: 'PTS-2026-006',
+          timestamp: daysAgo(36),
+          type: 'EARN',
+          pointsDelta: 95,
+          balanceAfter: 1180,
+          referenceId: 'RCP-PIK-77104',
+          channel: 'POS',
+          note: 'Family dairy & fresh fruit basket',
+        },
+      ],
+      notes: 'Last shopped 36 days ago — eligible for 15% Win-Back voucher.',
+      createdAt: daysAgo(150),
+      updatedAt: daysAgo(36),
+    },
+    {
+      id: 'CRM-ACC-007',
+      accountType: 'B2B_ACCOUNT',
+      name: 'Chef Renata Kusuma',
+      companyName: 'Healthy Bowl Catering',
+      storeId: 'store-jkt-pik',
+      storeName: 'GroceMart PIK 2 The Avenue',
+      phone: '+62 817-5500-8811',
+      email: 'procurement@healthybowl.id',
+      tier: 'SILVER',
+      pointsBalance: 420,
+      lifetimeSpendIDR: 4200000,
+      orderCount: 3,
+      lastOrderAt: daysAgo(34),
+      avgOrderCadenceDays: 7,
+      contractDiscountPct: 3,
+      creditLimitIDR: 20000000,
+      paymentTerms: 'NET_7',
+      preferredCategories: ['produce', 'meat_seafood'],
+      topRecurringSkus: [
+        { sku: 'SKU-PRD-001', name: 'Organic Baby Romaine Lettuce', unit: 'pack', avgQty: 20, unitPriceIDR: 26000 },
+      ],
+      rfmSegment: 'AT_RISK_CHURN',
+      pointsLedger: [
+        {
+          id: 'PTS-2026-007',
+          timestamp: daysAgo(34),
+          type: 'EARN',
+          pointsDelta: 180,
+          balanceAfter: 420,
+          referenceId: 'B2B-2026-0058',
+          channel: 'B2B',
+          note: 'Salad greens trial batch',
+        },
+      ],
+      createdAt: daysAgo(60),
+      updatedAt: daysAgo(34),
+    },
+    {
+      id: 'CRM-ACC-008',
+      accountType: 'B2C_MEMBER',
+      name: 'Fajar Nugroho',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      phone: '+62 819-0011-4455',
+      email: 'fajar.nugroho@gmail.com',
+      tier: 'SILVER',
+      pointsBalance: 250,
+      lifetimeSpendIDR: 1450000,
+      orderCount: 2,
+      lastOrderAt: daysAgo(3),
+      avgOrderCadenceDays: 10,
+      contractDiscountPct: 0,
+      creditLimitIDR: 0,
+      paymentTerms: 'CASH',
+      preferredCategories: ['bakery', 'pantry_coffee'],
+      topRecurringSkus: [
+        { sku: 'SKU-CSG-002', name: 'Kopi Susu Gula Aren Signature 250ml', unit: 'bottle', avgQty: 4, unitPriceIDR: 28000 },
+      ],
+      rfmSegment: 'NEW_SIGNUP',
+      pointsLedger: [
+        {
+          id: 'PTS-2026-008',
+          timestamp: daysAgo(3),
+          type: 'BONUS',
+          pointsDelta: 150,
+          balanceAfter: 250,
+          referenceId: 'WELCOME-2026',
+          channel: 'CAMPAIGN',
+          note: 'New Member Onboarding Bonus Points',
+        },
+      ],
+      createdAt: daysAgo(10),
+      updatedAt: daysAgo(3),
+    },
+  ];
+}
+
+function createInitialCrmDeals(): CrmDeal[] {
+  const now = Date.now();
+  const daysAgo = (d: number) => new Date(now - d * 86400000).toISOString();
+  const daysAhead = (d: number) => new Date(now + d * 86400000).toISOString().split('T')[0];
+  return [
+    {
+      id: 'DEAL-2026-001',
+      title: 'Cold-Chain Fresh Milk & Espresso Syrup Supply (18 Outlets)',
+      crmAccountId: 'CRM-ACC-004',
+      companyName: 'Kopi Kenangan Senopati Hub',
+      contactName: 'Kevin Gunawan',
+      contactPhone: '+62 811-7788-9900',
+      contactEmail: 'supply.senopati@kopikenangan.example.id',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      stage: 'COLD_CHAIN_TRIAL',
+      estimatedMonthlyValueIDR: 48000000,
+      probabilityPct: 45,
+      nextActivity: 'Cold-Chain Sample Delivery (2°C–4°C)',
+      nextActivityDate: daysAhead(2),
+      ownerName: 'Andi Pratama (COO)',
+      suggestedItems: [
+        { sku: 'SKU-DRY-001', productName: 'Grass-Fed Pasteurized Fresh Milk 1L', category: 'dairy_eggs', quantity: 200, unit: 'carton', unitPrice: 32000 },
+        { sku: 'SKU-CSG-002', productName: 'Kopi Susu Gula Aren Signature 250ml', category: 'pantry_coffee', quantity: 150, unit: 'bottle', unitPrice: 24000 },
+      ],
+      createdAt: daysAgo(8),
+      updatedAt: daysAgo(1),
+    },
+    {
+      id: 'DEAL-2026-002',
+      title: 'Executive Banquet Organic Produce & Wagyu Standing Order',
+      crmAccountId: 'CRM-ACC-001',
+      companyName: 'Hotel Mulia Banquet & Culinary',
+      contactName: 'Chef Alessandro Rossi',
+      contactPhone: '+62 813-1122-3344',
+      contactEmail: 'purchasing@grandgrandeurhotel.com',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      stage: 'NEGOTIATION',
+      estimatedMonthlyValueIDR: 125000000,
+      probabilityPct: 80,
+      nextActivity: 'Contract Terms & NET-30 Sign-off',
+      nextActivityDate: daysAhead(1),
+      ownerName: 'Mochammad Noer Suhasbi (Super Admin)',
+      suggestedItems: [
+        { sku: 'SKU-PRD-001', productName: 'Organic Baby Romaine Lettuce', category: 'produce', quantity: 120, unit: 'pack', unitPrice: 24000 },
+        { sku: 'SKU-PRD-002', productName: 'Heirloom Vine-Ripened Sweet Tomatoes', category: 'produce', quantity: 180, unit: '500g pack', unitPrice: 20000 },
+      ],
+      createdAt: daysAgo(14),
+      updatedAt: daysAgo(1),
+    },
+    {
+      id: 'DEAL-2026-003',
+      title: 'Daily Salad Greens & Microgreens Subscription (PIK Hub)',
+      crmAccountId: 'CRM-ACC-007',
+      companyName: 'Healthy Bowl Catering',
+      contactName: 'Chef Renata Kusuma',
+      contactPhone: '+62 817-5500-8811',
+      contactEmail: 'procurement@healthybowl.id',
+      storeId: 'store-jkt-pik',
+      storeName: 'GroceMart PIK 2 The Avenue',
+      stage: 'NEW_LEAD',
+      estimatedMonthlyValueIDR: 22500000,
+      probabilityPct: 25,
+      nextActivity: 'Tasting & HACCP Cert Walkthrough',
+      nextActivityDate: daysAhead(3),
+      ownerName: 'Siti Aminah (Back-Office Admin)',
+      suggestedItems: [
+        { sku: 'SKU-PRD-001', productName: 'Organic Baby Romaine Lettuce', category: 'produce', quantity: 80, unit: 'pack', unitPrice: 25000 },
+      ],
+      createdAt: daysAgo(3),
+      updatedAt: daysAgo(1),
+    },
+    {
+      id: 'DEAL-2026-004',
+      title: 'Q4 Sembako & Beras Pandan Wangi Tier-1 Wholesale',
+      crmAccountId: 'CRM-ACC-003',
+      companyName: 'Toko Berkah Mandiri',
+      contactName: 'H. Sudirman Santoso',
+      contactPhone: '+62 812-8822-9011',
+      contactEmail: 'sudirman@tokoberkahmandiri.id',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      stage: 'QUOTATION_SENT',
+      estimatedMonthlyValueIDR: 36000000,
+      probabilityPct: 65,
+      nextActivity: 'Follow up Quotation Approval',
+      nextActivityDate: daysAhead(2),
+      ownerName: 'Andi Pratama (COO)',
+      suggestedItems: [
+        { sku: 'SKU-PNT-001', productName: 'Beras Pandan Wangi Organic 5kg', category: 'pantry_coffee', quantity: 60, unit: 'bag', unitPrice: 88000 },
+      ],
+      createdAt: daysAgo(11),
+      updatedAt: daysAgo(2),
+    },
+    {
+      id: 'DEAL-2026-005',
+      title: '5-Branch Fresh Produce & Chili Daily Drop Contract',
+      crmAccountId: 'CRM-ACC-002',
+      companyName: 'Resto Sambal Nusantara (5 Branches)',
+      contactName: 'Ibu Maryam Wijaya',
+      contactPhone: '+62 815-4433-2211',
+      contactEmail: 'maryam@sambalnusantara.id',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      stage: 'WON',
+      estimatedMonthlyValueIDR: 64000000,
+      probabilityPct: 100,
+      nextActivity: 'Weekly Standing Order Live',
+      nextActivityDate: daysAhead(5),
+      ownerName: 'Mochammad Noer Suhasbi (Super Admin)',
+      suggestedItems: [
+        { sku: 'SKU-PRD-002', productName: 'Heirloom Vine-Ripened Sweet Tomatoes', category: 'produce', quantity: 200, unit: '500g pack', unitPrice: 21000 },
+      ],
+      createdAt: daysAgo(25),
+      updatedAt: daysAgo(4),
+    },
+  ];
+}
+
+function createInitialCrmActivities(): CrmActivity[] {
+  const now = Date.now();
+  const daysAgo = (d: number) => new Date(now - d * 86400000).toISOString();
+  return [
+    {
+      id: 'ACT-2026-001',
+      crmAccountId: 'CRM-ACC-004',
+      dealId: 'DEAL-2026-001',
+      type: 'COLD_CHAIN_DEMO',
+      subject: 'Delivered 12L Chilled Sample Box @ 3.1°C',
+      outcome: 'Barista QA passed froth stability test; moving toward QTN review.',
+      performedBy: 'Andi Pratama (COO)',
+      timestamp: daysAgo(2),
+    },
+    {
+      id: 'ACT-2026-002',
+      crmAccountId: 'CRM-ACC-001',
+      dealId: 'DEAL-2026-002',
+      type: 'TASTING',
+      subject: 'Executive Chef Hydroponic Greens & Dairy Tasting',
+      outcome: 'Approved organic romaine quality; negotiating 8% Platinum contract rebate.',
+      performedBy: 'Mochammad Noer Suhasbi (Super Admin)',
+      timestamp: daysAgo(3),
+    },
+    {
+      id: 'ACT-2026-003',
+      crmAccountId: 'CRM-ACC-006',
+      type: 'CALL',
+      subject: 'Churn Prevention Outreach — PIK 2 Gold Member',
+      outcome: 'Scheduled 15% Win-Back WhatsApp voucher campaign.',
+      performedBy: 'Siti Aminah (Back-Office Admin)',
+      timestamp: daysAgo(1),
+    },
+  ];
+}
+
+let crmAccounts: CrmAccount[] = createInitialCrmAccounts();
+let crmDeals: CrmDeal[] = createInitialCrmDeals();
+let crmActivities: CrmActivity[] = createInitialCrmActivities();
+
+function computePredictiveRestocks(scopedStoreId?: string): CrmPredictiveRestockAlert[] {
+  const nowMs = Date.now();
+  return crmAccounts
+    .filter((acc) => !scopedStoreId || scopedStoreId === 'ALL' || scopedStoreId === 'CONSOLIDATED' || acc.storeId === scopedStoreId)
+    .filter((acc) => acc.topRecurringSkus && acc.topRecurringSkus.length > 0 && acc.lastOrderAt)
+    .map((acc) => {
+      const daysSinceLastOrder = Math.max(
+        0,
+        Math.floor((nowMs - new Date(acc.lastOrderAt!).getTime()) / 86400000)
+      );
+      const cadence = Math.max(1, acc.avgOrderCadenceDays || 7);
+      const overdueDays = daysSinceLastOrder - cadence;
+      const urgency: CrmPredictiveRestockAlert['urgency'] =
+        overdueDays >= 2 ? 'OVERDUE' : overdueDays >= -1 ? 'DUE_TODAY' : 'UPCOMING';
+      const topSkus = acc.topRecurringSkus.map((s) => ({
+        sku: s.sku,
+        name: s.name,
+        unit: s.unit,
+        suggestedQty: s.avgQty,
+        unitPriceIDR: s.unitPriceIDR,
+      }));
+      const skuSummary = topSkus.map((s) => `${s.suggestedQty} ${s.unit} ${s.name}`).join(', ');
+      const suggestedOfferMessage = `Halo ${acc.companyName || acc.name}, siklus belanja GroceMart Anda (${cadence} hari) sudah tiba! Kami siapkan stok segar ${skuSummary} dengan diskon khusus member ${acc.tier} (${acc.contractDiscountPct || 5}%). Balas OK untuk konfirmasi pengiriman.`;
+      return {
+        crmAccountId: acc.id,
+        accountName: acc.name,
+        accountType: acc.accountType,
+        companyName: acc.companyName,
+        phone: acc.phone,
+        email: acc.email,
+        storeId: acc.storeId,
+        storeName: acc.storeName,
+        avgCadenceDays: cadence,
+        daysSinceLastOrder,
+        overdueDays,
+        urgency,
+        topSkus,
+        suggestedOfferMessage,
+      };
+    })
+    .filter((alert) => alert.overdueDays >= -2)
+    .sort((a, b) => b.overdueDays - a.overdueDays);
+}
+
+function applyCrmLoyaltySettlement(params: {
+  crmAcc: CrmAccount;
+  channel: 'POS' | 'B2B';
+  referenceId: string;
+  netPaidIDR: number;
+  redeemPoints: number;
+  timestamp: string;
+}): {
+  pointsRedeemed: number;
+  pointsDiscountIDR: number;
+  pointsEarned: number;
+  tierAfter: CrmLoyaltyTier;
+} {
+  const { crmAcc, channel, referenceId, netPaidIDR, redeemPoints, timestamp } = params;
+  const safeRedeem = Math.max(0, Math.min(crmAcc.pointsBalance, Math.floor(redeemPoints || 0)));
+  const pointsDiscountIDR = safeRedeem * 100;
+  if (safeRedeem > 0) {
+    crmAcc.pointsBalance = Math.max(0, crmAcc.pointsBalance - safeRedeem);
+    crmAcc.pointsLedger.unshift({
+      id: `PTS-RDM-${Date.now().toString().slice(-6)}`,
+      timestamp,
+      type: 'REDEEM',
+      pointsDelta: -safeRedeem,
+      balanceAfter: crmAcc.pointsBalance,
+      referenceId,
+      channel,
+      note: `Redeemed ${safeRedeem} pts (Rp ${pointsDiscountIDR.toLocaleString('id-ID')} discount) on ${referenceId}`,
+    });
+  }
+  const pointsEarned = Math.max(0, Math.floor(Math.max(0, netPaidIDR) / 10000));
+  if (pointsEarned > 0) {
+    crmAcc.pointsBalance += pointsEarned;
+    crmAcc.pointsLedger.unshift({
+      id: `PTS-ERN-${Date.now().toString().slice(-6)}`,
+      timestamp,
+      type: 'EARN',
+      pointsDelta: pointsEarned,
+      balanceAfter: crmAcc.pointsBalance,
+      referenceId,
+      channel,
+      note: `Earned ${pointsEarned} pts from ${channel} order ${referenceId} (Rp ${netPaidIDR.toLocaleString('id-ID')})`,
+    });
+  }
+  crmAcc.lifetimeSpendIDR = roundIDR(crmAcc.lifetimeSpendIDR + Math.max(0, netPaidIDR));
+  crmAcc.orderCount += 1;
+  crmAcc.lastOrderAt = timestamp;
+  crmAcc.tier = resolveCrmLoyaltyTier(crmAcc.lifetimeSpendIDR);
+  crmAcc.rfmSegment = computeCrmRfmSegment(crmAcc);
+  crmAcc.updatedAt = timestamp;
+  return {
+    pointsRedeemed: safeRedeem,
+    pointsDiscountIDR,
+    pointsEarned,
+    tierAfter: crmAcc.tier,
+  };
+}
+
+function ensureConsignmentSeedItems() {
+  const nowIso = new Date().toISOString();
+  const seeds = [
+    {
+      productId: 'prod-csg-001',
+      sku: 'SKU-CSG-001',
+      name: 'Artisanal Sourdough Croissant Box (4 pcs)',
+      category: 'bakery',
+      unit: 'box',
+      sellingPrice: 68000,
+      commissionPercent: 20,
+      supplierId: 'SUP-CSG-001',
+      supplierName: 'Bakery Maison Senopati UMKM',
+      storageZone: 'ambient' as StorageZoneType,
+      rackSen: 'SEN-AMB-R01-B01',
+      rackPik: 'PIK-AMB-R01-B01',
+      lotSen: 'LOT-CSG-CR01-SEN',
+      lotPik: 'LOT-CSG-CR01-PIK',
+      expiryDays: 4,
+      qtySen: 18,
+      qtyPik: 12,
+      image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=600&q=80',
+    },
+    {
+      productId: 'prod-csg-002',
+      sku: 'SKU-CSG-002',
+      name: 'Kopi Susu Gula Aren Signature 250ml',
+      category: 'beverages',
+      unit: 'bottle',
+      sellingPrice: 28000,
+      commissionPercent: 25,
+      supplierId: 'SUP-CSG-002',
+      supplierName: 'Kopi Tani Nusantara UMKM',
+      storageZone: 'cold_chilled' as StorageZoneType,
+      rackSen: 'SEN-CHL-R01-B01',
+      rackPik: 'PIK-CHL-R01-B01',
+      lotSen: 'LOT-CSG-KP02-SEN',
+      lotPik: 'LOT-CSG-KP02-PIK',
+      expiryDays: 6,
+      qtySen: 30,
+      qtyPik: 24,
+      image: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=600&q=80',
+    },
+  ];
+
+  seeds.forEach((s) => {
+    const netVendorCost = Math.round(s.sellingPrice * (1 - s.commissionPercent / 100));
+    if (!PRODUCTS.some((p) => p.id === s.productId)) {
+      PRODUCTS.push({
+        id: s.productId,
+        name: s.name,
+        category: (s.category === 'bakery' ? 'bakery' : 'pantry_coffee') as any,
+        categoryLabel: s.category === 'bakery' ? 'Artisan Bakery' : 'Pantry & Coffee',
+        price: s.sellingPrice,
+        unit: s.unit,
+        origin: s.supplierName,
+        stock: s.qtySen + s.qtyPik,
+        image: s.image,
+        fallbackGradient: 'from-amber-900/20 to-emerald-900/20',
+        description: `Consignment (Titip Jual) partner product by ${s.supplierName}. Store commission ${s.commissionPercent}%.`,
+        rating: 4.9,
+        reviewCount: 28,
+        sku: s.sku,
+        storageZone: s.storageZone,
+        salesChannel: 'BOTH',
+      });
+    }
+
+    if (!inventoryList.some((i) => i.sku === s.sku)) {
+      inventoryList.push({
+        sku: s.sku,
+        productId: s.productId,
+        productName: s.name,
+        name: s.name,
+        barcode: s.sku,
+        category: s.category,
+        currentStock: s.qtySen + s.qtyPik,
+        stockLevel: s.qtySen + s.qtyPik,
+        minimumThreshold: 6,
+        unitCost: netVendorCost,
+        wacUnitCost: netVendorCost,
+        sellingPrice: s.sellingPrice,
+        unit: s.unit,
+        supplierId: s.supplierId,
+        supplierName: s.supplierName,
+        lastRestockedAt: nowIso,
+        incomingStock: 0,
+        outgoingStock: 0,
+        reorderQuantity: 20,
+        valuationMethod: 'FIFO',
+        storageType: s.storageZone,
+        removalStrategy: 'FEFO',
+        salesChannel: 'B2C',
+        isConsignment: true,
+        consignmentSupplier: s.supplierName,
+        consignmentCommissionPercent: s.commissionPercent,
+        consignmentCostIDR: netVendorCost,
+      });
+    }
+
+    const storeConfigs = [
+      {
+        storeId: 'store-jkt-senopati',
+        storeName: 'GroceMart Senopati Flagship',
+        qty: s.qtySen,
+        lot: s.lotSen,
+        rack: s.rackSen,
+        whZone: s.storageZone === 'cold_chilled' ? 'WH-JKT-SEN-COLD' : 'WH-JKT-SEN-AMB',
+      },
+      {
+        storeId: 'store-jkt-pik',
+        storeName: 'GroceMart PIK 2 Signature',
+        qty: s.qtyPik,
+        lot: s.lotPik,
+        rack: s.rackPik,
+        whZone: s.storageZone === 'cold_chilled' ? 'WH-JKT-PIK-COLD' : 'WH-JKT-PIK-AMB',
+      },
+    ];
+
+    storeConfigs.forEach((sc) => {
+      if (!storeInventoryTiers.some((t) => t.sku === s.sku && t.storeId === sc.storeId)) {
+        storeInventoryTiers.push({
+          id: `STK-CSG-${s.sku}-${sc.storeId}`,
+          sku: s.sku,
+          productId: s.productId,
+          productName: s.name,
+          category: s.category,
+          storeId: sc.storeId,
+          storeName: sc.storeName,
+          warehouseZoneId: sc.whZone,
+          storageType: s.storageZone,
+          physicalStock: sc.qty,
+          availableStock: sc.qty,
+          reservedStock: 0,
+          incomingStock: 0,
+          minimumThreshold: 4,
+          safetyStockBuffer: 2,
+          maxCapacity: 80,
+          reorderQuantity: 15,
+          unitCost: netVendorCost,
+          sellingPrice: s.sellingPrice,
+          totalValuation: 0, // Zero owned inventory balance sheet valuation for consignment
+          unit: s.unit,
+          supplierId: s.supplierId,
+          supplierName: s.supplierName,
+          lastRestockedAt: nowIso,
+          updatedAt: nowIso,
+          binLocation: sc.rack,
+          rackBinCode: sc.rack,
+          lotNumber: sc.lot,
+          removalStrategy: 'FEFO',
+          rotationStrategy: 'FEFO',
+          isConsignment: true,
+          consignmentSupplier: s.supplierName,
+          consignmentCommissionPercent: s.commissionPercent,
+          consignmentCostIDR: netVendorCost,
+        });
+      }
+
+      if (!inventoryBatches.some((b) => b.sku === s.sku && b.storeId === sc.storeId)) {
+        const expIso = new Date(Date.now() + 86400000 * s.expiryDays).toISOString();
+        inventoryBatches.push({
+          batchId: `BAT-CSG-${s.sku.slice(-3)}-${sc.storeId.slice(-3).toUpperCase()}`,
+          sku: s.sku,
+          productName: s.name,
+          storeId: sc.storeId,
+          storeName: sc.storeName,
+          warehouseZoneId: sc.whZone,
+          lotNumber: sc.lot,
+          initialQuantity: sc.qty,
+          currentStock: sc.qty,
+          unitCost: netVendorCost,
+          sellingPrice: s.sellingPrice,
+          receivedDate: nowIso,
+          expiryDate: expIso,
+          daysUntilExpiry: s.expiryDays,
+          status: s.expiryDays <= 2 ? 'critical' : s.expiryDays <= 7 ? 'near_expiry' : 'fresh',
+          storageZone: s.storageZone,
+          supplierName: s.supplierName,
+          rackBinCode: sc.rack,
+          rotationStrategy: 'FEFO',
+          notes: `Consignment Titip Jual (${s.commissionPercent}% store margin)`,
+          isConsignment: true,
+          consignmentSupplier: s.supplierName,
+          consignmentCommissionPercent: s.commissionPercent,
+          consignmentCostIDR: netVendorCost,
+        });
+      }
+    });
+
+    if (!skuTaxRulesList.some((r) => r.sku === s.sku)) {
+      const taxCat = inferDefaultTaxCategory(s.category, s.name);
+      skuTaxRulesList.push({
+        sku: s.sku,
+        productName: s.name,
+        category: s.category,
+        taxCategory: taxCat,
+        taxRatePercent: getTaxRateForCategory(taxCat, 11),
+        b2cTaxInclusive: true,
+        b2bTaxExclusive: true,
+        updatedAt: nowIso,
+      });
+    }
+  });
+}
 
 function mapRackZoneToStorageType(zone: WarehouseRackStorageZone | string): StorageZoneType {
   const lower = String(zone || '').toLowerCase();
@@ -656,6 +1488,24 @@ function ensureRegulatoryCoaAccounts() {
       balance: 24800000,
       description: 'Inventory shrinkage variance write-offs and storekeeping operations',
     },
+    {
+      accountCode: '1011',
+      accountName: 'POS Cash Drawer (Laci Kasir Register)',
+      category: 'Asset',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Active frontline cashier drawer cash balance transferred to Main Safe Vault (#1010) via Setor Brankas',
+    },
+    {
+      accountCode: '2015',
+      accountName: 'Consignment Payable — Titip Jual UMKM',
+      category: 'Liability',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Accrued consignment vendor payables recognized only upon POS or B2B sale of Titip Jual stock',
+    },
   ];
   requiredAccounts.forEach((acc) => {
     if (!chartOfAccounts.some((c) => c.accountCode === acc.accountCode)) {
@@ -700,6 +1550,7 @@ let skuTaxRulesList: SkuTaxRule[] = [
       };
     }),
 ];
+ensureConsignmentSeedItems();
 
 let customerRmaList: CustomerRmaRecord[] = [
   {
@@ -3271,6 +4122,12 @@ function captureServerState() {
     communicationLogs,
     warehouseRacks,
     rackStocktakeSubmissions,
+    consignmentLedger,
+    safeDropsList,
+    recallEventsList,
+    crmAccounts,
+    crmDeals,
+    crmActivities,
     qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
     idempotencyStoreEntries: Array.from(idempotencyStore.entries()),
     inTransitTransferLotsEntries: Array.from(inTransitTransferLots.entries()),
@@ -3362,6 +4219,12 @@ function applyServerState(snap: any) {
   } else {
     rackStocktakeSubmissions = [];
   }
+  consignmentLedger = Array.isArray(snap.consignmentLedger) ? snap.consignmentLedger : [];
+  safeDropsList = Array.isArray(snap.safeDropsList) ? snap.safeDropsList : [];
+  recallEventsList = Array.isArray(snap.recallEventsList) ? snap.recallEventsList : [];
+  crmAccounts = Array.isArray(snap.crmAccounts) && snap.crmAccounts.length > 0 ? snap.crmAccounts : createInitialCrmAccounts();
+  crmDeals = Array.isArray(snap.crmDeals) && snap.crmDeals.length > 0 ? snap.crmDeals : createInitialCrmDeals();
+  crmActivities = Array.isArray(snap.crmActivities) && snap.crmActivities.length > 0 ? snap.crmActivities : createInitialCrmActivities();
   qrisTransactions.clear();
   if (Array.isArray(snap.qrisTransactionsEntries)) {
     snap.qrisTransactionsEntries.forEach(([k, v]: [string, any]) => qrisTransactions.set(k, v));
@@ -3431,6 +4294,7 @@ function hydrateStateFromSnapshot() {
         const parsed = JSON.parse(raw);
         applyServerState(parsed);
         ensureRegulatoryCoaAccounts();
+        ensureConsignmentSeedItems();
         syncAllBatchesExpiryStatus(Date.now());
         syncWarehouseRackOccupancy();
         console.log(`[GroceMart Snapshot] Hydrated persistent state from ${STATE_SNAPSHOT_PATH}`);
@@ -3442,6 +4306,7 @@ function hydrateStateFromSnapshot() {
   }
   inventoryBatches = createInitialBatches();
   ensureRegulatoryCoaAccounts();
+  ensureConsignmentSeedItems();
   syncWarehouseRackOccupancy();
   seedBaselineEnterpriseNotifications();
 }
@@ -3459,7 +4324,14 @@ async function resetDemoStateToBaseline() {
     inventoryBatches = createInitialBatches();
     warehouseRacks = createInitialWarehouseRacks();
     rackStocktakeSubmissions = [];
+    consignmentLedger = [];
+    safeDropsList = [];
+    recallEventsList = [];
+    crmAccounts = createInitialCrmAccounts();
+    crmDeals = createInitialCrmDeals();
+    crmActivities = createInitialCrmActivities();
     ensureRegulatoryCoaAccounts();
+    ensureConsignmentSeedItems();
     syncWarehouseRackOccupancy();
     enterpriseNotificationsList = [];
     seedBaselineEnterpriseNotifications();
@@ -3754,6 +4626,16 @@ async function startServer() {
       // Financial P&L / GL / Balance Sheet / Cash Flow / Omzet GETs
       if (urlPath.startsWith('/admin/accounting/') || urlPath === '/admin/omzet-analytics') {
         const allowed: CanonicalServerRole[] = ['store_manager', 'admin', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      // 6B. Standalone CRM & Loyalty 360 Access Control (Hidden/Blocked 403 for warehouse, purchasing, cashier)
+      if (urlPath.startsWith('/admin/crm/')) {
+        const allowed: CanonicalServerRole[] = ['store_manager', 'admin', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+      if (urlPath === '/pos/crm-members') {
+        const allowed: CanonicalServerRole[] = ['cashier', 'store_manager', 'coo', 'super_admin'];
         if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
       }
 
@@ -5716,6 +6598,8 @@ async function startServer() {
     }
 
     let grTotalCost = 0;
+    let ownedGrTotalCost = 0;
+    let consignmentItemCount = 0;
     const grItemsReceived: GoodsReceiptRecord['items'] = [];
 
     // Process each received item
@@ -5730,8 +6614,18 @@ async function startServer() {
       poItem.receivedQuantity += receivedQty;
       poItem.remainingBackorder = Math.max(0, poItem.orderedQuantity - poItem.receivedQuantity);
 
+      const catalogItem = inventoryList.find((i) => i.sku === poItem.sku);
+      const isConsignmentItem = Boolean(
+        poItem.isConsignment || catalogItem?.isConsignment || itemInput.isConsignment
+      );
+
       const itemCost = receivedQty * poItem.unitCost;
       grTotalCost += itemCost;
+      if (isConsignmentItem) {
+        consignmentItemCount += 1;
+      } else {
+        ownedGrTotalCost += itemCost;
+      }
 
       grItemsReceived.push({
         sku: poItem.sku,
@@ -5742,10 +6636,10 @@ async function startServer() {
         expiryDate: itemInput.expiryDate,
         qualityCondition: itemInput.qualityCondition || 'Passed - Grade A',
         tempCheckCelsius: itemInput.tempCheckCelsius,
+        isConsignment: isConsignmentItem,
       });
 
       // Update catalog inventory item with Moving Average Cost (WAC)
-      const catalogItem = inventoryList.find((i) => i.sku === poItem.sku);
       if (catalogItem) {
         const oldStock = Math.max(0, Number(catalogItem.currentStock) || 0);
         const oldCost = Number(catalogItem.wacUnitCost ?? catalogItem.unitCost ?? poItem.unitCost) || 0;
@@ -5756,8 +6650,10 @@ async function startServer() {
             : poItem.unitCost;
 
         catalogItem.currentStock = newTotalStock;
-        catalogItem.unitCost = newWac;
-        catalogItem.wacUnitCost = newWac;
+        if (!isConsignmentItem) {
+          catalogItem.unitCost = newWac;
+          catalogItem.wacUnitCost = newWac;
+        }
         catalogItem.incomingStock = Math.max(0, catalogItem.incomingStock - receivedQty);
         catalogItem.lastRestockedAt = new Date().toISOString();
         catalogItem.stockBatches = catalogItem.stockBatches || [];
@@ -5784,13 +6680,15 @@ async function startServer() {
             ? Math.round(((tierOldStock * tierOldCost) + (receivedQty * poItem.unitCost)) / tierNewStock)
             : poItem.unitCost;
 
-        tier.unitCost = tierNewWac;
+        if (!isConsignmentItem) {
+          tier.unitCost = tierNewWac;
+        }
         tier.physicalStock = tierNewStock;
         if (isQuarantineHold) {
           tier.reservedStock = Math.min(tierNewStock, (tier.reservedStock || 0) + receivedQty);
         }
         tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
-        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+        tier.totalValuation = isConsignmentItem ? 0 : Math.round(tier.physicalStock * tier.unitCost);
         tier.incomingStock = Math.max(0, tier.incomingStock - receivedQty);
         tier.lastRestockedAt = new Date().toISOString();
         tier.updatedAt = new Date().toISOString();
@@ -5832,7 +6730,13 @@ async function startServer() {
         storageZone: tier?.storageType || 'cold_chilled',
         supplierName: po.supplierName,
         sourcePoNumber: po.id,
-        notes: `Received via GR against ${po.id}`,
+        notes: isConsignmentItem
+          ? `Consignment (Titip Jual) received via GR against ${po.id} — Zero #1040/#2010 GL on receipt`
+          : `Received via GR against ${po.id}`,
+        isConsignment: isConsignmentItem,
+        consignmentSupplier: isConsignmentItem ? (poItem.consignmentSupplier || catalogItem?.consignmentSupplier || po.supplierName) : undefined,
+        consignmentCommissionPercent: isConsignmentItem ? (poItem.consignmentCommissionPercent || catalogItem?.consignmentCommissionPercent || 20) : undefined,
+        consignmentCostIDR: isConsignmentItem ? poItem.unitCost : undefined,
       });
     });
 
@@ -5847,6 +6751,8 @@ async function startServer() {
     const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
 
+    const roundedOwnedCost = Math.max(0, roundIDR(ownedGrTotalCost));
+
     const newGR: GoodsReceiptRecord = {
       id: grId,
       poId: po.id,
@@ -5859,51 +6765,59 @@ async function startServer() {
       receivedBy,
       isPartial,
       items: grItemsReceived,
-      receiverNotes: receiverNotes || (isPartial ? `Partial shipment received. ${totalRemaining} units backorder remaining.` : 'Order 100% fulfilled.'),
-      glEntryId: gleId1,
+      receiverNotes:
+        receiverNotes ||
+        (consignmentItemCount > 0 && roundedOwnedCost === 0
+          ? `Consignment Titip Jual receipt — shelf stocked with zero #1040/#2010 GL impact until sold.`
+          : isPartial
+          ? `Partial shipment received. ${totalRemaining} units backorder remaining.`
+          : 'Order 100% fulfilled.'),
+      glEntryId: roundedOwnedCost > 0 ? gleId1 : undefined,
     };
 
     po.goodsReceiptIds = po.goodsReceiptIds || [];
     po.goodsReceiptIds.push(grId);
     goodsReceipts.unshift(newGR);
 
-    // Auto-Post Double Entry to General Ledger:
-    // Debit 1040 Merchandise Inventory Asset
-    // Credit 2010 Trade Accounts Payable
-    const roundedGrTotalCost = Math.max(0, roundIDR(grTotalCost));
-    commitBalancedGlBatch(
-      [
-        {
-          id: gleId1,
-          timestamp: new Date().toISOString(),
-          storeId: po.storeId,
-          storeName: po.storeName,
-          accountCode: '1040',
-          accountName: 'Merchandise Inventory Asset',
-          category: 'Asset',
-          debit: roundedGrTotalCost,
-          credit: 0,
-          referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
-          referenceId: grId,
-          description: `${grId}: ${isPartial ? 'Partial' : 'Full'} Goods receipt on PO #${po.id} from ${po.supplierName}`,
-        },
-        {
-          id: gleId2,
-          timestamp: new Date().toISOString(),
-          storeId: po.storeId,
-          storeName: po.storeName,
-          accountCode: '2010',
-          accountName: 'Trade Accounts Payable (Vendors)',
-          category: 'Liability',
-          debit: 0,
-          credit: roundedGrTotalCost,
-          referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
+    // Auto-Post Double Entry to General Ledger ONLY for owned inventory (Titip Jual skips #1040/#2010 until sold)
+    if (roundedOwnedCost > 0) {
+      commitBalancedGlBatch(
+        [
+          {
+            id: gleId1,
+            timestamp: new Date().toISOString(),
+            storeId: po.storeId,
+            storeName: po.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: roundedOwnedCost,
+            credit: 0,
+            referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
+            referenceId: grId,
+            description: `${grId}: ${isPartial ? 'Partial' : 'Full'} Goods receipt on PO #${po.id} from ${po.supplierName}`,
+          },
+          {
+            id: gleId2,
+            timestamp: new Date().toISOString(),
+            storeId: po.storeId,
+            storeName: po.storeName,
+            accountCode: '2010',
+            accountName: 'Trade Accounts Payable (Vendors)',
+            category: 'Liability',
+            debit: 0,
+            credit: roundedOwnedCost,
+            referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
           referenceId: grId,
           description: `${grId}: Trade liability accrued for received items on PO #${po.id}`,
         },
       ],
       true
     );
+    }
+
+    syncWarehouseRackOccupancy();
+    scheduleStateSave();
 
     const qcAlertsInGr = grItemsReceived.filter(
       (gi) =>
@@ -5930,7 +6844,7 @@ async function startServer() {
       purchaseOrder: po,
       isPartial,
       remainingBackorder: totalRemaining,
-      journalEntryIds: [gleId1, gleId2],
+      journalEntryIds: roundedOwnedCost > 0 ? [gleId1, gleId2] : [],
     });
   });
 
@@ -7217,6 +8131,10 @@ async function startServer() {
             ? 'near_expiry'
             : 'fresh'
           : 'fresh',
+        isConsignment: Boolean(inv?.isConsignment || nearestBatch?.isConsignment),
+        consignmentSupplier: inv?.consignmentSupplier || nearestBatch?.consignmentSupplier,
+        consignmentCommissionPercent:
+          inv?.consignmentCommissionPercent ?? nearestBatch?.consignmentCommissionPercent,
       };
     });
 
@@ -7253,6 +8171,9 @@ async function startServer() {
       cashChange,
       customerName = 'Walk-in Retail Shopper',
       customerPhone,
+      customerMemberId,
+      crmAccountId,
+      redeemPoints = 0,
     } = req.body as POSTransactionRequest;
 
     if (!items || items.length === 0) {
@@ -7271,6 +8192,24 @@ async function startServer() {
       return res.status(403).json({
         error: `Permission Denied: User ${currentActiveStaffSession.userName} (${currentActiveStaffSession.userRole}) is not authorized for Frontline POS register checkouts.`,
       });
+    }
+
+    // Validate optional CRM Member & Loyalty Point Redemption BEFORE any stock mutation
+    const matchedCrmAccount = crmAccountId
+      ? crmAccounts.find((a) => a.id === crmAccountId)
+      : customerMemberId
+      ? crmAccounts.find((a) => a.id === customerMemberId)
+      : undefined;
+    const requestedRedeemPoints = Math.max(0, Math.floor(Number(redeemPoints) || 0));
+    if (requestedRedeemPoints > 0) {
+      if (!matchedCrmAccount) {
+        return res.status(400).json({ error: 'CRM Member account not found for loyalty point redemption.' });
+      }
+      if (requestedRedeemPoints > matchedCrmAccount.pointsBalance) {
+        return res.status(400).json({
+          error: `Insufficient loyalty points: requested ${requestedRedeemPoints} pts, available ${matchedCrmAccount.pointsBalance} pts.`,
+        });
+      }
     }
 
     // ATOMIC PRE-CHECK: Aggregate requested qty per SKU & validate sellable non-expired ATP before any mutation
@@ -7303,6 +8242,9 @@ async function startServer() {
 
     // 1. Real-time Inventory, FEFO Batch Deduction, and Post-Markdown Net Pricing
     let totalCogsCost = 0;
+    let totalOwnedCogsCost = 0;
+    let totalConsignmentPayableIDR = 0;
+    const pendingConsignmentEntries: ConsignmentLedgerEntry[] = [];
     let inventoryDeductedCount = 0;
     let computedSubtotal = 0;
 
@@ -7358,6 +8300,10 @@ async function startServer() {
           : Math.round(Number(item.lineTotal));
       computedSubtotal += lineTotal;
 
+      const isConsignmentLine = Boolean(
+        item.isConsignment || inv?.isConsignment || nearestBatch?.isConsignment
+      );
+
       // A. Store Inventory Tiers
       const tier = storeInventoryTiers.find(
         (t) => t.sku === item.sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
@@ -7366,7 +8312,7 @@ async function startServer() {
         tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
         tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
         tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
-        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+        tier.totalValuation = isConsignmentLine ? 0 : Math.round(tier.physicalStock * tier.unitCost);
         tier.updatedAt = timestamp;
       }
 
@@ -7380,6 +8326,47 @@ async function startServer() {
       const cogsLine =
         batchDeduction.allocatedQty > 0 ? roundIDR(batchDeduction.totalCogs) : roundIDR(unitCost * qty);
       totalCogsCost = roundIDR(totalCogsCost + cogsLine);
+
+      const primaryLot =
+        batchDeduction.allocations[0]?.lotNumber || nearestBatch?.lotNumber || item.lotNumber;
+      const primaryBatchId =
+        batchDeduction.allocations[0]?.batchId || nearestBatch?.batchId || item.batchId;
+
+      if (isConsignmentLine) {
+        const commPct = Number(
+          inv?.consignmentCommissionPercent ?? nearestBatch?.consignmentCommissionPercent ?? 20
+        );
+        const storeMarginIDR = Math.round(lineTotal * (commPct / 100));
+        const payableToVendorIDR = Math.max(0, lineTotal - storeMarginIDR);
+        totalConsignmentPayableIDR = roundIDR(totalConsignmentPayableIDR + payableToVendorIDR);
+        pendingConsignmentEntries.push({
+          id: `CSG-POS-${Date.now().toString().slice(-6)}-${pendingConsignmentEntries.length + 1}`,
+          timestamp,
+          storeId,
+          storeName,
+          channel: 'POS',
+          referenceId: receiptNumber,
+          sku: item.sku,
+          productName: item.name || inv?.productName || prod?.name || item.sku,
+          supplierName:
+            inv?.consignmentSupplier ||
+            nearestBatch?.consignmentSupplier ||
+            inv?.supplierName ||
+            'Consignment UMKM Partner',
+          lotNumber: primaryLot,
+          quantitySold: qty,
+          sellingPriceIDR: roundIDR(effectiveUnitPrice),
+          grossSalesIDR: lineTotal,
+          commissionPercent: commPct,
+          storeMarginIDR,
+          payableToVendorIDR,
+          status: 'UNSETTLED',
+          glVoucherIds: [],
+        });
+      } else {
+        totalOwnedCogsCost = roundIDR(totalOwnedCogsCost + cogsLine);
+      }
+
       inventoryDeductedCount += qty;
 
       return {
@@ -7390,12 +8377,20 @@ async function startServer() {
         unitPrice: roundIDR(effectiveUnitPrice),
         unitCost,
         lineTotal,
+        batchId: primaryBatchId,
+        lotNumber: primaryLot,
+        lotAllocations: batchDeduction.allocations,
+        isConsignment: isConsignmentLine,
       };
     });
 
     // 2. Post-Markdown Net VAT (PPN) Calculation Accuracy (strict integer IDR)
     const resolvedSubtotal = roundIDR(computedSubtotal);
-    const discountAmount = Math.min(resolvedSubtotal, Math.max(0, roundIDR(Number(discount) || 0)));
+    const baseDiscountAmount = Math.min(resolvedSubtotal, Math.max(0, roundIDR(Number(discount) || 0)));
+    const maxRedeemablePts = Math.floor(Math.max(0, resolvedSubtotal - baseDiscountAmount) / 100);
+    const effectivePosRedeemPoints = matchedCrmAccount ? Math.min(requestedRedeemPoints, maxRedeemablePts) : 0;
+    const loyaltyPointsDiscountIDR = effectivePosRedeemPoints * 100;
+    const discountAmount = Math.min(resolvedSubtotal, baseDiscountAmount + loyaltyPointsDiscountIDR);
     const netRevenueIDR = Math.max(0, resolvedSubtotal - discountAmount);
 
     let remainingCartDiscount = discountAmount;
@@ -7517,40 +8512,86 @@ async function startServer() {
     }
     commitBalancedGlBatch(posRevenueGlBatch, true);
 
-    journalEntryIds.push(gleId3, gleId4);
-    commitBalancedGlBatch(
-      [
-        {
-          id: gleId3,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: '5010',
-          accountName: 'Cost of Goods Sold (COGS)',
-          category: 'Expense',
-          debit: totalCogsCost,
-          credit: 0,
-          referenceType: 'POS_SALE',
-          referenceId: receiptNumber,
-          description: `COGS realized for ${normalizedItems.length} items sold via POS #${receiptNumber}`,
-        },
-        {
-          id: gleId4,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: '1040',
-          accountName: 'Merchandise Inventory Asset',
-          category: 'Asset',
-          debit: 0,
-          credit: totalCogsCost,
-          referenceType: 'POS_SALE',
-          referenceId: receiptNumber,
-          description: `Inventory balance reduction upon in-store POS dispatch #${receiptNumber}`,
-        },
-      ],
-      true
-    );
+    if (totalOwnedCogsCost > 0) {
+      journalEntryIds.push(gleId3, gleId4);
+      commitBalancedGlBatch(
+        [
+          {
+            id: gleId3,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: '5010',
+            accountName: 'Cost of Goods Sold (COGS)',
+            category: 'Expense',
+            debit: totalOwnedCogsCost,
+            credit: 0,
+            referenceType: 'POS_SALE',
+            referenceId: receiptNumber,
+            description: `COGS realized for owned items sold via POS #${receiptNumber}`,
+          },
+          {
+            id: gleId4,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: 0,
+            credit: totalOwnedCogsCost,
+            referenceType: 'POS_SALE',
+            referenceId: receiptNumber,
+            description: `Inventory balance reduction upon in-store POS dispatch #${receiptNumber}`,
+          },
+        ],
+        true
+      );
+    }
+
+    if (totalConsignmentPayableIDR > 0) {
+      ensureRegulatoryCoaAccounts();
+      const csgGle1 = `GLE-CSG-${Date.now().toString().slice(-6)}-1`;
+      const csgGle2 = `GLE-CSG-${Date.now().toString().slice(-6)}-2`;
+      journalEntryIds.push(csgGle1, csgGle2);
+      commitBalancedGlBatch(
+        [
+          {
+            id: csgGle1,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: '5010',
+            accountName: 'Cost of Goods Sold (COGS) — Consignment Payout',
+            category: 'Expense',
+            debit: totalConsignmentPayableIDR,
+            credit: 0,
+            referenceType: 'CONSIGNMENT_SALE',
+            referenceId: receiptNumber,
+            description: `Consignment Titip Jual COGS recognized at POS #${receiptNumber}`,
+          },
+          {
+            id: csgGle2,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: '2015',
+            accountName: 'Consignment Payable — Titip Jual UMKM',
+            category: 'Liability',
+            debit: 0,
+            credit: totalConsignmentPayableIDR,
+            referenceType: 'CONSIGNMENT_SALE',
+            referenceId: receiptNumber,
+            description: `Consignment Payable accrued for Titip Jual POS sale #${receiptNumber}`,
+          },
+        ],
+        true
+      );
+      pendingConsignmentEntries.forEach((ce) => {
+        ce.glVoucherIds = [csgGle1, csgGle2];
+        consignmentLedger.unshift(ce);
+      });
+    }
 
     // 4. Audit Trail Records
     auditTrail.unshift({
@@ -7604,7 +8645,21 @@ async function startServer() {
           : Math.max(0, roundIDR(Number(cashChange) || 0))
         : 0;
 
-    // 5. Construct Complete Receipt
+    // 5. Construct Complete Receipt & Apply CRM Loyalty Points Hook
+    let crmLoyaltySummary:
+      | { pointsRedeemed: number; pointsDiscountIDR: number; pointsEarned: number; tierAfter: CrmLoyaltyTier }
+      | undefined;
+    if (matchedCrmAccount) {
+      crmLoyaltySummary = applyCrmLoyaltySettlement({
+        crmAcc: matchedCrmAccount,
+        channel: 'POS',
+        referenceId: receiptNumber,
+        netPaidIDR: resolvedTotal,
+        redeemPoints: effectivePosRedeemPoints,
+        timestamp,
+      });
+    }
+
     const receipt: POSTransactionReceipt = {
       receiptNumber,
       transactionId,
@@ -7631,6 +8686,11 @@ async function startServer() {
       journalEntryIds,
       inventoryDeductedCount,
       totalCogsCost,
+      crmAccountId: matchedCrmAccount?.id,
+      crmMemberTier: crmLoyaltySummary?.tierAfter || matchedCrmAccount?.tier,
+      loyaltyPointsEarned: crmLoyaltySummary?.pointsEarned,
+      loyaltyPointsRedeemed: crmLoyaltySummary?.pointsRedeemed,
+      loyaltyPointsDiscountIDR: crmLoyaltySummary?.pointsDiscountIDR,
     };
 
     posTransactionsHistory.unshift(receipt);
@@ -7646,8 +8706,13 @@ async function startServer() {
       } else {
         activeShift.expectedEdcSalesIDR += resolvedTotal;
       }
-      activeShift.expectedTotalCashInDrawerIDR =
-        activeShift.openingFloatIDR + activeShift.expectedCashSalesIDR - activeShift.cashRefundsIDR;
+      activeShift.expectedTotalCashInDrawerIDR = Math.max(
+        0,
+        activeShift.openingFloatIDR +
+          activeShift.expectedCashSalesIDR -
+          activeShift.cashRefundsIDR -
+          (activeShift.safeDropsTotalIDR || 0)
+      );
     }
 
     // Event 2: Check reorder points for every SKU sold at POS
@@ -7655,10 +8720,13 @@ async function startServer() {
       normalizedItems.map((ni) => ni.sku),
       storeId
     );
+    syncWarehouseRackOccupancy();
+    scheduleStateSave();
 
     res.json({
       success: true,
       receipt,
+      crmAccountUpdated: matchedCrmAccount || undefined,
       taxBreakdown: {
         netRevenueIDR,
         ppnIDR: resolvedPpn,
@@ -8547,6 +9615,8 @@ async function startServer() {
       paymentMethod,
       giroDetails,
       transferProofUrl,
+      crmAccountId,
+      redeemPoints = 0,
     } = req.body;
 
     const customer = b2bCustomersList.find((c) => c.id === customerId);
@@ -8556,6 +9626,21 @@ async function startServer() {
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: 'Wholesale cart cannot be empty' });
+    }
+
+    const matchedB2bCrmAccount = crmAccountId
+      ? crmAccounts.find((a) => a.id === crmAccountId)
+      : crmAccounts.find((a) => a.linkedB2bCustomerId === customer.id);
+    const reqB2bRedeemPts = Math.max(0, Math.floor(Number(redeemPoints) || 0));
+    if (reqB2bRedeemPts > 0) {
+      if (!matchedB2bCrmAccount) {
+        return res.status(400).json({ error: 'Linked CRM account not found for loyalty point redemption.' });
+      }
+      if (reqB2bRedeemPts > matchedB2bCrmAccount.pointsBalance) {
+        return res.status(400).json({
+          error: `Insufficient loyalty points: requested ${reqB2bRedeemPts}, available ${matchedB2bCrmAccount.pointsBalance}.`,
+        });
+      }
     }
 
     // Validate PWP (Tebus Murah) non-cumulative max 1 unit cap & restricted category exclusion
@@ -8608,14 +9693,15 @@ async function startServer() {
       }
     }
 
-    // Calculate subtotal, PWP discounts, post-markdown/discount net VAT (PPN), and base units (strict integer IDR)
-    let subtotalIDR = 0;
+    // Calculate subtotal, PWP discounts, optional CRM points discount before VAT, and base units (strict integer IDR)
+    let rawSubtotalIDR = 0;
     let pwpDiscountIDR = 0;
     let totalBaseUnits = 0;
     let totalCogsIDR = 0;
     let totalPpnIDR = 0;
     let totalPb1IDR = 0;
 
+    const b2bLineSpecs: Array<{ lineNet: number; taxCat: IndonesianTaxCategory; stdRate: number }> = [];
     for (const item of items) {
       const prod = wholesaleProductsList.find(
         (p) => p.id === (item.product?.id || item.productId) || p.sku === (item.product?.sku || item.sku)
@@ -8627,7 +9713,7 @@ async function startServer() {
           : (Number(item.unitPrice ?? item.price ?? prod?.baseUnitPrice ?? 0) || 0) *
             (Number(item.quantity) || 1);
       const lineNet = Math.max(0, roundIDR(rawLineTotal));
-      subtotalIDR += lineNet;
+      rawSubtotalIDR += lineNet;
       totalBaseUnits += Number(item.baseUnitsCalculated) || Number(item.quantity) || 0;
       if (item.isPwpRedemption) {
         const normalPrice = primaryPwp?.normalPriceIDR || 38000;
@@ -8638,12 +9724,29 @@ async function startServer() {
       const taxCat: IndonesianTaxCategory =
         rule?.taxCategory || inferDefaultTaxCategory(prod?.category || item.product?.category || '', prod?.name || item.product?.name || '');
       const stdRate = rule?.taxRatePercent ?? posCheckoutConfig.ppnTaxPercent ?? 11;
-      const taxCalc = computeIndonesianTax(lineNet, taxCat, false, stdRate);
-      totalPpnIDR += roundIDR(taxCalc.ppnIDR);
-      totalPb1IDR += roundIDR(taxCalc.pb1IDR);
+      b2bLineSpecs.push({ lineNet, taxCat, stdRate });
     }
 
-    subtotalIDR = roundIDR(subtotalIDR);
+    rawSubtotalIDR = roundIDR(rawSubtotalIDR);
+    const maxB2bRedeemPts = Math.floor(rawSubtotalIDR / 100);
+    const effectiveB2bRedeemPts = matchedB2bCrmAccount ? Math.min(reqB2bRedeemPts, maxB2bRedeemPts) : 0;
+    const b2bPointsDiscountIDR = effectiveB2bRedeemPts * 100;
+    let remainingB2bDisc = b2bPointsDiscountIDR;
+    b2bLineSpecs.forEach((spec, idx) => {
+      const share =
+        idx === b2bLineSpecs.length - 1
+          ? remainingB2bDisc
+          : rawSubtotalIDR > 0
+          ? Math.min(remainingB2bDisc, Math.round((spec.lineNet / rawSubtotalIDR) * b2bPointsDiscountIDR))
+          : 0;
+      remainingB2bDisc = Math.max(0, remainingB2bDisc - share);
+      const discountedNet = Math.max(0, spec.lineNet - share);
+      const taxCalc = computeIndonesianTax(discountedNet, spec.taxCat, false, spec.stdRate);
+      totalPpnIDR += roundIDR(taxCalc.ppnIDR);
+      totalPb1IDR += roundIDR(taxCalc.pb1IDR);
+    });
+
+    const subtotalIDR = Math.max(0, rawSubtotalIDR - b2bPointsDiscountIDR);
     pwpDiscountIDR = roundIDR(pwpDiscountIDR);
     totalPpnIDR = roundIDR(totalPpnIDR);
     totalPb1IDR = roundIDR(totalPb1IDR);
@@ -8674,6 +9777,12 @@ async function startServer() {
     }
 
     // Real-Time Fractional Strategy-Aware (FEFO/FIFO) Inventory Deduction & Moving Average COGS
+    let totalOwnedB2bCogsIDR = 0;
+    let totalB2bConsignmentPayableIDR = 0;
+    const pendingB2bConsignmentEntries: ConsignmentLedgerEntry[] = [];
+    const orderTimestamp = new Date().toISOString();
+    const orderId = `B2B-2026-${(b2bOrdersList.length + 80).toString().padStart(4, '0')}`;
+
     for (const cartIt of items) {
       const prod = wholesaleProductsList.find(
         (p) => p.id === (cartIt.product?.id || cartIt.productId) || p.sku === (cartIt.product?.sku || cartIt.sku)
@@ -8682,15 +9791,51 @@ async function startServer() {
       const unitsToDeduct = Number(cartIt.baseUnitsCalculated) || Number(cartIt.quantity) || 1;
       const fallbackCost = (prod?.baseUnitPrice || 20000) * 0.72;
 
+      const invItem = inventoryList.find((i) => i.sku === targetSku);
+      const isConsignmentLine = Boolean(invItem?.isConsignment || (cartIt as any).isConsignment);
+
       const batchDeduction = deductBatchesByStrategy(targetSku, unitsToDeduct, 'CONSOLIDATED', fallbackCost);
-      totalCogsIDR = roundIDR(totalCogsIDR + roundIDR(batchDeduction.totalCogs));
+      const lineCogs = roundIDR(batchDeduction.totalCogs);
+      totalCogsIDR = roundIDR(totalCogsIDR + lineCogs);
+
+      (cartIt as any).lotNumber = batchDeduction.allocations[0]?.lotNumber;
+      (cartIt as any).lotAllocations = batchDeduction.allocations;
+
+      if (isConsignmentLine) {
+        const lineTotal = roundIDR(Number(cartIt.lineTotal) || Number(cartIt.unitPrice || prod?.baseUnitPrice || 0) * (Number(cartIt.quantity) || 1));
+        const commPct = Number(invItem?.consignmentCommissionPercent ?? 20);
+        const storeMarginIDR = Math.round(lineTotal * (commPct / 100));
+        const payableToVendorIDR = Math.max(0, lineTotal - storeMarginIDR);
+        totalB2bConsignmentPayableIDR = roundIDR(totalB2bConsignmentPayableIDR + payableToVendorIDR);
+        pendingB2bConsignmentEntries.push({
+          id: `CSG-B2B-${Date.now().toString().slice(-6)}-${pendingB2bConsignmentEntries.length + 1}`,
+          timestamp: orderTimestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Central Wholesale Logistics Hub',
+          channel: 'B2B',
+          referenceId: orderId,
+          sku: targetSku,
+          productName: prod?.name || cartIt.product?.name || targetSku,
+          supplierName: invItem?.consignmentSupplier || invItem?.supplierName || 'Consignment UMKM Partner',
+          lotNumber: batchDeduction.allocations[0]?.lotNumber,
+          quantitySold: unitsToDeduct,
+          sellingPriceIDR: Math.round(lineTotal / Math.max(1, unitsToDeduct)),
+          grossSalesIDR: lineTotal,
+          commissionPercent: commPct,
+          storeMarginIDR,
+          payableToVendorIDR,
+          status: 'UNSETTLED',
+          glVoucherIds: [],
+        });
+      } else {
+        totalOwnedB2bCogsIDR = roundIDR(totalOwnedB2bCogsIDR + lineCogs);
+      }
 
       if (prod) {
         prod.currentStockBaseUnits = Math.max(0, prod.currentStockBaseUnits - unitsToDeduct);
       }
 
       // Sync matching catalog inventory & store warehouse tier when SKUs share stock
-      const invItem = inventoryList.find((i) => i.sku === targetSku);
       if (invItem) {
         invItem.currentStock = Math.max(0, invItem.currentStock - unitsToDeduct);
         invItem.outgoingStock += unitsToDeduct;
@@ -8700,15 +9845,14 @@ async function startServer() {
         tier.physicalStock = Math.max(0, tier.physicalStock - unitsToDeduct);
         tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
         tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
-        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
-        tier.updatedAt = new Date().toISOString();
+        tier.totalValuation = isConsignmentLine ? 0 : Math.round(tier.physicalStock * tier.unitCost);
+        tier.updatedAt = orderTimestamp;
       }
     }
 
     totalCogsIDR = Math.max(0, roundIDR(totalCogsIDR));
 
-    const timestamp = new Date().toISOString();
-    const orderId = `B2B-2026-${(b2bOrdersList.length + 80).toString().padStart(4, '0')}`;
+    const timestamp = orderTimestamp;
     const journalEntryIds: string[] = [];
 
     // General Ledger Automation (Exact DR === CR Parity with split Revenue #4020 and Output VAT #2025)
@@ -8872,41 +10016,87 @@ async function startServer() {
     }
     commitBalancedGlBatch(b2bRevenueGlBatch, true);
 
-    // Debit COGS #5010 / Credit Merchandise Inventory #1040
-    journalEntryIds.push(gle3, gle4);
-    commitBalancedGlBatch(
-      [
-        {
-          id: gle3,
-          timestamp,
-          storeId: 'CONSOLIDATED',
-          storeName: 'Consolidated Company-Wide',
-          accountCode: '5010',
-          accountName: 'Cost of Goods Sold (COGS) - FIFO / WAC',
-          category: 'Expense',
-          debit: totalCogsIDR,
-          credit: 0,
-          referenceType: 'B2B_WHOLESALE_ORDER',
-          referenceId: orderId,
-          description: `B2B Wholesale Order [${orderId}]: FEFO moving average cost recognized (${totalBaseUnits} base units)`,
-        },
-        {
-          id: gle4,
-          timestamp,
-          storeId: 'CONSOLIDATED',
-          storeName: 'Consolidated Company-Wide',
-          accountCode: '1040',
-          accountName: 'Merchandise Inventory Asset',
-          category: 'Asset',
-          debit: 0,
-          credit: totalCogsIDR,
-          referenceType: 'B2B_WHOLESALE_ORDER',
-          referenceId: orderId,
-          description: `B2B Wholesale Order [${orderId}]: Stock inventory deduction via FEFO`,
-        },
-      ],
-      true
-    );
+    // Debit COGS #5010 / Credit Merchandise Inventory #1040 (and #2015 for Consignment items)
+    if (totalOwnedB2bCogsIDR > 0) {
+      journalEntryIds.push(gle3, gle4);
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle3,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '5010',
+            accountName: 'Cost of Goods Sold (COGS) - FIFO / WAC',
+            category: 'Expense',
+            debit: totalOwnedB2bCogsIDR,
+            credit: 0,
+            referenceType: 'B2B_WHOLESALE_ORDER',
+            referenceId: orderId,
+            description: `B2B Wholesale Order [${orderId}]: FEFO moving average cost recognized`,
+          },
+          {
+            id: gle4,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: 0,
+            credit: totalOwnedB2bCogsIDR,
+            referenceType: 'B2B_WHOLESALE_ORDER',
+            referenceId: orderId,
+            description: `B2B Wholesale Order [${orderId}]: Stock inventory deduction via FEFO`,
+          },
+        ],
+        true
+      );
+    }
+
+    if (totalB2bConsignmentPayableIDR > 0) {
+      ensureRegulatoryCoaAccounts();
+      const b2bCsg1 = `GLE-B2B-CSG-${Date.now().toString().slice(-6)}-1`;
+      const b2bCsg2 = `GLE-B2B-CSG-${Date.now().toString().slice(-6)}-2`;
+      journalEntryIds.push(b2bCsg1, b2bCsg2);
+      commitBalancedGlBatch(
+        [
+          {
+            id: b2bCsg1,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '5010',
+            accountName: 'Cost of Goods Sold (COGS) — Consignment Payout',
+            category: 'Expense',
+            debit: totalB2bConsignmentPayableIDR,
+            credit: 0,
+            referenceType: 'CONSIGNMENT_SALE',
+            referenceId: orderId,
+            description: `Consignment Titip Jual B2B COGS [${orderId}]`,
+          },
+          {
+            id: b2bCsg2,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '2015',
+            accountName: 'Consignment Payable — Titip Jual UMKM',
+            category: 'Liability',
+            debit: 0,
+            credit: totalB2bConsignmentPayableIDR,
+            referenceType: 'CONSIGNMENT_SALE',
+            referenceId: orderId,
+            description: `Consignment Payable accrued for B2B sale [${orderId}]`,
+          },
+        ],
+        true
+      );
+      pendingB2bConsignmentEntries.forEach((ce) => {
+        ce.glVoucherIds = [b2bCsg1, b2bCsg2];
+        consignmentLedger.unshift(ce);
+      });
+    }
 
     // Update Customer Accounts Receivable & Credit Balance
     customer.outstandingAR += totalAmountIDR;
@@ -8941,6 +10131,17 @@ async function startServer() {
     };
 
     b2bOrdersList.unshift(newOrder);
+
+    if (matchedB2bCrmAccount) {
+      applyCrmLoyaltySettlement({
+        crmAcc: matchedB2bCrmAccount,
+        channel: 'B2B',
+        referenceId: orderId,
+        netPaidIDR: totalAmountIDR,
+        redeemPoints: effectiveB2bRedeemPts,
+        timestamp: orderTimestamp,
+      });
+    }
 
     // Event 2, 4, 6 triggers on B2B checkout
     checkAndNotifyLowStockForSkus(
@@ -11667,7 +12868,39 @@ async function startServer() {
           matchingTier.updatedAt = newQc.timestamp;
         }
       }
+
+      // Directed Putaway Slotting Assignment
+      let assignedPutawayCode = String(req.body?.putawayRackBinCode || '').trim();
+      if (!assignedPutawayCode) {
+        const suggestion = computeDirectedPutawaySuggestion({
+          sku: newQc.sku,
+          storeId: newQc.storeId,
+          qty: qcQty || matchingBatch?.currentStock || 1,
+          lotNumber: newQc.batchNumber,
+          storageZone: matchingBatch?.storageZone || matchingTier?.storageType,
+        });
+        assignedPutawayCode = suggestion.recommendedRack?.rackBinCode || '';
+      }
+      if (assignedPutawayCode) {
+        newQc.putawayRackBinCode = assignedPutawayCode;
+        if (matchingBatch) {
+          matchingBatch.rackBinCode = assignedPutawayCode;
+        }
+        if (matchingTier) {
+          matchingTier.rackBinCode = assignedPutawayCode;
+          matchingTier.binLocation = assignedPutawayCode;
+        }
+        const targetRack = warehouseRacks.find(
+          (r) => r.rackBinCode === assignedPutawayCode && r.storeId === newQc.storeId
+        );
+        if (targetRack && !targetRack.assignedSkus.includes(newQc.sku)) {
+          targetRack.assignedSkus.push(newQc.sku);
+          targetRack.updatedAt = newQc.timestamp;
+        }
+      }
     }
+
+    syncWarehouseRackOccupancy();
 
     if (newQc.disposition === 'QUARANTINED' || newQc.disposition === 'REJECTED') {
       emitEnterpriseNotification({
@@ -11692,9 +12925,15 @@ async function startServer() {
       storeId: newQc.storeId,
       shiftId: currentActiveStaffSession.activeShiftId,
       status: 'AUTHORIZED_EXECUTED',
-      metadata: { sku: newQc.sku, disposition: newQc.disposition, action: newQc.actionTaken },
+      metadata: {
+        sku: newQc.sku,
+        disposition: newQc.disposition,
+        action: newQc.actionTaken,
+        putawayRackBinCode: newQc.putawayRackBinCode,
+      },
     });
 
+    scheduleStateSave();
     res.json({ success: true, record: newQc, message: `Quality inspection ${newQc.id} logged with disposition ${newQc.disposition}.` });
   });
 
@@ -12281,8 +13520,13 @@ async function startServer() {
       const openShift = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
       if (openShift) {
         openShift.cashRefundsIDR += totalRefund;
-        openShift.expectedTotalCashInDrawerIDR =
-          openShift.openingFloatIDR + openShift.expectedCashSalesIDR - openShift.cashRefundsIDR;
+        openShift.expectedTotalCashInDrawerIDR = Math.max(
+          0,
+          openShift.openingFloatIDR +
+            openShift.expectedCashSalesIDR -
+            openShift.cashRefundsIDR -
+            (openShift.safeDropsTotalIDR || 0)
+        );
       }
     } else {
       settleEntry = {
@@ -13414,8 +14658,13 @@ async function startServer() {
       const openShift = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
       if (openShift) {
         openShift.cashRefundsIDR += totalCreditNoteIDR;
-        openShift.expectedTotalCashInDrawerIDR =
-          openShift.openingFloatIDR + openShift.expectedCashSalesIDR - openShift.cashRefundsIDR;
+        openShift.expectedTotalCashInDrawerIDR = Math.max(
+          0,
+          openShift.openingFloatIDR +
+            openShift.expectedCashSalesIDR -
+            openShift.cashRefundsIDR -
+            (openShift.safeDropsTotalIDR || 0)
+        );
       }
     } else {
       rmaRevGlBatch.push({
@@ -14155,6 +15404,7 @@ async function startServer() {
       expectedEdcSalesIDR: 0,
       expectedTotalCashInDrawerIDR: Math.max(0, Number(openingFloatIDR) || 0),
       cashRefundsIDR: 0,
+      safeDropsTotalIDR: 0,
     };
 
     posShiftsList.unshift(newShift);
@@ -14675,6 +15925,19 @@ async function startServer() {
         `Subtotal: ${formatCurrencyRp(q.subtotal)} | PPN: ${formatCurrencyRp(q.taxAmount)}`,
         `Item (${qItems.length}): ${qItems.slice(0, 3).map((i) => `${i.productName || i.sku} (${i.quantity} ${i.unit || 'unit'})`).join(', ') || '-'}`,
       ];
+    } else if (docType === 'CRM_CAMPAIGN') {
+      isCustomerFacing = true;
+      docLabel = 'CRM Promo & Restock Offer';
+      docNumber = docId;
+      outletName = 'PT GroceMart Retail Indonesia (Loyalty & Key Accounts)';
+      totalDisplay = 'Member Exclusive';
+      detailRowsHtml = `
+        <tr><td><strong>Recipient</strong></td><td>${escapeHtmlText(recipientName)}</td></tr>
+        <tr><td><strong>Campaign Ref</strong></td><td>${escapeHtmlText(docId)}</td></tr>`;
+      waDetailsLines = [
+        `Program: ${docId}`,
+        customNote ? customNote : 'Penawaran eksklusif Loyalty & Restock GroceMart.',
+      ];
     } else if (docType === 'PR') {
       const pr = purchaseRequests.find((item) => item.id === docId);
       if (!pr) throw new Error(`Purchase Request '${docId}' not found.`);
@@ -14865,6 +16128,29 @@ async function startServer() {
         `Penerima: ${sj.recipientName || '-'} (${sj.recipientAddress || '-'})`,
         `Armada: ${sj.vehicleType || 'Fleet'} ${sj.vehiclePlateNumber || '-'} | Driver: ${sj.driverName || '-'}`,
         `Muatan: ${Number(sj.totalPackages) || 0} koli (${Number(sj.totalWeightKg) || 0} kg) | Suhu: ${sj.coldChainTempCelsius ?? '-'}°C`,
+      ];
+    } else if (docType === 'RECALL_ALERT') {
+      const trace = buildLiveRecallTrace(docId);
+      docLabel = 'BPOM / HACCP Batch Recall Alert';
+      docNumber = trace.lotNumber;
+      outletName = 'GroceMart Food Safety & QA Command';
+      totalDisplay = `${trace.totalRemainingUnits} remaining units frozen`;
+      detailRowsHtml = `
+        <tr><td><strong>Lot / Batch Number</strong></td><td>${escapeHtmlText(trace.lotNumber)}</td></tr>
+        <tr><td><strong>SKU / Product</strong></td><td>${escapeHtmlText(trace.sku)} — ${escapeHtmlText(trace.productName)}</td></tr>
+        <tr><td><strong>Status</strong></td><td>${trace.isQuarantined ? 'QUARANTINED / FROZEN' : 'ACTIVE TRACE'}</td></tr>
+        <tr><td><strong>Affected Outlets</strong></td><td>${escapeHtmlText(trace.currentHoldings.map((h) => `${h.storeName} (${h.currentStock} u)`).join(', ') || 'All outlets checked')}</td></tr>`;
+      lineItemsHtml = trace.currentHoldings
+        .map(
+          (h) =>
+            `<tr><td>${escapeHtmlText(h.batchId)}</td><td>${escapeHtmlText(h.storeName)} (${escapeHtmlText(h.rackBinCode)})</td><td style="text-align:right;">${h.currentStock}</td><td style="text-align:right;">${escapeHtmlText(h.status.toUpperCase())}</td><td style="text-align:right;">${escapeHtmlText(h.expiryDate.slice(0, 10))}</td></tr>`
+        )
+        .join('');
+      waDetailsLines = [
+        `URGENT FOOD SAFETY / BPOM BATCH RECALL ALERT`,
+        `Lot: ${trace.lotNumber} | Produk: ${trace.sku} - ${trace.productName}`,
+        `Status: ${trace.isQuarantined ? 'QUARANTINED & SALES LOCKED' : 'UNDER INVESTIGATION'}`,
+        `Sisa Stok Terdampak: ${trace.totalRemainingUnits} unit | Order B2B: ${trace.downstreamImpact.b2bOrders.length} | Struk POS: ${trace.downstreamImpact.posReceipts.length}`,
       ];
     } else {
       throw new Error(`Unsupported document type '${String(docType)}'.`);
@@ -16559,6 +17845,2464 @@ async function startServer() {
       glVoucherIds,
       message: `Rack Blind Opname ${sheetNumber} committed. Stock & balanced GL (${glVoucherIds.length} vouchers) synchronized.`,
     });
+  });
+
+  // =============================================================
+  // MODULE 1: DIRECTED PUTAWAY & ZONE-AWARE RACK SLOTTING
+  // =============================================================
+  function computeDirectedPutawaySuggestion(params: {
+    sku: string;
+    storeId: string;
+    qty?: number;
+    lotNumber?: string;
+    storageZone?: StorageZoneType | string;
+    category?: string;
+  }): PutawaySuggestionResponse {
+    syncWarehouseRackOccupancy();
+    const inv = inventoryList.find((i) => i.sku === params.sku);
+    const tier = storeInventoryTiers.find(
+      (t) => t.sku === params.sku && t.storeId === params.storeId
+    );
+    const rawZone = String(
+      params.storageZone || tier?.storageType || inv?.storageType || ''
+    ).toLowerCase();
+    const cat = String(params.category || inv?.category || tier?.category || '').toLowerCase();
+
+    let requiredStorageZone: WarehouseRackStorageZone = 'Ambient Dry';
+    if (rawZone.includes('freez') || cat.includes('meat') || cat.includes('seafood') || cat.includes('frozen')) {
+      requiredStorageZone = 'Deep Freeze (-20°C)';
+    } else if (
+      rawZone.includes('chill') ||
+      rawZone.includes('cold') ||
+      cat.includes('produce') ||
+      cat.includes('dairy') ||
+      cat.includes('egg') ||
+      cat.includes('beverage')
+    ) {
+      requiredStorageZone = 'Chilled Walk-In (2°C–4°C)';
+    }
+
+    const reqQty = Math.max(1, Number(params.qty) || 1);
+    const storeRacks = warehouseRacks.filter(
+      (r) =>
+        r.storeId === params.storeId &&
+        r.storageZone !== 'Quarantine Hold Cage'
+    );
+
+    const candidates: PutawayCandidateRack[] = storeRacks.map((r) => {
+      const remainingCapacity = Math.max(0, Number((r.maxCapacity - r.currentOccupancy).toFixed(2)));
+      const batchesInRack = inventoryBatches.filter(
+        (b) =>
+          b.storeId === r.storeId &&
+          b.rackBinCode === r.rackBinCode &&
+          b.currentStock > 0 &&
+          b.status !== 'depleted'
+      );
+      const sameSkuBatches = batchesInRack.filter((b) => b.sku === params.sku);
+      const hasSameLot = Boolean(
+        params.lotNumber && sameSkuBatches.some((b) => b.lotNumber === params.lotNumber)
+      );
+      const hasSameSkuDifferentLot = Boolean(
+        params.lotNumber &&
+          sameSkuBatches.some((b) => b.lotNumber !== params.lotNumber)
+      );
+
+      let score = 0;
+      const reasons: string[] = [];
+
+      if (r.storageZone === requiredStorageZone) {
+        score += 100;
+        reasons.push(`Zone match (${requiredStorageZone})`);
+      } else {
+        score -= 120;
+        reasons.push(`Zone mismatch (${r.storageZone})`);
+      }
+
+      if (remainingCapacity >= reqQty) {
+        score += 40;
+        reasons.push(`${remainingCapacity} units free`);
+      } else if (remainingCapacity > 0) {
+        score += 5;
+        reasons.push(`Partial capacity (${remainingCapacity} < ${reqQty})`);
+      } else {
+        score -= 80;
+        reasons.push('Rack full');
+      }
+
+      if (hasSameLot) {
+        score += 35;
+        reasons.push('Consolidates identical lot');
+      } else if (hasSameSkuDifferentLot) {
+        score -= 45;
+        reasons.push('Avoids FEFO lot mixing');
+      } else if (batchesInRack.length === 0) {
+        score += 20;
+        reasons.push('Clean empty bin');
+      }
+
+      if ((r.assignedSkus || []).includes(params.sku) && !hasSameSkuDifferentLot) {
+        score += 15;
+        reasons.push('Home SKU slot');
+      }
+
+      return {
+        rackBinCode: r.rackBinCode,
+        storeId: r.storeId,
+        storageZone: r.storageZone,
+        rotationPolicy: r.rotationPolicy,
+        maxCapacity: r.maxCapacity,
+        currentOccupancy: r.currentOccupancy,
+        remainingCapacity,
+        score,
+        reason: reasons.join(' · '),
+        hasSameSkuDifferentLot,
+        hasSameLot,
+      };
+    });
+
+    candidates.sort((a, b) => b.score - a.score);
+    const recommendedRack = candidates[0] || null;
+    const alternatives = candidates.slice(1, 5);
+
+    return {
+      sku: params.sku,
+      storeId: params.storeId,
+      lotNumber: params.lotNumber,
+      requiredStorageZone,
+      recommendedRack,
+      alternatives,
+      reason: recommendedRack
+        ? `${recommendedRack.rackBinCode} (${recommendedRack.reason})`
+        : `No configured non-quarantine racks found for ${params.storeId}`,
+    };
+  }
+
+  app.post('/api/admin/qc/putaway-suggestion', (req: Request, res: Response) => {
+    const { sku, storeId = 'store-jkt-senopati', qty = 1, lotNumber, storageZone, category } =
+      req.body || {};
+    if (!sku) {
+      return res.status(400).json({ error: 'sku is required for putaway recommendation.' });
+    }
+    const suggestion = computeDirectedPutawaySuggestion({
+      sku: String(sku),
+      storeId: String(storeId),
+      qty: Number(qty) || 1,
+      lotNumber: lotNumber ? String(lotNumber) : undefined,
+      storageZone,
+      category,
+    });
+    res.json(suggestion);
+  });
+
+  // =============================================================
+  // MODULE 2: CROSS-DOCKING DIRECT FULFILLMENT FLOW
+  // =============================================================
+  app.post('/api/admin/procurement/cross-dock', (req: Request, res: Response) => {
+    const {
+      poId,
+      deliveryNoteNumber = `XDOCK-SJ-${Date.now().toString().slice(-6)}`,
+      receivedBy,
+      driverName = 'Bambang Supriyanto',
+      vehiclePlateNumber = 'B 9142 SRO',
+      receiverNotes,
+      items,
+    } = (req.body || {}) as CrossDockRequest;
+
+    const po = purchaseOrders.find((p) => p.id === poId);
+    if (!po) {
+      return res.status(404).json({ error: 'Purchase Order not found.' });
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Cross-dock items array is required.' });
+    }
+
+    const actorName = receivedBy || getEffectiveOperatorName(req);
+    const timestamp = new Date().toISOString();
+
+    // Validate allocation quantities against PO open backorders
+    const lineAllocTotals: Array<{
+      poItem: PurchaseOrderItem;
+      totalQty: number;
+      batchNumber: string;
+      expiryDate: string;
+      tempCheckCelsius?: number;
+      allocations: Array<{ targetStoreId: string; targetStoreName: string; qty: number }>;
+    }> = [];
+
+    for (const itemIn of items) {
+      const poItem = po.items.find((pi) => pi.sku === itemIn.sku);
+      if (!poItem) {
+        return res.status(400).json({ error: `SKU ${itemIn.sku} is not on PO ${po.id}.` });
+      }
+      const validAllocs = (itemIn.allocations || [])
+        .map((a) => {
+          const outlet = resolveOutletFromCodeOrId(a.targetStoreId);
+          return {
+            targetStoreId: outlet?.storeId || a.targetStoreId,
+            targetStoreName: a.targetStoreName || outlet?.storeName || a.targetStoreId,
+            qty: Number(a.qty) || 0,
+          };
+        })
+        .filter((a) => a.qty > 0 && a.targetStoreId !== po.storeId);
+
+      const totalQty = Number(validAllocs.reduce((s, a) => s + a.qty, 0).toFixed(2));
+      if (totalQty <= 0) continue;
+      if (totalQty > poItem.remainingBackorder) {
+        return res.status(400).json({
+          error: `Cross-dock qty (${totalQty}) exceeds remaining backorder (${poItem.remainingBackorder}) for ${poItem.sku}.`,
+        });
+      }
+
+      lineAllocTotals.push({
+        poItem,
+        totalQty,
+        batchNumber: itemIn.batchNumber || `XDK-${Date.now().toString().slice(-6)}`,
+        expiryDate: itemIn.expiryDate || new Date(Date.now() + 86400000 * 14).toISOString(),
+        tempCheckCelsius: itemIn.tempCheckCelsius,
+        allocations: validAllocs,
+      });
+    }
+
+    if (lineAllocTotals.length === 0) {
+      return res.status(400).json({ error: 'No valid branch cross-dock allocations (> 0 qty to another branch) provided.' });
+    }
+
+    let ownedCostIDR = 0;
+    const grItems: GoodsReceiptRecord['items'] = [];
+    const createdTransfers: StockTransferRecord[] = [];
+    const createdSuratJalans: SuratJalanDocument[] = [];
+    const branchBundles = new Map<
+      string,
+      {
+        targetStoreName: string;
+        items: SuratJalanDocument['items'];
+      }
+    >();
+
+    for (const entry of lineAllocTotals) {
+      const { poItem, totalQty, batchNumber, expiryDate, tempCheckCelsius, allocations } = entry;
+      const catalogItem = inventoryList.find((i) => i.sku === poItem.sku);
+      const isConsignmentItem = Boolean(poItem.isConsignment || catalogItem?.isConsignment);
+
+      poItem.receivedQuantity += totalQty;
+      poItem.remainingBackorder = Math.max(0, poItem.orderedQuantity - poItem.receivedQuantity);
+
+      if (!isConsignmentItem) {
+        ownedCostIDR += Math.round(totalQty * poItem.unitCost);
+      }
+      if (catalogItem) {
+        catalogItem.incomingStock = Math.max(0, catalogItem.incomingStock - totalQty);
+      }
+      const sourceTier = storeInventoryTiers.find(
+        (t) => t.sku === poItem.sku && t.storeId === po.storeId
+      );
+      if (sourceTier) {
+        sourceTier.incomingStock = Math.max(0, sourceTier.incomingStock - totalQty);
+        sourceTier.updatedAt = timestamp;
+      }
+
+      grItems.push({
+        sku: poItem.sku,
+        productName: poItem.productName,
+        quantityOrdered: poItem.orderedQuantity,
+        quantityReceived: totalQty,
+        batchNumber,
+        expiryDate,
+        qualityCondition: 'Cold-Chain Verified',
+        tempCheckCelsius,
+        isConsignment: isConsignmentItem,
+      });
+
+      for (const alloc of allocations) {
+        let destTier = storeInventoryTiers.find(
+          (t) => t.sku === poItem.sku && t.storeId === alloc.targetStoreId
+        );
+        if (!destTier) {
+          const destZone = warehouseZones.find((z) => z.storeId === alloc.targetStoreId);
+          destTier = {
+            id: `STK-XDK-${Date.now().toString().slice(-5)}-${Math.floor(Math.random() * 99)}`,
+            sku: poItem.sku,
+            productId: catalogItem?.productId || poItem.sku,
+            productName: poItem.productName,
+            category: catalogItem?.category || 'produce',
+            storeId: alloc.targetStoreId,
+            storeName: alloc.targetStoreName,
+            warehouseZoneId: destZone?.id || `WH-${alloc.targetStoreId.toUpperCase()}`,
+            storageType: sourceTier?.storageType || catalogItem?.storageType || 'cold_chilled',
+            physicalStock: 0,
+            availableStock: 0,
+            reservedStock: 0,
+            incomingStock: 0,
+            minimumThreshold: 10,
+            safetyStockBuffer: 5,
+            maxCapacity: 120,
+            reorderQuantity: 30,
+            unitCost: poItem.unitCost,
+            sellingPrice: catalogItem?.sellingPrice || Math.round(poItem.unitCost * 1.45),
+            unit: catalogItem?.unit || 'pack',
+            supplierId: po.supplierId || 'SUP-XDK',
+            supplierName: po.supplierName,
+            lastRestockedAt: timestamp,
+            updatedAt: timestamp,
+            isConsignment: isConsignmentItem,
+            consignmentSupplier: isConsignmentItem ? po.supplierName : undefined,
+            consignmentCommissionPercent: catalogItem?.consignmentCommissionPercent,
+          };
+          storeInventoryTiers.push(destTier);
+        }
+
+        destTier.incomingStock = (destTier.incomingStock || 0) + alloc.qty;
+        destTier.updatedAt = timestamp;
+
+        const trfId = `TRF-XDK-${(stockTransfersList.length + 1).toString().padStart(3, '0')}`;
+        const sjSeq = (suratJalanList.length + branchBundles.size + 1).toString().padStart(4, '0');
+        const existingBundle = branchBundles.get(alloc.targetStoreId);
+        const sjNumber = existingBundle
+          ? createdSuratJalans.find((s) => s.recipientName === alloc.targetStoreName)?.documentNumber ||
+            `SJ/XDK/2026/${sjSeq}`
+          : `SJ/XDK/2026/${sjSeq}`;
+
+        if (!existingBundle) {
+          branchBundles.set(alloc.targetStoreId, {
+            targetStoreName: alloc.targetStoreName,
+            items: [],
+          });
+        }
+        branchBundles.get(alloc.targetStoreId)!.items.push({
+          sku: poItem.sku,
+          productName: poItem.productName,
+          batchNumber,
+          quantity: alloc.qty,
+          unit: catalogItem?.unit || 'pack',
+          packagingType: 'Plastic Crate',
+          condition: 'Cold-Chilled OK',
+          notes: `Cross-Dock Direct · Exp ${expiryDate.slice(0, 10)}`,
+        });
+
+        inTransitTransferLots.set(trfId, [
+          {
+            lotNumber: batchNumber,
+            expiryDate,
+            allocatedQty: alloc.qty,
+            unitCost: poItem.unitCost,
+            storageZone: destTier.storageType,
+            sellingPrice: destTier.sellingPrice,
+            supplierName: po.supplierName,
+          },
+        ]);
+
+        const trfRecord: StockTransferRecord = {
+          id: trfId,
+          timestamp,
+          sku: poItem.sku,
+          productName: poItem.productName,
+          sourceStoreId: po.storeId,
+          sourceStoreName: po.storeName,
+          destinationStoreId: alloc.targetStoreId,
+          destinationStoreName: alloc.targetStoreName,
+          quantity: alloc.qty,
+          unitCost: poItem.unitCost,
+          totalTransferValue: Math.round(alloc.qty * poItem.unitCost),
+          transferredBy: actorName,
+          status: 'in_transit',
+          suratJalanNumber: sjNumber,
+          notes: `Cross-Dock Direct from PO #${po.id} (${po.supplierName}) — Zero CDC shelf storage`,
+        };
+        stockTransfersList.unshift(trfRecord);
+        createdTransfers.push(trfRecord);
+      }
+    }
+
+    for (const [targetStoreId, bundle] of branchBundles.entries()) {
+      const sjSeq = (suratJalanList.length + 1).toString().padStart(4, '0');
+      const matchingTrf = createdTransfers.find((t) => t.destinationStoreId === targetStoreId);
+      const docNumber = matchingTrf?.suratJalanNumber || `SJ/XDK/2026/${sjSeq}`;
+      const destSched = storeSchedules.find((s) => s.storeId === targetStoreId);
+      const sjDoc: SuratJalanDocument = {
+        id: `SJ-XDK-${sjSeq}`,
+        documentNumber: docNumber,
+        issueDate: timestamp.split('T')[0],
+        senderStoreId: po.storeId,
+        senderStoreName: `${po.storeName} (Cross-Dock Bay)`,
+        senderAddress: 'Jl. Senopati No. 42, Jakarta Selatan',
+        senderPhone: '+62 21 720 8891',
+        recipientName: bundle.targetStoreName,
+        recipientAddress: destSched?.district ? `${destSched.district}, ${destSched.city}` : `${bundle.targetStoreName} Receiving Dock`,
+        recipientPhone: '+62 21 500 9912',
+        carrierName: 'GroceMart Cross-Dock Reefer Fleet',
+        vehiclePlateNumber,
+        vehicleType: 'Refrigerated Van 1.5T',
+        driverName,
+        driverPhone: '+62 812 8899 7711',
+        coldChainTempCelsius: 3.2,
+        specialHandlingInstructions: `Cross-Dock Direct Dispatch from PO #${po.id}. Bypassed CDC storage.`,
+        items: bundle.items,
+        totalPackages: bundle.items.reduce((s, it) => s + it.quantity, 0),
+        totalWeightKg: Math.max(10, bundle.items.reduce((s, it) => s + it.quantity, 0) * 2),
+        status: 'in_transit',
+        senderSignatureName: actorName,
+        driverSignatureName: driverName,
+      };
+      suratJalanList.unshift(sjDoc);
+      createdSuratJalans.push(sjDoc);
+    }
+
+    const totalRemaining = po.items.reduce((s, it) => s + it.remainingBackorder, 0);
+    const isPartial = totalRemaining > 0;
+    po.status = isPartial ? 'Partially Received' : 'Completed';
+    po.actualDeliveryDate = timestamp.split('T')[0];
+
+    const grId = `GR-XDK-${(goodsReceipts.length + 1).toString().padStart(3, '0')}`;
+    const glVoucherIds: string[] = [];
+    const roundedOwned = roundIDR(ownedCostIDR);
+    if (roundedOwned > 0) {
+      const g1 = `GLE-XDK-${Date.now().toString().slice(-6)}-1`;
+      const g2 = `GLE-XDK-${Date.now().toString().slice(-6)}-2`;
+      glVoucherIds.push(g1, g2);
+      commitBalancedGlBatch(
+        [
+          {
+            id: g1,
+            timestamp,
+            storeId: po.storeId,
+            storeName: po.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset (In-Transit Cross-Dock)',
+            category: 'Asset',
+            debit: roundedOwned,
+            credit: 0,
+            referenceType: 'CROSS_DOCK',
+            referenceId: grId,
+            description: `Cross-Dock Goods Receipt ${grId} for PO #${po.id} -> ${createdTransfers.length} branch transfer(s)`,
+          },
+          {
+            id: g2,
+            timestamp,
+            storeId: po.storeId,
+            storeName: po.storeName,
+            accountCode: '2010',
+            accountName: 'Trade Accounts Payable (Vendors)',
+            category: 'Liability',
+            debit: 0,
+            credit: roundedOwned,
+            referenceType: 'CROSS_DOCK',
+            referenceId: grId,
+            description: `Accounts Payable accrued for Cross-Dock PO #${po.id} (${po.supplierName})`,
+          },
+        ],
+        true
+      );
+    }
+
+    const newGr: GoodsReceiptRecord = {
+      id: grId,
+      poId: po.id,
+      storeId: po.storeId,
+      storeName: po.storeName,
+      warehouseZoneId: 'CROSS-DOCK-BAY',
+      deliveryNoteNumber,
+      vendorName: po.supplierName,
+      receivedAt: timestamp,
+      receivedBy: actorName,
+      isPartial,
+      items: grItems,
+      receiverNotes:
+        receiverNotes ||
+        `Cross-Dock Direct Fulfillment: ${createdTransfers.length} branch transfer(s) dispatched immediately without CDC shelf putaway.`,
+      glEntryId: glVoucherIds[0],
+    };
+    po.goodsReceiptIds = po.goodsReceiptIds || [];
+    po.goodsReceiptIds.push(grId);
+    goodsReceipts.unshift(newGr);
+
+    emitEnterpriseNotification({
+      dedupeKey: `CROSS_DOCK:${grId}`,
+      category: 'LOGISTICS',
+      severity: 'INFO',
+      title: `Cross-Dock Dispatched (${grId})`,
+      message: `PO #${po.id} cross-docked directly to ${branchBundles.size} branch(es) (${createdTransfers.length} in-transit transfers).`,
+      metadataLabel: `${grId} • ${createdSuratJalans.map((s) => s.documentNumber).join(', ')}`,
+      targetTab: 'transfers',
+    });
+
+    scheduleStateSave();
+    res.json({
+      success: true,
+      goodsReceipt: newGr,
+      transfers: createdTransfers,
+      suratJalans: createdSuratJalans,
+      glVoucherIds,
+      message: `Cross-Dock ${grId} executed: ${createdTransfers.length} branch transfer(s) & ${createdSuratJalans.length} Surat Jalan dispatched.`,
+    });
+  });
+
+  // =============================================================
+  // MODULE 3: WAREHOUSE REPACKING (BREAK-BULK) & BUNDLING ASSEMBLY
+  // =============================================================
+  app.post('/api/admin/inventory/repack-bundle', (req: Request, res: Response) => {
+    const body = (req.body || {}) as RepackBundleRequest;
+    const mode = body.mode;
+    const outlet = resolveOutletFromCodeOrId(body.storeId || 'store-jkt-senopati');
+    if (!outlet) {
+      return res.status(400).json({ error: `Invalid outlet '${body.storeId}'.` });
+    }
+    if (mode !== 'REPACK' && mode !== 'BUNDLE') {
+      return res.status(400).json({ error: "mode must be 'REPACK' or 'BUNDLE'." });
+    }
+
+    const scope = resolveRequestBranchScope(req);
+    if (
+      scope.isBranchScoped &&
+      scope.storeId !== 'ALL' &&
+      scope.storeId !== 'CONSOLIDATED' &&
+      outlet.storeId !== scope.storeId
+    ) {
+      return res.status(403).json({
+        error: `Branch-scoped operator cannot run repack/bundle for '${outlet.storeId}'.`,
+      });
+    }
+
+    const actorName = getEffectiveOperatorName(req);
+    const timestamp = new Date().toISOString();
+    const glVoucherIds: string[] = [];
+
+    if (mode === 'REPACK') {
+      const sourceSku = String(body.sourceSku || '').trim();
+      const sourceQty = Number(body.sourceQty);
+      const targetSku = String(body.targetSku || '').trim();
+      const targetQtyProduced = Number(body.targetQtyProduced);
+      const packagingFeeIDR = Math.max(0, roundIDR(Number(body.packagingFeeIDR) || 0));
+
+      if (!sourceSku || !targetSku || !Number.isFinite(sourceQty) || sourceQty <= 0 || !Number.isFinite(targetQtyProduced) || targetQtyProduced <= 0) {
+        return res.status(400).json({
+          error: 'sourceSku, targetSku, positive sourceQty, and positive targetQtyProduced are required.',
+        });
+      }
+
+      const atpCheck = getSellableNonExpiredAtpStock(sourceSku, outlet.storeId);
+      if (sourceQty > atpCheck.effectiveAtp) {
+        return res.status(400).json({
+          error: `Insufficient non-expired ATP stock for ${sourceSku} at ${outlet.storeName}: requested ${sourceQty}, available ${atpCheck.effectiveAtp}.`,
+        });
+      }
+
+      const sourceInv = inventoryList.find((i) => i.sku === sourceSku);
+      const sourceTier = storeInventoryTiers.find(
+        (t) => t.sku === sourceSku && t.storeId === outlet.storeId
+      );
+      const fallbackCost = sourceTier?.unitCost || sourceInv?.wacUnitCost || sourceInv?.unitCost || 15000;
+      const deduction = deductBatchesByStrategy(sourceSku, sourceQty, outlet.storeId, fallbackCost, atpCheck.hasBatchTracking);
+      if (deduction.insufficientStock) {
+        return res.status(400).json({
+          error: `Insufficient eligible batch stock for ${sourceSku}: available ${deduction.availableSellableQty}.`,
+        });
+      }
+
+      if (sourceTier) {
+        sourceTier.physicalStock = Math.max(0, Number((sourceTier.physicalStock - sourceQty).toFixed(2)));
+        sourceTier.reservedStock = Math.min(sourceTier.reservedStock, sourceTier.physicalStock);
+        sourceTier.availableStock = Math.max(0, Number((sourceTier.physicalStock - sourceTier.reservedStock).toFixed(2)));
+        sourceTier.totalValuation = Math.round(sourceTier.physicalStock * sourceTier.unitCost);
+        sourceTier.updatedAt = timestamp;
+      }
+      if (sourceInv) {
+        sourceInv.currentStock = Math.max(0, Number((sourceInv.currentStock - sourceQty).toFixed(2)));
+        sourceInv.stockLevel = sourceInv.currentStock;
+      }
+
+      const parentBatch = deduction.allocations[0]
+        ? inventoryBatches.find((b) => b.batchId === deduction.allocations[0].batchId)
+        : undefined;
+      const totalSourceCogsIDR = roundIDR(deduction.totalCogs);
+      const totalNewInventoryCostIDR = totalSourceCogsIDR + packagingFeeIDR;
+      const unitCostIDR = Math.round(totalNewInventoryCostIDR / targetQtyProduced);
+      const targetName = String(body.targetName || `${sourceInv?.productName || sourceSku} (Repacked)`).trim();
+      const targetUnit = String(body.targetUnit || 'pack').trim();
+      const targetSellingPrice =
+        Number(body.targetSellingPriceIDR) > 0
+          ? roundIDR(Number(body.targetSellingPriceIDR))
+          : Math.round(unitCostIDR * 1.45);
+      const expiryIso =
+        parentBatch?.expiryDate ||
+        deduction.allocations[0]?.expiryDate ||
+        new Date(Date.now() + 86400000 * 14).toISOString();
+      const daysUntilExpiry = Math.max(
+        1,
+        Math.ceil((new Date(expiryIso).getTime() - Date.now()) / 86400000)
+      );
+      const storageZone: StorageZoneType =
+        parentBatch?.storageZone || sourceTier?.storageType || sourceInv?.storageType || 'cold_chilled';
+      const rackSuggestion = !body.targetRackBinCode
+        ? computeDirectedPutawaySuggestion({
+            sku: targetSku,
+            storeId: outlet.storeId,
+            qty: targetQtyProduced,
+            storageZone,
+          })
+        : null;
+      const targetRack =
+        String(body.targetRackBinCode || '').trim() ||
+        rackSuggestion?.recommendedRack?.rackBinCode ||
+        parentBatch?.rackBinCode ||
+        'SEN-CHL-R01-B01';
+
+      // Upsert Target Catalog SKU & Tier
+      let targetInv = inventoryList.find((i) => i.sku === targetSku);
+      if (!targetInv) {
+        const prodId = `prod-rpk-${Date.now().toString().slice(-5)}`;
+        targetInv = {
+          sku: targetSku,
+          productId: prodId,
+          productName: targetName,
+          name: targetName,
+          barcode: targetSku,
+          category: sourceInv?.category || 'produce',
+          currentStock: targetQtyProduced,
+          stockLevel: targetQtyProduced,
+          minimumThreshold: 8,
+          unitCost: unitCostIDR,
+          wacUnitCost: unitCostIDR,
+          sellingPrice: targetSellingPrice,
+          unit: targetUnit,
+          supplierId: sourceInv?.supplierId || 'INTERNAL-REPACK',
+          supplierName: `Internal Repack (${sourceSku})`,
+          lastRestockedAt: timestamp,
+          incomingStock: 0,
+          outgoingStock: 0,
+          reorderQuantity: 20,
+          valuationMethod: 'FIFO',
+          storageType: storageZone,
+          removalStrategy: 'FEFO',
+          salesChannel: 'B2C',
+        };
+        inventoryList.push(targetInv);
+        if (!PRODUCTS.some((p) => p.id === prodId)) {
+          PRODUCTS.push({
+            id: prodId,
+            name: targetName,
+            category: (sourceInv?.category as any) || 'produce',
+            categoryLabel: sourceInv?.category || 'Produce & Fresh',
+            price: targetSellingPrice,
+            unit: targetUnit,
+            origin: outlet.storeName,
+            stock: targetQtyProduced,
+            image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80',
+            fallbackGradient: 'from-emerald-900/20 to-teal-900/20',
+            description: `Repacked retail unit from ${sourceSku}.`,
+            rating: 4.8,
+            reviewCount: 0,
+            sku: targetSku,
+            storageZone,
+            salesChannel: 'B2C',
+          });
+        }
+      } else {
+        targetInv.currentStock = Number((targetInv.currentStock + targetQtyProduced).toFixed(2));
+        targetInv.stockLevel = targetInv.currentStock;
+        targetInv.unitCost = unitCostIDR;
+        targetInv.wacUnitCost = unitCostIDR;
+        targetInv.lastRestockedAt = timestamp;
+      }
+
+      let targetTier = storeInventoryTiers.find(
+        (t) => t.sku === targetSku && t.storeId === outlet.storeId
+      );
+      if (!targetTier) {
+        targetTier = {
+          id: `STK-RPK-${Date.now().toString().slice(-5)}`,
+          sku: targetSku,
+          productId: targetInv.productId,
+          productName: targetName,
+          category: targetInv.category,
+          storeId: outlet.storeId,
+          storeName: outlet.storeName,
+          warehouseZoneId: inferWarehouseZoneId(outlet.storeId, storageZone),
+          storageType: storageZone,
+          physicalStock: targetQtyProduced,
+          availableStock: targetQtyProduced,
+          reservedStock: 0,
+          incomingStock: 0,
+          minimumThreshold: 8,
+          safetyStockBuffer: 3,
+          maxCapacity: 150,
+          reorderQuantity: 20,
+          unitCost: unitCostIDR,
+          sellingPrice: targetSellingPrice,
+          totalValuation: Math.round(targetQtyProduced * unitCostIDR),
+          unit: targetUnit,
+          supplierId: targetInv.supplierId,
+          supplierName: targetInv.supplierName,
+          lastRestockedAt: timestamp,
+          updatedAt: timestamp,
+          binLocation: targetRack,
+          rackBinCode: targetRack,
+          removalStrategy: 'FEFO',
+          rotationStrategy: 'FEFO',
+        };
+        storeInventoryTiers.push(targetTier);
+      } else {
+        targetTier.physicalStock = Number((targetTier.physicalStock + targetQtyProduced).toFixed(2));
+        targetTier.availableStock = Math.max(0, Number((targetTier.physicalStock - targetTier.reservedStock).toFixed(2)));
+        targetTier.unitCost = unitCostIDR;
+        targetTier.totalValuation = Math.round(targetTier.physicalStock * unitCostIDR);
+        targetTier.rackBinCode = targetRack;
+        targetTier.binLocation = targetRack;
+        targetTier.updatedAt = timestamp;
+      }
+
+      const lotNumber = `LOT-RPK-${Date.now().toString().slice(-6)}`;
+      const producedBatch: InventoryBatch = {
+        batchId: `BAT-RPK-${Date.now().toString().slice(-5)}-${inventoryBatches.length + 1}`,
+        sku: targetSku,
+        productName: targetName,
+        storeId: outlet.storeId,
+        storeName: outlet.storeName,
+        warehouseZoneId: targetTier.warehouseZoneId,
+        lotNumber,
+        initialQuantity: targetQtyProduced,
+        currentStock: targetQtyProduced,
+        unitCost: unitCostIDR,
+        sellingPrice: targetSellingPrice,
+        receivedDate: timestamp,
+        expiryDate: expiryIso,
+        daysUntilExpiry,
+        status: daysUntilExpiry <= 2 ? 'critical' : daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
+        storageZone,
+        supplierName: `Repacked from ${sourceSku} (Lot ${parentBatch?.lotNumber || 'N/A'})`,
+        rackBinCode: targetRack,
+        rotationStrategy: 'FEFO',
+        notes: body.notes || `Break-bulk repack ${sourceQty}x ${sourceSku} -> ${targetQtyProduced}x ${targetSku}`,
+      };
+      inventoryBatches.unshift(producedBatch);
+
+      if (!skuTaxRulesList.some((r) => r.sku === targetSku)) {
+        const taxCat = inferDefaultTaxCategory(targetInv.category, targetName);
+        skuTaxRulesList.push({
+          sku: targetSku,
+          productName: targetName,
+          category: targetInv.category,
+          taxCategory: taxCat,
+          taxRatePercent: getTaxRateForCategory(taxCat, 11),
+          b2cTaxInclusive: true,
+          b2bTaxExclusive: true,
+          updatedAt: timestamp,
+        });
+      }
+
+      // Balanced GL Reclassification (DR 1040 New Retail SKU / CR 1040 Bulk SKU + optional packaging)
+      const g1 = `GLE-RPK-${Date.now().toString().slice(-6)}-1`;
+      const g2 = `GLE-RPK-${Date.now().toString().slice(-6)}-2`;
+      glVoucherIds.push(g1, g2);
+      const glBatch: GeneralLedgerEntry[] = [
+        {
+          id: g1,
+          timestamp,
+          storeId: outlet.storeId,
+          storeName: outlet.storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset (Repacked SKU)',
+          category: 'Asset',
+          debit: totalNewInventoryCostIDR,
+          credit: 0,
+          referenceType: 'REPACK_BUNDLE',
+          referenceId: lotNumber,
+          description: `Repack produced ${targetQtyProduced}x ${targetSku} (inherited expiry ${expiryIso.slice(0, 10)}) by ${actorName}`,
+        },
+        {
+          id: g2,
+          timestamp,
+          storeId: outlet.storeId,
+          storeName: outlet.storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset (Source Bulk Consumed)',
+          category: 'Asset',
+          debit: 0,
+          credit: totalSourceCogsIDR,
+          referenceType: 'REPACK_BUNDLE',
+          referenceId: lotNumber,
+          description: `Bulk source ${sourceQty}x ${sourceSku} consumed into repack ${lotNumber}`,
+        },
+      ];
+      if (packagingFeeIDR > 0) {
+        const g3 = `GLE-RPK-${Date.now().toString().slice(-6)}-3`;
+        glVoucherIds.push(g3);
+        glBatch.push({
+          id: g3,
+          timestamp,
+          storeId: outlet.storeId,
+          storeName: outlet.storeName,
+          accountCode: '1010',
+          accountName: 'Cash / Packaging Supplies Clearing',
+          category: 'Asset',
+          debit: 0,
+          credit: packagingFeeIDR,
+          referenceType: 'REPACK_BUNDLE',
+          referenceId: lotNumber,
+          description: `Packaging materials absorbed for repack ${lotNumber}`,
+        });
+      }
+      commitBalancedGlBatch(glBatch, true);
+
+      syncWarehouseRackOccupancy();
+      scheduleStateSave();
+      return res.json({
+        success: true,
+        mode: 'REPACK',
+        producedSku: targetSku,
+        producedBatch,
+        totalSourceCogsIDR,
+        unitCostIDR,
+        glVoucherIds,
+        message: `Repacked ${sourceQty}x ${sourceSku} into ${targetQtyProduced}x ${targetSku} (Unit Cost Rp ${unitCostIDR.toLocaleString('id-ID')}, Exp ${expiryIso.slice(0, 10)}).`,
+      });
+    }
+
+    // BUNDLE / HAMPERS ASSEMBLY
+    const bundleSku = String(body.bundleSku || '').trim();
+    const bundleName = String(body.bundleName || '').trim();
+    const bundleQty = Number(body.bundleQty);
+    const components = Array.isArray(body.components) ? body.components : [];
+
+    if (!bundleSku || !bundleName || !Number.isFinite(bundleQty) || bundleQty <= 0 || components.length < 2) {
+      return res.status(400).json({
+        error: 'bundleSku, bundleName, positive bundleQty, and at least 2 components are required.',
+      });
+    }
+
+    // Atomic ATP Pre-Check for ALL components before mutating anything
+    for (const comp of components) {
+      const compSku = String(comp.sku || '').trim();
+      const perBundle = Number(comp.qtyPerBundle);
+      if (!compSku || !Number.isFinite(perBundle) || perBundle <= 0) {
+        return res.status(400).json({ error: `Invalid bundle component (${compSku || 'unknown'}).` });
+      }
+      const reqTotal = Number((perBundle * bundleQty).toFixed(2));
+      const atpCheck = getSellableNonExpiredAtpStock(compSku, outlet.storeId);
+      if (reqTotal > atpCheck.effectiveAtp) {
+        return res.status(400).json({
+          error: `Insufficient non-expired ATP for component ${compSku}: need ${reqTotal}, available ${atpCheck.effectiveAtp}.`,
+        });
+      }
+    }
+
+    let totalComponentCogsIDR = 0;
+    let earliestExpiryMs = Infinity;
+    let earliestExpiryIso = new Date(Date.now() + 86400000 * 10).toISOString();
+    const glEntries: GeneralLedgerEntry[] = [];
+    const lotNumber = `LOT-BND-${Date.now().toString().slice(-6)}`;
+
+    for (const comp of components) {
+      const reqTotal = Number((Number(comp.qtyPerBundle) * bundleQty).toFixed(2));
+      const compInv = inventoryList.find((i) => i.sku === comp.sku);
+      const compTier = storeInventoryTiers.find(
+        (t) => t.sku === comp.sku && t.storeId === outlet.storeId
+      );
+      const fallbackCost = compTier?.unitCost || compInv?.wacUnitCost || compInv?.unitCost || 15000;
+      const atpCheck = getSellableNonExpiredAtpStock(comp.sku, outlet.storeId);
+      const deduction = deductBatchesByStrategy(comp.sku, reqTotal, outlet.storeId, fallbackCost, atpCheck.hasBatchTracking);
+      const compCogs = roundIDR(deduction.totalCogs);
+      totalComponentCogsIDR += compCogs;
+
+      deduction.allocations.forEach((al) => {
+        const ms = new Date(al.expiryDate).getTime();
+        if (Number.isFinite(ms) && ms < earliestExpiryMs) {
+          earliestExpiryMs = ms;
+          earliestExpiryIso = al.expiryDate;
+        }
+      });
+
+      if (compTier) {
+        compTier.physicalStock = Math.max(0, Number((compTier.physicalStock - reqTotal).toFixed(2)));
+        compTier.reservedStock = Math.min(compTier.reservedStock, compTier.physicalStock);
+        compTier.availableStock = Math.max(0, Number((compTier.physicalStock - compTier.reservedStock).toFixed(2)));
+        compTier.totalValuation = Math.round(compTier.physicalStock * compTier.unitCost);
+        compTier.updatedAt = timestamp;
+      }
+      if (compInv) {
+        compInv.currentStock = Math.max(0, Number((compInv.currentStock - reqTotal).toFixed(2)));
+        compInv.stockLevel = compInv.currentStock;
+      }
+
+      const gCompId = `GLE-BND-${Date.now().toString().slice(-6)}-C${glEntries.length + 1}`;
+      glVoucherIds.push(gCompId);
+      glEntries.push({
+        id: gCompId,
+        timestamp,
+        storeId: outlet.storeId,
+        storeName: outlet.storeName,
+        accountCode: '1040',
+        accountName: `Merchandise Inventory Asset (Component ${comp.sku})`,
+        category: 'Asset',
+        debit: 0,
+        credit: compCogs,
+        referenceType: 'REPACK_BUNDLE',
+        referenceId: lotNumber,
+        description: `Consumed ${reqTotal}x ${comp.sku} for Bundle ${bundleSku} (${lotNumber})`,
+      });
+    }
+
+    const bundleUnitCostIDR = Math.round(totalComponentCogsIDR / bundleQty);
+    const bundleSellingPrice =
+      Number(body.bundleSellingPriceIDR) > 0
+        ? roundIDR(Number(body.bundleSellingPriceIDR))
+        : Math.round(bundleUnitCostIDR * 1.35);
+    const bundleUnit = String(body.bundleUnit || 'hamper').trim();
+    const bundleCat = String(body.bundleCategory || 'pantry').trim();
+    const daysUntilExpiry = Math.max(
+      1,
+      Math.ceil((new Date(earliestExpiryIso).getTime() - Date.now()) / 86400000)
+    );
+    const storageZone: StorageZoneType = 'ambient';
+    const rackSuggestion = !body.bundleRackBinCode
+      ? computeDirectedPutawaySuggestion({
+          sku: bundleSku,
+          storeId: outlet.storeId,
+          qty: bundleQty,
+          storageZone,
+        })
+      : null;
+    const bundleRack =
+      String(body.bundleRackBinCode || '').trim() ||
+      rackSuggestion?.recommendedRack?.rackBinCode ||
+      'SEN-AMB-R01-B01';
+
+    let bundleInv = inventoryList.find((i) => i.sku === bundleSku);
+    if (!bundleInv) {
+      const prodId = `prod-bnd-${Date.now().toString().slice(-5)}`;
+      bundleInv = {
+        sku: bundleSku,
+        productId: prodId,
+        productName: bundleName,
+        name: bundleName,
+        barcode: bundleSku,
+        category: bundleCat,
+        currentStock: bundleQty,
+        stockLevel: bundleQty,
+        minimumThreshold: 3,
+        unitCost: bundleUnitCostIDR,
+        wacUnitCost: bundleUnitCostIDR,
+        sellingPrice: bundleSellingPrice,
+        unit: bundleUnit,
+        supplierId: 'INTERNAL-BUNDLE',
+        supplierName: 'Internal Hampers & Bundle Assembly',
+        lastRestockedAt: timestamp,
+        incomingStock: 0,
+        outgoingStock: 0,
+        reorderQuantity: 10,
+        valuationMethod: 'FIFO',
+        storageType: storageZone,
+        removalStrategy: 'FEFO',
+        salesChannel: 'BOTH',
+      };
+      inventoryList.push(bundleInv);
+      if (!PRODUCTS.some((p) => p.id === prodId)) {
+        PRODUCTS.push({
+          id: prodId,
+          name: bundleName,
+          category: (bundleCat as any) || 'pantry_coffee',
+          categoryLabel: bundleCat || 'Pantry & Hampers',
+          price: bundleSellingPrice,
+          unit: bundleUnit,
+          origin: outlet.storeName,
+          stock: bundleQty,
+          image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80',
+          fallbackGradient: 'from-amber-900/20 to-emerald-900/20',
+          description: `Curated bundle assembled from ${components.map((c) => c.sku).join(', ')}.`,
+          rating: 4.9,
+          reviewCount: 0,
+          sku: bundleSku,
+          storageZone,
+          salesChannel: 'BOTH',
+        });
+      }
+    } else {
+      bundleInv.currentStock = Number((bundleInv.currentStock + bundleQty).toFixed(2));
+      bundleInv.stockLevel = bundleInv.currentStock;
+      bundleInv.unitCost = bundleUnitCostIDR;
+      bundleInv.wacUnitCost = bundleUnitCostIDR;
+      bundleInv.lastRestockedAt = timestamp;
+    }
+
+    let bundleTier = storeInventoryTiers.find(
+      (t) => t.sku === bundleSku && t.storeId === outlet.storeId
+    );
+    if (!bundleTier) {
+      bundleTier = {
+        id: `STK-BND-${Date.now().toString().slice(-5)}`,
+        sku: bundleSku,
+        productId: bundleInv.productId,
+        productName: bundleName,
+        category: bundleCat,
+        storeId: outlet.storeId,
+        storeName: outlet.storeName,
+        warehouseZoneId: inferWarehouseZoneId(outlet.storeId, storageZone),
+        storageType: storageZone,
+        physicalStock: bundleQty,
+        availableStock: bundleQty,
+        reservedStock: 0,
+        incomingStock: 0,
+        minimumThreshold: 3,
+        safetyStockBuffer: 1,
+        maxCapacity: 100,
+        reorderQuantity: 10,
+        unitCost: bundleUnitCostIDR,
+        sellingPrice: bundleSellingPrice,
+        totalValuation: Math.round(bundleQty * bundleUnitCostIDR),
+        unit: bundleUnit,
+        supplierId: 'INTERNAL-BUNDLE',
+        supplierName: 'Internal Hampers & Bundle Assembly',
+        lastRestockedAt: timestamp,
+        updatedAt: timestamp,
+        binLocation: bundleRack,
+        rackBinCode: bundleRack,
+        removalStrategy: 'FEFO',
+        rotationStrategy: 'FEFO',
+      };
+      storeInventoryTiers.push(bundleTier);
+    } else {
+      bundleTier.physicalStock = Number((bundleTier.physicalStock + bundleQty).toFixed(2));
+      bundleTier.availableStock = Math.max(0, Number((bundleTier.physicalStock - bundleTier.reservedStock).toFixed(2)));
+      bundleTier.unitCost = bundleUnitCostIDR;
+      bundleTier.totalValuation = Math.round(bundleTier.physicalStock * bundleUnitCostIDR);
+      bundleTier.rackBinCode = bundleRack;
+      bundleTier.binLocation = bundleRack;
+      bundleTier.updatedAt = timestamp;
+    }
+
+    const producedBatch: InventoryBatch = {
+      batchId: `BAT-BND-${Date.now().toString().slice(-5)}-${inventoryBatches.length + 1}`,
+      sku: bundleSku,
+      productName: bundleName,
+      storeId: outlet.storeId,
+      storeName: outlet.storeName,
+      warehouseZoneId: bundleTier.warehouseZoneId,
+      lotNumber,
+      initialQuantity: bundleQty,
+      currentStock: bundleQty,
+      unitCost: bundleUnitCostIDR,
+      sellingPrice: bundleSellingPrice,
+      receivedDate: timestamp,
+      expiryDate: earliestExpiryIso,
+      daysUntilExpiry,
+      status: daysUntilExpiry <= 2 ? 'critical' : daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
+      storageZone,
+      supplierName: `Bundled: ${components.map((c) => `${c.qtyPerBundle}x ${c.sku}`).join(' + ')}`,
+      rackBinCode: bundleRack,
+      rotationStrategy: 'FEFO',
+      notes: body.notes || `Bundle assembly ${bundleQty}x ${bundleSku}`,
+    };
+    inventoryBatches.unshift(producedBatch);
+
+    const gBundleDebit = `GLE-BND-${Date.now().toString().slice(-6)}-DR`;
+    glVoucherIds.unshift(gBundleDebit);
+    glEntries.unshift({
+      id: gBundleDebit,
+      timestamp,
+      storeId: outlet.storeId,
+      storeName: outlet.storeName,
+      accountCode: '1040',
+      accountName: `Merchandise Inventory Asset (Bundle ${bundleSku})`,
+      category: 'Asset',
+      debit: totalComponentCogsIDR,
+      credit: 0,
+      referenceType: 'REPACK_BUNDLE',
+      referenceId: lotNumber,
+      description: `Bundle assembled: ${bundleQty}x ${bundleSku} (earliest component expiry ${earliestExpiryIso.slice(0, 10)}) by ${actorName}`,
+    });
+    commitBalancedGlBatch(glEntries, true);
+
+    syncWarehouseRackOccupancy();
+    scheduleStateSave();
+    res.json({
+      success: true,
+      mode: 'BUNDLE',
+      producedSku: bundleSku,
+      producedBatch,
+      totalSourceCogsIDR: totalComponentCogsIDR,
+      unitCostIDR: bundleUnitCostIDR,
+      glVoucherIds,
+      message: `Assembled ${bundleQty}x ${bundleSku} (Cost Rp ${bundleUnitCostIDR.toLocaleString('id-ID')}/unit, Earliest Exp ${earliestExpiryIso.slice(0, 10)}).`,
+    });
+  });
+
+  // =============================================================
+  // MODULE 4: 1-CLICK BPOM / HACCP BATCH RECALL TRACEABILITY
+  // =============================================================
+  function buildLiveRecallTrace(lotNumberRaw: string): ComplianceRecallTraceResponse {
+    const lotNumber = String(lotNumberRaw || '').trim();
+    const lotLower = lotNumber.toLowerCase();
+
+    const matchingBatches = inventoryBatches.filter(
+      (b) => b.lotNumber.toLowerCase() === lotLower || b.batchId.toLowerCase() === lotLower
+    );
+    const primaryBatch = matchingBatches[0];
+    const resolvedLot = primaryBatch?.lotNumber || lotNumber;
+    const resolvedSku = primaryBatch?.sku || '';
+    const resolvedProduct = primaryBatch?.productName || resolvedSku || 'Unknown Product';
+
+    const grMatches = goodsReceipts
+      .filter((gr) =>
+        gr.items.some((it) => it.batchNumber.toLowerCase() === resolvedLot.toLowerCase())
+      )
+      .map((gr) => {
+        const matchedItems = gr.items.filter(
+          (it) => it.batchNumber.toLowerCase() === resolvedLot.toLowerCase()
+        );
+        return {
+          id: gr.id,
+          poId: gr.poId,
+          receivedAt: gr.receivedAt,
+          storeName: gr.storeName,
+          deliveryNoteNumber: gr.deliveryNoteNumber,
+          qtyReceived: matchedItems.reduce((s, it) => s + (Number(it.quantityReceived) || 0), 0),
+        };
+      });
+
+    const poNumbers = Array.from(
+      new Set([
+        ...matchingBatches.map((b) => b.sourcePoNumber).filter(Boolean) as string[],
+        ...grMatches.map((g) => g.poId).filter(Boolean),
+      ])
+    );
+    const supplierNames = Array.from(
+      new Set([
+        ...matchingBatches.map((b) => b.supplierName).filter(Boolean),
+        ...grMatches
+          .map((g) => goodsReceipts.find((r) => r.id === g.id)?.vendorName)
+          .filter(Boolean) as string[],
+      ])
+    );
+
+    const qcMatches = qcInspectionsList
+      .filter((qc) => qc.batchNumber.toLowerCase() === resolvedLot.toLowerCase())
+      .map((qc) => ({
+        id: qc.id,
+        timestamp: qc.timestamp,
+        disposition: qc.disposition,
+        actionTaken: qc.actionTaken,
+        inspectorName: qc.inspectorName,
+        temperatureCelsius: qc.parameters?.temperatureCelsius ?? 0,
+      }));
+
+    const currentHoldings = matchingBatches.map((b) => ({
+      batchId: b.batchId,
+      sku: b.sku,
+      productName: b.productName,
+      storeId: b.storeId,
+      storeName: b.storeName,
+      rackBinCode: b.rackBinCode || defaultRackForBatch(b),
+      currentStock: b.currentStock,
+      status: b.status,
+      expiryDate: b.expiryDate,
+      unitCost: b.unitCost,
+    }));
+
+    const totalRemainingUnits = Number(
+      matchingBatches.reduce((s, b) => s + Math.max(0, b.currentStock), 0).toFixed(2)
+    );
+
+    const b2bMatches: ComplianceRecallTraceResponse['downstreamImpact']['b2bOrders'] = [];
+    b2bOrdersList.forEach((ord) => {
+      let qty = 0;
+      (ord.items || []).forEach((it: any) => {
+        const allocs = Array.isArray(it.lotAllocations) ? it.lotAllocations : [];
+        const fromAlloc = allocs
+          .filter((a: any) => String(a.lotNumber || '').toLowerCase() === resolvedLot.toLowerCase())
+          .reduce((s: number, a: any) => s + (Number(a.allocatedQty) || 0), 0);
+        if (fromAlloc > 0) {
+          qty += fromAlloc;
+        } else if (String(it.lotNumber || '').toLowerCase() === resolvedLot.toLowerCase()) {
+          qty += Number(it.baseUnitsCalculated || it.quantity || 0);
+        }
+      });
+      if (qty > 0) {
+        b2bMatches.push({
+          orderId: ord.id,
+          companyName: ord.companyName,
+          customerName: ord.customerName,
+          orderDate: ord.orderDate,
+          qty,
+          status: ord.status,
+        });
+      }
+    });
+
+    const posMatches: ComplianceRecallTraceResponse['downstreamImpact']['posReceipts'] = [];
+    posTransactionsHistory.forEach((rcp) => {
+      let qty = 0;
+      (rcp.items || []).forEach((it: any) => {
+        const allocs = Array.isArray(it.lotAllocations) ? it.lotAllocations : [];
+        const fromAlloc = allocs
+          .filter((a: any) => String(a.lotNumber || '').toLowerCase() === resolvedLot.toLowerCase())
+          .reduce((s: number, a: any) => s + (Number(a.allocatedQty) || 0), 0);
+        if (fromAlloc > 0) {
+          qty += fromAlloc;
+        } else if (String(it.lotNumber || '').toLowerCase() === resolvedLot.toLowerCase()) {
+          qty += Number(it.quantity || 0);
+        }
+      });
+      if (qty > 0) {
+        posMatches.push({
+          receiptNumber: rcp.receiptNumber,
+          timestamp: rcp.timestamp,
+          storeName: rcp.storeName,
+          cashierName: rcp.cashierName,
+          qty,
+          totalIDR: rcp.total,
+        });
+      }
+    });
+
+    const b2cMatches: ComplianceRecallTraceResponse['downstreamImpact']['b2cOrders'] = [];
+    customerOrders.forEach((ord) => {
+      let qty = 0;
+      (ord.items || []).forEach((it: any) => {
+        if (String(it.lotNumber || '').toLowerCase() === resolvedLot.toLowerCase()) {
+          qty += Number(it.quantity || 0);
+        }
+      });
+      if (qty > 0) {
+        b2cMatches.push({
+          orderId: ord.id,
+          customerName: ord.customerName,
+          customerEmail: ord.customerEmail,
+          createdAt: ord.createdAt,
+          qty,
+          status: ord.status,
+        });
+      }
+    });
+
+    const transferMatches: ComplianceRecallTraceResponse['downstreamImpact']['transfers'] = [];
+    stockTransfersList.forEach((trf) => {
+      const sj = trf.suratJalanNumber
+        ? suratJalanList.find((s) => s.documentNumber === trf.suratJalanNumber)
+        : undefined;
+      const inTransitLots = inTransitTransferLots.get(trf.id) || [];
+      const lotMatch =
+        inTransitLots.some((l: any) => String(l.lotNumber || '').toLowerCase() === resolvedLot.toLowerCase()) ||
+        Boolean(
+          sj?.items?.some((it) => String(it.batchNumber || '').toLowerCase() === resolvedLot.toLowerCase())
+        );
+      if (lotMatch) {
+        transferMatches.push({
+          transferId: trf.id,
+          suratJalanNumber: trf.suratJalanNumber,
+          fromStoreName: trf.sourceStoreName,
+          toStoreName: trf.destinationStoreName,
+          qty: trf.quantity,
+          status: trf.status,
+          requestedAt: trf.timestamp,
+        });
+      }
+    });
+
+    const recallEv = recallEventsList.find(
+      (r) => r.lotNumber.toLowerCase() === resolvedLot.toLowerCase()
+    );
+    const isQuarantined =
+      Boolean(recallEv) ||
+      (matchingBatches.length > 0 &&
+        matchingBatches.every(
+          (b) => b.status === 'quarantined' || b.status === 'recalled' || b.currentStock === 0
+        ) &&
+        matchingBatches.some((b) => b.status === 'quarantined' || b.status === 'recalled'));
+
+    return {
+      lotNumber: resolvedLot,
+      sku: resolvedSku,
+      productName: resolvedProduct,
+      isQuarantined,
+      recalledAt: recallEv?.recalledAt,
+      recalledBy: recallEv?.recalledBy,
+      origin: {
+        poNumbers,
+        supplierNames,
+        goodsReceipts: grMatches,
+        qcInspections: qcMatches,
+      },
+      currentHoldings,
+      totalRemainingUnits,
+      downstreamImpact: {
+        b2bOrders: b2bMatches,
+        posReceipts: posMatches,
+        b2cOrders: b2cMatches,
+        transfers: transferMatches,
+      },
+    };
+  }
+
+  app.get('/api/admin/compliance/recall-trace/:lotNumber', (req: Request, res: Response) => {
+    const lotNumber = decodeURIComponent(String(req.params.lotNumber || '').trim());
+    if (!lotNumber) {
+      return res.status(400).json({ error: 'lotNumber is required.' });
+    }
+    const trace = buildLiveRecallTrace(lotNumber);
+    res.json(trace);
+  });
+
+  app.post('/api/admin/compliance/recall-execute/:lotNumber', (req: Request, res: Response) => {
+    const lotNumber = decodeURIComponent(String(req.params.lotNumber || '').trim());
+    const { reason = 'BPOM / HACCP Food Safety Recall Freeze' } = req.body || {};
+    if (!lotNumber) {
+      return res.status(400).json({ error: 'lotNumber is required.' });
+    }
+
+    const actorName = getEffectiveOperatorName(req);
+    const timestamp = new Date().toISOString();
+    const lotLower = lotNumber.toLowerCase();
+
+    const matchingBatches = inventoryBatches.filter(
+      (b) => b.lotNumber.toLowerCase() === lotLower || b.batchId.toLowerCase() === lotLower
+    );
+    if (matchingBatches.length === 0) {
+      return res.status(404).json({ error: `No inventory lots found matching '${lotNumber}'.` });
+    }
+
+    let affectedUnits = 0;
+    let newlyQuarantinedCount = 0;
+    const affectedByStoreSku = new Map<string, number>();
+
+    matchingBatches.forEach((b) => {
+      const wasLocked = b.status === 'quarantined' || b.status === 'recalled';
+      if (!wasLocked && b.currentStock > 0) {
+        const key = `${b.storeId}::${b.sku}`;
+        affectedByStoreSku.set(key, (affectedByStoreSku.get(key) || 0) + b.currentStock);
+      }
+      affectedUnits += Math.max(0, b.currentStock);
+      if (b.status !== 'recalled') {
+        b.status = 'recalled';
+        newlyQuarantinedCount += 1;
+      }
+      b.notes = `[RECALL FROZEN ${timestamp.slice(0, 10)} by ${actorName}] ${reason}`;
+    });
+
+    // Lock tier reservedStock/availableStock across every affected store & SKU so ATP rejects checkout
+    affectedByStoreSku.forEach((lockedQty, key) => {
+      const [sId, sku] = key.split('::');
+      const tier = storeInventoryTiers.find((t) => t.storeId === sId && t.sku === sku);
+      if (tier) {
+        tier.reservedStock = Math.min(
+          tier.physicalStock,
+          Number(((tier.reservedStock || 0) + lockedQty).toFixed(2))
+        );
+        tier.availableStock = Math.max(
+          0,
+          Number((tier.physicalStock - tier.reservedStock).toFixed(2))
+        );
+        tier.updatedAt = timestamp;
+      }
+    });
+
+    const primary = matchingBatches[0];
+    recallEventsList.unshift({
+      lotNumber: primary.lotNumber,
+      sku: primary.sku,
+      productName: primary.productName,
+      recalledAt: timestamp,
+      recalledBy: actorName,
+      quarantinedBatchesCount: matchingBatches.length,
+      affectedUnits,
+      reason,
+    });
+
+    emitEnterpriseNotification({
+      dedupeKey: `RECALL_EXEC:${primary.lotNumber}`,
+      category: 'QUALITY_CONTROL',
+      severity: 'CRITICAL',
+      title: `BPOM / HACCP Recall Locked: Lot ${primary.lotNumber}`,
+      message: `${matchingBatches.length} lot holding(s) (${affectedUnits} units of ${primary.productName}) frozen across all branches by ${actorName}.`,
+      metadataLabel: `${primary.lotNumber} • ${primary.sku}`,
+      targetTab: 'fefo',
+    });
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'QC_INSPECTION_LOGGED',
+      resourceId: primary.lotNumber,
+      userId: currentActiveStaffSession.userId,
+      userName: actorName,
+      userRole: getEffectiveRequestRole(req),
+      storeId: 'ALL',
+      shiftId: currentActiveStaffSession.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        action: 'BATCH_RECALL_FREEZE',
+        lotNumber: primary.lotNumber,
+        sku: primary.sku,
+        quarantinedBatchesCount: matchingBatches.length,
+        affectedUnits,
+      },
+    });
+
+    syncWarehouseRackOccupancy();
+    scheduleStateSave();
+    const trace = buildLiveRecallTrace(primary.lotNumber);
+    res.json({
+      success: true,
+      trace,
+      quarantinedBatchesCount: matchingBatches.length,
+      newlyQuarantinedCount,
+      affectedUnits,
+      message: `Batch recall executed: ${matchingBatches.length} lot(s) (${affectedUnits} units) frozen from POS & B2B sales.`,
+    });
+  });
+
+  // =============================================================
+  // MODULE 5: CONSIGNMENT (TITIP JUAL) STOCK & SETTLEMENT
+  // =============================================================
+  app.get('/api/admin/accounting/consignment', (req: Request, res: Response) => {
+    ensureConsignmentSeedItems();
+    const { storeId, supplierName } = req.query as { storeId?: string; supplierName?: string };
+
+    let batches = inventoryBatches.filter((b) => b.isConsignment);
+    let ledger = [...consignmentLedger];
+
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      batches = batches.filter((b) => b.storeId === storeId);
+      ledger = ledger.filter((l) => l.storeId === storeId);
+    }
+    if (supplierName && supplierName !== 'ALL') {
+      const q = supplierName.toLowerCase();
+      batches = batches.filter((b) => (b.consignmentSupplier || b.supplierName || '').toLowerCase().includes(q));
+      ledger = ledger.filter((l) => l.supplierName.toLowerCase().includes(q));
+    }
+
+    const unsettledPayableIDR = ledger
+      .filter((l) => l.status === 'UNSETTLED')
+      .reduce((s, l) => s + l.payableToVendorIDR, 0);
+    const settledTotalIDR = ledger
+      .filter((l) => l.status === 'SETTLED')
+      .reduce((s, l) => s + l.payableToVendorIDR, 0);
+    const totalStoreCommissionIDR = ledger.reduce((s, l) => s + l.storeMarginIDR, 0);
+    const totalUnsoldUnits = Number(
+      batches.reduce((s, b) => s + Math.max(0, b.currentStock), 0).toFixed(2)
+    );
+
+    const suppliers = Array.from(
+      new Set([
+        ...batches.map((b) => b.consignmentSupplier || b.supplierName),
+        ...ledger.map((l) => l.supplierName),
+      ])
+    ).filter(Boolean);
+
+    res.json({
+      summary: {
+        unsettledPayableIDR,
+        settledTotalIDR,
+        totalStoreCommissionIDR,
+        totalUnsoldUnits,
+        activeBatchesCount: batches.filter((b) => b.currentStock > 0).length,
+      },
+      suppliers,
+      activeStock: batches,
+      salesLedger: ledger,
+    });
+  });
+
+  app.post('/api/admin/accounting/consignment/settle', (req: Request, res: Response) => {
+    const { supplierName, ledgerIds } = (req.body || {}) as {
+      supplierName?: string;
+      ledgerIds?: string[];
+    };
+
+    const targets = consignmentLedger.filter((entry) => {
+      if (entry.status !== 'UNSETTLED') return false;
+      if (Array.isArray(ledgerIds) && ledgerIds.length > 0) {
+        return ledgerIds.includes(entry.id);
+      }
+      if (supplierName) {
+        return entry.supplierName.toLowerCase() === supplierName.toLowerCase();
+      }
+      return false;
+    });
+
+    if (targets.length === 0) {
+      return res.status(400).json({
+        error: 'No UNSETTLED consignment sales found matching the selected supplier or lines.',
+      });
+    }
+
+    ensureRegulatoryCoaAccounts();
+    const resolvedSupplier = supplierName || targets[0].supplierName;
+    const totalPayableIDR = roundIDR(
+      targets.reduce((s, t) => s + t.payableToVendorIDR, 0)
+    );
+    const timestamp = new Date().toISOString();
+    const actorName = getEffectiveOperatorName(req);
+
+    // Group lines by SKU for VendorBill
+    const bySku = new Map<string, { sku: string; productName: string; qty: number; total: number }>();
+    targets.forEach((t) => {
+      const cur = bySku.get(t.sku) || { sku: t.sku, productName: t.productName, qty: 0, total: 0 };
+      cur.qty += t.quantitySold;
+      cur.total += t.payableToVendorIDR;
+      bySku.set(t.sku, cur);
+    });
+
+    const billId = `VB-CSG-${(vendorBillsList.length + 1).toString().padStart(3, '0')}`;
+    const billNumber = `INV-CSG-${Date.now().toString().slice(-6)}`;
+    const billItems: VendorBillItem[] = Array.from(bySku.values()).map((it) => ({
+      sku: it.sku,
+      productName: `${it.productName} (Titip Jual Settlement)`,
+      poQuantity: it.qty,
+      grQuantity: it.qty,
+      billedQuantity: it.qty,
+      unitCost: Math.round(it.total / Math.max(1, it.qty)),
+      totalCost: roundIDR(it.total),
+    }));
+
+    const gle1 = `GLE-CSG-STL-${Date.now().toString().slice(-6)}-1`;
+    const gle2 = `GLE-CSG-STL-${Date.now().toString().slice(-6)}-2`;
+    commitBalancedGlBatch(
+      [
+        {
+          id: gle1,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '2015',
+          accountName: 'Consignment Payable — Titip Jual UMKM',
+          category: 'Liability',
+          debit: totalPayableIDR,
+          credit: 0,
+          referenceType: 'CONSIGNMENT_SETTLEMENT',
+          referenceId: billNumber,
+          description: `Consignment settlement cleared for ${resolvedSupplier} (${targets.length} POS/B2B sales) by ${actorName}`,
+        },
+        {
+          id: gle2,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '2010',
+          accountName: 'Trade Accounts Payable (Vendors)',
+          category: 'Liability',
+          debit: 0,
+          credit: totalPayableIDR,
+          referenceType: 'CONSIGNMENT_SETTLEMENT',
+          referenceId: billNumber,
+          description: `Vendor Bill ${billNumber} generated from Titip Jual consignment settlement (${resolvedSupplier})`,
+        },
+      ],
+      true
+    );
+
+    const newBill: VendorBill = {
+      id: billId,
+      billNumber,
+      supplierName: resolvedSupplier,
+      storeId: targets[0].storeId || 'store-jkt-senopati',
+      storeName: targets[0].storeName || 'GroceMart Central Operations',
+      poId: `CSG-STL-${billNumber}`,
+      goodsReceiptId: `GR-CSG-${targets.length}SALES`,
+      billDate: timestamp.split('T')[0],
+      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      paymentTerms: 'Net 7',
+      currency: 'IDR',
+      exchangeRate: 1,
+      items: billItems,
+      subtotal: totalPayableIDR,
+      taxPercent: 0,
+      taxAmount: 0,
+      grandTotal: totalPayableIDR,
+      grandTotalIDR: totalPayableIDR,
+      amountPaid: 0,
+      remainingDue: totalPayableIDR,
+      remainingBalanceIDR: totalPayableIDR,
+      status: 'APPROVED',
+      paymentStatus: 'UNPAID',
+      notes: `Consignment (Titip Jual) sales-based settlement covering ${targets.length} sold transactions.`,
+      glEntryIds: [gle1, gle2],
+      createdAt: timestamp,
+      approvedBy: actorName,
+      approvedAt: timestamp,
+    };
+    vendorBillsList.unshift(newBill);
+
+    targets.forEach((t) => {
+      t.status = 'SETTLED';
+      t.vendorBillId = billId;
+      t.settledAt = timestamp;
+    });
+
+    scheduleStateSave();
+    res.json({
+      success: true,
+      vendorBill: newBill,
+      settledCount: targets.length,
+      totalPayableIDR,
+      glVoucherIds: [gle1, gle2],
+      message: `Settled ${targets.length} consignment sale(s) for ${resolvedSupplier} -> Vendor Bill ${billNumber} (Rp ${totalPayableIDR.toLocaleString('id-ID')}).`,
+    });
+  });
+
+  app.post('/api/admin/accounting/consignment/rtv', (req: Request, res: Response) => {
+    const { batchId, quantity, reason = 'Unsold Titip Jual Return to Partner' } = req.body || {};
+    const batch = inventoryBatches.find((b) => b.batchId === batchId && b.isConsignment);
+    if (!batch) {
+      return res.status(404).json({ error: 'Consignment batch not found.' });
+    }
+    const qtyToReturn =
+      quantity !== undefined && Number(quantity) > 0
+        ? Math.min(batch.currentStock, Number(quantity))
+        : batch.currentStock;
+    if (qtyToReturn <= 0) {
+      return res.status(400).json({ error: 'Batch has 0 remaining consignment stock to return.' });
+    }
+
+    const timestamp = new Date().toISOString();
+    const actorName = getEffectiveOperatorName(req);
+
+    batch.currentStock = Math.max(0, Number((batch.currentStock - qtyToReturn).toFixed(2)));
+    if (batch.currentStock === 0) {
+      batch.status = 'depleted';
+    }
+    batch.notes = `[CONSIGNMENT RTV ${timestamp.slice(0, 10)} by ${actorName}] Returned ${qtyToReturn} unsold units — ${reason}`;
+
+    const tier = storeInventoryTiers.find(
+      (t) => t.sku === batch.sku && t.storeId === batch.storeId
+    );
+    if (tier) {
+      tier.physicalStock = Math.max(0, Number((tier.physicalStock - qtyToReturn).toFixed(2)));
+      tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+      tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+      tier.totalValuation = 0;
+      tier.updatedAt = timestamp;
+    }
+    const inv = inventoryList.find((i) => i.sku === batch.sku);
+    if (inv) {
+      inv.currentStock = Math.max(0, Number((inv.currentStock - qtyToReturn).toFixed(2)));
+      inv.stockLevel = inv.currentStock;
+    }
+
+    syncWarehouseRackOccupancy();
+    scheduleStateSave();
+    res.json({
+      success: true,
+      batch,
+      returnedQuantity: qtyToReturn,
+      glImpactIDR: 0,
+      message: `Returned ${qtyToReturn} unsold consignment units of ${batch.productName} to ${batch.consignmentSupplier || batch.supplierName} with Rp 0 inventory write-off loss.`,
+    });
+  });
+
+  // =============================================================
+  // MODULE 6: POS CASHIER SAFE DROP / SETOR BRANKAS
+  // =============================================================
+  app.get('/api/pos/safe-drops', (req: Request, res: Response) => {
+    const { storeId, shiftId } = req.query as { storeId?: string; shiftId?: string };
+    let list = [...safeDropsList];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((d) => d.storeId === storeId);
+    }
+    if (shiftId) {
+      list = list.filter((d) => d.shiftId === shiftId);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/pos/safe-drop', (req: Request, res: Response) => {
+    const {
+      storeId = 'store-jkt-senopati',
+      shiftId,
+      amountIDR,
+      supervisorName = 'Store Manager On-Duty',
+      sealBagNumber,
+      notes,
+    } = req.body || {};
+
+    const amount = roundIDR(Number(amountIDR) || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Safe drop amount must be greater than Rp 0.' });
+    }
+
+    const activeShift =
+      (shiftId ? posShiftsList.find((s) => s.id === shiftId && s.status === 'OPEN') : undefined) ||
+      posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
+
+    if (!activeShift) {
+      return res.status(400).json({
+        error: 'No OPEN POS register shift found. Open a shift before executing a Safe Drop.',
+      });
+    }
+
+    const currentExpectedDrawer = Math.max(
+      0,
+      activeShift.openingFloatIDR +
+        activeShift.expectedCashSalesIDR -
+        activeShift.cashRefundsIDR -
+        (activeShift.safeDropsTotalIDR || 0)
+    );
+
+    if (amount > currentExpectedDrawer) {
+      return res.status(400).json({
+        error: `Safe Drop amount (Rp ${amount.toLocaleString('id-ID')}) exceeds expected cash in drawer (Rp ${currentExpectedDrawer.toLocaleString('id-ID')}).`,
+      });
+    }
+
+    ensureRegulatoryCoaAccounts();
+    const timestamp = new Date().toISOString();
+    const seq = (safeDropsList.length + 1).toString().padStart(4, '0');
+    const slipNumber = `SDR-${activeShift.storeId.replace('store-', '').toUpperCase().slice(0, 6)}-${seq}`;
+    const gle1 = `GLE-SDR-${Date.now().toString().slice(-6)}-1`;
+    const gle2 = `GLE-SDR-${Date.now().toString().slice(-6)}-2`;
+
+    commitBalancedGlBatch(
+      [
+        {
+          id: gle1,
+          timestamp,
+          storeId: activeShift.storeId,
+          storeName: activeShift.storeName,
+          accountCode: '1010',
+          accountName: 'Main Safe Vault & Treasury Cash',
+          category: 'Asset',
+          debit: amount,
+          credit: 0,
+          referenceType: 'POS_SAFE_DROP',
+          referenceId: slipNumber,
+          description: `Setor Brankas (${slipNumber}) from ${activeShift.registerId} (${activeShift.cashierName}) verified by ${supervisorName}`,
+        },
+        {
+          id: gle2,
+          timestamp,
+          storeId: activeShift.storeId,
+          storeName: activeShift.storeName,
+          accountCode: '1011',
+          accountName: 'POS Cash Drawer (Laci Kasir Register)',
+          category: 'Asset',
+          debit: 0,
+          credit: amount,
+          referenceType: 'POS_SAFE_DROP',
+          referenceId: slipNumber,
+          description: `Cashier drawer reduction via Setor Brankas ${slipNumber} (Shift ${activeShift.id})`,
+        },
+      ],
+      true
+    );
+
+    activeShift.safeDropsTotalIDR = (activeShift.safeDropsTotalIDR || 0) + amount;
+    const afterBalance = Math.max(
+      0,
+      activeShift.openingFloatIDR +
+        activeShift.expectedCashSalesIDR -
+        activeShift.cashRefundsIDR -
+        activeShift.safeDropsTotalIDR
+    );
+    activeShift.expectedTotalCashInDrawerIDR = afterBalance;
+
+    const record: SafeDropRecord = {
+      id: `DROP-2026-${seq}`,
+      slipNumber,
+      timestamp,
+      storeId: activeShift.storeId,
+      storeName: activeShift.storeName,
+      shiftId: activeShift.id,
+      registerId: activeShift.registerId,
+      cashierId: activeShift.cashierId,
+      cashierName: activeShift.cashierName,
+      supervisorName: String(supervisorName || 'Store Manager On-Duty').trim(),
+      amountIDR: amount,
+      drawerBalanceBeforeIDR: currentExpectedDrawer,
+      drawerBalanceAfterIDR: afterBalance,
+      sealBagNumber: sealBagNumber ? String(sealBagNumber).trim() : `BAG-${Date.now().toString().slice(-5)}`,
+      notes: notes ? String(notes).trim() : undefined,
+      glVoucherIds: [gle1, gle2],
+    };
+    safeDropsList.unshift(record);
+
+    emitEnterpriseNotification({
+      dedupeKey: `SAFE_DROP:${slipNumber}`,
+      category: 'POS_OPERATIONS',
+      severity: 'INFO',
+      title: `POS Safe Drop Logged (${slipNumber})`,
+      message: `${activeShift.cashierName} dropped Rp ${amount.toLocaleString('id-ID')} from ${activeShift.registerId} to Main Safe Vault. Drawer balance: Rp ${afterBalance.toLocaleString('id-ID')}.`,
+      metadataLabel: `${slipNumber} • Shift ${activeShift.id}`,
+      targetTab: 'pos',
+    });
+
+    scheduleStateSave();
+    res.json({
+      success: true,
+      safeDrop: record,
+      shift: activeShift,
+      glVoucherIds: [gle1, gle2],
+      message: `Safe Drop ${slipNumber} (Rp ${amount.toLocaleString('id-ID')}) posted to Main Safe Vault (#1010).`,
+    });
+  });
+
+  // =============================================================
+  // STANDALONE CRM, LOYALTY & B2B CUSTOMER 360 ENDPOINTS
+  // =============================================================
+  app.get('/api/pos/crm-members', (req: Request, res: Response) => {
+    const q = String(req.query?.q || '').trim().toLowerCase();
+    const list = crmAccounts
+      .filter((a) => {
+        if (!q) return true;
+        return (
+          a.name.toLowerCase().includes(q) ||
+          (a.companyName || '').toLowerCase().includes(q) ||
+          a.phone.toLowerCase().includes(q) ||
+          a.id.toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 25)
+      .map((a) => ({
+        id: a.id,
+        accountType: a.accountType,
+        name: a.name,
+        companyName: a.companyName,
+        phone: a.phone,
+        email: a.email,
+        tier: a.tier,
+        pointsBalance: a.pointsBalance,
+        contractDiscountPct: a.contractDiscountPct,
+      }));
+    res.json(list);
+  });
+
+  app.get('/api/admin/crm/overview', (req: Request, res: Response) => {
+    const { isBranchScoped, storeId: scopedBranch } = resolveRequestBranchScope(req);
+    const rawStore = String(req.query?.storeId || '').trim();
+    const effectiveStore =
+      isBranchScoped && scopedBranch !== 'ALL' && scopedBranch !== 'CONSOLIDATED'
+        ? scopedBranch
+        : rawStore && rawStore !== 'ALL' && rawStore !== 'CONSOLIDATED'
+        ? rawStore
+        : undefined;
+
+    crmAccounts.forEach((acc) => {
+      acc.tier = resolveCrmLoyaltyTier(acc.lifetimeSpendIDR);
+      acc.rfmSegment = computeCrmRfmSegment(acc);
+    });
+
+    const filteredAccounts = effectiveStore
+      ? crmAccounts.filter((a) => a.storeId === effectiveStore)
+      : [...crmAccounts];
+    const filteredDeals = effectiveStore
+      ? crmDeals.filter((d) => d.storeId === effectiveStore)
+      : [...crmDeals];
+    const accountIds = new Set(filteredAccounts.map((a) => a.id));
+    const filteredActivities = effectiveStore
+      ? crmActivities.filter((act) => !act.crmAccountId || accountIds.has(act.crmAccountId))
+      : [...crmActivities];
+
+    const openDeals = filteredDeals.filter((d) => d.stage !== 'WON' && d.stage !== 'LOST');
+    const b2bPipelineValueIDR = openDeals.reduce((s, d) => s + (Number(d.estimatedMonthlyValueIDR) || 0), 0);
+    const weightedPipelineValueIDR = Math.round(
+      openDeals.reduce((s, d) => s + (Number(d.estimatedMonthlyValueIDR) || 0) * ((Number(d.probabilityPct) || 0) / 100), 0)
+    );
+    const loyaltyPointsLiabilityCount = filteredAccounts.reduce((s, a) => s + Math.max(0, a.pointsBalance), 0);
+    const loyaltyPointsLiabilityIDR = loyaltyPointsLiabilityCount * 100;
+    const atRiskChurnCount = filteredAccounts.filter((a) => a.rfmSegment === 'AT_RISK_CHURN').length;
+
+    const segmentDefs: Array<{ segment: CrmRfmSegment; label: string; description: string }> = [
+      {
+        segment: 'VIP_CHAMPION',
+        label: 'VIP Champions',
+        description: 'High frequency & lifetime spend >= Rp 15M',
+      },
+      {
+        segment: 'LOYAL_REGULAR',
+        label: 'Loyal Regulars',
+        description: 'Active repeat B2C/HORECA accounts within 30d',
+      },
+      {
+        segment: 'NEW_SIGNUP',
+        label: 'New Signups',
+        description: 'Recently onboarded members (<= 2 orders in 21d)',
+      },
+      {
+        segment: 'AT_RISK_CHURN',
+        label: 'At-Risk Churn (>30d)',
+        description: 'No purchase in >30 days — target win-back promo',
+      },
+    ];
+
+    const segmentBreakdown: CrmSegmentBreakdown[] = segmentDefs.map((def) => {
+      const members = filteredAccounts.filter((a) => a.rfmSegment === def.segment);
+      const totalSpend = members.reduce((s, m) => s + m.lifetimeSpendIDR, 0);
+      const totalOrders = members.reduce((s, m) => s + Math.max(1, m.orderCount), 0);
+      return {
+        segment: def.segment,
+        label: def.label,
+        description: def.description,
+        count: members.length,
+        totalLifetimeSpendIDR: totalSpend,
+        avgOrderValueIDR: members.length > 0 ? Math.round(totalSpend / totalOrders) : 0,
+      };
+    });
+
+    const predictiveRestocks = computePredictiveRestocks(effectiveStore);
+
+    const payload: CrmOverviewResponse = {
+      kpis: {
+        totalActiveMembers: filteredAccounts.length,
+        b2cMembersCount: filteredAccounts.filter((a) => a.accountType === 'B2C_MEMBER').length,
+        b2bAccountsCount: filteredAccounts.filter((a) => a.accountType === 'B2B_ACCOUNT').length,
+        b2bPipelineValueIDR,
+        weightedPipelineValueIDR,
+        atRiskChurnCount,
+        loyaltyPointsLiabilityCount,
+        loyaltyPointsLiabilityIDR,
+      },
+      accounts: filteredAccounts,
+      deals: filteredDeals,
+      activities: filteredActivities.slice(0, 60),
+      segmentBreakdown,
+      predictiveRestocks,
+    };
+
+    res.json(payload);
+  });
+
+  app.get('/api/admin/crm/accounts/:id/history', (req: Request, res: Response) => {
+    const acc = crmAccounts.find((a) => a.id === req.params.id);
+    if (!acc) return res.status(404).json({ error: 'CRM account not found.' });
+
+    const normPhone = normalizeIndonesianPhone(acc.phone);
+    const posOrders = posTransactionsHistory.filter(
+      (r) =>
+        r.crmAccountId === acc.id ||
+        (normPhone && normalizeIndonesianPhone((r as any).customerPhone || '') === normPhone) ||
+        (acc.name && (r as any).customerName?.toLowerCase() === acc.name.toLowerCase())
+    );
+    const b2bOrders = b2bOrdersList.filter(
+      (o) =>
+        (acc.linkedB2bCustomerId && o.customerId === acc.linkedB2bCustomerId) ||
+        (acc.companyName && o.companyName.toLowerCase() === acc.companyName.toLowerCase())
+    );
+    const quotations = enterpriseQuotationsList.filter(
+      (q) =>
+        (acc.companyName && q.customerCompany?.toLowerCase() === acc.companyName.toLowerCase()) ||
+        (acc.email && q.customerEmail?.toLowerCase() === acc.email.toLowerCase())
+    );
+    const comms = communicationLogs.filter(
+      (c) =>
+        (acc.email && c.recipientAddress?.toLowerCase() === acc.email.toLowerCase()) ||
+        (normPhone && normalizeIndonesianPhone(c.recipientAddress || '') === normPhone) ||
+        c.docId === acc.id
+    );
+    const activities = crmActivities.filter((act) => act.crmAccountId === acc.id);
+
+    res.json({
+      account: acc,
+      posOrders,
+      b2bOrders,
+      quotations,
+      communications: comms.slice(0, 30),
+      activities,
+    });
+  });
+
+  app.post('/api/admin/crm/accounts', (req: Request, res: Response) => {
+    const body = req.body || {};
+    const name = String(body.name || '').trim();
+    const phone = String(body.phone || '').trim();
+    if (!name || !phone) {
+      return res.status(400).json({ error: 'Account name and phone are required.' });
+    }
+
+    const { isBranchScoped, storeId: scopedBranch } = resolveRequestBranchScope(req);
+    const outlet = resolveOutletFromCodeOrId(
+      isBranchScoped && scopedBranch !== 'ALL' ? scopedBranch : body.storeId || 'store-jkt-senopati'
+    );
+    const storeId = outlet?.storeId || 'store-jkt-senopati';
+    const storeName = outlet?.storeName || 'GroceMart Senopati Flagship';
+    const nowIso = new Date().toISOString();
+    const accountType = body.accountType === 'B2B_ACCOUNT' ? 'B2B_ACCOUNT' : 'B2C_MEMBER';
+    const initialSpend = Math.max(0, roundIDR(Number(body.lifetimeSpendIDR) || 0));
+    const initialPts = Math.max(0, Math.floor(Number(body.pointsBalance) || 100));
+    const tier: CrmLoyaltyTier = body.tier || resolveCrmLoyaltyTier(initialSpend);
+    const id = `CRM-ACC-${(crmAccounts.length + 1).toString().padStart(3, '0')}`;
+
+    const newAcc: CrmAccount = {
+      id,
+      accountType,
+      name,
+      companyName: body.companyName ? String(body.companyName).trim() : undefined,
+      linkedB2bCustomerId: body.linkedB2bCustomerId ? String(body.linkedB2bCustomerId) : undefined,
+      storeId,
+      storeName,
+      phone,
+      email: String(body.email || `${name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@member.grocemart.id`).trim(),
+      tier,
+      pointsBalance: initialPts,
+      lifetimeSpendIDR: initialSpend,
+      orderCount: Math.max(0, Number(body.orderCount) || 0),
+      lastOrderAt: body.lastOrderAt || nowIso,
+      avgOrderCadenceDays: Math.max(1, Number(body.avgOrderCadenceDays) || 7),
+      contractDiscountPct: Math.max(0, Math.min(30, Number(body.contractDiscountPct) || (accountType === 'B2B_ACCOUNT' ? 5 : 0))),
+      creditLimitIDR: Math.max(0, roundIDR(Number(body.creditLimitIDR) || 0)),
+      paymentTerms: body.paymentTerms || (accountType === 'B2B_ACCOUNT' ? 'NET_14' : 'CASH'),
+      preferredCategories: Array.isArray(body.preferredCategories) ? body.preferredCategories : ['produce'],
+      topRecurringSkus: Array.isArray(body.topRecurringSkus) ? body.topRecurringSkus : [],
+      rfmSegment: computeCrmRfmSegment({ lifetimeSpendIDR: initialSpend, orderCount: Number(body.orderCount) || 1, lastOrderAt: nowIso }),
+      pointsLedger: [
+        {
+          id: `PTS-INIT-${Date.now().toString().slice(-6)}`,
+          timestamp: nowIso,
+          type: 'BONUS',
+          pointsDelta: initialPts,
+          balanceAfter: initialPts,
+          referenceId: id,
+          channel: 'CAMPAIGN',
+          note: 'Welcome CRM Onboarding Bonus Points',
+        },
+      ],
+      notes: body.notes ? String(body.notes) : undefined,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    crmAccounts.unshift(newAcc);
+    scheduleStateSave();
+    res.json({ success: true, account: newAcc, message: `CRM account ${newAcc.companyName || newAcc.name} created.` });
+  });
+
+  app.patch('/api/admin/crm/accounts/:id', (req: Request, res: Response) => {
+    const acc = crmAccounts.find((a) => a.id === req.params.id);
+    if (!acc) return res.status(404).json({ error: 'CRM account not found.' });
+
+    const { isBranchScoped, storeId: scopedBranch } = resolveRequestBranchScope(req);
+    if (isBranchScoped && scopedBranch !== 'ALL' && acc.storeId !== scopedBranch) {
+      return res.status(403).json({ error: `Branch isolation: Account belongs to ${acc.storeId}.` });
+    }
+
+    const body = req.body || {};
+    if (body.name !== undefined) acc.name = String(body.name).trim();
+    if (body.companyName !== undefined) acc.companyName = String(body.companyName).trim();
+    if (body.phone !== undefined) acc.phone = String(body.phone).trim();
+    if (body.email !== undefined) acc.email = String(body.email).trim();
+    if (body.tier && ['SILVER', 'GOLD', 'PLATINUM'].includes(body.tier)) acc.tier = body.tier;
+    if (body.contractDiscountPct !== undefined) acc.contractDiscountPct = Math.max(0, Math.min(35, Number(body.contractDiscountPct) || 0));
+    if (body.creditLimitIDR !== undefined) acc.creditLimitIDR = Math.max(0, roundIDR(Number(body.creditLimitIDR) || 0));
+    if (body.paymentTerms && ['CASH', 'NET_7', 'NET_14', 'NET_30'].includes(body.paymentTerms)) acc.paymentTerms = body.paymentTerms;
+    if (Array.isArray(body.preferredCategories)) acc.preferredCategories = body.preferredCategories;
+    if (body.notes !== undefined) acc.notes = String(body.notes);
+    acc.updatedAt = new Date().toISOString();
+
+    if (acc.linkedB2bCustomerId) {
+      const b2bCust = b2bCustomersList.find((c) => c.id === acc.linkedB2bCustomerId);
+      if (b2bCust && body.creditLimitIDR !== undefined) {
+        b2bCust.creditLimit = acc.creditLimitIDR;
+        b2bCust.availableCredit = Math.max(0, b2bCust.creditLimit - b2bCust.outstandingAR);
+      }
+    }
+
+    scheduleStateSave();
+    res.json({ success: true, account: acc, message: `Updated CRM profile for ${acc.companyName || acc.name}.` });
+  });
+
+  app.post('/api/admin/crm/deals', (req: Request, res: Response) => {
+    const body = req.body || {};
+    const title = String(body.title || '').trim();
+    const crmAccountId = String(body.crmAccountId || '').trim();
+    if (!title) {
+      return res.status(400).json({ error: 'Deal title is required.' });
+    }
+
+    const acc = crmAccounts.find((a) => a.id === crmAccountId);
+    const { isBranchScoped, storeId: scopedBranch } = resolveRequestBranchScope(req);
+    const outlet = resolveOutletFromCodeOrId(
+      isBranchScoped && scopedBranch !== 'ALL' ? scopedBranch : body.storeId || acc?.storeId || 'store-jkt-senopati'
+    );
+    const nowIso = new Date().toISOString();
+    const stage: CrmDealStage = body.stage || 'NEW_LEAD';
+    const stageProbMap: Record<CrmDealStage, number> = {
+      NEW_LEAD: 25,
+      COLD_CHAIN_TRIAL: 45,
+      QUOTATION_SENT: 65,
+      NEGOTIATION: 80,
+      WON: 100,
+      LOST: 0,
+    };
+
+    const newDeal: CrmDeal = {
+      id: `DEAL-2026-${(crmDeals.length + 1).toString().padStart(3, '0')}`,
+      title,
+      crmAccountId: acc?.id || crmAccountId || 'CRM-ACC-001',
+      companyName: String(body.companyName || acc?.companyName || acc?.name || 'Enterprise Prospect').trim(),
+      contactName: String(body.contactName || acc?.name || 'Procurement Manager').trim(),
+      contactPhone: String(body.contactPhone || acc?.phone || '+62 812 0000 000').trim(),
+      contactEmail: String(body.contactEmail || acc?.email || 'procurement@partner.id').trim(),
+      storeId: outlet?.storeId || 'store-jkt-senopati',
+      storeName: outlet?.storeName || 'GroceMart Senopati Flagship',
+      stage,
+      estimatedMonthlyValueIDR: Math.max(0, roundIDR(Number(body.estimatedMonthlyValueIDR) || 15000000)),
+      probabilityPct: body.probabilityPct !== undefined ? Number(body.probabilityPct) : stageProbMap[stage],
+      nextActivity: String(body.nextActivity || 'Schedule Cold-Chain Sample & Price Proposal').trim(),
+      nextActivityDate: String(body.nextActivityDate || new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0]),
+      ownerName: getEffectiveOperatorName(req),
+      suggestedItems: Array.isArray(body.suggestedItems) ? body.suggestedItems : undefined,
+      notes: body.notes ? String(body.notes) : undefined,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    crmDeals.unshift(newDeal);
+    scheduleStateSave();
+    res.json({ success: true, deal: newDeal, message: `Deal ${newDeal.id} created in ${newDeal.stage}.` });
+  });
+
+  app.patch('/api/admin/crm/deals/:id/stage', (req: Request, res: Response) => {
+    const deal = crmDeals.find((d) => d.id === req.params.id);
+    if (!deal) return res.status(404).json({ error: 'CRM deal not found.' });
+
+    const { isBranchScoped, storeId: scopedBranch } = resolveRequestBranchScope(req);
+    if (isBranchScoped && scopedBranch !== 'ALL' && deal.storeId !== scopedBranch) {
+      return res.status(403).json({ error: `Branch isolation: Deal belongs to ${deal.storeId}.` });
+    }
+
+    const stage = req.body?.stage as CrmDealStage;
+    const validStages: CrmDealStage[] = ['NEW_LEAD', 'COLD_CHAIN_TRIAL', 'QUOTATION_SENT', 'NEGOTIATION', 'WON', 'LOST'];
+    if (!validStages.includes(stage)) {
+      return res.status(400).json({ error: 'Invalid CRM deal stage.' });
+    }
+
+    const stageProbMap: Record<CrmDealStage, number> = {
+      NEW_LEAD: 25,
+      COLD_CHAIN_TRIAL: 45,
+      QUOTATION_SENT: 65,
+      NEGOTIATION: 80,
+      WON: 100,
+      LOST: 0,
+    };
+
+    deal.stage = stage;
+    deal.probabilityPct = stageProbMap[stage];
+    deal.updatedAt = new Date().toISOString();
+    const actorName = getEffectiveOperatorName(req);
+
+    let onboardedAccount: CrmAccount | undefined;
+    if (stage === 'WON') {
+      const acc = crmAccounts.find((a) => a.id === deal.crmAccountId);
+      if (acc) {
+        acc.accountType = 'B2B_ACCOUNT';
+        acc.tier = acc.tier === 'SILVER' ? 'GOLD' : 'PLATINUM';
+        acc.contractDiscountPct = Math.max(acc.contractDiscountPct, acc.tier === 'PLATINUM' ? 8 : 5);
+        acc.creditLimitIDR = Math.max(acc.creditLimitIDR, Math.max(25000000, deal.estimatedMonthlyValueIDR));
+        acc.paymentTerms = acc.paymentTerms === 'CASH' ? 'NET_14' : acc.paymentTerms;
+        acc.updatedAt = deal.updatedAt;
+        onboardedAccount = acc;
+
+        // Auto-activate or upgrade linked B2B customer profile
+        let b2bCust = acc.linkedB2bCustomerId
+          ? b2bCustomersList.find((c) => c.id === acc.linkedB2bCustomerId)
+          : b2bCustomersList.find((c) => c.companyName.toLowerCase() === (acc.companyName || '').toLowerCase());
+        if (!b2bCust) {
+          const newB2bId = `B2B-CUST-${(b2bCustomersList.length + 1).toString().padStart(3, '0')}`;
+          b2bCust = {
+            id: newB2bId,
+            name: acc.name,
+            companyName: acc.companyName || deal.companyName,
+            tier: 'horeca',
+            tierLabel: 'HoReCa / Enterprise Contract Partner',
+            creditLimit: acc.creditLimitIDR,
+            outstandingAR: 0,
+            availableCredit: acc.creditLimitIDR,
+            status: 'ACTIVE',
+            overdueDaysMax: 0,
+            overdueInvoicesCount: 0,
+            contactPerson: `${acc.name} (${acc.phone})`,
+            phone: acc.phone,
+            email: acc.email,
+            address: `${acc.storeName} B2B Territory`,
+            paymentTermsAllowed: ['cash', 'net7', 'net14', 'net30', 'giro', 'transfer_proof'],
+          };
+          b2bCustomersList.push(b2bCust);
+          acc.linkedB2bCustomerId = newB2bId;
+        } else {
+          b2bCust.status = 'ACTIVE';
+          b2bCust.creditLimit = Math.max(b2bCust.creditLimit, acc.creditLimitIDR);
+          b2bCust.availableCredit = Math.max(0, b2bCust.creditLimit - b2bCust.outstandingAR);
+        }
+      }
+
+      emitEnterpriseNotification({
+        dedupeKey: `CRM_WON:${deal.id}`,
+        category: 'PROCUREMENT_FINANCE',
+        severity: 'INFO',
+        title: `B2B Deal Won: ${deal.companyName}`,
+        message: `${deal.title} (Est. Rp ${deal.estimatedMonthlyValueIDR.toLocaleString('id-ID')}/mo) closed WON by ${actorName}. Contract tier & credit limit activated.`,
+        metadataLabel: `${deal.id} • WON`,
+        targetTab: 'crm',
+      });
+    }
+
+    crmActivities.unshift({
+      id: `ACT-2026-${(crmActivities.length + 1).toString().padStart(3, '0')}`,
+      crmAccountId: deal.crmAccountId,
+      dealId: deal.id,
+      type: 'FOLLOW_UP',
+      subject: `Deal Stage Moved -> ${stage}`,
+      outcome: stage === 'WON' ? 'Auto-onboarded B2B contract tier & credit limit.' : `Updated by ${actorName}`,
+      performedBy: actorName,
+      timestamp: deal.updatedAt,
+    });
+
+    scheduleStateSave();
+    res.json({
+      success: true,
+      deal,
+      onboardedAccount,
+      message: stage === 'WON'
+        ? `Deal ${deal.id} WON! ${deal.companyName} contract tier & credit limit activated.`
+        : `Deal ${deal.id} moved to ${stage}.`,
+    });
+  });
+
+  app.post('/api/admin/crm/deals/:id/convert-quotation', (req: Request, res: Response) => {
+    const deal = crmDeals.find((d) => d.id === req.params.id);
+    if (!deal) return res.status(404).json({ error: 'CRM deal not found.' });
+
+    const { isBranchScoped, storeId: scopedBranch } = resolveRequestBranchScope(req);
+    if (isBranchScoped && scopedBranch !== 'ALL' && deal.storeId !== scopedBranch) {
+      return res.status(403).json({ error: `Branch isolation: Deal belongs to ${deal.storeId}.` });
+    }
+
+    if (deal.linkedQuotationId) {
+      const existingQ = enterpriseQuotationsList.find((q) => q.id === deal.linkedQuotationId);
+      if (existingQ) {
+        return res.json({
+          success: true,
+          deal,
+          quotation: existingQ,
+          message: `Linked Quotation ${existingQ.quotationNumber} already exists for this deal.`,
+        });
+      }
+    }
+
+    const acc = crmAccounts.find((a) => a.id === deal.crmAccountId);
+    const itemsSource =
+      deal.suggestedItems && deal.suggestedItems.length > 0
+        ? deal.suggestedItems
+        : acc && acc.topRecurringSkus.length > 0
+        ? acc.topRecurringSkus.map((s) => ({
+            sku: s.sku,
+            productName: s.name,
+            category: 'produce',
+            quantity: s.avgQty,
+            unit: s.unit,
+            unitPrice: s.unitPriceIDR,
+          }))
+        : [
+            {
+              sku: 'SKU-PRD-001',
+              productName: 'Organic Baby Romaine Lettuce',
+              category: 'produce',
+              quantity: 50,
+              unit: 'pack',
+              unitPrice: 24500,
+            },
+          ];
+
+    const quotationItems = itemsSource.map((it) => {
+      const inv = inventoryList.find((i) => i.sku === it.sku);
+      const qty = Math.max(1, Number(it.quantity) || 1);
+      const price = roundIDR(Number(it.unitPrice) || inv?.sellingPrice || 25000);
+      return {
+        sku: it.sku,
+        productName: it.productName || inv?.productName || it.sku,
+        category: it.category || inv?.category || 'produce',
+        quantity: qty,
+        unit: it.unit || inv?.unit || 'pack',
+        unitPrice: price,
+        unitCost: inv?.unitCost || Math.round(price * 0.65),
+        lineTotal: Math.round(qty * price),
+      };
+    });
+
+    const subtotal = quotationItems.reduce((s, it) => s + it.lineTotal, 0);
+    const taxAmount = Math.round(subtotal * 0.11);
+    const total = subtotal + taxAmount;
+    const today = new Date().toISOString().split('T')[0];
+    const validUntil = new Date(Date.now() + (enterpriseSettings.quotationsAndSales.defaultValidityDays || 14) * 86400000)
+      .toISOString()
+      .split('T')[0];
+    const quotationNumber = `QTN-2026-${(enterpriseQuotationsList.length + 1001).toString()}`;
+    const newQuo: EnterpriseQuotation = {
+      id: `QUO-2026-${(enterpriseQuotationsList.length + 1).toString().padStart(3, '0')}`,
+      quotationNumber,
+      customerName: deal.contactName,
+      customerCompany: deal.companyName,
+      customerEmail: deal.contactEmail,
+      customerPhone: deal.contactPhone,
+      date: today,
+      validUntil,
+      items: quotationItems,
+      subtotal,
+      taxAmount,
+      total,
+      currency: 'IDR',
+      requiredDepositPercent: enterpriseSettings.quotationsAndSales.paymentConfirmationThreshold === 'DEPOSIT_50' ? 50 : 0,
+      depositAmount:
+        enterpriseSettings.quotationsAndSales.paymentConfirmationThreshold === 'DEPOSIT_50'
+          ? Math.round(total * 0.5)
+          : 0,
+      signatureStatus: 'PENDING',
+      status: 'SENT',
+      notes: `Generated from CRM Deal ${deal.id}: ${deal.title}`,
+      isProForma: false,
+    };
+
+    enterpriseQuotationsList.unshift(newQuo);
+    deal.linkedQuotationId = newQuo.id;
+    deal.stage = 'QUOTATION_SENT';
+    deal.probabilityPct = 65;
+    deal.updatedAt = new Date().toISOString();
+
+    const actorName = getEffectiveOperatorName(req);
+    crmActivities.unshift({
+      id: `ACT-2026-${(crmActivities.length + 1).toString().padStart(3, '0')}`,
+      crmAccountId: deal.crmAccountId,
+      dealId: deal.id,
+      type: 'FOLLOW_UP',
+      subject: `Converted to Quotation ${newQuo.quotationNumber}`,
+      outcome: `Created Quotation ${newQuo.id} (Rp ${total.toLocaleString('id-ID')}) and moved deal to QUOTATION_SENT.`,
+      performedBy: actorName,
+      timestamp: deal.updatedAt,
+    });
+
+    scheduleStateSave();
+    res.json({
+      success: true,
+      deal,
+      quotation: newQuo,
+      message: `Quotation ${newQuo.quotationNumber} created & linked to Deal ${deal.id}.`,
+    });
+  });
+
+  app.post('/api/admin/crm/activities', (req: Request, res: Response) => {
+    const body = req.body || {};
+    const subject = String(body.subject || '').trim();
+    if (!subject) return res.status(400).json({ error: 'Activity subject is required.' });
+    const activity: CrmActivity = {
+      id: `ACT-2026-${(crmActivities.length + 1).toString().padStart(3, '0')}`,
+      crmAccountId: body.crmAccountId ? String(body.crmAccountId) : undefined,
+      dealId: body.dealId ? String(body.dealId) : undefined,
+      type: body.type || 'CALL',
+      subject,
+      outcome: String(body.outcome || 'Logged via CRM 360°').trim(),
+      performedBy: getEffectiveOperatorName(req),
+      timestamp: new Date().toISOString(),
+    };
+    crmActivities.unshift(activity);
+    scheduleStateSave();
+    res.json({ success: true, activity, message: `Logged ${activity.type} activity.` });
+  });
+
+  app.post('/api/admin/crm/campaigns/dispatch', async (req: Request, res: Response) => {
+    try {
+      const {
+        channel = 'whatsapp',
+        segment,
+        accountIds,
+        campaignTitle = 'GroceMart Loyalty & Restock Offer',
+        messageTemplate,
+        voucherCode,
+      } = req.body || {};
+
+      if (!['email', 'whatsapp', 'both'].includes(channel)) {
+        return res.status(400).json({ error: 'Invalid channel. Use email, whatsapp, or both.' });
+      }
+      if (!messageTemplate || !String(messageTemplate).trim()) {
+        return res.status(400).json({ error: 'Campaign message template is required.' });
+      }
+
+      const { isBranchScoped, storeId: scopedBranch } = resolveRequestBranchScope(req);
+      let targets = crmAccounts.filter((acc) => {
+        if (isBranchScoped && scopedBranch !== 'ALL' && acc.storeId !== scopedBranch) return false;
+        if (Array.isArray(accountIds) && accountIds.length > 0) {
+          return accountIds.includes(acc.id);
+        }
+        if (segment && segment !== 'ALL') {
+          return computeCrmRfmSegment(acc) === segment;
+        }
+        return false;
+      });
+
+      if (targets.length === 0) {
+        return res.status(400).json({ error: 'No matching CRM recipients found for the selected segment/accounts.' });
+      }
+
+      const actorName = getEffectiveOperatorName(req);
+      const campaignRef = `CMP-${Date.now().toString().slice(-6)}`;
+      const dispatchedLogs: CommunicationDispatchLog[] = [];
+      let lastWaMeUrl: string | undefined;
+
+      for (const acc of targets) {
+        const personalizedText = String(messageTemplate)
+          .replace(/\{\{name\}\}/gi, acc.companyName || acc.name)
+          .replace(/\{\{tier\}\}/gi, acc.tier)
+          .replace(/\{\{points\}\}/gi, acc.pointsBalance.toLocaleString('id-ID'))
+          .replace(/\{\{voucher\}\}/gi, String(voucherCode || 'GROCEVIP15'));
+
+        if (channel === 'email' || channel === 'both') {
+          if (acc.email) {
+            const emLog = await dispatchEmailMessage({
+              toEmail: acc.email,
+              subject: `[GroceMart 360°] ${campaignTitle}`,
+              htmlBody: `<div style="font-family:Arial,sans-serif;padding:20px;background:#fff;color:#0f172a;border:1px solid #e2e8f0;border-radius:12px;">
+                <h2 style="color:#0F4C3A;margin:0 0 10px;">${escapeHtmlText(campaignTitle)}</h2>
+                <p style="font-size:14px;line-height:1.6;">${escapeHtmlText(personalizedText)}</p>
+                <p style="font-size:12px;color:#475569;margin-top:16px;">Tier: <strong>${acc.tier}</strong> · Loyalty Points: <strong>${acc.pointsBalance.toLocaleString('id-ID')} pts</strong></p>
+              </div>`,
+              docType: 'CRM_CAMPAIGN',
+              docId: acc.id,
+              docNumber: campaignRef,
+              recipientName: acc.companyName || acc.name,
+              sentBy: actorName,
+            });
+            dispatchedLogs.push(emLog);
+          }
+        }
+
+        if (channel === 'whatsapp' || channel === 'both') {
+          if (acc.phone) {
+            const waLog = await dispatchWhatsappMessage({
+              toPhone: acc.phone,
+              messageText: personalizedText,
+              docType: 'CRM_CAMPAIGN',
+              docId: acc.id,
+              docNumber: campaignRef,
+              recipientName: acc.companyName || acc.name,
+              sentBy: actorName,
+            });
+            dispatchedLogs.push(waLog);
+            if (waLog.waMeUrl) lastWaMeUrl = waLog.waMeUrl;
+          }
+        }
+
+        crmActivities.unshift({
+          id: `ACT-CMP-${Date.now().toString().slice(-5)}-${Math.floor(Math.random() * 90 + 10)}`,
+          crmAccountId: acc.id,
+          type: 'CAMPAIGN',
+          subject: `${campaignTitle} (${channel.toUpperCase()})`,
+          outcome: `Dispatched via ${channel.toUpperCase()} (${campaignRef})`,
+          performedBy: actorName,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      scheduleStateSave();
+      res.json({
+        success: true,
+        campaignRef,
+        recipientCount: targets.length,
+        dispatchCount: dispatchedLogs.length,
+        waMeUrl: lastWaMeUrl,
+        logs: dispatchedLogs,
+        message: `Dispatched "${campaignTitle}" to ${targets.length} recipient(s) across ${dispatchedLogs.length} message(s).`,
+      });
+    } catch (err: any) {
+      res.status(400).json({
+        success: false,
+        error: err?.message || 'Campaign dispatch failed.',
+      });
+    }
   });
 
   // -------------------------------------------------------------

@@ -16,6 +16,8 @@ import type {
   SupportedCurrency,
   PosRegisterShiftSession,
   SkuTaxRule,
+  CrmAccountType,
+  CrmLoyaltyTier,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -27,7 +29,7 @@ import {
   SAMPLE_SCALE_BARCODES,
 } from '../../utils/groceryEngine.ts';
 import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
-import { PosRmaQuickModal, PosShiftModal } from './PosShiftAndReturnModals';
+import { PosRmaQuickModal, PosSafeDropModal, PosShiftModal } from './PosShiftAndReturnModals';
 import { usePrint } from '../../context/PrintContext';
 import {
   Scan,
@@ -62,6 +64,8 @@ import {
   UserCheck,
   Mail,
   MessageCircle,
+  Lock,
+  Award,
 } from 'lucide-react';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
 
@@ -133,6 +137,33 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [customerName, setCustomerName] = useState<string>('Walk-in Retail Shopper');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerMemberId, setCustomerMemberId] = useState<string>('');
+  const [selectedCrmMember, setSelectedCrmMember] = useState<{
+    id: string;
+    accountType: CrmAccountType;
+    name: string;
+    companyName?: string;
+    phone: string;
+    email: string;
+    tier: CrmLoyaltyTier;
+    pointsBalance: number;
+    contractDiscountPct: number;
+  } | null>(null);
+  const [isMemberLookupOpen, setIsMemberLookupOpen] = useState<boolean>(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState<string>('');
+  const [memberResults, setMemberResults] = useState<
+    Array<{
+      id: string;
+      accountType: CrmAccountType;
+      name: string;
+      companyName?: string;
+      phone: string;
+      email: string;
+      tier: CrmLoyaltyTier;
+      pointsBalance: number;
+      contractDiscountPct: number;
+    }>
+  >([]);
+  const [redeemPointsInput, setRedeemPointsInput] = useState<number>(0);
 
   // 4. Barcode Quick Scanner State
   const [barcodeInput, setBarcodeInput] = useState<string>('');
@@ -163,6 +194,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [activeShift, setActiveShift] = useState<PosRegisterShiftSession | null>(null);
   const [shiftHistory, setShiftHistory] = useState<PosRegisterShiftSession[]>([]);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState<boolean>(false);
+  const [isSafeDropModalOpen, setIsSafeDropModalOpen] = useState<boolean>(false);
   const [rmaTargetReceipt, setRmaTargetReceipt] = useState<POSTransactionReceipt | null>(null);
   const [isBarcodeLabelModalOpen, setIsBarcodeLabelModalOpen] = useState<boolean>(false);
 
@@ -229,14 +261,45 @@ export const PosModule: React.FC<PosModuleProps> = ({
     apiClient.getSkuTaxRules().then(setSkuTaxRules).catch(() => {});
   }, [effectiveStoreId]);
 
+  useEffect(() => {
+    if (!isMemberLookupOpen) return;
+    let active = true;
+    apiClient
+      .searchPosCrmMembers(memberSearchQuery)
+      .then((list) => {
+        if (active) setMemberResults(list);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isMemberLookupOpen, memberSearchQuery]);
+
   // Calculations (matching backend computeIndonesianTax per SKU)
   const subtotal = useMemo(() => {
     return cart.reduce((acc, item) => acc + item.lineTotal, 0);
   }, [cart]);
 
-  const discountAmount = useMemo(() => {
+  const baseDiscountAmount = useMemo(() => {
     return Math.round((subtotal * discountPercent) / 100);
   }, [subtotal, discountPercent]);
+
+  const maxRedeemablePoints = useMemo(() => {
+    if (!selectedCrmMember || selectedCrmMember.pointsBalance <= 0) return 0;
+    const maxByBill = Math.floor(Math.max(0, subtotal - baseDiscountAmount) / 100);
+    return Math.min(selectedCrmMember.pointsBalance, maxByBill);
+  }, [selectedCrmMember, subtotal, baseDiscountAmount]);
+
+  const effectiveRedeemPoints = useMemo(() => {
+    if (!selectedCrmMember) return 0;
+    return Math.min(maxRedeemablePoints, Math.max(0, Math.floor(redeemPointsInput || 0)));
+  }, [selectedCrmMember, maxRedeemablePoints, redeemPointsInput]);
+
+  const pointsDiscountIDR = effectiveRedeemPoints * 100;
+
+  const discountAmount = useMemo(() => {
+    return Math.min(subtotal, baseDiscountAmount + pointsDiscountIDR);
+  }, [subtotal, baseDiscountAmount, pointsDiscountIDR]);
 
   const { taxAmount, totalAmount } = useMemo(() => {
     const netRevenue = Math.max(0, subtotal - discountAmount);
@@ -380,6 +443,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
     setCustomerName('Walk-in Retail Shopper');
     setCustomerPhone('');
     setCustomerMemberId('');
+    setSelectedCrmMember(null);
+    setRedeemPointsInput(0);
+    setIsMemberLookupOpen(false);
+    setMemberSearchQuery('');
   };
 
   // Barcode search and instant add (including Variable-Weight embedded scale barcodes)
@@ -472,7 +539,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
         shiftId: activeStaffSession?.activeShiftId || 'SHIFT-JKT-SEN-MORNING',
         items: cart,
         subtotal,
-        discount: discountAmount,
+        discount: baseDiscountAmount,
         tax: taxAmount,
         total: totalAmount,
         currency: activeCurrency,
@@ -484,6 +551,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
         customerName,
         customerPhone,
         customerMemberId,
+        crmAccountId: selectedCrmMember?.id,
+        redeemPoints: effectiveRedeemPoints > 0 ? effectiveRedeemPoints : undefined,
       };
 
       const res = await apiClient.posCheckout(payload);
@@ -492,7 +561,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
         setCompletedReceipt(res.receipt);
         setIsTenderModalOpen(false);
         clearCart();
-        onShowToast('Checkout Complete', `Receipt #${res.receipt.receiptNumber} generated.`);
+        const ptsSummary =
+          res.receipt.loyaltyPointsEarned || res.receipt.loyaltyPointsRedeemed
+            ? ` (+${res.receipt.loyaltyPointsEarned || 0} pts earned${
+                res.receipt.loyaltyPointsRedeemed ? `, -${res.receipt.loyaltyPointsRedeemed} pts redeemed` : ''
+              })`
+            : '';
+        onShowToast('Checkout Complete', `Receipt #${res.receipt.receiptNumber} generated.${ptsSummary}`);
         // Reload products, shift totals, and notify parent dashboard to refresh GL and stock
         loadProducts();
         loadHistory();
@@ -588,6 +663,26 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   : 'Open Shift (Modal Awal)'}
               </span>
             </button>
+
+            {activeShift && (
+              <button
+                type="button"
+                onClick={() => setIsSafeDropModalOpen(true)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  (activeShift.expectedTotalCashInDrawerIDR || 0) >= 5000000
+                    ? 'bg-amber-500 text-zinc-950 border-amber-600 animate-pulse shadow-xs'
+                    : isLight
+                    ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    : 'bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700'
+                }`}
+                title="Mid-Shift Safe Drop (Setor Brankas) — Drawer #1011 to Safe #1010"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>
+                  Safe Drop ({formatIDR(activeShift.expectedTotalCashInDrawerIDR || 0)})
+                </span>
+              </button>
+            )}
 
             {/* Multi-Currency Dropdown */}
             <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-800 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-zinc-700">
@@ -796,9 +891,16 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       </div>
 
                       {/* Name & SKU */}
-                      <h4 className="text-xs font-bold line-clamp-2 text-slate-900 dark:text-zinc-100 leading-tight">
-                        {prod.name}
-                      </h4>
+                      <div className="flex items-start justify-between gap-1">
+                        <h4 className="text-xs font-bold line-clamp-2 text-slate-900 dark:text-zinc-100 leading-tight">
+                          {prod.name}
+                        </h4>
+                        {prod.isConsignment && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            Titip Jual
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-1">
                         <span className="font-mono">{prod.sku}</span>
                         <span>Stock: {prod.availableStock}</span>
@@ -890,40 +992,168 @@ export const PosModule: React.FC<PosModuleProps> = ({
               </div>
             </div>
 
-            {/* Customer Shopper Input */}
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Shopper / Member Name..."
-                className={`flex-1 text-xs px-2.5 py-1.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                  isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
-                }`}
-              />
-              <select
-                value={discountPercent}
-                disabled={!canOverrideDiscount}
-                onChange={(e) => {
-                  if (!canOverrideDiscount) return;
-                  setDiscountPercent(Number(e.target.value));
-                }}
-                title={
-                  canOverrideDiscount
-                    ? 'Apply discount tier'
-                    : 'Manual discount / price overrides require Store Manager+ clearance'
-                }
-                className={`text-xs px-2 py-1.5 rounded-xl border font-semibold ${
-                  canOverrideDiscount ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
-                } ${
-                  isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
-                }`}
-              >
-                <option value={0}>0% Disc</option>
-                <option value={5}>5% Member</option>
-                <option value={10}>10% Staff</option>
-                <option value={15}>15% Promo</option>
-              </select>
+            {/* Customer Shopper Input & Lightweight Member/Loyalty Pill */}
+            <div className="mt-3 space-y-2 relative">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Shopper / Member Name..."
+                  className={`flex-1 min-w-0 text-xs px-2.5 py-1.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsMemberLookupOpen((prev) => !prev)}
+                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0 transition-colors ${
+                    selectedCrmMember
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                      : isLight
+                      ? 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                      : 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
+                  }`}
+                  title="Attach CRM Member for Loyalty Points Earn/Redeem"
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  <span>{selectedCrmMember ? `${selectedCrmMember.tier}` : 'Member'}</span>
+                </button>
+                <select
+                  value={discountPercent}
+                  disabled={!canOverrideDiscount}
+                  onChange={(e) => {
+                    if (!canOverrideDiscount) return;
+                    setDiscountPercent(Number(e.target.value));
+                  }}
+                  title={
+                    canOverrideDiscount
+                      ? 'Apply discount tier'
+                      : 'Manual discount / price overrides require Store Manager+ clearance'
+                  }
+                  className={`text-xs px-2 py-1.5 rounded-xl border font-semibold ${
+                    canOverrideDiscount ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+                  } ${
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                  }`}
+                >
+                  <option value={0}>0% Disc</option>
+                  <option value={5}>5% Member</option>
+                  <option value={10}>10% Staff</option>
+                  <option value={15}>15% Promo</option>
+                </select>
+              </div>
+
+              {selectedCrmMember && (
+                <div
+                  className={`px-2.5 py-2 rounded-xl border text-[11px] flex flex-wrap items-center justify-between gap-2 ${
+                    isLight ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900' : 'bg-emerald-950/30 border-emerald-800/60 text-emerald-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-bold truncate">{selectedCrmMember.companyName || selectedCrmMember.name}</span>
+                    <span className="font-mono font-bold text-amber-600 dark:text-amber-400 shrink-0">
+                      {selectedCrmMember.pointsBalance.toLocaleString('id-ID')} pts
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedCrmMember.pointsBalance > 0 && cart.length > 0 && (
+                      <>
+                        <input
+                          type="number"
+                          min={0}
+                          max={maxRedeemablePoints}
+                          value={redeemPointsInput || ''}
+                          onChange={(e) => setRedeemPointsInput(Math.max(0, Number(e.target.value)))}
+                          placeholder="Redeem pts"
+                          className={`w-20 px-2 py-0.5 rounded-lg border text-[11px] font-mono ${
+                            isLight ? 'bg-white border-emerald-300 text-slate-900' : 'bg-zinc-900 border-emerald-700 text-white'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setRedeemPointsInput(maxRedeemablePoints)}
+                          className="px-1.5 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold cursor-pointer"
+                        >
+                          Max ({maxRedeemablePoints})
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCrmMember(null);
+                        setRedeemPointsInput(0);
+                        setCustomerMemberId('');
+                        setCustomerPhone('');
+                        setCustomerName('Walk-in Retail Shopper');
+                      }}
+                      className="p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                      title="Detach member"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isMemberLookupOpen && (
+                <div
+                  className={`absolute left-0 right-0 top-10 z-30 rounded-xl border p-2.5 shadow-xl space-y-2 ${
+                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-700 text-zinc-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Search className="w-3.5 h-3.5 text-zinc-400" />
+                    <input
+                      type="text"
+                      value={memberSearchQuery}
+                      onChange={(e) => setMemberSearchQuery(e.target.value)}
+                      placeholder="Search member name, company, or phone..."
+                      className={`flex-1 text-xs bg-transparent focus:outline-none`}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsMemberLookupOpen(false)}
+                      className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800">
+                    {memberResults.length === 0 ? (
+                      <p className="py-3 text-center text-[11px] text-zinc-400">No CRM members matched.</p>
+                    ) : (
+                      memberResults.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCrmMember(m);
+                            setCustomerName(m.companyName || m.name);
+                            setCustomerPhone(m.phone);
+                            setCustomerMemberId(m.id);
+                            setRedeemPointsInput(0);
+                            setIsMemberLookupOpen(false);
+                          }}
+                          className="w-full py-2 px-1.5 text-left hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg flex items-center justify-between gap-2 cursor-pointer"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold truncate">{m.companyName || m.name}</p>
+                            <p className="text-[10px] text-zinc-400 truncate">
+                              {m.phone} · {m.tier}
+                            </p>
+                          </div>
+                          <span className="text-[11px] font-mono font-bold text-amber-600 dark:text-amber-400 shrink-0">
+                            {m.pointsBalance.toLocaleString('id-ID')} pts
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Itemized Cart Rows */}
@@ -1006,7 +1236,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
             {discountAmount > 0 && (
               <div className="flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400">
-                <span>Discount ({discountPercent}%):</span>
+                <span>
+                  Discount ({discountPercent}%{pointsDiscountIDR > 0 ? ` + ${effectiveRedeemPoints} pts` : ''}):
+                </span>
                 <span className="font-mono">-{formatCurrency(discountAmount)}</span>
               </div>
             )}
@@ -1505,6 +1737,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
               {/* Footer / GL Audit Stamp */}
               <div className="pt-2 border-t border-dashed border-slate-300 text-center text-[9px] text-zinc-500 space-y-1">
+                {(completedReceipt.loyaltyPointsEarned || completedReceipt.loyaltyPointsRedeemed) && (
+                  <p className="text-[10px] font-bold text-emerald-700">
+                    Loyalty ({completedReceipt.crmMemberTier || 'MEMBER'}): +{completedReceipt.loyaltyPointsEarned || 0} pts earned
+                    {completedReceipt.loyaltyPointsRedeemed ? ` · -${completedReceipt.loyaltyPointsRedeemed} pts redeemed` : ''}
+                  </p>
+                )}
                 <p>GL Journal Vouchers: {completedReceipt.journalEntryIds.slice(0, 2).join(', ')}</p>
                 <p>*** TERIMA KASIH ATAS KUNJUNGAN ANDA ***</p>
                 <p className="text-[8px] text-zinc-400">Barang yang dibeli tidak dapat ditukar kecuali basi.</p>
@@ -1658,6 +1896,22 @@ export const PosModule: React.FC<PosModuleProps> = ({
         activeShift={activeShift}
         shiftHistory={shiftHistory}
         onShiftUpdated={() => {
+          loadShiftState();
+          if (onInventoryUpdated) onInventoryUpdated();
+        }}
+        onShowToast={onShowToast}
+      />
+
+      {/* 7B. POS SAFE DROP (SETOR BRANKAS) MODAL */}
+      <PosSafeDropModal
+        theme={theme}
+        isOpen={isSafeDropModalOpen}
+        onClose={() => setIsSafeDropModalOpen(false)}
+        storeId={effectiveStoreId}
+        storeName={currentStoreInfo.storeName}
+        activeShift={activeShift}
+        onSafeDropCompleted={(updatedShift) => {
+          setActiveShift(updatedShift);
           loadShiftState();
           if (onInventoryUpdated) onInventoryUpdated();
         }}

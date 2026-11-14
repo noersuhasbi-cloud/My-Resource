@@ -106,6 +106,7 @@ import { GroceryReportsModule } from './GroceryReportsModule';
 import { SettingsModule } from './SettingsModule';
 import { OdooInventoryView } from './OdooInventoryView';
 import { QuotationsModule } from './QuotationsModule';
+import { CrmLoyaltyModule } from './CrmLoyaltyModule';
 import { NotificationCenterPopover } from './NotificationCenterPopover';
 import {
   normalizeEnterpriseRole,
@@ -1965,6 +1966,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             enterpriseSettings={enterpriseSettings}
             onRefreshData={() => refreshAllData()}
             onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4C: STANDALONE CRM, LOYALTY & CUSTOMER 360°                           */}
+        {/* ========================================================================= */}
+        {activeTab === 'crm' && (
+          <CrmLoyaltyModule
+            theme={theme}
+            selectedStore={selectedGlobalStore}
+            storeOutlets={storeOutlets}
+            activeStaffSession={activeStaffSession}
+            onShowToast={onShowToast}
+            onNavigateToQuotations={() => setActiveTab('quotations')}
+            onRefreshData={() => refreshAllData()}
           />
         )}
 

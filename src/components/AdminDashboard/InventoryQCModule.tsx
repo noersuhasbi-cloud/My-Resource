@@ -5,6 +5,7 @@ import type {
   QCDisposition,
   QCDispositionAction,
   InventoryItem,
+  PutawaySuggestionResponse,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import {
@@ -25,8 +26,11 @@ import {
   Layers,
   Mail,
   MessageCircle,
+  MapPin,
+  ShieldAlert,
 } from 'lucide-react';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
+import { BatchRecallTraceModal } from './BatchRecallTraceModal';
 
 interface InventoryQCModuleProps {
   theme: 'light' | 'dark';
@@ -80,6 +84,12 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
     record: QCInspectionRecord;
     channel: 'email' | 'whatsapp';
   } | null>(null);
+  const [recallLotModal, setRecallLotModal] = useState<string | null>(null);
+
+  // Directed Putaway Suggestion State
+  const [putawaySuggestion, setPutawaySuggestion] = useState<PutawaySuggestionResponse | null>(null);
+  const [putawayLoading, setPutawayLoading] = useState<boolean>(false);
+  const [selectedPutawayRack, setSelectedPutawayRack] = useState<string>('');
 
   // New Inspection Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -105,6 +115,42 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   const [disposition, setDisposition] = useState<QCDisposition>('PASSED');
   const [actionTaken, setActionTaken] = useState<QCDispositionAction>('RELEASE_TO_SHELF');
   const [notes, setNotes] = useState<string>('Standard quality inspection passed. Zero signs of bruising or pest activity.');
+
+  React.useEffect(() => {
+    if (!isModalOpen || disposition !== 'PASSED' || !selectedSku) {
+      setPutawaySuggestion(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchSuggestion = async () => {
+      setPutawayLoading(true);
+      try {
+        const selectedItem = inventory.find((i) => i.sku === selectedSku);
+        const targetStore = selectedStore === 'CONSOLIDATED' ? 'store-jkt-senopati' : selectedStore;
+        const res = await apiClient.getQcPutawaySuggestion({
+          sku: selectedSku,
+          storeId: targetStore,
+          qty: totalBatchQty,
+          lotNumber: batchNumber,
+          category: selectedItem?.category,
+        });
+        if (!cancelled) {
+          setPutawaySuggestion(res);
+          setSelectedPutawayRack(res.recommendedRack?.rackBinCode || '');
+        }
+      } catch {
+        if (!cancelled) {
+          setPutawaySuggestion(null);
+        }
+      } finally {
+        if (!cancelled) setPutawayLoading(false);
+      }
+    };
+    fetchSuggestion();
+    return () => {
+      cancelled = true;
+    };
+  }, [isModalOpen, disposition, selectedSku, selectedStore, totalBatchQty, batchNumber, inventory]);
 
   // Auto-adjust disposition based on defect parameters
   const handleTempChange = (temp: number) => {
@@ -135,7 +181,9 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
     setIsSubmitting(true);
     try {
       const selectedItem = inventory.find((i) => i.sku === selectedSku);
+      const targetStore = selectedStore === 'CONSOLIDATED' ? 'store-jkt-senopati' : selectedStore;
       const res = await apiClient.submitQCInspection({
+        storeId: targetStore,
         referenceType: refType,
         referenceId: refId,
         sku: selectedSku,
@@ -155,12 +203,15 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
         },
         disposition,
         actionTaken,
+        putawayRackBinCode: disposition === 'PASSED' && selectedPutawayRack ? selectedPutawayRack : undefined,
         notes,
       });
 
       onShowToast(
         'QC Inspection Logged',
-        `Batch ${batchNumber} dispositioned as ${disposition} (${actionTaken.replace(/_/g, ' ')}).`
+        `Batch ${batchNumber} dispositioned as ${disposition} (${actionTaken.replace(/_/g, ' ')})${
+          res?.record?.putawayRackBinCode ? ` · Putaway: ${res.record.putawayRackBinCode}` : ''
+        }.`
       );
       setIsModalOpen(false);
       if (onRefreshData) onRefreshData();
@@ -428,10 +479,16 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                     </span>
                   </td>
 
-                  <td className="py-3.5 px-4">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-zinc-700">
+                  <td className="py-3.5 px-4 space-y-1">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-zinc-700 inline-block">
                       {rec.actionTaken.replace(/_/g, ' ')}
                     </span>
+                    {rec.putawayRackBinCode && (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
+                        <MapPin className="w-2.5 h-2.5" />
+                        <span>Rack: {rec.putawayRackBinCode}</span>
+                      </div>
+                    )}
                   </td>
 
                   <td className="py-3.5 px-4 text-[11px] max-w-xs space-y-1.5">
@@ -463,6 +520,19 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                       >
                         <MessageCircle className="w-3 h-3" />
                         <span>WhatsApp</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRecallLotModal(rec.batchNumber)}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold cursor-pointer ${
+                          isLight
+                            ? 'border-rose-200 text-rose-700 hover:bg-rose-50'
+                            : 'border-rose-800/60 text-rose-300 hover:bg-rose-950/30'
+                        }`}
+                        title="1-Click BPOM/HACCP Batch Recall Traceability"
+                      >
+                        <ShieldAlert className="w-3 h-3" />
+                        <span>Recall Trace</span>
                       </button>
                       {(rec.disposition === 'REJECTED' || rec.disposition === 'QUARANTINED') && (
                         <button
@@ -737,6 +807,64 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                 </div>
               </div>
 
+              {/* Directed Putaway Slotting Recommendation (for PASSED lots) */}
+              {disposition === 'PASSED' && (
+                <div
+                  className={`p-3.5 rounded-xl border space-y-2 ${
+                    isLight
+                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                      : 'bg-emerald-950/25 border-emerald-800/50 text-emerald-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                      <MapPin className="w-3.5 h-3.5" />
+                      Directed Putaway &amp; Zone-Aware Rack Slotting
+                    </span>
+                    {putawaySuggestion?.requiredStorageZone && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
+                        {putawaySuggestion.requiredStorageZone}
+                      </span>
+                    )}
+                  </div>
+                  {putawayLoading ? (
+                    <div className="text-[11px] opacity-75">Computing optimal cold-chain / lot-segregated rack...</div>
+                  ) : putawaySuggestion?.recommendedRack ? (
+                    <div className="space-y-2">
+                      <div className="text-[11px] leading-snug">
+                        <strong>Recommended Bin:</strong>{' '}
+                        <span className="font-mono font-bold">{putawaySuggestion.recommendedRack.rackBinCode}</span> —{' '}
+                        {putawaySuggestion.reason}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold mb-1 opacity-80">
+                          Assign Putaway Rack Bin (Auto-Selected or Override)
+                        </label>
+                        <select
+                          value={selectedPutawayRack}
+                          onChange={(e) => setSelectedPutawayRack(e.target.value)}
+                          className={`w-full px-2.5 py-1.5 rounded-lg border font-mono text-xs font-bold ${
+                            isLight ? 'bg-white border-emerald-300 text-gray-900' : 'bg-zinc-900 border-emerald-700 text-zinc-100'
+                          }`}
+                        >
+                          {[putawaySuggestion.recommendedRack, ...putawaySuggestion.alternatives].map((cand, idx) => (
+                            <option key={cand.rackBinCode} value={cand.rackBinCode}>
+                              {idx === 0 ? '★ ' : ''}
+                              {cand.rackBinCode} · {cand.storageZone} · Free {cand.remainingCapacity}/{cand.maxCapacity} (
+                              {cand.rotationPolicy})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] opacity-80">
+                      No matching zone rack configured yet — batch will release to general zone stock.
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-800' : 'text-zinc-200'} dark:text-zinc-200`}>
                   Inspector Notes
@@ -800,6 +928,19 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
           />
         );
       })()}
+      {recallLotModal !== null && (
+        <BatchRecallTraceModal
+          isOpen={recallLotModal !== null}
+          onClose={() => setRecallLotModal(null)}
+          theme={theme}
+          initialLotNumber={recallLotModal}
+          onShowToast={onShowToast}
+          onRecallExecuted={() => {
+            if (onRefreshData) onRefreshData();
+            loadQcData();
+          }}
+        />
+      )}
   </>
 );
 };

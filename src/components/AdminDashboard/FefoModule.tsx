@@ -39,7 +39,9 @@ import {
   ArrowDownRight,
   Barcode,
   Info,
+  ShieldAlert,
 } from 'lucide-react';
+import { BatchRecallTraceModal } from './BatchRecallTraceModal';
 
 interface FefoModuleProps {
   theme: 'light' | 'dark';
@@ -75,6 +77,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
   const [appliedMarkdownBatches, setAppliedMarkdownBatches] = useState<Set<string>>(new Set());
   const [isPushingMarkdown, setIsPushingMarkdown] = useState<boolean>(false);
   const [selectedBatchForSticker, setSelectedBatchForSticker] = useState<BatchMarkdownCandidate | null>(null);
+  const [recallTargetLot, setRecallTargetLot] = useState<string | null>(null);
 
   const isLight = theme === 'light';
 
@@ -631,6 +634,11 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                         <div className="text-[11px] font-mono text-slate-600 dark:text-zinc-300 font-semibold">
                           {batch.lotNumber}
                         </div>
+                        {batch.rackBinCode && (
+                          <div className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">
+                            Bin: {batch.rackBinCode}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3 px-4">
@@ -701,22 +709,41 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                         {formatIDR(batch.currentStock * batch.unitCost)}
                       </td>
 
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-4 text-center space-y-1.5">
                         <span
                           className={`inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
-                            isCritical
+                            batch.status === 'recalled'
+                              ? 'bg-rose-600 text-white border border-rose-700'
+                              : isCritical
                               ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
                               : isNear
                               ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
                               : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                           }`}
                         >
-                          {batch.daysUntilExpiry <= 2
+                          {batch.status === 'recalled'
+                            ? 'Recalled'
+                            : batch.daysUntilExpiry <= 2
                             ? 'Critical'
                             : batch.daysUntilExpiry <= 5
                             ? 'Near Expiry'
                             : 'Fresh'}
                         </span>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => setRecallTargetLot(batch.lotNumber)}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold cursor-pointer transition-colors ${
+                              isLight
+                                ? 'border-rose-200 text-rose-700 hover:bg-rose-50'
+                                : 'border-rose-800/60 text-rose-300 hover:bg-rose-950/30'
+                            }`}
+                            title="Trace lot origin & downstream POS/B2B exposure"
+                          >
+                            <ShieldAlert className="w-3 h-3" />
+                            <span>Recall Trace</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1200,6 +1227,17 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
           </div>
         </div>,
         document.body
+      )}
+
+      {recallTargetLot !== null && (
+        <BatchRecallTraceModal
+          isOpen={recallTargetLot !== null}
+          onClose={() => setRecallTargetLot(null)}
+          theme={theme}
+          initialLotNumber={recallTargetLot}
+          onShowToast={onShowToast}
+          onRecallExecuted={() => loadBatches()}
+        />
       )}
     </div>
   );

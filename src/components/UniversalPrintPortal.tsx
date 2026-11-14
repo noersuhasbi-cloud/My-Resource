@@ -133,6 +133,90 @@ export function renderPrintDocument(
       }
 
       // =====================================================================
+      // FORMAT GROUP A: 80mm THERMAL POS SAFE DROP (SLIP SETOR BRANKAS)
+      // =====================================================================
+      case 'pos_safe_drop': {
+        const d = activePrintPayload.safeDrop;
+        return (
+          <div className="print-page-thermal80 bg-white text-black font-mono text-[10px] leading-snug p-1 space-y-2.5">
+            <div className="text-center space-y-1 pb-2 border-b border-dashed border-black">
+              <h3 className="font-black text-xs uppercase tracking-wider">
+                SLIP SETOR BRANKAS
+              </h3>
+              <p className="text-[9.5px] font-bold">POS CASH SAFE DROP RECEIPT</p>
+              <p className="text-[9px]">{d.storeName}</p>
+            </div>
+
+            <div className="text-[9.5px] space-y-0.5 pb-2 border-b border-dashed border-black">
+              <div className="flex justify-between">
+                <span>Slip #:</span>
+                <span className="font-bold">{d.slipNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Timestamp:</span>
+                <span>{new Date(d.timestamp).toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Shift / Reg:</span>
+                <span>{d.shiftId} / {d.registerId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Cashier:</span>
+                <span className="font-bold">{d.cashierName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Supervisor:</span>
+                <span>{d.supervisorName || 'Store Manager'}</span>
+              </div>
+              {d.sealBagNumber && (
+                <div className="flex justify-between">
+                  <span>Seal Bag #:</span>
+                  <span className="font-bold">{d.sealBagNumber}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1 pb-2 border-b border-dashed border-black text-[9.5px]">
+              <div className="flex justify-between">
+                <span>Drawer Before:</span>
+                <span>{formatIDR(d.drawerBalanceBeforeIDR)}</span>
+              </div>
+              <div className="flex justify-between font-black text-[11px] py-1 border-y border-black">
+                <span>SAFE DROP (1010):</span>
+                <span>{formatIDR(d.amountIDR)}</span>
+              </div>
+              <div className="flex justify-between font-bold">
+                <span>Drawer Remaining (1011):</span>
+                <span>{formatIDR(d.drawerBalanceAfterIDR)}</span>
+              </div>
+              {d.glVoucherIds.length > 0 && (
+                <div className="text-[8.5px] pt-1">
+                  GL: {d.glVoucherIds.join(', ')}
+                </div>
+              )}
+              {d.notes && (
+                <div className="text-[8.5px] italic">Note: {d.notes}</div>
+              )}
+            </div>
+
+            <div className="pt-3 text-[8.5px] text-center space-y-5">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="mb-6">Cashier Sign</p>
+                  <div className="border-t border-black pt-0.5">{d.cashierName}</div>
+                </div>
+                <div>
+                  <p className="mb-6">Vault Supervisor</p>
+                  <div className="border-t border-black pt-0.5">{d.supervisorName || 'Supervisor'}</div>
+                </div>
+              </div>
+              <p>Printed: {printedAt}</p>
+            </div>
+          </div>
+        );
+      }
+
+      // =====================================================================
       // FORMAT GROUP A: 80mm THERMAL POS SHIFT Z-REPORT
       // =====================================================================
       case 'pos_zreport': {
@@ -190,6 +274,12 @@ export function renderPrintDocument(
                 <span>Cash Refunds:</span>
                 <span>-{formatIDR(s.cashRefundsIDR)}</span>
               </div>
+              {(s.safeDropsTotalIDR || 0) > 0 && (
+                <div className="flex justify-between">
+                  <span>Safe Drops (Setor Brankas):</span>
+                  <span>-{formatIDR(s.safeDropsTotalIDR || 0)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold border-t border-dotted border-black pt-0.5">
                 <span>Expected Cash Drawer:</span>
                 <span>{formatIDR(s.expectedTotalCashInDrawerIDR)}</span>
@@ -1551,6 +1641,7 @@ export function renderPrintDocument(
           b2b_ar: 'B2B WHOLESALE AR & BILYET GIRO REGISTER',
           analytic_budgets: 'ANALYTIC COST CENTERS & DEPARTMENTAL BUDGETS',
           margin_analysis: 'REAL-TIME PRODUCT MARGIN ANALYSIS',
+          consignment: 'CONSIGNMENT (TITIP JUAL) SETTLEMENT LEDGER',
         };
 
         return (

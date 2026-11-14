@@ -25,6 +25,7 @@ import type {
   VendorCreditNote,
   VendorRtvDebitNote,
   BatchMarkdownCandidate,
+  SafeDropRecord,
 } from '../types/index.ts';
 import type { LabelableProductItem } from '../components/AdminDashboard/BarcodeShelfLabelModal';
 import type { AccountingSubTab } from '../components/AdminDashboard/AdminSidebar';
@@ -42,6 +43,11 @@ export type PrintPayload =
       type: 'pos_zreport';
       format: 'thermal80';
       shift: PosRegisterShiftSession;
+    }
+  | {
+      type: 'pos_safe_drop';
+      format: 'thermal80';
+      safeDrop: SafeDropRecord;
     }
   | {
       type: 'b2c_receipt';

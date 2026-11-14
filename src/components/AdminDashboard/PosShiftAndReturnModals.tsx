@@ -10,6 +10,7 @@ import {
   RotateCcw,
   ShieldCheck,
   X,
+  Lock,
 } from 'lucide-react';
 import type {
   POSTransactionReceipt,
@@ -17,6 +18,7 @@ import type {
   PosShiftDenominationCount,
   RmaDisposition,
   RmaRefundMethod,
+  SafeDropRecord,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -211,8 +213,11 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                 <span className="text-base font-bold block mt-1">
                   {formatIDR(finalizedZReport.expectedTotalCashInDrawerIDR)}
                 </span>
-                <span className="text-[10px] text-gray-500 dark:text-zinc-400">
+                <span className="text-[10px] text-gray-500 dark:text-zinc-400 block">
                   Float {formatIDR(finalizedZReport.openingFloatIDR)} + Sales {formatIDR(finalizedZReport.expectedCashSalesIDR)}
+                  {(finalizedZReport.safeDropsTotalIDR || 0) > 0
+                    ? ` − Safe Drops ${formatIDR(finalizedZReport.safeDropsTotalIDR || 0)}`
+                    : ''}
                 </span>
               </div>
 
@@ -361,6 +366,9 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
               </div>
               <span className="font-mono font-bold">
                 Txns Logged: {activeShift.transactionCount}
+                {(activeShift.safeDropsTotalIDR || 0) > 0
+                  ? ` · Safe Drops: ${formatIDR(activeShift.safeDropsTotalIDR || 0)}`
+                  : ''}
               </span>
             </div>
 
@@ -737,6 +745,282 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
             </button>
           </div>
         </form>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+// ============================================================================
+// POS CASHIER SAFE DROP (SETOR BRANKAS) MODAL
+// ============================================================================
+interface PosSafeDropModalProps {
+  theme: 'light' | 'dark';
+  isOpen: boolean;
+  onClose: () => void;
+  storeId: string;
+  storeName: string;
+  activeShift: PosRegisterShiftSession | null;
+  onSafeDropCompleted: (updatedShift: PosRegisterShiftSession, safeDrop: SafeDropRecord) => void;
+  onShowToast: (title: string, message: string) => void;
+}
+
+export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
+  theme,
+  isOpen,
+  onClose,
+  storeId,
+  storeName,
+  activeShift,
+  onSafeDropCompleted,
+  onShowToast,
+}) => {
+  const isLight = theme === 'light';
+  const { triggerPrint } = usePrint();
+  const [amountIDR, setAmountIDR] = useState<number>(1000000);
+  const [supervisorName, setSupervisorName] = useState<string>('Store Manager / Head Cashier');
+  const [sealBagNumber, setSealBagNumber] = useState<string>(`BAG-${Date.now().toString().slice(-5)}`);
+  const [notes, setNotes] = useState<string>('Mid-shift drawer cash skim to back-office vault');
+  const [recentDrops, setRecentDrops] = useState<SafeDropRecord[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const drawerBalance = activeShift?.expectedTotalCashInDrawerIDR ?? 0;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setSealBagNumber(`BAG-${Date.now().toString().slice(-5)}`);
+    if (drawerBalance > 0 && amountIDR > drawerBalance) {
+      setAmountIDR(Math.max(100000, Math.floor(drawerBalance / 100000) * 100000));
+    }
+    apiClient
+      .getPosSafeDrops(storeId, activeShift?.id)
+      .then(setRecentDrops)
+      .catch(() => {});
+  }, [isOpen, storeId, activeShift?.id]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeShift) {
+      onShowToast('No Active Shift', 'Please open a POS Register Shift before executing a Safe Drop.');
+      return;
+    }
+    if (amountIDR <= 0 || amountIDR > drawerBalance) {
+      onShowToast(
+        'Invalid Safe Drop Amount',
+        `Safe drop amount (${formatIDR(amountIDR)}) must be > 0 and <= current drawer balance (${formatIDR(drawerBalance)}).`
+      );
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await apiClient.createPosSafeDrop({
+        storeId,
+        shiftId: activeShift.id,
+        amountIDR,
+        supervisorName,
+        sealBagNumber,
+        notes,
+      });
+      onShowToast('Safe Drop Recorded', res.message);
+      onSafeDropCompleted(res.shift, res.safeDrop);
+      onClose();
+      triggerPrint({
+        type: 'pos_safe_drop',
+        format: 'thermal80',
+        safeDrop: res.safeDrop,
+      });
+    } catch (err: any) {
+      onShowToast('Safe Drop Failed', err?.message || 'Unable to execute safe drop');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className={`w-full max-w-lg rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
+          isLight
+            ? 'bg-white border-gray-200 text-slate-900'
+            : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 pb-3 border-b border-gray-200 dark:border-zinc-800">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                POS Treasury · COA #1011 → #1010
+              </span>
+              <h3 className="text-base font-bold">Cashier Safe Drop (Setor Brankas)</h3>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div
+          className={`p-3.5 rounded-xl border grid grid-cols-2 gap-3 text-xs font-mono ${
+            drawerBalance >= 5000000
+              ? 'bg-amber-500/10 border-amber-500/30'
+              : isLight
+              ? 'bg-gray-50 border-gray-200'
+              : 'bg-zinc-800/60 border-zinc-700'
+          }`}
+        >
+          <div>
+            <span className="text-[10px] font-sans opacity-75 block">Current Drawer Cash (#1011)</span>
+            <span className="text-sm font-bold text-[#0F4C3A] dark:text-emerald-400">
+              {formatIDR(drawerBalance)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] font-sans opacity-75 block">Shift Safe Drops So Far</span>
+            <span className="text-sm font-bold">
+              {formatIDR(activeShift?.safeDropsTotalIDR || 0)}
+            </span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          <div>
+            <label className="block font-semibold mb-1">Safe Drop Amount (IDR)</label>
+            <input
+              type="number"
+              min={10000}
+              max={Math.max(10000, drawerBalance)}
+              step={50000}
+              value={amountIDR}
+              onChange={(e) => setAmountIDR(Math.max(0, Number(e.target.value) || 0))}
+              className={`w-full px-3 py-2 rounded-xl border font-mono text-sm font-bold ${
+                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+              }`}
+            />
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {[500000, 1000000, 2000000, 5000000].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  disabled={preset > drawerBalance}
+                  onClick={() => setAmountIDR(preset)}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono font-bold cursor-pointer disabled:opacity-40 ${
+                    isLight ? 'bg-gray-50 border-gray-200 hover:bg-gray-100' : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700'
+                  }`}
+                >
+                  {formatIDR(preset)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold mb-1">Receiving Supervisor / Witness</label>
+              <input
+                type="text"
+                value={supervisorName}
+                onChange={(e) => setSupervisorName(e.target.value)}
+                className={`w-full px-3 py-2 rounded-xl border ${
+                  isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                }`}
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1">Tamper-Evident Seal Bag #</label>
+              <input
+                type="text"
+                value={sealBagNumber}
+                onChange={(e) => setSealBagNumber(e.target.value)}
+                className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                  isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                }`}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold mb-1">Notes</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className={`w-full px-3 py-2 rounded-xl border ${
+                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+              }`}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 font-semibold cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || !activeShift || amountIDR <= 0 || amountIDR > drawerBalance}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-bold cursor-pointer disabled:opacity-50"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>{isSubmitting ? 'Recording Drop...' : 'Confirm Safe Drop & Print Slip'}</span>
+            </button>
+          </div>
+        </form>
+
+        {recentDrops.length > 0 && (
+          <div className="pt-3 border-t border-gray-200 dark:border-zinc-800 space-y-1.5">
+            <div className="text-[10px] font-bold uppercase tracking-wider opacity-70">
+              Shift Safe Drop Audit History ({storeName})
+            </div>
+            <div className="space-y-1 max-h-28 overflow-y-auto">
+              {recentDrops.slice(0, 4).map((sd) => (
+                <div
+                  key={sd.id}
+                  className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between text-[11px] font-mono ${
+                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/40 border-zinc-800'
+                  }`}
+                >
+                  <span>
+                    {sd.slipNumber} · {sd.sealBagNumber || 'Vault'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                      {formatIDR(sd.amountIDR)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        triggerPrint({
+                          type: 'pos_safe_drop',
+                          format: 'thermal80',
+                          safeDrop: sd,
+                        })
+                      }
+                      className="text-[10px] underline cursor-pointer"
+                    >
+                      Reprint
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body
