@@ -15,9 +15,11 @@ import type {
   WasteRecord,
   WholesaleProduct,
   StoreOutletSchedule,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import type { AdminDashboardTab } from './AdminSidebar';
 import { formatIDR } from '../../utils/formatters';
+import { canSessionViewValuation } from '../../utils/rbac';
 import {
   formatMultiUomStock,
   getOdooSkuProfile,
@@ -53,6 +55,7 @@ import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
 
 interface OdooInventoryViewProps {
   theme: 'light' | 'dark';
+  activeStaffSession?: StaffShiftSession | null;
   selectedOutletFilter: string;
   onOutletFilterChange: (val: string) => void;
   selectedStorageZoneFilter: string;
@@ -145,6 +148,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   theme,
+  activeStaffSession,
   selectedOutletFilter,
   onOutletFilterChange,
   selectedStorageZoneFilter,
@@ -172,6 +176,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const canViewValuation = canSessionViewValuation(activeStaffSession);
   const [viewMode, setViewMode] = useState<InventoryViewMode>('kanban');
   const [hubFilter, setHubFilter] = useState<HubScope>('ALL');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('ALL');
@@ -720,10 +725,12 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800">
           <div className={`${subCardClass} p-3`}>
             <span className={`text-[11px] font-medium ${textMuted} block`}>
-              Asset Valuation (COA #1040)
+              {canViewValuation ? 'Asset Valuation (COA #1040)' : 'Active Tracked Quants'}
             </span>
             <span className={`text-sm sm:text-base font-bold font-mono tabular-nums ${textTitle} mt-0.5 block`}>
-              {formatIDR(summaryMetrics.totalValuationIDR)}
+              {canViewValuation
+                ? formatIDR(summaryMetrics.totalValuationIDR)
+                : `${enrichedListRows.length} Stock Quants`}
             </span>
           </div>
 
@@ -1034,7 +1041,9 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                     <th className="py-3 px-3.5">Lot / Batch &amp; Expiry</th>
                     <th className="py-3 px-3 text-center">Removal Strategy</th>
                     <th className="py-3 px-3.5">Multi-UoM Stock (On Hand / Res / ATP)</th>
-                    <th className="py-3 px-3.5 text-right">Unit Cost &amp; Valuation</th>
+                    {canViewValuation && (
+                      <th className="py-3 px-3.5 text-right">Unit Cost &amp; Valuation</th>
+                    )}
                     <th className="py-3 px-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1174,14 +1183,16 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                         </td>
 
                         {/* 6. Moving Avg Unit Cost & Asset Valuation */}
-                        <td className="py-3 px-3.5 text-right font-mono tabular-nums min-w-[140px]">
-                          <div className={`text-[11px] font-bold ${textTitle}`}>
-                            {formatIDR(totalValuation)}
-                          </div>
-                          <div className={`text-[10px] ${textMuted} mt-0.5`}>
-                            Avg: {formatIDR(row.unitCost)} / {profile.uomConversion.baseUnitLabel}
-                          </div>
-                        </td>
+                        {canViewValuation && (
+                          <td className="py-3 px-3.5 text-right font-mono tabular-nums min-w-[140px]">
+                            <div className={`text-[11px] font-bold ${textTitle}`}>
+                              {formatIDR(totalValuation)}
+                            </div>
+                            <div className={`text-[10px] ${textMuted} mt-0.5`}>
+                              Avg: {formatIDR(row.unitCost)} / {profile.uomConversion.baseUnitLabel}
+                            </div>
+                          </td>
+                        )}
 
                         {/* 7. Actions */}
                         <td className="py-3 px-3.5 text-right whitespace-nowrap">
@@ -1246,7 +1257,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
 
                   {enrichedListRows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-xs">
+                      <td colSpan={canViewValuation ? 7 : 6} className="py-10 text-center text-xs">
                         <span className={textMuted}>
                           No inventory quants match the active warehouse, channel, or strategy filters.
                         </span>

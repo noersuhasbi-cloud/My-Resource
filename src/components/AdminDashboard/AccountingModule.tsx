@@ -13,6 +13,7 @@ import type {
   B2BCustomer,
   GiroPaymentRecord,
   EnterpriseSettingsConfig,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import {
@@ -52,6 +53,7 @@ import { ComplianceAccountingPanels } from './ComplianceAccountingPanels';
 import { AnalyticMarginModule } from './AnalyticMarginModule';
 import { usePrint } from '../../context/PrintContext';
 import type { AccountingSubTab } from './AdminSidebar';
+import { isBranchScopedRole, normalizeEnterpriseRole } from '../../utils/rbac';
 
 const FX_RATES: Record<SupportedCurrency, { symbol: string; rate: number; label: string }> = {
   IDR: { symbol: 'Rp', rate: 1, label: 'IDR (Base)' },
@@ -77,6 +79,7 @@ interface AccountingModuleProps {
   onShowToast: (title: string, message: string) => void;
   activeSubTab?: AccountingSubTab;
   onSubTabChange?: (subTab: AccountingSubTab) => void;
+  activeStaffSession?: StaffShiftSession | null;
 }
 
 export const AccountingModule: React.FC<AccountingModuleProps> = ({
@@ -96,9 +99,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   onShowToast,
   activeSubTab,
   onSubTabChange,
+  activeStaffSession,
 }) => {
   const isLight = theme === 'light';
   const { triggerPrint } = usePrint();
+  const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
+  const canManageAccountingAndGiro = ['admin', 'coo', 'super_admin'].includes(canonicalRole);
+  const isBranchLocked = isBranchScopedRole(canonicalRole);
 
   // Multi-Currency Selection (Module 4)
   const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>('IDR');
@@ -298,17 +305,20 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </span>
               <select
                 value={selectedStore}
+                disabled={isBranchLocked}
                 onChange={(e) => {
                   onStoreChange(e.target.value);
                   onShowToast('Accounting Scope Changed', `Reporting scope set to ${e.target.value}`);
                 }}
-                className={`px-3 py-2 text-xs font-semibold rounded-xl border focus:outline-none focus:border-[#0F4C3A] transition-all ${
+                className={`px-3 py-2 text-xs font-semibold rounded-xl border focus:outline-none focus:border-[#0F4C3A] transition-all disabled:opacity-65 disabled:cursor-not-allowed ${
                   isLight
                     ? 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50'
                     : 'bg-zinc-800 border-zinc-700 text-white'
                 }`}
               >
-                <option value="CONSOLIDATED">Consolidated Company-Wide (All Outlets)</option>
+                {!isBranchLocked && (
+                  <option value="CONSOLIDATED">Consolidated Company-Wide (All Outlets)</option>
+                )}
                 <option value="store-jkt-senopati">Senopati Flagship Hub (Jakarta)</option>
                 <option value="store-jkt-pik">PIK 2 The Avenue Hub (Jakarta)</option>
                 <option value="store-jkt-menteng">Menteng Heritage Hub (Jakarta)</option>
@@ -924,7 +934,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                             Counter-Voucher
                           </span>
-                        ) : (
+                        ) : canManageAccountingAndGiro ? (
                           <button
                             onClick={() => setReversingEntry(entry)}
                             className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all ${
@@ -936,6 +946,8 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           >
                             Reverse Entry
                           </button>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 font-mono">Posted</span>
                         )}
                       </td>
                     </tr>
@@ -1058,6 +1070,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           goodsReceipts={goodsReceipts}
           onRefreshData={onRefreshData}
           onShowToast={onShowToast}
+          activeStaffSession={activeStaffSession}
         />
       )}
 
@@ -1202,17 +1215,21 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           )}
                         </td>
                         <td className="py-3.5 px-3.5 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleCustomerLock(cust)}
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer whitespace-nowrap ${
-                              isLocked
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/25 dark:hover:bg-emerald-500/20'
-                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/25 dark:hover:bg-rose-500/20'
-                            }`}
-                          >
-                            {isLocked ? 'Restore Facility' : 'Freeze Credit'}
-                          </button>
+                          {canManageAccountingAndGiro ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleCustomerLock(cust)}
+                              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer whitespace-nowrap ${
+                                isLocked
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/25 dark:hover:bg-emerald-500/20'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/25 dark:hover:bg-rose-500/20'
+                              }`}
+                            >
+                              {isLocked ? 'Restore Facility' : 'Freeze Credit'}
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-gray-400 font-mono">Controller Only</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -1295,26 +1312,30 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                       </td>
                       <td className="py-3.5 px-3.5 text-right">
                         {giro.status === 'PENDING_CLEARING' ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              disabled={isProcessingGiro}
-                              onClick={() => handleClearGiro(giro.id)}
-                              className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold transition-all shadow-2xs cursor-pointer"
-                              title="Clear Giro and deposit into Bank BCA #1020"
-                            >
-                              Mark Cleared
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isProcessingGiro}
-                              onClick={() => handleBounceGiro(giro.id)}
-                              className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition-all shadow-2xs cursor-pointer"
-                              title="Dishonor Giro, assess penalty, and freeze customer credit"
-                            >
-                              Tolak Kliring
-                            </button>
-                          </div>
+                          canManageAccountingAndGiro ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                disabled={isProcessingGiro}
+                                onClick={() => handleClearGiro(giro.id)}
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold transition-all shadow-2xs cursor-pointer"
+                                title="Clear Giro and deposit into Bank BCA #1020"
+                              >
+                                Mark Cleared
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isProcessingGiro}
+                                onClick={() => handleBounceGiro(giro.id)}
+                                className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition-all shadow-2xs cursor-pointer"
+                                title="Dishonor Giro, assess penalty, and freeze customer credit"
+                              >
+                                Tolak Kliring
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-gray-400 font-mono">Treasury Only</span>
+                          )
                         ) : (
                           <span className="text-[11px] text-gray-400 font-mono">Completed</span>
                         )}

@@ -1021,7 +1021,9 @@ export interface StaffShiftSession {
   userId: string;
   userName: string;
   userRole: UserRole;
-  storeId: string; // Assigned physical store or 'ALL' for executive
+  storeId: string; // Assigned physical store/hub or 'ALL' for multi-branch roles
+  assignedBranchId?: string; // Explicit branch/hub ID mirror for branch-scoped locks
+  isBranchScoped?: boolean; // True for cashier, warehouse, store_manager
   storeName: string;
   activeShiftId: string; // e.g. SHIFT-JKT-MORNING-01
   shiftName: 'Morning Shift' | 'Afternoon Shift' | 'Night Shift';
@@ -1050,6 +1052,7 @@ export interface StaffShiftSession {
     canViewMultiBranchRevenue?: boolean;
     canViewBranchMonitor?: boolean;
     canConfirmArrival?: boolean;
+    canManageOperatorAssignments?: boolean;
   };
 }
 
@@ -2511,3 +2514,22 @@ export interface BranchMonitorResponse {
   openPurchaseOrders: BranchMonitorIncomingPO[];
   inTransitTransfers: BranchMonitorInTransitTransfer[];
 }
+
+export interface OperatorBranchAssignment {
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  storeId: string;
+  storeName: string;
+  isBranchScoped: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface ConfirmArrivalResponse {
+  success: boolean;
+  message: string;
+  type: 'TRANSFER' | 'PO';
+  id: string;
+}
+

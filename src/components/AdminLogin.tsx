@@ -34,15 +34,17 @@ interface AdminLoginProps {
   onShowToast?: (title: string, message: string) => void;
 }
 
-// Fallback staff roster if backend request fails
+// Fallback staff roster if backend request fails (all 7 canonical roles)
 const FALLBACK_STAFF_ROSTER: StaffShiftSession[] = [
   {
-    userId: 'USR-EXEC-01',
-    userName: 'Irfan Hakim (COO & VP ERP)',
-    userRole: 'executive',
+    userId: 'USR-SADM-01',
+    userName: 'Mochammad Noer Suhasbi (Super Admin)',
+    userRole: 'super_admin',
     storeId: 'ALL',
-    storeName: 'GroceMart Consolidated Group',
-    activeShiftId: 'SHIFT-EXEC-ALL-HOURS',
+    storeName: 'GroceMart Consolidated Group (All Outlets)',
+    assignedBranchId: 'ALL',
+    isBranchScoped: false,
+    activeShiftId: 'SHIFT-SADM-ALL-HOURS',
     shiftName: 'Morning Shift',
     assignedZones: ['ambient', 'cold_chilled', 'freezer'],
     loginTimestamp: new Date().toISOString(),
@@ -56,15 +58,20 @@ const FALLBACK_STAFF_ROSTER: StaffShiftSession[] = [
       canViewFinancePnL: true,
       canManageOutlets: true,
       canOverrideStoreClosure: true,
+      canViewValuation: true,
+      canManageOperatorAssignments: true,
+      canOverridePosPrice: true,
     },
   },
   {
-    userId: 'USR-MGR-01',
-    userName: 'Dewi Sartika (Store Operations Manager)',
-    userRole: 'store_manager',
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
+    userId: 'USR-COO-01',
+    userName: 'Irfan Hakim (COO & VP Operations)',
+    userRole: 'coo',
+    storeId: 'ALL',
+    storeName: 'GroceMart Consolidated Group (All Outlets)',
+    assignedBranchId: 'ALL',
+    isBranchScoped: false,
+    activeShiftId: 'SHIFT-COO-ALL-HOURS',
     shiftName: 'Morning Shift',
     assignedZones: ['ambient', 'cold_chilled', 'freezer'],
     loginTimestamp: new Date().toISOString(),
@@ -78,28 +85,117 @@ const FALLBACK_STAFF_ROSTER: StaffShiftSession[] = [
       canViewFinancePnL: true,
       canManageOutlets: true,
       canOverrideStoreClosure: true,
+      canViewValuation: true,
+      canManageOperatorAssignments: false,
+      canOverridePosPrice: true,
     },
   },
   {
-    userId: 'USR-PCK-01',
-    userName: 'Rudi Hermawan (Cold-Chain Picker & Receiving Clerk)',
-    userRole: 'warehouse_picker',
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
+    userId: 'USR-ADM-01',
+    userName: 'Siti Aminah (Back-Office & Finance Admin)',
+    userRole: 'admin',
+    storeId: 'ALL',
+    storeName: 'GroceMart Consolidated Group (All Outlets)',
+    assignedBranchId: 'ALL',
+    isBranchScoped: false,
+    activeShiftId: 'SHIFT-ADM-OFFICE',
     shiftName: 'Morning Shift',
-    assignedZones: ['cold_chilled', 'ambient'],
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
     loginTimestamp: new Date().toISOString(),
     permissions: {
       canViewPos: false,
       canViewInventory: true,
       canAdjustInventory: false,
-      canPickZone: (zone: StorageZoneType) => zone === 'cold_chilled' || zone === 'ambient',
+      canPickZone: () => false,
+      canReceiveGoods: false,
+      canApprovePurchaseOrder: false,
+      canViewFinancePnL: true,
+      canManageOutlets: false,
+      canOverrideStoreClosure: false,
+      canViewValuation: true,
+      canManageOperatorAssignments: false,
+      canOverridePosPrice: false,
+    },
+  },
+  {
+    userId: 'USR-MGR-01',
+    userName: 'Rina Kartika (Store Manager)',
+    userRole: 'store_manager',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    assignedBranchId: 'store-jkt-senopati',
+    isBranchScoped: true,
+    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
+    shiftName: 'Morning Shift',
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: true,
+      canViewInventory: true,
+      canAdjustInventory: true,
+      canPickZone: () => true,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: true,
+      canManageOutlets: true,
+      canOverrideStoreClosure: true,
+      canViewValuation: true,
+      canManageOperatorAssignments: false,
+      canOverridePosPrice: true,
+    },
+  },
+  {
+    userId: 'USR-PUR-01',
+    userName: 'Dewi Lestari (Purchasing & Vendor Lead)',
+    userRole: 'purchasing',
+    storeId: 'ALL',
+    storeName: 'GroceMart Consolidated Group (All Outlets)',
+    assignedBranchId: 'ALL',
+    isBranchScoped: false,
+    activeShiftId: 'SHIFT-PUR-HQ',
+    shiftName: 'Morning Shift',
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: false,
+      canViewInventory: true,
+      canAdjustInventory: false,
+      canPickZone: () => false,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: false,
+      canManageOutlets: false,
+      canOverrideStoreClosure: false,
+      canViewValuation: true,
+      canManageOperatorAssignments: false,
+      canOverridePosPrice: false,
+    },
+  },
+  {
+    userId: 'USR-WHS-01',
+    userName: 'Budi Santoso (Warehouse Staff)',
+    userRole: 'warehouse',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    assignedBranchId: 'store-jkt-senopati',
+    isBranchScoped: true,
+    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
+    shiftName: 'Morning Shift',
+    assignedZones: ['cold_chilled', 'ambient', 'freezer'],
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: false,
+      canViewInventory: true,
+      canAdjustInventory: true,
+      canPickZone: (zone: StorageZoneType) => ['cold_chilled', 'ambient', 'freezer'].includes(zone),
       canReceiveGoods: true,
       canApprovePurchaseOrder: false,
       canViewFinancePnL: false,
       canManageOutlets: false,
       canOverrideStoreClosure: false,
+      canViewValuation: false,
+      canManageOperatorAssignments: false,
+      canOverridePosPrice: false,
     },
   },
   {
@@ -108,13 +204,15 @@ const FALLBACK_STAFF_ROSTER: StaffShiftSession[] = [
     userRole: 'cashier',
     storeId: 'store-jkt-senopati',
     storeName: 'GroceMart Senopati Flagship',
+    assignedBranchId: 'store-jkt-senopati',
+    isBranchScoped: true,
     activeShiftId: 'SHIFT-JKT-SEN-MORNING',
     shiftName: 'Morning Shift',
     assignedZones: ['ambient'],
     loginTimestamp: new Date().toISOString(),
     permissions: {
       canViewPos: true,
-      canViewInventory: true,
+      canViewInventory: false,
       canAdjustInventory: false,
       canPickZone: () => false,
       canReceiveGoods: false,
@@ -122,6 +220,9 @@ const FALLBACK_STAFF_ROSTER: StaffShiftSession[] = [
       canViewFinancePnL: false,
       canManageOutlets: false,
       canOverrideStoreClosure: false,
+      canViewValuation: false,
+      canManageOperatorAssignments: false,
+      canOverridePosPrice: false,
     },
   },
 ];
@@ -137,8 +238,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
   const [activeTab, setActiveTab] = useState<'roster' | 'credentials'>('roster');
   const [availableProfiles, setAvailableProfiles] = useState<StaffShiftSession[]>(FALLBACK_STAFF_ROSTER);
-  const [selectedUserId, setSelectedUserId] = useState<string>('USR-EXEC-01');
-  const [usernameInput, setUsernameInput] = useState<string>('USR-EXEC-01');
+  const [selectedUserId, setSelectedUserId] = useState<string>('USR-SADM-01');
+  const [usernameInput, setUsernameInput] = useState<string>('USR-SADM-01');
   const [passwordInput, setPasswordInput] = useState<string>('admin123');
   const [selectedShift, setSelectedShift] = useState<'Morning Shift' | 'Afternoon Shift' | 'Night Shift'>('Morning Shift');
   const [rememberWorkstation, setRememberWorkstation] = useState<boolean>(true);
@@ -194,6 +295,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
       const res = await apiClient.adminLogin(payload);
       if (res.success && res.session) {
+        apiClient.setOperatorContext(res.session);
         if (rememberWorkstation) {
           try {
             localStorage.setItem('grocemart_admin_session', JSON.stringify(res.session));
@@ -221,10 +323,18 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
   const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
+      case 'super_admin':
+        return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60';
+      case 'coo':
       case 'executive':
         return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800/60';
+      case 'admin':
+        return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800/60';
       case 'store_manager':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60';
+      case 'purchasing':
+        return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800/60';
+      case 'warehouse':
       case 'warehouse_picker':
         return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60';
       case 'cashier':
@@ -236,10 +346,18 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
   const getRoleIcon = (role: UserRole) => {
     switch (role) {
+      case 'super_admin':
+        return <ShieldCheck className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />;
+      case 'coo':
       case 'executive':
         return <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />;
+      case 'admin':
+        return <Shield className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />;
       case 'store_manager':
         return <Building2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />;
+      case 'purchasing':
+        return <Users className="w-5 h-5 text-teal-600 dark:text-teal-400 shrink-0" />;
+      case 'warehouse':
       case 'warehouse_picker':
         return <Package className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />;
       case 'cashier':

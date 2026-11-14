@@ -65,6 +65,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
       const res = await apiClient.getRbacSession();
       setCurrentSession(res.currentSession);
       setAvailableProfiles(res.availableProfiles || []);
+      apiClient.setOperatorContext(res.currentSession);
       if (onSessionUpdated) onSessionUpdated(res.currentSession);
     } catch (e) {
       console.error('Failed to load RBAC session:', e);
@@ -84,6 +85,10 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
       const res = await apiClient.switchRbacSession(userId);
       setCurrentSession(res.session);
       setZoneTestResult(null);
+      apiClient.setOperatorContext(res.session);
+      try {
+        localStorage.setItem('grocemart_admin_session', JSON.stringify(res.session));
+      } catch {}
       if (onSessionUpdated) onSessionUpdated(res.session);
       onShowToast(
         'Staff Identity Switched',
@@ -128,16 +133,24 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 
   const roleBadgeColor = (role: UserRole) => {
     switch (role) {
+      case 'super_admin':
+        return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30';
+      case 'coo':
       case 'executive':
         return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30';
+      case 'admin':
+        return 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30';
       case 'store_manager':
         return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
+      case 'purchasing':
+        return 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30';
+      case 'warehouse':
       case 'warehouse_picker':
         return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30';
       case 'receiving_clerk':
         return 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30';
       case 'cashier':
-        return 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30';
+        return 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30';
       default:
         return 'bg-gray-500/15 text-gray-700 dark:text-gray-300 border-gray-500/30';
     }

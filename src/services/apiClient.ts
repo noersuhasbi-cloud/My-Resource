@@ -87,6 +87,8 @@ import type {
   RmaSourceChannel,
   EnterpriseNotification,
   BranchMonitorResponse,
+  OperatorBranchAssignment,
+  ConfirmArrivalResponse,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
@@ -2591,6 +2593,65 @@ export const apiClient = {
       throw new Error(err.error || 'Failed to load multi-branch network monitor');
     }
     return res.json();
+  },
+
+  async confirmBranchArrival(payload: {
+    type: 'TRANSFER' | 'PO';
+    id: string;
+  }): Promise<ConfirmArrivalResponse> {
+    const res = await fetchApi('/api/admin/settings/confirm-arrival', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to confirm incoming delivery arrival');
+    }
+    return data;
+  },
+
+  async getOperatorAssignments(): Promise<{
+    assignments: OperatorBranchAssignment[];
+    branchOptions: { storeId: string; storeName: string; hubType: string }[];
+  }> {
+    const res = await fetchApi('/api/admin/settings/operator-assignments');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load operator branch assignments');
+    }
+    return data;
+  },
+
+  async updateOperatorAssignment(payload: {
+    userId: string;
+    storeId: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    assignments: OperatorBranchAssignment[];
+    updatedProfile: StaffShiftSession;
+    currentSession: StaffShiftSession;
+    availableProfiles: StaffShiftSession[];
+  }> {
+    const res = await fetchApi('/api/admin/settings/operator-assignments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to update operator branch assignment');
+    }
+    if (data?.currentSession) {
+      setApiOperatorContext(data.currentSession);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('grocemart_admin_session', JSON.stringify(data.currentSession));
+        } catch {}
+      }
+    }
+    return data;
   },
 
   async resetDemoData(): Promise<{

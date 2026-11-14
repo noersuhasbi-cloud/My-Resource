@@ -24,6 +24,9 @@ import type {
   VendorBill,
   PurchaseOrder,
   GoodsReceiptRecord,
+  StaffShiftSession,
+  BranchMonitorResponse,
+  OperatorBranchAssignment,
 } from '../../types/index.ts';
 import {
   INITIAL_ENTERPRISE_SETTINGS,
@@ -33,6 +36,11 @@ import {
 } from '../../data/inventoryData';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import {
+  normalizeEnterpriseRole,
+  getRoleDisplayLabel,
+  isBranchScopedRole,
+} from '../../utils/rbac';
 import {
   Settings,
   Building2,
@@ -75,6 +83,9 @@ import {
   BarChart3,
   Lock,
   EyeOff,
+  Users,
+  PackageCheck,
+  MapPin,
 } from 'lucide-react';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { ValuationCostingSettingsTab } from './ValuationCostingSettingsTab';
@@ -85,6 +96,7 @@ import { IndonesianTaxRulesPanel } from './IndonesianTaxRulesPanel';
 
 export type SettingsSubTab =
   | 'enterprise'
+  | 'branch_monitor'
   | 'valuation'
   | 'warehouse'
   | 'matching'
@@ -97,6 +109,7 @@ export type SettingsSubTab =
 
 interface SettingsModuleProps {
   theme: 'light' | 'dark';
+  activeStaffSession?: StaffShiftSession | null;
   chartOfAccounts: ChartOfAccount[];
   storeOutlets: StoreOutletSchedule[];
   warehouseZones: WarehouseZone[];
@@ -104,6 +117,10 @@ interface SettingsModuleProps {
   initialSubTab?: SettingsSubTab;
   onShowToast: (title: string, message: string) => void;
   onRefreshData?: () => void;
+  onOperatorAssignmentsUpdated?: (data: {
+    currentSession: StaffShiftSession;
+    availableProfiles: StaffShiftSession[];
+  }) => void;
   onNavigateToVendorBills?: () => void;
   onNavigateToAnalytic?: () => void;
   onNavigateToMargin?: () => void;
@@ -112,6 +129,7 @@ interface SettingsModuleProps {
 
 export const SettingsModule: React.FC<SettingsModuleProps> = ({
   theme,
+  activeStaffSession,
   chartOfAccounts,
   storeOutlets,
   warehouseZones,
@@ -119,12 +137,20 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   initialSubTab,
   onShowToast,
   onRefreshData,
+  onOperatorAssignmentsUpdated,
   onNavigateToVendorBills,
   onNavigateToAnalytic,
   onNavigateToMargin,
   onNavigateToQuotations,
 }) => {
   const isLight = theme === 'light';
+  const currentRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
+  const isSuperAdmin = currentRole === 'super_admin';
+  const isCoo = currentRole === 'coo';
+  const isAdminRole = currentRole === 'admin';
+  const canViewBranchMonitor = isSuperAdmin || isCoo || isAdminRole;
+  const canConfirmArrivals = isSuperAdmin || isCoo || currentRole === 'warehouse' || currentRole === 'store_manager';
+  const isReadOnlyPolicyRole = isAdminRole;
 
   // Active Sub-Tab
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(
@@ -158,6 +184,16 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [isReconciling, setIsReconciling] = useState<boolean>(false);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isTransferring, setIsTransferring] = useState<boolean>(false);
+
+  // 0B. Multi-Branch Monitor (Cabang, Omzet & Barang Datang) + Operator Assignments State
+  const [branchMonitorData, setBranchMonitorData] = useState<BranchMonitorResponse | null>(null);
+  const [isLoadingMonitor, setIsLoadingMonitor] = useState<boolean>(false);
+  const [confirmingArrivalId, setConfirmingArrivalId] = useState<string | null>(null);
+  const [operatorAssignments, setOperatorAssignments] = useState<OperatorBranchAssignment[]>([]);
+  const [branchAssignmentOptions, setBranchAssignmentOptions] = useState<
+    { storeId: string; storeName: string; hubType: string }[]
+  >([]);
+  const [savingAssignmentUserId, setSavingAssignmentUserId] = useState<string | null>(null);
 
   // 1. COA Management & Mapping State
   const [coaViewMode, setCoaViewMode] = useState<'directory' | 'mapping'>('directory');
@@ -275,6 +311,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         billsRes,
         poRes,
         grRes,
+        monitorRes,
+        assignRes,
       ] = await Promise.all([
         apiClient.getCoaMapping().catch(() => null),
         apiClient.getPosConfig().catch(() => null),
@@ -290,6 +328,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         apiClient.getVendorBills().catch(() => []),
         apiClient.getPurchaseOrders().catch(() => []),
         apiClient.getGoodsReceipts().catch(() => []),
+        canViewBranchMonitor ? apiClient.getBranchMonitor().catch(() => null) : Promise.resolve(null),
+        canViewBranchMonitor ? apiClient.getOperatorAssignments().catch(() => null) : Promise.resolve(null),
       ]);
 
       if (coaRes) setCoaConfig(coaRes);
@@ -306,10 +346,66 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       if (billsRes) setVendorBills(billsRes);
       if (poRes) setPurchaseOrders(poRes);
       if (grRes) setGoodsReceipts(grRes);
+      if (monitorRes) setBranchMonitorData(monitorRes);
+      if (assignRes) {
+        setOperatorAssignments(assignRes.assignments || []);
+        setBranchAssignmentOptions(assignRes.branchOptions || []);
+      }
     } catch (err) {
       console.error('Failed to load Settings & Configuration:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadBranchMonitorData = async () => {
+    if (!canViewBranchMonitor) return;
+    setIsLoadingMonitor(true);
+    try {
+      const [monitorRes, assignRes] = await Promise.all([
+        apiClient.getBranchMonitor().catch(() => null),
+        apiClient.getOperatorAssignments().catch(() => null),
+      ]);
+      if (monitorRes) setBranchMonitorData(monitorRes);
+      if (assignRes) {
+        setOperatorAssignments(assignRes.assignments || []);
+        setBranchAssignmentOptions(assignRes.branchOptions || []);
+      }
+    } finally {
+      setIsLoadingMonitor(false);
+    }
+  };
+
+  const handleConfirmArrival = async (type: 'TRANSFER' | 'PO', id: string) => {
+    setConfirmingArrivalId(`${type}:${id}`);
+    try {
+      const res = await apiClient.confirmBranchArrival({ type, id });
+      onShowToast('Arrival Confirmed', res.message);
+      await loadBranchMonitorData();
+      onRefreshData?.();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Confirm Arrival Failed', msg);
+    } finally {
+      setConfirmingArrivalId(null);
+    }
+  };
+
+  const handleUpdateOperatorBranch = async (userId: string, storeId: string) => {
+    setSavingAssignmentUserId(userId);
+    try {
+      const res = await apiClient.updateOperatorAssignment({ userId, storeId });
+      setOperatorAssignments(res.assignments || []);
+      onShowToast('Branch Assignment Saved', res.message);
+      onOperatorAssignmentsUpdated?.({
+        currentSession: res.currentSession,
+        availableProfiles: res.availableProfiles,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Assignment Update Blocked', msg);
+    } finally {
+      setSavingAssignmentUserId(null);
     }
   };
 
@@ -873,6 +969,25 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             </span>
           </button>
 
+          {canViewBranchMonitor && (
+            <button
+              onClick={() => {
+                setActiveSubTab('branch_monitor');
+                loadBranchMonitorData();
+              }}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeSubTab === 'branch_monitor'
+                  ? 'bg-[#0F4C3A] text-white shadow-xs'
+                  : isLight
+                  ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+              }`}
+            >
+              <MapPin className="w-4 h-4 text-emerald-500" />
+              <span>Branches, Omzet &amp; Access</span>
+            </button>
+          )}
+
           <button
             onClick={() => setActiveSubTab('valuation')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
@@ -1015,6 +1130,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {/* ========================================================================= */}
       {activeSubTab === 'enterprise' && (
         <div className="space-y-6 animate-fadeIn">
+          {isReadOnlyPolicyRole && (
+            <div className={`p-3.5 rounded-xl border flex items-center gap-2.5 text-xs ${
+              isLight ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-amber-950/30 border-amber-800/40 text-amber-200'
+            }`}>
+              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                <strong>Read-Only Governance Mode (Admin):</strong> You can inspect Enterprise &amp; POS policy configurations, while system-wide policy updates require COO or Super Admin clearance.
+              </span>
+            </div>
+          )}
           {/* Quick Filter Pill Bar */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
             <span className="text-[11px] font-bold text-gray-500 dark:text-zinc-300 uppercase tracking-wider shrink-0 mr-1">
@@ -1603,6 +1728,408 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <IndonesianTaxRulesPanel theme={theme} onShowToast={onShowToast} />
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 0B. MULTI-BRANCH MONITOR (CABANG, OMZET & BARANG DATANG) + OPERATOR ASSIGNMENTS */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'branch_monitor' && canViewBranchMonitor && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Header & Refresh Bar */}
+          <div className={`${cardClass} p-5 sm:p-6`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-zinc-800">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-[#0F4C3A] text-white">
+                    Network Control Tower
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-zinc-300 font-mono">
+                    {branchMonitorData?.totals.openBranches ?? storeOutlets.length} / {branchMonitorData?.totals.totalBranches ?? storeOutlets.length} Hubs Open
+                  </span>
+                </div>
+                <h2 className={`text-base sm:text-lg font-bold mt-1 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                  Cabang, Omzet &amp; Barang Datang (Multi-Branch Monitor)
+                </h2>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                  Real-time branch revenue (POS + B2C + B2B), inventory asset valuation, incoming goods dock arrivals, and RBAC operator branch assignments.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={loadBranchMonitorData}
+                disabled={isLoadingMonitor}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer self-start sm:self-auto ${
+                  isLight
+                    ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                }`}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMonitor ? 'animate-spin' : ''}`} />
+                <span>Refresh Monitor</span>
+              </button>
+            </div>
+
+            {/* 4 Network KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-4">
+              <div className={subCardClass}>
+                <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 block">
+                  Active Store &amp; Warehouse Hubs
+                </span>
+                <span className="text-lg font-bold font-mono tabular-nums mt-1 block">
+                  {branchMonitorData?.totals.openBranches ?? 0} / {branchMonitorData?.totals.totalBranches ?? 6} Open
+                </span>
+              </div>
+              <div className={subCardClass}>
+                <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 block">
+                  Live Network Omzet (POS + B2C + B2B)
+                </span>
+                <span className="text-lg font-bold font-mono tabular-nums text-[#0F4C3A] dark:text-emerald-400 mt-1 block">
+                  {formatIDR(branchMonitorData?.totals.totalLiveOmzetIDR ?? 0)}
+                </span>
+              </div>
+              <div className={subCardClass}>
+                <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 block">
+                  Consolidated Stock Valuation
+                </span>
+                <span className="text-lg font-bold font-mono tabular-nums mt-1 block">
+                  {formatIDR(branchMonitorData?.totals.totalStockValuationIDR ?? 0)}
+                </span>
+              </div>
+              <div className={subCardClass}>
+                <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 block">
+                  Pending Barang Datang (PO + Transit)
+                </span>
+                <span className="text-lg font-bold font-mono tabular-nums text-amber-600 dark:text-amber-400 mt-1 block">
+                  {(branchMonitorData?.totals.openPoCount ?? 0)} POs · {(branchMonitorData?.totals.inTransitCount ?? 0)} Transit
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 1. Branch Directory & Live Omzet Table */}
+          <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                  <Building2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                  <span>Network Branches &amp; Live Omzet</span>
+                </h3>
+                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                  Live revenue breakdown per outlet across retail POS, online B2C express, and wholesale B2B channels
+                </p>
+              </div>
+              <span className="text-xs font-mono text-slate-500 dark:text-zinc-400">
+                {branchMonitorData?.totals.totalOrders ?? 0} total settled orders
+              </span>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+              <table className="w-full text-left text-xs min-w-[760px]">
+                <thead>
+                  <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${
+                    isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                  }`}>
+                    <th className="py-3 px-3.5">Branch Code &amp; Name</th>
+                    <th className="py-3 px-3">Hub Type</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3 text-center">Orders</th>
+                    <th className="py-3 px-3 text-right">Live Omzet (IDR)</th>
+                    <th className="py-3 px-3 text-right">Stock Valuation</th>
+                    <th className="py-3 px-3 text-center">Incoming</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                  {(branchMonitorData?.branches || []).map((branch) => (
+                    <tr key={branch.storeId} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'}>
+                      <td className="py-3 px-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+                            {branch.branchCode}
+                          </span>
+                          <span className="font-bold">{branch.storeName}</span>
+                        </div>
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                          {branch.district}, {branch.city}
+                        </div>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 whitespace-nowrap">
+                          {branch.hubType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            branch.status === 'Open'
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
+                              : branch.status === 'Holiday Mode'
+                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25'
+                              : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
+                          }`}
+                        >
+                          {branch.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center font-mono font-bold tabular-nums">
+                        {branch.orderCount}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums">
+                        <div className="font-bold text-[#0F4C3A] dark:text-emerald-400">
+                          {formatIDR(branch.liveOmzetIDR)}
+                        </div>
+                        <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                          POS {formatIDR(branch.posOmzetIDR)} · B2C {formatIDR(branch.b2cOmzetIDR)} · B2B {formatIDR(branch.b2bOmzetIDR)}
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums">
+                        <div className="font-bold">{formatIDR(branch.stockValuationIDR)}</div>
+                        <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                          {branch.totalStockUnits.toLocaleString('id-ID')} units
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-center font-mono text-[11px]">
+                        <span className="text-amber-600 dark:text-amber-400 font-bold">{branch.incomingPoCount} PO</span>
+                        <span className="mx-1 text-slate-400">·</span>
+                        <span className="text-sky-600 dark:text-sky-400 font-bold">{branch.inTransitTransferCount} Trf</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {(!branchMonitorData || branchMonitorData.branches.length === 0) && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
+                        {isLoadingMonitor ? 'Loading multi-branch metrics...' : 'No branch telemetry available.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 2. Incoming Goods & In-Transit Deliveries (Barang Datang) */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Open Purchase Orders */}
+            <div className={`${cardClass} p-5 space-y-4`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                    <PackageCheck className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                    <span>Incoming Vendor Purchase Orders (Barang Datang)</span>
+                  </h3>
+                  <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                    Open or partial PO shipments awaiting dock receipt &amp; COA #1040 capitalization
+                  </p>
+                </div>
+                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                  {branchMonitorData?.openPurchaseOrders.length ?? 0} Open
+                </span>
+              </div>
+
+              <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
+                {(branchMonitorData?.openPurchaseOrders || []).map((po) => (
+                  <div key={po.poId} className={`${subCardClass} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-xs text-[#0F4C3A] dark:text-emerald-400">{po.poId}</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                          {po.status}
+                        </span>
+                        <span className="text-[11px] font-semibold">{po.destinationBranchName}</span>
+                      </div>
+                      <div className="text-xs font-semibold truncate">{po.supplierName}</div>
+                      <div className={`text-[11px] line-clamp-1 ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                        {po.itemsSummary}
+                      </div>
+                      <div className="text-[10px] font-mono text-slate-500 dark:text-zinc-400">
+                        Backorder: <strong>{po.remainingBackorderQty}</strong> / {po.expectedUnitsQty} units · Value: <strong>{formatIDR(po.incomingValueIDR)}</strong>
+                      </div>
+                    </div>
+
+                    {canConfirmArrivals ? (
+                      <button
+                        type="button"
+                        disabled={confirmingArrivalId === `PO:${po.poId}`}
+                        onClick={() => handleConfirmArrival('PO', po.poId)}
+                        className="px-3 py-1.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold transition-all disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        {confirmingArrivalId === `PO:${po.poId}` ? 'Receiving...' : 'Confirm Arrival'}
+                      </button>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 whitespace-nowrap shrink-0">
+                        Read-Only
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {(branchMonitorData?.openPurchaseOrders.length ?? 0) === 0 && (
+                  <p className="text-xs text-slate-400 py-6 text-center italic">
+                    All vendor purchase orders have been received at dock.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* In-Transit Inter-Warehouse Transfers */}
+            <div className={`${cardClass} p-5 space-y-4`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                    <Truck className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                    <span>In-Transit Inter-Branch Transfers</span>
+                  </h3>
+                  <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                    Dispatched cold-chain sprinter shipments awaiting destination receiving confirmation
+                  </p>
+                </div>
+                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-lg bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                  {branchMonitorData?.inTransitTransfers.length ?? 0} In Transit
+                </span>
+              </div>
+
+              <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
+                {(branchMonitorData?.inTransitTransfers || []).map((tr) => (
+                  <div key={tr.transferId} className={`${subCardClass} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-xs text-sky-700 dark:text-sky-400">{tr.transferId}</span>
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-zinc-800">
+                          {tr.waybillNumber}
+                        </span>
+                      </div>
+                      <div className="text-xs font-bold truncate">
+                        {tr.quantity}x {tr.productName} ({tr.sku})
+                      </div>
+                      <div className={`text-[11px] ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
+                        {tr.originBranchName} <ArrowRight className="w-3 h-3 inline mx-1" /> <strong>{tr.destinationBranchName}</strong>
+                      </div>
+                      <div className="text-[10px] font-mono text-slate-500 dark:text-zinc-400">
+                        Transfer Value: <strong>{formatIDR(tr.totalTransferValueIDR)}</strong>
+                      </div>
+                    </div>
+
+                    {canConfirmArrivals ? (
+                      <button
+                        type="button"
+                        disabled={confirmingArrivalId === `TRANSFER:${tr.transferId}`}
+                        onClick={() => handleConfirmArrival('TRANSFER', tr.transferId)}
+                        className="px-3 py-1.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold transition-all disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        {confirmingArrivalId === `TRANSFER:${tr.transferId}` ? 'Stocking...' : 'Confirm Arrival'}
+                      </button>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 whitespace-nowrap shrink-0">
+                        Read-Only
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {(branchMonitorData?.inTransitTransfers.length ?? 0) === 0 && (
+                  <p className="text-xs text-slate-400 py-6 text-center italic">
+                    No active inter-branch transfers currently in transit.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Operator Role & Branch Assignment Configuration */}
+          <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-zinc-800">
+              <div>
+                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                  <Users className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                  <span>Operator Role &amp; Branch Assignment Configuration</span>
+                </h3>
+                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                  Assign branch-scoped operators (Cashier, Warehouse Ops, Store Manager) to physical outlets or Central Distribution Center (WH-CDC-01). Changes immediately lock Outlet Scope across sessions.
+                </p>
+              </div>
+              {!isSuperAdmin && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25 whitespace-nowrap">
+                  <Lock className="w-3.5 h-3.5" />
+                  Super Admin Only
+                </span>
+              )}
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+              <table className="w-full text-left text-xs min-w-[740px]">
+                <thead>
+                  <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${
+                    isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                  }`}>
+                    <th className="py-3 px-3.5">Operator Profile</th>
+                    <th className="py-3 px-3">Enterprise Role</th>
+                    <th className="py-3 px-3">Scope Mode</th>
+                    <th className="py-3 px-3">Assigned Branch / Hub</th>
+                    <th className="py-3 px-3 text-right">Last Updated</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                  {operatorAssignments.map((op) => {
+                    const scoped = op.isBranchScoped || isBranchScopedRole(op.userRole);
+                    const allowedOptions = scoped
+                      ? branchAssignmentOptions.filter((b) => b.storeId !== 'ALL')
+                      : branchAssignmentOptions;
+
+                    return (
+                      <tr key={op.userId} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'}>
+                        <td className="py-3 px-3.5">
+                          <div className="font-bold">{op.userName}</div>
+                          <div className="font-mono text-[10px] text-slate-400">{op.userId}</div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/20 whitespace-nowrap">
+                            {getRoleDisplayLabel(op.userRole)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          {scoped ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                              <Lock className="w-3 h-3" />
+                              Locked to Branch
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/25">
+                              Multi-Branch Network
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 min-w-[230px]">
+                          <select
+                            disabled={!isSuperAdmin || savingAssignmentUserId === op.userId}
+                            value={op.storeId}
+                            onChange={(e) => handleUpdateOperatorBranch(op.userId, e.target.value)}
+                            className={`w-full px-3 py-1.5 text-xs rounded-xl font-semibold border ${
+                              !isSuperAdmin ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
+                            } ${inputClass}`}
+                          >
+                            {allowedOptions.map((opt) => (
+                              <option key={opt.storeId} value={opt.storeId}>
+                                {opt.storeName} ({opt.hubType})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono text-[10px] text-slate-500 dark:text-zinc-400">
+                          {op.updatedAt ? (
+                            <>
+                              <div>{new Date(op.updatedAt).toLocaleString()}</div>
+                              <div>by {op.updatedBy || 'System'}</div>
+                            </>
+                          ) : (
+                            <span>Default Roster</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -2233,6 +2760,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {/* ========================================================================= */}
       {activeSubTab === 'pos' && (
         <div className="space-y-6 animate-fadeIn">
+          {isReadOnlyPolicyRole && (
+            <div className={`p-3.5 rounded-xl border flex items-center gap-2.5 text-xs ${
+              isLight ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-amber-950/30 border-amber-800/40 text-amber-200'
+            }`}>
+              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                <strong>Read-Only Governance Mode (Admin):</strong> POS checkout &amp; rounding policy changes require COO or Super Admin clearance.
+              </span>
+            </div>
+          )}
           <div className={`${cardClass} p-5 sm:p-6 space-y-6`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-zinc-800">
               <div>
@@ -2247,11 +2784,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
               <button
                 onClick={handleSavePosConfig}
-                disabled={isSavingPos}
+                disabled={isSavingPos || isReadOnlyPolicyRole}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer self-start sm:self-auto"
               >
                 {isSavingPos ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>Save POS Configuration</span>
+                <span>{isReadOnlyPolicyRole ? 'Read-Only (COO / Super Admin)' : 'Save POS Configuration'}</span>
               </button>
             </div>
 
@@ -3696,6 +4233,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {activeSubTab === 'approval_matrix' && (
         <ApprovalMatrixModule
           theme={theme}
+          activeStaffSession={activeStaffSession}
           selectedStore="CONSOLIDATED"
           approvalRules={approvalRules}
           approvalQueue={approvalQueue}

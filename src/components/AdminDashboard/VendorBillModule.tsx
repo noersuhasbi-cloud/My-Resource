@@ -9,9 +9,11 @@ import type {
   GoodsReceiptRecord,
   SupportedCurrency,
   VendorCreditNote,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { apiClient } from '../../services/apiClient';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 import { usePrint } from '../../context/PrintContext';
 import {
   FileText,
@@ -61,6 +63,7 @@ interface VendorBillModuleProps {
   // If opened directly with a preselected PO or GR for quick creation:
   initialPreselectedPoId?: string;
   initialPreselectedGrId?: string;
+  activeStaffSession?: StaffShiftSession | null;
 }
 
 export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
@@ -73,9 +76,13 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   onShowToast,
   initialPreselectedPoId,
   initialPreselectedGrId,
+  activeStaffSession,
 }) => {
   const isLight = theme === 'light';
   const { triggerPrint } = usePrint();
+  const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
+  const canCreateVendorBill = ['purchasing', 'admin', 'coo', 'super_admin'].includes(canonicalRole);
+  const canApprovePayVoidBill = ['admin', 'coo', 'super_admin'].includes(canonicalRole);
 
   // State Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -461,14 +468,16 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
 
-          <button
-            type="button"
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0c3d2e] text-white shadow-sm transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Vendor Bill (3-Way Match)</span>
-          </button>
+          {canCreateVendorBill && (
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0c3d2e] text-white shadow-sm transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Vendor Bill (3-Way Match)</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -820,7 +829,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {bill.status !== 'APPROVED' && bill.status !== 'PAID' && bill.status !== 'VOID' && (
+                          {canApprovePayVoidBill && bill.status !== 'APPROVED' && bill.status !== 'PAID' && bill.status !== 'VOID' && (
                             <button
                               type="button"
                               onClick={() => handleApproveBill(bill.id)}
@@ -831,7 +840,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                             </button>
                           )}
 
-                          {bill.paymentStatus !== 'PAID' && bill.status !== 'VOID' && (
+                          {canApprovePayVoidBill && bill.paymentStatus !== 'PAID' && bill.status !== 'VOID' && (
                             isVarianceBlocked ? (
                               <span
                                 className="px-2 py-1 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 cursor-not-allowed"
@@ -850,7 +859,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                             )
                           )}
 
-                          {bill.paymentStatus !== 'PAID' && bill.status !== 'VOID' && (
+                          {canApprovePayVoidBill && bill.paymentStatus !== 'PAID' && bill.status !== 'VOID' && (
                             <button
                               type="button"
                               onClick={() => {

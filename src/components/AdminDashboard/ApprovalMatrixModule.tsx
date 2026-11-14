@@ -4,9 +4,11 @@ import type {
   ApprovalTierRule,
   ApprovalRequest,
   ApprovalModuleType,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { apiClient } from '../../services/apiClient';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   FileCheck2,
   CheckCircle2,
@@ -30,6 +32,7 @@ interface ApprovalMatrixModuleProps {
   selectedStore?: string;
   approvalRules?: ApprovalTierRule[];
   approvalQueue?: ApprovalRequest[];
+  activeStaffSession?: StaffShiftSession | null;
   onRefreshData?: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -39,10 +42,13 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
   selectedStore = 'CONSOLIDATED',
   approvalRules,
   approvalQueue,
+  activeStaffSession,
   onRefreshData,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
+  const canDecideAndEditRules = ['store_manager', 'coo', 'super_admin'].includes(canonicalRole);
 
   // Sub-tabs: 'queue' | 'rules'
   const [subTab, setSubTab] = useState<'queue' | 'rules'>('queue');
@@ -216,6 +222,15 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
             </button>
           </div>
         </div>
+
+        {!canDecideAndEditRules && (
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2">
+            <Lock className="w-4 h-4 shrink-0" />
+            <span>
+              <strong>Read-Only Governance Mode:</strong> Approval execution and threshold rule edits require Store Manager, COO, or Super Admin clearance.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
@@ -376,7 +391,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                         </span>
                       </div>
 
-                      {req.status === 'PENDING' && (
+                      {req.status === 'PENDING' && canDecideAndEditRules && (
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleOpenAction(req, 'REJECTED')}
@@ -392,6 +407,11 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                             <span>Approve Tier {req.currentTierLevel}</span>
                           </button>
                         </div>
+                      )}
+                      {req.status === 'PENDING' && !canDecideAndEditRules && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400">
+                          <Lock className="w-3 h-3" /> Read-Only Queue
+                        </span>
                       )}
                     </div>
                   </div>
@@ -419,11 +439,11 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
 
             <button
               onClick={handleSaveRules}
-              disabled={isSavingRules}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+              disabled={isSavingRules || !canDecideAndEditRules}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isSavingRules ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>Save Approval Matrix</span>
+              <span>{canDecideAndEditRules ? 'Save Approval Matrix' : 'Rules Read-Only'}</span>
             </button>
           </div>
 
@@ -454,12 +474,13 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-200 mb-1">Required Approver Role</label>
                     <select
                       value={rule.requiredRole}
+                      disabled={!canDecideAndEditRules}
                       onChange={(e) => {
                         const copy = [...rulesState];
                         copy[idx].requiredRole = e.target.value;
                         setRulesState(copy);
                       }}
-                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs ${
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs disabled:opacity-60 ${
                         isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-600'
                       }`}
                     >
@@ -474,13 +495,14 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-200 mb-1">Min Threshold (IDR)</label>
                     <input
                       type="number"
+                      disabled={!canDecideAndEditRules}
                       value={rule.minThresholdIDR}
                       onChange={(e) => {
                         const copy = [...rulesState];
                         copy[idx].minThresholdIDR = Number(e.target.value);
                         setRulesState(copy);
                       }}
-                      className={`w-full px-2.5 py-1.5 rounded-lg border font-mono text-xs ${
+                      className={`w-full px-2.5 py-1.5 rounded-lg border font-mono text-xs disabled:opacity-60 ${
                         isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-600'
                       }`}
                     />
@@ -491,13 +513,14 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                     <div className="flex items-center gap-2 pt-1.5">
                       <input
                         type="checkbox"
+                        disabled={!canDecideAndEditRules}
                         checked={rule.requiresPin}
                         onChange={(e) => {
                           const copy = [...rulesState];
                           copy[idx].requiresPin = e.target.checked;
                           setRulesState(copy);
                         }}
-                        className="rounded"
+                        className="rounded disabled:opacity-60"
                       />
                       <span className="text-xs">Require Manager PIN Verification</span>
                     </div>

@@ -86,6 +86,7 @@ import {
   Wind,
   LogOut,
   Printer,
+  Lock,
 } from 'lucide-react';
 
 import { FefoModule } from './FefoModule';
@@ -106,6 +107,13 @@ import { SettingsModule } from './SettingsModule';
 import { OdooInventoryView } from './OdooInventoryView';
 import { QuotationsModule } from './QuotationsModule';
 import { NotificationCenterPopover } from './NotificationCenterPopover';
+import {
+  normalizeEnterpriseRole,
+  isBranchScopedRole,
+  getDefaultTabForRole,
+  canSessionViewValuation,
+  isRoleTabAllowed,
+} from '../../utils/rbac';
 
 interface AdminDashboardProps {
   initialStaffSession?: StaffShiftSession | null;
@@ -152,7 +160,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const [activeTab, setActiveTab] = useState<AdminDashboardTab>(() => {
-    if (initialStaffSession?.userRole === 'cashier') return 'pos';
+    if (initialStaffSession?.userRole) {
+      return getDefaultTabForRole(initialStaffSession.userRole);
+    }
     return 'overview';
   });
 
@@ -162,15 +172,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
   const [availableStaffProfiles, setAvailableStaffProfiles] = useState<StaffShiftSession[]>([]);
 
-  // Redirect activeTab automatically if role permission removes access
+  const isCurrentRoleBranchScoped = isBranchScopedRole(activeStaffSession?.userRole);
+  const lockedBranchId =
+    activeStaffSession?.assignedBranchId ||
+    (activeStaffSession?.storeId && activeStaffSession.storeId !== 'ALL'
+      ? activeStaffSession.storeId
+      : 'store-jkt-senopati');
+  const canViewValuation = canSessionViewValuation(activeStaffSession);
+  const canViewFinancialModules = (() => {
+    if (!activeStaffSession) return true;
+    const role = normalizeEnterpriseRole(activeStaffSession.userRole);
+    return role === 'store_manager' || role === 'admin' || role === 'coo' || role === 'super_admin';
+  })();
+
+  // Synchronize API operator context & branch scope whenever activeStaffSession updates
   useEffect(() => {
-    if (activeStaffSession && !isDashboardTabAllowed(activeStaffSession, activeTab)) {
-      const fallback: AdminDashboardTab = activeStaffSession.permissions?.canViewPos
-        ? 'pos'
-        : activeStaffSession.permissions?.canViewInventory
-        ? 'inventory'
-        : 'overview';
-      setActiveTab(fallback);
+    apiClient.setOperatorContext(activeStaffSession);
+    if (!activeStaffSession) return;
+
+    if (!isRoleTabAllowed(activeStaffSession.userRole, activeTab)) {
+      setActiveTab(getDefaultTabForRole(activeStaffSession.userRole));
+    }
+
+    if (isBranchScopedRole(activeStaffSession.userRole)) {
+      const assigned =
+        activeStaffSession.assignedBranchId ||
+        (activeStaffSession.storeId && activeStaffSession.storeId !== 'ALL'
+          ? activeStaffSession.storeId
+          : 'store-jkt-senopati');
+      setSelectedGlobalStore(assigned);
+      setSelectedOutletFilter(assigned);
+      setSelectedFinanceStore(assigned);
     }
   }, [activeStaffSession, activeTab]);
 
@@ -271,7 +303,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [glSearch, setGlSearch] = useState<string>('');
 
   // Load all backend data
-  const refreshAllData = async () => {
+  const refreshAllData = async (overrideSession?: StaffShiftSession | null) => {
+    const effectiveSession = overrideSession !== undefined ? overrideSession : activeStaffSession;
+    if (effectiveSession) {
+      apiClient.setOperatorContext(effectiveSession);
+    }
+    const effectiveRole = effectiveSession ? normalizeEnterpriseRole(effectiveSession.userRole) : 'super_admin';
+    const allowFinancialReads =
+      effectiveRole === 'store_manager' ||
+      effectiveRole === 'admin' ||
+      effectiveRole === 'coo' ||
+      effectiveRole === 'super_admin';
+    const targetFinStore =
+      effectiveSession && isBranchScopedRole(effectiveSession.userRole)
+        ? effectiveSession.assignedBranchId ||
+          (effectiveSession.storeId !== 'ALL' ? effectiveSession.storeId : 'store-jkt-senopati')
+        : selectedFinanceStore;
+
     setIsLoading(true);
     try {
       const [
@@ -304,20 +352,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         enterpriseSettingsRes,
         notifRes,
       ] = await Promise.all([
-        apiClient.getOmzetAnalytics().catch(() => null),
-        apiClient.getStoreStatus(),
+        allowFinancialReads ? apiClient.getOmzetAnalytics().catch(() => null) : Promise.resolve(null),
+        apiClient.getStoreStatus().catch(() => null),
         apiClient.getStoreOutlets().catch(() => []),
-        apiClient.getInventory(),
+        apiClient.getInventory().catch(() => ({ items: [], metrics: { totalStockCount: 0, totalValuationWAC: 0, lowStockCount: 0, totalSkus: 0 } })),
         apiClient.getInventoryMatrix().catch(() => ({ warehouseZones: [], storeInventoryTiers: [], outlets: [] })),
-        apiClient.getPurchaseRequests(),
-        apiClient.getPurchaseOrders(),
+        apiClient.getPurchaseRequests().catch(() => []),
+        apiClient.getPurchaseOrders().catch(() => []),
         apiClient.getGoodsReceipts().catch(() => []),
         apiClient.getChartOfAccounts().catch(() => []),
-        apiClient.getGeneralLedger(selectedFinanceStore),
-        apiClient.getPnLReport(selectedFinanceStore),
-        apiClient.getBalanceSheet(selectedFinanceStore).catch(() => null),
-        apiClient.getCashFlow(selectedFinanceStore).catch(() => null),
-        apiClient.getAuditTrail(),
+        allowFinancialReads ? apiClient.getGeneralLedger(targetFinStore).catch(() => []) : Promise.resolve([]),
+        allowFinancialReads ? apiClient.getPnLReport(targetFinStore).catch(() => null) : Promise.resolve(null),
+        allowFinancialReads ? apiClient.getBalanceSheet(targetFinStore).catch(() => null) : Promise.resolve(null),
+        allowFinancialReads ? apiClient.getCashFlow(targetFinStore).catch(() => null) : Promise.resolve(null),
+        allowFinancialReads ? apiClient.getAuditTrail().catch(() => []) : Promise.resolve([]),
         apiClient.getRbacSession().catch(() => null),
         apiClient.getClimateThresholds().catch(() => []),
         apiClient.getInventoryBatches().catch(() => []),
@@ -335,7 +383,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ]);
 
       if (rbacRes) {
-        if (!initialStaffSession) {
+        if (!initialStaffSession && !overrideSession && !activeStaffSession) {
           setActiveStaffSession(rbacRes.currentSession);
         }
         setAvailableStaffProfiles(rbacRes.availableProfiles || []);
@@ -343,9 +391,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setClimateConfigs(climateRes || []);
 
       setOmzetData(omzetRes);
-      setStoreStatus(statusRes);
-      setBannerInput(statusRes.noticeBanner || '');
-      setReopenInput(statusRes.reopenEstimated || '07:00 - 22:00 Daily');
+      if (statusRes) {
+        setStoreStatus(statusRes);
+        setBannerInput(statusRes.noticeBanner || '');
+        setReopenInput(statusRes.reopenEstimated || '07:00 - 22:00 Daily');
+      }
       setStoreOutlets(outletsRes);
 
       setInventory(invRes.items);
@@ -391,7 +441,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   useEffect(() => {
-    refreshAllData();
+    refreshAllData(initialStaffSession || activeStaffSession);
     const timer = window.setInterval(() => {
       apiClient
         .getAdminNotifications()
@@ -404,13 +454,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return () => window.clearInterval(timer);
   }, []);
 
-  // Reload financials when store filter changes
+  // Reload financials when store filter changes (only for roles authorized to view financial statements)
   useEffect(() => {
+    if (!canViewFinancialModules) return;
     const loadStoreFinancials = async () => {
       try {
         const [glRes, pnlRes, bsRes, cfRes] = await Promise.all([
-          apiClient.getGeneralLedger(selectedFinanceStore),
-          apiClient.getPnLReport(selectedFinanceStore),
+          apiClient.getGeneralLedger(selectedFinanceStore).catch(() => []),
+          apiClient.getPnLReport(selectedFinanceStore).catch(() => null),
           apiClient.getBalanceSheet(selectedFinanceStore).catch(() => null),
           apiClient.getCashFlow(selectedFinanceStore).catch(() => null),
         ]);
@@ -423,7 +474,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     };
     loadStoreFinancials();
-  }, [selectedFinanceStore]);
+  }, [selectedFinanceStore, canViewFinancialModules]);
 
   // Handlers for Store Operations
   const handleToggleStoreOpen = async () => {
@@ -798,7 +849,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     onChange={async (e) => {
                       try {
                         const res = await apiClient.switchRbacSession(e.target.value);
+                        apiClient.setOperatorContext(res.session);
                         setActiveStaffSession(res.session);
+                        if (isBranchScopedRole(res.session.userRole)) {
+                          const assigned =
+                            res.session.assignedBranchId ||
+                            (res.session.storeId && res.session.storeId !== 'ALL'
+                              ? res.session.storeId
+                              : 'store-jkt-senopati');
+                          setSelectedGlobalStore(assigned);
+                          setSelectedOutletFilter(assigned);
+                          setSelectedFinanceStore(assigned);
+                        } else {
+                          setSelectedGlobalStore('CONSOLIDATED');
+                          setSelectedOutletFilter('ALL');
+                          setSelectedFinanceStore('CONSOLIDATED');
+                        }
+                        if (!isRoleTabAllowed(res.session.userRole, activeTab)) {
+                          setActiveTab(getDefaultTabForRole(res.session.userRole));
+                        }
+                        refreshAllData(res.session);
                         onShowToast(
                           'Staff Identity Switched',
                           `Switched to ${res.session.userName} (${res.session.userRole.replace(/_/g, ' ')})`
@@ -825,14 +895,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               )}
 
-              {/* Global Outlet Selector Dropdown */}
+              {/* Global Outlet Selector Dropdown (Locked for branch-scoped roles) */}
               <div className="flex items-center gap-1.5">
                 <span className={`text-[11px] font-medium hidden md:inline ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
                   Outlet Scope:
                 </span>
                 <select
-                  value={selectedGlobalStore}
+                  disabled={isCurrentRoleBranchScoped}
+                  value={isCurrentRoleBranchScoped ? lockedBranchId : selectedGlobalStore}
                   onChange={(e) => {
+                    if (isCurrentRoleBranchScoped) return;
                     const val = e.target.value;
                     setSelectedGlobalStore(val);
                     setSelectedOutletFilter(val);
@@ -842,20 +914,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       val === 'CONSOLIDATED' ? 'Showing Consolidated Network Data' : `Filtered to ${val}`
                     );
                   }}
+                  title={
+                    isCurrentRoleBranchScoped
+                      ? `Outlet scope locked to assigned branch (${lockedBranchId})`
+                      : 'Select outlet or consolidated network scope'
+                  }
                   className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                    isLight
+                    isCurrentRoleBranchScoped
+                      ? isLight
+                        ? 'bg-slate-100 border-slate-200 text-slate-600 cursor-not-allowed'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 cursor-not-allowed'
+                      : isLight
                       ? 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50 focus:border-[#0F4C3A]'
                       : 'bg-zinc-800 border-zinc-700 text-zinc-100 hover:bg-zinc-700'
                   }`}
                 >
-                  <option value="CONSOLIDATED">All Outlets (Consolidated Network)</option>
+                  {!isCurrentRoleBranchScoped && (
+                    <option value="CONSOLIDATED">All Outlets (Consolidated Network)</option>
+                  )}
                   <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
                   <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
                   <option value="store-jkt-menteng">Menteng Heritage (Jakarta)</option>
                   <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
                   <option value="store-sby-gubeng">Gubeng Central Hub (Surabaya)</option>
                   <option value="store-bali-canggu">Batu Bolong Organic (Bali)</option>
+                  <option value="WH-CDC-01">Central Distribution Center (WH-CDC-01)</option>
                 </select>
+                {isCurrentRoleBranchScoped && (
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border whitespace-nowrap ${
+                      isLight
+                        ? 'bg-amber-50 border-amber-200 text-amber-800'
+                        : 'bg-amber-950/40 border-amber-800/50 text-amber-300'
+                    }`}
+                    title={`Restricted to assigned branch: ${activeStaffSession?.storeName || lockedBranchId}`}
+                  >
+                    <Lock className="w-3 h-3" />
+                    <span className="hidden sm:inline">Locked</span>
+                  </span>
+                )}
               </div>
 
               {/* Dark / Light Mode Instant Toggle Switch */}
@@ -942,7 +1039,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* Refresh Sync Button */}
               <button
-                onClick={refreshAllData}
+                onClick={() => refreshAllData()}
                 disabled={isLoading}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border transition-all disabled:opacity-50 cursor-pointer ${
                   isLight
@@ -1062,7 +1159,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </span>
                 </div>
                 <div className={`mt-3 text-2xl font-bold ${textTitle} tracking-tight`}>
-                  {formatIDR(inventoryMetrics.totalValuationWAC || 48200000)}
+                  {canViewValuation
+                    ? formatIDR(inventoryMetrics.totalValuationWAC || 48200000)
+                    : `${inventoryMetrics.totalStockCount.toLocaleString('id-ID')} Units`}
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-xs">
                   <span className={`font-semibold ${inventoryMetrics.lowStockCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'}`}>
@@ -1680,6 +1779,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {/* Odoo-Standard Inventory Operations (Kanban + Granular Stock & Lot List + B2B/B2C Split + FEFO/FIFO) */}
             <OdooInventoryView
               theme={theme}
+              activeStaffSession={activeStaffSession}
               selectedOutletFilter={selectedOutletFilter === 'CONSOLIDATED' ? 'ALL' : selectedOutletFilter}
               onOutletFilterChange={setSelectedOutletFilter}
               selectedStorageZoneFilter={selectedStorageZoneFilter}
@@ -1880,6 +1980,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'procurement' && (
           <ProcurementModule
             theme={theme}
+            activeStaffSession={activeStaffSession}
             selectedStore={selectedGlobalStore}
             inventory={inventory}
             purchaseRequests={purchaseRequests}
@@ -1887,7 +1988,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             goodsReceipts={goodsReceipts}
             vendorBills={vendorBills}
             storeOutlets={storeOutlets}
-            onRefreshData={refreshAllData}
+            onRefreshData={() => refreshAllData()}
             onShowToast={onShowToast}
           />
         )}
@@ -1900,7 +2001,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             inventory={inventory}
             enterpriseSettings={enterpriseSettings}
-            onRefreshData={refreshAllData}
+            onRefreshData={() => refreshAllData()}
             onShowToast={onShowToast}
           />
         )}
@@ -1911,8 +2012,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'accounting' && (
           <AccountingModule
             theme={theme}
+            activeStaffSession={activeStaffSession}
             selectedStore={selectedFinanceStore}
             onStoreChange={(s) => {
+              if (isCurrentRoleBranchScoped) return;
               setSelectedFinanceStore(s);
               setSelectedGlobalStore(s);
             }}
@@ -1925,7 +2028,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             purchaseOrders={purchaseOrders}
             goodsReceipts={goodsReceipts}
             enterpriseSettings={enterpriseSettings}
-            onRefreshData={refreshAllData}
+            onRefreshData={() => refreshAllData()}
             onShowToast={onShowToast}
             activeSubTab={accountingDeepSubTab}
             onSubTabChange={(sub) => setAccountingDeepSubTab(sub)}
@@ -2126,12 +2229,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'transfers' && (
           <SettingsModule
             theme={theme}
+            activeStaffSession={activeStaffSession}
             chartOfAccounts={chartOfAccounts}
             storeOutlets={storeOutlets}
             warehouseZones={warehouseZones}
             inventoryTiers={inventoryTiers}
             initialSubTab="transfer"
-            onRefreshData={refreshAllData}
+            onRefreshData={() => refreshAllData()}
             onShowToast={onShowToast}
           />
         )}
@@ -2142,8 +2246,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'approvals' && (
           <ApprovalMatrixModule
             theme={theme}
+            activeStaffSession={activeStaffSession}
             selectedStore={selectedGlobalStore}
-            onRefreshData={refreshAllData}
+            onRefreshData={() => refreshAllData()}
             onShowToast={onShowToast}
           />
         )}
@@ -2165,11 +2270,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'settings' && (
           <SettingsModule
             theme={theme}
+            activeStaffSession={activeStaffSession}
             chartOfAccounts={chartOfAccounts}
             storeOutlets={storeOutlets}
             warehouseZones={warehouseZones}
             inventoryTiers={inventoryTiers}
-            onRefreshData={refreshAllData}
+            onRefreshData={() => refreshAllData()}
+            onOperatorAssignmentsUpdated={(res) => {
+              setAvailableStaffProfiles(res.availableProfiles);
+              setActiveStaffSession(res.currentSession);
+              apiClient.setOperatorContext(res.currentSession);
+              refreshAllData(res.currentSession);
+            }}
             onShowToast={onShowToast}
             onNavigateToVendorBills={() => {
               setAccountingDeepSubTab('vendor_bills');

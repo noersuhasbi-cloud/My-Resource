@@ -1,5 +1,6 @@
 import React from 'react';
 import type { StaffShiftSession } from '../../types/index.ts';
+import { isRoleTabAllowed } from '../../utils/rbac';
 import {
   LayoutDashboard,
   Store,
@@ -102,37 +103,8 @@ interface AdminSidebarProps {
 }
 
 export function isDashboardTabAllowed(session: StaffShiftSession | null | undefined, tab: AdminDashboardTab): boolean {
-  if (!session || session.userRole === 'executive') return true;
-  const p = session.permissions;
-  switch (tab) {
-    case 'pos':
-      return !!p?.canViewPos;
-    case 'inventory':
-    case 'fefo':
-    case 'waste':
-    case 'picker':
-    case 'qc':
-    case 'logistics':
-    case 'transfers':
-      return !!p?.canViewInventory;
-    case 'procurement':
-      return !!(p?.canReceiveGoods || p?.canApprovePurchaseOrder || p?.canViewInventory);
-    case 'accounting':
-    case 'reports':
-    case 'quotations':
-      return !!p?.canViewFinancePnL;
-    case 'operations':
-    case 'approvals':
-    case 'settings':
-      return !!p?.canManageOutlets;
-    case 'overview':
-    case 'rbac':
-    case 'audit':
-    case 'openapi':
-    case 'erd':
-    default:
-      return true;
-  }
+  if (!session) return true;
+  return isRoleTabAllowed(session.userRole, tab);
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -242,6 +214,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         }`}
       >
         {/* SECTION 1: CORE OPERATIONS */}
+        {(allow('overview') || allow('pos') || allow('operations') || allow('inventory')) && (
         <div>
           {!isCollapsed && (
             <div className="px-3 mb-2 flex items-center justify-between">
@@ -253,6 +226,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
           <div className="space-y-1">
             {/* 1. Executive Dashboard */}
+            {allow('overview') && (
             <button
               onClick={() => handleTabClick('overview')}
               title={isCollapsed ? 'Executive Dashboard' : undefined}
@@ -276,6 +250,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
               )}
             </button>
+            )}
 
             {/* POS Cashier Register */}
             {allow('pos') && (
@@ -400,8 +375,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             )}
           </div>
         </div>
+        )}
 
         {/* SECTION 2: SUPPLY CHAIN & QUALITY */}
+        {(allow('fefo') ||
+          allow('waste') ||
+          allow('picker') ||
+          allow('procurement') ||
+          allow('quotations') ||
+          allow('qc') ||
+          allow('logistics') ||
+          allow('transfers') ||
+          allow('approvals') ||
+          allow('reports') ||
+          allow('settings')) && (
         <div>
           {!isCollapsed && (
             <div className="px-3 mb-2 flex items-center justify-between">
@@ -413,6 +400,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
           <div className="space-y-1">
             {/* 4. FEFO & Batch Traceability */}
+            {allow('fefo') && (
             <button
               onClick={() => handleTabClick('fefo')}
               title={isCollapsed ? 'FEFO & Batch Traceability' : undefined}
@@ -444,8 +432,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
 
             {/* 5. Waste & Shrinkage */}
+            {allow('waste') && (
             <button
               onClick={() => handleTabClick('waste')}
               title={isCollapsed ? 'Waste & Shrinkage Management' : undefined}
@@ -477,8 +467,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
 
             {/* 6. In-Store Picker & Catch Weight */}
+            {allow('picker') && (
             <button
               onClick={() => handleTabClick('picker')}
               title={isCollapsed ? 'Fulfillment & Catch Weight' : undefined}
@@ -499,8 +491,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <span className="truncate flex-1 text-left">Fulfillment &amp; Catch Weight</span>
               )}
             </button>
+            )}
 
             {/* 7. Procurement & Supply Chain */}
+            {allow('procurement') && (
             <button
               onClick={() => handleTabClick('procurement')}
               title={isCollapsed ? 'Procurement & Supply Chain' : undefined}
@@ -539,6 +533,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </span>
               )}
             </button>
+            )}
 
             {/* 7Q. B2B Quotations & Pro Forma Invoices */}
             {allow('quotations') && (
@@ -576,6 +571,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             )}
 
             {/* 7A. Inventory QC & Spoilage Inspections */}
+            {allow('qc') && (
             <button
               onClick={() => handleTabClick('qc')}
               title={isCollapsed ? 'Quality Control (QC) & Spoilage Inspections' : undefined}
@@ -607,8 +603,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
 
             {/* 7B. Logistics & Shipping Documents */}
+            {allow('logistics') && (
             <button
               onClick={() => handleTabClick('logistics')}
               title={isCollapsed ? 'Logistics & Shipping Documents (Surat Jalan)' : undefined}
@@ -640,8 +638,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
 
             {/* 7C. Inter-Warehouse Transfers */}
+            {allow('transfers') && (
             <button
               onClick={() => handleTabClick('transfers')}
               title={isCollapsed ? 'Inter-Warehouse Stock Transfers' : undefined}
@@ -662,6 +662,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <span className="truncate flex-1 text-left">Warehouse Transfers</span>
               )}
             </button>
+            )}
 
             {/* 7D. Approval Matrix & Authorization Queue */}
             {allow('approvals') && (
@@ -769,6 +770,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             )}
           </div>
         </div>
+        )}
 
         {/* SECTION 3: FINANCE & CORE ACCOUNTING (Collapsible Nested Menu) */}
         {allow('accounting') && (
@@ -966,6 +968,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         )}
 
         {/* SECTION 4: SYSTEM & ARCHITECTURE */}
+        {(allow('rbac') || allow('audit') || allow('openapi') || allow('erd')) && (
         <div>
           {!isCollapsed ? (
             <div
@@ -989,6 +992,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
           <div className="space-y-1">
             {/* 8. Roles & Shifts (RBAC) */}
+            {allow('rbac') && (
             <button
               onClick={() => handleTabClick('rbac')}
               title={isCollapsed ? 'Roles & Shifts (RBAC)' : undefined}
@@ -1020,8 +1024,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
 
             {/* 9. Security Audit Logs */}
+            {allow('audit') && (
             <button
               onClick={() => handleTabClick('audit')}
               title={isCollapsed ? 'Security & Audit Logs' : undefined}
@@ -1042,8 +1048,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <span className="truncate flex-1 text-left">Security &amp; Audit Logs</span>
               )}
             </button>
+            )}
 
             {/* 10. QRIS OpenAPI */}
+            {allow('openapi') && (
             <button
               onClick={() => handleTabClick('openapi')}
               title={isCollapsed ? 'QRIS Open API Specifications' : undefined}
@@ -1064,8 +1072,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <span className="truncate flex-1 text-left">QRIS Open API Specs</span>
               )}
             </button>
+            )}
 
             {/* 11. ERD & Technical Architecture */}
+            {allow('erd') && (
             <button
               onClick={() => handleTabClick('erd')}
               title={isCollapsed ? 'ERD & Technical Specs' : undefined}
@@ -1097,8 +1107,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
           </div>
         </div>
+        )}
       </nav>
 
       {/* Footer / Storefront Exit Link */}

@@ -19,6 +19,7 @@ import type {
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 import { computeIndonesianTax, inferDefaultTaxCategory } from '../../utils/indonesianCompliance';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -87,6 +88,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
 }) => {
   const isLight = theme === 'light';
   const { triggerPrint } = usePrint();
+  const canOverrideDiscount =
+    activeStaffSession?.permissions?.canOverridePosPrice ??
+    ['store_manager', 'coo', 'super_admin'].includes(normalizeEnterpriseRole(activeStaffSession?.userRole));
 
   // 1. Catalog & Filter State
   const [products, setProducts] = useState<POSProductItem[]>([]);
@@ -113,6 +117,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
   // 3. Register Cart State
   const [cart, setCart] = useState<POSCartItem[]>([]);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
+
+  useEffect(() => {
+    if (!canOverrideDiscount && discountPercent !== 0) {
+      setDiscountPercent(0);
+    }
+  }, [canOverrideDiscount, discountPercent]);
   const [customerName, setCustomerName] = useState<string>('Walk-in Retail Shopper');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerMemberId, setCustomerMemberId] = useState<string>('');
@@ -886,8 +896,19 @@ export const PosModule: React.FC<PosModuleProps> = ({
               />
               <select
                 value={discountPercent}
-                onChange={(e) => setDiscountPercent(Number(e.target.value))}
-                className={`text-xs px-2 py-1.5 rounded-xl border font-semibold cursor-pointer ${
+                disabled={!canOverrideDiscount}
+                onChange={(e) => {
+                  if (!canOverrideDiscount) return;
+                  setDiscountPercent(Number(e.target.value));
+                }}
+                title={
+                  canOverrideDiscount
+                    ? 'Apply discount tier'
+                    : 'Manual discount / price overrides require Store Manager+ clearance'
+                }
+                className={`text-xs px-2 py-1.5 rounded-xl border font-semibold ${
+                  canOverrideDiscount ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+                } ${
                   isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
                 }`}
               >

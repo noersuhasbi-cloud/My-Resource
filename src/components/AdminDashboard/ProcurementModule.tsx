@@ -9,9 +9,11 @@ import type {
   AutoReplenishmentItemPlan,
   VendorBill,
   StoreOutletSchedule,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   Truck,
   Plus,
@@ -49,6 +51,7 @@ interface ProcurementModuleProps {
   goodsReceipts: GoodsReceiptRecord[];
   vendorBills?: VendorBill[];
   storeOutlets?: StoreOutletSchedule[];
+  activeStaffSession?: StaffShiftSession | null;
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -62,10 +65,16 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   goodsReceipts,
   vendorBills = [],
   storeOutlets = [],
+  activeStaffSession,
   onRefreshData,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
+  const canManagePrPo = ['purchasing', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
+  const canReceiveGR = ['warehouse', 'purchasing', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
+  const canCreateVendorBill = ['purchasing', 'admin', 'coo', 'super_admin'].includes(canonicalRole);
+  const isWarehouseRole = canonicalRole === 'warehouse';
 
   // Modal States
   const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
@@ -101,9 +110,17 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   >({});
 
   // Active Module Sub-Tab
-  const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'pr' | 'po' | 'gr' | 'vendor_bills'>('auto_replenishment');
+  const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'pr' | 'po' | 'gr' | 'vendor_bills'>(
+    canonicalRole === 'warehouse' ? 'gr' : 'auto_replenishment'
+  );
   const [preselectedPoId, setPreselectedPoId] = useState<string>('');
   const [preselectedGrId, setPreselectedGrId] = useState<string>('');
+
+  React.useEffect(() => {
+    if (isWarehouseRole && (activeTab === 'auto_replenishment' || activeTab === 'vendor_bills')) {
+      setActiveTab('gr');
+    }
+  }, [isWarehouseRole, activeTab]);
 
   // Auto-Replenishment & Min-Max Stock Planning State
   const [replenishmentPlan, setReplenishmentPlan] = useState<AutoReplenishmentConsolidatedPlan | null>(null);
@@ -415,13 +432,15 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setIsCreatingPR(true)}
-              className="px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl flex items-center gap-2 transition-all shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              New Restock PR
-            </button>
+            {canManagePrPo && (
+              <button
+                onClick={() => setIsCreatingPR(true)}
+                className="px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl flex items-center gap-2 transition-all shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                New Restock PR
+              </button>
+            )}
             <button
               onClick={onRefreshData}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
@@ -506,25 +525,27 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       {/* SUB-TAB NAVIGATION BAR */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        <button
-          type="button"
-          onClick={() => setActiveTab('auto_replenishment')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'auto_replenishment'
-              ? 'bg-[#0F4C3A] text-white shadow-xs'
-              : isLight
-              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
-          }`}
-        >
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>Auto-Replenishment (Min-Max)</span>
-          {replenishmentPlan && replenishmentPlan.skusNeedingRestockCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse whitespace-nowrap">
-              {replenishmentPlan.skusNeedingRestockCount}
-            </span>
-          )}
-        </button>
+        {!isWarehouseRole && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('auto_replenishment')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'auto_replenishment'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>Auto-Replenishment (Min-Max)</span>
+            {replenishmentPlan && replenishmentPlan.skusNeedingRestockCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse whitespace-nowrap">
+                {replenishmentPlan.skusNeedingRestockCount}
+              </span>
+            )}
+          </button>
+        )}
 
         <button
           type="button"
@@ -598,35 +619,37 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           </span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setPreselectedPoId('');
-            setPreselectedGrId('');
-            setActiveTab('vendor_bills');
-          }}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'vendor_bills'
-              ? 'bg-[#0F4C3A] text-white shadow-xs'
-              : isLight
-              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
-          }`}
-        >
-          <Receipt className="w-4 h-4 text-indigo-500" />
-          <span>Vendor Bills (3-Way Match)</span>
-          {vendorBills.length > 0 && (
-            <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
-                activeTab === 'vendor_bills'
-                  ? 'bg-white/15 text-indigo-100 border-white/25'
-                  : 'bg-indigo-500/15 text-indigo-700 border-indigo-500/25 dark:text-indigo-300'
-              }`}
-            >
-              {vendorBills.length}
-            </span>
-          )}
-        </button>
+        {!isWarehouseRole && (
+          <button
+            type="button"
+            onClick={() => {
+              setPreselectedPoId('');
+              setPreselectedGrId('');
+              setActiveTab('vendor_bills');
+            }}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'vendor_bills'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+            }`}
+          >
+            <Receipt className="w-4 h-4 text-indigo-500" />
+            <span>Vendor Bills (3-Way Match)</span>
+            {vendorBills.length > 0 && (
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                  activeTab === 'vendor_bills'
+                    ? 'bg-white/15 text-indigo-100 border-white/25'
+                    : 'bg-indigo-500/15 text-indigo-700 border-indigo-500/25 dark:text-indigo-300'
+                }`}
+              >
+                {vendorBills.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* SECTION 0: PREDICTIVE AUTO-REPLENISHMENT & MIN-MAX PLANNING */}
@@ -686,19 +709,21 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleGenerateAutoPOs}
-                  disabled={isGeneratingDraftPOs || (replenishmentPlan?.skusNeedingRestockCount === 0 && selectedReplenishmentSkus.length === 0)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-sm ${
-                    isGeneratingDraftPOs || (replenishmentPlan?.skusNeedingRestockCount === 0 && selectedReplenishmentSkus.length === 0)
-                      ? 'bg-zinc-400 cursor-not-allowed opacity-60'
-                      : 'bg-gradient-to-r from-emerald-700 to-[#0F4C3A] hover:brightness-110 active:scale-98'
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-300" />
-                  <span>{isGeneratingDraftPOs ? 'Generating Draft POs...' : '⚡ Generate Draft Purchase Orders'}</span>
-                </button>
+                {canManagePrPo && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateAutoPOs}
+                    disabled={isGeneratingDraftPOs || (replenishmentPlan?.skusNeedingRestockCount === 0 && selectedReplenishmentSkus.length === 0)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer shadow-sm ${
+                      isGeneratingDraftPOs || (replenishmentPlan?.skusNeedingRestockCount === 0 && selectedReplenishmentSkus.length === 0)
+                        ? 'bg-zinc-400 cursor-not-allowed opacity-60'
+                        : 'bg-gradient-to-r from-emerald-700 to-[#0F4C3A] hover:brightness-110 active:scale-98'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{isGeneratingDraftPOs ? 'Generating Draft POs...' : '⚡ Generate Draft Purchase Orders'}</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1066,12 +1091,18 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       {pr.status === 'pending' ? (
-                        <button
-                          onClick={() => handleApprovePR(pr.id)}
-                          className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"
-                        >
-                          Approve → PO
-                        </button>
+                        canManagePrPo ? (
+                          <button
+                            onClick={() => handleApprovePR(pr.id)}
+                            className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"
+                          >
+                            Approve → PO
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                            Pending Approval
+                          </span>
+                        )
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -1242,26 +1273,30 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       <td className="py-3.5 px-4 text-right">
                         {po.status !== 'Completed' ? (
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => openReceivingModal(po)}
-                              className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"
-                            >
-                              Receive GR
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPreselectedPoId(po.id);
-                                const gr = goodsReceipts.find((g) => g.poId === po.id);
-                                if (gr) setPreselectedGrId(gr.id);
-                                setActiveTab('vendor_bills');
-                              }}
-                              className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
-                              title="Create or match Vendor Bill against this PO"
-                            >
-                              Match Bill
-                            </button>
-                            {totalBackorder > 0 && (
+                            {canReceiveGR && (
+                              <button
+                                onClick={() => openReceivingModal(po)}
+                                className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"
+                              >
+                                Receive GR
+                              </button>
+                            )}
+                            {canCreateVendorBill && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreselectedPoId(po.id);
+                                  const gr = goodsReceipts.find((g) => g.poId === po.id);
+                                  if (gr) setPreselectedGrId(gr.id);
+                                  setActiveTab('vendor_bills');
+                                }}
+                                className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
+                                title="Create or match Vendor Bill against this PO"
+                              >
+                                Match Bill
+                              </button>
+                            )}
+                            {canManagePrPo && totalBackorder > 0 && (
                               <button
                                 onClick={() => {
                                   setForceClosingPO(po);
@@ -1277,6 +1312,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 Close PO
                               </button>
                             )}
+                            {!canReceiveGR && !canCreateVendorBill && !canManagePrPo && (
+                              <span className="text-[11px] text-gray-400 font-mono">View Only</span>
+                            )}
                           </div>
                         ) : (
                           <div className="flex items-center justify-end gap-2">
@@ -1290,19 +1328,21 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 </span>
                               )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPreselectedPoId(po.id);
-                                const gr = goodsReceipts.find((g) => g.poId === po.id);
-                                if (gr) setPreselectedGrId(gr.id);
-                                setActiveTab('vendor_bills');
-                              }}
-                              className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
-                              title="View or match Vendor Bill"
-                            >
-                              Vendor Bill
-                            </button>
+                            {canCreateVendorBill && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreselectedPoId(po.id);
+                                  const gr = goodsReceipts.find((g) => g.poId === po.id);
+                                  if (gr) setPreselectedGrId(gr.id);
+                                  setActiveTab('vendor_bills');
+                                }}
+                                className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
+                                title="View or match Vendor Bill"
+                              >
+                                Vendor Bill
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>
@@ -1405,18 +1445,24 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       {gr.glEntryId || 'GLE-Posted'}
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPreselectedPoId(gr.poId);
-                          setPreselectedGrId(gr.id);
-                          setActiveTab('vendor_bills');
-                        }}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
-                        title="Create or match Vendor Bill for this Goods Receipt"
-                      >
-                        Match Bill
-                      </button>
+                      {canCreateVendorBill ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPreselectedPoId(gr.poId);
+                            setPreselectedGrId(gr.id);
+                            setActiveTab('vendor_bills');
+                          }}
+                          className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
+                          title="Create or match Vendor Bill for this Goods Receipt"
+                        >
+                          Match Bill
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                          Verified
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -1428,7 +1474,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       )}
 
       {/* SECTION 4: VENDOR BILLS (3-WAY MATCH AP) */}
-      {activeTab === 'vendor_bills' && (
+      {activeTab === 'vendor_bills' && !isWarehouseRole && (
         <VendorBillModule
           theme={theme}
           selectedStore={selectedStore}
@@ -1439,6 +1485,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           onShowToast={onShowToast}
           initialPreselectedPoId={preselectedPoId}
           initialPreselectedGrId={preselectedGrId}
+          activeStaffSession={activeStaffSession}
         />
       )}
 

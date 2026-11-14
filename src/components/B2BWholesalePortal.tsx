@@ -8,8 +8,11 @@ import type {
   PWPRule,
   B2BWholesaleOrder,
   GiroPaymentRecord,
+  SkuTaxRule,
+  IndonesianTaxCategory,
 } from '../types/index.ts';
 import { formatIDR } from '../utils/formatters';
+import { computeIndonesianTax, inferDefaultTaxCategory } from '../utils/indonesianCompliance';
 import { getOdooSkuProfile } from '../utils/inventoryOdooHelper';
 import { apiClient } from '../services/apiClient';
 import { usePrint } from '../context/PrintContext';
@@ -97,6 +100,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
 
   const [products, setProducts] = useState<WholesaleProduct[]>([]);
   const [pwpRules, setPwpRules] = useState<PWPRule[]>([]);
+  const [skuTaxRules, setSkuTaxRules] = useState<SkuTaxRule[]>([]);
 
   const [internalB2bOrders, setInternalB2bOrders] = useState<B2BWholesaleOrder[]>([]);
   const b2bOrders = propB2bOrders && propB2bOrders.length > 0 ? propB2bOrders : internalB2bOrders;
@@ -159,16 +163,18 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
   const loadPortalData = async () => {
     setIsLoading(true);
     try {
-      const [custData, prodData, rulesData, ordersData] = await Promise.all([
+      const [custData, prodData, rulesData, ordersData, taxRulesData] = await Promise.all([
         apiClient.getB2BCustomers(),
         apiClient.getB2BProducts(),
         apiClient.getPWPRules(),
         apiClient.getB2BOrders(),
+        apiClient.getSkuTaxRules().catch(() => []),
       ]);
       setCustomers(custData);
       setProducts(prodData);
       setPwpRules(rulesData);
       setB2bOrders(ordersData);
+      setSkuTaxRules(taxRulesData);
     } catch (err) {
       console.error('Failed to load B2B portal data:', err);
     } finally {
@@ -335,9 +341,18 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
     );
   };
 
-  // Total B2B Cart Calculations
+  // Total B2B Cart Calculations (Indonesian PPN 11% for BKP vs 0% Sembako Exempt matching backend)
   const cartSubtotal = cartItems.reduce((sum, it) => sum + it.lineTotal, 0);
-  const cartTaxPPN11 = Math.round(cartSubtotal * 0.11);
+  const cartTaxPPN11 = useMemo(() => {
+    return cartItems.reduce((sum, it) => {
+      const rule = skuTaxRules.find((r) => r.sku === it.product.sku);
+      const taxCat: IndonesianTaxCategory =
+        rule?.taxCategory || inferDefaultTaxCategory(it.product.category || '', it.product.name || '');
+      const stdRate = rule?.taxRatePercent ?? 11;
+      const calc = computeIndonesianTax(Math.round(it.lineTotal), taxCat, false, stdRate);
+      return sum + Math.round(calc.ppnIDR) + Math.round(calc.pb1IDR);
+    }, 0);
+  }, [cartItems, skuTaxRules]);
   const cartTotalDue = cartSubtotal + cartTaxPPN11;
   const totalBaseUnitsInCart = cartItems.reduce((sum, it) => sum + it.baseUnitsCalculated, 0);
 

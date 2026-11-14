@@ -130,6 +130,11 @@ import type {
   EnterpriseNotification,
   EnterpriseNotificationCategory,
   EnterpriseNotificationSeverity,
+  BranchMonitorHubSummary,
+  BranchMonitorIncomingPO,
+  BranchMonitorInTransitTransfer,
+  BranchMonitorResponse,
+  OperatorBranchAssignment,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -277,6 +282,24 @@ function ensureRegulatoryCoaAccounts() {
       balance: 0,
       description: 'Cashier Z-Report blind denomination count over/short variance account',
     },
+    {
+      accountCode: '1510',
+      accountName: 'Cold-Chain Walk-in Coolers & Display Chillers',
+      category: 'Asset',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 210000000,
+      description: 'Fixed assets: industrial walk-in chillers and display refrigerators',
+    },
+    {
+      accountCode: '1520',
+      accountName: 'Point-of-Sale Hardware & Warehouse Handhelds',
+      category: 'Asset',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 48000000,
+      description: 'Fixed assets: POS terminals, scales, and RF scanners',
+    },
   ];
   requiredAccounts.forEach((acc) => {
     if (!chartOfAccounts.some((c) => c.accountCode === acc.accountCode)) {
@@ -285,6 +308,11 @@ function ensureRegulatoryCoaAccounts() {
   });
 }
 ensureRegulatoryCoaAccounts();
+
+const INITIAL_SEED_GL_IDS = new Set(INITIAL_GENERAL_LEDGER.map((g) => g.id));
+const BASELINE_COA_BY_CODE: Record<string, { category: ChartOfAccount['category']; accountName: string; balance: number }> = Object.fromEntries(
+  chartOfAccounts.map((c) => [c.accountCode, { category: c.category, accountName: c.accountName, balance: c.balance }])
+);
 
 let skuTaxRulesList: SkuTaxRule[] = [
   ...inventoryList.map((item) => {
@@ -475,6 +503,9 @@ function applyBlindOpnameApproval(sheet: BlindOpnameSheet, approverName: string)
     if (inv && variance !== 0) {
       inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) + variance).toFixed(2)));
     }
+    if (variance !== 0) {
+      syncBatchesForStockVariance(line.sku, sheet.storeId, variance, unitCost, line.countedLotNumber);
+    }
 
     return {
       sku: line.sku,
@@ -501,63 +532,73 @@ function applyBlindOpnameApproval(sheet: BlindOpnameSheet, approverName: string)
     glIds.push(g1, g2);
 
     if (isShortage) {
-      generalLedger.unshift({
-        id: g1,
-        timestamp,
-        storeId: sheet.storeId,
-        storeName: sheet.storeName,
-        accountCode: '5210',
-        accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
-        category: 'Expense',
-        debit: absVal,
-        credit: 0,
-        referenceType: 'STOCK_OPNAME',
-        referenceId: sheet.sheetNumber,
-        description: `Blind Stock Opname Shortage Variance (${sheet.sheetNumber}) approved by ${approverName}`,
-      });
-      generalLedger.unshift({
-        id: g2,
-        timestamp,
-        storeId: sheet.storeId,
-        storeName: sheet.storeName,
-        accountCode: '1040',
-        accountName: 'Merchandise Inventory Asset',
-        category: 'Asset',
-        debit: 0,
-        credit: absVal,
-        referenceType: 'STOCK_OPNAME',
-        referenceId: sheet.sheetNumber,
-        description: `Inventory Asset write-down for Blind Stock Opname ${sheet.sheetNumber}`,
-      });
+      commitBalancedGlBatch(
+        [
+          {
+            id: g1,
+            timestamp,
+            storeId: sheet.storeId,
+            storeName: sheet.storeName,
+            accountCode: '5210',
+            accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
+            category: 'Expense',
+            debit: absVal,
+            credit: 0,
+            referenceType: 'STOCK_OPNAME',
+            referenceId: sheet.sheetNumber,
+            description: `Blind Stock Opname Shortage Variance (${sheet.sheetNumber}) approved by ${approverName}`,
+          },
+          {
+            id: g2,
+            timestamp,
+            storeId: sheet.storeId,
+            storeName: sheet.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: 0,
+            credit: absVal,
+            referenceType: 'STOCK_OPNAME',
+            referenceId: sheet.sheetNumber,
+            description: `Inventory Asset write-down for Blind Stock Opname ${sheet.sheetNumber}`,
+          },
+        ],
+        true
+      );
     } else {
-      generalLedger.unshift({
-        id: g1,
-        timestamp,
-        storeId: sheet.storeId,
-        storeName: sheet.storeName,
-        accountCode: '1040',
-        accountName: 'Merchandise Inventory Asset',
-        category: 'Asset',
-        debit: absVal,
-        credit: 0,
-        referenceType: 'STOCK_OPNAME',
-        referenceId: sheet.sheetNumber,
-        description: `Inventory Asset surplus adjustment for Blind Stock Opname ${sheet.sheetNumber}`,
-      });
-      generalLedger.unshift({
-        id: g2,
-        timestamp,
-        storeId: sheet.storeId,
-        storeName: sheet.storeName,
-        accountCode: '5210',
-        accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
-        category: 'Expense',
-        debit: 0,
-        credit: absVal,
-        referenceType: 'STOCK_OPNAME',
-        referenceId: sheet.sheetNumber,
-        description: `Blind Stock Opname Surplus credit (${sheet.sheetNumber}) approved by ${approverName}`,
-      });
+      commitBalancedGlBatch(
+        [
+          {
+            id: g1,
+            timestamp,
+            storeId: sheet.storeId,
+            storeName: sheet.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: absVal,
+            credit: 0,
+            referenceType: 'STOCK_OPNAME',
+            referenceId: sheet.sheetNumber,
+            description: `Inventory Asset surplus adjustment for Blind Stock Opname ${sheet.sheetNumber}`,
+          },
+          {
+            id: g2,
+            timestamp,
+            storeId: sheet.storeId,
+            storeName: sheet.storeName,
+            accountCode: '5210',
+            accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
+            category: 'Expense',
+            debit: 0,
+            credit: absVal,
+            referenceType: 'STOCK_OPNAME',
+            referenceId: sheet.sheetNumber,
+            description: `Blind Stock Opname Surplus credit (${sheet.sheetNumber}) approved by ${approverName}`,
+          },
+        ],
+        true
+      );
     }
   }
 
@@ -823,15 +864,85 @@ function getSellableNonExpiredAtpStock(sku: string, storeId: string = 'ALL'): {
   };
 }
 
+function syncBatchesForStockVariance(
+  sku: string,
+  storeId: string,
+  deltaQty: number,
+  unitCost: number = 15000,
+  preferredLotNumber?: string
+): void {
+  if (!deltaQty || Math.abs(deltaQty) < 0.0001) return;
+  const nowMs = Date.now();
+  const candidates = inventoryBatches.filter(
+    (b) =>
+      b.sku === sku &&
+      (storeId === 'ALL' || storeId === 'CONSOLIDATED' || b.storeId === storeId) &&
+      b.status !== 'quarantined' &&
+      b.status !== 'recalled' &&
+      b.status !== 'expired'
+  );
+
+  if (deltaQty < 0) {
+    let toRemove = Math.abs(deltaQty);
+    const ordered = candidates
+      .filter((b) => b.currentStock > 0)
+      .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+    for (const batch of ordered) {
+      if (toRemove <= 0) break;
+      const take = Math.min(batch.currentStock, toRemove);
+      batch.currentStock = Math.max(0, Number((batch.currentStock - take).toFixed(2)));
+      toRemove = Number((toRemove - take).toFixed(2));
+      if (batch.currentStock === 0) batch.status = 'depleted';
+    }
+  } else {
+    const activeMatch =
+      (preferredLotNumber ? candidates.find((b) => b.lotNumber === preferredLotNumber) : undefined) ||
+      candidates
+        .filter((b) => new Date(b.expiryDate).getTime() > nowMs)
+        .sort((a, b) => new Date(b.expiryDate).getTime() - new Date(a.expiryDate).getTime())[0];
+    if (activeMatch) {
+      activeMatch.currentStock = Number((activeMatch.currentStock + deltaQty).toFixed(2));
+      if (activeMatch.status === 'depleted') {
+        activeMatch.status = activeMatch.daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh';
+      }
+    } else {
+      const targetStoreId = storeId === 'ALL' || storeId === 'CONSOLIDATED' ? 'store-jkt-senopati' : storeId;
+      const storeInfo = storeSchedules.find((s) => s.storeId === targetStoreId);
+      const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === targetStoreId);
+      const inv = inventoryList.find((i) => i.sku === sku);
+      inventoryBatches.unshift({
+        batchId: `BAT-ADJ-${Date.now().toString().slice(-5)}-${inventoryBatches.length + 1}`,
+        sku,
+        productName: inv?.productName || tier?.productName || sku,
+        storeId: targetStoreId,
+        storeName: storeInfo?.storeName || tier?.storeName || 'GroceMart Senopati Flagship',
+        warehouseZoneId: tier?.warehouseZoneId || 'WH-JKT-SEN-COLD',
+        lotNumber: preferredLotNumber || `LOT-ADJ-${Date.now().toString().slice(-4)}`,
+        initialQuantity: deltaQty,
+        currentStock: deltaQty,
+        unitCost: unitCost || tier?.unitCost || inv?.unitCost || 15000,
+        sellingPrice: inv?.sellingPrice || tier?.sellingPrice || Math.round((unitCost || 15000) * 1.4),
+        receivedDate: new Date().toISOString(),
+        expiryDate: new Date(nowMs + 86400000 * 30).toISOString(),
+        daysUntilExpiry: 30,
+        status: 'fresh',
+        storageZone: tier?.storageType || 'cold_chilled',
+        supplierName: inv?.supplierName || 'Opname / Stock Adjustment',
+        notes: 'Stock variance synchronization adjustment',
+      });
+    }
+  }
+}
+
 function updateCoaLedgerBalance(accountCode: string, debitAmount: number, creditAmount: number) {
   const acc = chartOfAccounts.find((c) => c.accountCode === accountCode);
   if (!acc) return;
   const dr = roundIDR(Number(debitAmount) || 0);
   const cr = roundIDR(Number(creditAmount) || 0);
   if (acc.normalBalance === 'Debit') {
-    acc.balance = Math.max(0, Math.round(acc.balance + dr - cr));
+    acc.balance = Math.round(acc.balance + dr - cr);
   } else {
-    acc.balance = Math.max(0, Math.round(acc.balance + cr - dr));
+    acc.balance = Math.round(acc.balance + cr - dr);
   }
 }
 
@@ -1810,13 +1921,76 @@ let securityAuditTrail: SecurityAuditTrailRecord[] = [
   },
 ];
 
-// Active staff profiles for testing / switching RBAC
+// Canonical 7-Role Enterprise Staff Roster (plus backward-compatible role normalization)
+const BRANCH_ASSIGNMENT_OPTIONS: { storeId: string; storeName: string; hubType: string }[] = [
+  ...INITIAL_STORE_SCHEDULES.map((s) => ({
+    storeId: s.storeId,
+    storeName: s.storeName,
+    hubType: s.storeId === 'store-jkt-pik' ? 'Dark Store' : 'Retail Flagship',
+  })),
+  { storeId: 'WH-CDC-01', storeName: 'Central Distribution Center (WH-CDC-01)', hubType: 'Central CDC' },
+  { storeId: 'ALL', storeName: 'All Outlets (Consolidated)', hubType: 'Multi-Branch Network' },
+];
+
+const DEFAULT_OPERATOR_ASSIGNMENTS: Record<string, { storeId: string; storeName: string; updatedAt?: string; updatedBy?: string }> = {
+  'USR-CASH-01': { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship' },
+  'USR-WHS-01': { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship' },
+  'USR-PUR-01': { storeId: 'ALL', storeName: 'All Outlets (Consolidated)' },
+  'USR-MGR-01': { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship' },
+  'USR-ADM-01': { storeId: 'ALL', storeName: 'All Outlets (Consolidated)' },
+  'USR-COO-01': { storeId: 'ALL', storeName: 'All Outlets (Consolidated)' },
+  'USR-SADM-01': { storeId: 'ALL', storeName: 'All Outlets (Consolidated)' },
+};
+
+let operatorBranchAssignments: Record<string, { storeId: string; storeName: string; updatedAt?: string; updatedBy?: string }> = JSON.parse(
+  JSON.stringify(DEFAULT_OPERATOR_ASSIGNMENTS)
+);
+
+type CanonicalServerRole =
+  | 'cashier'
+  | 'warehouse'
+  | 'purchasing'
+  | 'store_manager'
+  | 'admin'
+  | 'coo'
+  | 'super_admin';
+
+function normalizeServerRole(role?: string | null): CanonicalServerRole {
+  switch (role) {
+    case 'cashier':
+      return 'cashier';
+    case 'warehouse':
+    case 'warehouse_picker':
+    case 'receiving_clerk':
+      return 'warehouse';
+    case 'purchasing':
+      return 'purchasing';
+    case 'store_manager':
+      return 'store_manager';
+    case 'admin':
+      return 'admin';
+    case 'coo':
+    case 'executive':
+      return 'coo';
+    case 'super_admin':
+    default:
+      return 'super_admin';
+  }
+}
+
+function isBranchScopedServerRole(role?: string | null): boolean {
+  const canonical = normalizeServerRole(role);
+  return canonical === 'cashier' || canonical === 'warehouse' || canonical === 'store_manager';
+}
+
 const AVAILABLE_STAFF_USERS: StaffShiftSession[] = [
   {
     userId: 'USR-CASH-01',
     userName: 'Andi Wijaya (Frontline Cashier)',
     userRole: 'cashier',
     storeId: 'store-jkt-senopati',
+    assignedBranchId: 'store-jkt-senopati',
+    isBranchScoped: true,
     storeName: 'GroceMart Senopati Flagship',
     activeShiftId: 'SHIFT-JKT-SEN-MORNING',
     shiftName: 'Morning Shift',
@@ -1824,43 +1998,110 @@ const AVAILABLE_STAFF_USERS: StaffShiftSession[] = [
     loginTimestamp: new Date().toISOString(),
     permissions: {
       canViewPos: true,
-      canViewInventory: true,
+      canViewInventory: false,
       canAdjustInventory: false,
-      canPickZone: (zone: StorageZoneType) => false,
+      canPickZone: () => false,
       canReceiveGoods: false,
       canApprovePurchaseOrder: false,
       canViewFinancePnL: false,
       canManageOutlets: false,
       canOverrideStoreClosure: false,
+      canViewValuation: false,
+      canCreatePrPo: false,
+      canPayVendorBills: false,
+      canManageGiro: false,
+      canModifyCoa: false,
+      canFactoryReset: false,
+      canManagePromos: false,
+      canOverridePosPrice: false,
+      canApproveStocktake: false,
+      canViewMultiBranchRevenue: false,
+      canViewBranchMonitor: false,
+      canConfirmArrival: false,
+      canManageOperatorAssignments: false,
     },
   },
   {
-    userId: 'USR-PCK-01',
-    userName: 'Rudi Hermawan (Cold-Chain Picker & Receiving Clerk)',
-    userRole: 'warehouse_picker',
+    userId: 'USR-WHS-01',
+    userName: 'Budi Santoso (Warehouse Ops)',
+    userRole: 'warehouse',
     storeId: 'store-jkt-senopati',
+    assignedBranchId: 'store-jkt-senopati',
+    isBranchScoped: true,
     storeName: 'GroceMart Senopati Flagship',
     activeShiftId: 'SHIFT-JKT-SEN-MORNING',
     shiftName: 'Morning Shift',
-    assignedZones: ['cold_chilled', 'ambient'], // Limited to chilled & ambient; NOT sub-zero
+    assignedZones: ['cold_chilled', 'ambient', 'freezer'],
     loginTimestamp: new Date().toISOString(),
     permissions: {
       canViewPos: false,
       canViewInventory: true,
-      canAdjustInventory: false,
-      canPickZone: (zone: StorageZoneType) => zone === 'cold_chilled' || zone === 'ambient',
+      canAdjustInventory: true,
+      canPickZone: () => true,
       canReceiveGoods: true,
       canApprovePurchaseOrder: false,
       canViewFinancePnL: false,
       canManageOutlets: false,
       canOverrideStoreClosure: false,
+      canViewValuation: false,
+      canCreatePrPo: false,
+      canPayVendorBills: false,
+      canManageGiro: false,
+      canModifyCoa: false,
+      canFactoryReset: false,
+      canManagePromos: false,
+      canOverridePosPrice: false,
+      canApproveStocktake: false,
+      canViewMultiBranchRevenue: false,
+      canViewBranchMonitor: false,
+      canConfirmArrival: true,
+      canManageOperatorAssignments: false,
+    },
+  },
+  {
+    userId: 'USR-PUR-01',
+    userName: 'Dewi Lestari (Procurement Officer)',
+    userRole: 'purchasing',
+    storeId: 'ALL',
+    assignedBranchId: 'ALL',
+    isBranchScoped: false,
+    storeName: 'All Outlets (Consolidated)',
+    activeShiftId: 'SHIFT-HQ-MORNING',
+    shiftName: 'Morning Shift',
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: false,
+      canViewInventory: true,
+      canAdjustInventory: false,
+      canPickZone: () => false,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: false,
+      canManageOutlets: false,
+      canOverrideStoreClosure: false,
+      canViewValuation: true,
+      canCreatePrPo: true,
+      canPayVendorBills: false,
+      canManageGiro: false,
+      canModifyCoa: false,
+      canFactoryReset: false,
+      canManagePromos: false,
+      canOverridePosPrice: false,
+      canApproveStocktake: false,
+      canViewMultiBranchRevenue: false,
+      canViewBranchMonitor: false,
+      canConfirmArrival: false,
+      canManageOperatorAssignments: false,
     },
   },
   {
     userId: 'USR-MGR-01',
-    userName: 'Dewi Sartika (Store Operations Manager)',
+    userName: 'Rina Kartika (Branch Store Manager)',
     userRole: 'store_manager',
     storeId: 'store-jkt-senopati',
+    assignedBranchId: 'store-jkt-senopati',
+    isBranchScoped: true,
     storeName: 'GroceMart Senopati Flagship',
     activeShiftId: 'SHIFT-JKT-SEN-MORNING',
     shiftName: 'Morning Shift',
@@ -1873,17 +2114,69 @@ const AVAILABLE_STAFF_USERS: StaffShiftSession[] = [
       canPickZone: () => true,
       canReceiveGoods: true,
       canApprovePurchaseOrder: true,
-      canViewFinancePnL: true, // Only for Senopati
-      canManageOutlets: true,
+      canViewFinancePnL: true,
+      canManageOutlets: false,
       canOverrideStoreClosure: true,
+      canViewValuation: true,
+      canCreatePrPo: true,
+      canPayVendorBills: false,
+      canManageGiro: false,
+      canModifyCoa: false,
+      canFactoryReset: false,
+      canManagePromos: true,
+      canOverridePosPrice: true,
+      canApproveStocktake: true,
+      canViewMultiBranchRevenue: false,
+      canViewBranchMonitor: false,
+      canConfirmArrival: true,
+      canManageOperatorAssignments: false,
     },
   },
   {
-    userId: 'USR-EXEC-01',
-    userName: 'Irfan Hakim (Chief Operations Officer & VP ERP)',
-    userRole: 'executive',
+    userId: 'USR-ADM-01',
+    userName: 'Siti Aminah (Back-Office Admin)',
+    userRole: 'admin',
     storeId: 'ALL',
-    storeName: 'GroceMart Consolidated Group',
+    assignedBranchId: 'ALL',
+    isBranchScoped: false,
+    storeName: 'All Outlets (Consolidated)',
+    activeShiftId: 'SHIFT-HQ-MORNING',
+    shiftName: 'Morning Shift',
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: false,
+      canViewInventory: true,
+      canAdjustInventory: false,
+      canPickZone: () => false,
+      canReceiveGoods: false,
+      canApprovePurchaseOrder: false,
+      canViewFinancePnL: true,
+      canManageOutlets: true,
+      canOverrideStoreClosure: false,
+      canViewValuation: true,
+      canCreatePrPo: false,
+      canPayVendorBills: true,
+      canManageGiro: true,
+      canModifyCoa: true,
+      canFactoryReset: false,
+      canManagePromos: false,
+      canOverridePosPrice: false,
+      canApproveStocktake: false,
+      canViewMultiBranchRevenue: true,
+      canViewBranchMonitor: true,
+      canConfirmArrival: false,
+      canManageOperatorAssignments: false,
+    },
+  },
+  {
+    userId: 'USR-COO-01',
+    userName: 'Irfan Hakim (Chief Operations Officer)',
+    userRole: 'coo',
+    storeId: 'ALL',
+    assignedBranchId: 'ALL',
+    isBranchScoped: false,
+    storeName: 'All Outlets (Consolidated)',
     activeShiftId: 'SHIFT-EXEC-ALL-HOURS',
     shiftName: 'Morning Shift',
     assignedZones: ['ambient', 'cold_chilled', 'freezer'],
@@ -1895,14 +2188,104 @@ const AVAILABLE_STAFF_USERS: StaffShiftSession[] = [
       canPickZone: () => true,
       canReceiveGoods: true,
       canApprovePurchaseOrder: true,
-      canViewFinancePnL: true, // Consolidated company-wide
+      canViewFinancePnL: true,
       canManageOutlets: true,
       canOverrideStoreClosure: true,
+      canViewValuation: true,
+      canCreatePrPo: true,
+      canPayVendorBills: true,
+      canManageGiro: true,
+      canModifyCoa: true,
+      canFactoryReset: false,
+      canManagePromos: true,
+      canOverridePosPrice: true,
+      canApproveStocktake: true,
+      canViewMultiBranchRevenue: true,
+      canViewBranchMonitor: true,
+      canConfirmArrival: true,
+      canManageOperatorAssignments: false,
+    },
+  },
+  {
+    userId: 'USR-SADM-01',
+    userName: 'Mochammad Noer Suhasbi (Super Admin)',
+    userRole: 'super_admin',
+    storeId: 'ALL',
+    assignedBranchId: 'ALL',
+    isBranchScoped: false,
+    storeName: 'All Outlets (Consolidated)',
+    activeShiftId: 'SHIFT-SADM-ALL-HOURS',
+    shiftName: 'Morning Shift',
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    loginTimestamp: new Date().toISOString(),
+    permissions: {
+      canViewPos: true,
+      canViewInventory: true,
+      canAdjustInventory: true,
+      canPickZone: () => true,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: true,
+      canManageOutlets: true,
+      canOverrideStoreClosure: true,
+      canViewValuation: true,
+      canCreatePrPo: true,
+      canPayVendorBills: true,
+      canManageGiro: true,
+      canModifyCoa: true,
+      canFactoryReset: true,
+      canManagePromos: true,
+      canOverridePosPrice: true,
+      canApproveStocktake: true,
+      canViewMultiBranchRevenue: true,
+      canViewBranchMonitor: true,
+      canConfirmArrival: true,
+      canManageOperatorAssignments: true,
     },
   },
 ];
 
-let currentActiveStaffSession: StaffShiftSession = AVAILABLE_STAFF_USERS[3]; // Default to executive for smooth UX, toggleable via admin UI
+let currentActiveStaffSession: StaffShiftSession = AVAILABLE_STAFF_USERS[6]; // Default to super_admin for full administrative control
+
+function resolveStaffUser(idOrRole?: string | null): StaffShiftSession | undefined {
+  if (!idOrRole) return undefined;
+  const trimmed = String(idOrRole).trim();
+  if (trimmed === 'USR-PCK-01') return AVAILABLE_STAFF_USERS.find((u) => u.userId === 'USR-WHS-01');
+  if (trimmed === 'USR-EXEC-01') return AVAILABLE_STAFF_USERS.find((u) => u.userId === 'USR-COO-01');
+  const direct = AVAILABLE_STAFF_USERS.find((u) => u.userId === trimmed);
+  if (direct) return direct;
+  const clean = trimmed.toLowerCase();
+  return AVAILABLE_STAFF_USERS.find(
+    (u) =>
+      u.userId.toLowerCase() === clean ||
+      u.userName.toLowerCase().includes(clean) ||
+      u.userRole.toLowerCase() === clean.replace(/\s+/g, '_')
+  );
+}
+
+function syncAssignmentsOntoProfiles() {
+  AVAILABLE_STAFF_USERS.forEach((profile) => {
+    const assigned = operatorBranchAssignments[profile.userId];
+    if (assigned) {
+      profile.storeId = assigned.storeId;
+      profile.assignedBranchId = assigned.storeId;
+      profile.storeName = assigned.storeName;
+    } else {
+      profile.assignedBranchId = profile.storeId;
+    }
+    profile.isBranchScoped = isBranchScopedServerRole(profile.userRole);
+  });
+  const activeUpdated = AVAILABLE_STAFF_USERS.find((u) => u.userId === currentActiveStaffSession?.userId);
+  if (activeUpdated) {
+    currentActiveStaffSession = {
+      ...activeUpdated,
+      loginTimestamp: currentActiveStaffSession.loginTimestamp,
+      shiftName: currentActiveStaffSession.shiftName,
+    };
+  }
+}
+
+syncAssignmentsOntoProfiles();
 
 // Module 4: Climate-Adaptive Cold-Chain Configs & Multi-Currency FX Rates
 const CURRENCY_RATES: Record<SupportedCurrency, CurrencyExchangeRate> = {
@@ -2264,6 +2647,7 @@ function captureServerState() {
     securityAuditTrail,
     climateAdaptiveConfigs,
     enterpriseNotificationsList,
+    operatorBranchAssignments,
     qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
     idempotencyStoreEntries: Array.from(idempotencyStore.entries()),
   };
@@ -2336,6 +2720,15 @@ function applyServerState(snap: any) {
   if (Array.isArray(snap.idempotencyStoreEntries)) {
     snap.idempotencyStoreEntries.forEach(([k, v]: [string, any]) => idempotencyStore.set(k, v));
   }
+  if (snap.operatorBranchAssignments && typeof snap.operatorBranchAssignments === 'object') {
+    operatorBranchAssignments = {
+      ...JSON.parse(JSON.stringify(DEFAULT_OPERATOR_ASSIGNMENTS)),
+      ...snap.operatorBranchAssignments,
+    };
+  } else {
+    operatorBranchAssignments = JSON.parse(JSON.stringify(DEFAULT_OPERATOR_ASSIGNMENTS));
+  }
+  syncAssignmentsOntoProfiles();
 }
 
 const INITIAL_STATE_BASELINE_JSON = JSON.stringify(captureServerState());
@@ -2493,6 +2886,244 @@ async function startServer() {
   });
 
   app.use(express.json());
+
+  // 7-Role Enterprise RBAC & Branch-Scope Express Guard Middleware
+  app.use('/api', (req: Request, res: Response, next) => {
+    const urlPath = req.path || req.originalUrl.split('?')[0];
+    const method = req.method.toUpperCase();
+
+    // Determine effective operator role & branch (explicit header overrides active server session cleanly)
+    const rawHeaderRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'] : undefined;
+    const rawHeaderBranch = typeof req.headers['x-operator-branch'] === 'string' ? req.headers['x-operator-branch'] : undefined;
+    const rawHeaderOpId = typeof req.headers['x-operator-id'] === 'string' ? req.headers['x-operator-id'] : undefined;
+
+    const effectiveRole: CanonicalServerRole = normalizeServerRole(
+      rawHeaderRole || currentActiveStaffSession.userRole
+    );
+    const assignedAssignment = rawHeaderOpId ? operatorBranchAssignments[rawHeaderOpId] : undefined;
+    const effectiveBranch =
+      rawHeaderBranch ||
+      assignedAssignment?.storeId ||
+      currentActiveStaffSession.assignedBranchId ||
+      currentActiveStaffSession.storeId ||
+      'ALL';
+
+    const denyAccess = (requiredRoles: CanonicalServerRole[], customReason?: string) => {
+      const reason =
+        customReason ||
+        `RBAC Access Denied (403): Role '${effectiveRole}' is not authorized for ${method} ${urlPath}. Required role(s): [${requiredRoles.join(', ')}].`;
+      securityAuditTrail.unshift({
+        id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+        timestamp: new Date().toISOString(),
+        actionType: 'ZONE_CONFIG_UPDATE',
+        resourceId: `${method} ${urlPath}`,
+        userId: rawHeaderOpId || currentActiveStaffSession.userId,
+        userName: currentActiveStaffSession.userName,
+        userRole: effectiveRole,
+        storeId: effectiveBranch,
+        shiftId: currentActiveStaffSession.activeShiftId,
+        status: 'PERMISSION_DENIED',
+        metadata: { requiredRoles, reason },
+      });
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        role: effectiveRole,
+        branch: effectiveBranch,
+        requiredRoles,
+        error: reason,
+      });
+    };
+
+    // Public / auth / health / read-only lookup exceptions
+    if (
+      urlPath === '/health' ||
+      urlPath.startsWith('/admin/auth/') ||
+      urlPath === '/admin/rbac/current-session' ||
+      urlPath === '/admin/rbac/switch-session' ||
+      urlPath === '/admin/rbac/handover' ||
+      urlPath === '/admin/rbac/check-zone-access'
+    ) {
+      return next();
+    }
+
+    // Check scoped rules for /api/admin/*, /api/pos/*, and /api/b2b/giro*
+    if (urlPath.startsWith('/admin/') || urlPath.startsWith('/pos/') || urlPath.startsWith('/b2b/giro')) {
+      // 1. Super Admin Only Endpoints
+      if (
+        urlPath === '/admin/system/reset-demo-data' ||
+        urlPath === '/admin/reset-demo-data' ||
+        (urlPath === '/admin/settings/operator-assignments' && method === 'POST') ||
+        (urlPath.startsWith('/admin/settings/coa-account') && method === 'DELETE') ||
+        (urlPath === '/admin/compliance/sku-tax-rules' && method === 'PUT')
+      ) {
+        if (effectiveRole !== 'super_admin') {
+          return denyAccess(['super_admin']);
+        }
+      }
+
+      // 2. Multi-Branch Monitor & Operator Assignments Read
+      if (
+        urlPath === '/admin/settings/branch-monitor' ||
+        (urlPath === '/admin/settings/operator-assignments' && method === 'GET')
+      ) {
+        const allowed: CanonicalServerRole[] = ['admin', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      // 3. Confirm Arrival on Incoming Transfers/POs
+      if (urlPath === '/admin/settings/confirm-arrival' && method === 'POST') {
+        const allowed: CanonicalServerRole[] = ['warehouse', 'store_manager', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      // 4. Approval Matrix Rules & Decisions
+      if (urlPath.startsWith('/admin/approvals/')) {
+        if (method !== 'GET') {
+          const allowed: CanonicalServerRole[] = ['store_manager', 'coo', 'super_admin'];
+          if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+        } else {
+          const allowed: CanonicalServerRole[] = ['store_manager', 'admin', 'coo', 'super_admin'];
+          if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+        }
+      }
+
+      // 5. Bilyet Giro Clearing / Bouncing & Vendor Bill Payments/Approvals
+      if (urlPath.startsWith('/b2b/giro')) {
+        if (method !== 'GET') {
+          const allowed: CanonicalServerRole[] = ['admin', 'coo', 'super_admin'];
+          if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+        } else {
+          const allowed: CanonicalServerRole[] = ['admin', 'coo', 'super_admin'];
+          if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+        }
+      }
+
+      if (urlPath.startsWith('/admin/procurement/vendor-bills')) {
+        if (method === 'POST' && urlPath === '/admin/procurement/vendor-bills') {
+          const allowed: CanonicalServerRole[] = ['purchasing', 'admin', 'coo', 'super_admin'];
+          if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+        } else if (method !== 'GET') {
+          const allowed: CanonicalServerRole[] = ['admin', 'coo', 'super_admin'];
+          if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+        }
+      }
+
+      // 6. Enterprise Settings, POS Config, COA Writes
+      if (
+        (urlPath === '/admin/settings/enterprise' || urlPath === '/admin/settings/pos-config') &&
+        method !== 'GET'
+      ) {
+        const allowed: CanonicalServerRole[] = ['coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      if (
+        (urlPath.startsWith('/admin/settings/coa-account') ||
+          urlPath === '/admin/settings/coa-mapping' ||
+          urlPath.startsWith('/admin/accounting/')) &&
+        method !== 'GET'
+      ) {
+        const allowed: CanonicalServerRole[] = ['admin', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      // Financial P&L / GL / Balance Sheet / Cash Flow / Omzet GETs
+      if (urlPath.startsWith('/admin/accounting/') || urlPath === '/admin/omzet-analytics') {
+        const allowed: CanonicalServerRole[] = ['store_manager', 'admin', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      // 7. Procurement PR/PO vs Dock Goods Receipt (GR) & QC
+      if (
+        urlPath.startsWith('/admin/procurement/requests') ||
+        urlPath.startsWith('/admin/procurement/orders') ||
+        urlPath === '/admin/replenishment/generate-po' ||
+        urlPath.startsWith('/admin/vendor-credit-notes') ||
+        urlPath === '/admin/compliance/rtv' ||
+        urlPath.startsWith('/admin/valuation/landed-costs')
+      ) {
+        if (method !== 'GET') {
+          const allowed: CanonicalServerRole[] = ['purchasing', 'store_manager', 'coo', 'super_admin'];
+          if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+        }
+      }
+
+      if (urlPath === '/admin/procurement/gr/receive-partial' || urlPath === '/admin/qc/inspections') {
+        if (method !== 'GET') {
+          const allowed: CanonicalServerRole[] = ['warehouse', 'purchasing', 'store_manager', 'coo', 'super_admin'];
+          if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+        }
+      }
+
+      // 8. Inventory Transfers, Picker, Logistics, Stock Adjustments, Bulk Import
+      if (
+        urlPath.startsWith('/admin/inventory/') ||
+        urlPath.startsWith('/admin/picker/') ||
+        urlPath.startsWith('/admin/catch-weight/') ||
+        urlPath.startsWith('/admin/fulfillment/') ||
+        urlPath.startsWith('/admin/substitutions/') ||
+        urlPath.startsWith('/admin/logistics/') ||
+        urlPath.startsWith('/admin/warehouse/') ||
+        urlPath.startsWith('/admin/batch-recall/') ||
+        urlPath.startsWith('/admin/cold-chain/')
+      ) {
+        if (method !== 'GET') {
+          if (
+            urlPath === '/admin/inventory/stock-opname/reconcile' ||
+            urlPath === '/admin/inventory/adjust'
+          ) {
+            const allowed: CanonicalServerRole[] = ['warehouse', 'store_manager', 'coo', 'super_admin'];
+            if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+          } else {
+            const allowed: CanonicalServerRole[] = ['warehouse', 'store_manager', 'coo', 'super_admin'];
+            if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+          }
+        }
+      }
+
+      // 9. Store Emergency Override / Outlets Config
+      if ((urlPath === '/admin/store-status' || urlPath.startsWith('/admin/outlets/')) && method !== 'GET') {
+        const allowed: CanonicalServerRole[] = ['store_manager', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      // 10. POS Cashier Terminal & Sales Returns (RMA)
+      if (
+        (urlPath.startsWith('/pos/') && method !== 'GET') ||
+        urlPath === '/admin/returns' ||
+        urlPath === '/admin/compliance/rma' ||
+        urlPath.startsWith('/admin/hardware/')
+      ) {
+        const allowed: CanonicalServerRole[] = ['cashier', 'store_manager', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      // 11. Branch-Scoped Write Isolation Check (cashier, warehouse, store_manager)
+      if (
+        method !== 'GET' &&
+        isBranchScopedServerRole(effectiveRole) &&
+        effectiveBranch !== 'ALL' &&
+        effectiveBranch !== 'CONSOLIDATED'
+      ) {
+        const bodyStoreId = typeof req.body?.storeId === 'string' ? req.body.storeId : undefined;
+        if (
+          bodyStoreId &&
+          bodyStoreId !== 'ALL' &&
+          bodyStoreId !== 'CONSOLIDATED' &&
+          effectiveBranch !== 'WH-CDC-01' &&
+          bodyStoreId !== effectiveBranch
+        ) {
+          return denyAccess(
+            [effectiveRole],
+            `Branch Isolation Violation (403): Operator (${effectiveRole}) assigned to '${effectiveBranch}' cannot mutate data for '${bodyStoreId}'.`
+          );
+        }
+      }
+    }
+
+    next();
+  });
 
   // Debounced atomic snapshot persistence on every successful mutating API request
   app.use('/api', (req: Request, res: Response, next) => {
@@ -3572,7 +4203,7 @@ async function startServer() {
     const delta = item.currentStock - previousStock;
     const costDelta = Math.abs(delta) * item.unitCost;
 
-    // Also update multi-tier item if present
+    // Also update multi-tier item & tracked batches if present
     const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
     if (tier) {
       tier.physicalStock = Math.max(0, tier.physicalStock + Number(adjustmentQty));
@@ -3580,29 +4211,57 @@ async function startServer() {
       tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
       tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
     }
+    if (delta !== 0) {
+      syncBatchesForStockVariance(sku, storeId, delta, item.unitCost);
+    }
 
-    // Log GL adjustment
+    // Post balanced double-entry GL adjustment (#1040 Inventory Asset <-> #5210 Inventory Shrinkage & Opname Variance)
     const gleId = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-    generalLedger.unshift({
-      id: gleId,
-      timestamp: new Date().toISOString(),
-      storeId,
-      storeName: tier?.storeName || 'GroceMart Retail Hub',
-      accountCode: '1040',
-      accountName: 'Merchandise Inventory Asset',
-      category: 'Asset',
-      debit: delta > 0 ? costDelta : 0,
-      credit: delta < 0 ? costDelta : 0,
-      referenceType: 'INVENTORY_ADJUSTMENT',
-      referenceId: sku,
-      description: `Stock adjustment for ${sku} (${delta > 0 ? '+' : ''}${delta} units): ${reason}`,
-    });
+    const gleContraId = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const adjTimestamp = new Date().toISOString();
+    const roundedCostDelta = roundIDR(costDelta);
+
+    if (roundedCostDelta > 0) {
+      commitBalancedGlBatch(
+        [
+          {
+            id: gleId,
+            timestamp: adjTimestamp,
+            storeId,
+            storeName: tier?.storeName || 'GroceMart Retail Hub',
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: delta > 0 ? roundedCostDelta : 0,
+            credit: delta < 0 ? roundedCostDelta : 0,
+            referenceType: 'INVENTORY_ADJUSTMENT',
+            referenceId: sku,
+            description: `Stock adjustment for ${sku} (${delta > 0 ? '+' : ''}${delta} units): ${reason}`,
+          },
+          {
+            id: gleContraId,
+            timestamp: adjTimestamp,
+            storeId,
+            storeName: tier?.storeName || 'GroceMart Retail Hub',
+            accountCode: '5210',
+            accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
+            category: 'Expense',
+            debit: delta < 0 ? roundedCostDelta : 0,
+            credit: delta > 0 ? roundedCostDelta : 0,
+            referenceType: 'INVENTORY_ADJUSTMENT',
+            referenceId: sku,
+            description: `Contra variance adjustment for ${sku} (${delta > 0 ? '+' : ''}${delta} units): ${reason}`,
+          },
+        ],
+        true
+      );
+    }
 
     if (delta < 0) {
       checkAndNotifyLowStockForSkus([sku], storeId);
     }
 
-    res.json({ success: true, item, delta, costDelta, gleId });
+    res.json({ success: true, item, delta, costDelta: roundedCostDelta, gleId });
   });
 
   // -------------------------------------------------------------
@@ -3818,35 +4477,39 @@ async function startServer() {
     const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
 
-    generalLedger.unshift({
-      id: gleId1,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: '6030',
-      accountName: 'Inventory Shrinkage & Spoilage Expense',
-      category: 'Expense',
-      debit: totalShrinkageCost,
-      credit: 0,
-      referenceType: 'WASTE_SHRINKAGE',
-      referenceId: wasteId,
-      description: `Shrinkage write-off: ${qty} units of ${item.productName} (${reason.replace(/_/g, ' ')})`,
-    });
-
-    generalLedger.unshift({
-      id: gleId2,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: '1040',
-      accountName: 'Merchandise Inventory Asset',
-      category: 'Asset',
-      debit: 0,
-      credit: totalShrinkageCost,
-      referenceType: 'WASTE_SHRINKAGE',
-      referenceId: wasteId,
-      description: `Inventory reduction for waste loss #${wasteId}`,
-    });
+    commitBalancedGlBatch(
+      [
+        {
+          id: gleId1,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '6030',
+          accountName: 'Inventory Shrinkage & Spoilage Expense',
+          category: 'Expense',
+          debit: totalShrinkageCost,
+          credit: 0,
+          referenceType: 'WASTE_SHRINKAGE',
+          referenceId: wasteId,
+          description: `Shrinkage write-off: ${qty} units of ${item.productName} (${reason.replace(/_/g, ' ')})`,
+        },
+        {
+          id: gleId2,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
+          category: 'Asset',
+          debit: 0,
+          credit: totalShrinkageCost,
+          referenceType: 'WASTE_SHRINKAGE',
+          referenceId: wasteId,
+          description: `Inventory reduction for waste loss #${wasteId}`,
+        },
+      ],
+      true
+    );
 
     const newRecord: WasteRecord = {
       id: wasteId,
@@ -4254,6 +4917,21 @@ async function startServer() {
       }
 
       if (totalRemaining > 0 && closureNotes) {
+        po.items.forEach((poItem) => {
+          const openQty = Math.max(0, Number(poItem.remainingBackorder) || 0);
+          if (openQty > 0) {
+            const inv = inventoryList.find((i) => i.sku === poItem.sku);
+            if (inv) {
+              inv.incomingStock = Math.max(0, (inv.incomingStock || 0) - openQty);
+            }
+            const tier = storeInventoryTiers.find((t) => t.sku === poItem.sku && t.storeId === po.storeId);
+            if (tier) {
+              tier.incomingStock = Math.max(0, (tier.incomingStock || 0) - openQty);
+              tier.updatedAt = new Date().toISOString();
+            }
+            poItem.remainingBackorder = 0;
+          }
+        });
         po.status = 'Completed';
         po.isForceClosed = true;
         po.closureNotes = closureNotes;
@@ -4608,52 +5286,51 @@ async function startServer() {
   app.delete('/api/admin/inventory/stock-tier/:id', forbidHardDelete('Stock Ledger Records'));
   app.delete('/api/admin/waste/:id', forbidHardDelete('Waste/Shrinkage Records'));
 
-  app.get('/api/admin/accounting/pnl', (req: Request, res: Response) => {
-    syncAllBatchesExpiryStatus(Date.now());
-    const { storeId } = req.query;
-    let relevantEntries = generalLedger;
-    let storeName = 'Consolidated Company-Wide';
+  const buildDynamicPnlSnapshot = (rawStoreId?: unknown) => {
+    const storeIdStr = rawStoreId ? String(rawStoreId) : 'CONSOLIDATED';
+    const isSingleStore = Boolean(storeIdStr && storeIdStr !== 'CONSOLIDATED' && storeIdStr !== 'ALL');
+    const factor = isSingleStore ? 0.25 : 1.0;
+    const storeMeta = isSingleStore ? storeSchedules.find((st) => st.storeId === storeIdStr) : undefined;
+    const storeName = storeMeta?.storeName || (isSingleStore ? storeIdStr : 'Consolidated Company-Wide');
 
-    if (storeId && storeId !== 'CONSOLIDATED') {
-      relevantEntries = generalLedger.filter((e) => e.storeId === storeId);
-      const s = storeSchedules.find((st) => st.storeId === storeId);
-      if (s) storeName = s.storeName;
-    }
+    const getStoreScopedBalance = (code: string): number => {
+      const liveAcc = chartOfAccounts.find((c) => c.accountCode === code);
+      if (!isSingleStore) return liveAcc?.balance ?? 0;
+      const base = BASELINE_COA_BY_CODE[code]?.balance ?? liveAcc?.balance ?? 0;
+      const category = liveAcc?.category || BASELINE_COA_BY_CODE[code]?.category || 'Expense';
+      let delta = 0;
+      generalLedger.forEach((entry) => {
+        if (entry.accountCode !== code || entry.storeId !== storeIdStr || INITIAL_SEED_GL_IDS.has(entry.id)) return;
+        const dr = roundIDR(entry.debit);
+        const cr = roundIDR(entry.credit);
+        delta += category === 'Revenue' || category === 'Liability' || category === 'Equity' ? cr - dr : dr - cr;
+      });
+      return Math.round(base * factor + delta);
+    };
 
-    let grossSalesRevenue = 0;
-    let costOfGoodsSold = 0;
-
-    relevantEntries.forEach((entry) => {
-      if (entry.accountCode === '4010') grossSalesRevenue += entry.credit;
-      if (entry.accountCode === '5010') costOfGoodsSold += entry.debit;
-    });
-
-    // Provide realistic baseline if ledger is young
-    if (grossSalesRevenue === 0) {
-      grossSalesRevenue = storeId && storeId !== 'CONSOLIDATED' ? 45000000 : 388500000;
-      costOfGoodsSold = Math.round(grossSalesRevenue * 0.62);
-    }
-
-    const discountsGiven = Math.round(grossSalesRevenue * 0.04);
+    const revenueAccounts = chartOfAccounts.filter((c) => c.category === 'Revenue');
+    const grossSalesRevenue = revenueAccounts.reduce((s, a) => s + getStoreScopedBalance(a.accountCode), 0);
+    const discountsGiven = 0;
     const netSalesRevenue = grossSalesRevenue - discountsGiven;
+    const costOfGoodsSold = getStoreScopedBalance('5010');
     const grossProfit = netSalesRevenue - costOfGoodsSold;
     const grossMarginPercent = netSalesRevenue > 0 ? (grossProfit / netSalesRevenue) * 100 : 0;
 
-    const factor = storeId && storeId !== 'CONSOLIDATED' ? 0.22 : 1.0;
-    const operatingExpenses = [
-      { category: 'Cold-Chain Refrigeration & Store Electricity', amount: Math.round(18500000 * factor) },
-      { category: 'Same-Day Chilled Logistics & Couriers', amount: Math.round(12200000 * factor) },
-      { category: 'Store Storekeeping & Quality Inspection Staff', amount: Math.round(24800000 * factor) },
-      { category: 'Biodegradable Insulated Packaging', amount: Math.round(3500000 * factor) },
-    ];
+    const expenseAccounts = chartOfAccounts.filter((c) => c.category === 'Expense' && c.accountCode !== '5010');
+    const operatingExpenses = expenseAccounts
+      .map((acc) => ({
+        category: `${acc.accountName} (#${acc.accountCode})`,
+        amount: getStoreScopedBalance(acc.accountCode),
+      }))
+      .filter((item) => item.amount !== 0);
 
     const totalOperatingExpenses = operatingExpenses.reduce((sum, o) => sum + o.amount, 0);
     const netProfit = grossProfit - totalOperatingExpenses;
     const netMarginPercent = netSalesRevenue > 0 ? (netProfit / netSalesRevenue) * 100 : 0;
 
-    res.json({
+    return {
       period: 'October 2026 MTD',
-      storeId: storeId ? String(storeId) : 'CONSOLIDATED',
+      storeId: storeIdStr || 'CONSOLIDATED',
       storeName,
       grossSalesRevenue,
       discountsGiven,
@@ -4665,52 +5342,77 @@ async function startServer() {
       totalOperatingExpenses,
       netProfit,
       netMarginPercent: Number(netMarginPercent.toFixed(1)),
-    });
+    };
+  };
+
+  app.get('/api/admin/accounting/pnl', (req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
+    res.json(buildDynamicPnlSnapshot(req.query.storeId));
   });
 
   app.get('/api/admin/accounting/balance-sheet', (req: Request, res: Response) => {
     syncAllBatchesExpiryStatus(Date.now());
     const { storeId } = req.query;
-    const isSingleStore = storeId && storeId !== 'CONSOLIDATED';
+    const storeIdStr = storeId ? String(storeId) : 'CONSOLIDATED';
+    const isSingleStore = Boolean(storeIdStr && storeIdStr !== 'CONSOLIDATED' && storeIdStr !== 'ALL');
     const factor = isSingleStore ? 0.25 : 1.0;
 
-    const currentAssets = [
-      { category: 'Cash on Hand & Register Drawer Float', amount: Math.round(45000000 * factor) },
-      { category: 'Bank BCA Operational Clearing', amount: Math.round(382000000 * factor) },
-      { category: 'QRIS Settlement Receivable (ASPI Clearing)', amount: Math.round(28400000 * factor) },
-      { category: 'Merchandise Inventory Asset (FIFO/WAC Valued)', amount: Math.round(846500000 * factor) },
-    ];
+    const getScopedAccBalance = (acc: ChartOfAccount): number => {
+      if (!isSingleStore) return acc.balance;
+      const base = BASELINE_COA_BY_CODE[acc.accountCode]?.balance ?? acc.balance;
+      let delta = 0;
+      generalLedger.forEach((entry) => {
+        if (entry.accountCode !== acc.accountCode || entry.storeId !== storeIdStr || INITIAL_SEED_GL_IDS.has(entry.id)) {
+          return;
+        }
+        const dr = roundIDR(entry.debit);
+        const cr = roundIDR(entry.credit);
+        delta += acc.normalBalance === 'Debit' ? dr - cr : cr - dr;
+      });
+      return Math.round(base * factor + delta);
+    };
 
-    const nonCurrentAssets = [
-      { category: 'Cold-Chain Walk-in Coolers & Display Chillers', amount: Math.round(210000000 * factor) },
-      { category: 'Point-of-Sale Hardware & Warehouse Handhelds', amount: Math.round(48000000 * factor) },
-    ];
+    const assetAccounts = chartOfAccounts.filter((c) => c.category === 'Asset');
+    const currentAssets = assetAccounts
+      .filter((c) => c.accountCode !== '1510' && c.accountCode !== '1520')
+      .map((c) => ({ category: `${c.accountName} (#${c.accountCode})`, amount: getScopedAccBalance(c) }))
+      .filter((a) => a.amount !== 0);
+
+    const nonCurrentAssets = assetAccounts
+      .filter((c) => c.accountCode === '1510' || c.accountCode === '1520')
+      .map((c) => ({ category: `${c.accountName} (#${c.accountCode})`, amount: getScopedAccBalance(c) }));
 
     const totalAssets = [...currentAssets, ...nonCurrentAssets].reduce((s, a) => s + a.amount, 0);
 
-    const currentLiabilities = [
-      { category: 'Trade Accounts Payable to Farm Cooperatives', amount: Math.round(142000000 * factor) },
-      { category: 'Accrued Electricity & Cold-Chain Logistics Fees', amount: Math.round(35000000 * factor) },
-      { category: 'Customer Store Credit & GrocePoints Liability', amount: Math.round(8500000 * factor) },
-    ];
+    const currentLiabilities = chartOfAccounts
+      .filter((c) => c.category === 'Liability')
+      .map((c) => ({ category: `${c.accountName} (#${c.accountCode})`, amount: getScopedAccBalance(c) }))
+      .filter((l) => l.amount !== 0);
 
     const totalLiabilities = currentLiabilities.reduce((s, l) => s + l.amount, 0);
 
-    const retainedPrior = Math.round(174900000 * factor);
-    const currentPeriodNet = Math.round(91500000 * factor);
-    const paidInEquity = totalAssets - totalLiabilities - retainedPrior - currentPeriodNet;
+    const livePnl = buildDynamicPnlSnapshot(storeIdStr);
+    const equityAccounts = chartOfAccounts.filter((c) => c.category === 'Equity');
+    const paidInAcc = equityAccounts.find((c) => c.accountCode === '3010');
+    const retainedAcc = equityAccounts.find((c) => c.accountCode === '3020');
+    const paidInEquity = paidInAcc ? getScopedAccBalance(paidInAcc) : 0;
+    const retainedPrior = retainedAcc ? getScopedAccBalance(retainedAcc) : 0;
+    const otherEquity = equityAccounts
+      .filter((c) => c.accountCode !== '3010' && c.accountCode !== '3020')
+      .map((c) => ({ category: `${c.accountName} (#${c.accountCode})`, amount: getScopedAccBalance(c) }));
 
     const equityItems = [
-      { category: 'Paid-In Capital & Founding Equity', amount: paidInEquity },
-      { category: 'Retained Earnings (Prior Quarters)', amount: retainedPrior },
-      { category: 'Current Month Net Earnings (P&L MTD)', amount: currentPeriodNet },
+      { category: 'Paid-In Capital & Founding Equity (#3010)', amount: paidInEquity },
+      { category: 'Retained Earnings (Prior Quarters) (#3020)', amount: retainedPrior },
+      ...otherEquity,
+      { category: 'Current Month Net Earnings (P&L MTD)', amount: livePnl.netProfit },
     ];
 
     const totalEquity = equityItems.reduce((s, e) => s + e.amount, 0);
 
     res.json({
       period: 'October 2026 MTD',
-      storeId: storeId ? String(storeId) : 'CONSOLIDATED',
+      storeId: storeIdStr,
       assets: {
         currentAssets,
         nonCurrentAssets,
@@ -4724,18 +5426,42 @@ async function startServer() {
         equityItems,
         totalEquity,
       },
-      isBalanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 100,
+      isBalanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 1,
     });
   });
 
   app.get('/api/admin/accounting/cash-flow', (req: Request, res: Response) => {
     syncAllBatchesExpiryStatus(Date.now());
     const { storeId } = req.query;
-    const factor = storeId && storeId !== 'CONSOLIDATED' ? 0.25 : 1.0;
+    const storeIdStr = storeId ? String(storeId) : 'CONSOLIDATED';
+    const isSingleStore = Boolean(storeIdStr && storeIdStr !== 'CONSOLIDATED' && storeIdStr !== 'ALL');
+    const factor = isSingleStore ? 0.25 : 1.0;
+
+    const cashCodes = new Set(['1010', '1015', '1020']);
+    const liveCashBalance = isSingleStore
+      ? Math.round(
+          ['1010', '1015', '1020'].reduce((sum, code) => sum + (BASELINE_COA_BY_CODE[code]?.balance ?? 0), 0) * factor
+        ) +
+        generalLedger
+          .filter((e) => cashCodes.has(e.accountCode) && e.storeId === storeIdStr && !INITIAL_SEED_GL_IDS.has(e.id))
+          .reduce((sum, e) => sum + roundIDR(e.debit) - roundIDR(e.credit), 0)
+      : ['1010', '1015', '1020'].reduce(
+          (sum, code) => sum + (chartOfAccounts.find((c) => c.accountCode === code)?.balance ?? 0),
+          0
+        );
+
+    const liveCashDelta = generalLedger
+      .filter(
+        (e) =>
+          cashCodes.has(e.accountCode) &&
+          !INITIAL_SEED_GL_IDS.has(e.id) &&
+          (!isSingleStore || e.storeId === storeIdStr)
+      )
+      .reduce((sum, e) => sum + roundIDR(e.debit) - roundIDR(e.credit), 0);
 
     const operatingActivities = [
-      { category: 'Cash Receipts from QRIS Online & In-Store Sales', amount: Math.round(365000000 * factor) },
-      { category: 'Payments to Produce & Dairy Suppliers', amount: -Math.round(210000000 * factor) },
+      { category: 'Cash Receipts from QRIS Online & In-Store Sales', amount: Math.round(365000000 * factor) + Math.max(0, liveCashDelta) },
+      { category: 'Payments to Produce & Dairy Suppliers', amount: -Math.round(210000000 * factor) + Math.min(0, liveCashDelta) },
       { category: 'Payments for Cold-Chain Refrigeration & Store Utilities', amount: -Math.round(18500000 * factor) },
       { category: 'Salaries Paid to Storekeepers & Couriers', amount: -Math.round(24800000 * factor) },
     ];
@@ -4754,12 +5480,12 @@ async function startServer() {
     const netFinancingCash = financingActivities.reduce((s, f) => s + f.amount, 0);
 
     const netCashIncrease = netOperatingCash + netInvestingCash + netFinancingCash;
-    const beginningCash = Math.round(390000000 * factor);
-    const endingCash = beginningCash + netCashIncrease;
+    const endingCash = liveCashBalance;
+    const beginningCash = endingCash - netCashIncrease;
 
     res.json({
       period: 'October 2026 MTD',
-      storeId: storeId ? String(storeId) : 'CONSOLIDATED',
+      storeId: storeIdStr,
       operatingActivities,
       netOperatingCash,
       investingActivities,
@@ -4977,35 +5703,39 @@ async function startServer() {
       ? 'Natural Shrinkage / Evaporation Loss'
       : 'Anomalous Spoilage Loss';
 
-    generalLedger.unshift({
-      id: gleId1,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: '6030',
-      accountName: 'Inventory Shrinkage & Spoilage Expense',
-      category: 'Expense',
-      debit: totalLossCost,
-      credit: 0,
-      referenceType: 'INVENTORY_ADJUSTMENT',
-      referenceId: evapId,
-      description: `[${classification}] ${weightLossGrams}g moisture loss on ${item.productName} (${weightLossPercent}% vs ${toleranceConfig.maxEvaporationTolerancePercent}% threshold)`,
-    });
-
-    generalLedger.unshift({
-      id: gleId2,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: '1040',
-      accountName: 'Merchandise Inventory Asset',
-      category: 'Asset',
-      debit: 0,
-      credit: totalLossCost,
-      referenceType: 'INVENTORY_ADJUSTMENT',
-      referenceId: evapId,
-      description: `Asset balance adjustment for natural shrinkage audit #${evapId}`,
-    });
+    commitBalancedGlBatch(
+      [
+        {
+          id: gleId1,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '6030',
+          accountName: 'Inventory Shrinkage & Spoilage Expense',
+          category: 'Expense',
+          debit: totalLossCost,
+          credit: 0,
+          referenceType: 'INVENTORY_ADJUSTMENT',
+          referenceId: evapId,
+          description: `[${classification}] ${weightLossGrams}g moisture loss on ${item.productName} (${weightLossPercent}% vs ${toleranceConfig.maxEvaporationTolerancePercent}% threshold)`,
+        },
+        {
+          id: gleId2,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
+          category: 'Asset',
+          debit: 0,
+          credit: totalLossCost,
+          referenceType: 'INVENTORY_ADJUSTMENT',
+          referenceId: evapId,
+          description: `Asset balance adjustment for natural shrinkage audit #${evapId}`,
+        },
+      ],
+      true
+    );
 
     const adjustment: NaturalShrinkageAdjustment = {
       id: evapId,
@@ -5298,35 +6028,39 @@ async function startServer() {
       const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
       const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
 
-      generalLedger.unshift({
-        id: gleId1,
-        timestamp,
-        storeId: prompt.storeId,
-        storeName: order.storeName,
-        accountCode: '6010',
-        accountName: 'Store Operational Expense',
-        category: 'Expense',
-        debit: prompt.priceDelta,
-        credit: 0,
-        referenceType: 'OPEX',
-        referenceId: prompt.id,
-        description: `Customer courtesy discount for substituted SKU ${prompt.replacementSku} on Order #${prompt.orderId}`,
-      });
-
-      generalLedger.unshift({
-        id: gleId2,
-        timestamp,
-        storeId: prompt.storeId,
-        storeName: order.storeName,
-        accountCode: '4010',
-        accountName: 'Grocery Sales Revenue',
-        category: 'Revenue',
-        debit: 0,
-        credit: prompt.priceDelta,
-        referenceType: 'OPEX',
-        referenceId: prompt.id,
-        description: `Revenue differential offset for order #${prompt.orderId}`,
-      });
+      commitBalancedGlBatch(
+        [
+          {
+            id: gleId1,
+            timestamp,
+            storeId: prompt.storeId,
+            storeName: order.storeName,
+            accountCode: '6010',
+            accountName: 'Store Operational Expense',
+            category: 'Expense',
+            debit: prompt.priceDelta,
+            credit: 0,
+            referenceType: 'OPEX',
+            referenceId: prompt.id,
+            description: `Customer courtesy discount for substituted SKU ${prompt.replacementSku} on Order #${prompt.orderId}`,
+          },
+          {
+            id: gleId2,
+            timestamp,
+            storeId: prompt.storeId,
+            storeName: order.storeName,
+            accountCode: '4010',
+            accountName: 'Grocery Sales Revenue',
+            category: 'Revenue',
+            debit: 0,
+            credit: prompt.priceDelta,
+            referenceType: 'OPEX',
+            referenceId: prompt.id,
+            description: `Revenue differential offset for order #${prompt.orderId}`,
+          },
+        ],
+        true
+      );
 
       journalIds.push(gleId1, gleId2);
       prompt.glJournalIds = journalIds;
@@ -5375,17 +6109,7 @@ async function startServer() {
   app.post('/api/admin/auth/login', (req: Request, res: Response) => {
     const { userId, username, password, pin, shiftName } = req.body || {};
 
-    let target = AVAILABLE_STAFF_USERS.find((u) => u.userId === userId);
-
-    if (!target && username) {
-      const cleanUser = String(username).toLowerCase().trim();
-      target = AVAILABLE_STAFF_USERS.find(
-        (u) =>
-          u.userId.toLowerCase() === cleanUser ||
-          u.userName.toLowerCase().includes(cleanUser) ||
-          u.userRole.toLowerCase() === cleanUser.replace(/\s+/g, '_')
-      );
-    }
+    let target = resolveStaffUser(userId || username);
 
     if (!target) {
       return res.status(401).json({
@@ -5460,6 +6184,7 @@ async function startServer() {
   });
 
   app.get('/api/admin/rbac/current-session', (_req: Request, res: Response) => {
+    syncAssignmentsOntoProfiles();
     res.json({
       currentSession: currentActiveStaffSession,
       availableProfiles: AVAILABLE_STAFF_USERS,
@@ -5467,14 +6192,18 @@ async function startServer() {
   });
 
   app.post('/api/admin/rbac/switch-session', (req: Request, res: Response) => {
+    syncAssignmentsOntoProfiles();
     const { userId } = req.body;
-    const target = AVAILABLE_STAFF_USERS.find((u) => u.userId === userId);
+    const target = resolveStaffUser(userId);
     if (!target) return res.status(404).json({ error: 'Staff profile not found' });
 
-    currentActiveStaffSession = target;
+    currentActiveStaffSession = {
+      ...target,
+      loginTimestamp: new Date().toISOString(),
+    };
     res.json({
       success: true,
-      message: `Active session switched to ${target.userName} (${target.userRole})`,
+      message: `Active session switched to ${currentActiveStaffSession.userName} (${currentActiveStaffSession.userRole})`,
       session: currentActiveStaffSession,
     });
   });
@@ -5607,53 +6336,14 @@ async function startServer() {
     });
   });
 
-  // Multi-Currency Financial Statement API (Converts GL / P&L based on target currency)
+  // Multi-Currency Financial Statement API (Converts dynamic GL / COA P&L based on target currency)
   app.get('/api/admin/accounting/pnl-multicurrency', (req: Request, res: Response) => {
     syncAllBatchesExpiryStatus(Date.now());
     const { storeId, currency = 'IDR' } = req.query;
     const targetCurrency = (String(currency).toUpperCase() as SupportedCurrency) || 'IDR';
     const rateInfo = CURRENCY_RATES[targetCurrency] || CURRENCY_RATES.IDR;
+    const basePnl = buildDynamicPnlSnapshot(storeId);
 
-    let relevantEntries = generalLedger;
-    let storeName = 'Consolidated Company-Wide';
-
-    if (storeId && storeId !== 'CONSOLIDATED') {
-      relevantEntries = generalLedger.filter((e) => e.storeId === storeId);
-      const s = storeSchedules.find((st) => st.storeId === storeId);
-      if (s) storeName = s.storeName;
-    }
-
-    let grossSalesRevenue = 0;
-    let costOfGoodsSold = 0;
-
-    relevantEntries.forEach((entry) => {
-      if (entry.accountCode === '4010') grossSalesRevenue += entry.credit;
-      if (entry.accountCode === '5010') costOfGoodsSold += entry.debit;
-    });
-
-    if (grossSalesRevenue === 0) {
-      grossSalesRevenue = storeId && storeId !== 'CONSOLIDATED' ? 45000000 : 388500000;
-      costOfGoodsSold = Math.round(grossSalesRevenue * 0.62);
-    }
-
-    const discountsGiven = Math.round(grossSalesRevenue * 0.04);
-    const netSalesRevenue = grossSalesRevenue - discountsGiven;
-    const grossProfit = netSalesRevenue - costOfGoodsSold;
-    const grossMarginPercent = netSalesRevenue > 0 ? (grossProfit / netSalesRevenue) * 100 : 0;
-
-    const factor = storeId && storeId !== 'CONSOLIDATED' ? 0.22 : 1.0;
-    const operatingExpenses = [
-      { category: 'Cold-Chain Refrigeration & Store Electricity', amount: Math.round(18500000 * factor) },
-      { category: 'Same-Day Chilled Logistics & Couriers', amount: Math.round(12200000 * factor) },
-      { category: 'Store Storekeeping & Quality Inspection Staff', amount: Math.round(24800000 * factor) },
-      { category: 'Biodegradable Insulated Packaging', amount: Math.round(3500000 * factor) },
-    ];
-
-    const totalOperatingExpenses = operatingExpenses.reduce((sum, o) => sum + o.amount, 0);
-    const netProfit = grossProfit - totalOperatingExpenses;
-    const netMarginPercent = netSalesRevenue > 0 ? (netProfit / netSalesRevenue) * 100 : 0;
-
-    // Convert all IDR values to target currency
     const fx = (val: number) => {
       if (targetCurrency === 'IDR') return val;
       return Number((val / rateInfo.rateToIDR).toFixed(rateInfo.decimalPlaces));
@@ -5663,22 +6353,22 @@ async function startServer() {
       currency: targetCurrency,
       symbol: rateInfo.symbol,
       fxRateToIDR: rateInfo.rateToIDR,
-      period: 'October 2026 MTD',
-      storeId: storeId ? String(storeId) : 'CONSOLIDATED',
-      storeName,
-      grossSalesRevenue: fx(grossSalesRevenue),
-      discountsGiven: fx(discountsGiven),
-      netSalesRevenue: fx(netSalesRevenue),
-      costOfGoodsSold: fx(costOfGoodsSold),
-      grossProfit: fx(grossProfit),
-      grossMarginPercent: Number(grossMarginPercent.toFixed(1)),
-      operatingExpenses: operatingExpenses.map((o) => ({
+      period: basePnl.period,
+      storeId: basePnl.storeId,
+      storeName: basePnl.storeName,
+      grossSalesRevenue: fx(basePnl.grossSalesRevenue),
+      discountsGiven: fx(basePnl.discountsGiven),
+      netSalesRevenue: fx(basePnl.netSalesRevenue),
+      costOfGoodsSold: fx(basePnl.costOfGoodsSold),
+      grossProfit: fx(basePnl.grossProfit),
+      grossMarginPercent: basePnl.grossMarginPercent,
+      operatingExpenses: basePnl.operatingExpenses.map((o) => ({
         category: o.category,
         amount: fx(o.amount),
       })),
-      totalOperatingExpenses: fx(totalOperatingExpenses),
-      netProfit: fx(netProfit),
-      netMarginPercent: Number(netMarginPercent.toFixed(1)),
+      totalOperatingExpenses: fx(basePnl.totalOperatingExpenses),
+      netProfit: fx(basePnl.netProfit),
+      netMarginPercent: basePnl.netMarginPercent,
     });
   });
 
@@ -6260,6 +6950,458 @@ async function startServer() {
     });
   });
 
+  // --- 1B. MULTI-BRANCH MONITOR (CABANG, OMZET & BARANG DATANG) + OPERATOR ASSIGNMENTS ---
+  app.get('/api/admin/settings/branch-monitor', (_req: Request, res: Response) => {
+    const branches: BranchMonitorHubSummary[] = storeSchedules.map((st, idx) => {
+      const storeTiers = storeInventoryTiers.filter((t) => t.storeId === st.storeId);
+      const stockValuationIDR = storeTiers.reduce(
+        (sum, t) => sum + Math.round((t.physicalStock || 0) * (t.unitCost || 0)),
+        0
+      );
+      const totalStockUnits = Number(
+        storeTiers.reduce((sum, t) => sum + (t.physicalStock || 0), 0).toFixed(2)
+      );
+
+      const posForBranch = posTransactionsHistory.filter(
+        (p) => p.storeId === st.storeId
+      );
+      const b2cForBranch = customerOrders.filter(
+        (o) =>
+          (o.pickupStore?.id || (o as unknown as { storeId?: string }).storeId || 'store-jkt-senopati') === st.storeId
+      );
+      const b2bForBranch = b2bOrdersList.filter(
+        (o) =>
+          ((o as unknown as { storeId?: string }).storeId || 'store-jkt-senopati') === st.storeId &&
+          (o.status as string) !== 'cancelled'
+      );
+
+      const posOmzetIDR = posForBranch.reduce((s, p) => s + (p.total || 0), 0);
+      const b2cOmzetIDR = b2cForBranch.reduce((s, o) => s + (o.total || 0), 0);
+      const b2bOmzetIDR = b2bForBranch.reduce((s, o) => s + (o.totalAmountIDR || 0), 0);
+      const liveOmzetIDR = posOmzetIDR + b2cOmzetIDR + b2bOmzetIDR;
+      const orderCount = posForBranch.length + b2cForBranch.length + b2bForBranch.length;
+
+      const incomingPoCount = purchaseOrders.filter(
+        (po) => po.storeId === st.storeId && po.status !== 'Completed' && po.status !== 'Cancelled'
+      ).length;
+      const inTransitTransferCount = stockTransfersList.filter(
+        (tr) => tr.destinationStoreId === st.storeId && tr.status === 'in_transit'
+      ).length;
+
+      const branchCode = `BR-${st.city.slice(0, 3).toUpperCase()}-${String(idx + 1).padStart(2, '0')}`;
+      const hubType: BranchMonitorHubSummary['hubType'] =
+        st.storeId === 'store-jkt-pik'
+          ? 'Dark Store'
+          : st.storeId === 'store-jkt-senopati'
+          ? 'Central CDC'
+          : 'Retail Flagship';
+      const status: BranchMonitorHubSummary['status'] = st.isEmergencyClosed
+        ? 'Emergency Closed'
+        : st.isHolidayMode
+        ? 'Holiday Mode'
+        : 'Open';
+
+      return {
+        storeId: st.storeId,
+        branchCode,
+        storeName: st.storeName,
+        city: st.city,
+        district: st.district,
+        hubType,
+        status,
+        isEmergencyClosed: !!st.isEmergencyClosed,
+        orderCount,
+        liveOmzetIDR,
+        posOmzetIDR,
+        b2cOmzetIDR,
+        b2bOmzetIDR,
+        stockValuationIDR,
+        totalStockUnits,
+        incomingPoCount,
+        inTransitTransferCount,
+      };
+    });
+
+    const openPurchaseOrders: BranchMonitorIncomingPO[] = purchaseOrders
+      .filter((po) => po.status !== 'Completed' && po.status !== 'Cancelled')
+      .map((po) => {
+        const expectedUnitsQty = po.items.reduce((s, it) => s + (it.orderedQuantity || 0), 0);
+        const receivedUnitsQty = po.items.reduce((s, it) => s + (it.receivedQuantity || 0), 0);
+        const remainingBackorderQty = Math.max(0, expectedUnitsQty - receivedUnitsQty);
+        const mappedStatus: BranchMonitorIncomingPO['status'] =
+          po.status === 'Partially Received'
+            ? 'Partially Received'
+            : po.status === 'Sent'
+            ? 'Approved'
+            : 'Pending';
+        return {
+          poId: po.id,
+          supplierName: po.supplierName,
+          destinationBranchId: po.storeId,
+          destinationBranchName: po.storeName,
+          expectedItemsCount: po.items.length,
+          expectedUnitsQty,
+          remainingBackorderQty,
+          incomingValueIDR: po.totalCost || 0,
+          status: mappedStatus,
+          expectedDeliveryDate: po.expectedDeliveryDate,
+          itemsSummary: po.items
+            .map((it) => `${it.productName} (${Math.max(0, (it.orderedQuantity || 0) - (it.receivedQuantity || 0))} left)`)
+            .join(', '),
+        };
+      });
+
+    const inTransitTransfers: BranchMonitorInTransitTransfer[] = stockTransfersList
+      .filter((tr) => tr.status === 'in_transit')
+      .map((tr) => ({
+        transferId: tr.id,
+        sku: tr.sku,
+        productName: tr.productName,
+        originBranchId: tr.sourceStoreId,
+        originBranchName: tr.sourceStoreName,
+        destinationBranchId: tr.destinationStoreId,
+        destinationBranchName: tr.destinationStoreName,
+        quantity: tr.quantity,
+        unitCostIDR: tr.unitCost,
+        totalTransferValueIDR: tr.totalTransferValue,
+        waybillNumber: tr.suratJalanNumber,
+        timestamp: tr.timestamp,
+        status: 'in_transit',
+      }));
+
+    const payload: BranchMonitorResponse = {
+      generatedAt: new Date().toISOString(),
+      totals: {
+        totalBranches: branches.length,
+        openBranches: branches.filter((b) => b.status === 'Open').length,
+        totalLiveOmzetIDR: branches.reduce((s, b) => s + b.liveOmzetIDR, 0),
+        totalOrders: branches.reduce((s, b) => s + b.orderCount, 0),
+        totalStockValuationIDR: branches.reduce((s, b) => s + b.stockValuationIDR, 0),
+        openPoCount: openPurchaseOrders.length,
+        inTransitCount: inTransitTransfers.length,
+      },
+      branches,
+      openPurchaseOrders,
+      inTransitTransfers,
+    };
+
+    res.json(payload);
+  });
+
+  app.post('/api/admin/settings/confirm-arrival', (req: Request, res: Response) => {
+    const { type, id } = (req.body || {}) as { type?: 'TRANSFER' | 'PO'; id?: string };
+    if (!type || !id) {
+      return res.status(400).json({ error: 'type ("TRANSFER" | "PO") and id are required.' });
+    }
+
+    const timestamp = new Date().toISOString();
+
+    if (type === 'TRANSFER') {
+      const record = stockTransfersList.find((t) => t.id === id);
+      if (!record) return res.status(404).json({ error: `Stock transfer '${id}' not found.` });
+      if (record.status === 'completed') {
+        return res.json({ success: true, type, id, message: `Transfer #${id} is already completed.` });
+      }
+
+      const destTier = storeInventoryTiers.find(
+        (t) => t.sku === record.sku && t.storeId === record.destinationStoreId
+      );
+      if (destTier) {
+        const oldStock = Math.max(0, Number(destTier.physicalStock) || 0);
+        const newStock = Number((oldStock + record.quantity).toFixed(2));
+        destTier.unitCost =
+          newStock > 0
+            ? Math.round(((oldStock * (destTier.unitCost || record.unitCost)) + (record.quantity * record.unitCost)) / newStock)
+            : record.unitCost;
+        destTier.physicalStock = newStock;
+        destTier.incomingStock = Math.max(0, (destTier.incomingStock || 0) - record.quantity);
+        destTier.availableStock = Math.max(0, Number((destTier.physicalStock - destTier.reservedStock).toFixed(2)));
+        destTier.totalValuation = Math.round(destTier.physicalStock * destTier.unitCost);
+        destTier.lastRestockedAt = timestamp;
+        destTier.updatedAt = timestamp;
+      }
+
+      const transitLots = inTransitTransferLots.get(id) || [
+        {
+          lotNumber: `TRF-LOT-${id.slice(-4)}`,
+          expiryDate: new Date(Date.now() + 86400000 * 14).toISOString(),
+          allocatedQty: record.quantity,
+          unitCost: record.unitCost,
+          storageZone: destTier?.storageType || ('cold_chilled' as StorageZoneType),
+          sellingPrice: destTier?.sellingPrice || Math.round(record.unitCost * 1.45),
+          supplierName: record.sourceStoreName,
+        },
+      ];
+      transitLots.forEach((lot, idx) => {
+        const daysUntilExpiry = Math.max(1, Math.ceil((new Date(lot.expiryDate).getTime() - Date.now()) / 86400000));
+        inventoryBatches.unshift({
+          batchId: `BAT-TRF-RCV-${Date.now().toString().slice(-5)}-${idx + 1}`,
+          sku: record.sku,
+          productName: record.productName,
+          storeId: record.destinationStoreId,
+          storeName: record.destinationStoreName,
+          warehouseZoneId: destTier?.warehouseZoneId || `WH-${record.destinationStoreId.toUpperCase()}`,
+          lotNumber: lot.lotNumber,
+          initialQuantity: lot.allocatedQty,
+          currentStock: lot.allocatedQty,
+          unitCost: lot.unitCost,
+          sellingPrice: lot.sellingPrice,
+          receivedDate: timestamp,
+          expiryDate: lot.expiryDate,
+          daysUntilExpiry,
+          status: daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
+          storageZone: lot.storageZone,
+          supplierName: lot.supplierName,
+          notes: `Arrival confirmed via Multi-Branch Monitor (${record.id})`,
+        });
+      });
+      inTransitTransferLots.delete(id);
+      record.status = 'completed';
+      markEnterpriseNotificationReadByDedupeKey(`TRANSFER_IN_TRANSIT:${id}`);
+
+      return res.json({
+        success: true,
+        type: 'TRANSFER',
+        id,
+        message: `In-transit transfer #${id} (${record.quantity}x ${record.productName}) arrived and stocked at ${record.destinationStoreName}.`,
+      });
+    }
+
+    if (type === 'PO') {
+      const po = purchaseOrders.find((p) => p.id === id);
+      if (!po) return res.status(404).json({ error: `Purchase Order '${id}' not found.` });
+      if (po.status === 'Completed') {
+        return res.json({ success: true, type, id, message: `Purchase Order #${id} is already completed.` });
+      }
+
+      const grId = `GR-MON-${Date.now().toString().slice(-5)}`;
+      const receivedItems: GoodsReceiptRecord['items'] = [];
+      let totalVal = 0;
+
+      po.items.forEach((item, idx) => {
+        const remaining = Math.max(0, (item.orderedQuantity || 0) - (item.receivedQuantity || 0));
+        if (remaining <= 0) return;
+
+        item.receivedQuantity = item.orderedQuantity;
+        item.remainingBackorder = 0;
+        const lotNumber = `LOT-ARR-${Date.now().toString().slice(-4)}-${idx + 1}`;
+        const expiryDate = new Date(Date.now() + 86400000 * 18).toISOString();
+
+        const tier = storeInventoryTiers.find(
+          (t) => t.sku === item.sku && t.storeId === po.storeId
+        );
+        if (tier) {
+          const oldStock = Math.max(0, Number(tier.physicalStock) || 0);
+          const newStock = Number((oldStock + remaining).toFixed(2));
+          tier.unitCost =
+            newStock > 0
+              ? Math.round(((oldStock * (tier.unitCost || item.unitCost)) + (remaining * item.unitCost)) / newStock)
+              : item.unitCost;
+          tier.physicalStock = newStock;
+          tier.incomingStock = Math.max(0, (tier.incomingStock || 0) - remaining);
+          tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+          tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+          tier.lastRestockedAt = timestamp;
+          tier.updatedAt = timestamp;
+        }
+
+        const daysUntilExpiry = 18;
+        inventoryBatches.unshift({
+          batchId: `BAT-PO-ARR-${Date.now().toString().slice(-5)}-${idx + 1}`,
+          sku: item.sku,
+          productName: item.productName,
+          storeId: po.storeId,
+          storeName: po.storeName,
+          warehouseZoneId: tier?.warehouseZoneId || `WH-${po.storeId.toUpperCase()}`,
+          lotNumber,
+          initialQuantity: remaining,
+          currentStock: remaining,
+          unitCost: item.unitCost,
+          sellingPrice: tier?.sellingPrice || Math.round(item.unitCost * 1.45),
+          receivedDate: timestamp,
+          expiryDate,
+          daysUntilExpiry,
+          status: 'fresh',
+          storageZone: tier?.storageType || 'cold_chilled',
+          supplierName: po.supplierName,
+          notes: `Dock arrival confirmed via Multi-Branch Monitor (${po.id})`,
+        });
+
+        totalVal += Math.round(remaining * item.unitCost);
+        receivedItems.push({
+          sku: item.sku,
+          productName: item.productName,
+          quantityOrdered: item.orderedQuantity,
+          quantityReceived: remaining,
+          batchNumber: lotNumber,
+          expiryDate,
+          qualityCondition: 'Passed - Grade A',
+        });
+      });
+
+      po.status = 'Completed';
+      const gleId1 = `GLE-ARR-${Date.now()}-1`;
+      const gleId2 = `GLE-ARR-${Date.now()}-2`;
+
+      goodsReceipts.unshift({
+        id: grId,
+        poId: po.id,
+        vendorName: po.supplierName,
+        storeId: po.storeId,
+        storeName: po.storeName,
+        warehouseZoneId: po.warehouseZoneId || `WH-${po.storeId.toUpperCase()}`,
+        receivedBy: currentActiveStaffSession.userName,
+        receivedAt: timestamp,
+        deliveryNoteNumber: `SJ-${po.id}`,
+        isPartial: false,
+        items: receivedItems,
+        receiverNotes: 'Dock arrival confirmed via Multi-Branch Monitor',
+        glEntryId: totalVal > 0 ? gleId1 : undefined,
+      });
+
+      if (totalVal > 0) {
+        commitBalancedGlBatch(
+          [
+            {
+              id: gleId1,
+              timestamp,
+              storeId: po.storeId,
+              storeName: po.storeName,
+              accountCode: '1040',
+              accountName: 'Merchandise Inventory Asset',
+              category: 'Asset',
+              debit: totalVal,
+              credit: 0,
+              referenceType: 'PARTIAL_GR',
+              referenceId: grId,
+              description: `Dock Arrival Confirmation for ${po.id} -> ${grId}`,
+            },
+            {
+              id: gleId2,
+              timestamp,
+              storeId: po.storeId,
+              storeName: po.storeName,
+              accountCode: '2010',
+              accountName: 'Trade Accounts Payable (Vendors)',
+              category: 'Liability',
+              debit: 0,
+              credit: totalVal,
+              referenceType: 'PARTIAL_GR',
+              referenceId: grId,
+              description: `Vendor AP accrual for dock receipt ${grId} (${po.supplierName})`,
+            },
+          ],
+          true
+        );
+      }
+
+      return res.json({
+        success: true,
+        type: 'PO',
+        id,
+        message: `Purchase Order #${id} dock arrival confirmed (${grId}). Stock & Inventory GL (#1040) updated for ${po.storeName}.`,
+      });
+    }
+
+    return res.status(400).json({ error: `Unsupported arrival type '${type}'.` });
+  });
+
+  app.get('/api/admin/settings/operator-assignments', (_req: Request, res: Response) => {
+    syncAssignmentsOntoProfiles();
+    const assignments: OperatorBranchAssignment[] = AVAILABLE_STAFF_USERS.map((u) => {
+      const assigned = operatorBranchAssignments[u.userId];
+      return {
+        userId: u.userId,
+        userName: u.userName,
+        userRole: u.userRole,
+        storeId: assigned?.storeId || u.storeId,
+        storeName: assigned?.storeName || u.storeName,
+        isBranchScoped: isBranchScopedServerRole(u.userRole),
+        updatedAt: assigned?.updatedAt,
+        updatedBy: assigned?.updatedBy,
+      };
+    });
+    res.json({
+      assignments,
+      branchOptions: BRANCH_ASSIGNMENT_OPTIONS,
+    });
+  });
+
+  app.post('/api/admin/settings/operator-assignments', (req: Request, res: Response) => {
+    const { userId, storeId } = (req.body || {}) as { userId?: string; storeId?: string };
+    if (!userId || !storeId) {
+      return res.status(400).json({ error: 'userId and storeId are required.' });
+    }
+
+    const targetProfile = AVAILABLE_STAFF_USERS.find((u) => u.userId === userId);
+    if (!targetProfile) {
+      return res.status(404).json({ error: `Operator profile '${userId}' not found.` });
+    }
+
+    if (isBranchScopedServerRole(targetProfile.userRole) && (storeId === 'ALL' || storeId === 'CONSOLIDATED')) {
+      return res.status(400).json({
+        error: `Branch-scoped role '${targetProfile.userRole}' must be assigned to a specific physical store or warehouse hub (cannot be 'ALL').`,
+      });
+    }
+
+    const option = BRANCH_ASSIGNMENT_OPTIONS.find((opt) => opt.storeId === storeId);
+    if (!option) {
+      return res.status(400).json({ error: `Invalid target branch/hub '${storeId}'.` });
+    }
+
+    const updatedAt = new Date().toISOString();
+    operatorBranchAssignments[userId] = {
+      storeId: option.storeId,
+      storeName: option.storeName,
+      updatedAt,
+      updatedBy: currentActiveStaffSession.userName,
+    };
+
+    syncAssignmentsOntoProfiles();
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: updatedAt,
+      actionType: 'POLICY_UPDATE',
+      resourceId: `OP_ASSIGNMENT_${userId}`,
+      userId: currentActiveStaffSession.userId,
+      userName: currentActiveStaffSession.userName,
+      userRole: currentActiveStaffSession.userRole,
+      storeId: option.storeId,
+      shiftId: currentActiveStaffSession.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        targetUserId: userId,
+        targetUserName: targetProfile.userName,
+        assignedStoreId: option.storeId,
+        assignedStoreName: option.storeName,
+      },
+    });
+
+    const assignments: OperatorBranchAssignment[] = AVAILABLE_STAFF_USERS.map((u) => {
+      const assigned = operatorBranchAssignments[u.userId];
+      return {
+        userId: u.userId,
+        userName: u.userName,
+        userRole: u.userRole,
+        storeId: assigned?.storeId || u.storeId,
+        storeName: assigned?.storeName || u.storeName,
+        isBranchScoped: isBranchScopedServerRole(u.userRole),
+        updatedAt: assigned?.updatedAt,
+        updatedBy: assigned?.updatedBy,
+      };
+    });
+
+    res.json({
+      success: true,
+      message: `${targetProfile.userName} assigned to ${option.storeName}.`,
+      assignments,
+      updatedProfile: AVAILABLE_STAFF_USERS.find((u) => u.userId === userId),
+      currentSession: currentActiveStaffSession,
+      availableProfiles: AVAILABLE_STAFF_USERS,
+    });
+  });
+
   // --- 2. COA MAPPING & POS CHECKOUT CONFIG ---
   app.get('/api/admin/settings/coa-mapping', (_req: Request, res: Response) => {
     res.json(coaMappingConfig);
@@ -6328,24 +7470,44 @@ async function startServer() {
     const timestamp = new Date().toISOString();
     const id = `LC-2026-${(landedCostsList.length + 1).toString().padStart(3, '0')}`;
 
-    // Calculate allocation
-    const totalQty = items.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 1), 0);
-    const allocatedItems = items.map((it: any) => {
+    // Calculate allocation across BY_QUANTITY, BY_VALUE, BY_WEIGHT, or EQUAL without over-valuing prior stock
+    const totalQty = items.reduce((sum: number, it: any) => sum + Math.max(1, Number(it.quantity) || 1), 0);
+    const totalValue = items.reduce((sum: number, it: any) => {
+      const inv = inventoryList.find((i) => i.sku === it.sku);
+      const baseCost = inv?.wacUnitCost || inv?.unitCost || 15000;
+      return sum + Math.max(1, Number(it.quantity) || 1) * baseCost;
+    }, 0);
+    const totalWeight = items.reduce((sum: number, it: any) => {
+      const inv = inventoryList.find((i) => i.sku === it.sku);
+      const weightKg = Number(it.weightKg) || (inv?.unit?.toLowerCase().includes('kg') ? 1 : 0.5);
+      return sum + Math.max(1, Number(it.quantity) || 1) * weightKg;
+    }, 0);
+
+    let allocatedSum = 0;
+    const allocatedItems = items.map((it: any, idx: number) => {
       const inv = inventoryList.find((i) => i.sku === it.sku);
       const productName = inv?.productName || `Product ${it.sku}`;
       const baseCost = inv?.wacUnitCost || inv?.unitCost || 15000;
-      const qty = Number(it.quantity) || 1;
+      const qty = Math.max(1, Number(it.quantity) || 1);
+      const weightKg = Number(it.weightKg) || (inv?.unit?.toLowerCase().includes('kg') ? 1 : 0.5);
 
       let lineLandedShare = 0;
-      if (allocationMethod === 'BY_QUANTITY') {
+      if (idx === items.length - 1) {
+        lineLandedShare = Math.max(0, roundIDR(totalLandedCostIDR - allocatedSum));
+      } else if (allocationMethod === 'BY_QUANTITY') {
         lineLandedShare = totalQty > 0 ? Math.round((totalLandedCostIDR * qty) / totalQty) : Math.round(totalLandedCostIDR / items.length);
-      } else if (allocationMethod === 'EQUAL') {
-        lineLandedShare = Math.round(totalLandedCostIDR / items.length);
+      } else if (allocationMethod === 'BY_VALUE') {
+        lineLandedShare = totalValue > 0 ? Math.round((totalLandedCostIDR * (qty * baseCost)) / totalValue) : Math.round(totalLandedCostIDR / items.length);
+      } else if (allocationMethod === 'BY_WEIGHT') {
+        lineLandedShare = totalWeight > 0 ? Math.round((totalLandedCostIDR * (qty * weightKg)) / totalWeight) : Math.round(totalLandedCostIDR / items.length);
       } else {
         lineLandedShare = Math.round(totalLandedCostIDR / items.length);
       }
+      allocatedSum += lineLandedShare;
 
-      const allocatedPerUnit = Math.round(lineLandedShare / qty);
+      // Absorb lineLandedShare into Moving Average Unit Cost across on-hand stock (or receipt qty if stock is lower)
+      const stockPool = inv && inv.currentStock > 0 ? Math.max(qty, inv.currentStock) : qty;
+      const allocatedPerUnit = Math.round(lineLandedShare / stockPool);
       const newUnitCost = baseCost + allocatedPerUnit;
 
       if (inv) {
@@ -6358,6 +7520,13 @@ async function startServer() {
           tier.totalValuation = Math.round(tier.physicalStock * newUnitCost);
         }
       });
+      const latestBatch = inventoryBatches.find(
+        (b) => b.sku === it.sku && b.currentStock > 0 && b.status !== 'depleted' && (!poId || b.sourcePoNumber === poId)
+      );
+      if (latestBatch) {
+        const batchDivisor = Math.max(qty, latestBatch.currentStock);
+        latestBatch.unitCost = Math.round(latestBatch.unitCost + lineLandedShare / batchDivisor);
+      }
 
       return {
         sku: it.sku,
@@ -6374,33 +7543,34 @@ async function startServer() {
     const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     glEntryIds.push(gleId1);
 
-    // Debit Merchandise Inventory Asset #1040 for entire absorbed amount (including informal fees)
-    generalLedger.unshift({
-      id: gleId1,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: '1040',
-      accountName: 'Merchandise Inventory Asset',
-      category: 'Asset',
-      debit: totalLandedCostIDR,
-      credit: 0,
-      referenceType: 'LANDED_COST',
-      referenceId: id,
-      description: `Landed Cost Absorption [${id}]: ${description} allocated across ${allocatedItems.length} SKUs (incl. kuli bongkar absorption)`,
-    });
+    const lcGlBatch: GeneralLedgerEntry[] = [
+      {
+        id: gleId1,
+        timestamp,
+        storeId: 'CONSOLIDATED',
+        storeName: 'Consolidated Company-Wide',
+        accountCode: '1040',
+        accountName: 'Merchandise Inventory Asset',
+        category: 'Asset',
+        debit: totalLandedCostIDR,
+        credit: 0,
+        referenceType: 'LANDED_COST',
+        referenceId: id,
+        description: `Landed Cost Absorption [${id}]: ${description} allocated across ${allocatedItems.length} SKUs (incl. kuli bongkar absorption)`,
+      },
+    ];
 
     // Credit side: Split between Petty Cash #1015 (for informal labor) and Accrual Clearing #2040 (for formal freight/customs)
     const formalAccrualIDR = totalLandedCostIDR - safeInformalLabor;
     if (formalAccrualIDR > 0) {
-      const gleId2 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
       glEntryIds.push(gleId2);
-      generalLedger.unshift({
+      lcGlBatch.push({
         id: gleId2,
         timestamp,
         storeId: 'CONSOLIDATED',
         storeName: 'Consolidated Company-Wide',
-        accountCode: enterpriseSettings.landedCosts.clearingAccountCode as AccountCode || '2040',
+        accountCode: (enterpriseSettings.landedCosts.clearingAccountCode as AccountCode) || '2040',
         accountName: enterpriseSettings.landedCosts.clearingAccountName || 'Landed Cost Accrual / Clearing',
         category: 'Liability',
         debit: 0,
@@ -6412,9 +7582,9 @@ async function startServer() {
     }
 
     if (safeInformalLabor > 0) {
-      const gleId3 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
       glEntryIds.push(gleId3);
-      generalLedger.unshift({
+      lcGlBatch.push({
         id: gleId3,
         timestamp,
         storeId: 'CONSOLIDATED',
@@ -6429,6 +7599,8 @@ async function startServer() {
         description: `Petty cash disbursement for informal unloading labor (Kuli Bongkar / Retribusi Non-Faktur) voucher #${id}`,
       });
     }
+
+    commitBalancedGlBatch(lcGlBatch, true);
 
     const record: LandedCostRecord = {
       id,
@@ -6479,9 +7651,9 @@ async function startServer() {
 
   app.get('/api/b2b/products', (_req: Request, res: Response) => {
     syncAllBatchesExpiryStatus(Date.now());
-    // Sync current stock from live inventory list
+    // Sync current stock only for explicitly mapped/shared SKUs (avoid fragile partial name prefix matching)
     wholesaleProductsList.forEach((prod) => {
-      const inv = inventoryList.find((i) => i.sku.includes(prod.sku.replace('B2B-SKU-', '')) || i.productName.toLowerCase().includes(prod.name.slice(0, 8).toLowerCase()));
+      const inv = inventoryList.find((i) => i.sku === prod.sku);
       if (inv) {
         prod.currentStockBaseUnits = inv.currentStock;
       }
@@ -6956,36 +8128,46 @@ async function startServer() {
     const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
 
-    // Debit Bank BCA #1020 / Credit Giro Receivable #1210
-    generalLedger.unshift({
-      id: gle1,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: '1020',
-      accountName: 'Bank BCA Operational Clearing',
-      category: 'Asset',
-      debit: giro.amountIDR,
-      credit: 0,
-      referenceType: 'GIRO_CLEARING',
-      referenceId: giro.id,
-      description: `Bilyet Giro #${giro.giroNumber} cleared into Bank BCA from ${giro.customerName}`,
-    });
+    // Debit Bank BCA #1020 / Credit Giro Receivable #1210 via balanced COA-synced GL batch
+    commitBalancedGlBatch(
+      [
+        {
+          id: gle1,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '1020',
+          accountName: 'Bank BCA Operational Clearing',
+          category: 'Asset',
+          debit: giro.amountIDR,
+          credit: 0,
+          referenceType: 'GIRO_CLEARING',
+          referenceId: giro.id,
+          description: `Bilyet Giro #${giro.giroNumber} cleared into Bank BCA from ${giro.customerName}`,
+        },
+        {
+          id: gle2,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '1210',
+          accountName: 'Bilyet Giro & PDC Clearing Receivable',
+          category: 'Asset',
+          debit: 0,
+          credit: giro.amountIDR,
+          referenceType: 'GIRO_CLEARING',
+          referenceId: giro.id,
+          description: `Settlement of cleared Giro Warkat #${giro.giroNumber}`,
+        },
+      ],
+      true
+    );
 
-    generalLedger.unshift({
-      id: gle2,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: '1210',
-      accountName: 'Bilyet Giro & PDC Clearing Receivable',
-      category: 'Asset',
-      debit: 0,
-      credit: giro.amountIDR,
-      referenceType: 'GIRO_CLEARING',
-      referenceId: giro.id,
-      description: `Settlement of cleared Giro Warkat #${giro.giroNumber}`,
-    });
+    const linkedOrder = b2bOrdersList.find((o) => o.id === giro.orderId);
+    if (linkedOrder) {
+      linkedOrder.paymentStatus = 'SETTLED';
+      if (linkedOrder.status === 'PENDING_FINANCE') linkedOrder.status = 'CONFIRMED';
+    }
 
     // Update customer available credit
     const customer = b2bCustomersList.find((c) => c.id === giro.customerId);
@@ -7041,72 +8223,85 @@ async function startServer() {
       targetSubTab: 'b2b_ar',
     });
 
+    const linkedOrder = b2bOrdersList.find((o) => o.id === giro.orderId);
+    if (linkedOrder) {
+      linkedOrder.paymentStatus = 'BOUNCED';
+    }
+
     const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
     const gle3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
     const gle4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
 
-    // Re-open AR: Debit AR #1200 / Credit Giro Receivable #1210
-    generalLedger.unshift({
-      id: gle1,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: '1200',
-      accountName: 'Accounts Receivable - B2B Wholesale',
-      category: 'Asset',
-      debit: giro.amountIDR,
-      credit: 0,
-      referenceType: 'GIRO_BOUNCED',
-      referenceId: giro.id,
-      description: `Dishonored Giro #${giro.giroNumber}: Re-opened AR debt for ${giro.customerName}`,
-    });
+    // Re-open AR: Debit AR #1200 / Credit Giro Receivable #1210 via balanced COA-synced batch
+    commitBalancedGlBatch(
+      [
+        {
+          id: gle1,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '1200',
+          accountName: 'Accounts Receivable - B2B Wholesale',
+          category: 'Asset',
+          debit: giro.amountIDR,
+          credit: 0,
+          referenceType: 'GIRO_BOUNCED',
+          referenceId: giro.id,
+          description: `Dishonored Giro #${giro.giroNumber}: Re-opened AR debt for ${giro.customerName}`,
+        },
+        {
+          id: gle2,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '1210',
+          accountName: 'Bilyet Giro & PDC Clearing Receivable',
+          category: 'Asset',
+          debit: 0,
+          credit: giro.amountIDR,
+          referenceType: 'GIRO_BOUNCED',
+          referenceId: giro.id,
+          description: `Removal of bounced Giro Warkat #${giro.giroNumber} from clearing queue`,
+        },
+      ],
+      true
+    );
 
-    generalLedger.unshift({
-      id: gle2,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: '1210',
-      accountName: 'Bilyet Giro & PDC Clearing Receivable',
-      category: 'Asset',
-      debit: 0,
-      credit: giro.amountIDR,
-      referenceType: 'GIRO_BOUNCED',
-      referenceId: giro.id,
-      description: `Removal of bounced Giro Warkat #${giro.giroNumber} from clearing queue`,
-    });
-
-    // Penalty Fee: Debit AR #1200 / Credit Giro Penalty Income #4090
-    generalLedger.unshift({
-      id: gle3,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: '1200',
-      accountName: 'Accounts Receivable - B2B Wholesale',
-      category: 'Asset',
-      debit: penaltyFee,
-      credit: 0,
-      referenceType: 'GIRO_BOUNCED_PENALTY',
-      referenceId: giro.id,
-      description: `Administrative penalty surcharge on bounced Giro #${giro.giroNumber}`,
-    });
-
-    generalLedger.unshift({
-      id: gle4,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: '4090',
-      accountName: 'Giro Bounced Penalty & Admin Surcharge Income',
-      category: 'Revenue',
-      debit: 0,
-      credit: penaltyFee,
-      referenceType: 'GIRO_BOUNCED_PENALTY',
-      referenceId: giro.id,
-      description: `Fee income recognized on dishonored check #${giro.giroNumber}`,
-    });
+    // Penalty Fee: Debit AR #1200 / Credit Giro Penalty Income #4090 via balanced COA-synced batch
+    commitBalancedGlBatch(
+      [
+        {
+          id: gle3,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '1200',
+          accountName: 'Accounts Receivable - B2B Wholesale',
+          category: 'Asset',
+          debit: penaltyFee,
+          credit: 0,
+          referenceType: 'GIRO_BOUNCED_PENALTY',
+          referenceId: giro.id,
+          description: `Administrative penalty surcharge on bounced Giro #${giro.giroNumber}`,
+        },
+        {
+          id: gle4,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '4090',
+          accountName: 'Giro Bounced Penalty & Admin Surcharge Income',
+          category: 'Revenue',
+          debit: 0,
+          credit: penaltyFee,
+          referenceType: 'GIRO_BOUNCED_PENALTY',
+          referenceId: giro.id,
+          description: `Fee income recognized on dishonored check #${giro.giroNumber}`,
+        },
+      ],
+      true
+    );
 
     res.json({
       success: true,
@@ -7425,11 +8620,11 @@ async function startServer() {
     const qtyTolPercent =
       enforcementMode === 'STRICT_3_WAY'
         ? 0
-        : (enterpriseSettings.threeWayMatching.quantityTolerancePercent ?? 2.0);
+        : (enterpriseSettings.threeWayMatching.quantityTolerancePercent ?? 0.5);
     const priceTolPercent =
       enforcementMode === 'STRICT_3_WAY'
         ? 0
-        : (enterpriseSettings.threeWayMatching.priceTolerancePercent ?? 1.0);
+        : (enterpriseSettings.threeWayMatching.priceTolerancePercent ?? 0.5);
 
     let hasAnyPriceVariance = false;
     let hasAnyQtyVariance = false;
@@ -8307,6 +9502,9 @@ async function startServer() {
       if (inv && variance !== 0) {
         inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) + variance).toFixed(2)));
       }
+      if (variance !== 0) {
+        syncBatchesForStockVariance(line.sku, storeId, variance, unitCost);
+      }
     });
 
     const glEntryIds: string[] = [];
@@ -8760,6 +9958,12 @@ async function startServer() {
       } else if (reqItem.module === 'procurement_po' && reqItem.documentId.startsWith('VB-')) {
         const bill = vendorBillsList.find((b) => b.id === reqItem.documentId);
         if (bill) bill.status = 'VOID';
+      } else if (reqItem.module === 'b2b_credit_term' || reqItem.module === 'b2b_transfer_verification') {
+        const order = b2bOrdersList.find((o) => o.id === reqItem.documentId);
+        if (order) {
+          order.status = 'DRAFT';
+          order.paymentStatus = 'AWAITING_APPROVAL';
+        }
       }
     } else {
       if (reqItem.currentTierLevel < reqItem.requiredTierLevel) {
@@ -8778,6 +9982,59 @@ async function startServer() {
             bill.approvedBy = currentActiveStaffSession.userName;
             bill.approvedAt = new Date().toISOString();
             postVendorBillApprovalGL(bill, currentActiveStaffSession.userName);
+          }
+        } else if (reqItem.module === 'b2b_credit_term' || reqItem.module === 'b2b_transfer_verification') {
+          const order = b2bOrdersList.find((o) => o.id === reqItem.documentId);
+          if (order) {
+            order.status = 'CONFIRMED';
+            if (reqItem.module === 'b2b_transfer_verification') {
+              order.paymentStatus = 'SETTLED';
+              const cust = b2bCustomersList.find((c) => c.id === order.customerId);
+              if (cust) {
+                cust.outstandingAR = Math.max(0, cust.outstandingAR - order.totalAmountIDR);
+                cust.availableCredit = Math.max(0, cust.creditLimit - cust.outstandingAR);
+                if (cust.status === 'CREDIT_LOCKED' && cust.outstandingAR < cust.creditLimit && cust.overdueDaysMax <= 7) {
+                  cust.status = 'ACTIVE';
+                  cust.lockReason = undefined;
+                }
+              }
+              const ts = new Date().toISOString();
+              commitBalancedGlBatch(
+                [
+                  {
+                    id: `GLE-TRF-${Date.now().toString().slice(-5)}-1`,
+                    timestamp: ts,
+                    storeId: 'CONSOLIDATED',
+                    storeName: 'Consolidated Company-Wide',
+                    accountCode: '1020',
+                    accountName: 'Bank BCA Operational Clearing',
+                    category: 'Asset',
+                    debit: order.totalAmountIDR,
+                    credit: 0,
+                    referenceType: 'B2B_WHOLESALE_ORDER',
+                    referenceId: order.id,
+                    description: `Verified bank transfer settlement for B2B Order ${order.id} (${order.companyName})`,
+                  },
+                  {
+                    id: `GLE-TRF-${Date.now().toString().slice(-5)}-2`,
+                    timestamp: ts,
+                    storeId: 'CONSOLIDATED',
+                    storeName: 'Consolidated Company-Wide',
+                    accountCode: '1200',
+                    accountName: 'Accounts Receivable - B2B Wholesale',
+                    category: 'Asset',
+                    debit: 0,
+                    credit: order.totalAmountIDR,
+                    referenceType: 'B2B_WHOLESALE_ORDER',
+                    referenceId: order.id,
+                    description: `AR cleared by Finance-verified transfer for ${order.id}`,
+                  },
+                ],
+                true
+              );
+            } else {
+              order.paymentStatus = 'APPROVED_CREDIT';
+            }
           }
         }
       }
@@ -9028,34 +10285,39 @@ async function startServer() {
           notes: `Auto-scrapped from QC Inspection ${newQc.id}`,
           glEntryId: gle1,
         });
-        generalLedger.unshift({
-          id: gle1,
-          timestamp: newQc.timestamp,
-          storeId: newQc.storeId,
-          storeName: newQc.storeName,
-          accountCode: '6030',
-          accountName: 'Perishable Spoilage & Shrinkage Expense',
-          category: 'Expense',
-          debit: lossValue,
-          credit: 0,
-          referenceType: 'WASTE_SHRINKAGE',
-          referenceId: newQc.id,
-          description: `QC Scrap Write-Off (${scrapQty} ${newQc.sku}) from inspection ${newQc.id}`,
-        });
-        generalLedger.unshift({
-          id: gle2,
-          timestamp: newQc.timestamp,
-          storeId: newQc.storeId,
-          storeName: newQc.storeName,
-          accountCode: '1040',
-          accountName: 'Merchandise Inventory Asset',
-          category: 'Asset',
-          debit: 0,
-          credit: lossValue,
-          referenceType: 'WASTE_SHRINKAGE',
-          referenceId: newQc.id,
-          description: `Inventory Asset reduced for QC Scrap ${newQc.id}`,
-        });
+        commitBalancedGlBatch(
+          [
+            {
+              id: gle1,
+              timestamp: newQc.timestamp,
+              storeId: newQc.storeId,
+              storeName: newQc.storeName,
+              accountCode: '6030',
+              accountName: 'Perishable Spoilage & Shrinkage Expense',
+              category: 'Expense',
+              debit: lossValue,
+              credit: 0,
+              referenceType: 'WASTE_SHRINKAGE',
+              referenceId: newQc.id,
+              description: `QC Scrap Write-Off (${scrapQty} ${newQc.sku}) from inspection ${newQc.id}`,
+            },
+            {
+              id: gle2,
+              timestamp: newQc.timestamp,
+              storeId: newQc.storeId,
+              storeName: newQc.storeName,
+              accountCode: '1040',
+              accountName: 'Merchandise Inventory Asset',
+              category: 'Asset',
+              debit: 0,
+              credit: lossValue,
+              referenceType: 'WASTE_SHRINKAGE',
+              referenceId: newQc.id,
+              description: `Inventory Asset reduced for QC Scrap ${newQc.id}`,
+            },
+          ],
+          true
+        );
       }
     } else if (newQc.disposition === 'QUARANTINED' || newQc.disposition === 'REJECTED') {
       if (matchingBatch) {
@@ -9683,7 +10945,7 @@ async function startServer() {
     const glVoucherIds: string[] = [revGleId, settleGleId];
 
     // Double-entry 1: Debit Grocery Sales Revenue (#4010) / Credit Cash (#1010) or Store Credit (#2020)
-    generalLedger.unshift({
+    const revEntry: GeneralLedgerEntry = {
       id: revGleId,
       timestamp,
       storeId,
@@ -9696,10 +10958,11 @@ async function startServer() {
       referenceType: 'POS_SALE',
       referenceId: returnId,
       description: `POS Sales Return Reversal (${returnId}) for receipt ${originalReceiptNumber || 'Walk-in'}`,
-    });
+    };
 
+    let settleEntry: GeneralLedgerEntry;
     if (resolvedChannel === 'CASH_DRAWER') {
-      generalLedger.unshift({
+      settleEntry = {
         id: settleGleId,
         timestamp,
         storeId,
@@ -9712,7 +10975,7 @@ async function startServer() {
         referenceType: 'POS_SALE',
         referenceId: returnId,
         description: `POS Cash Drawer Refund for Return ${returnId}`,
-      });
+      };
       const openShift = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
       if (openShift) {
         openShift.cashRefundsIDR += totalRefund;
@@ -9720,7 +10983,7 @@ async function startServer() {
           openShift.openingFloatIDR + openShift.expectedCashSalesIDR - openShift.cashRefundsIDR;
       }
     } else {
-      generalLedger.unshift({
+      settleEntry = {
         id: settleGleId,
         timestamp,
         storeId,
@@ -9733,8 +10996,9 @@ async function startServer() {
         referenceType: 'POS_SALE',
         referenceId: returnId,
         description: `Store Credit / E-Wallet Refund (${resolvedChannel}) for Return ${returnId}`,
-      });
+      };
     }
+    commitBalancedGlBatch([revEntry, settleEntry], true);
 
     let totalRestockCogs = 0;
     let totalScrapCogs = 0;
@@ -9761,6 +11025,7 @@ async function startServer() {
           tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
           tier.updatedAt = timestamp;
         }
+        syncBatchesForStockVariance(it.sku, storeId, qty, it.unitCost);
       } else {
         totalScrapCogs += lineCogs;
       }
@@ -9770,68 +11035,78 @@ async function startServer() {
       const invGle = `GLE-RET-${seq}-INV`;
       const cogsGle = `GLE-RET-${seq}-COGS`;
       glVoucherIds.push(invGle, cogsGle);
-      generalLedger.unshift({
-        id: invGle,
-        timestamp,
-        storeId,
-        storeName: resolvedStoreName,
-        accountCode: '1040',
-        accountName: 'Merchandise Inventory Asset',
-        category: 'Asset',
-        debit: totalRestockCogs,
-        credit: 0,
-        referenceType: 'POS_SALE',
-        referenceId: returnId,
-        description: `Good-condition POS return restocked to ATP (${returnId})`,
-      });
-      generalLedger.unshift({
-        id: cogsGle,
-        timestamp,
-        storeId,
-        storeName: resolvedStoreName,
-        accountCode: '5010',
-        accountName: 'Cost of Goods Sold (COGS)',
-        category: 'Expense',
-        debit: 0,
-        credit: totalRestockCogs,
-        referenceType: 'POS_SALE',
-        referenceId: returnId,
-        description: `COGS reversal for restocked POS return (${returnId})`,
-      });
+      commitBalancedGlBatch(
+        [
+          {
+            id: invGle,
+            timestamp,
+            storeId,
+            storeName: resolvedStoreName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: totalRestockCogs,
+            credit: 0,
+            referenceType: 'POS_SALE',
+            referenceId: returnId,
+            description: `Good-condition POS return restocked to ATP (${returnId})`,
+          },
+          {
+            id: cogsGle,
+            timestamp,
+            storeId,
+            storeName: resolvedStoreName,
+            accountCode: '5010',
+            accountName: 'Cost of Goods Sold (COGS)',
+            category: 'Expense',
+            debit: 0,
+            credit: totalRestockCogs,
+            referenceType: 'POS_SALE',
+            referenceId: returnId,
+            description: `COGS reversal for restocked POS return (${returnId})`,
+          },
+        ],
+        true
+      );
     }
 
     if (totalScrapCogs > 0) {
       const scrapDrGle = `GLE-RET-${seq}-SCRAP-DR`;
       const scrapCrGle = `GLE-RET-${seq}-SCRAP-CR`;
       glVoucherIds.push(scrapDrGle, scrapCrGle);
-      generalLedger.unshift({
-        id: scrapDrGle,
-        timestamp,
-        storeId,
-        storeName: resolvedStoreName,
-        accountCode: '6030',
-        accountName: 'Perishable Spoilage & Shrinkage Expense',
-        category: 'Expense',
-        debit: totalScrapCogs,
-        credit: 0,
-        referenceType: 'POS_SALE',
-        referenceId: returnId,
-        description: `Returned perishable waste written off on POS return (${returnId})`,
-      });
-      generalLedger.unshift({
-        id: scrapCrGle,
-        timestamp,
-        storeId,
-        storeName: resolvedStoreName,
-        accountCode: '5010',
-        accountName: 'Cost of Goods Sold (COGS)',
-        category: 'Expense',
-        debit: 0,
-        credit: totalScrapCogs,
-        referenceType: 'POS_SALE',
-        referenceId: returnId,
-        description: `COGS reclassification to Spoilage Waste for POS return (${returnId})`,
-      });
+      commitBalancedGlBatch(
+        [
+          {
+            id: scrapDrGle,
+            timestamp,
+            storeId,
+            storeName: resolvedStoreName,
+            accountCode: '6030',
+            accountName: 'Perishable Spoilage & Shrinkage Expense',
+            category: 'Expense',
+            debit: totalScrapCogs,
+            credit: 0,
+            referenceType: 'POS_SALE',
+            referenceId: returnId,
+            description: `Returned perishable waste written off on POS return (${returnId})`,
+          },
+          {
+            id: scrapCrGle,
+            timestamp,
+            storeId,
+            storeName: resolvedStoreName,
+            accountCode: '5010',
+            accountName: 'Cost of Goods Sold (COGS)',
+            category: 'Expense',
+            debit: 0,
+            credit: totalScrapCogs,
+            referenceType: 'POS_SALE',
+            referenceId: returnId,
+            description: `COGS reclassification to Spoilage Waste for POS return (${returnId})`,
+          },
+        ],
+        true
+      );
     }
 
     const newReturn: POSReturnRecord = {
@@ -10220,8 +11495,10 @@ async function startServer() {
       prepaymentAdvanceIDR = totalCreditIDR;
     }
 
+    const vcnGlBatch: GeneralLedgerEntry[] = [];
+
     if (apOffsetIDR > 0) {
-      generalLedger.unshift({
+      vcnGlBatch.push({
         id: journalDrId,
         timestamp,
         storeId,
@@ -10235,12 +11512,11 @@ async function startServer() {
         referenceId: noteId,
         description: `Vendor Credit Note ${noteId} reducing AP to ${payload.supplierName || 'Vendor'}`,
       });
-      updateCoaLedgerBalance('2010', apOffsetIDR, 0);
     }
 
     if (prepaymentAdvanceIDR > 0) {
       const advGlId = apOffsetIDR > 0 ? `${journalDrId}-ADV` : journalDrId;
-      generalLedger.unshift({
+      vcnGlBatch.push({
         id: advGlId,
         timestamp,
         storeId,
@@ -10254,10 +11530,9 @@ async function startServer() {
         referenceId: noteId,
         description: `Post-payment Vendor Advance ${noteId} (${linkedBill ? `Bill ${linkedBill.id} ${linkedBill.status}` : 'No open AP'}) to ${payload.supplierName || 'Vendor'}`,
       });
-      updateCoaLedgerBalance('1150', prepaymentAdvanceIDR, 0);
     }
 
-    generalLedger.unshift({
+    vcnGlBatch.push({
       id: journalCrId,
       timestamp,
       storeId,
@@ -10271,10 +11546,9 @@ async function startServer() {
       referenceId: noteId,
       description: `Inventory Asset credited for RTV ${noteId} (${qty} ${payload.unit || 'pack'} ${sku})`,
     });
-    updateCoaLedgerBalance('1040', 0, subtotalReturnedIDR);
 
     if (ppnMasukanReversedIDR > 0) {
-      generalLedger.unshift({
+      vcnGlBatch.push({
         id: `GLE-VCN-${Date.now().toString().slice(-4)}-VAT`,
         timestamp,
         storeId,
@@ -10288,8 +11562,9 @@ async function startServer() {
         referenceId: noteId,
         description: `PPN Masukan reversed for Vendor Credit Note ${noteId}`,
       });
-      updateCoaLedgerBalance('2026', 0, ppnMasukanReversedIDR);
     }
+
+    commitBalancedGlBatch(vcnGlBatch, true);
 
     const newNote: VendorCreditNote = {
       creditNoteId: noteId,
@@ -10377,42 +11652,84 @@ async function startServer() {
       bill.paymentStatus = 'PARTIALLY_PAID';
     }
 
-    if (excessAdvanceIDR > 0) {
+    const originalHad2010Debit = generalLedger.some(
+      (g) => g.referenceId === note.creditNoteId && g.accountCode === '2010' && g.debit > 0
+    );
+    const originalHad1150Debit = generalLedger.some(
+      (g) => g.referenceId === note.creditNoteId && g.accountCode === '1150' && g.debit > 0
+    );
+    const tsApply = new Date().toISOString();
+
+    if (excessAdvanceIDR > 0 && originalHad2010Debit) {
       const advGlId = `GLE-VCN-ADV-${Date.now().toString().slice(-4)}`;
-      const ap2010 = chartOfAccounts.find((c) => c.accountCode === '2010')?.balance ?? 0;
-      const reclassAmount = Math.min(excessAdvanceIDR, ap2010);
-      generalLedger.unshift({
-        id: advGlId,
-        timestamp: new Date().toISOString(),
-        storeId: note.storeId,
-        storeName: note.storeName,
-        accountCode: '1150',
-        accountName: 'Vendor Prepayments / Advances (Uang Muka Pembelian)',
-        category: 'Asset',
-        debit: excessAdvanceIDR,
-        credit: 0,
-        referenceType: 'PURCHASE_AP',
-        referenceId: note.creditNoteId,
-        description: `Excess credit Rp ${excessAdvanceIDR.toLocaleString('id-ID')} from ${note.creditNoteId} (${note.supplierName}) reclassified to Vendor Prepayment after settling ${vendorBillId}`,
-      });
-      updateCoaLedgerBalance('1150', excessAdvanceIDR, 0);
-      if (reclassAmount > 0) {
-        generalLedger.unshift({
-          id: `${advGlId}-CR`,
-          timestamp: new Date().toISOString(),
-          storeId: note.storeId,
-          storeName: note.storeName,
-          accountCode: '2010',
-          accountName: 'Trade Accounts Payable',
-          category: 'Liability',
-          debit: 0,
-          credit: reclassAmount,
-          referenceType: 'PURCHASE_AP',
-          referenceId: note.creditNoteId,
-          description: `Reverse excess AP debit on ${note.creditNoteId}`,
-        });
-        updateCoaLedgerBalance('2010', 0, reclassAmount);
-      }
+      commitBalancedGlBatch(
+        [
+          {
+            id: advGlId,
+            timestamp: tsApply,
+            storeId: note.storeId,
+            storeName: note.storeName,
+            accountCode: '1150',
+            accountName: 'Vendor Prepayments / Advances (Uang Muka Pembelian)',
+            category: 'Asset',
+            debit: excessAdvanceIDR,
+            credit: 0,
+            referenceType: 'PURCHASE_AP',
+            referenceId: note.creditNoteId,
+            description: `Excess credit Rp ${excessAdvanceIDR.toLocaleString('id-ID')} from ${note.creditNoteId} (${note.supplierName}) reclassified to Vendor Prepayment after settling ${vendorBillId}`,
+          },
+          {
+            id: `${advGlId}-CR`,
+            timestamp: tsApply,
+            storeId: note.storeId,
+            storeName: note.storeName,
+            accountCode: '2010',
+            accountName: 'Trade Accounts Payable',
+            category: 'Liability',
+            debit: 0,
+            credit: excessAdvanceIDR,
+            referenceType: 'PURCHASE_AP',
+            referenceId: note.creditNoteId,
+            description: `Reverse excess AP debit on ${note.creditNoteId}`,
+          },
+        ],
+        true
+      );
+    } else if (appliedIDR > 0 && !originalHad2010Debit && originalHad1150Debit) {
+      const setGlId = `GLE-VCN-SET-${Date.now().toString().slice(-4)}`;
+      commitBalancedGlBatch(
+        [
+          {
+            id: `${setGlId}-DR`,
+            timestamp: tsApply,
+            storeId: note.storeId,
+            storeName: note.storeName,
+            accountCode: '2010',
+            accountName: 'Trade Accounts Payable',
+            category: 'Liability',
+            debit: appliedIDR,
+            credit: 0,
+            referenceType: 'PURCHASE_AP',
+            referenceId: note.creditNoteId,
+            description: `Apply Vendor Prepayment ${note.creditNoteId} to settle Bill ${vendorBillId}`,
+          },
+          {
+            id: `${setGlId}-CR`,
+            timestamp: tsApply,
+            storeId: note.storeId,
+            storeName: note.storeName,
+            accountCode: '1150',
+            accountName: 'Vendor Prepayments / Advances (Uang Muka Pembelian)',
+            category: 'Asset',
+            debit: 0,
+            credit: appliedIDR,
+            referenceType: 'PURCHASE_AP',
+            referenceId: note.creditNoteId,
+            description: `Consume Vendor Advance ${note.creditNoteId} against Bill ${vendorBillId}`,
+          },
+        ],
+        true
+      );
     }
 
     note.status = 'applied_to_bill';
@@ -10648,12 +11965,7 @@ async function startServer() {
         if (inv) {
           inv.currentStock = Number(((inv.currentStock || 0) + qty).toFixed(2));
         }
-        const batch = inventoryBatches.find(
-          (b) => b.sku === it.sku && (b.status === 'active' || b.status === 'fresh' || b.status === 'near_expiry')
-        );
-        if (batch) {
-          batch.currentStock = Number((batch.currentStock + qty).toFixed(2));
-        }
+        syncBatchesForStockVariance(it.sku, storeId, qty, uCost, it.lotNumber);
       } else {
         totalScrapLoss += Math.round(qty * uCost);
         const batchId = `BAT-QUAR-${Date.now().toString().slice(-5)}`;
@@ -10718,29 +12030,32 @@ async function startServer() {
     const totalCreditNoteIDR = totalSubtotalReversed + totalPpnReversed;
     const glIds: string[] = [];
 
-    // 1. Reverse Revenue (#4010 retail / #4020 B2B)
+    // 1. Reverse Revenue (#4010 retail / #4020 B2B) + Output VAT (#2025) vs AR/Cash/StoreCredit
     const revGleId = `GLE-RMA-${seq}-REV`;
+    const settleGleId = `GLE-RMA-${seq}-SETTLE`;
     glIds.push(revGleId);
-    generalLedger.unshift({
-      id: revGleId,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: sourceChannel === 'B2B' ? '4020' : '4010',
-      accountName: sourceChannel === 'B2B' ? 'B2B Wholesale Revenue' : 'Grocery Sales Revenue',
-      category: 'Revenue',
-      debit: totalSubtotalReversed,
-      credit: 0,
-      referenceType: 'POS_SALE',
-      referenceId: notaReturNumber,
-      description: `Sales Return Reversal (${notaReturNumber}) for ${sourceChannel} Ref #${sourceReferenceId}`,
-    });
 
-    // 2. Reverse PPN Keluaran (#2025) if applicable
+    const rmaRevGlBatch: GeneralLedgerEntry[] = [
+      {
+        id: revGleId,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: sourceChannel === 'B2B' ? '4020' : '4010',
+        accountName: sourceChannel === 'B2B' ? 'B2B Wholesale Revenue' : 'Grocery Sales Revenue',
+        category: 'Revenue',
+        debit: totalSubtotalReversed,
+        credit: 0,
+        referenceType: 'POS_SALE',
+        referenceId: notaReturNumber,
+        description: `Sales Return Reversal (${notaReturNumber}) for ${sourceChannel} Ref #${sourceReferenceId}`,
+      },
+    ];
+
     if (totalPpnReversed > 0) {
       const taxGleId = `GLE-RMA-${seq}-PPN`;
       glIds.push(taxGleId);
-      generalLedger.unshift({
+      rmaRevGlBatch.push({
         id: taxGleId,
         timestamp,
         storeId,
@@ -10756,11 +12071,9 @@ async function startServer() {
       });
     }
 
-    // 3. Credit Refund Target: AR Reduction (#1200) vs Cash Drawer (#1010) vs Store Credit (#2020)
-    const settleGleId = `GLE-RMA-${seq}-SETTLE`;
     glIds.push(settleGleId);
     if (refundMethod === 'AR_REDUCTION' || sourceChannel === 'B2B') {
-      generalLedger.unshift({
+      rmaRevGlBatch.push({
         id: settleGleId,
         timestamp,
         storeId,
@@ -10782,7 +12095,7 @@ async function startServer() {
         }
       }
     } else if (refundMethod === 'CASH') {
-      generalLedger.unshift({
+      rmaRevGlBatch.push({
         id: settleGleId,
         timestamp,
         storeId,
@@ -10803,7 +12116,7 @@ async function startServer() {
           openShift.openingFloatIDR + openShift.expectedCashSalesIDR - openShift.cashRefundsIDR;
       }
     } else {
-      generalLedger.unshift({
+      rmaRevGlBatch.push({
         id: settleGleId,
         timestamp,
         storeId,
@@ -10818,74 +12131,85 @@ async function startServer() {
         description: `Store credit voucher issued for RMA ${notaReturNumber}`,
       });
     }
+    commitBalancedGlBatch(rmaRevGlBatch, true);
 
-    // 4. Inventory Asset Restock (#1040 vs #5010 COGS) or Scrap Quarantine (#5030)
+    // 4. Inventory Asset Restock (#1040 vs #5010 COGS) or Scrap Quarantine (#6030 vs #5010)
     if (totalRestockCogs > 0) {
       const invGle = `GLE-RMA-${seq}-INV`;
       const cogsGle = `GLE-RMA-${seq}-COGS`;
       glIds.push(invGle, cogsGle);
-      generalLedger.unshift({
-        id: invGle,
-        timestamp,
-        storeId,
-        storeName,
-        accountCode: '1040',
-        accountName: 'Merchandise Inventory Asset',
-        category: 'Asset',
-        debit: totalRestockCogs,
-        credit: 0,
-        referenceType: 'POS_SALE',
-        referenceId: notaReturNumber,
-        description: `Good-condition RMA restocked to Available ATP (${notaReturNumber})`,
-      });
-      generalLedger.unshift({
-        id: cogsGle,
-        timestamp,
-        storeId,
-        storeName,
-        accountCode: '5010',
-        accountName: 'Cost of Goods Sold (COGS)',
-        category: 'Expense',
-        debit: 0,
-        credit: totalRestockCogs,
-        referenceType: 'POS_SALE',
-        referenceId: notaReturNumber,
-        description: `COGS reversal for restocked RMA items (${notaReturNumber})`,
-      });
+      commitBalancedGlBatch(
+        [
+          {
+            id: invGle,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: totalRestockCogs,
+            credit: 0,
+            referenceType: 'POS_SALE',
+            referenceId: notaReturNumber,
+            description: `Good-condition RMA restocked to Available ATP (${notaReturNumber})`,
+          },
+          {
+            id: cogsGle,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: '5010',
+            accountName: 'Cost of Goods Sold (COGS)',
+            category: 'Expense',
+            debit: 0,
+            credit: totalRestockCogs,
+            referenceType: 'POS_SALE',
+            referenceId: notaReturNumber,
+            description: `COGS reversal for restocked RMA items (${notaReturNumber})`,
+          },
+        ],
+        true
+      );
     }
 
     if (totalScrapLoss > 0) {
       const scrapDrGle = `GLE-RMA-${seq}-SCRAP`;
       const scrapCrGle = `GLE-RMA-${seq}-SCRAP-CR`;
       glIds.push(scrapDrGle, scrapCrGle);
-      generalLedger.unshift({
-        id: scrapDrGle,
-        timestamp,
-        storeId,
-        storeName,
-        accountCode: '6030',
-        accountName: 'Perishable Spoilage & Shrinkage Expense',
-        category: 'Expense',
-        debit: totalScrapLoss,
-        credit: 0,
-        referenceType: 'WASTE_SHRINKAGE',
-        referenceId: notaReturNumber,
-        description: `RMA Spoilage/Quarantine Loss (${notaReturNumber})`,
-      });
-      generalLedger.unshift({
-        id: scrapCrGle,
-        timestamp,
-        storeId,
-        storeName,
-        accountCode: '5010',
-        accountName: 'Cost of Goods Sold (COGS)',
-        category: 'Expense',
-        debit: 0,
-        credit: totalScrapLoss,
-        referenceType: 'WASTE_SHRINKAGE',
-        referenceId: notaReturNumber,
-        description: `COGS reclassification to Spoilage Expense for RMA (${notaReturNumber})`,
-      });
+      commitBalancedGlBatch(
+        [
+          {
+            id: scrapDrGle,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: '6030',
+            accountName: 'Perishable Spoilage & Shrinkage Expense',
+            category: 'Expense',
+            debit: totalScrapLoss,
+            credit: 0,
+            referenceType: 'WASTE_SHRINKAGE',
+            referenceId: notaReturNumber,
+            description: `RMA Spoilage/Quarantine Loss (${notaReturNumber})`,
+          },
+          {
+            id: scrapCrGle,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: '5010',
+            accountName: 'Cost of Goods Sold (COGS)',
+            category: 'Expense',
+            debit: 0,
+            credit: totalScrapLoss,
+            referenceType: 'WASTE_SHRINKAGE',
+            referenceId: notaReturNumber,
+            description: `COGS reclassification to Spoilage Expense for RMA (${notaReturNumber})`,
+          },
+        ],
+        true
+      );
     }
 
     const rmaRecord: CustomerRmaRecord = {
@@ -11085,10 +12409,11 @@ async function startServer() {
     const gAdv = `GLE-RTV-${seq}-ADV`;
     const g2 = `GLE-RTV-${seq}-INV`;
     const glIds: string[] = [];
+    const rtvGlBatch: GeneralLedgerEntry[] = [];
 
     if (apOffsetIDR > 0) {
       glIds.push(g1);
-      generalLedger.unshift({
+      rtvGlBatch.push({
         id: g1,
         timestamp,
         storeId,
@@ -11102,12 +12427,11 @@ async function startServer() {
         referenceId: debitNoteNumber,
         description: `RTV Debit Note ${debitNoteNumber} reducing AP to ${supplierName} (Bill: ${linkedBill?.id || 'Open AP'}, QC: ${qcInspectionId || 'Manual'})`,
       });
-      updateCoaLedgerBalance('2010', apOffsetIDR, 0);
     }
 
     if (prepaymentAdvanceIDR > 0) {
       glIds.push(gAdv);
-      generalLedger.unshift({
+      rtvGlBatch.push({
         id: gAdv,
         timestamp,
         storeId,
@@ -11121,11 +12445,10 @@ async function startServer() {
         referenceId: debitNoteNumber,
         description: `Post-payment RTV Debit Note ${debitNoteNumber} (${linkedBill ? `Bill ${linkedBill.id} ${linkedBill.status}` : 'Insufficient AP'}) booked as Vendor Advance to ${supplierName}`,
       });
-      updateCoaLedgerBalance('1150', prepaymentAdvanceIDR, 0);
     }
 
     glIds.push(g2);
-    generalLedger.unshift({
+    rtvGlBatch.push({
       id: g2,
       timestamp,
       storeId,
@@ -11139,12 +12462,11 @@ async function startServer() {
       referenceId: debitNoteNumber,
       description: `Inventory Asset deducted for RTV ${debitNoteNumber} (${qty} ${unit} ${sku})`,
     });
-    updateCoaLedgerBalance('1040', 0, subtotalReturnedIDR);
 
     if (ppnMasukanReversedIDR > 0) {
       const g3 = `GLE-RTV-${seq}-VAT`;
       glIds.push(g3);
-      generalLedger.unshift({
+      rtvGlBatch.push({
         id: g3,
         timestamp,
         storeId,
@@ -11158,8 +12480,9 @@ async function startServer() {
         referenceId: debitNoteNumber,
         description: `PPN Masukan reversed on Nota Retur Pembelian ${debitNoteNumber}`,
       });
-      updateCoaLedgerBalance('2026', 0, ppnMasukanReversedIDR);
     }
+
+    commitBalancedGlBatch(rtvGlBatch, true);
 
     const vcnId = `VCN-2026-${seq}`;
     vendorCreditNotesList.unshift({
@@ -11585,63 +12908,73 @@ async function startServer() {
       glIds.push(g1, g2);
 
       if (isShort) {
-        generalLedger.unshift({
-          id: g1,
-          timestamp,
-          storeId: shift.storeId,
-          storeName: shift.storeName,
-          accountCode: '5220',
-          accountName: 'POS Cash Drawer Over/Short Variance (Selisih Kasir)',
-          category: 'Expense',
-          debit: absVar,
-          credit: 0,
-          referenceType: 'POS_SHIFT_Z_REPORT',
-          referenceId: zReportNumber,
-          description: `Cashier Short Variance (Selisih Kurang) on ${zReportNumber} - ${shift.cashierName}`,
-        });
-        generalLedger.unshift({
-          id: g2,
-          timestamp,
-          storeId: shift.storeId,
-          storeName: shift.storeName,
-          accountCode: '1010',
-          accountName: 'Cash on Hand & Store Registers',
-          category: 'Asset',
-          debit: 0,
-          credit: absVar,
-          referenceType: 'POS_SHIFT_Z_REPORT',
-          referenceId: zReportNumber,
-          description: `Cash drawer physical balance adjustment on ${zReportNumber}`,
-        });
+        commitBalancedGlBatch(
+          [
+            {
+              id: g1,
+              timestamp,
+              storeId: shift.storeId,
+              storeName: shift.storeName,
+              accountCode: '5220',
+              accountName: 'POS Cash Drawer Over/Short Variance (Selisih Kasir)',
+              category: 'Expense',
+              debit: absVar,
+              credit: 0,
+              referenceType: 'POS_SHIFT_Z_REPORT',
+              referenceId: zReportNumber,
+              description: `Cashier Short Variance (Selisih Kurang) on ${zReportNumber} - ${shift.cashierName}`,
+            },
+            {
+              id: g2,
+              timestamp,
+              storeId: shift.storeId,
+              storeName: shift.storeName,
+              accountCode: '1010',
+              accountName: 'Cash on Hand & Store Registers',
+              category: 'Asset',
+              debit: 0,
+              credit: absVar,
+              referenceType: 'POS_SHIFT_Z_REPORT',
+              referenceId: zReportNumber,
+              description: `Cash drawer physical balance adjustment on ${zReportNumber}`,
+            },
+          ],
+          true
+        );
       } else {
-        generalLedger.unshift({
-          id: g1,
-          timestamp,
-          storeId: shift.storeId,
-          storeName: shift.storeName,
-          accountCode: '1010',
-          accountName: 'Cash on Hand & Store Registers',
-          category: 'Asset',
-          debit: absVar,
-          credit: 0,
-          referenceType: 'POS_SHIFT_Z_REPORT',
-          referenceId: zReportNumber,
-          description: `Cash drawer surplus (Selisih Lebih) deposited on ${zReportNumber}`,
-        });
-        generalLedger.unshift({
-          id: g2,
-          timestamp,
-          storeId: shift.storeId,
-          storeName: shift.storeName,
-          accountCode: '5220',
-          accountName: 'POS Cash Drawer Over/Short Variance (Selisih Kasir)',
-          category: 'Expense',
-          debit: 0,
-          credit: absVar,
-          referenceType: 'POS_SHIFT_Z_REPORT',
-          referenceId: zReportNumber,
-          description: `Cashier Over Variance credit on ${zReportNumber} - ${shift.cashierName}`,
-        });
+        commitBalancedGlBatch(
+          [
+            {
+              id: g1,
+              timestamp,
+              storeId: shift.storeId,
+              storeName: shift.storeName,
+              accountCode: '1010',
+              accountName: 'Cash on Hand & Store Registers',
+              category: 'Asset',
+              debit: absVar,
+              credit: 0,
+              referenceType: 'POS_SHIFT_Z_REPORT',
+              referenceId: zReportNumber,
+              description: `Cash drawer surplus (Selisih Lebih) deposited on ${zReportNumber}`,
+            },
+            {
+              id: g2,
+              timestamp,
+              storeId: shift.storeId,
+              storeName: shift.storeName,
+              accountCode: '5220',
+              accountName: 'POS Cash Drawer Over/Short Variance (Selisih Kasir)',
+              category: 'Expense',
+              debit: 0,
+              credit: absVar,
+              referenceType: 'POS_SHIFT_Z_REPORT',
+              referenceId: zReportNumber,
+              description: `Cashier Over Variance credit on ${zReportNumber} - ${shift.cashierName}`,
+            },
+          ],
+          true
+        );
       }
     }
 
@@ -11740,6 +13073,24 @@ async function startServer() {
       const cust = b2bCustomersList.find((c) => c.id === order.customerId);
       const rawTin = cust?.npwp || cust?.nik || '';
       const tinCheck = validateNpwpOrNik(rawTin);
+      const dppIDR = Math.max(0, order.subtotalIDR - (order.pwpDiscountIDR || 0));
+      let taxClassification: IndonesianTaxCategory = 'BKP_STANDARD';
+      let pb1IDR = 0;
+      if (order.taxPPN11IDR === 0) {
+        const hasPb1Item = order.items.some((it) => {
+          const rule = skuTaxRulesList.find((r) => r.sku === it.product?.sku);
+          const cat =
+            rule?.taxCategory ||
+            inferDefaultTaxCategory(it.product?.category || '', it.product?.name || '');
+          return cat === 'NON_BKP_PB1';
+        });
+        if (hasPb1Item && order.totalAmountIDR > dppIDR) {
+          taxClassification = 'NON_BKP_PB1';
+          pb1IDR = order.totalAmountIDR - dppIDR;
+        } else {
+          taxClassification = 'BKP_DIBEBASKAN';
+        }
+      }
       rows.push({
         rowId: `CT-B2B-${idx + 1}`,
         documentType: 'FAKTUR_KELUARAN_B2B',
@@ -11749,10 +13100,10 @@ async function startServer() {
         counterpartyName: order.companyName,
         npwpOrNik: tinCheck.cleanDigits || '0000000000000000',
         isNpwpValid: tinCheck.valid,
-        taxClassification: 'BKP_STANDARD',
-        dppIDR: order.subtotalIDR - (order.pwpDiscountIDR || 0),
+        taxClassification,
+        dppIDR,
         ppnIDR: order.taxPPN11IDR,
-        pb1IDR: 0,
+        pb1IDR,
         totalIDR: order.totalAmountIDR,
         referenceId: order.id,
       });
@@ -11760,7 +13111,22 @@ async function startServer() {
 
     // 2. B2C POS Digunggung Retail Invoices
     posTransactionsHistory.forEach((rcp, idx) => {
-      const dpp = Math.max(0, rcp.total - rcp.tax);
+      const pb1Amount = Math.max(0, Number((rcp as any).pb1TaxIDR || 0));
+      const dpp = Math.max(0, rcp.total - rcp.tax - pb1Amount);
+      const hasPb1Item =
+        pb1Amount > 0 ||
+        (rcp.items || []).some((it) => {
+          const rule = skuTaxRulesList.find((r) => r.sku === it.sku);
+          const cat =
+            rule?.taxCategory || inferDefaultTaxCategory(it.category || '', it.name || '');
+          return cat === 'NON_BKP_PB1';
+        });
+      const taxClassification: IndonesianTaxCategory =
+        rcp.tax === 0 && pb1Amount === 0
+          ? 'BKP_DIBEBASKAN'
+          : rcp.tax === 0 && hasPb1Item
+          ? 'NON_BKP_PB1'
+          : 'BKP_STANDARD';
       rows.push({
         rowId: `CT-POS-${idx + 1}`,
         documentType: 'DIGUNGGUNG_B2C_POS',
@@ -11770,10 +13136,10 @@ async function startServer() {
         counterpartyName: 'Konsumen Akhir (POS Retail Digunggung)',
         npwpOrNik: '0000000000000000',
         isNpwpValid: false,
-        taxClassification: 'BKP_STANDARD',
+        taxClassification,
         dppIDR: dpp,
         ppnIDR: rcp.tax,
-        pb1IDR: 0,
+        pb1IDR: pb1Amount,
         totalIDR: rcp.total,
         referenceId: rcp.receiptNumber,
       });
