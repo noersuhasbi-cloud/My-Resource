@@ -47,7 +47,10 @@ import {
   Truck,
   Printer,
   ChevronDown,
+  Mail,
+  MessageCircle,
 } from 'lucide-react';
+import { DocumentDispatchModal } from './AdminDashboard/DocumentDispatchModal';
 
 interface B2BWholesalePortalProps {
   onBackToRetailStorefront: () => void;
@@ -153,6 +156,10 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
   );
   const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false);
   const [activeReceiptOrder, setActiveReceiptOrder] = useState<B2BWholesaleOrder | null>(null);
+  const [dispatchInvoice, setDispatchInvoice] = useState<{
+    order: B2BWholesaleOrder;
+    channel: 'email' | 'whatsapp';
+  } | null>(null);
 
   // Active Customer Object
   const currentCustomer = useMemo(() => {
@@ -1358,33 +1365,73 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                 </div>
               )}
 
-              <div className="pt-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    triggerPrint({
-                      type: 'b2b_invoice',
-                      format: 'a4',
-                      order: activeReceiptOrder,
-                    })
-                  }
-                  className="flex-1 py-2.5 rounded-xl border border-stone-300 dark:border-zinc-700 text-xs font-bold hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak Faktur</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveReceiptOrder(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-800 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
-                >
-                  Selesai
-                </button>
+              <div className="pt-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      triggerPrint({
+                        type: 'b2b_invoice',
+                        format: 'a4',
+                        order: activeReceiptOrder,
+                      })
+                    }
+                    className="flex-1 py-2.5 rounded-xl border border-stone-300 dark:border-zinc-700 text-xs font-bold hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Cetak Faktur</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveReceiptOrder(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-800 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer"
+                  >
+                    Selesai
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDispatchInvoice({ order: activeReceiptOrder, channel: 'email' })
+                    }
+                    className="py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-100 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Email Faktur</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDispatchInvoice({ order: activeReceiptOrder, channel: 'whatsapp' })
+                    }
+                    className="py-2 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 text-xs font-bold hover:bg-emerald-100 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>WhatsApp Faktur</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>,
           document.body
         )
+      )}
+      {dispatchInvoice && (
+        <DocumentDispatchModal
+          isOpen={Boolean(dispatchInvoice)}
+          onClose={() => setDispatchInvoice(null)}
+          theme={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light'}
+          initialChannel={dispatchInvoice.channel}
+          docType="B2B_INVOICE"
+          docId={dispatchInvoice.order.id}
+          docNumber={dispatchInvoice.order.id}
+          docSummary={`Company: ${dispatchInvoice.order.companyName || dispatchInvoice.order.customerName}\nPayment: ${dispatchInvoice.order.paymentMethod.toUpperCase()} (${dispatchInvoice.order.paymentStatus})\nTotal Faktur: ${formatIDR(dispatchInvoice.order.totalAmountIDR)}`}
+          defaultRecipientName={dispatchInvoice.order.companyName || dispatchInvoice.order.customerName}
+          defaultRecipientEmail={currentCustomer?.email || ''}
+          defaultRecipientPhone={currentCustomer?.phone || ''}
+          onShowToast={onShowToast}
+        />
       )}
     </div>
   );

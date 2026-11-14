@@ -21,7 +21,10 @@ import {
   ShieldCheck,
   X,
   Trash2,
+  Mail,
+  MessageCircle,
 } from 'lucide-react';
+import { DocumentDispatchModal } from './DocumentDispatchModal';
 
 interface QuotationsModuleProps {
   theme: 'light' | 'dark';
@@ -77,6 +80,10 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
 
   // Convert loading state
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [dispatchQuote, setDispatchQuote] = useState<{
+    quote: EnterpriseQuotation;
+    channel: 'email' | 'whatsapp';
+  } | null>(null);
 
   const loadQuotations = async () => {
     setIsLoading(true);
@@ -568,6 +575,28 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                           <Printer className="w-3.5 h-3.5" />
                         </button>
 
+                        <button
+                          type="button"
+                          onClick={() => setDispatchQuote({ quote: q, channel: 'email' })}
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                            isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                          }`}
+                          title="Email Quotation via SMTP"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setDispatchQuote({ quote: q, channel: 'whatsapp' })}
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                            isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                          }`}
+                          title="Send Quotation via WhatsApp"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </button>
+
                         {q.signatureStatus === 'PENDING' && q.status !== 'CONVERTED_TO_ORDER' && (
                           <button
                             type="button"
@@ -842,6 +871,22 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
           </div>
         </div>,
         document.body
+      )}
+      {dispatchQuote && (
+        <DocumentDispatchModal
+          isOpen={Boolean(dispatchQuote)}
+          onClose={() => setDispatchQuote(null)}
+          theme={theme}
+          initialChannel={dispatchQuote.channel}
+          docType="QUOTATION"
+          docId={dispatchQuote.quote.id}
+          docNumber={dispatchQuote.quote.quotationNumber}
+          docSummary={`Customer: ${dispatchQuote.quote.customerCompany || dispatchQuote.quote.customerName}\nValid Until: ${dispatchQuote.quote.validUntil}\nTotal: ${formatIDR(dispatchQuote.quote.total)} (${dispatchQuote.quote.items.length} items)`}
+          defaultRecipientName={dispatchQuote.quote.customerCompany || dispatchQuote.quote.customerName}
+          defaultRecipientEmail={dispatchQuote.quote.customerEmail}
+          defaultRecipientPhone={dispatchQuote.quote.customerPhone}
+          onShowToast={onShowToast}
+        />
       )}
     </div>
   );

@@ -60,7 +60,10 @@ import {
   History,
   X,
   UserCheck,
+  Mail,
+  MessageCircle,
 } from 'lucide-react';
+import { DocumentDispatchModal } from './DocumentDispatchModal';
 
 interface PosModuleProps {
   theme: 'light' | 'dark';
@@ -91,6 +94,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const canOverrideDiscount =
     activeStaffSession?.permissions?.canOverridePosPrice ??
     ['store_manager', 'coo', 'super_admin'].includes(normalizeEnterpriseRole(activeStaffSession?.userRole));
+  const [dispatchReceipt, setDispatchReceipt] = useState<{
+    receipt: POSTransactionReceipt;
+    channel: 'email' | 'whatsapp';
+  } | null>(null);
 
   // 1. Catalog & Filter State
   const [products, setProducts] = useState<POSProductItem[]>([]);
@@ -1504,39 +1511,64 @@ export const PosModule: React.FC<PosModuleProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerPrint({
-                      type: 'pos_receipt',
-                      format: 'thermal80',
-                      receipt: completedReceipt,
-                    });
-                  }}
-                  className="flex-1 py-2 rounded-xl border border-slate-300 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-slate-50 cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRmaTargetReceipt(completedReceipt);
-                    setCompletedReceipt(null);
-                  }}
-                  className="py-2 px-3 rounded-xl border border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Return / RMA</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCompletedReceipt(null)}
-                  className="flex-1 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer"
-                >
-                  New Sale (F2)
-                </button>
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerPrint({
+                        type: 'pos_receipt',
+                        format: 'thermal80',
+                        receipt: completedReceipt,
+                      });
+                    }}
+                    className="flex-1 py-2 rounded-xl border border-slate-300 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-slate-50 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRmaTargetReceipt(completedReceipt);
+                      setCompletedReceipt(null);
+                    }}
+                    className="py-2 px-3 rounded-xl border border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Return / RMA</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCompletedReceipt(null)}
+                    className="flex-1 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer"
+                  >
+                    New Sale (F2)
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDispatchReceipt({ receipt: completedReceipt, channel: 'email' })
+                    }
+                    className="py-1.5 px-2.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Email Receipt</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDispatchReceipt({ receipt: completedReceipt, channel: 'whatsapp' })
+                    }
+                    className="py-1.5 px-2.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>WhatsApp Receipt</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>,
@@ -1665,6 +1697,22 @@ export const PosModule: React.FC<PosModuleProps> = ({
         }}
         onShowToast={onShowToast}
       />
+      {dispatchReceipt && (
+        <DocumentDispatchModal
+          isOpen={Boolean(dispatchReceipt)}
+          onClose={() => setDispatchReceipt(null)}
+          theme={theme}
+          initialChannel={dispatchReceipt.channel}
+          docType="POS_RECEIPT"
+          docId={dispatchReceipt.receipt.receiptNumber}
+          docNumber={dispatchReceipt.receipt.receiptNumber}
+          docSummary={`Outlet: ${dispatchReceipt.receipt.storeName}\nItems: ${dispatchReceipt.receipt.items.length} | Payment: ${dispatchReceipt.receipt.paymentMethod.toUpperCase()}\nSubtotal: ${formatIDR(dispatchReceipt.receipt.subtotal)} | Disc: -${formatIDR(dispatchReceipt.receipt.discount)} | Tax: ${formatIDR(dispatchReceipt.receipt.tax)}\nTotal Paid: ${formatIDR(dispatchReceipt.receipt.total)}`}
+          defaultRecipientName="Walk-in Customer"
+          defaultRecipientEmail=""
+          defaultRecipientPhone=""
+          onShowToast={onShowToast}
+        />
+      )}
     </div>
   );
 };

@@ -1029,6 +1029,7 @@ export interface StaffShiftSession {
   shiftName: 'Morning Shift' | 'Afternoon Shift' | 'Night Shift';
   assignedZones: StorageZoneType[]; // e.g. ['cold_chilled', 'ambient']
   loginTimestamp: string;
+  isActive?: boolean;
   permissions: {
     canViewPos: boolean;
     canViewInventory: boolean;
@@ -2522,6 +2523,9 @@ export interface OperatorBranchAssignment {
   storeId: string;
   storeName: string;
   isBranchScoped: boolean;
+  isActive?: boolean;
+  loginPin?: string;
+  hasCustomPin?: boolean;
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -2533,3 +2537,90 @@ export interface ConfirmArrivalResponse {
   id: string;
 }
 
+// =============================================================
+// ADDITIVE COMMUNICATION DISPATCH GATEWAY (SMTP & WHATSAPP)
+// =============================================================
+export type CommunicationDocType =
+  | 'QUOTATION'
+  | 'PR'
+  | 'PO'
+  | 'GR'
+  | 'QC_REPORT'
+  | 'POS_RECEIPT'
+  | 'B2B_INVOICE'
+  | 'SURAT_JALAN';
+
+export type SmtpProviderPreset =
+  | 'custom'
+  | 'google_workspace'
+  | 'amazon_ses'
+  | 'sendgrid_mailgun'
+  | 'microsoft_365';
+
+export type SmtpEncryptionMode = 'STARTTLS' | 'SSL_TLS' | 'NONE';
+
+export type WhatsAppProviderType = 'meta_cloud' | 'indonesian_gateway';
+
+export interface CommunicationGatewayConfig {
+  smtp: {
+    providerPreset: SmtpProviderPreset;
+    host: string;
+    port: number;
+    encryption: SmtpEncryptionMode;
+    username: string;
+    password: string;
+    senderName: string;
+    senderEmail: string;
+    ccAuditEmail?: string;
+    enableLiveSmtp: boolean;
+  };
+  whatsapp: {
+    providerType: WhatsAppProviderType;
+    metaPhoneNumberId: string;
+    metaWabaId: string;
+    metaAccessToken: string;
+    gatewayApiUrl: string;
+    gatewayApiKey: string;
+    gatewaySenderNumber: string;
+    enableDirectWaApi: boolean;
+    fallbackWaWebInSandbox: boolean;
+    vendorMessageTemplate: string;
+    customerMessageTemplate: string;
+  };
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export interface CommunicationDispatchLog {
+  id: string;
+  timestamp: string;
+  channel: 'email' | 'whatsapp';
+  docType: CommunicationDocType | 'TEST_EMAIL' | 'TEST_WHATSAPP';
+  docId: string;
+  docNumber: string;
+  recipientName: string;
+  recipientAddress: string;
+  mode: 'LIVE' | 'SANDBOX';
+  status: 'SENT' | 'FAILED';
+  subjectOrPreview?: string;
+  waMeUrl?: string;
+  errorMessage?: string;
+  sentBy?: string;
+}
+
+export interface SendDocumentDispatchPayload {
+  channel: 'email' | 'whatsapp' | 'both';
+  docType: CommunicationDocType;
+  docId: string;
+  recipientName: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  customNote?: string;
+}
+
+export interface SendDocumentDispatchResponse {
+  success: boolean;
+  message: string;
+  waMeUrl?: string;
+  logs: CommunicationDispatchLog[];
+}

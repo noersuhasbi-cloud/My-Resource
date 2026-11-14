@@ -27,6 +27,7 @@ import type {
   StaffShiftSession,
   BranchMonitorResponse,
   OperatorBranchAssignment,
+  UserRole,
 } from '../../types/index.ts';
 import {
   INITIAL_ENTERPRISE_SETTINGS,
@@ -86,6 +87,7 @@ import {
   Users,
   PackageCheck,
   MapPin,
+  Mail,
 } from 'lucide-react';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { ValuationCostingSettingsTab } from './ValuationCostingSettingsTab';
@@ -93,6 +95,7 @@ import { WarehouseRoutingSettingsTab } from './WarehouseRoutingSettingsTab';
 import { ThreeWayMatchingSettingsTab } from './ThreeWayMatchingSettingsTab';
 import { BlindOpnamePanel } from './BlindOpnamePanel';
 import { IndonesianTaxRulesPanel } from './IndonesianTaxRulesPanel';
+import { CommunicationGatewaySettingsTab } from './CommunicationGatewaySettingsTab';
 
 export type SettingsSubTab =
   | 'enterprise'
@@ -105,7 +108,8 @@ export type SettingsSubTab =
   | 'promotions'
   | 'import_opname'
   | 'transfer'
-  | 'approval_matrix';
+  | 'approval_matrix'
+  | 'communication_gateway';
 
 interface SettingsModuleProps {
   theme: 'light' | 'dark';
@@ -194,6 +198,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     { storeId: string; storeName: string; hubType: string }[]
   >([]);
   const [savingAssignmentUserId, setSavingAssignmentUserId] = useState<string | null>(null);
+  const [operatorPinDrafts, setOperatorPinDrafts] = useState<Record<string, string>>({});
 
   // 1. COA Management & Mapping State
   const [coaViewMode, setCoaViewMode] = useState<'directory' | 'mapping'>('directory');
@@ -348,8 +353,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       if (grRes) setGoodsReceipts(grRes);
       if (monitorRes) setBranchMonitorData(monitorRes);
       if (assignRes) {
-        setOperatorAssignments(assignRes.assignments || []);
+        const list = assignRes.assignments || [];
+        setOperatorAssignments(list);
         setBranchAssignmentOptions(assignRes.branchOptions || []);
+        const pinMap: Record<string, string> = {};
+        list.forEach((op) => {
+          if (op.loginPin) pinMap[op.userId] = op.loginPin;
+        });
+        setOperatorPinDrafts(pinMap);
       }
     } catch (err) {
       console.error('Failed to load Settings & Configuration:', err);
@@ -368,8 +379,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       ]);
       if (monitorRes) setBranchMonitorData(monitorRes);
       if (assignRes) {
-        setOperatorAssignments(assignRes.assignments || []);
+        const list = assignRes.assignments || [];
+        setOperatorAssignments(list);
         setBranchAssignmentOptions(assignRes.branchOptions || []);
+        const pinMap: Record<string, string> = {};
+        list.forEach((op) => {
+          if (op.loginPin) pinMap[op.userId] = op.loginPin;
+        });
+        setOperatorPinDrafts(pinMap);
       }
     } finally {
       setIsLoadingMonitor(false);
@@ -391,12 +408,21 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     }
   };
 
-  const handleUpdateOperatorBranch = async (userId: string, storeId: string) => {
+  const handleUpdateOperatorAssignment = async (
+    userId: string,
+    patch: { storeId?: string; userRole?: UserRole; isActive?: boolean; loginPin?: string }
+  ) => {
     setSavingAssignmentUserId(userId);
     try {
-      const res = await apiClient.updateOperatorAssignment({ userId, storeId });
-      setOperatorAssignments(res.assignments || []);
-      onShowToast('Branch Assignment Saved', res.message);
+      const res = await apiClient.updateOperatorAssignment({ userId, ...patch });
+      const list = res.assignments || [];
+      setOperatorAssignments(list);
+      const pinMap: Record<string, string> = {};
+      list.forEach((op) => {
+        if (op.loginPin) pinMap[op.userId] = op.loginPin;
+      });
+      setOperatorPinDrafts((prev) => ({ ...prev, ...pinMap }));
+      onShowToast('Operator Governance Updated', res.message);
       onOperatorAssignmentsUpdated?.({
         currentSession: res.currentSession,
         availableProfiles: res.availableProfiles,
@@ -1121,6 +1147,20 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           >
             <ShieldCheck className="w-4 h-4" />
             <span>Approval Matrix</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('communication_gateway')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'communication_gateway'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <Mail className="w-4 h-4 text-emerald-500" />
+            <span>Email (SMTP) &amp; WhatsApp Gateway</span>
           </button>
         </div>
       </div>
@@ -2044,27 +2084,34 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <span>Operator Role &amp; Branch Assignment Configuration</span>
                 </h3>
                 <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
-                  Assign branch-scoped operators (Cashier, Warehouse Ops, Store Manager) to physical outlets or Central Distribution Center (WH-CDC-01). Changes immediately lock Outlet Scope across sessions.
+                  Only Super Admin can configure an operator&apos;s Enterprise Role, Assigned Outlet / Hub, Active Status, and Login PIN. All active sessions remain strictly locked until Lock / Sign Out.
                 </p>
               </div>
-              {!isSuperAdmin && (
+              {!isSuperAdmin ? (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25 whitespace-nowrap">
                   <Lock className="w-3.5 h-3.5" />
                   Super Admin Only
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/25 whitespace-nowrap">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Super Admin Governance Active
                 </span>
               )}
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
-              <table className="w-full text-left text-xs min-w-[740px]">
+              <table className="w-full text-left text-xs min-w-[960px]">
                 <thead>
                   <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${
                     isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
                   }`}>
                     <th className="py-3 px-3.5">Operator Profile</th>
-                    <th className="py-3 px-3">Enterprise Role</th>
+                    <th className="py-3 px-3">Assigned Role</th>
                     <th className="py-3 px-3">Scope Mode</th>
                     <th className="py-3 px-3">Assigned Branch / Hub</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3">Login PIN</th>
                     <th className="py-3 px-3 text-right">Last Updated</th>
                   </tr>
                 </thead>
@@ -2074,6 +2121,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     const allowedOptions = scoped
                       ? branchAssignmentOptions.filter((b) => b.storeId !== 'ALL')
                       : branchAssignmentOptions;
+                    const isSelf = op.userId === activeStaffSession?.userId;
+                    const isActiveOp = op.isActive !== false;
+                    const pinDraft = operatorPinDrafts[op.userId] ?? op.loginPin ?? '';
+                    const isSavingOp = savingAssignmentUserId === op.userId;
 
                     return (
                       <tr key={op.userId} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'}>
@@ -2081,10 +2132,34 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           <div className="font-bold">{op.userName}</div>
                           <div className="font-mono text-[10px] text-slate-400">{op.userId}</div>
                         </td>
-                        <td className="py-3 px-3">
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/20 whitespace-nowrap">
-                            {getRoleDisplayLabel(op.userRole)}
-                          </span>
+                        <td className="py-3 px-3 min-w-[165px]">
+                          {isSuperAdmin ? (
+                            <select
+                              disabled={isSelf || isSavingOp}
+                              value={normalizeEnterpriseRole(op.userRole)}
+                              onChange={(e) =>
+                                handleUpdateOperatorAssignment(op.userId, {
+                                  userRole: e.target.value as UserRole,
+                                })
+                              }
+                              className={`w-full px-2.5 py-1.5 text-xs rounded-xl font-semibold border ${
+                                isSelf ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
+                              } ${inputClass}`}
+                              title={isSelf ? 'Cannot demote your own active Super Admin account' : 'Assign Enterprise Role'}
+                            >
+                              <option value="cashier">Cashier</option>
+                              <option value="warehouse">Warehouse Ops</option>
+                              <option value="purchasing">Purchasing</option>
+                              <option value="store_manager">Store Manager</option>
+                              <option value="admin">Back-Office Admin</option>
+                              <option value="coo">COO</option>
+                              <option value="super_admin">Super Admin</option>
+                            </select>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/20 whitespace-nowrap">
+                              {getRoleDisplayLabel(op.userRole)}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap">
                           {scoped ? (
@@ -2098,11 +2173,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-3 min-w-[230px]">
+                        <td className="py-3 px-3 min-w-[220px]">
                           <select
-                            disabled={!isSuperAdmin || savingAssignmentUserId === op.userId}
+                            disabled={!isSuperAdmin || isSavingOp}
                             value={op.storeId}
-                            onChange={(e) => handleUpdateOperatorBranch(op.userId, e.target.value)}
+                            onChange={(e) =>
+                              handleUpdateOperatorAssignment(op.userId, { storeId: e.target.value })
+                            }
                             className={`w-full px-3 py-1.5 text-xs rounded-xl font-semibold border ${
                               !isSuperAdmin ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
                             } ${inputClass}`}
@@ -2113,6 +2190,69 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                               </option>
                             ))}
                           </select>
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <button
+                            type="button"
+                            disabled={!isSuperAdmin || isSelf || isSavingOp}
+                            onClick={() =>
+                              handleUpdateOperatorAssignment(op.userId, { isActive: !isActiveOp })
+                            }
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                              isActiveOp
+                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
+                                : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
+                            } ${!isSuperAdmin || isSelf ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:opacity-90'}`}
+                            title={
+                              !isSuperAdmin
+                                ? 'Super Admin Only'
+                                : isSelf
+                                ? 'Cannot deactivate your own active session'
+                                : isActiveOp
+                                ? 'Click to suspend operator login'
+                                : 'Click to reactivate operator login'
+                            }
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${isActiveOp ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                            {isActiveOp ? 'Active' : 'Suspended'}
+                          </button>
+                        </td>
+                        <td className="py-3 px-3 min-w-[165px]">
+                          {isSuperAdmin ? (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={pinDraft}
+                                disabled={isSavingOp}
+                                onChange={(e) =>
+                                  setOperatorPinDrafts((prev) => ({ ...prev, [op.userId]: e.target.value }))
+                                }
+                                placeholder="PIN (min 4)"
+                                maxLength={32}
+                                className={`w-24 px-2.5 py-1 text-xs font-mono rounded-lg border ${inputClass}`}
+                              />
+                              <button
+                                type="button"
+                                disabled={
+                                  isSavingOp ||
+                                  !pinDraft.trim() ||
+                                  pinDraft.trim().length < 4 ||
+                                  pinDraft.trim() === (op.loginPin || '8821')
+                                }
+                                onClick={() =>
+                                  handleUpdateOperatorAssignment(op.userId, { loginPin: pinDraft.trim() })
+                                }
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-[#0F4C3A] text-white hover:bg-[#0b382b] disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="font-mono text-[11px] text-slate-400 inline-flex items-center gap-1">
+                              <Lock className="w-3 h-3" />
+                              {op.hasCustomPin ? 'Custom PIN' : 'Standard'}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-right font-mono text-[10px] text-slate-500 dark:text-zinc-400">
                           {op.updatedAt ? (
@@ -4239,6 +4379,17 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           approvalQueue={approvalQueue}
           onShowToast={onShowToast}
           onRefreshData={onRefreshData || (() => {})}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* 6. EMAIL (SMTP) & WHATSAPP BUSINESS API GATEWAY TAB */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'communication_gateway' && (
+        <CommunicationGatewaySettingsTab
+          theme={theme}
+          canEditConfig={isSuperAdmin || isCoo}
+          onShowToast={onShowToast}
         />
       )}
     </div>

@@ -170,7 +170,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [activeStaffSession, setActiveStaffSession] = useState<StaffShiftSession | null>(
     initialStaffSession || null
   );
-  const [availableStaffProfiles, setAvailableStaffProfiles] = useState<StaffShiftSession[]>([]);
 
   const isCurrentRoleBranchScoped = isBranchScopedRole(activeStaffSession?.userRole);
   const lockedBranchId =
@@ -386,7 +385,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         if (!initialStaffSession && !overrideSession && !activeStaffSession) {
           setActiveStaffSession(rbacRes.currentSession);
         }
-        setAvailableStaffProfiles(rbacRes.availableProfiles || []);
       }
       setClimateConfigs(climateRes || []);
 
@@ -831,67 +829,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Right: Active Staff Session + Consolidated Store Selector + Dark/Light Toggle + Sync Button */}
             <div className="flex items-center gap-2 flex-wrap ml-auto">
-              {/* Active Operator RBAC Badge & Identity Switcher */}
+              {/* Active Operator RBAC Session Identity Pill (Strictly Locked Post-Login) */}
               {activeStaffSession && (
                 <div
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold ${
                     isLight ? 'bg-emerald-500/10 border-emerald-500/25 text-[#0F4C3A]' : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
                   }`}
+                  title="Operator identity, role, and branch are strictly locked. Use Lock ERP / Sign Out to switch accounts."
                 >
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
                   <span className="hidden xl:inline text-[11px] text-gray-500 dark:text-zinc-300 font-normal">Operator:</span>
-                  <span className="font-bold truncate max-w-[120px]">{activeStaffSession.userName}</span>
+                  <span className="font-bold truncate max-w-[140px]">{activeStaffSession.userName}</span>
                   <span className="inline-flex items-center whitespace-nowrap text-[10px] px-1.5 py-0.2 rounded bg-[#0F4C3A]/15 text-[#0F4C3A] dark:bg-emerald-500/15 dark:text-emerald-300 uppercase font-mono">
                     {activeStaffSession.userRole.replace(/_/g, ' ')}
                   </span>
-                  <select
-                    value={activeStaffSession.userId}
-                    onChange={async (e) => {
-                      try {
-                        const res = await apiClient.switchRbacSession(e.target.value);
-                        apiClient.setOperatorContext(res.session);
-                        setActiveStaffSession(res.session);
-                        if (isBranchScopedRole(res.session.userRole)) {
-                          const assigned =
-                            res.session.assignedBranchId ||
-                            (res.session.storeId && res.session.storeId !== 'ALL'
-                              ? res.session.storeId
-                              : 'store-jkt-senopati');
-                          setSelectedGlobalStore(assigned);
-                          setSelectedOutletFilter(assigned);
-                          setSelectedFinanceStore(assigned);
-                        } else {
-                          setSelectedGlobalStore('CONSOLIDATED');
-                          setSelectedOutletFilter('ALL');
-                          setSelectedFinanceStore('CONSOLIDATED');
-                        }
-                        if (!isRoleTabAllowed(res.session.userRole, activeTab)) {
-                          setActiveTab(getDefaultTabForRole(res.session.userRole));
-                        }
-                        refreshAllData(res.session);
-                        onShowToast(
-                          'Staff Identity Switched',
-                          `Switched to ${res.session.userName} (${res.session.userRole.replace(/_/g, ' ')})`
-                        );
-                      } catch (err) {
-                        onShowToast('Switch Failed', String(err));
-                      }
-                    }}
-                    className={`text-[11px] font-semibold bg-transparent border-0 cursor-pointer focus:ring-0 p-0 ml-1 ${
-                      isLight ? 'text-gray-700' : 'text-zinc-200'
+                  <span
+                    className={`hidden sm:inline-flex items-center gap-1 whitespace-nowrap text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${
+                      isLight
+                        ? 'bg-white/70 border-emerald-500/20 text-[#0F4C3A]'
+                        : 'bg-emerald-950/70 border-emerald-500/25 text-emerald-300'
                     }`}
-                    title="Switch Active Operator Identity"
                   >
-                    {availableStaffProfiles.map((p) => (
-                      <option
-                        key={p.userId}
-                        value={p.userId}
-                        className={isLight ? 'bg-white text-gray-900' : 'bg-zinc-900 text-white'}
-                      >
-                        {p.userName} ({p.userRole.replace(/_/g, ' ')})
-                      </option>
-                    ))}
-                  </select>
+                    <Lock className="w-2.5 h-2.5 flex-shrink-0" />
+                    <span>Session Locked • Assigned by Super Admin</span>
+                  </span>
                 </div>
               )}
 
@@ -2181,6 +2142,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeTab === 'rbac' && (
           <RbacModule
             theme={theme}
+            activeStaffSession={activeStaffSession}
             onShowToast={onShowToast}
             onSessionUpdated={(s) => setActiveStaffSession(s)}
           />
@@ -2277,7 +2239,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             inventoryTiers={inventoryTiers}
             onRefreshData={() => refreshAllData()}
             onOperatorAssignmentsUpdated={(res) => {
-              setAvailableStaffProfiles(res.availableProfiles);
               setActiveStaffSession(res.currentSession);
               apiClient.setOperatorContext(res.currentSession);
               refreshAllData(res.currentSession);

@@ -23,7 +23,10 @@ import {
   ArrowRight,
   Package,
   Layers,
+  Mail,
+  MessageCircle,
 } from 'lucide-react';
+import { DocumentDispatchModal } from './DocumentDispatchModal';
 
 interface InventoryQCModuleProps {
   theme: 'light' | 'dark';
@@ -73,6 +76,10 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   // Filters
   const [filterDisposition, setFilterDisposition] = useState<'ALL' | QCDisposition>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [dispatchQc, setDispatchQc] = useState<{
+    record: QCInspectionRecord;
+    channel: 'email' | 'whatsapp';
+  } | null>(null);
 
   // New Inspection Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -430,33 +437,61 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                   <td className="py-3.5 px-4 text-[11px] max-w-xs space-y-1.5">
                     <div className="font-semibold">{rec.inspectorName}</div>
                     <p className="text-gray-500 dark:text-zinc-300 text-[10px] truncate">{rec.notes}</p>
-                    {(rec.disposition === 'REJECTED' || rec.disposition === 'QUARANTINED') && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                       <button
                         type="button"
-                        onClick={async () => {
-                          try {
-                            const res = await apiClient.createComplianceRtv({
-                              qcInspectionId: rec.id,
-                              storeId: rec.storeId,
-                              storeName: rec.storeName,
-                              sku: rec.sku,
-                              productName: rec.productName,
-                              lotNumber: rec.batchNumber,
-                              quantityReturned: Math.max(1, rec.sampleQuantity || 1),
-                              reason: `QC ${rec.disposition}: ${rec.notes || rec.actionTaken}`,
-                            });
-                            onShowToast('RTV Debit Note Issued', res.message);
-                            if (onRefreshData) onRefreshData();
-                          } catch (err: any) {
-                            onShowToast('RTV Error', err.message || 'Failed to generate RTV Debit Note');
-                          }
-                        }}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold cursor-pointer whitespace-nowrap"
+                        onClick={() => setDispatchQc({ record: rec, channel: 'email' })}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold cursor-pointer ${
+                          isLight
+                            ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50'
+                            : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                        }`}
+                        title="Email HACCP QC & RTV Report"
                       >
-                        <ArrowRight className="w-3 h-3" />
-                        <span>Issue RTV Debit Note</span>
+                        <Mail className="w-3 h-3" />
+                        <span>Email</span>
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => setDispatchQc({ record: rec, channel: 'whatsapp' })}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold cursor-pointer ${
+                          isLight
+                            ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50'
+                            : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                        }`}
+                        title="Send HACCP QC & RTV Report via WhatsApp"
+                      >
+                        <MessageCircle className="w-3 h-3" />
+                        <span>WhatsApp</span>
+                      </button>
+                      {(rec.disposition === 'REJECTED' || rec.disposition === 'QUARANTINED') && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const res = await apiClient.createComplianceRtv({
+                                qcInspectionId: rec.id,
+                                storeId: rec.storeId,
+                                storeName: rec.storeName,
+                                sku: rec.sku,
+                                productName: rec.productName,
+                                lotNumber: rec.batchNumber,
+                                quantityReturned: Math.max(1, rec.sampleQuantity || 1),
+                                reason: `QC ${rec.disposition}: ${rec.notes || rec.actionTaken}`,
+                              });
+                              onShowToast('RTV Debit Note Issued', res.message);
+                              if (onRefreshData) onRefreshData();
+                            } catch (err: any) {
+                              onShowToast('RTV Error', err.message || 'Failed to generate RTV Debit Note');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold cursor-pointer whitespace-nowrap"
+                        >
+                          <ArrowRight className="w-3 h-3" />
+                          <span>Issue RTV Debit Note</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -741,6 +776,30 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
         </div>,
         document.body
       )}
+      {dispatchQc && (() => {
+        const rec = dispatchQc.record;
+        const total = Math.max(0, Number(rec.totalBatchQuantity) || 0);
+        const passed = rec.disposition === 'PASSED' ? total : 0;
+        const quarantine = rec.disposition === 'QUARANTINED' ? total : 0;
+        const rejectedRtv = rec.disposition === 'REJECTED' ? total : 0;
+        const passRate = total > 0 ? Math.round((passed / total) * 1000) / 10 : 0;
+        return (
+          <DocumentDispatchModal
+            isOpen={Boolean(dispatchQc)}
+            onClose={() => setDispatchQc(null)}
+            theme={theme}
+            initialChannel={dispatchQc.channel}
+            docType="QC_REPORT"
+            docId={rec.id}
+            docNumber={rec.id}
+            docSummary={`Product: ${rec.sku} — ${rec.productName} (Batch ${rec.batchNumber})\nCold-Chain Temp: ${rec.parameters.temperatureCelsius}°C (${rec.parameters.coldChainCompliant ? 'Compliant' : 'BREACH'})\nPassed: ${passed} | Quarantine Hold: ${quarantine} | Rejected RTV: ${rejectedRtv} | Pass Rate: ${passRate}%`}
+            defaultRecipientName={`QA / Supplier Liaison (${rec.storeName})`}
+            defaultRecipientEmail="qa-vendor-compliance@grocemart.co.id"
+            defaultRecipientPhone="081288001122"
+            onShowToast={onShowToast}
+          />
+        );
+      })()}
   </>
 );
 };

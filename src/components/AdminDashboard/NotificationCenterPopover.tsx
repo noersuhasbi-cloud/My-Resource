@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bell,
   AlertTriangle,
@@ -121,12 +122,57 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
   const isLight = theme === 'light';
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>('ALL');
+  const [popoverCoords, setPopoverCoords] = useState<{
+    top: number;
+    left: number;
+    maxHeight: number;
+  }>({ top: 56, left: 16, maxHeight: 480 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const updatePopoverPosition = useCallback(() => {
+    if (!buttonRef.current || typeof window === 'undefined') return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const margin = 16;
+    const panelWidth = Math.min(384, viewportW - margin * 2);
+
+    // Anchor to bell's left edge so the popover opens rightwards into the workspace;
+    // clamp within viewport bounds if near the right edge.
+    let left = rect.left;
+    if (left + panelWidth > viewportW - margin) {
+      left = Math.max(margin, Math.min(rect.right - panelWidth, viewportW - panelWidth - margin));
+    }
+    if (left < margin) {
+      left = margin;
+    }
+
+    const top = Math.min(rect.bottom + 8, Math.max(margin, viewportH - 160));
+    const maxHeight = Math.min(480, Math.max(220, viewportH - top - margin));
+
+    setPopoverCoords({ top, left, maxHeight });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    updatePopoverPosition();
+    window.addEventListener('resize', updatePopoverPosition);
+    window.addEventListener('scroll', updatePopoverPosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePopoverPosition);
+      window.removeEventListener('scroll', updatePopoverPosition, true);
+    };
+  }, [isOpen, updatePopoverPosition]);
 
   useEffect(() => {
     if (!isOpen) return;
     const handleOutsideClick = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const inTrigger = containerRef.current?.contains(target);
+      const inPopover = popoverRef.current?.contains(target);
+      if (!inTrigger && !inPopover) {
         setIsOpen(false);
       }
     };
@@ -164,8 +210,12 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
     <div ref={containerRef} className="relative">
       {/* Header Notification Bell Button */}
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          if (!isOpen) updatePopoverPosition();
+          setIsOpen((prev) => !prev);
+        }}
         className={`relative p-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center cursor-pointer ${
           isLight
             ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700 shadow-2xs'
@@ -183,13 +233,19 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
         )}
       </button>
 
-      {/* Interactive Alert Center Dropdown Popover */}
-      {isOpen && (
+      {/* Interactive Alert Center Dropdown Popover (Portaled & Viewport-Clamped) */}
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <div
-          className={`fixed sm:absolute right-2 sm:right-0 left-2 sm:left-auto top-14 sm:top-full sm:mt-2 sm:w-96 max-h-[480px] flex flex-col rounded-2xl border shadow-2xl z-50 overflow-hidden transition-all ${
+          ref={popoverRef}
+          style={{
+            top: `${popoverCoords.top}px`,
+            left: `${popoverCoords.left}px`,
+            maxHeight: `${popoverCoords.maxHeight}px`,
+          }}
+          className={`fixed z-[60] w-96 max-w-[calc(100vw-2rem)] flex flex-col rounded-2xl border shadow-2xl overflow-hidden transition-colors ${
             isLight
               ? 'bg-white border-slate-200 text-slate-900'
-              : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+              : 'dark bg-zinc-900 border-zinc-800 text-zinc-100'
           }`}
         >
           {/* Popover Header */}
@@ -364,7 +420,8 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

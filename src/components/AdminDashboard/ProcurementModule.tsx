@@ -39,8 +39,11 @@ import {
   ShoppingCart,
   Receipt,
   FileCheck,
+  Mail,
+  MessageCircle,
 } from 'lucide-react';
 import { VendorBillModule } from './VendorBillModule';
+import { DocumentDispatchModal } from './DocumentDispatchModal';
 
 interface ProcurementModuleProps {
   theme: 'light' | 'dark';
@@ -133,6 +136,16 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [prFilter, setPrFilter] = useState<'ALL' | 'pending' | 'approved'>('ALL');
   const [poFilter, setPoFilter] = useState<'ALL' | 'Pending' | 'Partially Received' | 'Completed'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [dispatchDoc, setDispatchDoc] = useState<{
+    channel: 'email' | 'whatsapp';
+    docType: 'PR' | 'PO' | 'GR';
+    docId: string;
+    docNumber: string;
+    docSummary: string;
+    recipientName: string;
+    recipientEmail?: string;
+    recipientPhone?: string;
+  } | null>(null);
 
   // Fetch Auto-Replenishment Plan
   const loadReplenishmentPlan = React.useCallback(async () => {
@@ -1090,25 +1103,67 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       </div>
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      {pr.status === 'pending' ? (
-                        canManagePrPo ? (
-                          <button
-                            onClick={() => handleApprovePR(pr.id)}
-                            className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"
-                          >
-                            Approve → PO
-                          </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {pr.status === 'pending' ? (
+                          canManagePrPo ? (
+                            <button
+                              onClick={() => handleApprovePR(pr.id)}
+                              className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"
+                            >
+                              Approve → PO
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                              Pending Approval
+                            </span>
+                          )
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                            Pending Approval
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            PO #{pr.poId}
                           </span>
-                        )
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          PO #{pr.poId}
-                        </span>
-                      )}
+                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDispatchDoc({
+                              channel: 'email',
+                              docType: 'PR',
+                              docId: pr.id,
+                              docNumber: pr.id,
+                              docSummary: `Item: ${pr.sku} — ${pr.productName}\nQty: ${pr.suggestedQuantity} units | Est. Total: ${formatIDR(pr.totalEstimatedCost)}`,
+                              recipientName: pr.requestedBy || 'Procurement Manager',
+                              recipientEmail: 'procurement@grocemart.co.id',
+                            })
+                          }
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                            isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                          }`}
+                          title="Email Purchase Request"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDispatchDoc({
+                              channel: 'whatsapp',
+                              docType: 'PR',
+                              docId: pr.id,
+                              docNumber: pr.id,
+                              docSummary: `Item: ${pr.sku} — ${pr.productName}\nQty: ${pr.suggestedQuantity} units | Est. Total: ${formatIDR(pr.totalEstimatedCost)}`,
+                              recipientName: pr.requestedBy || 'Procurement Manager',
+                              recipientPhone: '081190001122',
+                            })
+                          }
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                            isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                          }`}
+                          title="Send Purchase Request via WhatsApp"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1312,6 +1367,48 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 Close PO
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDispatchDoc({
+                                  channel: 'email',
+                                  docType: 'PO',
+                                  docId: po.id,
+                                  docNumber: po.poNumber || po.id,
+                                  docSummary: `Supplier: ${po.supplierName}\nDestination: ${po.storeName}\nTotal Cost: ${formatIDR(po.totalCost)} (${po.items.length} items)`,
+                                  recipientName: po.supplierName,
+                                  recipientEmail: po.supplierContact?.includes('@') ? po.supplierContact : 'orders@vendor-partner.co.id',
+                                  recipientPhone: po.supplierContact && !po.supplierContact.includes('@') ? po.supplierContact : '081288001122',
+                                })
+                              }
+                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                              }`}
+                              title="Email Purchase Order to Supplier"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDispatchDoc({
+                                  channel: 'whatsapp',
+                                  docType: 'PO',
+                                  docId: po.id,
+                                  docNumber: po.poNumber || po.id,
+                                  docSummary: `Supplier: ${po.supplierName}\nDestination: ${po.storeName}\nTotal Cost: ${formatIDR(po.totalCost)} (${po.items.length} items)`,
+                                  recipientName: po.supplierName,
+                                  recipientEmail: po.supplierContact?.includes('@') ? po.supplierContact : 'orders@vendor-partner.co.id',
+                                  recipientPhone: po.supplierContact && !po.supplierContact.includes('@') ? po.supplierContact : '081288001122',
+                                })
+                              }
+                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                              }`}
+                              title="Send Purchase Order via WhatsApp"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </button>
                             {!canReceiveGR && !canCreateVendorBill && !canManagePrPo && (
                               <span className="text-[11px] text-gray-400 font-mono">View Only</span>
                             )}
@@ -1343,6 +1440,48 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 Vendor Bill
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDispatchDoc({
+                                  channel: 'email',
+                                  docType: 'PO',
+                                  docId: po.id,
+                                  docNumber: po.poNumber || po.id,
+                                  docSummary: `Supplier: ${po.supplierName}\nDestination: ${po.storeName}\nTotal Cost: ${formatIDR(po.totalCost)} (Completed)`,
+                                  recipientName: po.supplierName,
+                                  recipientEmail: po.supplierContact?.includes('@') ? po.supplierContact : 'orders@vendor-partner.co.id',
+                                  recipientPhone: po.supplierContact && !po.supplierContact.includes('@') ? po.supplierContact : '081288001122',
+                                })
+                              }
+                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                              }`}
+                              title="Email Purchase Order"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDispatchDoc({
+                                  channel: 'whatsapp',
+                                  docType: 'PO',
+                                  docId: po.id,
+                                  docNumber: po.poNumber || po.id,
+                                  docSummary: `Supplier: ${po.supplierName}\nDestination: ${po.storeName}\nTotal Cost: ${formatIDR(po.totalCost)} (Completed)`,
+                                  recipientName: po.supplierName,
+                                  recipientEmail: po.supplierContact?.includes('@') ? po.supplierContact : 'orders@vendor-partner.co.id',
+                                  recipientPhone: po.supplierContact && !po.supplierContact.includes('@') ? po.supplierContact : '081288001122',
+                                })
+                              }
+                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                              }`}
+                              title="Send Purchase Order via WhatsApp"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         )}
                       </td>
@@ -1445,24 +1584,66 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       {gr.glEntryId || 'GLE-Posted'}
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      {canCreateVendorBill ? (
+                      <div className="flex items-center justify-end gap-1.5">
+                        {canCreateVendorBill ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPreselectedPoId(gr.poId);
+                              setPreselectedGrId(gr.id);
+                              setActiveTab('vendor_bills');
+                            }}
+                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
+                            title="Create or match Vendor Bill for this Goods Receipt"
+                          >
+                            Match Bill
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            Verified
+                          </span>
+                        )}
                         <button
                           type="button"
-                          onClick={() => {
-                            setPreselectedPoId(gr.poId);
-                            setPreselectedGrId(gr.id);
-                            setActiveTab('vendor_bills');
-                          }}
-                          className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
-                          title="Create or match Vendor Bill for this Goods Receipt"
+                          onClick={() =>
+                            setDispatchDoc({
+                              channel: 'email',
+                              docType: 'GR',
+                              docId: gr.id,
+                              docNumber: gr.id,
+                              docSummary: `PO Ref: ${gr.poId} | Vendor: ${gr.vendorName}\nDelivery Note: ${gr.deliveryNoteNumber} | Received By: ${gr.receivedBy}`,
+                              recipientName: gr.vendorName,
+                              recipientEmail: 'receiving-ack@vendor-partner.co.id',
+                            })
+                          }
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                            isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                          }`}
+                          title="Email Goods Receipt"
                         >
-                          Match Bill
+                          <Mail className="w-3.5 h-3.5" />
                         </button>
-                      ) : (
-                        <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                          Verified
-                        </span>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDispatchDoc({
+                              channel: 'whatsapp',
+                              docType: 'GR',
+                              docId: gr.id,
+                              docNumber: gr.id,
+                              docSummary: `PO Ref: ${gr.poId} | Vendor: ${gr.vendorName}\nDelivery Note: ${gr.deliveryNoteNumber} | Received By: ${gr.receivedBy}`,
+                              recipientName: gr.vendorName,
+                              recipientPhone: '081288001122',
+                            })
+                          }
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                            isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                          }`}
+                          title="Send Goods Receipt via WhatsApp"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1907,6 +2088,22 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           </div>
         </div>,
         document.body
+      )}
+      {dispatchDoc && (
+        <DocumentDispatchModal
+          isOpen={Boolean(dispatchDoc)}
+          onClose={() => setDispatchDoc(null)}
+          theme={theme}
+          initialChannel={dispatchDoc.channel}
+          docType={dispatchDoc.docType}
+          docId={dispatchDoc.docId}
+          docNumber={dispatchDoc.docNumber}
+          docSummary={dispatchDoc.docSummary}
+          defaultRecipientName={dispatchDoc.recipientName}
+          defaultRecipientEmail={dispatchDoc.recipientEmail}
+          defaultRecipientPhone={dispatchDoc.recipientPhone}
+          onShowToast={onShowToast}
+        />
       )}
     </div>
   );

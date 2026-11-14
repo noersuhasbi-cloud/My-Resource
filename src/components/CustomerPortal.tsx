@@ -17,11 +17,13 @@ import {
   Sparkles, X, TrendingUp, Award, Database, LogOut,
   ShieldAlert, Lock, ShieldCheck,
   Bell, BellRing, Store, Volume2,
-  Building2, Building, CreditCard, Layers, Clock, AlertTriangle, FileText, Check, Eye, Send
+  Building2, Building, CreditCard, Layers, Clock, AlertTriangle, FileText, Check, Eye, Send,
+  Mail, MessageCircle
 } from 'lucide-react';
 import { loginWithGoogle } from '../services/firebaseService';
 import { SafeImage } from './SafeImage';
 import { usePrint } from '../context/PrintContext';
+import { DocumentDispatchModal } from './AdminDashboard/DocumentDispatchModal';
 
 interface CustomerPortalProps {
   isOpen: boolean;
@@ -99,6 +101,10 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const [activeB2bReceiptOrder, setActiveB2bReceiptOrder] = useState<B2BWholesaleOrder | null>(null);
   const [b2bOrderSearch, setB2bOrderSearch] = useState<string>('');
   const [viewingGiroSlip, setViewingGiroSlip] = useState<GiroPaymentRecord | null>(null);
+  const [dispatchB2bInvoice, setDispatchB2bInvoice] = useState<{
+    order: B2BWholesaleOrder;
+    channel: 'email' | 'whatsapp';
+  } | null>(null);
 
   const currentB2bCustomer = useMemo(() => {
     return b2bCustomers.find((c) => c.id === selectedB2bCustomerId) || b2bCustomers[0] || null;
@@ -2284,7 +2290,27 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-2 flex justify-end gap-2">
+                <div className="pt-2 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDispatchB2bInvoice({ order: activeB2bReceiptOrder, channel: 'email' })
+                    }
+                    className="px-3 py-2 border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 hover:bg-indigo-100 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Email</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDispatchB2bInvoice({ order: activeB2bReceiptOrder, channel: 'whatsapp' })
+                    }
+                    className="px-3 py-2 border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>WhatsApp</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() =>
@@ -2310,6 +2336,22 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               </div>
             </div>,
             document.body
+          )}
+
+          {dispatchB2bInvoice && (
+            <DocumentDispatchModal
+              isOpen={Boolean(dispatchB2bInvoice)}
+              onClose={() => setDispatchB2bInvoice(null)}
+              theme={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light'}
+              initialChannel={dispatchB2bInvoice.channel}
+              docType="B2B_INVOICE"
+              docId={dispatchB2bInvoice.order.id}
+              docNumber={dispatchB2bInvoice.order.id}
+              docSummary={`Company: ${dispatchB2bInvoice.order.companyName || dispatchB2bInvoice.order.customerName}\nPayment: ${dispatchB2bInvoice.order.paymentMethod.toUpperCase()} (${dispatchB2bInvoice.order.paymentStatus})\nTotal Faktur: ${formatIDR(dispatchB2bInvoice.order.totalAmountIDR)}`}
+              defaultRecipientName={dispatchB2bInvoice.order.companyName || dispatchB2bInvoice.order.customerName}
+              defaultRecipientEmail={currentB2bCustomer?.email || ''}
+              defaultRecipientPhone={currentB2bCustomer?.phone || ''}
+            />
           )}
 
           {/* Viewing Bilyet Giro Physical Slip Modal */}

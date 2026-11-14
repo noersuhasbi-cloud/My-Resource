@@ -26,7 +26,10 @@ import {
   Calendar,
   Phone,
   User,
+  Mail,
+  MessageCircle,
 } from 'lucide-react';
+import { DocumentDispatchModal } from './DocumentDispatchModal';
 
 interface LogisticsDocsModalProps {
   theme: 'light' | 'dark';
@@ -102,6 +105,10 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
   // Search & filter
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [dispatchSj, setDispatchSj] = useState<{
+    sj: SuratJalanDocument;
+    channel: 'email' | 'whatsapp';
+  } | null>(null);
 
   // New Surat Jalan Form State
   const [isCreatingSj, setIsCreatingSj] = useState<boolean>(false);
@@ -208,6 +215,37 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {activeTab === 'surat_jalan' && selectedSj && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setDispatchSj({ sj: selectedSj, channel: 'email' })}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                    isLight
+                      ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-800 shadow-2xs'
+                      : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-indigo-300'
+                  }`}
+                  title="Email Surat Jalan via SMTP"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Email</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDispatchSj({ sj: selectedSj, channel: 'whatsapp' })}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                    isLight
+                      ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800 shadow-2xs'
+                      : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-emerald-400'
+                  }`}
+                  title="Send Surat Jalan via WhatsApp"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">WhatsApp</span>
+                </button>
+              </>
+            )}
+
             <button
               onClick={handlePrint}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
@@ -756,6 +794,22 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
           </div>,
           document.body
         )}
+      {dispatchSj && (
+        <DocumentDispatchModal
+          isOpen={Boolean(dispatchSj)}
+          onClose={() => setDispatchSj(null)}
+          theme={theme}
+          initialChannel={dispatchSj.channel}
+          docType="SURAT_JALAN"
+          docId={dispatchSj.sj.id}
+          docNumber={dispatchSj.sj.documentNumber}
+          docSummary={`Recipient: ${dispatchSj.sj.recipientName}\nFleet: ${dispatchSj.sj.vehicleType} (${dispatchSj.sj.vehiclePlateNumber}) | Driver: ${dispatchSj.sj.driverName}\nPayload: ${dispatchSj.sj.totalPackages} Koli / ${dispatchSj.sj.totalWeightKg} Kg`}
+          defaultRecipientName={dispatchSj.sj.recipientName}
+          defaultRecipientEmail="warehouse-receiving@grocemart.co.id"
+          defaultRecipientPhone={dispatchSj.sj.recipientPhone}
+          onShowToast={onShowToast}
+        />
+      )}
       </div>
     );
 

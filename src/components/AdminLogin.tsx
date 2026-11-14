@@ -500,12 +500,15 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 {availableProfiles.map((profile) => {
                   const isSelected = selectedUserId === profile.userId;
+                  const isSuspended = profile.isActive === false;
                   return (
                     <div
                       key={profile.userId}
                       onClick={() => handleSelectProfile(profile)}
                       className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative group ${
-                        isSelected
+                        isSuspended
+                          ? 'opacity-65 bg-rose-50/40 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60'
+                          : isSelected
                           ? 'bg-emerald-50/40 dark:bg-stone-800/90 border-[#0F4C3A] dark:border-emerald-500 shadow-xs ring-1 ring-[#0F4C3A]/30 dark:ring-emerald-500/40'
                           : 'bg-white dark:bg-stone-800/40 border-gray-200 dark:border-stone-700/70 hover:bg-gray-50 dark:hover:bg-stone-800/70 hover:border-gray-300 dark:hover:border-stone-600'
                       }`}
@@ -533,13 +536,20 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                           </div>
                         </div>
 
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md border uppercase tracking-wider ${getRoleBadgeColor(
-                            profile.userRole
-                          )}`}
-                        >
-                          {profile.userRole.replace(/_/g, ' ')}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md border uppercase tracking-wider ${getRoleBadgeColor(
+                              profile.userRole
+                            )}`}
+                          >
+                            {profile.userRole.replace(/_/g, ' ')}
+                          </span>
+                          {isSuspended && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-500/30 uppercase">
+                              Suspended
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Store & Scope */}

@@ -26,6 +26,7 @@ import type {
   NaturalShrinkageAdjustment,
   SubstitutionPromptRecord,
   StaffShiftSession,
+  UserRole,
   SecurityAuditTrailRecord,
   ClimateAdaptiveThresholdConfig,
   SupportedCurrency,
@@ -89,6 +90,10 @@ import type {
   BranchMonitorResponse,
   OperatorBranchAssignment,
   ConfirmArrivalResponse,
+  CommunicationGatewayConfig,
+  CommunicationDispatchLog,
+  SendDocumentDispatchPayload,
+  SendDocumentDispatchResponse,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
@@ -216,6 +221,7 @@ export const apiClient = {
     customerEmail: string;
     storeId?: string;
     discount?: number;
+    deliveryFee?: number;
     items?: CartItem[];
   }): Promise<{ success: boolean; message: string; auditRecordId: string; journalEntryIds: string[] }> {
     const res = await fetchApi('/api/qris/simulate-pay', {
@@ -2625,7 +2631,10 @@ export const apiClient = {
 
   async updateOperatorAssignment(payload: {
     userId: string;
-    storeId: string;
+    storeId?: string;
+    userRole?: UserRole;
+    isActive?: boolean;
+    loginPin?: string;
   }): Promise<{
     success: boolean;
     message: string;
@@ -2668,6 +2677,93 @@ export const apiClient = {
       throw new Error(err.error || 'Failed to reset demo data');
     }
     return res.json();
+  },
+
+  async getCommunicationGateway(): Promise<{
+    config: CommunicationGatewayConfig;
+    logs: CommunicationDispatchLog[];
+    canEdit: boolean;
+  }> {
+    const res = await fetchApi('/api/admin/settings/communication-gateway');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load communication gateway configuration');
+    }
+    return data;
+  },
+
+  async saveCommunicationGateway(
+    config: CommunicationGatewayConfig
+  ): Promise<{
+    success: boolean;
+    message: string;
+    config: CommunicationGatewayConfig;
+  }> {
+    const res = await fetchApi('/api/admin/settings/communication-gateway', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to save communication gateway configuration');
+    }
+    return data;
+  },
+
+  async testEmailGateway(payload?: {
+    recipientEmail?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    log: CommunicationDispatchLog;
+  }> {
+    const res = await fetchApi('/api/admin/communications/test-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to test SMTP connection');
+    }
+    return data;
+  },
+
+  async testWhatsappGateway(payload: {
+    recipientPhone: string;
+    recipientName?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    waMeUrl?: string;
+    log: CommunicationDispatchLog;
+  }> {
+    const res = await fetchApi('/api/admin/communications/test-whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to send test WhatsApp message');
+    }
+    return data;
+  },
+
+  async sendDocumentCommunication(
+    payload: SendDocumentDispatchPayload
+  ): Promise<SendDocumentDispatchResponse> {
+    const res = await fetchApi('/api/admin/communications/send-document', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to dispatch document');
+    }
+    return data;
   },
 };
 

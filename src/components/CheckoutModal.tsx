@@ -152,6 +152,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         customerEmail: recipientEmail,
         storeId: selectedPickupStore?.id,
         discount: appliedDiscount,
+        deliveryFee,
         items,
       });
     } catch (err: any) {

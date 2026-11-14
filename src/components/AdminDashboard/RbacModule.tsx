@@ -28,19 +28,19 @@ import {
 
 interface RbacModuleProps {
   theme: 'light' | 'dark';
+  activeStaffSession?: StaffShiftSession | null;
   onShowToast: (title: string, message: string) => void;
   onSessionUpdated?: (session: StaffShiftSession) => void;
 }
 
 export const RbacModule: React.FC<RbacModuleProps> = ({
   theme,
+  activeStaffSession,
   onShowToast,
-  onSessionUpdated,
 }) => {
-  const [currentSession, setCurrentSession] = useState<StaffShiftSession | null>(null);
+  const [currentSession, setCurrentSession] = useState<StaffShiftSession | null>(activeStaffSession || null);
   const [availableProfiles, setAvailableProfiles] = useState<StaffShiftSession[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSwitching, setIsSwitching] = useState<boolean>(false);
 
   // Live Zone Access Guard Tester
   const [testedZone, setTestedZone] = useState<StorageZoneType>('ambient');
@@ -63,10 +63,8 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
     setIsLoading(true);
     try {
       const res = await apiClient.getRbacSession();
-      setCurrentSession(res.currentSession);
+      setCurrentSession(activeStaffSession || res.currentSession);
       setAvailableProfiles(res.availableProfiles || []);
-      apiClient.setOperatorContext(res.currentSession);
-      if (onSessionUpdated) onSessionUpdated(res.currentSession);
     } catch (e) {
       console.error('Failed to load RBAC session:', e);
       onShowToast('Error', 'Failed to retrieve RBAC staff session');
@@ -76,30 +74,14 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
   };
 
   useEffect(() => {
+    if (activeStaffSession) {
+      setCurrentSession(activeStaffSession);
+    }
+  }, [activeStaffSession]);
+
+  useEffect(() => {
     loadRbacData();
   }, []);
-
-  const handleSwitchSession = async (userId: string) => {
-    setIsSwitching(true);
-    try {
-      const res = await apiClient.switchRbacSession(userId);
-      setCurrentSession(res.session);
-      setZoneTestResult(null);
-      apiClient.setOperatorContext(res.session);
-      try {
-        localStorage.setItem('grocemart_admin_session', JSON.stringify(res.session));
-      } catch {}
-      if (onSessionUpdated) onSessionUpdated(res.session);
-      onShowToast(
-        'Staff Identity Switched',
-        `Active operator is now ${res.session.userName} (${res.session.userRole.replace(/_/g, ' ')}). Granular permissions re-evaluated.`
-      );
-    } catch (err) {
-      onShowToast('Switch Failed', String(err));
-    } finally {
-      setIsSwitching(false);
-    }
-  };
 
   const handleTestZoneAccess = async (zone: StorageZoneType) => {
     setIsTestingZone(true);
@@ -293,7 +275,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           </div>
         </div>
 
-        {/* Quick Identity Switcher for Testing Access Boundaries */}
+        {/* Read-Only Authorized Personnel Roster */}
         <div
           className={`lg:col-span-2 p-5 rounded-2xl border flex flex-col justify-between ${
             isLight
@@ -302,17 +284,18 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           }`}
         >
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
               <div>
                 <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
-                  Switch Active Role Profile (Live RBAC Emulation)
+                  Authorized Enterprise Personnel Roster (Read-Only)
                 </h3>
                 <p className="text-xs text-gray-400">
-                  Select a test identity to simulate operational and security restrictions across all ERP endpoints.
+                  Role and branch governance is configured exclusively by Super Admin. Use Lock / Sign Out to switch accounts.
                 </p>
               </div>
-              <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                {availableProfiles.length} Profiles Ready
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                <Lock className="w-3 h-3" />
+                Session Locked • {availableProfiles.length} Profiles
               </span>
             </div>
 
@@ -320,16 +303,14 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
               {availableProfiles.map((profile) => {
                 const isActive = currentSession?.userId === profile.userId;
                 return (
-                  <button
+                  <div
                     key={profile.userId}
-                    onClick={() => handleSwitchSession(profile.userId)}
-                    disabled={isActive || isSwitching}
-                    className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                    className={`p-3 rounded-xl border text-left relative flex flex-col justify-between ${
                       isActive
                         ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 shadow-xs ring-1 ring-[#0F4C3A]'
                         : isLight
-                        ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 bg-white'
-                        : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50 bg-zinc-900/50'
+                        ? 'border-gray-200 bg-gray-50/40'
+                        : 'border-zinc-800 bg-zinc-900/50'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -351,16 +332,18 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 
                     <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between text-[10px] text-gray-400">
                       <span>Shift: {profile.shiftName}</span>
-                      <span className="font-mono">Zones: [{profile.assignedZones?.length ? profile.assignedZones.join(', ') : 'ALL'}]</span>
+                      <span className="font-mono">
+                        {profile.isActive === false ? 'SUSPENDED' : `Zones: [${profile.assignedZones?.length ? profile.assignedZones.join(', ') : 'ALL'}]`}
+                      </span>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
           </div>
 
           <div className="mt-3 text-[11px] text-gray-400">
-            💡 Selecting <strong>Warehouse Picker</strong> will restrict viewing P&amp;L and approving POs. Selecting <strong>Executive</strong> unlocks full consolidated multi-store overrides.
+            🔒 Post-login session switching is disabled to enforce strict zero-trust privilege isolation. Click <strong>Lock / Sign Out</strong> to authenticate as another operator.
           </div>
         </div>
       </div>

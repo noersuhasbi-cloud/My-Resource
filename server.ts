@@ -6,6 +6,7 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 import https from 'https';
 import { fileURLToPath } from 'url';
+import nodemailer from 'nodemailer';
 
 import {
   INITIAL_STORE_STATUS,
@@ -135,6 +136,9 @@ import type {
   BranchMonitorInTransitTransfer,
   BranchMonitorResponse,
   OperatorBranchAssignment,
+  CommunicationGatewayConfig,
+  CommunicationDispatchLog,
+  CommunicationDocType,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -183,6 +187,43 @@ let b2bOrdersList: B2BWholesaleOrder[] = JSON.parse(JSON.stringify(INITIAL_B2B_O
 let vendorCreditNotesList: VendorCreditNote[] = JSON.parse(JSON.stringify(MOCK_VENDOR_CREDIT_NOTES));
 let dynamicMarkdownConfig: DynamicMarkdownConfig = JSON.parse(JSON.stringify(DEFAULT_MARKDOWN_CONFIG));
 let enterpriseNotificationsList: EnterpriseNotification[] = [];
+
+function createDefaultCommunicationGatewayConfig(): CommunicationGatewayConfig {
+  return {
+    smtp: {
+      providerPreset: 'google_workspace',
+      host: 'smtp.gmail.com',
+      port: 587,
+      encryption: 'STARTTLS',
+      username: '',
+      password: '',
+      senderName: 'PT GroceMart Retail Indonesia',
+      senderEmail: 'noreply@grocemart.co.id',
+      ccAuditEmail: 'finance-audit@grocemart.co.id',
+      enableLiveSmtp: false,
+    },
+    whatsapp: {
+      providerType: 'meta_cloud',
+      metaPhoneNumberId: '',
+      metaWabaId: '',
+      metaAccessToken: '',
+      gatewayApiUrl: 'https://api.fonnte.com/send',
+      gatewayApiKey: '',
+      gatewaySenderNumber: '+6281100008821',
+      enableDirectWaApi: false,
+      fallbackWaWebInSandbox: true,
+      vendorMessageTemplate:
+        'Halo {{recipient_name}},\n\nBerikut dokumen *{{doc_type}}* ({{doc_number}}) dari {{outlet_name}}.\nNilai Total: {{total_amount}}\n\nMohon konfirmasi penerimaan dokumen ini. Terima kasih.',
+      customerMessageTemplate:
+        'Halo {{recipient_name}},\n\nTerima kasih telah bertransaksi di {{outlet_name}}. Berikut ringkasan *{{doc_type}}* ({{doc_number}}) senilai {{total_amount}}.\n\nSalam sehat selalu,\nPT GroceMart Retail Indonesia',
+    },
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'System Default',
+  };
+}
+
+let communicationGatewayConfig: CommunicationGatewayConfig = createDefaultCommunicationGatewayConfig();
+let communicationLogs: CommunicationDispatchLog[] = [];
 
 let removalStrategiesConfig: RemovalStrategyConfig = {
   categoryStrategies: {
@@ -1932,17 +1973,27 @@ const BRANCH_ASSIGNMENT_OPTIONS: { storeId: string; storeName: string; hubType: 
   { storeId: 'ALL', storeName: 'All Outlets (Consolidated)', hubType: 'Multi-Branch Network' },
 ];
 
-const DEFAULT_OPERATOR_ASSIGNMENTS: Record<string, { storeId: string; storeName: string; updatedAt?: string; updatedBy?: string }> = {
-  'USR-CASH-01': { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship' },
-  'USR-WHS-01': { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship' },
-  'USR-PUR-01': { storeId: 'ALL', storeName: 'All Outlets (Consolidated)' },
-  'USR-MGR-01': { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship' },
-  'USR-ADM-01': { storeId: 'ALL', storeName: 'All Outlets (Consolidated)' },
-  'USR-COO-01': { storeId: 'ALL', storeName: 'All Outlets (Consolidated)' },
-  'USR-SADM-01': { storeId: 'ALL', storeName: 'All Outlets (Consolidated)' },
+interface OperatorAssignmentEntry {
+  userRole?: CanonicalServerRole;
+  storeId: string;
+  storeName: string;
+  isActive?: boolean;
+  loginPin?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+const DEFAULT_OPERATOR_ASSIGNMENTS: Record<string, OperatorAssignmentEntry> = {
+  'USR-CASH-01': { userRole: 'cashier', storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship', isActive: true, loginPin: '8821' },
+  'USR-WHS-01': { userRole: 'warehouse', storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship', isActive: true, loginPin: '8821' },
+  'USR-PUR-01': { userRole: 'purchasing', storeId: 'ALL', storeName: 'All Outlets (Consolidated)', isActive: true, loginPin: '8821' },
+  'USR-MGR-01': { userRole: 'store_manager', storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship', isActive: true, loginPin: '8821' },
+  'USR-ADM-01': { userRole: 'admin', storeId: 'ALL', storeName: 'All Outlets (Consolidated)', isActive: true, loginPin: '8821' },
+  'USR-COO-01': { userRole: 'coo', storeId: 'ALL', storeName: 'All Outlets (Consolidated)', isActive: true, loginPin: '8821' },
+  'USR-SADM-01': { userRole: 'super_admin', storeId: 'ALL', storeName: 'All Outlets (Consolidated)', isActive: true, loginPin: '8821' },
 };
 
-let operatorBranchAssignments: Record<string, { storeId: string; storeName: string; updatedAt?: string; updatedBy?: string }> = JSON.parse(
+let operatorBranchAssignments: Record<string, OperatorAssignmentEntry> = JSON.parse(
   JSON.stringify(DEFAULT_OPERATOR_ASSIGNMENTS)
 );
 
@@ -1955,7 +2006,7 @@ type CanonicalServerRole =
   | 'coo'
   | 'super_admin';
 
-function normalizeServerRole(role?: string | null): CanonicalServerRole {
+function normalizeServerRoleStrict(role?: string | null): CanonicalServerRole | null {
   switch (role) {
     case 'cashier':
       return 'cashier';
@@ -1973,15 +2024,215 @@ function normalizeServerRole(role?: string | null): CanonicalServerRole {
     case 'executive':
       return 'coo';
     case 'super_admin':
-    default:
       return 'super_admin';
+    default:
+      return null;
   }
+}
+
+function normalizeServerRole(role?: string | null): CanonicalServerRole {
+  return normalizeServerRoleStrict(role) || 'super_admin';
 }
 
 function isBranchScopedServerRole(role?: string | null): boolean {
   const canonical = normalizeServerRole(role);
   return canonical === 'cashier' || canonical === 'warehouse' || canonical === 'store_manager';
 }
+
+const ROLE_PERMISSION_TEMPLATES: Record<
+  CanonicalServerRole,
+  { assignedZones: StorageZoneType[]; permissions: StaffShiftSession['permissions'] }
+> = {
+  cashier: {
+    assignedZones: ['ambient'],
+    permissions: {
+      canViewPos: true,
+      canViewInventory: false,
+      canAdjustInventory: false,
+      canPickZone: () => false,
+      canReceiveGoods: false,
+      canApprovePurchaseOrder: false,
+      canViewFinancePnL: false,
+      canManageOutlets: false,
+      canOverrideStoreClosure: false,
+      canViewValuation: false,
+      canCreatePrPo: false,
+      canPayVendorBills: false,
+      canManageGiro: false,
+      canModifyCoa: false,
+      canFactoryReset: false,
+      canManagePromos: false,
+      canOverridePosPrice: false,
+      canApproveStocktake: false,
+      canViewMultiBranchRevenue: false,
+      canViewBranchMonitor: false,
+      canConfirmArrival: false,
+      canManageOperatorAssignments: false,
+    },
+  },
+  warehouse: {
+    assignedZones: ['cold_chilled', 'ambient', 'freezer'],
+    permissions: {
+      canViewPos: false,
+      canViewInventory: true,
+      canAdjustInventory: true,
+      canPickZone: () => true,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: false,
+      canViewFinancePnL: false,
+      canManageOutlets: false,
+      canOverrideStoreClosure: false,
+      canViewValuation: false,
+      canCreatePrPo: false,
+      canPayVendorBills: false,
+      canManageGiro: false,
+      canModifyCoa: false,
+      canFactoryReset: false,
+      canManagePromos: false,
+      canOverridePosPrice: false,
+      canApproveStocktake: false,
+      canViewMultiBranchRevenue: false,
+      canViewBranchMonitor: false,
+      canConfirmArrival: true,
+      canManageOperatorAssignments: false,
+    },
+  },
+  purchasing: {
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    permissions: {
+      canViewPos: false,
+      canViewInventory: true,
+      canAdjustInventory: false,
+      canPickZone: () => false,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: false,
+      canManageOutlets: false,
+      canOverrideStoreClosure: false,
+      canViewValuation: true,
+      canCreatePrPo: true,
+      canPayVendorBills: false,
+      canManageGiro: false,
+      canModifyCoa: false,
+      canFactoryReset: false,
+      canManagePromos: false,
+      canOverridePosPrice: false,
+      canApproveStocktake: false,
+      canViewMultiBranchRevenue: false,
+      canViewBranchMonitor: false,
+      canConfirmArrival: false,
+      canManageOperatorAssignments: false,
+    },
+  },
+  store_manager: {
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    permissions: {
+      canViewPos: true,
+      canViewInventory: true,
+      canAdjustInventory: true,
+      canPickZone: () => true,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: true,
+      canManageOutlets: false,
+      canOverrideStoreClosure: true,
+      canViewValuation: true,
+      canCreatePrPo: true,
+      canPayVendorBills: false,
+      canManageGiro: false,
+      canModifyCoa: false,
+      canFactoryReset: false,
+      canManagePromos: true,
+      canOverridePosPrice: true,
+      canApproveStocktake: true,
+      canViewMultiBranchRevenue: false,
+      canViewBranchMonitor: false,
+      canConfirmArrival: true,
+      canManageOperatorAssignments: false,
+    },
+  },
+  admin: {
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    permissions: {
+      canViewPos: false,
+      canViewInventory: true,
+      canAdjustInventory: false,
+      canPickZone: () => false,
+      canReceiveGoods: false,
+      canApprovePurchaseOrder: false,
+      canViewFinancePnL: true,
+      canManageOutlets: true,
+      canOverrideStoreClosure: false,
+      canViewValuation: true,
+      canCreatePrPo: false,
+      canPayVendorBills: true,
+      canManageGiro: true,
+      canModifyCoa: true,
+      canFactoryReset: false,
+      canManagePromos: false,
+      canOverridePosPrice: false,
+      canApproveStocktake: false,
+      canViewMultiBranchRevenue: true,
+      canViewBranchMonitor: true,
+      canConfirmArrival: false,
+      canManageOperatorAssignments: false,
+    },
+  },
+  coo: {
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    permissions: {
+      canViewPos: true,
+      canViewInventory: true,
+      canAdjustInventory: true,
+      canPickZone: () => true,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: true,
+      canManageOutlets: true,
+      canOverrideStoreClosure: true,
+      canViewValuation: true,
+      canCreatePrPo: true,
+      canPayVendorBills: true,
+      canManageGiro: true,
+      canModifyCoa: true,
+      canFactoryReset: false,
+      canManagePromos: true,
+      canOverridePosPrice: true,
+      canApproveStocktake: true,
+      canViewMultiBranchRevenue: true,
+      canViewBranchMonitor: true,
+      canConfirmArrival: true,
+      canManageOperatorAssignments: false,
+    },
+  },
+  super_admin: {
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    permissions: {
+      canViewPos: true,
+      canViewInventory: true,
+      canAdjustInventory: true,
+      canPickZone: () => true,
+      canReceiveGoods: true,
+      canApprovePurchaseOrder: true,
+      canViewFinancePnL: true,
+      canManageOutlets: true,
+      canOverrideStoreClosure: true,
+      canViewValuation: true,
+      canCreatePrPo: true,
+      canPayVendorBills: true,
+      canManageGiro: true,
+      canModifyCoa: true,
+      canFactoryReset: true,
+      canManagePromos: true,
+      canOverridePosPrice: true,
+      canApproveStocktake: true,
+      canViewMultiBranchRevenue: true,
+      canViewBranchMonitor: true,
+      canConfirmArrival: true,
+      canManageOperatorAssignments: true,
+    },
+  },
+};
 
 const AVAILABLE_STAFF_USERS: StaffShiftSession[] = [
   {
@@ -2266,12 +2517,19 @@ function resolveStaffUser(idOrRole?: string | null): StaffShiftSession | undefin
 function syncAssignmentsOntoProfiles() {
   AVAILABLE_STAFF_USERS.forEach((profile) => {
     const assigned = operatorBranchAssignments[profile.userId];
+    const resolvedRole = normalizeServerRoleStrict(assigned?.userRole) || normalizeServerRole(profile.userRole);
+    const template = ROLE_PERMISSION_TEMPLATES[resolvedRole];
+    profile.userRole = resolvedRole;
+    profile.assignedZones = [...template.assignedZones];
+    profile.permissions = { ...template.permissions };
     if (assigned) {
       profile.storeId = assigned.storeId;
       profile.assignedBranchId = assigned.storeId;
       profile.storeName = assigned.storeName;
+      profile.isActive = assigned.isActive !== false;
     } else {
       profile.assignedBranchId = profile.storeId;
+      profile.isActive = true;
     }
     profile.isBranchScoped = isBranchScopedServerRole(profile.userRole);
   });
@@ -2491,6 +2749,11 @@ const qrisTransactions = new Map<string, {
   settlementChannel?: string;
 }>();
 
+const inTransitTransferLots = new Map<
+  string,
+  { lotNumber: string; expiryDate: string; allocatedQty: number; unitCost: number; storageZone: StorageZoneType; sellingPrice: number; supplierName: string }[]
+>();
+
 // Helper to calculate CRC16 for Indonesian QRIS specification
 function calculateCRC16(str: string): string {
   let crc = 0xffff;
@@ -2648,8 +2911,11 @@ function captureServerState() {
     climateAdaptiveConfigs,
     enterpriseNotificationsList,
     operatorBranchAssignments,
+    communicationGatewayConfig,
+    communicationLogs,
     qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
     idempotencyStoreEntries: Array.from(idempotencyStore.entries()),
+    inTransitTransferLotsEntries: Array.from(inTransitTransferLots.entries()),
   };
 }
 
@@ -2712,6 +2978,22 @@ function applyServerState(snap: any) {
   if (Array.isArray(snap.enterpriseNotificationsList)) {
     enterpriseNotificationsList = snap.enterpriseNotificationsList;
   }
+  if (snap.communicationGatewayConfig && typeof snap.communicationGatewayConfig === 'object') {
+    const def = createDefaultCommunicationGatewayConfig();
+    communicationGatewayConfig = {
+      smtp: { ...def.smtp, ...(snap.communicationGatewayConfig.smtp || {}) },
+      whatsapp: { ...def.whatsapp, ...(snap.communicationGatewayConfig.whatsapp || {}) },
+      updatedAt: snap.communicationGatewayConfig.updatedAt || def.updatedAt,
+      updatedBy: snap.communicationGatewayConfig.updatedBy || def.updatedBy,
+    };
+  } else {
+    communicationGatewayConfig = createDefaultCommunicationGatewayConfig();
+  }
+  if (Array.isArray(snap.communicationLogs)) {
+    communicationLogs = snap.communicationLogs;
+  } else {
+    communicationLogs = [];
+  }
   qrisTransactions.clear();
   if (Array.isArray(snap.qrisTransactionsEntries)) {
     snap.qrisTransactionsEntries.forEach(([k, v]: [string, any]) => qrisTransactions.set(k, v));
@@ -2720,11 +3002,21 @@ function applyServerState(snap: any) {
   if (Array.isArray(snap.idempotencyStoreEntries)) {
     snap.idempotencyStoreEntries.forEach(([k, v]: [string, any]) => idempotencyStore.set(k, v));
   }
+  inTransitTransferLots.clear();
+  if (Array.isArray(snap.inTransitTransferLotsEntries)) {
+    snap.inTransitTransferLotsEntries.forEach(([k, v]: [string, any]) => inTransitTransferLots.set(k, v));
+  }
   if (snap.operatorBranchAssignments && typeof snap.operatorBranchAssignments === 'object') {
-    operatorBranchAssignments = {
-      ...JSON.parse(JSON.stringify(DEFAULT_OPERATOR_ASSIGNMENTS)),
-      ...snap.operatorBranchAssignments,
-    };
+    const merged: Record<string, OperatorAssignmentEntry> = JSON.parse(JSON.stringify(DEFAULT_OPERATOR_ASSIGNMENTS));
+    Object.entries(snap.operatorBranchAssignments).forEach(([uid, val]) => {
+      if (val && typeof val === 'object') {
+        merged[uid] = {
+          ...(merged[uid] || { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship', isActive: true, loginPin: '8821' }),
+          ...(val as OperatorAssignmentEntry),
+        };
+      }
+    });
+    operatorBranchAssignments = merged;
   } else {
     operatorBranchAssignments = JSON.parse(JSON.stringify(DEFAULT_OPERATOR_ASSIGNMENTS));
   }
@@ -2892,15 +3184,22 @@ async function startServer() {
     const urlPath = req.path || req.originalUrl.split('?')[0];
     const method = req.method.toUpperCase();
 
-    // Determine effective operator role & branch (explicit header overrides active server session cleanly)
-    const rawHeaderRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'] : undefined;
-    const rawHeaderBranch = typeof req.headers['x-operator-branch'] === 'string' ? req.headers['x-operator-branch'] : undefined;
-    const rawHeaderOpId = typeof req.headers['x-operator-id'] === 'string' ? req.headers['x-operator-id'] : undefined;
+    // Determine effective operator role & branch (strict validation — unknown roles never default to super_admin)
+    const rawHeaderRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : undefined;
+    const rawHeaderBranch = typeof req.headers['x-operator-branch'] === 'string' ? req.headers['x-operator-branch'].trim() : undefined;
+    const rawHeaderOpId = typeof req.headers['x-operator-id'] === 'string' ? req.headers['x-operator-id'].trim() : undefined;
 
-    const effectiveRole: CanonicalServerRole = normalizeServerRole(
-      rawHeaderRole || currentActiveStaffSession.userRole
-    );
+    const assignedProfile = rawHeaderOpId ? AVAILABLE_STAFF_USERS.find((u) => u.userId === rawHeaderOpId) : undefined;
     const assignedAssignment = rawHeaderOpId ? operatorBranchAssignments[rawHeaderOpId] : undefined;
+    const strictHeaderRole = rawHeaderRole ? normalizeServerRoleStrict(rawHeaderRole) : undefined;
+    const resolvedSessionRole = normalizeServerRoleStrict(currentActiveStaffSession.userRole) || 'cashier';
+
+    const effectiveRole: CanonicalServerRole = rawHeaderRole
+      ? strictHeaderRole || 'cashier'
+      : assignedProfile
+      ? normalizeServerRole(assignedProfile.userRole)
+      : resolvedSessionRole;
+
     const effectiveBranch =
       rawHeaderBranch ||
       assignedAssignment?.storeId ||
@@ -2911,14 +3210,14 @@ async function startServer() {
     const denyAccess = (requiredRoles: CanonicalServerRole[], customReason?: string) => {
       const reason =
         customReason ||
-        `RBAC Access Denied (403): Role '${effectiveRole}' is not authorized for ${method} ${urlPath}. Required role(s): [${requiredRoles.join(', ')}].`;
+        `RBAC Access Denied (403): Role '${rawHeaderRole && !strictHeaderRole ? rawHeaderRole : effectiveRole}' is not authorized for ${method} ${urlPath}. Required role(s): [${requiredRoles.join(', ')}].`;
       securityAuditTrail.unshift({
         id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
         timestamp: new Date().toISOString(),
         actionType: 'ZONE_CONFIG_UPDATE',
         resourceId: `${method} ${urlPath}`,
         userId: rawHeaderOpId || currentActiveStaffSession.userId,
-        userName: currentActiveStaffSession.userName,
+        userName: assignedProfile?.userName || currentActiveStaffSession.userName,
         userRole: effectiveRole,
         storeId: effectiveBranch,
         shiftId: currentActiveStaffSession.activeShiftId,
@@ -2940,7 +3239,6 @@ async function startServer() {
       urlPath === '/health' ||
       urlPath.startsWith('/admin/auth/') ||
       urlPath === '/admin/rbac/current-session' ||
-      urlPath === '/admin/rbac/switch-session' ||
       urlPath === '/admin/rbac/handover' ||
       urlPath === '/admin/rbac/check-zone-access'
     ) {
@@ -2949,10 +3247,25 @@ async function startServer() {
 
     // Check scoped rules for /api/admin/*, /api/pos/*, and /api/b2b/giro*
     if (urlPath.startsWith('/admin/') || urlPath.startsWith('/pos/') || urlPath.startsWith('/b2b/giro')) {
+      // Reject deactivated operator or unknown role header spoofing
+      if (rawHeaderRole && !strictHeaderRole) {
+        return denyAccess(['super_admin'], `RBAC Access Denied (403): Unrecognized operator role '${rawHeaderRole}'.`);
+      }
+      if (assignedAssignment?.isActive === false || assignedProfile?.isActive === false) {
+        return denyAccess(['super_admin'], `Access Denied (403): Operator account '${rawHeaderOpId}' is currently suspended by Super Admin.`);
+      }
+      if (assignedProfile && rawHeaderRole && strictHeaderRole !== normalizeServerRole(assignedProfile.userRole)) {
+        const assignedCanon = normalizeServerRole(assignedProfile.userRole);
+        if (strictHeaderRole === 'super_admin' && assignedCanon !== 'super_admin') {
+          return denyAccess([assignedCanon], `Privilege Escalation Blocked (403): Operator '${rawHeaderOpId}' is locked to role '${assignedCanon}' and cannot elevate to 'super_admin'.`);
+        }
+      }
+
       // 1. Super Admin Only Endpoints
       if (
         urlPath === '/admin/system/reset-demo-data' ||
         urlPath === '/admin/reset-demo-data' ||
+        urlPath === '/admin/rbac/switch-session' ||
         (urlPath === '/admin/settings/operator-assignments' && method === 'POST') ||
         (urlPath.startsWith('/admin/settings/coa-account') && method === 'DELETE') ||
         (urlPath === '/admin/compliance/sku-tax-rules' && method === 'PUT')
@@ -3009,12 +3322,42 @@ async function startServer() {
         }
       }
 
-      // 6. Enterprise Settings, POS Config, COA Writes
+      // 6. Enterprise Settings, POS Config, Communication Gateway, COA Writes
       if (
-        (urlPath === '/admin/settings/enterprise' || urlPath === '/admin/settings/pos-config') &&
+        (urlPath === '/admin/settings/enterprise' ||
+          urlPath === '/admin/settings/pos-config' ||
+          (urlPath === '/admin/settings/communication-gateway' && method !== 'GET') ||
+          urlPath === '/admin/communications/test-email' ||
+          urlPath === '/admin/communications/test-whatsapp') &&
         method !== 'GET'
       ) {
         const allowed: CanonicalServerRole[] = ['coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      if (urlPath === '/admin/settings/communication-gateway' && method === 'GET') {
+        const allowed: CanonicalServerRole[] = [
+          'cashier',
+          'warehouse',
+          'purchasing',
+          'store_manager',
+          'admin',
+          'coo',
+          'super_admin',
+        ];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      if (urlPath === '/admin/communications/send-document' && method === 'POST') {
+        const allowed: CanonicalServerRole[] = [
+          'cashier',
+          'warehouse',
+          'purchasing',
+          'store_manager',
+          'admin',
+          'coo',
+          'super_admin',
+        ];
         if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
       }
 
@@ -3576,7 +3919,15 @@ async function startServer() {
           const rawGrossSum = rawLineItems.reduce((acc, r) => acc + r.lineSubtotal, 0);
           const cartDiscount = Math.min(rawGrossSum, Math.max(0, roundIDR(Number(req.body.discount) || 0)));
           const effectiveAfterDiscount = Math.max(0, rawGrossSum - cartDiscount);
-          const isInclusivePriceMode = Math.abs(effectiveAfterDiscount - tx.amount) <= Math.max(5, rawLineItems.length * 2);
+          const explicitDeliveryFee =
+            req.body.deliveryFee !== undefined
+              ? Math.max(0, roundIDR(Number(req.body.deliveryFee) || 0))
+              : ([0, 10000, 15000].includes(tx.amount - effectiveAfterDiscount)
+                  ? tx.amount - effectiveAfterDiscount
+                  : 0);
+          const isInclusivePriceMode =
+            Math.abs(effectiveAfterDiscount + explicitDeliveryFee - tx.amount) <=
+            Math.max(5, rawLineItems.length * 2);
 
           let remainingDiscount = cartDiscount;
           rawLineItems.forEach((entry, idx) => {
@@ -5069,10 +5420,11 @@ async function startServer() {
       const expiryIso =
         itemInput.expiryDate ||
         new Date(Date.now() + 86400000 * 21).toISOString();
-      const daysUntilExpiry = Math.max(
-        1,
-        Math.ceil((new Date(expiryIso).getTime() - Date.now()) / 86400000)
-      );
+      const expiryDiffMs = new Date(expiryIso).getTime() - Date.now();
+      const isExpiredOnReceipt = !Number.isFinite(expiryDiffMs) || expiryDiffMs <= 0;
+      const daysUntilExpiry = isExpiredOnReceipt
+        ? Math.min(0, Math.floor((Number.isFinite(expiryDiffMs) ? expiryDiffMs : 0) / 86400000))
+        : Math.max(1, Math.ceil(expiryDiffMs / 86400000));
 
       inventoryBatches.unshift({
         batchId: `BAT-GR-${Date.now().toString().slice(-5)}-${inventoryBatches.length + 1}`,
@@ -5089,7 +5441,13 @@ async function startServer() {
         receivedDate: new Date().toISOString(),
         expiryDate: expiryIso,
         daysUntilExpiry,
-        status: isQuarantineHold ? 'quarantined' : daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
+        status: isExpiredOnReceipt
+          ? 'expired'
+          : isQuarantineHold
+          ? 'quarantined'
+          : daysUntilExpiry <= 7
+          ? 'near_expiry'
+          : 'fresh',
         storageZone: tier?.storageType || 'cold_chilled',
         supplierName: po.supplierName,
         sourcePoNumber: po.id,
@@ -6107,6 +6465,7 @@ async function startServer() {
   // Staff switch + zone-authorization checks + audit log
   // =============================================================
   app.post('/api/admin/auth/login', (req: Request, res: Response) => {
+    syncAssignmentsOntoProfiles();
     const { userId, username, password, pin, shiftName } = req.body || {};
 
     let target = resolveStaffUser(userId || username);
@@ -6118,18 +6477,29 @@ async function startServer() {
       });
     }
 
-    if (
-      password &&
-      password !== 'admin123' &&
-      password !== '8821' &&
-      password !== 'grocemart2026' &&
-      password !== target.userId &&
-      pin !== '8821'
-    ) {
-      return res.status(401).json({
+    const assignment = operatorBranchAssignments[target.userId];
+    if (assignment?.isActive === false || target.isActive === false) {
+      return res.status(403).json({
         success: false,
-        error: 'Incorrect security password or PIN. Hint: use default "admin123" or PIN "8821".',
+        error: `Account '${target.userName}' is currently suspended/inactive. Contact your Super Admin to reactivate access.`,
       });
+    }
+
+    const configuredPin = assignment?.loginPin || '8821';
+    const hasCustomPin = configuredPin !== '8821';
+    if (password !== undefined || pin !== undefined) {
+      const provided = password !== undefined ? String(password) : String(pin);
+      const isDefaultPasswordAllowed =
+        !hasCustomPin && (provided === 'admin123' || provided === 'grocemart2026' || provided === target.userId);
+      const isPinMatch = provided === configuredPin || (pin !== undefined && String(pin) === configuredPin);
+      if (!isPinMatch && !isDefaultPasswordAllowed) {
+        return res.status(401).json({
+          success: false,
+          error: hasCustomPin
+            ? 'Incorrect Security PIN configured by Super Admin for this operator.'
+            : 'Incorrect security password or PIN. Hint: use default "admin123" or PIN "8821".',
+        });
+      }
     }
 
     currentActiveStaffSession = {
@@ -6153,6 +6523,8 @@ async function startServer() {
         loginMethod: userId ? 'role_profile_selection' : 'credential_login',
         clientIp: req.ip || '127.0.0.1',
         shift: currentActiveStaffSession.shiftName,
+        assignedBranchId: target.assignedBranchId || target.storeId,
+        lockedRole: target.userRole,
       },
     });
 
@@ -6193,9 +6565,22 @@ async function startServer() {
 
   app.post('/api/admin/rbac/switch-session', (req: Request, res: Response) => {
     syncAssignmentsOntoProfiles();
-    const { userId } = req.body;
+    const rawHeaderRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : undefined;
+    const callerRole = rawHeaderRole ? normalizeServerRoleStrict(rawHeaderRole) : normalizeServerRole(currentActiveStaffSession.userRole);
+    if (callerRole !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Session switching is locked. Click Lock / Sign Out to switch operator accounts.',
+      });
+    }
+
+    const { userId } = req.body || {};
     const target = resolveStaffUser(userId);
     if (!target) return res.status(404).json({ error: 'Staff profile not found' });
+    if (target.isActive === false) {
+      return res.status(403).json({ error: `Operator '${target.userName}' is suspended/inactive.` });
+    }
 
     currentActiveStaffSession = {
       ...target,
@@ -6829,6 +7214,15 @@ async function startServer() {
       },
     });
 
+    const resolvedCashTendered =
+      cashTendered !== undefined ? Math.max(0, roundIDR(Number(cashTendered) || 0)) : resolvedTotal;
+    const resolvedCashChange =
+      paymentMethod === 'cash'
+        ? cashTendered !== undefined
+          ? Math.max(0, resolvedCashTendered - resolvedTotal)
+          : Math.max(0, roundIDR(Number(cashChange) || 0))
+        : 0;
+
     // 5. Construct Complete Receipt
     const receipt: POSTransactionReceipt = {
       receiptNumber,
@@ -6849,8 +7243,8 @@ async function startServer() {
       currencyTotal: resolvedCurrencyTotal,
       currencyRateToIDR,
       paymentMethod,
-      cashTendered,
-      cashChange,
+      cashTendered: resolvedCashTendered,
+      cashChange: resolvedCashChange,
       qrisRef: paymentMethod === 'qris' ? `QRIS-POS-${shortCode}` : undefined,
       cardLast4: paymentMethod.includes('card') ? '8842' : undefined,
       journalEntryIds,
@@ -7133,7 +7527,11 @@ async function startServer() {
         },
       ];
       transitLots.forEach((lot, idx) => {
-        const daysUntilExpiry = Math.max(1, Math.ceil((new Date(lot.expiryDate).getTime() - Date.now()) / 86400000));
+        const diffMs = new Date(lot.expiryDate).getTime() - Date.now();
+        const isExpiredLot = !Number.isFinite(diffMs) || diffMs <= 0;
+        const daysUntilExpiry = isExpiredLot
+          ? Math.min(0, Math.floor((Number.isFinite(diffMs) ? diffMs : 0) / 86400000))
+          : Math.max(1, Math.ceil(diffMs / 86400000));
         inventoryBatches.unshift({
           batchId: `BAT-TRF-RCV-${Date.now().toString().slice(-5)}-${idx + 1}`,
           sku: record.sku,
@@ -7149,7 +7547,7 @@ async function startServer() {
           receivedDate: timestamp,
           expiryDate: lot.expiryDate,
           daysUntilExpiry,
-          status: daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
+          status: isExpiredLot ? 'expired' : daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
           storageZone: lot.storageZone,
           supplierName: lot.supplierName,
           notes: `Arrival confirmed via Multi-Branch Monitor (${record.id})`,
@@ -7306,10 +7704,15 @@ async function startServer() {
     return res.status(400).json({ error: `Unsupported arrival type '${type}'.` });
   });
 
-  app.get('/api/admin/settings/operator-assignments', (_req: Request, res: Response) => {
+  app.get('/api/admin/settings/operator-assignments', (req: Request, res: Response) => {
     syncAssignmentsOntoProfiles();
+    const rawHeaderRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : undefined;
+    const callerRole = rawHeaderRole ? normalizeServerRoleStrict(rawHeaderRole) : normalizeServerRole(currentActiveStaffSession.userRole);
+    const includePin = callerRole === 'super_admin';
+
     const assignments: OperatorBranchAssignment[] = AVAILABLE_STAFF_USERS.map((u) => {
       const assigned = operatorBranchAssignments[u.userId];
+      const pinVal = assigned?.loginPin || '8821';
       return {
         userId: u.userId,
         userName: u.userName,
@@ -7317,6 +7720,9 @@ async function startServer() {
         storeId: assigned?.storeId || u.storeId,
         storeName: assigned?.storeName || u.storeName,
         isBranchScoped: isBranchScopedServerRole(u.userRole),
+        isActive: assigned?.isActive !== false,
+        hasCustomPin: pinVal !== '8821',
+        ...(includePin ? { loginPin: pinVal } : {}),
         updatedAt: assigned?.updatedAt,
         updatedBy: assigned?.updatedBy,
       };
@@ -7328,9 +7734,29 @@ async function startServer() {
   });
 
   app.post('/api/admin/settings/operator-assignments', (req: Request, res: Response) => {
-    const { userId, storeId } = (req.body || {}) as { userId?: string; storeId?: string };
-    if (!userId || !storeId) {
-      return res.status(400).json({ error: 'userId and storeId are required.' });
+    const rawHeaderRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : undefined;
+    const rawHeaderOpId = typeof req.headers['x-operator-id'] === 'string' ? req.headers['x-operator-id'].trim() : undefined;
+    const callerRole = rawHeaderRole ? normalizeServerRoleStrict(rawHeaderRole) : normalizeServerRole(currentActiveStaffSession.userRole);
+    if (callerRole !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Only Super Admin is authorized to modify operator roles, branch assignments, status, or login PINs.',
+      });
+    }
+
+    const { userId, storeId, userRole, isActive, loginPin } = (req.body || {}) as {
+      userId?: string;
+      storeId?: string;
+      userRole?: string;
+      isActive?: boolean;
+      loginPin?: string;
+    };
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required.' });
+    }
+    if (storeId === undefined && userRole === undefined && isActive === undefined && loginPin === undefined) {
+      return res.status(400).json({ error: 'Provide at least one field to update (storeId, userRole, isActive, loginPin).' });
     }
 
     const targetProfile = AVAILABLE_STAFF_USERS.find((u) => u.userId === userId);
@@ -7338,23 +7764,68 @@ async function startServer() {
       return res.status(404).json({ error: `Operator profile '${userId}' not found.` });
     }
 
-    if (isBranchScopedServerRole(targetProfile.userRole) && (storeId === 'ALL' || storeId === 'CONSOLIDATED')) {
+    const existingEntry = operatorBranchAssignments[userId] || {
+      userRole: normalizeServerRole(targetProfile.userRole),
+      storeId: targetProfile.storeId,
+      storeName: targetProfile.storeName,
+      isActive: true,
+      loginPin: '8821',
+    };
+
+    let nextRole: CanonicalServerRole = normalizeServerRoleStrict(existingEntry.userRole) || normalizeServerRole(targetProfile.userRole);
+    if (userRole !== undefined) {
+      const parsedRole = normalizeServerRoleStrict(userRole);
+      if (!parsedRole) {
+        return res.status(400).json({ error: `Invalid enterprise role '${userRole}'.` });
+      }
+      nextRole = parsedRole;
+    }
+
+    const nextIsBranchScoped = isBranchScopedServerRole(nextRole);
+    let nextStoreId = storeId !== undefined ? storeId : existingEntry.storeId;
+    if (nextIsBranchScoped && (nextStoreId === 'ALL' || nextStoreId === 'CONSOLIDATED')) {
+      if (storeId !== undefined) {
+        return res.status(400).json({
+          error: `Branch-scoped role '${nextRole}' must be assigned to a specific physical store or warehouse hub (cannot be 'ALL').`,
+        });
+      }
+      nextStoreId = 'store-jkt-senopati';
+    }
+
+    const option = BRANCH_ASSIGNMENT_OPTIONS.find((opt) => opt.storeId === nextStoreId);
+    if (!option) {
+      return res.status(400).json({ error: `Invalid target branch/hub '${nextStoreId}'.` });
+    }
+
+    const nextIsActive = isActive !== undefined ? Boolean(isActive) : existingEntry.isActive !== false;
+    const callerOpId = rawHeaderOpId || currentActiveStaffSession.userId;
+    if (userId === callerOpId && (nextIsActive === false || nextRole !== 'super_admin')) {
       return res.status(400).json({
-        error: `Branch-scoped role '${targetProfile.userRole}' must be assigned to a specific physical store or warehouse hub (cannot be 'ALL').`,
+        error: 'Governance Guard: You cannot deactivate or demote your own active Super Admin session.',
       });
     }
 
-    const option = BRANCH_ASSIGNMENT_OPTIONS.find((opt) => opt.storeId === storeId);
-    if (!option) {
-      return res.status(400).json({ error: `Invalid target branch/hub '${storeId}'.` });
+    let nextLoginPin = existingEntry.loginPin || '8821';
+    if (loginPin !== undefined) {
+      const cleanedPin = String(loginPin).trim();
+      if (cleanedPin.length < 4 || cleanedPin.length > 32) {
+        return res.status(400).json({ error: 'Login PIN / password must be between 4 and 32 characters.' });
+      }
+      nextLoginPin = cleanedPin;
     }
 
     const updatedAt = new Date().toISOString();
+    const actorProfile = rawHeaderOpId ? AVAILABLE_STAFF_USERS.find((u) => u.userId === rawHeaderOpId) : undefined;
+    const actorName = actorProfile?.userName || currentActiveStaffSession.userName;
+
     operatorBranchAssignments[userId] = {
+      userRole: nextRole,
       storeId: option.storeId,
       storeName: option.storeName,
+      isActive: nextIsActive,
+      loginPin: nextLoginPin,
       updatedAt,
-      updatedBy: currentActiveStaffSession.userName,
+      updatedBy: actorName,
     };
 
     syncAssignmentsOntoProfiles();
@@ -7364,22 +7835,26 @@ async function startServer() {
       timestamp: updatedAt,
       actionType: 'POLICY_UPDATE',
       resourceId: `OP_ASSIGNMENT_${userId}`,
-      userId: currentActiveStaffSession.userId,
-      userName: currentActiveStaffSession.userName,
-      userRole: currentActiveStaffSession.userRole,
+      userId: callerOpId,
+      userName: actorName,
+      userRole: 'super_admin',
       storeId: option.storeId,
       shiftId: currentActiveStaffSession.activeShiftId,
       status: 'AUTHORIZED_EXECUTED',
       metadata: {
         targetUserId: userId,
         targetUserName: targetProfile.userName,
+        assignedRole: nextRole,
         assignedStoreId: option.storeId,
         assignedStoreName: option.storeName,
+        isActive: nextIsActive,
+        pinUpdated: loginPin !== undefined,
       },
     });
 
     const assignments: OperatorBranchAssignment[] = AVAILABLE_STAFF_USERS.map((u) => {
       const assigned = operatorBranchAssignments[u.userId];
+      const pinVal = assigned?.loginPin || '8821';
       return {
         userId: u.userId,
         userName: u.userName,
@@ -7387,17 +7862,27 @@ async function startServer() {
         storeId: assigned?.storeId || u.storeId,
         storeName: assigned?.storeName || u.storeName,
         isBranchScoped: isBranchScopedServerRole(u.userRole),
+        isActive: assigned?.isActive !== false,
+        hasCustomPin: pinVal !== '8821',
+        loginPin: pinVal,
         updatedAt: assigned?.updatedAt,
         updatedBy: assigned?.updatedBy,
       };
     });
 
+    const callerUpdatedSession =
+      AVAILABLE_STAFF_USERS.find((u) => u.userId === callerOpId) || currentActiveStaffSession;
+
     res.json({
       success: true,
-      message: `${targetProfile.userName} assigned to ${option.storeName}.`,
+      message: `${targetProfile.userName} updated: ${nextRole.replace(/_/g, ' ').toUpperCase()} @ ${option.storeName} (${nextIsActive ? 'Active' : 'Suspended'}).`,
       assignments,
       updatedProfile: AVAILABLE_STAFF_USERS.find((u) => u.userId === userId),
-      currentSession: currentActiveStaffSession,
+      currentSession: {
+        ...callerUpdatedSession,
+        loginTimestamp: currentActiveStaffSession.loginTimestamp,
+        shiftName: currentActiveStaffSession.shiftName,
+      },
       availableProfiles: AVAILABLE_STAFF_USERS,
     });
   });
@@ -9613,11 +10098,6 @@ async function startServer() {
     });
   });
 
-  const inTransitTransferLots = new Map<
-    string,
-    { lotNumber: string; expiryDate: string; allocatedQty: number; unitCost: number; storageZone: StorageZoneType; sellingPrice: number; supplierName: string }[]
-  >();
-
   app.get('/api/admin/inventory/transfer', (_req: Request, res: Response) => {
     res.json(stockTransfersList);
   });
@@ -9862,7 +10342,11 @@ async function startServer() {
       },
     ];
     transitLots.forEach((lot, idx) => {
-      const daysUntilExpiry = Math.max(1, Math.ceil((new Date(lot.expiryDate).getTime() - Date.now()) / 86400000));
+      const diffMs = new Date(lot.expiryDate).getTime() - Date.now();
+      const isExpiredLot = !Number.isFinite(diffMs) || diffMs <= 0;
+      const daysUntilExpiry = isExpiredLot
+        ? Math.min(0, Math.floor((Number.isFinite(diffMs) ? diffMs : 0) / 86400000))
+        : Math.max(1, Math.ceil(diffMs / 86400000));
       inventoryBatches.unshift({
         batchId: `BAT-TRF-RCV-${Date.now().toString().slice(-5)}-${idx + 1}`,
         sku: record.sku,
@@ -9878,7 +10362,7 @@ async function startServer() {
         receivedDate: timestamp,
         expiryDate: lot.expiryDate,
         daysUntilExpiry,
-        status: daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
+        status: isExpiredLot ? 'expired' : daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
         storageZone: lot.storageZone,
         supplierName: lot.supplierName,
         notes: `Received from ${record.sourceStoreName} (${record.id})`,
@@ -13208,6 +13692,942 @@ async function startServer() {
       csvContent,
       xmlContent,
     });
+  });
+
+  // -------------------------------------------------------------
+  // ADDITIVE COMMUNICATION DISPATCH ENGINE (SMTP & WHATSAPP)
+  // -------------------------------------------------------------
+  function normalizeIndonesianPhone(rawPhone?: string): string {
+    const cleaned = String(rawPhone || '').replace(/[^\d+]/g, '');
+    if (!cleaned) return '';
+    let digits = cleaned.replace(/^\+/, '');
+    if (digits.startsWith('620')) {
+      digits = `62${digits.slice(3)}`;
+    } else if (digits.startsWith('08')) {
+      digits = `628${digits.slice(2)}`;
+    } else if (digits.startsWith('0')) {
+      digits = `62${digits.slice(1)}`;
+    } else if (digits.startsWith('8')) {
+      digits = `62${digits}`;
+    }
+    return digits;
+  }
+
+  function buildWaMeUrl(phoneDigits: string, messageText: string): string {
+    const encoded = encodeURIComponent(messageText);
+    return `https://wa.me/${phoneDigits}?text=${encoded}`;
+  }
+
+  function formatCurrencyRp(amount: number): string {
+    return `Rp ${Math.round(Number(amount) || 0).toLocaleString('id-ID')}`;
+  }
+
+  function escapeHtmlText(value: unknown): string {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderCommunicationTemplate(
+    template: string,
+    vars: Record<string, string>
+  ): string {
+    return String(template || '')
+      .replace(/\{\{\s*recipient_name\s*\}\}/g, vars.recipient_name || '')
+      .replace(/\{\{\s*doc_type\s*\}\}/g, vars.doc_type || '')
+      .replace(/\{\{\s*doc_number\s*\}\}/g, vars.doc_number || '')
+      .replace(/\{\{\s*total_amount\s*\}\}/g, vars.total_amount || '')
+      .replace(/\{\{\s*outlet_name\s*\}\}/g, vars.outlet_name || '');
+  }
+
+  function isMaskedSecretPlaceholder(val: unknown): boolean {
+    if (typeof val !== 'string') return false;
+    const trimmed = val.trim();
+    return (
+      trimmed === '********' ||
+      trimmed === '••••••••' ||
+      /^[•*]{6,}$/.test(trimmed)
+    );
+  }
+
+  function maskCommunicationConfig(
+    cfg: CommunicationGatewayConfig,
+    includeSecrets: boolean
+  ): CommunicationGatewayConfig {
+    if (includeSecrets) {
+      return JSON.parse(JSON.stringify(cfg));
+    }
+    return {
+      ...cfg,
+      smtp: {
+        ...cfg.smtp,
+        password: cfg.smtp.password ? '********' : '',
+      },
+      whatsapp: {
+        ...cfg.whatsapp,
+        metaAccessToken: cfg.whatsapp.metaAccessToken ? '********' : '',
+        gatewayApiKey: cfg.whatsapp.gatewayApiKey ? '********' : '',
+      },
+    };
+  }
+
+  function getEffectiveRequestRole(req: Request): CanonicalServerRole {
+    const rawHeaderRole =
+      typeof req.headers['x-operator-role'] === 'string'
+        ? req.headers['x-operator-role'].trim()
+        : undefined;
+    const rawHeaderOpId =
+      typeof req.headers['x-operator-id'] === 'string'
+        ? req.headers['x-operator-id'].trim()
+        : undefined;
+    const assignedProfile = rawHeaderOpId
+      ? AVAILABLE_STAFF_USERS.find((u) => u.userId === rawHeaderOpId)
+      : undefined;
+    const strictHeaderRole = rawHeaderRole ? normalizeServerRoleStrict(rawHeaderRole) : undefined;
+    const resolvedSessionRole =
+      normalizeServerRoleStrict(currentActiveStaffSession.userRole) || 'cashier';
+    return rawHeaderRole
+      ? strictHeaderRole || 'cashier'
+      : assignedProfile
+      ? normalizeServerRole(assignedProfile.userRole)
+      : resolvedSessionRole;
+  }
+
+  function getEffectiveOperatorName(req: Request): string {
+    const rawHeaderOpId =
+      typeof req.headers['x-operator-id'] === 'string'
+        ? req.headers['x-operator-id'].trim()
+        : undefined;
+    const assignedProfile = rawHeaderOpId
+      ? AVAILABLE_STAFF_USERS.find((u) => u.userId === rawHeaderOpId)
+      : undefined;
+    return assignedProfile?.userName || currentActiveStaffSession.userName || 'System Operator';
+  }
+
+  function buildFormattedDocumentContent(
+    docType: CommunicationDocType,
+    docId: string,
+    recipientName: string,
+    customNote?: string
+  ): {
+    docNumber: string;
+    docLabel: string;
+    outletName: string;
+    totalDisplay: string;
+    subject: string;
+    htmlBody: string;
+    whatsappText: string;
+  } {
+    let docLabel = 'Enterprise Document';
+    let docNumber = docId;
+    let outletName = 'GroceMart Central Operations';
+    let totalDisplay = 'Rp 0';
+    let isCustomerFacing = false;
+    let detailRowsHtml = '';
+    let lineItemsHtml = '';
+    let waDetailsLines: string[] = [];
+
+    if (docType === 'QUOTATION') {
+      isCustomerFacing = true;
+      const q = enterpriseQuotationsList.find(
+        (item) => item.id === docId || item.quotationNumber === docId
+      );
+      if (!q) throw new Error(`Quotation '${docId}' not found.`);
+      const qItems = Array.isArray(q.items) ? q.items : [];
+      docLabel = q.isProForma ? 'Pro Forma Invoice' : 'Sales Quotation';
+      docNumber = q.quotationNumber || q.id;
+      outletName = 'PT GroceMart Retail Indonesia (B2B Desk)';
+      totalDisplay = formatCurrencyRp(q.total);
+      detailRowsHtml = `
+        <tr><td><strong>Customer / Company</strong></td><td>${escapeHtmlText(q.customerCompany || q.customerName || '-')}</td></tr>
+        <tr><td><strong>Issue Date / Valid Until</strong></td><td>${escapeHtmlText(q.date || '-')} / ${escapeHtmlText(q.validUntil || '-')}</td></tr>
+        <tr><td><strong>Required Deposit (${Number(q.requiredDepositPercent) || 0}%)</strong></td><td>${formatCurrencyRp(q.depositAmount)}</td></tr>
+        <tr><td><strong>Signature Status</strong></td><td>${escapeHtmlText(q.signatureStatus || 'PENDING')}</td></tr>`;
+      lineItemsHtml = qItems
+        .map(
+          (it) =>
+            `<tr><td>${escapeHtmlText(it.sku || '-')}</td><td>${escapeHtmlText(it.productName || '-')}</td><td style="text-align:right;">${Number(it.quantity) || 0} ${escapeHtmlText(it.unit || 'unit')}</td><td style="text-align:right;">${formatCurrencyRp(it.unitPrice)}</td><td style="text-align:right;">${formatCurrencyRp(it.lineTotal)}</td></tr>`
+        )
+        .join('');
+      waDetailsLines = [
+        `Perusahaan: ${q.customerCompany || q.customerName || '-'}`,
+        `Berlaku s/d: ${q.validUntil || '-'}`,
+        `Subtotal: ${formatCurrencyRp(q.subtotal)} | PPN: ${formatCurrencyRp(q.taxAmount)}`,
+        `Item (${qItems.length}): ${qItems.slice(0, 3).map((i) => `${i.productName || i.sku} (${i.quantity} ${i.unit || 'unit'})`).join(', ') || '-'}`,
+      ];
+    } else if (docType === 'PR') {
+      const pr = purchaseRequests.find((item) => item.id === docId);
+      if (!pr) throw new Error(`Purchase Request '${docId}' not found.`);
+      docLabel = 'Purchase Request (PR)';
+      docNumber = pr.id;
+      outletName = pr.storeName || 'GroceMart Outlet';
+      totalDisplay = formatCurrencyRp(pr.totalEstimatedCost);
+      const prPriority = String(pr.priority || 'normal').toUpperCase();
+      const prStatus = String(pr.status || 'pending').toUpperCase();
+      detailRowsHtml = `
+        <tr><td><strong>Requested By</strong></td><td>${escapeHtmlText(pr.requestedBy || '-')}</td></tr>
+        <tr><td><strong>Target Store / Hub</strong></td><td>${escapeHtmlText(outletName)}</td></tr>
+        <tr><td><strong>Priority / Reason</strong></td><td>${escapeHtmlText(prPriority)} (${escapeHtmlText(pr.reason || '-')})</td></tr>
+        <tr><td><strong>Status</strong></td><td>${escapeHtmlText(prStatus)}</td></tr>`;
+      lineItemsHtml = `<tr><td>${escapeHtmlText(pr.sku || '-')}</td><td>${escapeHtmlText(pr.productName || '-')}</td><td style="text-align:right;">${Number(pr.suggestedQuantity) || 0}</td><td style="text-align:right;">${formatCurrencyRp(pr.estimatedUnitCost)}</td><td style="text-align:right;">${formatCurrencyRp(pr.totalEstimatedCost)}</td></tr>`;
+      waDetailsLines = [
+        `Outlet: ${outletName}`,
+        `SKU: ${pr.sku || '-'} — ${pr.productName || '-'}`,
+        `Qty Diminta: ${Number(pr.suggestedQuantity) || 0} unit | Prioritas: ${prPriority}`,
+      ];
+    } else if (docType === 'PO') {
+      const po = purchaseOrders.find((item) => item.id === docId || item.poNumber === docId);
+      if (!po) throw new Error(`Purchase Order '${docId}' not found.`);
+      const poItems = Array.isArray(po.items) ? po.items : [];
+      docLabel = 'Purchase Order (PO)';
+      docNumber = po.poNumber || po.id;
+      outletName = po.storeName || 'GroceMart Warehouse';
+      totalDisplay = formatCurrencyRp(po.totalCost);
+      detailRowsHtml = `
+        <tr><td><strong>Supplier / Vendor</strong></td><td>${escapeHtmlText(po.supplierName || '-')}</td></tr>
+        <tr><td><strong>Destination Store</strong></td><td>${escapeHtmlText(outletName)}</td></tr>
+        <tr><td><strong>Expected Delivery</strong></td><td>${escapeHtmlText(po.expectedDeliveryDate || '-')}</td></tr>
+        <tr><td><strong>Payment Terms</strong></td><td>${escapeHtmlText(po.paymentTerms || 'Net 30')}</td></tr>
+        <tr><td><strong>PO Status</strong></td><td>${escapeHtmlText(po.status || 'OPEN')}</td></tr>`;
+      lineItemsHtml = poItems
+        .map((it) => {
+          const ordered = Number(it.orderedQuantity) || 0;
+          const received = Number(it.receivedQuantity) || 0;
+          const backorder = Math.max(0, ordered - received);
+          const qtyCell = backorder > 0 && received > 0
+            ? `${ordered} (Rec: ${received}, Backorder: ${backorder})`
+            : `${ordered} (Rec: ${received})`;
+          return `<tr><td>${escapeHtmlText(it.sku || '-')}</td><td>${escapeHtmlText(it.productName || '-')}</td><td style="text-align:right;">${qtyCell}</td><td style="text-align:right;">${formatCurrencyRp(it.unitCost)}</td><td style="text-align:right;">${formatCurrencyRp(it.totalCost)}</td></tr>`;
+        })
+        .join('');
+      const totalBackorder = poItems.reduce((s, i) => s + Math.max(0, (Number(i.orderedQuantity) || 0) - (Number(i.receivedQuantity) || 0)), 0);
+      waDetailsLines = [
+        `Supplier: ${po.supplierName || '-'}`,
+        `Tujuan: ${outletName}`,
+        `Estimasi Kirim: ${po.expectedDeliveryDate || '-'} | Status: ${po.status || 'OPEN'}${totalBackorder > 0 ? ` (Backorder: ${totalBackorder} unit)` : ''}`,
+        `Item (${poItems.length}): ${poItems.slice(0, 3).map((i) => `${i.productName || i.sku} x${i.orderedQuantity}`).join(', ') || '-'}`,
+      ];
+    } else if (docType === 'GR') {
+      const gr = goodsReceipts.find((item) => item.id === docId);
+      if (!gr) throw new Error(`Goods Receipt '${docId}' not found.`);
+      const grItems = Array.isArray(gr.items) ? gr.items : [];
+      docLabel = 'Goods Receipt (GR)';
+      docNumber = gr.id;
+      outletName = gr.storeName || 'GroceMart Warehouse';
+      const totalQty = grItems.reduce((s, i) => s + (Number(i.quantityReceived) || 0), 0);
+      const totalOrdered = grItems.reduce((s, i) => s + (Number(i.quantityOrdered) || 0), 0);
+      const remainingBackorder = Math.max(0, totalOrdered - totalQty);
+      totalDisplay = `${totalQty} units received`;
+      detailRowsHtml = `
+        <tr><td><strong>PO Reference</strong></td><td>${escapeHtmlText(gr.poId || '-')}</td></tr>
+        <tr><td><strong>Vendor</strong></td><td>${escapeHtmlText(gr.vendorName || '-')}</td></tr>
+        <tr><td><strong>Vendor Delivery Note</strong></td><td>${escapeHtmlText(gr.deliveryNoteNumber || '-')}</td></tr>
+        <tr><td><strong>Received By</strong></td><td>${escapeHtmlText(gr.receivedBy || '-')} (${escapeHtmlText(gr.isPartial ? `Partial Delivery — Backorder ${remainingBackorder}` : 'Full Delivery')})</td></tr>`;
+      lineItemsHtml = grItems
+        .map(
+          (it) =>
+            `<tr><td>${escapeHtmlText(it.sku || '-')}</td><td>${escapeHtmlText(it.productName || '-')} (Batch ${escapeHtmlText(it.batchNumber || '-')})</td><td style="text-align:right;">${Number(it.quantityReceived) || 0} / ${Number(it.quantityOrdered) || 0}</td><td style="text-align:right;">${it.tempCheckCelsius !== undefined ? `${it.tempCheckCelsius}°C` : '-'}</td><td style="text-align:right;">${escapeHtmlText(it.qualityCondition || '-')}</td></tr>`
+        )
+        .join('');
+      waDetailsLines = [
+        `Ref PO: ${gr.poId || '-'} | Surat Jalan Vendor: ${gr.deliveryNoteNumber || '-'}`,
+        `Diterima di: ${outletName} oleh ${gr.receivedBy || '-'}`,
+        `Delivery: ${gr.isPartial ? 'Partial' : 'Full'} (${totalQty} / ${totalOrdered} units${remainingBackorder > 0 ? `, Backorder ${remainingBackorder}` : ''})`,
+      ];
+    } else if (docType === 'QC_REPORT') {
+      const qc = qcInspectionsList.find((item) => item.id === docId);
+      if (!qc) throw new Error(`QC Inspection Report '${docId}' not found.`);
+      const params = qc.parameters || ({} as NonNullable<typeof qc.parameters>);
+      docLabel = 'HACCP QC Inspection & RTV Report';
+      docNumber = qc.id;
+      outletName = qc.storeName || 'GroceMart Cold-Chain QC';
+      const totalBatchQty = Math.max(0, Number(qc.totalBatchQuantity) || 0);
+      const passedQty = qc.disposition === 'PASSED' ? totalBatchQty : 0;
+      const quarantineQty = qc.disposition === 'QUARANTINED' ? totalBatchQty : 0;
+      const rejectedRtvQty = qc.disposition === 'REJECTED' ? totalBatchQty : 0;
+      const passRatePct = totalBatchQty > 0 ? Math.round((passedQty / totalBatchQty) * 1000) / 10 : 0;
+      const tempC = Number(params.temperatureCelsius ?? 0);
+      const actionLabel = String(qc.actionTaken || 'RELEASE_TO_SHELF').replace(/_/g, ' ');
+      totalDisplay = `Pass Rate ${passRatePct}% (${qc.disposition})`;
+      detailRowsHtml = `
+        <tr><td><strong>SKU / Product</strong></td><td>${escapeHtmlText(qc.sku || '-')} — ${escapeHtmlText(qc.productName || '-')}</td></tr>
+        <tr><td><strong>Batch / Expiry</strong></td><td>${escapeHtmlText(qc.batchNumber || '-')} (Exp: ${escapeHtmlText(qc.expiryDate || '-')})</td></tr>
+        <tr><td><strong>Cold-Chain Temperature</strong></td><td>${tempC}°C (${params.coldChainCompliant ? 'Compliant' : 'Temperature Breach'})</td></tr>
+        <tr><td><strong>Disposition / Action</strong></td><td>${escapeHtmlText(qc.disposition)} — ${escapeHtmlText(actionLabel)}</td></tr>
+        <tr><td><strong>Inspector</strong></td><td>${escapeHtmlText(qc.inspectorName || '-')}</td></tr>`;
+      lineItemsHtml = `
+        <tr><td>PASSED</td><td>Released / Passed Inspection</td><td style="text-align:right;">${passedQty}</td><td style="text-align:right;">${passRatePct}%</td><td style="text-align:right;">${escapeHtmlText(params.visualFreshness || '-')}</td></tr>
+        <tr><td>QUARANTINE</td><td>Quarantine Hold</td><td style="text-align:right;">${quarantineQty}</td><td style="text-align:right;">${quarantineQty > 0 ? 'HOLD' : '0%'}</td><td style="text-align:right;">${escapeHtmlText(params.packagingIntegrity || '-')}</td></tr>
+        <tr><td>REJECTED_RTV</td><td>Rejected / Return to Vendor (RTV)</td><td style="text-align:right;">${rejectedRtvQty}</td><td style="text-align:right;">${rejectedRtvQty > 0 ? 'RTV' : '0%'}</td><td style="text-align:right;">${escapeHtmlText(params.sensoryOdorCheck || '-')}</td></tr>`;
+      waDetailsLines = [
+        `Produk: ${qc.sku || '-'} - ${qc.productName || '-'} (Batch ${qc.batchNumber || '-'})`,
+        `Suhu Cold-Chain: ${tempC}°C (${params.coldChainCompliant ? 'Compliant' : 'BREACH'})`,
+        `Hasil: Passed ${passedQty} | Quarantine Hold ${quarantineQty} | Rejected RTV ${rejectedRtvQty} | Pass Rate ${passRatePct}%`,
+        `Aksi: ${actionLabel} (Inspektor: ${qc.inspectorName || '-'})`,
+      ];
+    } else if (docType === 'POS_RECEIPT') {
+      isCustomerFacing = true;
+      const rcp = posTransactionsHistory.find(
+        (item) => item.receiptNumber === docId || item.transactionId === docId || item.orderId === docId
+      );
+      if (!rcp) throw new Error(`POS Receipt '${docId}' not found.`);
+      const rcpItems = Array.isArray(rcp.items) ? rcp.items : [];
+      const payMethod = String(rcp.paymentMethod || 'cash').toUpperCase();
+      docLabel = 'Customer POS Receipt';
+      docNumber = rcp.receiptNumber;
+      outletName = rcp.storeName || 'GroceMart Retail Store';
+      totalDisplay = formatCurrencyRp(rcp.total);
+      detailRowsHtml = `
+        <tr><td><strong>Store Outlet</strong></td><td>${escapeHtmlText(outletName)}</td></tr>
+        <tr><td><strong>Cashier / Shift</strong></td><td>${escapeHtmlText(rcp.cashierName || 'Cashier')} (${escapeHtmlText(rcp.shiftId || '-')})</td></tr>
+        <tr><td><strong>Payment Method</strong></td><td>${escapeHtmlText(payMethod)}</td></tr>
+        <tr><td><strong>Subtotal / Tax / Discount</strong></td><td>${formatCurrencyRp(rcp.subtotal)} / ${formatCurrencyRp(rcp.tax)} / -${formatCurrencyRp(rcp.discount)}</td></tr>`;
+      lineItemsHtml = rcpItems
+        .map(
+          (it) =>
+            `<tr><td>${escapeHtmlText(it.sku || '-')}</td><td>${escapeHtmlText(it.name || '-')}</td><td style="text-align:right;">${Number(it.quantity) || 0} ${escapeHtmlText(it.unit || 'unit')}</td><td style="text-align:right;">${formatCurrencyRp(it.unitPrice)}</td><td style="text-align:right;">${formatCurrencyRp(it.lineTotal)}</td></tr>`
+        )
+        .join('');
+      waDetailsLines = [
+        `Struk: ${rcp.receiptNumber} | Kasir: ${rcp.cashierName || 'Cashier'}`,
+        `Metode Bayar: ${payMethod}`,
+        `Item (${rcpItems.length}): ${rcpItems.slice(0, 4).map((i) => `${i.name || i.sku} x${i.quantity}`).join(', ') || '-'}`,
+        `Subtotal: ${formatCurrencyRp(rcp.subtotal)} | Diskon: -${formatCurrencyRp(rcp.discount)} | PPN/PB1: ${formatCurrencyRp(rcp.tax)} | Grand Total: ${formatCurrencyRp(rcp.total)}`,
+      ];
+    } else if (docType === 'B2B_INVOICE') {
+      isCustomerFacing = true;
+      const ord = b2bOrdersList.find((item) => item.id === docId);
+      if (!ord) throw new Error(`B2B Invoice '${docId}' not found.`);
+      const ordItems = Array.isArray(ord.items) ? ord.items : [];
+      const payMethod = String(ord.paymentMethod || 'cod').toUpperCase();
+      docLabel = 'Faktur B2B Wholesale Invoice';
+      docNumber = ord.id;
+      outletName = 'PT GroceMart Wholesale Hub';
+      totalDisplay = formatCurrencyRp(ord.totalAmountIDR);
+      detailRowsHtml = `
+        <tr><td><strong>Customer / Company</strong></td><td>${escapeHtmlText(ord.companyName || ord.customerName || '-')}</td></tr>
+        <tr><td><strong>Order Date / Due Date</strong></td><td>${escapeHtmlText(ord.orderDate || '-')} / ${escapeHtmlText(ord.duePaymentDate || '-')}</td></tr>
+        <tr><td><strong>Payment Method / Status</strong></td><td>${escapeHtmlText(payMethod)} (${escapeHtmlText(ord.paymentStatus || 'PENDING')})</td></tr>
+        <tr><td><strong>PPN 11% / PWP Discount</strong></td><td>${formatCurrencyRp(ord.taxPPN11IDR)} / -${formatCurrencyRp(ord.pwpDiscountIDR)}</td></tr>`;
+      lineItemsHtml = ordItems
+        .map(
+          (it) =>
+            `<tr><td>${escapeHtmlText(it.product?.sku || '-')}</td><td>${escapeHtmlText(it.product?.name || 'Wholesale Item')}</td><td style="text-align:right;">${Number(it.quantity) || 0} ${escapeHtmlText(it.selectedUoM || 'unit')}</td><td style="text-align:right;">${formatCurrencyRp(it.unitPrice)}</td><td style="text-align:right;">${formatCurrencyRp(it.lineTotal)}</td></tr>`
+        )
+        .join('');
+      waDetailsLines = [
+        `Pelanggan: ${ord.companyName || ord.customerName || '-'}`,
+        `Pembayaran: ${payMethod} (${ord.paymentStatus || 'PENDING'})`,
+        `Total Base Units: ${Number(ord.totalBaseUnits) || 0} | PPN: ${formatCurrencyRp(ord.taxPPN11IDR)} | PWP Diskon: -${formatCurrencyRp(ord.pwpDiscountIDR)}`,
+      ];
+    } else if (docType === 'SURAT_JALAN') {
+      const sj = suratJalanList.find(
+        (item) => item.id === docId || item.documentNumber === docId
+      );
+      if (!sj) throw new Error(`Surat Jalan '${docId}' not found.`);
+      const sjItems = Array.isArray(sj.items) ? sj.items : [];
+      docLabel = 'Surat Jalan (Delivery Waybill)';
+      docNumber = sj.documentNumber || sj.id;
+      outletName = sj.senderStoreName || 'GroceMart Logistics CDC';
+      totalDisplay = `${Number(sj.totalPackages) || 0} Koli / ${Number(sj.totalWeightKg) || 0} Kg`;
+      detailRowsHtml = `
+        <tr><td><strong>Sender Hub</strong></td><td>${escapeHtmlText(sj.senderStoreName || outletName)}</td></tr>
+        <tr><td><strong>Recipient</strong></td><td>${escapeHtmlText(sj.recipientName || '-')} — ${escapeHtmlText(sj.recipientAddress || '-')}</td></tr>
+        <tr><td><strong>Driver / Vehicle</strong></td><td>${escapeHtmlText(sj.driverName || '-')} (${escapeHtmlText(sj.vehicleType || 'Fleet')} - ${escapeHtmlText(sj.vehiclePlateNumber || '-')})</td></tr>
+        <tr><td><strong>Cold-Chain Target</strong></td><td>${sj.coldChainTempCelsius !== undefined ? `${sj.coldChainTempCelsius}°C` : 'Ambient'}</td></tr>`;
+      lineItemsHtml = sjItems
+        .map(
+          (it) =>
+            `<tr><td>${escapeHtmlText(it.sku || '-')}</td><td>${escapeHtmlText(it.productName || '-')} (Batch ${escapeHtmlText(it.batchNumber || '-')})</td><td style="text-align:right;">${Number(it.quantity) || 0} ${escapeHtmlText(it.unit || 'unit')}</td><td style="text-align:right;">${escapeHtmlText(it.packagingType || '-')}</td><td style="text-align:right;">${escapeHtmlText(it.condition || '-')}</td></tr>`
+        )
+        .join('');
+      waDetailsLines = [
+        `Penerima: ${sj.recipientName || '-'} (${sj.recipientAddress || '-'})`,
+        `Armada: ${sj.vehicleType || 'Fleet'} ${sj.vehiclePlateNumber || '-'} | Driver: ${sj.driverName || '-'}`,
+        `Muatan: ${Number(sj.totalPackages) || 0} koli (${Number(sj.totalWeightKg) || 0} kg) | Suhu: ${sj.coldChainTempCelsius ?? '-'}°C`,
+      ];
+    } else {
+      throw new Error(`Unsupported document type '${String(docType)}'.`);
+    }
+
+    const template = isCustomerFacing
+      ? communicationGatewayConfig.whatsapp.customerMessageTemplate
+      : communicationGatewayConfig.whatsapp.vendorMessageTemplate;
+
+    const baseWaText = renderCommunicationTemplate(template, {
+      recipient_name: recipientName || 'Partner',
+      doc_type: docLabel,
+      doc_number: docNumber,
+      total_amount: totalDisplay,
+      outlet_name: outletName,
+    });
+
+    const whatsappText = [
+      baseWaText,
+      '',
+      ...waDetailsLines,
+      customNote ? `\nCatatan Tambahan: ${customNote}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const subject = `[GroceMart] ${docLabel} #${docNumber} — ${outletName}`;
+    const noteSection = customNote
+      ? `<div style="margin:14px 0;padding:10px 14px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;color:#0f172a;"><strong>Note:</strong> ${escapeHtmlText(customNote)}</div>`
+      : '';
+
+    const htmlBody = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:720px;margin:0 auto;padding:24px;background:#ffffff;color:#0f172a;border:1px solid #e2e8f0;border-radius:8px;">
+        <div style="border-bottom:2px solid #0F4C3A;padding-bottom:12px;margin-bottom:16px;">
+          <div style="font-size:18px;font-weight:700;color:#0F4C3A;">${escapeHtmlText(communicationGatewayConfig.smtp.senderName || 'PT GroceMart Retail Indonesia')}</div>
+          <div style="font-size:12px;color:#475569;margin-top:4px;">${escapeHtmlText(docLabel)} • Ref: <strong>${escapeHtmlText(docNumber)}</strong></div>
+        </div>
+        <p style="font-size:13px;line-height:1.5;">Dear <strong>${escapeHtmlText(recipientName || 'Valued Partner')}</strong>,</p>
+        <p style="font-size:13px;line-height:1.5;">Please find the official summary for <strong>${escapeHtmlText(docLabel)} (${escapeHtmlText(docNumber)})</strong> issued by ${escapeHtmlText(outletName)}.</p>
+        ${noteSection}
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin:14px 0;">
+          <tbody>${detailRowsHtml}</tbody>
+        </table>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:14px;border:1px solid #cbd5e1;">
+          <thead>
+            <tr style="background:#f1f5f9;text-align:left;">
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;">Code / Metric</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;">Description</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Qty</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Unit / Rate</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Total / Status</th>
+            </tr>
+          </thead>
+          <tbody>${lineItemsHtml}</tbody>
+        </table>
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e2e8f0;text-align:right;font-size:14px;font-weight:700;color:#0F4C3A;">
+          Summary Total: ${escapeHtmlText(totalDisplay)}
+        </div>
+        <div style="margin-top:20px;font-size:11px;color:#64748b;">
+          Sent automatically by GroceMatrix™ Enterprise ERP Communication Engine.
+        </div>
+      </div>`;
+
+    return {
+      docNumber,
+      docLabel,
+      outletName,
+      totalDisplay,
+      subject,
+      htmlBody,
+      whatsappText,
+    };
+  }
+
+  async function dispatchEmailMessage(params: {
+    toEmail: string;
+    subject: string;
+    htmlBody: string;
+    docType: CommunicationDispatchLog['docType'];
+    docId: string;
+    docNumber: string;
+    recipientName: string;
+    sentBy: string;
+  }): Promise<CommunicationDispatchLog> {
+    const email = String(params.toEmail || '').trim();
+    const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const smtpCfg = communicationGatewayConfig.smtp;
+    const mode: 'LIVE' | 'SANDBOX' = smtpCfg.enableLiveSmtp ? 'LIVE' : 'SANDBOX';
+    const logId = `COMM-EM-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`;
+
+    if (!isValidEmail) {
+      const failedLog: CommunicationDispatchLog = {
+        id: logId,
+        timestamp: new Date().toISOString(),
+        channel: 'email',
+        docType: params.docType,
+        docId: params.docId,
+        docNumber: params.docNumber,
+        recipientName: params.recipientName,
+        recipientAddress: email || '(missing email)',
+        mode,
+        status: 'FAILED',
+        subjectOrPreview: params.subject,
+        errorMessage: 'Invalid or missing recipient email address.',
+        sentBy: params.sentBy,
+      };
+      communicationLogs.unshift(failedLog);
+      communicationLogs = communicationLogs.slice(0, 200);
+      scheduleStateSave();
+      throw new Error(failedLog.errorMessage);
+    }
+
+    if (smtpCfg.enableLiveSmtp) {
+      if (!smtpCfg.host || !smtpCfg.port || !smtpCfg.username || !smtpCfg.password) {
+        const failedLog: CommunicationDispatchLog = {
+          id: logId,
+          timestamp: new Date().toISOString(),
+          channel: 'email',
+          docType: params.docType,
+          docId: params.docId,
+          docNumber: params.docNumber,
+          recipientName: params.recipientName,
+          recipientAddress: email,
+          mode: 'LIVE',
+          status: 'FAILED',
+          subjectOrPreview: params.subject,
+          errorMessage: 'Live SMTP requires Host, Port, Username, and Password.',
+          sentBy: params.sentBy,
+        };
+        communicationLogs.unshift(failedLog);
+        communicationLogs = communicationLogs.slice(0, 200);
+        scheduleStateSave();
+        throw new Error(failedLog.errorMessage);
+      }
+
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpCfg.host,
+          port: Number(smtpCfg.port) || 587,
+          secure: smtpCfg.encryption === 'SSL_TLS' || Number(smtpCfg.port) === 465,
+          requireTLS: smtpCfg.encryption === 'STARTTLS',
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 10000,
+          auth: {
+            user: smtpCfg.username,
+            pass: smtpCfg.password,
+          },
+        });
+
+        await transporter.sendMail({
+          from: `"${smtpCfg.senderName || 'PT GroceMart Retail Indonesia'}" <${smtpCfg.senderEmail || smtpCfg.username}>`,
+          to: email,
+          cc: smtpCfg.ccAuditEmail?.trim() || undefined,
+          subject: params.subject,
+          html: params.htmlBody,
+        });
+      } catch (err: any) {
+        const errMsg = err?.message || 'SMTP transport error';
+        const failedLog: CommunicationDispatchLog = {
+          id: logId,
+          timestamp: new Date().toISOString(),
+          channel: 'email',
+          docType: params.docType,
+          docId: params.docId,
+          docNumber: params.docNumber,
+          recipientName: params.recipientName,
+          recipientAddress: email,
+          mode: 'LIVE',
+          status: 'FAILED',
+          subjectOrPreview: params.subject,
+          errorMessage: errMsg,
+          sentBy: params.sentBy,
+        };
+        communicationLogs.unshift(failedLog);
+        communicationLogs = communicationLogs.slice(0, 200);
+        scheduleStateSave();
+        throw new Error(`SMTP Live Dispatch Failed: ${errMsg}`);
+      }
+    }
+
+    const successLog: CommunicationDispatchLog = {
+      id: logId,
+      timestamp: new Date().toISOString(),
+      channel: 'email',
+      docType: params.docType,
+      docId: params.docId,
+      docNumber: params.docNumber,
+      recipientName: params.recipientName,
+      recipientAddress: email,
+      mode,
+      status: 'SENT',
+      subjectOrPreview: params.subject,
+      sentBy: params.sentBy,
+    };
+    communicationLogs.unshift(successLog);
+    communicationLogs = communicationLogs.slice(0, 200);
+    scheduleStateSave();
+    return successLog;
+  }
+
+  async function dispatchWhatsappMessage(params: {
+    toPhone: string;
+    messageText: string;
+    docType: CommunicationDispatchLog['docType'];
+    docId: string;
+    docNumber: string;
+    recipientName: string;
+    sentBy: string;
+  }): Promise<CommunicationDispatchLog> {
+    const normalizedPhone = normalizeIndonesianPhone(params.toPhone);
+    const waCfg = communicationGatewayConfig.whatsapp;
+    const mode: 'LIVE' | 'SANDBOX' = waCfg.enableDirectWaApi ? 'LIVE' : 'SANDBOX';
+    const logId = `COMM-WA-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`;
+
+    if (!normalizedPhone || normalizedPhone.length < 9 || normalizedPhone.length > 16 || !/^\d+$/.test(normalizedPhone)) {
+      const failedLog: CommunicationDispatchLog = {
+        id: logId,
+        timestamp: new Date().toISOString(),
+        channel: 'whatsapp',
+        docType: params.docType,
+        docId: params.docId,
+        docNumber: params.docNumber,
+        recipientName: params.recipientName,
+        recipientAddress: params.toPhone || '(missing phone)',
+        mode,
+        status: 'FAILED',
+        subjectOrPreview: params.messageText.slice(0, 120),
+        errorMessage: 'Invalid or missing WhatsApp recipient phone number.',
+        sentBy: params.sentBy,
+      };
+      communicationLogs.unshift(failedLog);
+      communicationLogs = communicationLogs.slice(0, 200);
+      scheduleStateSave();
+      throw new Error(failedLog.errorMessage);
+    }
+
+    const waMeUrl = buildWaMeUrl(normalizedPhone, params.messageText);
+
+    if (waCfg.enableDirectWaApi) {
+      try {
+        if (waCfg.providerType === 'meta_cloud') {
+          if (!waCfg.metaPhoneNumberId || !waCfg.metaAccessToken) {
+            throw new Error('Meta Cloud API requires Phone Number ID and Permanent Access Token.');
+          }
+          const resp = await fetch(
+            `https://graph.facebook.com/v19.0/${encodeURIComponent(waCfg.metaPhoneNumberId)}/messages`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${waCfg.metaAccessToken}`,
+                'Content-Type': 'application/json',
+              },
+              signal: AbortSignal.timeout(10000),
+              body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                to: normalizedPhone,
+                type: 'text',
+                text: { body: params.messageText },
+              }),
+            }
+          );
+          if (!resp.ok) {
+            const errTxt = await resp.text();
+            throw new Error(`Meta WhatsApp API (${resp.status}): ${errTxt.slice(0, 180)}`);
+          }
+        } else {
+          if (!waCfg.gatewayApiUrl || !waCfg.gatewayApiKey) {
+            throw new Error('Indonesian WA Gateway requires Gateway API URL and Device Token / API Key.');
+          }
+          const resp = await fetch(waCfg.gatewayApiUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: waCfg.gatewayApiKey,
+              'Content-Type': 'application/json',
+            },
+            signal: AbortSignal.timeout(10000),
+            body: JSON.stringify({
+              target: normalizedPhone,
+              phone: normalizedPhone,
+              message: params.messageText,
+              sender: normalizeIndonesianPhone(waCfg.gatewaySenderNumber) || waCfg.gatewaySenderNumber,
+            }),
+          });
+          if (!resp.ok) {
+            const errTxt = await resp.text();
+            throw new Error(`WA Gateway HTTP (${resp.status}): ${errTxt.slice(0, 180)}`);
+          }
+        }
+      } catch (err: any) {
+        const errMsg = err?.message || 'WhatsApp API dispatch error';
+        const failedLog: CommunicationDispatchLog = {
+          id: logId,
+          timestamp: new Date().toISOString(),
+          channel: 'whatsapp',
+          docType: params.docType,
+          docId: params.docId,
+          docNumber: params.docNumber,
+          recipientName: params.recipientName,
+          recipientAddress: `+${normalizedPhone}`,
+          mode: 'LIVE',
+          status: 'FAILED',
+          subjectOrPreview: params.messageText.slice(0, 120),
+          waMeUrl: waCfg.fallbackWaWebInSandbox ? waMeUrl : undefined,
+          errorMessage: errMsg,
+          sentBy: params.sentBy,
+        };
+        communicationLogs.unshift(failedLog);
+        communicationLogs = communicationLogs.slice(0, 200);
+        scheduleStateSave();
+        throw new Error(`WhatsApp Direct API Failed: ${errMsg}`);
+      }
+    }
+
+    const successLog: CommunicationDispatchLog = {
+      id: logId,
+      timestamp: new Date().toISOString(),
+      channel: 'whatsapp',
+      docType: params.docType,
+      docId: params.docId,
+      docNumber: params.docNumber,
+      recipientName: params.recipientName,
+      recipientAddress: `+${normalizedPhone}`,
+      mode,
+      status: 'SENT',
+      subjectOrPreview: params.messageText.slice(0, 120),
+      waMeUrl: !waCfg.enableDirectWaApi && waCfg.fallbackWaWebInSandbox ? waMeUrl : undefined,
+      sentBy: params.sentBy,
+    };
+    communicationLogs.unshift(successLog);
+    communicationLogs = communicationLogs.slice(0, 200);
+    scheduleStateSave();
+    return successLog;
+  }
+
+  app.get('/api/admin/settings/communication-gateway', (req: Request, res: Response) => {
+    const role = getEffectiveRequestRole(req);
+    const canEdit = role === 'super_admin' || role === 'coo';
+    res.json({
+      config: maskCommunicationConfig(communicationGatewayConfig, canEdit),
+      logs: communicationLogs.slice(0, 100),
+      canEdit,
+    });
+  });
+
+  app.post('/api/admin/settings/communication-gateway', (req: Request, res: Response) => {
+    const role = getEffectiveRequestRole(req);
+    if (role !== 'super_admin' && role !== 'coo') {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Only Super Admin or COO may update SMTP / WhatsApp Gateway configuration.',
+      });
+    }
+
+    const incoming = req.body || {};
+    const nextSmtp = incoming.smtp || {};
+    const nextWa = incoming.whatsapp || {};
+    const actorName = getEffectiveOperatorName(req);
+
+    communicationGatewayConfig = {
+      smtp: {
+        providerPreset: nextSmtp.providerPreset || communicationGatewayConfig.smtp.providerPreset,
+        host: String(nextSmtp.host ?? communicationGatewayConfig.smtp.host).trim(),
+        port: Number(nextSmtp.port ?? communicationGatewayConfig.smtp.port) || 587,
+        encryption: nextSmtp.encryption || communicationGatewayConfig.smtp.encryption,
+        username: String(nextSmtp.username ?? communicationGatewayConfig.smtp.username).trim(),
+        password:
+          isMaskedSecretPlaceholder(nextSmtp.password)
+            ? communicationGatewayConfig.smtp.password
+            : String(nextSmtp.password ?? communicationGatewayConfig.smtp.password),
+        senderName:
+          String(nextSmtp.senderName ?? communicationGatewayConfig.smtp.senderName).trim() ||
+          'PT GroceMart Retail Indonesia',
+        senderEmail: String(nextSmtp.senderEmail ?? communicationGatewayConfig.smtp.senderEmail).trim(),
+        ccAuditEmail: String(nextSmtp.ccAuditEmail ?? communicationGatewayConfig.smtp.ccAuditEmail ?? '').trim(),
+        enableLiveSmtp: Boolean(nextSmtp.enableLiveSmtp),
+      },
+      whatsapp: {
+        providerType: nextWa.providerType || communicationGatewayConfig.whatsapp.providerType,
+        metaPhoneNumberId: String(
+          nextWa.metaPhoneNumberId ?? communicationGatewayConfig.whatsapp.metaPhoneNumberId
+        ).trim(),
+        metaWabaId: String(nextWa.metaWabaId ?? communicationGatewayConfig.whatsapp.metaWabaId).trim(),
+        metaAccessToken:
+          isMaskedSecretPlaceholder(nextWa.metaAccessToken)
+            ? communicationGatewayConfig.whatsapp.metaAccessToken
+            : String(nextWa.metaAccessToken ?? communicationGatewayConfig.whatsapp.metaAccessToken).trim(),
+        gatewayApiUrl: String(
+          nextWa.gatewayApiUrl ?? communicationGatewayConfig.whatsapp.gatewayApiUrl
+        ).trim(),
+        gatewayApiKey:
+          isMaskedSecretPlaceholder(nextWa.gatewayApiKey)
+            ? communicationGatewayConfig.whatsapp.gatewayApiKey
+            : String(nextWa.gatewayApiKey ?? communicationGatewayConfig.whatsapp.gatewayApiKey).trim(),
+        gatewaySenderNumber: String(
+          nextWa.gatewaySenderNumber ?? communicationGatewayConfig.whatsapp.gatewaySenderNumber
+        ).trim(),
+        enableDirectWaApi: Boolean(nextWa.enableDirectWaApi),
+        fallbackWaWebInSandbox:
+          nextWa.fallbackWaWebInSandbox !== undefined
+            ? Boolean(nextWa.fallbackWaWebInSandbox)
+            : communicationGatewayConfig.whatsapp.fallbackWaWebInSandbox,
+        vendorMessageTemplate: String(
+          nextWa.vendorMessageTemplate ?? communicationGatewayConfig.whatsapp.vendorMessageTemplate
+        ),
+        customerMessageTemplate: String(
+          nextWa.customerMessageTemplate ?? communicationGatewayConfig.whatsapp.customerMessageTemplate
+        ),
+      },
+      updatedAt: new Date().toISOString(),
+      updatedBy: actorName,
+    };
+
+    scheduleStateSave();
+    res.json({
+      success: true,
+      message: 'Communication gateway configuration saved successfully.',
+      config: communicationGatewayConfig,
+    });
+  });
+
+  app.post('/api/admin/communications/test-email', async (req: Request, res: Response) => {
+    const role = getEffectiveRequestRole(req);
+    if (role !== 'super_admin' && role !== 'coo') {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Only Super Admin or COO may test SMTP connection.',
+      });
+    }
+    try {
+      const targetEmail =
+        String(req.body?.recipientEmail || '').trim() ||
+        communicationGatewayConfig.smtp.ccAuditEmail ||
+        communicationGatewayConfig.smtp.senderEmail ||
+        'audit@grocemart.co.id';
+      const actorName = getEffectiveOperatorName(req);
+      const log = await dispatchEmailMessage({
+        toEmail: targetEmail,
+        subject: '[GroceMart ERP] SMTP Gateway Handshake Verification',
+        htmlBody: `<div style="font-family:Arial,sans-serif;padding:20px;background:#fff;color:#0f172a;border:1px solid #e2e8f0;">
+          <h2 style="color:#0F4C3A;margin:0 0 8px;">GroceMart SMTP Gateway Test</h2>
+          <p>Host: <strong>${escapeHtmlText(communicationGatewayConfig.smtp.host || 'Sandbox Relay')}</strong> : ${communicationGatewayConfig.smtp.port} (${communicationGatewayConfig.smtp.encryption})</p>
+          <p>Triggered by: ${escapeHtmlText(actorName)} at ${new Date().toISOString()}</p>
+        </div>`,
+        docType: 'TEST_EMAIL',
+        docId: 'SMTP-TEST',
+        docNumber: 'SMTP-TEST',
+        recipientName: 'Gateway Verification',
+        sentBy: actorName,
+      });
+
+      res.json({
+        success: true,
+        message:
+          log.mode === 'LIVE'
+            ? `Live SMTP test email dispatched to ${targetEmail}.`
+            : `Sandbox SMTP relay handshake verified for ${targetEmail}.`,
+        log,
+      });
+    } catch (err: any) {
+      res.status(400).json({
+        success: false,
+        error: err?.message || 'SMTP test dispatch failed.',
+      });
+    }
+  });
+
+  app.post('/api/admin/communications/test-whatsapp', async (req: Request, res: Response) => {
+    const role = getEffectiveRequestRole(req);
+    if (role !== 'super_admin' && role !== 'coo') {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Only Super Admin or COO may test WhatsApp gateway.',
+      });
+    }
+    try {
+      const recipientPhone = String(req.body?.recipientPhone || '').trim();
+      const recipientName = String(req.body?.recipientName || 'System Tester').trim();
+      const actorName = getEffectiveOperatorName(req);
+      const log = await dispatchWhatsappMessage({
+        toPhone: recipientPhone,
+        messageText: `Halo ${recipientName},\n\nIni adalah pesan verifikasi WhatsApp Business API dari GroceMatrix™ ERP (${communicationGatewayConfig.smtp.senderName}).`,
+        docType: 'TEST_WHATSAPP',
+        docId: 'WA-TEST',
+        docNumber: 'WA-TEST',
+        recipientName,
+        sentBy: actorName,
+      });
+
+      res.json({
+        success: true,
+        message:
+          log.mode === 'LIVE'
+            ? `Live WhatsApp test message sent to ${log.recipientAddress}.`
+            : `Sandbox WhatsApp dispatch verified for ${log.recipientAddress}.`,
+        waMeUrl: log.waMeUrl,
+        log,
+      });
+    } catch (err: any) {
+      res.status(400).json({
+        success: false,
+        error: err?.message || 'WhatsApp test dispatch failed.',
+      });
+    }
+  });
+
+  app.post('/api/admin/communications/send-document', async (req: Request, res: Response) => {
+    try {
+      const {
+        channel,
+        docType,
+        docId,
+        recipientName,
+        recipientEmail,
+        recipientPhone,
+        customNote,
+      } = req.body || {};
+
+      if (!channel || !['email', 'whatsapp', 'both'].includes(channel)) {
+        return res.status(400).json({ success: false, error: 'Invalid dispatch channel.' });
+      }
+      if (!docType || !docId) {
+        return res.status(400).json({ success: false, error: 'docType and docId are required.' });
+      }
+
+      const safeRecipient = String(recipientName || 'Partner').trim();
+      const actorName = getEffectiveOperatorName(req);
+      const formatted = buildFormattedDocumentContent(
+        docType as CommunicationDocType,
+        String(docId),
+        safeRecipient,
+        customNote ? String(customNote) : undefined
+      );
+
+      const createdLogs: CommunicationDispatchLog[] = [];
+      let waMeUrl: string | undefined;
+
+      if (channel === 'email' || channel === 'both') {
+        const emLog = await dispatchEmailMessage({
+          toEmail: String(recipientEmail || ''),
+          subject: formatted.subject,
+          htmlBody: formatted.htmlBody,
+          docType: docType as CommunicationDocType,
+          docId: String(docId),
+          docNumber: formatted.docNumber,
+          recipientName: safeRecipient,
+          sentBy: actorName,
+        });
+        createdLogs.push(emLog);
+      }
+
+      if (channel === 'whatsapp' || channel === 'both') {
+        const waLog = await dispatchWhatsappMessage({
+          toPhone: String(recipientPhone || ''),
+          messageText: formatted.whatsappText,
+          docType: docType as CommunicationDocType,
+          docId: String(docId),
+          docNumber: formatted.docNumber,
+          recipientName: safeRecipient,
+          sentBy: actorName,
+        });
+        createdLogs.push(waLog);
+        if (waLog.waMeUrl) waMeUrl = waLog.waMeUrl;
+      }
+
+      const modeSummary = createdLogs.map((l) => `${l.channel.toUpperCase()} (${l.mode})`).join(' + ');
+      res.json({
+        success: true,
+        message: `${formatted.docLabel} ${formatted.docNumber} dispatched via ${modeSummary}.`,
+        waMeUrl,
+        logs: createdLogs,
+      });
+    } catch (err: any) {
+      res.status(400).json({
+        success: false,
+        error: err?.message || 'Document dispatch failed.',
+      });
+    }
   });
 
   // -------------------------------------------------------------
