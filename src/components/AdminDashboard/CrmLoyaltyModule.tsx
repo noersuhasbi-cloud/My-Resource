@@ -1118,7 +1118,11 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {/* SUB-TAB 5: PROMO & VOUCHER RULES ENGINE                      */}
       {/* ============================================================ */}
       {subTab === 'promo_rules' && (
-        <PromoVoucherRulesTab theme={theme} onShowToast={onShowToast} />
+        <PromoVoucherRulesTab
+          theme={theme}
+          activeStaffSession={activeStaffSession}
+          onShowToast={onShowToast}
+        />
       )}
 
       {/* ============================================================ */}

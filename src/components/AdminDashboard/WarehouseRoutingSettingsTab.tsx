@@ -29,6 +29,7 @@ interface WarehouseRoutingSettingsTabProps {
   bins: WarehouseBinLocation[];
   routes: WarehouseMultiStepRoute[];
   inventoryTiers: StoreInventoryStock[];
+  isReadOnly?: boolean;
   onUpdateSettings: (updated: Partial<EnterpriseSettingsConfig>) => Promise<void>;
   onRefreshBins: () => void;
   onRefreshRoutes?: () => void;
@@ -41,6 +42,7 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
   bins,
   routes,
   inventoryTiers,
+  isReadOnly = false,
   onUpdateSettings,
   onRefreshBins,
   onRefreshRoutes,
@@ -202,18 +204,19 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
           <div className="flex items-center gap-2.5 shrink-0">
             <button
               onClick={() => setIsAddBinModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+              disabled={isReadOnly}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />
               <span>Add Storage Bin</span>
             </button>
             <button
               onClick={handleSaveSettings}
-              disabled={isSavingConfig}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              disabled={isSavingConfig || isReadOnly}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSavingConfig ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>Save Rules</span>
+              <span>{isReadOnly ? 'Read-Only' : 'Save Rules'}</span>
             </button>
           </div>
         </div>
@@ -239,11 +242,12 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
           <label className="relative inline-flex items-center cursor-pointer shrink-0">
             <input
               type="checkbox"
+              disabled={isReadOnly}
               checked={config.multiStepRoutingEnabled}
               onChange={(e) => setConfig({ ...config, multiStepRoutingEnabled: e.target.checked })}
               className="sr-only peer"
             />
-            <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+            <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
           </label>
         </div>
 
@@ -272,8 +276,9 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                 </div>
                 <button
                   type="button"
+                  disabled={isReadOnly}
                   onClick={() => handleToggleRouteActive(rt)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 transition-colors cursor-pointer ${
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                     isActive
                       ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
                       : 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-300 border-zinc-500/30 hover:bg-zinc-500/25'
@@ -421,9 +426,10 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                       </td>
                       <td className="py-3.5 px-3.5">
                         <select
+                          disabled={isReadOnly}
                           value={bin.status}
                           onChange={(e) => handleUpdateBinStatus(bin, e.target.value as WarehouseBinLocation['status'])}
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer focus:outline-none ${
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed ${
                             bin.status === 'OCCUPIED'
                               ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20'
                               : bin.status === 'AVAILABLE'

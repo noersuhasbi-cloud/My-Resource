@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, FileCheck2, Handshake, RefreshCw, RotateCcw } from 'lucide-react';
-import type { ConsignmentLedgerEntry, InventoryBatch } from '../../types/index.ts';
+import type { ConsignmentLedgerEntry, InventoryBatch, StaffShiftSession } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 
 interface ConsignmentSettlementPanelProps {
   theme: 'light' | 'dark';
   selectedStore: string;
+  activeStaffSession?: StaffShiftSession | null;
   onSettled?: () => void;
   onShowToast?: (title: string, message: string) => void;
 }
@@ -14,10 +16,14 @@ interface ConsignmentSettlementPanelProps {
 export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProps> = ({
   theme,
   selectedStore,
+  activeStaffSession,
   onSettled,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const canSettleConsignment =
+    !activeStaffSession ||
+    ['admin', 'coo', 'super_admin'].includes(normalizeEnterpriseRole(activeStaffSession.userRole));
   const [loading, setLoading] = useState(true);
   const [settlingSupplier, setSettlingSupplier] = useState<string | null>(null);
   const [returningBatchId, setReturningBatchId] = useState<string | null>(null);
@@ -168,9 +174,9 @@ export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProp
               <button
                 key={sup.supplierName}
                 type="button"
-                disabled={settlingSupplier === sup.supplierName}
+                disabled={settlingSupplier === sup.supplierName || !canSettleConsignment}
                 onClick={() => handleSettleSupplier(sup.supplierName)}
-                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
               >
                 <FileCheck2 className="w-3.5 h-3.5" />
                 <span>
@@ -218,9 +224,9 @@ export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProp
                     {b.currentStock > 0 ? (
                       <button
                         type="button"
-                        disabled={returningBatchId === b.batchId}
+                        disabled={returningBatchId === b.batchId || !canSettleConsignment}
                         onClick={() => handleReturnUnsold(b)}
-                        className="px-2.5 py-1 rounded-lg border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer"
                       >
                         <RotateCcw className="w-3 h-3" />
                         <span>{returningBatchId === b.batchId ? 'Returning...' : 'Return Unsold (RTV)'}</span>

@@ -11,13 +11,15 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
-import type { BlindOpnameSheet } from '../../types/index.ts';
+import type { BlindOpnameSheet, StaffShiftSession } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 
 interface BlindOpnamePanelProps {
   theme: 'light' | 'dark';
   selectedStoreId: string;
+  activeStaffSession?: StaffShiftSession | null;
   onRefreshData?: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -25,10 +27,18 @@ interface BlindOpnamePanelProps {
 export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
   theme,
   selectedStoreId,
+  activeStaffSession,
   onRefreshData,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
+  const canCount =
+    !activeStaffSession ||
+    ['warehouse', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
+  const canApprove =
+    !activeStaffSession ||
+    ['store_manager', 'coo', 'super_admin'].includes(canonicalRole);
   const [sheets, setSheets] = useState<BlindOpnameSheet[]>([]);
   const [activeSheetId, setActiveSheetId] = useState<string>('');
   const [warehouseHub, setWarehouseHub] = useState<'CDC' | 'DARK_STORE' | 'RETAIL_FRONT'>('CDC');
@@ -196,15 +206,17 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
               <option value="WH-JKT-SEN-AMB">Dry Ambient Racks</option>
             </select>
 
-            <button
-              type="button"
-              disabled={isActioning}
-              onClick={handleGenerate}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Generate Blind Sheet</span>
-            </button>
+            {canCount && (
+              <button
+                type="button"
+                disabled={isActioning}
+                onClick={handleGenerate}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Generate Blind Sheet</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -280,7 +292,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {activeSheet.status === 'COUNTING' && (
+              {activeSheet.status === 'COUNTING' && canCount && (
                 <button
                   type="button"
                   disabled={isActioning}
@@ -292,7 +304,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
                 </button>
               )}
 
-              {activeSheet.status === 'PENDING_APPROVAL' && (
+              {activeSheet.status === 'PENDING_APPROVAL' && canApprove && (
                 <>
                   <button
                     type="button"

@@ -1243,10 +1243,16 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                         <td className="py-3 px-3 text-center">
                           <button
                             type="button"
-                            disabled={savingStrategy}
+                            disabled={savingStrategy || !canManageWarehouseTopology}
                             onClick={() => handleToggleRowStrategy(row.sku, strategy)}
-                            title="Click to toggle FEFO / FIFO picking priority"
-                            className={`px-2 py-1 rounded-lg text-[10px] font-bold font-mono border transition-all cursor-pointer whitespace-nowrap ${
+                            title={
+                              canManageWarehouseTopology
+                                ? 'Click to toggle FEFO / FIFO picking priority'
+                                : 'Read-Only for your role'
+                            }
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold font-mono border transition-all whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed ${
+                              canManageWarehouseTopology ? 'cursor-pointer' : ''
+                            } ${
                               strategy === 'FEFO'
                                 ? 'bg-emerald-500/10 border-emerald-500/30 text-[#0F4C3A] dark:text-emerald-300 hover:bg-emerald-500/20'
                                 : 'bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20'
@@ -1332,7 +1338,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                               B2B/B2C
                             </button>
 
-                            {!row.isWholesaleRow && row.sourceTier && (
+                            {canManageWarehouseTopology && !row.isWholesaleRow && row.sourceTier && (
                               <>
                                 <button
                                   type="button"
@@ -1479,12 +1485,12 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                       <div className={`text-[10px] font-mono ${textMuted}`}>{catKey}</div>
                     </div>
                     <select
-                      disabled={savingStrategy}
+                      disabled={savingStrategy || !canManageWarehouseTopology}
                       value={activeStrat}
                       onChange={(e) =>
                         handleCategoryStrategyChange(catKey, e.target.value as RemovalStrategyType)
                       }
-                      className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg ${inputClass}`}
+                      className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg disabled:opacity-60 disabled:cursor-not-allowed ${inputClass}`}
                     >
                       <option value="FEFO">FEFO (Earliest Expiry)</option>
                       <option value="FIFO">FIFO (First Received)</option>

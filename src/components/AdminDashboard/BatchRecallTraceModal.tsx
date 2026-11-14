@@ -13,9 +13,10 @@ import {
   Truck,
   X,
 } from 'lucide-react';
-import type { ComplianceRecallTraceResponse } from '../../types/index.ts';
+import type { ComplianceRecallTraceResponse, StaffShiftSession } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
 
 interface BatchRecallTraceModalProps {
@@ -23,6 +24,7 @@ interface BatchRecallTraceModalProps {
   onClose: () => void;
   theme: 'light' | 'dark';
   initialLotNumber?: string;
+  activeStaffSession?: StaffShiftSession | null;
   onShowToast?: (title: string, message: string) => void;
   onRecallExecuted?: () => void;
 }
@@ -32,10 +34,16 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
   onClose,
   theme,
   initialLotNumber = '',
+  activeStaffSession,
   onShowToast,
   onRecallExecuted,
 }) => {
   const isLight = theme === 'light';
+  const canExecuteRecall =
+    !activeStaffSession ||
+    ['warehouse', 'store_manager', 'coo', 'super_admin'].includes(
+      normalizeEnterpriseRole(activeStaffSession.userRole)
+    );
   const [lotQuery, setLotQuery] = useState(initialLotNumber);
   const [trace, setTrace] = useState<ComplianceRecallTraceResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -208,13 +216,15 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
                   <button
                     type="button"
                     onClick={handleExecuteRecall}
-                    disabled={executing || trace.isQuarantined}
-                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    disabled={executing || trace.isQuarantined || !canExecuteRecall}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                   >
                     {trace.isQuarantined ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                     <span>
                       {trace.isQuarantined
                         ? 'All Lots Frozen'
+                        : !canExecuteRecall
+                        ? 'Freeze Restricted (Warehouse/Manager)'
                         : executing
                         ? 'Freezing...'
                         : 'Quarantine & Freeze All Remaining Lots'}

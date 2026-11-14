@@ -158,6 +158,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const canViewBranchMonitor = isSuperAdmin || isCoo || isAdminRole;
   const canViewAuditAndKpis = isSuperAdmin || isCoo;
   const canConfirmArrivals = isSuperAdmin || isCoo || currentRole === 'warehouse' || currentRole === 'store_manager';
+  const canManagePromotions = isSuperAdmin || isCoo || currentRole === 'store_manager';
+  const canMutateStock = isSuperAdmin || isCoo || currentRole === 'warehouse' || currentRole === 'store_manager';
   const isReadOnlyPolicyRole = isAdminRole;
 
   // Active Sub-Tab
@@ -1259,6 +1261,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <label className="relative inline-flex items-center cursor-pointer shrink-0">
                     <input
                       type="checkbox"
+                      disabled={isReadOnlyPolicyRole}
                       checked={enterpriseSettings.landedCosts.enabled}
                       onChange={(e) =>
                         handleUpdateEnterpriseSettings({
@@ -1267,7 +1270,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       }
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
                   </label>
                 </div>
 
@@ -1276,6 +1279,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <div>
                       <label className={labelClass}>Default Allocation Method</label>
                       <select
+                        disabled={isReadOnlyPolicyRole}
                         value={enterpriseSettings.landedCosts.defaultAllocationMethod}
                         onChange={(e) =>
                           handleUpdateEnterpriseSettings({
@@ -1285,7 +1289,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             },
                           })
                         }
-                        className={inputClass}
+                        className={`${inputClass} disabled:opacity-60`}
                       >
                         <option value="BY_QUANTITY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Quantity (Per piece)</option>
                         <option value="BY_VALUE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Value (Invoice proportion)</option>
@@ -1296,6 +1300,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <div>
                       <label className={labelClass}>Accounting Journal</label>
                       <select
+                        disabled={isReadOnlyPolicyRole}
                         value={enterpriseSettings.landedCosts.defaultJournal}
                         onChange={(e) =>
                           handleUpdateEnterpriseSettings({
@@ -1305,7 +1310,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             },
                           })
                         }
-                        className={inputClass}
+                        className={`${inputClass} disabled:opacity-60`}
                       >
                         <option value="MISC_OPERATIONS" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Operations &amp; Landed Costs</option>
                         <option value="GENERAL_JOURNAL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">General Standard Journal</option>
@@ -1365,6 +1370,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <label className="relative inline-flex items-center cursor-pointer shrink-0">
                     <input
                       type="checkbox"
+                      disabled={isReadOnlyPolicyRole}
                       checked={enterpriseSettings.warehouseRouting.multiStepRoutingEnabled}
                       onChange={(e) =>
                         handleUpdateEnterpriseSettings({
@@ -1376,7 +1382,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       }
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
                   </label>
                 </div>
 
@@ -1385,6 +1391,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <div>
                       <label className={labelClass}>Default Fulfillment Route</label>
                       <select
+                        disabled={isReadOnlyPolicyRole}
                         value={enterpriseSettings.warehouseRouting.defaultRouteSteps}
                         onChange={(e) =>
                           handleUpdateEnterpriseSettings({
@@ -1394,7 +1401,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             },
                           })
                         }
-                        className={inputClass}
+                        className={`${inputClass} disabled:opacity-60`}
                       >
                         <option value="THREE_STEP" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">3-Step (Intake &rarr; QC &rarr; Chilled Putaway)</option>
                         <option value="TWO_STEP" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">2-Step (Pallet Scan &rarr; Shelf Putaway)</option>
@@ -1406,6 +1413,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         <span className="text-xs font-semibold text-gray-700 dark:text-zinc-300">Auto Putaway Bins</span>
                         <input
                           type="checkbox"
+                          disabled={isReadOnlyPolicyRole}
                           checked={enterpriseSettings.warehouseRouting.autoAssignPutawayBin}
                           onChange={(e) =>
                             handleUpdateEnterpriseSettings({
@@ -1415,7 +1423,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                               },
                             })
                           }
-                          className="w-4 h-4 text-[#0F4C3A] rounded"
+                          className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                         />
                       </div>
                     </div>
@@ -1467,6 +1475,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <label className="relative inline-flex items-center cursor-pointer shrink-0">
                     <input
                       type="checkbox"
+                      disabled={isReadOnlyPolicyRole}
                       checked={enterpriseSettings.analyticAccounting.enabled}
                       onChange={(e) =>
                         handleUpdateEnterpriseSettings({
@@ -1478,7 +1487,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       }
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
                   </label>
                 </div>
 
@@ -1487,6 +1496,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <div className="flex-1">
                       <label className={labelClass}>Default Department</label>
                       <select
+                        disabled={isReadOnlyPolicyRole}
                         value={enterpriseSettings.analyticAccounting.defaultDepartment}
                         onChange={(e) =>
                           handleUpdateEnterpriseSettings({
@@ -1496,7 +1506,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             },
                           })
                         }
-                        className={inputClass}
+                        className={`${inputClass} disabled:opacity-60`}
                       >
                         {enterpriseSettings.analyticAccounting.departments.map((dept) => (
                           <option key={dept.id} value={dept.id} className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">
@@ -1512,6 +1522,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           type="number"
                           min="5"
                           max="50"
+                          disabled={isReadOnlyPolicyRole}
                           value={enterpriseSettings.analyticAccounting.marginWarningThresholdPercent}
                           onChange={(e) =>
                             handleUpdateEnterpriseSettings({
@@ -1521,7 +1532,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                               },
                             })
                           }
-                          className={`font-mono font-bold ${inputClass}`}
+                          className={`font-mono font-bold ${inputClass} disabled:opacity-60`}
                         />
                         <span className="text-xs font-bold text-gray-500 dark:text-zinc-300">%</span>
                       </div>
@@ -1601,6 +1612,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <label className="relative inline-flex items-center cursor-pointer shrink-0">
                     <input
                       type="checkbox"
+                      disabled={isReadOnlyPolicyRole}
                       checked={enterpriseSettings.quotationsAndSales.mandatoryProductsEnabled}
                       onChange={(e) =>
                         handleUpdateEnterpriseSettings({
@@ -1612,7 +1624,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       }
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
                   </label>
                 </div>
 
@@ -1621,6 +1633,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <div>
                       <label className={labelClass}>Payment Confirmation Threshold</label>
                       <select
+                        disabled={isReadOnlyPolicyRole}
                         value={enterpriseSettings.quotationsAndSales.paymentConfirmationThreshold}
                         onChange={(e) =>
                           handleUpdateEnterpriseSettings({
@@ -1630,7 +1643,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             },
                           })
                         }
-                        className={inputClass}
+                        className={`${inputClass} disabled:opacity-60`}
                       >
                         <option value="DEPOSIT_50" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">50% Deposit Required</option>
                         <option value="FULL_100" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">100% Full Payment Upfront</option>
@@ -1643,6 +1656,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         type="number"
                         min="1"
                         max="60"
+                        disabled={isReadOnlyPolicyRole}
                         value={enterpriseSettings.quotationsAndSales.defaultValidityDays}
                         onChange={(e) =>
                           handleUpdateEnterpriseSettings({
@@ -1652,7 +1666,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             },
                           })
                         }
-                        className={`font-mono font-bold ${inputClass}`}
+                        className={`font-mono font-bold ${inputClass} disabled:opacity-60`}
                       />
                     </div>
                   </div>
@@ -1679,6 +1693,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
+                        disabled={isReadOnlyPolicyRole}
                         checked={enterpriseSettings.quotationsAndSales.onlineSignaturesRequired}
                         onChange={(e) =>
                           handleUpdateEnterpriseSettings({
@@ -1688,13 +1703,14 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             },
                           })
                         }
-                        className="w-4 h-4 text-[#0F4C3A] rounded"
+                        className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                       />
                       <span className="text-gray-700 dark:text-zinc-300">Digital Signatures</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
+                        disabled={isReadOnlyPolicyRole}
                         checked={enterpriseSettings.quotationsAndSales.autoGeneratePdfQuote}
                         onChange={(e) =>
                           handleUpdateEnterpriseSettings({
@@ -1704,7 +1720,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             },
                           })
                         }
-                        className="w-4 h-4 text-[#0F4C3A] rounded"
+                        className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                       />
                       <span className="text-gray-700 dark:text-zinc-300">Auto PDF Generation</span>
                     </label>
@@ -1791,7 +1807,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             {/* SECTION 6: INDONESIAN TAXATION, PPN 11%/12% & NPWP/NIK VALIDATOR */}
             {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'TAX') && (
               <div className="lg:col-span-2">
-                <IndonesianTaxRulesPanel theme={theme} onShowToast={onShowToast} />
+                <IndonesianTaxRulesPanel theme={theme} canEdit={isSuperAdmin} onShowToast={onShowToast} />
               </div>
             )}
           </div>
@@ -2311,6 +2327,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           inventoryTiers={inventoryTiers}
           chartOfAccounts={chartOfAccounts}
           purchaseOrders={purchaseOrders}
+          isReadOnly={isReadOnlyPolicyRole}
           onUpdateSettings={handleUpdateEnterpriseSettings}
           onRefreshLandedCosts={handleRefreshLandedCosts}
           onShowToast={onShowToast}
@@ -2327,6 +2344,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           bins={warehouseBins}
           routes={warehouseRoutes}
           inventoryTiers={inventoryTiers}
+          isReadOnly={isReadOnlyPolicyRole}
           onUpdateSettings={handleUpdateEnterpriseSettings}
           onRefreshBins={handleRefreshBins}
           onRefreshRoutes={handleRefreshRoutes}
@@ -2344,6 +2362,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           vendorBills={vendorBills}
           purchaseOrders={purchaseOrders}
           goodsReceipts={goodsReceipts}
+          isReadOnly={isReadOnlyPolicyRole}
           onUpdateSettings={handleUpdateEnterpriseSettings}
           onRefreshData={fetchAllSettings}
           onOpenVendorBillsModal={onNavigateToVendorBills}
@@ -2408,11 +2427,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ) : (
                   <button
                     onClick={handleSaveCoa}
-                    disabled={isSavingCoa}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                    disabled={isSavingCoa || isReadOnlyPolicyRole}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {isSavingCoa ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    <span>Save COA Mapping</span>
+                    <span>{isReadOnlyPolicyRole ? 'Read-Only (COO / Super Admin)' : 'Save COA Mapping'}</span>
                   </button>
                 )}
               </div>
@@ -2524,6 +2543,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </div>
                 <label className={labelClass}>Target Revenue Account</label>
                 <select
+                  disabled={isReadOnlyPolicyRole}
                   value={coaConfig.posRevenueAccountCode}
                   onChange={(e) => {
                     const found = chartOfAccounts.find((c) => c.accountCode === e.target.value);
@@ -2533,7 +2553,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       posRevenueAccountName: found?.accountName || 'Sales Revenue',
                     });
                   }}
-                  className={`w-full ${inputClass}`}
+                  className={`w-full ${inputClass} disabled:opacity-60`}
                 >
                   {chartOfAccounts
                     .filter((c) => c.category === 'Revenue')
@@ -2561,6 +2581,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </div>
                 <label className={labelClass}>Target Inventory Asset Account</label>
                 <select
+                  disabled={isReadOnlyPolicyRole}
                   value={coaConfig.inventoryAssetAccountCode}
                   onChange={(e) => {
                     const found = chartOfAccounts.find((c) => c.accountCode === e.target.value);
@@ -2570,7 +2591,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       inventoryAssetAccountName: found?.accountName || 'Inventory Asset',
                     });
                   }}
-                  className={`w-full ${inputClass}`}
+                  className={`w-full ${inputClass} disabled:opacity-60`}
                 >
                   {chartOfAccounts
                     .filter((c) => c.category === 'Asset')
@@ -2598,6 +2619,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </div>
                 <label className={labelClass}>Target COGS Account</label>
                 <select
+                  disabled={isReadOnlyPolicyRole}
                   value={coaConfig.cogsAccountCode}
                   onChange={(e) => {
                     const found = chartOfAccounts.find((c) => c.accountCode === e.target.value);
@@ -2607,7 +2629,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       cogsAccountName: found?.accountName || 'Cost of Goods Sold',
                     });
                   }}
-                  className={`w-full ${inputClass}`}
+                  className={`w-full ${inputClass} disabled:opacity-60`}
                 >
                   {chartOfAccounts
                     .filter((c) => c.category === 'Expense')
@@ -2635,6 +2657,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </div>
                 <label className={labelClass}>Target Shrinkage Write-off Account</label>
                 <select
+                  disabled={isReadOnlyPolicyRole}
                   value={coaConfig.shrinkageExpenseAccountCode}
                   onChange={(e) => {
                     const found = chartOfAccounts.find((c) => c.accountCode === e.target.value);
@@ -2644,7 +2667,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       shrinkageExpenseAccountName: found?.accountName || 'Shrinkage Expense',
                     });
                   }}
-                  className={`w-full ${inputClass}`}
+                  className={`w-full ${inputClass} disabled:opacity-60`}
                 >
                   {chartOfAccounts
                     .filter((c) => c.category === 'Expense')
@@ -2670,6 +2693,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <div className={subCardClass}>
                   <label className={labelClass}>Cash Drawer Clearing</label>
                   <select
+                    disabled={isReadOnlyPolicyRole}
                     value={coaConfig.cashClearingAccountCode}
                     onChange={(e) => {
                       const found = chartOfAccounts.find((c) => c.accountCode === e.target.value);
@@ -2679,7 +2703,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         cashClearingAccountName: found?.accountName || 'Cash Clearing',
                       });
                     }}
-                    className={`w-full ${inputClass}`}
+                    className={`w-full ${inputClass} disabled:opacity-60`}
                   >
                     {chartOfAccounts
                       .filter((c) => c.category === 'Asset')
@@ -2695,6 +2719,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <div className={subCardClass}>
                   <label className={labelClass}>QRIS Settlement Clearing</label>
                   <select
+                    disabled={isReadOnlyPolicyRole}
                     value={coaConfig.qrisClearingAccountCode}
                     onChange={(e) => {
                       const found = chartOfAccounts.find((c) => c.accountCode === e.target.value);
@@ -2704,7 +2729,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         qrisClearingAccountName: found?.accountName || 'QRIS Clearing',
                       });
                     }}
-                    className={`w-full ${inputClass}`}
+                    className={`w-full ${inputClass} disabled:opacity-60`}
                   >
                     {chartOfAccounts
                       .filter((c) => c.category === 'Asset')
@@ -2720,6 +2745,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <div className={subCardClass}>
                   <label className={labelClass}>EDC Card Operational Clearing</label>
                   <select
+                    disabled={isReadOnlyPolicyRole}
                     value={coaConfig.edcClearingAccountCode}
                     onChange={(e) => {
                       const found = chartOfAccounts.find((c) => c.accountCode === e.target.value);
@@ -2729,7 +2755,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         edcClearingAccountName: found?.accountName || 'EDC Card Clearing',
                       });
                     }}
-                    className={`w-full ${inputClass}`}
+                    className={`w-full ${inputClass} disabled:opacity-60`}
                   >
                     {chartOfAccounts
                       .filter((c) => c.category === 'Asset')
@@ -2967,9 +2993,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </div>
                 <label className={labelClass}>Rounding Method</label>
                 <select
+                  disabled={isReadOnlyPolicyRole}
                   value={posConfig.roundingRule}
                   onChange={(e) => setPosConfig({ ...posConfig, roundingRule: e.target.value as PosRoundingRule })}
-                  className={`w-full ${inputClass}`}
+                  className={`w-full ${inputClass} disabled:opacity-60`}
                 >
                   <option value="none">No Rounding (Exact to Rp 1)</option>
                   <option value="nearest_100">Round to Nearest Rp 100 (Standard Retail)</option>
@@ -2994,9 +3021,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     type="number"
                     min={0}
                     max={30}
+                    disabled={isReadOnlyPolicyRole}
                     value={posConfig.ppnTaxPercent}
                     onChange={(e) => setPosConfig({ ...posConfig, ppnTaxPercent: Math.max(0, Number(e.target.value) || 0) })}
-                    className={`w-28 ${inputClass}`}
+                    className={`w-28 ${inputClass} disabled:opacity-60`}
                   />
                   <span className="text-xs font-bold text-gray-500">% Standard PPN</span>
                 </div>
@@ -3004,9 +3032,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <input
                     type="checkbox"
                     id="taxInclusiveCheck"
+                    disabled={isReadOnlyPolicyRole}
                     checked={posConfig.isTaxInclusive}
                     onChange={(e) => setPosConfig({ ...posConfig, isTaxInclusive: e.target.checked })}
-                    className="w-4 h-4 text-[#0F4C3A] rounded"
+                    className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                   />
                   <label htmlFor="taxInclusiveCheck" className={`text-xs ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
                     Prices displayed are tax-inclusive
@@ -3026,9 +3055,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     type="number"
                     min={0}
                     max={50}
+                    disabled={isReadOnlyPolicyRole}
                     value={posConfig.maxCashierDiscountPercent}
                     onChange={(e) => setPosConfig({ ...posConfig, maxCashierDiscountPercent: Math.max(0, Number(e.target.value) || 0) })}
-                    className={`w-28 ${inputClass}`}
+                    className={`w-28 ${inputClass} disabled:opacity-60`}
                   />
                   <span className="text-xs font-bold text-gray-500">% without Manager PIN</span>
                 </div>
@@ -3036,9 +3066,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <input
                     type="checkbox"
                     id="managerPinCheck"
+                    disabled={isReadOnlyPolicyRole}
                     checked={posConfig.requireManagerPinForVoid}
                     onChange={(e) => setPosConfig({ ...posConfig, requireManagerPinForVoid: e.target.checked })}
-                    className="w-4 h-4 text-[#0F4C3A] rounded"
+                    className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                   />
                   <label htmlFor="managerPinCheck" className={`text-xs ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
                     Require Manager PIN for item void
@@ -3056,9 +3087,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <input
                     type="checkbox"
                     id="enableVivoCheck"
+                    disabled={isReadOnlyPolicyRole}
                     checked={posConfig.enableVivoNearExpiryDiscount}
                     onChange={(e) => setPosConfig({ ...posConfig, enableVivoNearExpiryDiscount: e.target.checked })}
-                    className="w-4 h-4 text-[#0F4C3A] rounded"
+                    className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                   />
                   <label htmlFor="enableVivoCheck" className={`text-xs font-semibold ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>
                     Enable Automatic Vivo Clearance
@@ -3070,7 +3102,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     type="number"
                     min={5}
                     max={75}
-                    disabled={!posConfig.enableVivoNearExpiryDiscount}
+                    disabled={isReadOnlyPolicyRole || !posConfig.enableVivoNearExpiryDiscount}
                     value={posConfig.vivoNearExpiryDiscountPercent}
                     onChange={(e) => setPosConfig({ ...posConfig, vivoNearExpiryDiscountPercent: Math.max(5, Number(e.target.value) || 25) })}
                     className={`w-28 ${inputClass} disabled:opacity-50`}
@@ -3089,9 +3121,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <input
                   type="number"
                   step={50000}
+                  disabled={isReadOnlyPolicyRole}
                   value={posConfig.cashDrawerFloatIDR}
                   onChange={(e) => setPosConfig({ ...posConfig, cashDrawerFloatIDR: Math.max(0, Number(e.target.value) || 0) })}
-                  className={`w-full ${inputClass}`}
+                  className={`w-full ${inputClass} disabled:opacity-60`}
                 />
                 <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
                   Formatted: {formatIDR(posConfig.cashDrawerFloatIDR)} per register.
@@ -3110,9 +3143,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     type="number"
                     min={1}
                     max={10}
+                    disabled={isReadOnlyPolicyRole}
                     value={posConfig.loyaltyPointsPer1000IDR}
                     onChange={(e) => setPosConfig({ ...posConfig, loyaltyPointsPer1000IDR: Math.max(1, Number(e.target.value) || 1) })}
-                    className={`w-28 ${inputClass}`}
+                    className={`w-28 ${inputClass} disabled:opacity-60`}
                   />
                   <span className="text-xs text-gray-500">GrocePoint per Rp 1.000 spent</span>
                 </div>
@@ -3124,10 +3158,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               <label className={labelClass}>Custom Store Receipt Footer Notice</label>
               <input
                 type="text"
+                disabled={isReadOnlyPolicyRole}
                 value={posConfig.storeReceiptFooterText}
                 onChange={(e) => setPosConfig({ ...posConfig, storeReceiptFooterText: e.target.value })}
                 placeholder="e.g. Thank you for shopping with GroceMart! Follow @grocemart for farm updates."
-                className={`w-full ${inputClass}`}
+                className={`w-full ${inputClass} disabled:opacity-60`}
               />
             </div>
           </div>
@@ -3161,14 +3196,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               </div>
 
               <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingPromo(true)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0c3e2f] text-white flex items-center gap-2 cursor-pointer shadow-xs transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Promotion Rule</span>
-                </button>
+                {canManagePromotions && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingPromo(true)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0c3e2f] text-white flex items-center gap-2 cursor-pointer shadow-xs transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create Promotion Rule</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -3344,8 +3381,9 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           <td className="py-3.5 px-4 text-center">
                             <button
                               type="button"
+                              disabled={!canManagePromotions}
                               onClick={() => handleTogglePromoActive(rule)}
-                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                                 rule.active
                                   ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
                                   : 'bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'
@@ -3358,9 +3396,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           <td className="py-3.5 px-4 text-right">
                             <button
                               type="button"
+                              disabled={!canManagePromotions}
                               onClick={() => handleDeletePromo(rule.id)}
-                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                              title="Deactivate rule"
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={canManagePromotions ? 'Deactivate rule' : 'Read-Only for your role'}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -3707,6 +3746,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <BlindOpnamePanel
                   theme={theme}
                   selectedStoreId={opnameStoreId}
+                  activeStaffSession={activeStaffSession}
                   onRefreshData={onRefreshData}
                   onShowToast={onShowToast}
                 />
@@ -3855,11 +3895,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
                     <button
                       onClick={handleExecuteOpname}
-                      disabled={isReconciling}
-                      className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                      disabled={isReconciling || !canMutateStock}
+                      className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       {isReconciling ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileCheck2 className="w-4 h-4" />}
-                      <span>Post GL Reconciliations</span>
+                      <span>{canMutateStock ? 'Post GL Reconciliations' : 'Read-Only Mode'}</span>
                     </button>
                   </div>
                 </div>
@@ -4089,11 +4129,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       </span>
                       <button
                         onClick={handleCommitBulkImport}
-                        disabled={isImporting}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                        disabled={isImporting || !canMutateStock}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                       >
                         {isImporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                        <span>Commit Bulk Import to Warehouse</span>
+                        <span>{canMutateStock ? 'Commit Bulk Import to Warehouse' : 'Read-Only Mode'}</span>
                       </button>
                     </div>
 
@@ -4229,11 +4269,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
                 <button
                   onClick={handleExecuteTransfer}
-                  disabled={isTransferring}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                  disabled={isTransferring || !canMutateStock}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
                 >
                   {isTransferring ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-                  <span>Execute Inter-Store Transfer</span>
+                  <span>{canMutateStock ? 'Execute Inter-Store Transfer' : 'Read-Only Mode'}</span>
                 </button>
               </div>
             </div>
@@ -4357,22 +4397,28 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                                 <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/25">
                                   IN TRANSIT
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    try {
-                                      const res = await apiClient.receiveStockTransfer(t.id);
-                                      onShowToast('Transfer Received', res.message);
-                                      fetchAllSettings();
-                                      onRefreshData?.();
-                                    } catch (err: any) {
-                                      onShowToast('Receive Failed', err?.message || 'Error confirming transfer receipt');
-                                    }
-                                  }}
-                                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-colors cursor-pointer"
-                                >
-                                  Confirm Receipt
-                                </button>
+                                {canConfirmArrivals ? (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        const res = await apiClient.receiveStockTransfer(t.id);
+                                        onShowToast('Transfer Received', res.message);
+                                        fetchAllSettings();
+                                        onRefreshData?.();
+                                      } catch (err: any) {
+                                        onShowToast('Receive Failed', err?.message || 'Error confirming transfer receipt');
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-colors cursor-pointer"
+                                  >
+                                    Confirm Receipt
+                                  </button>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300">
+                                    Read-Only
+                                  </span>
+                                )}
                               </div>
                             ) : (
                               <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">

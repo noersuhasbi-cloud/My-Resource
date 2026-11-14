@@ -125,6 +125,8 @@ import type {
   DemandSeasonalityProfile,
   DemandForecastResponse,
   PosValidatePromoResponse,
+  EpodRecord,
+  EpodReturnLine,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
@@ -848,6 +850,106 @@ export const apiClient = {
     return res.json();
   },
 
+  async createStorefrontOrder(payload: {
+    orderId?: string;
+    storeId?: string;
+    fulfillmentType?: 'PICKUP_IN_STORE' | 'DELIVERY';
+    deliveryMethod?: 'instant' | 'scheduled' | 'pickup';
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    deliveryAddress?: string;
+    crmAccountId?: string;
+    voucherCode?: string;
+    discount?: number;
+    deliveryFee?: number;
+    paymentStatus?: 'pending' | 'paid';
+    notes?: string;
+    items: Array<
+      | CartItem
+      | {
+          sku: string;
+          productId?: string;
+          productName?: string;
+          quantity: number;
+          unitPrice?: number;
+          unit?: string;
+          isCatchWeight?: boolean;
+          estimatedWeightGrams?: number;
+        }
+    >;
+  }): Promise<{
+    success: boolean;
+    alreadyReserved?: boolean;
+    orderId: string;
+    fulfillmentType: 'PICKUP_IN_STORE' | 'DELIVERY';
+    status: string;
+    fulfillmentOrder: PickerOrder;
+    reservations?: Array<{
+      sku: string;
+      reservedQty: number;
+      newReservedStock: number;
+      newAvailableStock: number;
+      batchIds: string[];
+    }>;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/storefront/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to place storefront order & reserve stock');
+    }
+    return data;
+  },
+
+  async completeFulfillmentOrder(
+    orderId: string,
+    payload?: {
+      items?: Array<{
+        itemId?: string;
+        sku?: string;
+        pickedQty?: number;
+        actualWeightGrams?: number;
+        actualWeighedGrams?: number;
+      }>;
+      actualWeights?: Record<string, number>;
+    }
+  ): Promise<{
+    success: boolean;
+    alreadyCompleted?: boolean;
+    order: PickerOrder;
+    fulfillmentStatus?: string;
+    totals?: {
+      subtotalIDR: number;
+      discountIDR: number;
+      deliveryFeeIDR: number;
+      netRevenueIDR: number;
+      ppnIDR: number;
+      pb1IDR: number;
+      grandTotalIDR: number;
+      cogsIDR: number;
+    };
+    glJournalIds?: string[];
+    loyaltyPointsAwarded?: number;
+    suratJalan?: SuratJalanDocument;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/fulfillment/${encodeURIComponent(orderId)}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to complete omnichannel fulfillment order');
+    }
+    return data;
+  },
+
   // -------------------------------------------------------------
   // Catch Weight Management API
   // -------------------------------------------------------------
@@ -1440,6 +1542,77 @@ export const apiClient = {
       body: JSON.stringify(data),
     });
     return res.json();
+  },
+
+  async createLogisticsTrip(payload: {
+    suratJalanIds: string[];
+    routeZone: string;
+    vehicleType: string;
+    vehiclePlate: string;
+    maxPayloadKg?: number;
+    targetTempCelsius?: number;
+    currentTempCelsius?: number;
+    driverName: string;
+    driverContact?: string;
+    departureHub?: string;
+    estimatedArrival?: string;
+    notifyCustomers?: boolean;
+  }): Promise<{
+    success: boolean;
+    trip: ShipmentQuotaTracking;
+    suratJalans: SuratJalanDocument[];
+    notificationsSent: number;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/logistics/trips', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to consolidate route trip');
+    }
+    return data;
+  },
+
+  async submitSuratJalanEpod(
+    sjIdOrDoc: string,
+    payload: {
+      receiverName: string;
+      deliveredAt?: string;
+      arrivalTempCelsius: number;
+      outcome: 'DELIVERED_FULL' | 'PARTIAL_RETURN';
+      returnedItems?: Array<{
+        sku: string;
+        returnedQty: number;
+        condition: 'GOOD_RESTOCK' | 'DAMAGED_QUARANTINE';
+        reason?: string;
+      }>;
+      notes?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    document: SuratJalanDocument;
+    epod: EpodRecord;
+    creditMemoNumber?: string;
+    creditAmountIDR?: number;
+    glEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetchApi(
+      `/api/admin/logistics/surat-jalan/${encodeURIComponent(sjIdOrDoc)}/epod`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to record electronic Proof of Delivery (e-POD)');
+    }
+    return data;
   },
 
   // -------------------------------------------------------------

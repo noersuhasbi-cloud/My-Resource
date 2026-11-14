@@ -6,9 +6,11 @@ import type {
   InventoryItem,
   DynamicMarkdownConfig,
   BatchMarkdownCandidate,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   evaluateBatchMarkdown,
   DEFAULT_MARKDOWN_CONFIG,
@@ -47,6 +49,7 @@ interface FefoModuleProps {
   theme: 'light' | 'dark';
   selectedStore: string;
   inventory: InventoryItem[];
+  activeStaffSession?: StaffShiftSession | null;
   onShowToast: (title: string, message: string) => void;
 }
 
@@ -54,11 +57,15 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
   theme,
   selectedStore,
   inventory,
+  activeStaffSession,
   onShowToast,
 }) => {
   // View Switcher: Standard FEFO Batches vs Dynamic Markdown Engine
   const { triggerPrint } = usePrint();
   const [activeTab, setActiveTab] = useState<'batches' | 'markdown_engine'>('batches');
+  const canConfigureMarkdownPolicy =
+    !activeStaffSession ||
+    ['store_manager', 'coo', 'super_admin'].includes(normalizeEnterpriseRole(activeStaffSession.userRole));
 
   const [batches, setBatches] = useState<InventoryBatch[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -101,6 +108,10 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
   useEffect(() => {
     loadBatches();
   }, [selectedStore, statusFilter]);
+
+  useEffect(() => {
+    apiClient.getDynamicMarkdownConfig().then(setMarkdownConfig).catch(() => {});
+  }, []);
 
   // Run FEFO Simulation
   const handleRunSimulation = async (e: React.FormEvent) => {
@@ -169,24 +180,24 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
         'Dynamic Markdowns Activated',
         `Pushed ${markdownCandidates.length} batch clearance discounts to POS and Storefront checkout. Salvaging ${formatIDR(totalSalvageRecovery)} in grocery revenue.`
       );
-    } catch {
-      const ids = markdownCandidates.map((c) => c.batchId);
-      setAppliedMarkdownBatches(new Set(ids));
-      onShowToast(
-        'Dynamic Markdowns Activated (Storefront Sync)',
-        `Activated dynamic markdown pricing for ${markdownCandidates.length} lot(s). Cashier POS barcodes and storefront checkout synced.`
-      );
+    } catch (err) {
+      onShowToast('Markdown Sync Failed', err instanceof Error ? err.message : String(err));
     } finally {
       setIsPushingMarkdown(false);
     }
   };
 
-  const handleApplySingleMarkdown = (candidate: BatchMarkdownCandidate) => {
-    setAppliedMarkdownBatches((prev) => new Set([...prev, candidate.batchId]));
-    onShowToast(
-      'Markdown Applied to Batch',
-      `Batch #${candidate.batchId} (${candidate.productName}) clearance tag ${candidate.discountPercent}% active at POS.`
-    );
+  const handleApplySingleMarkdown = async (candidate: BatchMarkdownCandidate) => {
+    try {
+      await apiClient.applyDynamicBatchMarkdowns([candidate.batchId]);
+      setAppliedMarkdownBatches((prev) => new Set([...prev, candidate.batchId]));
+      onShowToast(
+        'Markdown Applied to Batch',
+        `Batch #${candidate.batchId} (${candidate.productName}) clearance tag ${candidate.discountPercent}% active at POS.`
+      );
+    } catch (err) {
+      onShowToast('Markdown Apply Failed', err instanceof Error ? err.message : String(err));
+    }
   };
 
   return (
@@ -1215,13 +1226,21 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  onShowToast('Policy Saved', 'Automated Dynamic Markdown policy updated successfully.');
-                  setIsConfigModalOpen(false);
+                type="button"
+                disabled={!canConfigureMarkdownPolicy}
+                onClick={async () => {
+                  try {
+                    const res = await apiClient.saveDynamicMarkdownConfig(markdownConfig);
+                    setMarkdownConfig(res.config);
+                    onShowToast('Policy Saved', res.message || 'Automated Dynamic Markdown policy updated successfully.');
+                    setIsConfigModalOpen(false);
+                  } catch (err) {
+                    onShowToast('Policy Save Failed', err instanceof Error ? err.message : String(err));
+                  }
                 }}
-                className="px-4 py-1.5 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-xs cursor-pointer"
+                className="px-4 py-1.5 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Save Policy
+                {canConfigureMarkdownPolicy ? 'Save Policy' : 'Read-Only (Manager/COO)'}
               </button>
             </div>
           </div>
@@ -1235,6 +1254,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
           onClose={() => setRecallTargetLot(null)}
           theme={theme}
           initialLotNumber={recallTargetLot}
+          activeStaffSession={activeStaffSession}
           onShowToast={onShowToast}
           onRecallExecuted={() => loadBatches()}
         />

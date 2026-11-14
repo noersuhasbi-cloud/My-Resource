@@ -19,15 +19,18 @@ import type {
   RmaRefundMethod,
   RmaSourceChannel,
   VendorRtvDebitNote,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 import { usePrint } from '../../context/PrintContext';
 
 interface ComplianceAccountingPanelsProps {
   theme: 'light' | 'dark';
   mode: 'rma_rtv' | 'coretax_djp';
   selectedStore: string;
+  activeStaffSession?: StaffShiftSession | null;
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -36,11 +39,19 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
   theme,
   mode,
   selectedStore,
+  activeStaffSession,
   onRefreshData,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
   const { triggerPrint } = usePrint();
+  const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
+  const canIssueRma =
+    !activeStaffSession ||
+    ['cashier', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
+  const canIssueRtv =
+    !activeStaffSession ||
+    ['purchasing', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
 
   // Module 1: RMA & RTV state
   const [rmaList, setRmaList] = useState<CustomerRmaRecord[]>([]);
@@ -319,11 +330,17 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
 
             <button
               type="submit"
-              disabled={isCreatingRma || !selectedOrderObj}
-              className="w-full py-2.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-50 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5"
+              disabled={isCreatingRma || !selectedOrderObj || !canIssueRma}
+              className="w-full py-2.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
-              <span>{isCreatingRma ? 'Issuing Nota Retur...' : 'Issue Credit Note (Nota Retur Penjualan)'}</span>
+              <span>
+                {!canIssueRma
+                  ? 'Read-Only (Requires Cashier/Manager/COO)'
+                  : isCreatingRma
+                  ? 'Issuing Nota Retur...'
+                  : 'Issue Credit Note (Nota Retur Penjualan)'}
+              </span>
             </button>
           </form>
 
@@ -393,11 +410,17 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
 
             <button
               type="submit"
-              disabled={isCreatingRtv}
-              className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5"
+              disabled={isCreatingRtv || !canIssueRtv}
+              className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
-              <span>{isCreatingRtv ? 'Generating Debit Note...' : 'Issue Vendor Debit Note (Nota Retur Pembelian)'}</span>
+              <span>
+                {!canIssueRtv
+                  ? 'Read-Only (Requires Purchasing/Manager/COO)'
+                  : isCreatingRtv
+                  ? 'Generating Debit Note...'
+                  : 'Issue Vendor Debit Note (Nota Retur Pembelian)'}
+              </span>
             </button>
           </form>
         </div>

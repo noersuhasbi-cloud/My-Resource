@@ -5,11 +5,13 @@ import { apiClient } from '../../services/apiClient';
 
 interface IndonesianTaxRulesPanelProps {
   theme: 'light' | 'dark';
+  canEdit?: boolean;
   onShowToast: (title: string, message: string) => void;
 }
 
 export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = ({
   theme,
+  canEdit = true,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
@@ -187,11 +189,12 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
                 </td>
                 <td className="py-2.5 px-3">
                   <select
+                    disabled={!canEdit}
                     value={rule.taxCategory}
                     onChange={(e) =>
                       handleUpdateTax(rule, e.target.value as IndonesianTaxCategory)
                     }
-                    className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold ${
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold disabled:opacity-60 disabled:cursor-not-allowed ${
                       isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
                     }`}
                   >
@@ -203,11 +206,12 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
                 <td className="py-2.5 px-3 text-center font-mono font-bold">
                   {rule.taxCategory === 'BKP_STANDARD' ? (
                     <select
+                      disabled={!canEdit}
                       value={rule.taxRatePercent}
                       onChange={(e) =>
                         handleUpdateTax(rule, rule.taxCategory, Number(e.target.value))
                       }
-                      className={`px-2 py-1 rounded-lg border font-mono ${
+                      className={`px-2 py-1 rounded-lg border font-mono disabled:opacity-60 disabled:cursor-not-allowed ${
                         isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
                       }`}
                     >
@@ -221,10 +225,11 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
                 <td className="py-2.5 px-3 text-center whitespace-nowrap">
                   <button
                     type="button"
+                    disabled={!canEdit}
                     onClick={() =>
                       handleUpdateTax(rule, rule.taxCategory, rule.taxRatePercent, !rule.b2cTaxInclusive)
                     }
-                    className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer ${
+                    className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
                       rule.b2cTaxInclusive
                         ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                         : 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30'

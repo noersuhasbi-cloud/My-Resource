@@ -512,6 +512,7 @@ export interface InventoryBatch {
   consignmentSupplier?: string;
   consignmentCommissionPercent?: number;
   consignmentCostIDR?: number;
+  reservedQuantity?: number;
 }
 
 export interface FEFOAllocationTrace {
@@ -732,6 +733,10 @@ export interface PickerOrderItem {
 
   status: PickerItemStatus;
   substitution?: PickerItemSubstitution;
+  isReserved?: boolean;
+  reservedAllocations?: FEFOAllocationTrace[];
+  taxCategory?: IndonesianTaxCategory;
+  taxRatePercent?: number;
 }
 
 export interface PickerOrder {
@@ -742,6 +747,8 @@ export interface PickerOrder {
   storeId: string;
   storeName: string;
   deliveryMethod: 'instant' | 'scheduled' | 'pickup';
+  fulfillmentType?: 'PICKUP_IN_STORE' | 'DELIVERY';
+  fulfillmentStatus?: 'PENDING_PICKING' | 'READY_FOR_PICKUP' | 'READY_FOR_DISPATCH' | 'COMPLETED';
   assignedPicker: string;
   pickerStatus: PickerOrderStatus;
   priority: 'express_30min' | 'standard' | 'scheduled';
@@ -751,6 +758,17 @@ export interface PickerOrder {
   pickedItems: number;
   hasCatchWeight: boolean;
   notes?: string;
+  crmAccountId?: string;
+  voucherCode?: string;
+  discountIDR?: number;
+  deliveryFeeIDR?: number;
+  deliveryAddress?: string;
+  paymentStatus?: 'pending' | 'paid';
+  stockReserved?: boolean;
+  suratJalanId?: string;
+  suratJalanNumber?: string;
+  glJournalIds?: string[];
+  totalFinalIDR?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -1490,11 +1508,42 @@ export interface SuratJalanDocument {
   items: SuratJalanItem[];
   totalPackages: number;
   totalWeightKg: number;
-  status: 'draft' | 'dispatched' | 'in_transit' | 'delivered' | 'signed';
+  status: 'draft' | 'READY_FOR_DISPATCH' | 'dispatched' | 'in_transit' | 'delivered' | 'partial_return' | 'signed';
   senderSignatureName: string;
   driverSignatureName?: string;
   recipientSignatureName?: string;
   signedAt?: string;
+  orderId?: string;
+  b2bOrderRef?: string;
+  crmAccountId?: string;
+  recipientEmail?: string;
+  tripId?: string;
+  routeZone?: string;
+  epod?: EpodRecord;
+}
+
+export interface EpodReturnLine {
+  sku: string;
+  productName?: string;
+  dispatchedQty?: number;
+  returnedQty: number;
+  condition: 'GOOD_RESTOCK' | 'DAMAGED_QUARANTINE';
+  reason?: string;
+  unitPriceIDR?: number;
+  unitCostIDR?: number;
+}
+
+export interface EpodRecord {
+  receiverName: string;
+  deliveredAt: string;
+  arrivalTempCelsius: number;
+  outcome: 'DELIVERED_FULL' | 'PARTIAL_RETURN';
+  returnedItems: EpodReturnLine[];
+  creditMemoNumber?: string;
+  creditAmountIDR?: number;
+  glEntryIds?: string[];
+  notes?: string;
+  recordedBy?: string;
 }
 
 export interface DeliveryOrderItem {
@@ -1527,7 +1576,7 @@ export interface DeliveryOrderDocument {
 export interface ShipmentQuotaTracking {
   id: string; // e.g. SHP-2026-001
   tripId: string;
-  vehicleType: 'Refrigerated Van 1.5T' | 'Chilled Truck 4T' | 'Electric Cargo Trike' | 'Standard Courier';
+  vehicleType: 'Refrigerated Van 1.5T' | 'Chilled Truck 4T' | 'Electric Cargo Trike' | 'Standard Courier' | string;
   vehiclePlate: string;
   maxPayloadKg: number;
   currentPayloadKg: number;
@@ -1544,6 +1593,12 @@ export interface ShipmentQuotaTracking {
   driverContact: string;
   assignedOrdersCount: number;
   status: 'loading' | 'in_transit' | 'arrived' | 'delayed';
+  routeZone?: string;
+  suratJalanIds?: string[];
+  suratJalanNumbers?: string[];
+  coldChainCompliant?: boolean;
+  coldChainAdvisory?: string;
+  customerNotificationsSent?: number;
 }
 
 // =============================================================

@@ -52,6 +52,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [qrisPayloadString, setQrisPayloadString] = useState<string>('');
   const [qrisCountdownSeconds, setQrisCountdownSeconds] = useState<number>(900); // 15 minutes
   const [isSimulatingPayment, setIsSimulatingPayment] = useState<boolean>(false);
+  const [isReservingOrder, setIsReservingOrder] = useState<boolean>(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [blockedNotice, setBlockedNotice] = useState<string>('');
 
@@ -117,9 +118,35 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       return;
     }
     setBlockedNotice('');
+    setIsReservingOrder(true);
 
     const newOrderId = generateOrderId();
     setCurrentOrderId(newOrderId);
+
+    try {
+      // Reserve branch stock & enqueue omnichannel fulfillment order on backend
+      await apiClient.createStorefrontOrder({
+        orderId: newOrderId,
+        storeId: selectedPickupStore?.id || 'store-jkt-senopati',
+        fulfillmentType: deliveryMethod === 'pickup' ? 'PICKUP_IN_STORE' : 'DELIVERY',
+        deliveryMethod,
+        customerName: recipientName,
+        customerEmail: recipientEmail,
+        customerPhone: recipientPhone,
+        deliveryAddress: addressLine,
+        crmAccountId: customerAccount?.id,
+        voucherCode,
+        discount: appliedDiscount,
+        deliveryFee,
+        paymentStatus: 'pending',
+        notes: deliveryNotes,
+        items,
+      });
+    } catch (err: any) {
+      setIsReservingOrder(false);
+      setBlockedNotice(err?.message || 'Unable to reserve inventory for your order. Please adjust quantities.');
+      return;
+    }
 
     try {
       // Connect to Open API endpoint on backend
@@ -128,13 +155,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setQrisPayloadString(res.qrPayloadString);
       setQrisCountdownSeconds(900);
       setStep('qris_payment');
-    } catch (err) {
-      // Graceful fallback
+    } catch {
+      // Graceful fallback for QRIS QR payload string after reservation succeeded
       const fallbackRef = generateQrisReference();
       setQrisReference(fallbackRef);
       setQrisPayloadString(`00020101021226630016ID.GO.BI.QRIS011893600002010200392817440215ID10200392817440303UME5204541153033605406${total}5802ID5928GROCEMART RETAIL INDONESIA6007JAKARTA61051211062160112${newOrderId}6304ABCD`);
       setQrisCountdownSeconds(900);
       setStep('qris_payment');
+    } finally {
+      setIsReservingOrder(false);
     }
   };
 
@@ -383,12 +412,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               )}
             </div>
 
-            {/* Store Closed Banner Notice */}
+            {/* Store Closed or Stock Validation Banner Notice */}
             {(isStoreClosed || blockedNotice) && (
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2.5 animate-in fade-in">
                 <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="font-bold text-sm">Storefront Checkout Temporarily Paused</h4>
+                  <h4 className="font-bold text-sm">
+                    {isStoreClosed ? 'Storefront Checkout Temporarily Paused' : 'Order Stock & Fulfillment Check'}
+                  </h4>
                   <p className="mt-0.5 leading-relaxed">
                     {blockedNotice || storeClosureNotice || storeStatus?.noticeBanner || 'GroceMart is currently in holiday closure or maintenance. You may browse the catalog, but new order checkouts are paused.'}
                   </p>
@@ -446,10 +477,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
               <button
                 type="submit"
-                disabled={isStoreClosed}
+                disabled={isStoreClosed || isReservingOrder}
                 className="py-3 px-6 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>{isStoreClosed ? 'Checkout Paused (Store Closed)' : 'Continue to QRIS Payment'}</span>
+                <span>
+                  {isStoreClosed
+                    ? 'Checkout Paused (Store Closed)'
+                    : isReservingOrder
+                    ? 'Reserving Branch Stock...'
+                    : 'Continue to QRIS Payment'}
+                </span>
                 <ArrowRight className="w-4 h-4 text-amber-300" />
               </button>
             </div>
@@ -526,6 +563,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 Supported: GoPay · OVO · ShopeePay · DANA · BCA mobile · Livin' by Mandiri · BRImo · CIMB OCTO
               </p>
             </div>
+
+            {blockedNotice && (
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2.5 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold">Payment Verification Failed</h4>
+                  <p className="mt-0.5 leading-relaxed">{blockedNotice}</p>
+                </div>
+              </div>
+            )}
 
             {/* Simulator Action Button */}
             <div className="pt-4 border-t border-stone-200 dark:border-stone-800 flex flex-col sm:flex-row items-center gap-3">

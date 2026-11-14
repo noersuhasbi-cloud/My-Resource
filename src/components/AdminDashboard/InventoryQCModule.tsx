@@ -6,8 +6,10 @@ import type {
   QCDispositionAction,
   InventoryItem,
   PutawaySuggestionResponse,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -37,6 +39,7 @@ interface InventoryQCModuleProps {
   selectedStore: string;
   inventory: InventoryItem[];
   qcRecords?: QCInspectionRecord[];
+  activeStaffSession?: StaffShiftSession | null;
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -46,10 +49,18 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   selectedStore,
   inventory,
   qcRecords,
+  activeStaffSession,
   onRefreshData,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
+  const canCreateInspection =
+    !activeStaffSession ||
+    ['warehouse', 'purchasing', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
+  const canIssueRtv =
+    !activeStaffSession ||
+    ['purchasing', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
 
   // Internal QC records if not provided by parent
   const [internalQcRecords, setInternalQcRecords] = useState<QCInspectionRecord[]>(qcRecords || []);
@@ -279,13 +290,15 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Quality Inspection</span>
-          </button>
+          {canCreateInspection && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Quality Inspection</span>
+            </button>
+          )}
         </div>
 
         {/* KPI Summary Cards */}
@@ -534,7 +547,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                         <ShieldAlert className="w-3 h-3" />
                         <span>Recall Trace</span>
                       </button>
-                      {(rec.disposition === 'REJECTED' || rec.disposition === 'QUARANTINED') && (
+                      {canIssueRtv && (rec.disposition === 'REJECTED' || rec.disposition === 'QUARANTINED') && (
                         <button
                           type="button"
                           onClick={async () => {
@@ -934,6 +947,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
           onClose={() => setRecallLotModal(null)}
           theme={theme}
           initialLotNumber={recallLotModal}
+          activeStaffSession={activeStaffSession}
           onShowToast={onShowToast}
           onRecallExecuted={() => {
             if (onRefreshData) onRefreshData();

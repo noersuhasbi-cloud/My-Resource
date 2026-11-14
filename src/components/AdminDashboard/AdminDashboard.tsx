@@ -173,6 +173,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
 
   const isCurrentRoleBranchScoped = isBranchScopedRole(activeStaffSession?.userRole);
+  const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
+  const canMutateOperations = ['store_manager', 'coo', 'super_admin'].includes(canonicalRole);
+  const canMutateClimateThresholds = ['warehouse', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
   const lockedBranchId =
     activeStaffSession?.assignedBranchId ||
     (activeStaffSession?.storeId && activeStaffSession.storeId !== 'ALL'
@@ -181,8 +184,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const canViewValuation = canSessionViewValuation(activeStaffSession);
   const canViewFinancialModules = (() => {
     if (!activeStaffSession) return true;
-    const role = normalizeEnterpriseRole(activeStaffSession.userRole);
-    return role === 'store_manager' || role === 'admin' || role === 'coo' || role === 'super_admin';
+    return canonicalRole === 'store_manager' || canonicalRole === 'admin' || canonicalRole === 'coo' || canonicalRole === 'super_admin';
   })();
 
   // Synchronize API operator context & branch scope whenever activeStaffSession updates
@@ -1149,7 +1151,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <p className={`text-xs ${textMuted}`}>Granular performance across Indonesian physical hubs</p>
                   </div>
                   <span className="inline-flex items-center whitespace-nowrap text-xs font-semibold px-2.5 py-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-lg border border-emerald-500/20">
-                    6 Active Outlets
+                    {(omzetData?.storeBreakdown || []).filter((s) => s.status !== 'Closed').length} / {(omzetData?.storeBreakdown || []).length || 6} Open Outlets
                   </span>
                 </div>
 
@@ -1190,10 +1192,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </div>
                           </td>
                           <td className="py-3 px-3 text-right whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              Open
-                            </span>
+                            {store.status === 'Closed' ? (
+                              <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                Closed
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Open
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1299,8 +1308,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </span>
                     <button
                       onClick={handleToggleStoreOpen}
-                      disabled={isUpdatingStatus}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                      disabled={isUpdatingStatus || !canMutateOperations}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
                         storeStatus?.isOpen ? 'bg-[#0F4C3A] dark:bg-emerald-600' : 'bg-red-600'
                       }`}
                     >
@@ -1314,6 +1323,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
+              {!canMutateOperations && (
+                <div className="mt-4 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                  <Lock className="w-4 h-4 shrink-0" />
+                  <span>Read-only operations monitor. Only Store Manager, COO, or Super Admin can toggle store status or edit operating schedules.</span>
+                </div>
+              )}
+
               {/* Custom Banner Editor */}
               <div className="mt-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1323,10 +1339,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </label>
                     <input
                       type="text"
+                      disabled={!canMutateOperations}
                       value={bannerInput}
                       onChange={(e) => setBannerInput(e.target.value)}
                       placeholder="e.g. Fresh harvest arrives daily from Lembang! Open 07:00 - 22:00 WIB."
-                      className={`w-full px-3.5 py-2 text-xs rounded-xl ${inputClass}`}
+                      className={`w-full px-3.5 py-2 text-xs rounded-xl disabled:opacity-60 ${inputClass}`}
                     />
                   </div>
 
@@ -1336,10 +1353,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </label>
                     <input
                       type="text"
+                      disabled={!canMutateOperations}
                       value={reopenInput}
                       onChange={(e) => setReopenInput(e.target.value)}
                       placeholder="Open 07:00 - 22:00 Daily"
-                      className={`w-full px-3.5 py-2 text-xs rounded-xl ${inputClass}`}
+                      className={`w-full px-3.5 py-2 text-xs rounded-xl disabled:opacity-60 ${inputClass}`}
                     />
                   </div>
                 </div>
@@ -1347,10 +1365,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="flex justify-end">
                   <button
                     onClick={handleSaveBanner}
-                    disabled={isUpdatingStatus}
-                    className="px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl transition-all shadow-sm disabled:opacity-50"
+                    disabled={isUpdatingStatus || !canMutateOperations}
+                    className="px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Save &amp; Broadcast Banner
+                    {canMutateOperations ? 'Save & Broadcast Banner' : 'Read-Only Mode'}
                   </button>
                 </div>
               </div>
@@ -1429,7 +1447,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div className={`flex items-center justify-between pt-2 border-t ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                         <button
                           onClick={() => handleToggleOutletEmergency(outlet)}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
+                          disabled={!canMutateOperations}
+                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                             outlet.isEmergencyClosed
                               ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/20'
                               : 'bg-rose-600/10 text-rose-700 dark:text-rose-300 border-rose-500/40 hover:bg-rose-600/20'
@@ -1440,7 +1459,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                         <button
                           onClick={() => setEditingOutlet(outlet)}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 border ${
+                          disabled={!canMutateOperations}
+                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 border disabled:opacity-50 disabled:cursor-not-allowed ${
                             isLight
                               ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                               : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
@@ -1659,6 +1679,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </span>
                         <div className="flex items-center gap-1">
                           <button
+                            disabled={!canMutateClimateThresholds}
                             onClick={async () => {
                               const newOffset = Number((cfg.adaptiveOffsetCelsius - 0.5).toFixed(1));
                               try {
@@ -1673,12 +1694,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onShowToast('Error', String(e));
                               }
                             }}
-                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-zinc-700"
-                            title="Tighter threshold (-0.5°C)"
+                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={canMutateClimateThresholds ? 'Tighter threshold (-0.5°C)' : 'Read-Only for your role'}
                           >
                             -0.5°
                           </button>
                           <button
+                            disabled={!canMutateClimateThresholds}
                             onClick={async () => {
                               const newOffset = Number((cfg.adaptiveOffsetCelsius + 0.5).toFixed(1));
                               try {
@@ -1693,8 +1715,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onShowToast('Error', String(e));
                               }
                             }}
-                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-zinc-700"
-                            title="Looser threshold (+0.5°C)"
+                            className="px-2 py-0.5 rounded border text-xs font-bold hover:bg-gray-100 dark:hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={canMutateClimateThresholds ? 'Looser threshold (+0.5°C)' : 'Read-Only for your role'}
                           >
                             +0.5°
                           </button>
@@ -2121,6 +2143,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             selectedStore={selectedGlobalStore}
             inventory={inventory}
+            activeStaffSession={activeStaffSession}
             onShowToast={onShowToast}
           />
         )}
@@ -2188,6 +2211,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             selectedStore={selectedGlobalStore}
             inventory={inventory}
+            activeStaffSession={activeStaffSession}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
           />
@@ -2201,6 +2225,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             isOpen={true}
             isStandalonePage={true}
+            activeStaffSession={activeStaffSession}
             onClose={() => {}}
             onShowToast={onShowToast}
           />

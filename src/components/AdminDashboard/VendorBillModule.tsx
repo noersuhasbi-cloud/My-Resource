@@ -158,8 +158,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   const [currencyInput, setCurrencyInput] = useState<SupportedCurrency>('IDR');
   const [taxPercentInput, setTaxPercentInput] = useState<number>(11);
   const [billNotesInput, setBillNotesInput] = useState<string>('');
-  const [autoApproveInput, setAutoApproveInput] = useState<boolean>(true);
+  const [autoApproveInput, setAutoApproveInput] = useState<boolean>(canApprovePayVoidBill);
   const [isSubmittingBill, setIsSubmittingBill] = useState(false);
+
+  useEffect(() => {
+    setAutoApproveInput(canApprovePayVoidBill);
+  }, [canApprovePayVoidBill]);
 
   // Line items state for draft bill creation
   const [itemBilledOverrides, setItemBilledOverrides] = useState<
@@ -1211,17 +1215,19 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               </div>
 
               {/* Checkbox for Immediate Approval */}
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={autoApproveInput}
-                  onChange={(e) => setAutoApproveInput(e.target.checked)}
-                  className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="font-medium text-xs">
-                  Auto-Approve &amp; post liability immediately to Accounts Payable (COA #2010)
-                </span>
-              </label>
+              {canApprovePayVoidBill && (
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoApproveInput}
+                    onChange={(e) => setAutoApproveInput(e.target.checked)}
+                    className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span className="font-medium text-xs">
+                    Auto-Approve &amp; post liability immediately to Accounts Payable (COA #2010)
+                  </span>
+                </label>
+              )}
 
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-zinc-800">

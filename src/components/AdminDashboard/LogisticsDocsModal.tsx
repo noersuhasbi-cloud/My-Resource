@@ -4,10 +4,12 @@ import type {
   SuratJalanDocument,
   DeliveryOrderDocument,
   ShipmentQuotaTracking,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { apiClient } from '../../services/apiClient';
 import { usePrint } from '../../context/PrintContext';
+import { normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   Truck,
   FileText,
@@ -28,6 +30,9 @@ import {
   User,
   Mail,
   MessageCircle,
+  ClipboardCheck,
+  AlertTriangle,
+  Layers,
 } from 'lucide-react';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
 
@@ -40,6 +45,7 @@ interface LogisticsDocsModalProps {
   deliveryOrders?: DeliveryOrderDocument[];
   shipments?: ShipmentQuotaTracking[];
   onIssueSuratJalan?: (doc: Partial<SuratJalanDocument>) => Promise<void>;
+  activeStaffSession?: StaffShiftSession | null;
   onShowToast: (title: string, message: string) => void;
 }
 
@@ -52,9 +58,15 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
   deliveryOrders: propDoList,
   shipments: propShipments,
   onIssueSuratJalan,
+  activeStaffSession,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const canIssueSuratJalan =
+    !activeStaffSession ||
+    ['warehouse', 'store_manager', 'coo', 'super_admin'].includes(
+      normalizeEnterpriseRole(activeStaffSession.userRole)
+    );
   const { triggerPrint, invoiceTracking } = usePrint();
   const showLots = invoiceTracking?.displayLotsOnInvoices ?? true;
   const showDeliveryExpiry = invoiceTracking?.displaySerialExpiryOnDeliveryDocs ?? true;
@@ -78,8 +90,12 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
       setInternalSjList(sjRes);
       setInternalDoList(doRes);
       setInternalShipments(quotaRes);
-      if (!selectedSj && sjRes.length > 0) setSelectedSj(sjRes[0]);
-      if (!selectedDo && doRes.length > 0) setSelectedDo(doRes[0]);
+      setSelectedSj((prev) =>
+        prev ? sjRes.find((s) => s.id === prev.id) || sjRes[0] || null : sjRes[0] || null
+      );
+      setSelectedDo((prev) =>
+        prev ? doRes.find((d) => d.id === prev.id) || doRes[0] || null : doRes[0] || null
+      );
     } catch (err: unknown) {
       console.error('Failed to fetch logistics documents:', err);
     }
@@ -118,6 +134,62 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
   const [newSjVehiclePlate, setNewSjVehiclePlate] = useState<string>('B 9482 SXZ');
   const [newSjTemp, setNewSjTemp] = useState<number>(3.5);
   const [newSjNotes, setNewSjNotes] = useState<string>('Continuous cold-chain 2-4°C required');
+
+  // Consolidated Route Trip Builder State
+  const FLEET_PRESETS = [
+    {
+      id: 'chiller_van',
+      label: 'Chiller Van B-9102-GMR (2°C–4°C • Max 1,200 kg)',
+      vehicleType: 'Chiller Van (2°C–4°C)',
+      vehiclePlate: 'B-9102-GMR',
+      driverName: 'Bambang Supriyanto',
+      driverContact: '+62 812 8899 7711',
+      maxPayloadKg: 1200,
+      targetTempCelsius: 3.0,
+      isAmbient: false,
+    },
+    {
+      id: 'reefer_truck',
+      label: 'Reefer Truck B-9220-GMR (2°C–4°C • Max 2,500 kg)',
+      vehicleType: 'Reefer Truck (2°C–4°C)',
+      vehiclePlate: 'B-9220-GMR',
+      driverName: 'Hendra Gunawan',
+      driverContact: '+62 813 7788 1122',
+      maxPayloadKg: 2500,
+      targetTempCelsius: 2.5,
+      isAmbient: false,
+    },
+    {
+      id: 'ambient_truck',
+      label: 'Ambient Box Truck B-9440-GMR (Dry Cargo • Max 2,500 kg)',
+      vehicleType: 'Ambient Box Truck',
+      vehiclePlate: 'B-9440-GMR',
+      driverName: 'Slamet Riyadi',
+      driverContact: '+62 815 9922 3344',
+      maxPayloadKg: 2500,
+      targetTempCelsius: 24.0,
+      isAmbient: true,
+    },
+  ];
+
+  const [isTripBuilderOpen, setIsTripBuilderOpen] = useState<boolean>(false);
+  const [tripSelectedSjIds, setTripSelectedSjIds] = useState<string[]>([]);
+  const [tripRouteZone, setTripRouteZone] = useState<string>('South Jakarta / SCBD-Senopati');
+  const [tripFleetPresetId, setTripFleetPresetId] = useState<string>('chiller_van');
+  const [tripNotifyCustomers, setTripNotifyCustomers] = useState<boolean>(true);
+  const [isSubmittingTrip, setIsSubmittingTrip] = useState<boolean>(false);
+
+  // e-POD Modal State
+  const [epodTargetSj, setEpodTargetSj] = useState<SuratJalanDocument | null>(null);
+  const [epodReceiverName, setEpodReceiverName] = useState<string>('');
+  const [epodDeliveredAt, setEpodDeliveredAt] = useState<string>('');
+  const [epodArrivalTemp, setEpodArrivalTemp] = useState<number>(3.4);
+  const [epodOutcome, setEpodOutcome] = useState<'DELIVERED_FULL' | 'PARTIAL_RETURN'>('DELIVERED_FULL');
+  const [epodNotes, setEpodNotes] = useState<string>('');
+  const [epodReturnMap, setEpodReturnMap] = useState<
+    Record<string, { returnedQty: number; condition: 'GOOD_RESTOCK' | 'DAMAGED_QUARANTINE'; reason: string }>
+  >({});
+  const [isSubmittingEpod, setIsSubmittingEpod] = useState<boolean>(false);
 
   if (!isOpen && !isStandalonePage) return null;
 
@@ -173,6 +245,121 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
     }
   };
 
+  const readyToDispatchSjList = suratJalanList.filter(
+    (sj) => sj.status === 'READY_FOR_DISPATCH' || sj.status === 'draft'
+  );
+  const activeFleetPreset =
+    FLEET_PRESETS.find((f) => f.id === tripFleetPresetId) || FLEET_PRESETS[0];
+  const selectedTripSjs = suratJalanList.filter((sj) => tripSelectedSjIds.includes(sj.id));
+  const selectedTripWeightKg = Number(
+    selectedTripSjs.reduce((sum, sj) => sum + (Number(sj.totalWeightKg) || 0), 0).toFixed(2)
+  );
+  const selectedTripUtilPct = Math.round(
+    (selectedTripWeightKg / activeFleetPreset.maxPayloadKg) * 100
+  );
+  const tripColdChainConflict =
+    activeFleetPreset.isAmbient &&
+    selectedTripSjs.some((sj) => (sj.coldChainTempCelsius ?? 4) <= 8);
+
+  const openTripBuilder = () => {
+    setTripSelectedSjIds(readyToDispatchSjList.map((sj) => sj.id));
+    setIsTripBuilderOpen(true);
+  };
+
+  const handleConsolidateTripSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (tripSelectedSjIds.length === 0 || isSubmittingTrip) return;
+    setIsSubmittingTrip(true);
+    try {
+      const res = await apiClient.createLogisticsTrip({
+        suratJalanIds: tripSelectedSjIds,
+        routeZone: tripRouteZone,
+        vehicleType: activeFleetPreset.vehicleType,
+        vehiclePlate: activeFleetPreset.vehiclePlate,
+        maxPayloadKg: activeFleetPreset.maxPayloadKg,
+        targetTempCelsius: activeFleetPreset.targetTempCelsius,
+        currentTempCelsius: activeFleetPreset.isAmbient ? 23.5 : activeFleetPreset.targetTempCelsius,
+        driverName: activeFleetPreset.driverName,
+        driverContact: activeFleetPreset.driverContact,
+        notifyCustomers: tripNotifyCustomers,
+      });
+      await fetchDocs();
+      setIsTripBuilderOpen(false);
+      onShowToast('Consolidated Trip Dispatched', res.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Trip Consolidation Blocked', msg);
+    } finally {
+      setIsSubmittingTrip(false);
+    }
+  };
+
+  const openEpodModal = (sj: SuratJalanDocument) => {
+    setEpodTargetSj(sj);
+    setEpodReceiverName(sj.recipientName || '');
+    setEpodDeliveredAt(new Date().toISOString().slice(0, 16));
+    setEpodArrivalTemp(sj.coldChainTempCelsius ?? 3.5);
+    setEpodOutcome('DELIVERED_FULL');
+    setEpodNotes('');
+    const initMap: Record<
+      string,
+      { returnedQty: number; condition: 'GOOD_RESTOCK' | 'DAMAGED_QUARANTINE'; reason: string }
+    > = {};
+    sj.items.forEach((it) => {
+      initMap[it.sku] = {
+        returnedQty: 0,
+        condition: 'GOOD_RESTOCK',
+        reason: '',
+      };
+    });
+    setEpodReturnMap(initMap);
+  };
+
+  const handleSubmitEpod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!epodTargetSj || isSubmittingEpod) return;
+
+    const returnedItems =
+      epodOutcome === 'PARTIAL_RETURN'
+        ? Object.entries(epodReturnMap)
+            .filter(([, cfg]) => Number(cfg.returnedQty) > 0)
+            .map(([sku, cfg]) => ({
+              sku,
+              returnedQty: Number(cfg.returnedQty),
+              condition: cfg.condition,
+              reason: cfg.reason || undefined,
+            }))
+        : [];
+
+    if (epodOutcome === 'PARTIAL_RETURN' && returnedItems.length === 0) {
+      onShowToast(
+        'Partial Return Quantities Needed',
+        'Enter at least one returned SKU quantity (> 0) or select Full Delivery.'
+      );
+      return;
+    }
+
+    setIsSubmittingEpod(true);
+    try {
+      const res = await apiClient.submitSuratJalanEpod(epodTargetSj.id, {
+        receiverName: epodReceiverName,
+        deliveredAt: epodDeliveredAt ? new Date(epodDeliveredAt).toISOString() : undefined,
+        arrivalTempCelsius: Number(epodArrivalTemp),
+        outcome: epodOutcome,
+        returnedItems,
+        notes: epodNotes || undefined,
+      });
+      await fetchDocs();
+      setEpodTargetSj(null);
+      onShowToast('e-POD Recorded & Synced', res.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('e-POD Submission Failed', msg);
+    } finally {
+      setIsSubmittingEpod(false);
+    }
+  };
+
   const filteredSjList = suratJalanList.filter((sj) => {
     if (!searchTerm) return true;
     const q = searchTerm.toLowerCase();
@@ -217,6 +404,18 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
           <div className="flex items-center gap-2">
             {activeTab === 'surat_jalan' && selectedSj && (
               <>
+                {canIssueSuratJalan &&
+                  !['delivered', 'partial_return', 'signed'].includes(selectedSj.status) && (
+                    <button
+                      type="button"
+                      onClick={() => openEpodModal(selectedSj)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all cursor-pointer"
+                      title="Record Electronic Proof of Delivery (e-POD)"
+                    >
+                      <ClipboardCheck className="w-3.5 h-3.5" />
+                      <span>Complete e-POD</span>
+                    </button>
+                  )}
                 <button
                   type="button"
                   onClick={() => setDispatchSj({ sj: selectedSj, channel: 'email' })}
@@ -331,14 +530,28 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
             </button>
           </div>
 
-          {activeTab === 'surat_jalan' && (
-            <button
-              onClick={() => setIsCreatingSj(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-xs transition-all cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Issue Surat Jalan</span>
-            </button>
+          {activeTab === 'surat_jalan' && canIssueSuratJalan && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={openTripBuilder}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                  isLight
+                    ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900'
+                    : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-300'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Consolidate Route Trip ({readyToDispatchSjList.length})</span>
+              </button>
+              <button
+                onClick={() => setIsCreatingSj(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Issue Surat Jalan</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -574,6 +787,34 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                         </div>
                       </div>
                     </div>
+
+                    {selectedSj.epod && (
+                      <div className="mt-5 p-3.5 rounded-xl border border-emerald-300 dark:border-emerald-700/60 bg-emerald-50/70 dark:bg-emerald-950/20 text-xs space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider text-[11px]">
+                            Electronic Proof of Delivery (e-POD) Verified — {selectedSj.epod.outcome.replace(/_/g, ' ')}
+                          </span>
+                          <span className="font-mono text-[11px] text-emerald-800 dark:text-emerald-400">
+                            Arrival Temp: {selectedSj.epod.arrivalTempCelsius}°C · Signed: {new Date(selectedSj.epod.deliveredAt).toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-700 dark:text-zinc-300">
+                          Receiver: <strong>{selectedSj.epod.receiverName}</strong>
+                          {selectedSj.tripId && <span> · Consolidated Trip: <strong className="font-mono">{selectedSj.tripId}</strong></span>}
+                          {selectedSj.epod.creditMemoNumber && (
+                            <span> · Credit Memo: <strong className="font-mono text-amber-700 dark:text-amber-300">{selectedSj.epod.creditMemoNumber}</strong> ({formatIDR(selectedSj.epod.creditAmountIDR || 0)})</span>
+                          )}
+                        </div>
+                        {selectedSj.epod.returnedItems && selectedSj.epod.returnedItems.length > 0 && (
+                          <div className="text-[11px] text-amber-800 dark:text-amber-300 pt-1 border-t border-emerald-200/70 dark:border-emerald-800/50">
+                            Returned Lines:{' '}
+                            {selectedSj.epod.returnedItems
+                              .map((r) => `${r.sku} x${r.returnedQty} (${r.condition.replace(/_/g, ' ')})`)
+                              .join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="py-20 text-center text-xs opacity-50">Select a Surat Jalan to view</div>
@@ -805,10 +1046,435 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
           docNumber={dispatchSj.sj.documentNumber}
           docSummary={`Recipient: ${dispatchSj.sj.recipientName}\nFleet: ${dispatchSj.sj.vehicleType} (${dispatchSj.sj.vehiclePlateNumber}) | Driver: ${dispatchSj.sj.driverName}\nPayload: ${dispatchSj.sj.totalPackages} Koli / ${dispatchSj.sj.totalWeightKg} Kg`}
           defaultRecipientName={dispatchSj.sj.recipientName}
-          defaultRecipientEmail="warehouse-receiving@grocemart.co.id"
+          defaultRecipientEmail={dispatchSj.sj.recipientEmail || 'warehouse-receiving@grocemart.co.id'}
           defaultRecipientPhone={dispatchSj.sj.recipientPhone}
           onShowToast={onShowToast}
         />
+      )}
+
+      {/* Route Trip Consolidation Builder Modal */}
+      {isTripBuilderOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[115] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto ${
+            isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+          }`}>
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-[#0F4C3A] text-white">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Consolidate Delivery Route Trip</h3>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                    Group multiple ready Surat Jalan waybills onto one cold-chain fleet trip
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTripBuilderOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConsolidateTripSubmit} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Route Delivery Zone</label>
+                  <select
+                    value={tripRouteZone}
+                    onChange={(e) => setTripRouteZone(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    }`}
+                  >
+                    <option value="South Jakarta / SCBD-Senopati">South Jakarta / SCBD-Senopati</option>
+                    <option value="Central & West Jakarta">Central & West Jakarta</option>
+                    <option value="PIK 2 / North Jakarta">PIK 2 / North Jakarta</option>
+                    <option value="Bintaro / BSD City">Bintaro / BSD City</option>
+                    <option value="Bekasi / East Industrial">Bekasi / East Industrial</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">Fleet Vehicle & Driver Assignment</label>
+                  <select
+                    value={tripFleetPresetId}
+                    onChange={(e) => setTripFleetPresetId(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    }`}
+                  >
+                    {FLEET_PRESETS.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Payload Quota & Cold-Chain Validation Bar */}
+              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800/70 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">
+                    Driver: {activeFleetPreset.driverName} ({activeFleetPreset.vehiclePlate})
+                  </span>
+                  <span className={`font-mono font-bold ${
+                    selectedTripUtilPct > 100
+                      ? 'text-rose-600 dark:text-rose-400'
+                      : 'text-[#0F4C3A] dark:text-emerald-400'
+                  }`}>
+                    {selectedTripWeightKg} / {activeFleetPreset.maxPayloadKg} kg ({selectedTripUtilPct}%)
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      selectedTripUtilPct > 100
+                        ? 'bg-rose-600'
+                        : selectedTripUtilPct > 80
+                        ? 'bg-amber-500'
+                        : 'bg-[#0F4C3A]'
+                    }`}
+                    style={{ width: `${Math.min(100, selectedTripUtilPct)}%` }}
+                  />
+                </div>
+                {tripColdChainConflict && (
+                  <div className="flex items-start gap-2 text-rose-700 dark:text-rose-300 pt-1">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      Cold-Chain Conflict: Selected Surat Jalan contains chilled/frozen goods. Switch to a Chiller Van or Reefer Truck.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Ready Surat Jalan Selector */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Select Surat Jalan Dispatches ({tripSelectedSjIds.length} selected)</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTripSelectedSjIds(
+                        tripSelectedSjIds.length === readyToDispatchSjList.length
+                          ? []
+                          : readyToDispatchSjList.map((s) => s.id)
+                      )
+                    }
+                    className="text-[11px] font-semibold text-[#0F4C3A] dark:text-emerald-400 hover:underline cursor-pointer"
+                  >
+                    {tripSelectedSjIds.length === readyToDispatchSjList.length ? 'Clear All' : 'Select All Ready'}
+                  </button>
+                </div>
+
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                  {readyToDispatchSjList.length === 0 ? (
+                    <div className="p-6 text-center rounded-xl border border-dashed border-gray-300 dark:border-zinc-700 text-gray-500">
+                      No READY_FOR_DISPATCH Surat Jalan documents pending consolidation. Complete a fulfillment order or issue a new Surat Jalan first.
+                    </div>
+                  ) : (
+                    readyToDispatchSjList.map((sj) => {
+                      const checked = tripSelectedSjIds.includes(sj.id);
+                      return (
+                        <label
+                          key={sj.id}
+                          className={`flex items-center justify-between gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                            checked
+                              ? 'border-[#0F4C3A] bg-emerald-500/5'
+                              : isLight
+                              ? 'border-gray-200 hover:bg-gray-50'
+                              : 'border-zinc-700 hover:bg-zinc-800/70'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setTripSelectedSjIds((prev) =>
+                                  e.target.checked
+                                    ? [...prev, sj.id]
+                                    : prev.filter((id) => id !== sj.id)
+                                );
+                              }}
+                              className="rounded text-[#0F4C3A]"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-mono font-bold truncate">{sj.documentNumber} — {sj.recipientName}</div>
+                              <div className="text-[11px] text-gray-500 dark:text-zinc-400 truncate">
+                                {sj.routeZone || sj.recipientAddress} · {sj.items.length} SKU(s) · Target {sj.coldChainTempCelsius}°C
+                              </div>
+                            </div>
+                          </div>
+                          <span className="font-mono font-bold shrink-0">{sj.totalWeightKg} kg</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 p-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={tripNotifyCustomers}
+                  onChange={(e) => setTripNotifyCustomers(e.target.checked)}
+                  className="rounded text-[#0F4C3A]"
+                />
+                <span>Notify customers via WhatsApp &amp; Email Dispatch Gateway upon departure</span>
+              </label>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setIsTripBuilderOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    isSubmittingTrip ||
+                    tripSelectedSjIds.length === 0 ||
+                    selectedTripUtilPct > 100 ||
+                    tripColdChainConflict
+                  }
+                  className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmittingTrip ? 'Dispatching Trip...' : `Dispatch Consolidated Trip (${tripSelectedSjIds.length})`}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Electronic Proof of Delivery (e-POD) Modal */}
+      {epodTargetSj && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[115] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto ${
+            isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+          }`}>
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500 text-white">
+                  <ClipboardCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Electronic Proof of Delivery (e-POD)</h3>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 font-mono">
+                    {epodTargetSj.documentNumber} · {epodTargetSj.recipientName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEpodTargetSj(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitEpod} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Receiver Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={epodReceiverName}
+                    onChange={(e) => setEpodReceiverName(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Delivery Timestamp</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={epodDeliveredAt}
+                    onChange={(e) => setEpodDeliveredAt(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Arrival Temp (°C)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    value={epodArrivalTemp}
+                    onChange={(e) => setEpodArrivalTemp(Number(e.target.value))}
+                    className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1.5">Delivery Outcome</label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setEpodOutcome('DELIVERED_FULL')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      epodOutcome === 'DELIVERED_FULL'
+                        ? 'border-emerald-600 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                        : 'border-gray-200 dark:border-zinc-700'
+                    }`}
+                  >
+                    <div className="font-bold">Full Delivery Signed</div>
+                    <div className="text-[11px] opacity-80">100% items accepted in good condition</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEpodOutcome('PARTIAL_RETURN')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      epodOutcome === 'PARTIAL_RETURN'
+                        ? 'border-amber-600 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+                        : 'border-gray-200 dark:border-zinc-700'
+                    }`}
+                  >
+                    <div className="font-bold">Partial Return / On-Site Rejection</div>
+                    <div className="text-[11px] opacity-80">Restock good items or quarantine damaged lines</div>
+                  </button>
+                </div>
+              </div>
+
+              {epodOutcome === 'PARTIAL_RETURN' && (
+                <div className="space-y-2.5 p-3.5 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/40 dark:bg-amber-950/20">
+                  <div className="font-bold text-amber-900 dark:text-amber-300">
+                    Returned Line Disposition (Auto-updates Inventory &amp; Credit Memo GL)
+                  </div>
+                  <div className="space-y-2">
+                    {epodTargetSj.items.map((item) => {
+                      const rowState = epodReturnMap[item.sku] || {
+                        returnedQty: 0,
+                        condition: 'GOOD_RESTOCK' as const,
+                        reason: '',
+                      };
+                      return (
+                        <div
+                          key={item.sku}
+                          className={`p-2.5 rounded-xl border grid grid-cols-1 sm:grid-cols-12 gap-2 items-center ${
+                            isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-700'
+                          }`}
+                        >
+                          <div className="sm:col-span-4">
+                            <div className="font-bold truncate">{item.productName}</div>
+                            <div className="text-[11px] font-mono text-gray-500">
+                              {item.sku} · Sent: {item.quantity} {item.unit}
+                            </div>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-[10px] text-gray-400 block">Return Qty</label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={item.quantity}
+                              value={rowState.returnedQty}
+                              onChange={(e) => {
+                                const val = Math.min(item.quantity, Math.max(0, Number(e.target.value) || 0));
+                                setEpodReturnMap((prev) => ({
+                                  ...prev,
+                                  [item.sku]: { ...rowState, returnedQty: val },
+                                }));
+                              }}
+                              className={`w-full px-2 py-1.5 rounded-lg border font-mono ${
+                                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                              }`}
+                            />
+                          </div>
+                          <div className="sm:col-span-3">
+                            <label className="text-[10px] text-gray-400 block">Condition</label>
+                            <select
+                              value={rowState.condition}
+                              onChange={(e) =>
+                                setEpodReturnMap((prev) => ({
+                                  ...prev,
+                                  [item.sku]: {
+                                    ...rowState,
+                                    condition: e.target.value as 'GOOD_RESTOCK' | 'DAMAGED_QUARANTINE',
+                                  },
+                                }))
+                              }
+                              className={`w-full px-2 py-1.5 rounded-lg border ${
+                                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                              }`}
+                            >
+                              <option value="GOOD_RESTOCK">Good (Restock Sellable)</option>
+                              <option value="DAMAGED_QUARANTINE">Damaged (Quarantine + Waste)</option>
+                            </select>
+                          </div>
+                          <div className="sm:col-span-3">
+                            <label className="text-[10px] text-gray-400 block">Reason</label>
+                            <input
+                              type="text"
+                              placeholder="Optional note"
+                              value={rowState.reason}
+                              onChange={(e) =>
+                                setEpodReturnMap((prev) => ({
+                                  ...prev,
+                                  [item.sku]: { ...rowState, reason: e.target.value },
+                                }))
+                              }
+                              className={`w-full px-2 py-1.5 rounded-lg border ${
+                                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold mb-1">Handover Notes (Optional)</label>
+                <input
+                  type="text"
+                  value={epodNotes}
+                  onChange={(e) => setEpodNotes(e.target.value)}
+                  placeholder="e.g. Received at loading dock #2, seal intact"
+                  className={`w-full px-3 py-2 rounded-xl border ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                  }`}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setEpodTargetSj(null)}
+                  className="px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingEpod}
+                  className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmittingEpod ? 'Submitting e-POD...' : 'Confirm & Seal e-POD'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
       )}
       </div>
     );

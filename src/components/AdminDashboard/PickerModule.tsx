@@ -65,6 +65,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
   const [orders, setOrders] = useState<PickerOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<PickerOrder | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isCompletingOrder, setIsCompletingOrder] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   // Scanner Simulator State
@@ -205,15 +206,25 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
     }
   };
 
-  // Handle Complete Order
+  // Handle Complete Order (Unified Omnichannel Fulfillment + Catch-Weight + GL + Surat Jalan)
   const handleCompleteOrder = async () => {
-    if (!selectedOrder) return;
+    if (!selectedOrder || isCompletingOrder) return;
+    setIsCompletingOrder(true);
     try {
-      const res = await apiClient.completePickerOrder(selectedOrder.orderId);
-      onShowToast('Picking Complete', res.message);
-      loadPickerData();
-    } catch (err) {
-      onShowToast('Failed to Complete Order', String(err));
+      const res = await apiClient.completeFulfillmentOrder(selectedOrder.orderId, {
+        items: selectedOrder.items.map((it) => ({
+          itemId: it.id,
+          sku: it.sku,
+          pickedQty: it.pickedQty > 0 ? it.pickedQty : it.orderedQty,
+          actualWeightGrams: it.actualWeighedGrams,
+        })),
+      });
+      onShowToast('Fulfillment Sealed & Synced', res.message);
+      await loadPickerData();
+    } catch (err: any) {
+      onShowToast('Failed to Complete Order', err?.message || String(err));
+    } finally {
+      setIsCompletingOrder(false);
     }
   };
 
@@ -418,27 +429,46 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-zinc-800">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className={`text-base font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>
                         Order #{selectedOrder.orderId}
                       </h3>
                       <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400">
                         {selectedOrder.pickerStatus.replace(/_/g, ' ')}
                       </span>
+                      {selectedOrder.stockReserved && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                          Stock Reserved
+                        </span>
+                      )}
+                      {selectedOrder.suratJalanNumber && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/25">
+                          {selectedOrder.suratJalanNumber}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-600 dark:text-zinc-300 mt-0.5">Customer: <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{selectedOrder.customerName}</strong> ({selectedOrder.customerPhone}) &bull; Target: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{selectedOrder.targetDispatchTime}</span></p>
                   </div>
 
-                  {selectedOrder.pickerStatus !== 'ready_for_packing' && selectedOrder.pickerStatus !== 'completed' ? (
+                  {selectedOrder.pickerStatus !== 'ready_for_packing' &&
+                  selectedOrder.pickerStatus !== 'completed' &&
+                  selectedOrder.fulfillmentStatus !== 'COMPLETED' &&
+                  selectedOrder.fulfillmentStatus !== 'READY_FOR_PICKUP' ? (
                     <button
                       onClick={handleCompleteOrder}
-                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-sm transition-all"
+                      disabled={isCompletingOrder}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer"
                     >
-                      Complete &amp; Seal Batch
+                      {isCompletingOrder ? 'Sealing & Syncing...' : 'Complete & Seal Batch'}
                     </button>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 text-white">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Ready for Delivery
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {selectedOrder.fulfillmentStatus === 'READY_FOR_PICKUP'
+                        ? 'Ready for Pickup'
+                        : selectedOrder.suratJalanNumber
+                        ? `SJ Issued: ${selectedOrder.suratJalanNumber}`
+                        : 'Ready for Delivery'}
                     </span>
                   )}
                 </div>

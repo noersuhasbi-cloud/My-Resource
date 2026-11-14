@@ -1373,6 +1373,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
         <ConsignmentSettlementPanel
           theme={theme}
           selectedStore={selectedStore}
+          activeStaffSession={activeStaffSession}
           onSettled={onRefreshData}
           onShowToast={onShowToast}
         />
@@ -1384,6 +1385,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           theme={theme}
           mode={complianceSubView}
           selectedStore={selectedStore}
+          activeStaffSession={activeStaffSession}
           onRefreshData={onRefreshData}
           onShowToast={onShowToast}
         />

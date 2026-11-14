@@ -33,6 +33,7 @@ interface ValuationCostingSettingsTabProps {
   inventoryTiers: StoreInventoryStock[];
   chartOfAccounts: ChartOfAccount[];
   purchaseOrders?: PurchaseOrder[];
+  isReadOnly?: boolean;
   onUpdateSettings: (updated: Partial<EnterpriseSettingsConfig>) => Promise<void>;
   onRefreshLandedCosts: () => void;
   onShowToast: (title: string, message: string) => void;
@@ -45,6 +46,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
   inventoryTiers,
   chartOfAccounts,
   purchaseOrders = [],
+  isReadOnly = false,
   onUpdateSettings,
   onRefreshLandedCosts,
   onShowToast,
@@ -200,18 +202,19 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
           <div className="flex items-center gap-2.5 shrink-0">
             <button
               onClick={() => setIsLandedModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+              disabled={isReadOnly}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />
               <span>Apply Landed Cost</span>
             </button>
             <button
               onClick={handleSaveSettings}
-              disabled={isSavingConfig}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              disabled={isSavingConfig || isReadOnly}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSavingConfig ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>Save Rules</span>
+              <span>{isReadOnly ? 'Read-Only' : 'Save Rules'}</span>
             </button>
           </div>
         </div>
@@ -238,11 +241,12 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
+                disabled={isReadOnly}
                 checked={config.enabled}
                 onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+              <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
             </label>
           </div>
 
@@ -250,9 +254,10 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
             <div>
               <label className={labelClass}>Default Allocation Method</label>
               <select
+                disabled={isReadOnly}
                 value={config.defaultAllocationMethod}
                 onChange={(e) => setConfig({ ...config, defaultAllocationMethod: e.target.value as any })}
-                className={inputClass}
+                className={`${inputClass} disabled:opacity-60`}
               >
                 <option value="BY_QUANTITY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Quantity (Equal cost per unit piece / pack)</option>
                 <option value="BY_VALUE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Value (Proportional to line item invoice value)</option>
@@ -267,9 +272,10 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
             <div>
               <label className={labelClass}>Default Accounting Journal</label>
               <select
+                disabled={isReadOnly}
                 value={config.defaultJournal}
                 onChange={(e) => setConfig({ ...config, defaultJournal: e.target.value })}
-                className={inputClass}
+                className={`${inputClass} disabled:opacity-60`}
               >
                 <option value="MISC_OPERATIONS" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Operations &amp; Landed Costs Journal (MISC_OPERATIONS)</option>
                 <option value="GENERAL_JOURNAL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">General Standard Journal (GENERAL_JOURNAL)</option>
@@ -282,9 +288,10 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 <label className={labelClass}>Inbound Freight Account</label>
                 <input
                   type="text"
+                  disabled={isReadOnly}
                   value={config.freightExpenseAccountCode}
                   onChange={(e) => setConfig({ ...config, freightExpenseAccountCode: e.target.value })}
-                  className={`font-mono ${inputClass}`}
+                  className={`font-mono ${inputClass} disabled:opacity-60`}
                   placeholder="5040"
                 />
                 <span className="text-[10px] text-gray-500 dark:text-zinc-300 mt-1 block truncate">{config.freightExpenseAccountName}</span>
@@ -293,9 +300,10 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 <label className={labelClass}>Customs &amp; Duty Account</label>
                 <input
                   type="text"
+                  disabled={isReadOnly}
                   value={config.customsDutyAccountCode}
                   onChange={(e) => setConfig({ ...config, customsDutyAccountCode: e.target.value })}
-                  className={`font-mono ${inputClass}`}
+                  className={`font-mono ${inputClass} disabled:opacity-60`}
                   placeholder="5050"
                 />
                 <span className="text-[10px] text-gray-500 dark:text-zinc-300 mt-1 block truncate">{config.customsDutyAccountName}</span>
@@ -307,9 +315,10 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 <label className={labelClass}>Cold Handling Account</label>
                 <input
                   type="text"
+                  disabled={isReadOnly}
                   value={config.handlingAccountCode}
                   onChange={(e) => setConfig({ ...config, handlingAccountCode: e.target.value })}
-                  className={`font-mono ${inputClass}`}
+                  className={`font-mono ${inputClass} disabled:opacity-60`}
                   placeholder="5060"
                 />
                 <span className="text-[10px] text-gray-500 dark:text-zinc-300 mt-1 block truncate">{config.handlingAccountName}</span>
@@ -318,9 +327,10 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 <label className={labelClass}>Landed Accrual / Clearing</label>
                 <input
                   type="text"
+                  disabled={isReadOnly}
                   value={config.clearingAccountCode}
                   onChange={(e) => setConfig({ ...config, clearingAccountCode: e.target.value })}
-                  className={`font-mono ${inputClass}`}
+                  className={`font-mono ${inputClass} disabled:opacity-60`}
                   placeholder="2040"
                 />
                 <span className="text-[10px] text-gray-500 dark:text-zinc-300 mt-1 block truncate">{config.clearingAccountName}</span>
@@ -363,11 +373,12 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
               <label className="relative inline-flex items-center cursor-pointer shrink-0">
                 <input
                   type="checkbox"
+                  disabled={isReadOnly}
                   checked={invoiceTracking.displayLotsOnInvoices}
                   onChange={(e) => setInvoiceTracking({ ...invoiceTracking, displayLotsOnInvoices: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
 
@@ -383,11 +394,12 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
               <label className="relative inline-flex items-center cursor-pointer shrink-0">
                 <input
                   type="checkbox"
+                  disabled={isReadOnly}
                   checked={invoiceTracking.displaySerialExpiryOnDeliveryDocs}
                   onChange={(e) => setInvoiceTracking({ ...invoiceTracking, displaySerialExpiryOnDeliveryDocs: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
 
@@ -403,11 +415,12 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
               <label className="relative inline-flex items-center cursor-pointer shrink-0">
                 <input
                   type="checkbox"
+                  disabled={isReadOnly}
                   checked={invoiceTracking.requireLotScanOnFulfillment}
                   onChange={(e) => setInvoiceTracking({ ...invoiceTracking, requireLotScanOnFulfillment: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600"></div>
+                <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
 
