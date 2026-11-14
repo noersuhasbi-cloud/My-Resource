@@ -90,7 +90,9 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
 
   const barBits = useMemo(() => encodeEan13Bars(ean13Code), [ean13Code]);
 
-  const effectivePricePerKg = activeProduct.pricePerKg || activeProduct.sellingPrice * 2;
+  const effectivePricePerKg =
+    activeProduct.pricePerKg ||
+    (activeProduct.unit.toLowerCase().includes('kg') ? activeProduct.sellingPrice : activeProduct.sellingPrice * 4);
   const computedWeighedPrice = Math.round(effectivePricePerKg * (weightGrams / 1000));
   const shelfRetailPrice = taxInclusiveDisplay
     ? activeProduct.sellingPrice

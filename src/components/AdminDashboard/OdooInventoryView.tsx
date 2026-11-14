@@ -14,6 +14,7 @@ import type {
   WarehouseBinLocation,
   WasteRecord,
   WholesaleProduct,
+  StoreOutletSchedule,
 } from '../../types/index.ts';
 import type { AdminDashboardTab } from './AdminSidebar';
 import { formatIDR } from '../../utils/formatters';
@@ -65,6 +66,7 @@ interface OdooInventoryViewProps {
   warehouseBins: WarehouseBinLocation[];
   purchaseOrders: PurchaseOrder[];
   qcInspections: QCInspectionRecord[];
+  storeOutlets?: StoreOutletSchedule[];
   stockTransfers: StockTransferRecord[];
   pickerOrders: PickerOrder[];
   b2bOrders: B2BWholesaleOrder[];
@@ -156,6 +158,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   warehouseBins,
   purchaseOrders,
   qcInspections,
+  storeOutlets = [],
   stockTransfers,
   pickerOrders,
   b2bOrders,
@@ -945,9 +948,19 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
               >
                 <option value="ALL">All Store Outlets</option>
-                <option value="store-jkt-senopati">Senopati Flagship / CDC (Jakarta)</option>
-                <option value="store-jkt-pik">PIK 2 Dark Store (Jakarta)</option>
-                <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
+                {storeOutlets && storeOutlets.length > 0 ? (
+                  storeOutlets.map((st) => (
+                    <option key={st.storeId} value={st.storeId}>
+                      {st.storeName} ({st.city})
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="store-jkt-senopati">Senopati Flagship / CDC (Jakarta)</option>
+                    <option value="store-jkt-pik">PIK 2 Dark Store (Jakarta)</option>
+                    <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
+                  </>
+                )}
               </select>
 
               <select

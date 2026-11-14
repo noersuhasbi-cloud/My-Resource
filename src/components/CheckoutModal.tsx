@@ -67,6 +67,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   }, [customerAccount]);
 
+  // Reset modal step & notices whenever reopened
+  useEffect(() => {
+    if (isOpen) {
+      setStep('details');
+      setBlockedNotice('');
+      setCompletedOrder(null);
+      setIsSimulatingPayment(false);
+    }
+  }, [isOpen]);
+
   // QRIS Countdown timer
   useEffect(() => {
     let timer: any = null;
@@ -130,6 +140,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const handleSimulateQRISPayment = async () => {
     setIsSimulatingPayment(true);
+    setBlockedNotice('');
 
     try {
       // Call backend open API to settle QRIS payment, deduct inventory, and record GL entries
@@ -139,10 +150,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         channel: 'BCA QRIS',
         customerName: recipientName,
         customerEmail: recipientEmail,
+        storeId: selectedPickupStore?.id,
+        discount: appliedDiscount,
         items,
       });
-    } catch (err) {
-      console.warn('Backend payment simulation notice:', err);
+    } catch (err: any) {
+      setIsSimulatingPayment(false);
+      setBlockedNotice(err?.message || 'QRIS settlement blocked by backend validation. Please review your order or outlet.');
+      return;
     }
 
     setTimeout(() => {

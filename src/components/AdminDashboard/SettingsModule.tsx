@@ -3582,16 +3582,21 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </span>
                 </div>
                 <div className={subCardClass}>
-                  <span className="text-[11px] text-gray-500 font-semibold block">Active In-Transit Quota</span>
+                  <span className="text-[11px] text-gray-500 font-semibold block">Active In-Transit Shipments</span>
                   <span className="text-base sm:text-lg font-bold font-mono text-blue-600 dark:text-blue-400 mt-1 block">
-                    100% On-Schedule
+                    {transferRecords.filter((t) => t.status === 'in_transit').length} In Transit
                   </span>
                 </div>
               </div>
 
               {/* Table of Transfers */}
-              {transferRecords.length === 0 ? (
-                <p className="text-xs text-slate-600 dark:text-zinc-300 font-medium italic p-4 text-center">No transfers executed yet.</p>
+              {(() => {
+                const filteredTransfers = transferRecords.filter((t) => {
+                  if (transferFilterStatus === 'ALL') return true;
+                  return (t.status || 'completed').toUpperCase() === transferFilterStatus;
+                });
+                return filteredTransfers.length === 0 ? (
+                <p className="text-xs text-slate-600 dark:text-zinc-300 font-medium italic p-4 text-center">No transfers match the selected status filter.</p>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-zinc-800">
                   <table className="w-full text-left text-xs">
@@ -3610,7 +3615,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
-                      {transferRecords.map((t) => (
+                      {filteredTransfers.map((t) => (
                         <tr
                           key={t.id}
                           className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'}`}
@@ -3644,17 +3649,42 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             {formatIDR(t.totalTransferValue)}
                           </td>
                           <td className="py-3 px-3 text-center whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                              COMPLETED
-                            </span>
+                            {t.status === 'in_transit' ? (
+                              <div className="inline-flex items-center gap-1.5">
+                                <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/25">
+                                  IN TRANSIT
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      const res = await apiClient.receiveStockTransfer(t.id);
+                                      onShowToast('Transfer Received', res.message);
+                                      fetchAllSettings();
+                                      onRefreshData?.();
+                                    } catch (err: any) {
+                                      onShowToast('Receive Failed', err?.message || 'Error confirming transfer receipt');
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-colors cursor-pointer"
+                                >
+                                  Confirm Receipt
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                COMPLETED
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              )}
+              );
+              })()}
             </div>
           </div>
         </div>

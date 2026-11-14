@@ -127,6 +127,9 @@ import type {
   RmaDisposition,
   RmaRefundMethod,
   RmaSourceChannel,
+  EnterpriseNotification,
+  EnterpriseNotificationCategory,
+  EnterpriseNotificationSeverity,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -174,6 +177,7 @@ let giroRecordsList: GiroPaymentRecord[] = JSON.parse(JSON.stringify(INITIAL_GIR
 let b2bOrdersList: B2BWholesaleOrder[] = JSON.parse(JSON.stringify(INITIAL_B2B_ORDERS));
 let vendorCreditNotesList: VendorCreditNote[] = JSON.parse(JSON.stringify(MOCK_VENDOR_CREDIT_NOTES));
 let dynamicMarkdownConfig: DynamicMarkdownConfig = JSON.parse(JSON.stringify(DEFAULT_MARKDOWN_CONFIG));
+let enterpriseNotificationsList: EnterpriseNotification[] = [];
 
 let removalStrategiesConfig: RemovalStrategyConfig = {
   categoryStrategies: {
@@ -599,6 +603,115 @@ function getEffectiveRemovalStrategy(sku: string, category?: string): RemovalStr
   return 'FEFO';
 }
 
+function emitEnterpriseNotification(input: {
+  dedupeKey: string;
+  category: EnterpriseNotificationCategory;
+  severity: EnterpriseNotificationSeverity;
+  title: string;
+  message: string;
+  metadataLabel?: string;
+  targetTab: string;
+  targetSubTab?: string;
+  skipIfExistsAny?: boolean;
+}): EnterpriseNotification {
+  const nowIso = new Date().toISOString();
+  if (input.skipIfExistsAny) {
+    const existingAny = enterpriseNotificationsList.find((n) => n.dedupeKey === input.dedupeKey);
+    if (existingAny) {
+      return existingAny;
+    }
+  }
+
+  const existingUnread = enterpriseNotificationsList.find(
+    (n) => n.dedupeKey === input.dedupeKey && !n.isRead
+  );
+  if (existingUnread) {
+    const hasChanged =
+      existingUnread.severity !== input.severity ||
+      existingUnread.title !== input.title ||
+      existingUnread.message !== input.message ||
+      existingUnread.metadataLabel !== input.metadataLabel;
+    existingUnread.severity = input.severity;
+    existingUnread.title = input.title;
+    existingUnread.message = input.message;
+    existingUnread.metadataLabel = input.metadataLabel;
+    existingUnread.targetTab = input.targetTab;
+    existingUnread.targetSubTab = input.targetSubTab;
+    if (hasChanged) {
+      existingUnread.updatedAt = nowIso;
+    }
+    return existingUnread;
+  }
+
+  const created: EnterpriseNotification = {
+    id: `NTF-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+    dedupeKey: input.dedupeKey,
+    category: input.category,
+    severity: input.severity,
+    title: input.title,
+    message: input.message,
+    metadataLabel: input.metadataLabel,
+    targetTab: input.targetTab,
+    targetSubTab: input.targetSubTab,
+    isRead: false,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  enterpriseNotificationsList.unshift(created);
+  if (enterpriseNotificationsList.length > 100) {
+    enterpriseNotificationsList.length = 100;
+  }
+  return created;
+}
+
+function markEnterpriseNotificationReadByDedupeKey(dedupeKey: string): void {
+  const nowIso = new Date().toISOString();
+  enterpriseNotificationsList.forEach((n) => {
+    if (n.dedupeKey === dedupeKey && !n.isRead) {
+      n.isRead = true;
+      n.updatedAt = nowIso;
+    }
+  });
+}
+
+function checkAndNotifyLowStockForSkus(skus: string[], storeId: string = 'store-jkt-senopati'): void {
+  const uniqueSkus = Array.from(new Set(skus.filter(Boolean)));
+  uniqueSkus.forEach((sku) => {
+    const tier =
+      storeInventoryTiers.find(
+        (t) => t.sku === sku && (storeId === 'CONSOLIDATED' || storeId === 'ALL' || t.storeId === storeId)
+      ) || storeInventoryTiers.find((t) => t.sku === sku);
+    const inv = inventoryList.find((i) => i.sku === sku);
+    const productName = tier?.productName || inv?.productName || inv?.name || sku;
+    const reorderPoint = tier?.minimumThreshold ?? inv?.minimumThreshold ?? 20;
+    const availableStock = tier ? tier.availableStock : (inv?.currentStock ?? 0);
+    const effectiveStoreId = tier?.storeId || storeId;
+    const effectiveStoreName = tier?.storeName || effectiveStoreId;
+
+    if (availableStock <= 0) {
+      emitEnterpriseNotification({
+        dedupeKey: `LOW_STOCK:${sku}:${effectiveStoreId}:OOS`,
+        category: 'INVENTORY',
+        severity: 'CRITICAL',
+        title: `Out of Stock Breach: ${productName}`,
+        message: `${sku} at ${effectiveStoreName} reached 0 available units (Reorder Point: ${reorderPoint}). Immediate PO replenishment required.`,
+        metadataLabel: `${sku} • 0 ATP • ${effectiveStoreName}`,
+        targetTab: 'procurement',
+      });
+    } else if (availableStock <= reorderPoint) {
+      emitEnterpriseNotification({
+        dedupeKey: `LOW_STOCK:${sku}:${effectiveStoreId}:ROP`,
+        category: 'INVENTORY',
+        severity: 'WARNING',
+        title: `Reorder Point Reached: ${productName}`,
+        message: `Available stock dropped to ${availableStock} units (Threshold: ${reorderPoint}) at ${effectiveStoreName}.`,
+        metadataLabel: `${sku} • ${availableStock}/${reorderPoint} units`,
+        targetTab: 'procurement',
+      });
+    }
+  });
+}
+
 function syncBatchExpiryStatus(batch: InventoryBatch, nowMs: number = Date.now()): boolean {
   if (batch.status === 'expired') return true;
   const expiryMs = new Date(batch.expiryDate).getTime();
@@ -617,7 +730,36 @@ function syncBatchExpiryStatus(batch: InventoryBatch, nowMs: number = Date.now()
 
 function syncAllBatchesExpiryStatus(nowMs: number = Date.now()): void {
   inventoryBatches.forEach((b) => {
-    syncBatchExpiryStatus(b, nowMs);
+    const isExpired = syncBatchExpiryStatus(b, nowMs);
+    if (b.currentStock <= 0 || b.status === 'depleted' || b.status === 'quarantined' || b.status === 'recalled') {
+      return;
+    }
+    const expiryMs = new Date(b.expiryDate).getTime();
+    const msLeft = expiryMs - nowMs;
+    if (isExpired || b.status === 'expired') {
+      emitEnterpriseNotification({
+        dedupeKey: `EXPIRY_BATCH:${b.batchId}:EXPIRED`,
+        category: 'PERISHABLES',
+        severity: 'CRITICAL',
+        title: `Expired Batch Locked: ${b.productName}`,
+        message: `Lot ${b.lotNumber} (${b.currentStock} units) at ${b.storeName} has expired and is locked from POS & online sale.`,
+        metadataLabel: `${b.sku} • Lot ${b.lotNumber} • Locked`,
+        targetTab: 'fefo',
+        skipIfExistsAny: true,
+      });
+    } else if (Number.isFinite(msLeft) && msLeft > 0 && msLeft <= 48 * 3600 * 1000) {
+      const hoursLeft = Math.max(1, Math.round(msLeft / 3600000));
+      emitEnterpriseNotification({
+        dedupeKey: `EXPIRY_BATCH:${b.batchId}:CRITICAL_48H`,
+        category: 'PERISHABLES',
+        severity: 'WARNING',
+        title: `Near-Expiry Clearance (<48h): ${b.productName}`,
+        message: `Lot ${b.lotNumber} (${b.currentStock} units) expires in ${hoursLeft}h at ${b.storeName}. Apply FEFO markdown clearance.`,
+        metadataLabel: `${b.sku} • Lot ${b.lotNumber} • ${hoursLeft}h left`,
+        targetTab: 'fefo',
+        skipIfExistsAny: true,
+      });
+    }
   });
 }
 
@@ -2006,6 +2148,58 @@ function generateQRISPayload(orderId: string, amount: number): string {
   return `${rawPayloadWithoutCRC}${checksum}`;
 }
 
+function seedBaselineEnterpriseNotifications() {
+  syncAllBatchesExpiryStatus(Date.now());
+  giroRecordsList
+    .filter((g) => g.status === 'PENDING_CLEARING')
+    .slice(0, 2)
+    .forEach((g) => {
+      emitEnterpriseNotification({
+        dedupeKey: `GIRO_PENDING:${g.id}`,
+        category: 'B2B_FINANCE',
+        severity: 'ACTION_REQUIRED',
+        title: `Bilyet Giro Clearing Due (#${g.giroNumber})`,
+        message: `${g.customerName} Giro warkat (${g.issuingBank}) for Rp ${g.amountIDR.toLocaleString('id-ID')} is pending SKNBI clearing.`,
+        metadataLabel: `${g.giroNumber} • Rp ${g.amountIDR.toLocaleString('id-ID')}`,
+        targetTab: 'accounting',
+        targetSubTab: 'b2b_ar',
+        skipIfExistsAny: true,
+      });
+    });
+  approvalQueueList
+    .filter((a) => a.status === 'PENDING')
+    .slice(0, 2)
+    .forEach((a) => {
+      emitEnterpriseNotification({
+        dedupeKey: `APR_QUEUE:${a.id}`,
+        category: 'PROCUREMENT_FINANCE',
+        severity: 'ACTION_REQUIRED',
+        title: `Approval Required: ${a.documentTitle}`,
+        message: `${a.payloadSummary?.reason || 'Document queued for authorization'} (Tier ${a.currentTierLevel}/${a.requiredTierLevel}).`,
+        metadataLabel: `${a.documentId} • Rp ${a.amountIDR.toLocaleString('id-ID')}`,
+        targetTab: 'approvals',
+        skipIfExistsAny: true,
+      });
+    });
+  pickerOrders
+    .filter((p) => p.pickerStatus === 'assigned' || p.pickerStatus === 'in_progress')
+    .slice(0, 2)
+    .forEach((p) => {
+      emitEnterpriseNotification({
+        dedupeKey: `PICKER_QUEUE:${p.orderId}`,
+        category: 'FULFILLMENT',
+        severity: 'INFO',
+        title: `Order Ready for Picking (#${p.orderId})`,
+        message: `${p.customerName} (${p.totalItems} items) assigned at ${p.storeName}.`,
+        metadataLabel: `${p.orderId} • ${p.storeName}`,
+        targetTab: 'picker',
+        skipIfExistsAny: true,
+      });
+    });
+}
+
+seedBaselineEnterpriseNotifications();
+
 // -------------------------------------------------------------
 // NON-VOLATILE STATE PERSISTENCE SNAPSHOT (.grocematrix-state.json)
 // -------------------------------------------------------------
@@ -2069,6 +2263,7 @@ function captureServerState() {
     substitutionPromptRecords,
     securityAuditTrail,
     climateAdaptiveConfigs,
+    enterpriseNotificationsList,
     qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
     idempotencyStoreEntries: Array.from(idempotencyStore.entries()),
   };
@@ -2130,6 +2325,9 @@ function applyServerState(snap: any) {
   if (Array.isArray(snap.substitutionPromptRecords)) substitutionPromptRecords = snap.substitutionPromptRecords;
   if (Array.isArray(snap.securityAuditTrail)) securityAuditTrail = snap.securityAuditTrail;
   if (Array.isArray(snap.climateAdaptiveConfigs)) climateAdaptiveConfigs = snap.climateAdaptiveConfigs;
+  if (Array.isArray(snap.enterpriseNotificationsList)) {
+    enterpriseNotificationsList = snap.enterpriseNotificationsList;
+  }
   qrisTransactions.clear();
   if (Array.isArray(snap.qrisTransactionsEntries)) {
     snap.qrisTransactionsEntries.forEach(([k, v]: [string, any]) => qrisTransactions.set(k, v));
@@ -2190,6 +2388,7 @@ function hydrateStateFromSnapshot() {
   }
   inventoryBatches = createInitialBatches();
   ensureRegulatoryCoaAccounts();
+  seedBaselineEnterpriseNotifications();
 }
 
 async function resetDemoStateToBaseline() {
@@ -2204,6 +2403,8 @@ async function resetDemoStateToBaseline() {
     applyServerState(baseline);
     inventoryBatches = createInitialBatches();
     ensureRegulatoryCoaAccounts();
+    enterpriseNotificationsList = [];
+    seedBaselineEnterpriseNotifications();
     if (fs.existsSync(STATE_SNAPSHOT_TMP_PATH)) {
       await fsPromises.unlink(STATE_SNAPSHOT_TMP_PATH).catch(() => {});
     }
@@ -2320,6 +2521,71 @@ async function startServer() {
       timestamp: new Date().toISOString(),
       batchesCount: inventoryBatches.length,
       message: 'Demo state snapshot cleared and re-initialized with fresh relative-date seed baseline.',
+    });
+  });
+
+  // -------------------------------------------------------------
+  // ENTERPRISE NOTIFICATION CENTER ENDPOINTS
+  // -------------------------------------------------------------
+  app.get('/api/admin/notifications', (_req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
+    const sorted = [...enterpriseNotificationsList].sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt).getTime() -
+        new Date(a.updatedAt || a.createdAt).getTime()
+    );
+    const unreadCount = sorted.filter((n) => !n.isRead).length;
+    res.json({
+      notifications: sorted,
+      unreadCount,
+    });
+  });
+
+  app.post('/api/admin/notifications/mark-read', (req: Request, res: Response) => {
+    const { id, markAll } = (req.body || {}) as { id?: string; markAll?: boolean };
+    const nowIso = new Date().toISOString();
+    if (markAll) {
+      enterpriseNotificationsList.forEach((n) => {
+        if (!n.isRead) {
+          n.isRead = true;
+          n.updatedAt = nowIso;
+        }
+      });
+    } else if (id) {
+      const target = enterpriseNotificationsList.find((n) => n.id === id);
+      if (target) {
+        target.isRead = true;
+        target.updatedAt = nowIso;
+      }
+    }
+    const sorted = [...enterpriseNotificationsList].sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt).getTime() -
+        new Date(a.updatedAt || a.createdAt).getTime()
+    );
+    res.json({
+      success: true,
+      notifications: sorted,
+      unreadCount: sorted.filter((n) => !n.isRead).length,
+    });
+  });
+
+  app.post('/api/admin/notifications/clear', (req: Request, res: Response) => {
+    const { onlyRead = true } = (req.body || {}) as { onlyRead?: boolean };
+    if (onlyRead) {
+      enterpriseNotificationsList = enterpriseNotificationsList.filter((n) => !n.isRead);
+    } else {
+      enterpriseNotificationsList = [];
+    }
+    const sorted = [...enterpriseNotificationsList].sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt).getTime() -
+        new Date(a.updatedAt || a.createdAt).getTime()
+    );
+    res.json({
+      success: true,
+      notifications: sorted,
+      unreadCount: sorted.filter((n) => !n.isRead).length,
     });
   });
 
@@ -2498,7 +2764,30 @@ async function startServer() {
   });
 
   app.post('/api/qris/simulate-pay', async (req: Request, res: Response) => {
-    const { orderId, channel = 'BCA QRIS', customerName = 'GroceMart Customer', customerEmail = 'customer@grocemart.co.id', items = [] } = req.body;
+    const { orderId, channel = 'BCA QRIS', customerName = 'GroceMart Customer', customerEmail = 'customer@grocemart.co.id', items = [], storeId: rawStoreId } = req.body;
+    const requestedStoreId = String(rawStoreId || 'store-jkt-senopati');
+    const LEGACY_STORE_MAP: Record<string, string> = {
+      'store-sby-dharmahusada': 'store-sby-gubeng',
+      'store-bdg-riau': 'store-bdg-dago',
+      'store-bali-sanur': 'store-bali-canggu',
+      'store-ygy-kaliurang': 'store-jkt-senopati',
+      'store-mdn-ringroad': 'store-jkt-senopati',
+    };
+    const resolvedStoreId = storeSchedules.some((s) => s.storeId === requestedStoreId)
+      ? requestedStoreId
+      : LEGACY_STORE_MAP[requestedStoreId] || 'store-jkt-senopati';
+
+    if (!storeStatus.isOpen || storeStatus.isHolidayMode) {
+      return res.status(400).json({
+        error: storeStatus.noticeBanner || 'GroceMart storefront is temporarily closed. Checkout cannot be completed.',
+      });
+    }
+    const targetOutlet = storeSchedules.find((s) => s.storeId === resolvedStoreId);
+    if (targetOutlet?.isEmergencyClosed) {
+      return res.status(400).json({
+        error: `Outlet '${targetOutlet.storeName}' is under emergency closure (${targetOutlet.closureReason || 'Maintenance'}).`,
+      });
+    }
     
     // GUARD 1: Payment Webhook Idempotency (QRIS Safety)
     const idempotencyKey = (
@@ -2568,7 +2857,7 @@ async function startServer() {
           }
           for (const [targetSku, totalReqQty] of skuTotals.entries()) {
             const invItem = inventoryList.find((inv) => inv.sku === targetSku);
-            const atpCheck = getSellableNonExpiredAtpStock(targetSku, 'store-jkt-senopati');
+            const atpCheck = getSellableNonExpiredAtpStock(targetSku, resolvedStoreId);
             const maxSellable = invItem ? Math.min(invItem.currentStock, atpCheck.effectiveAtp) : atpCheck.effectiveAtp;
             if (totalReqQty > maxSellable) {
               const conflictErr = new Error(
@@ -2616,7 +2905,7 @@ async function startServer() {
                 syncBatchExpiryStatus(b);
                 return (
                   b.sku === targetSku &&
-                  b.storeId === 'store-jkt-senopati' &&
+                  (b.storeId === resolvedStoreId || b.storeId === 'store-jkt-senopati') &&
                   b.currentStock > 0 &&
                   b.status !== 'quarantined' &&
                   b.status !== 'recalled' &&
@@ -2624,7 +2913,11 @@ async function startServer() {
                   b.status !== 'depleted'
                 );
               })
-              .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime())[0];
+              .sort((a, b) => {
+                const storePref = (b.storeId === resolvedStoreId ? 0 : 1) - (a.storeId === resolvedStoreId ? 0 : 1);
+                if (storePref !== 0) return storePref;
+                return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+              })[0];
             const mdCandidate = nearestSellableBatch
               ? evaluateBatchMarkdown(nearestSellableBatch, dynamicMarkdownConfig)
               : null;
@@ -2679,9 +2972,11 @@ async function startServer() {
               invItem.currentStock = Math.max(0, invItem.currentStock - qty);
               invItem.outgoingStock += qty;
 
-              const batchResult = deductBatchesByStrategy(invItem.sku, qty, 'store-jkt-senopati', invItem.unitCost);
+              const batchResult = deductBatchesByStrategy(invItem.sku, qty, resolvedStoreId, invItem.unitCost);
 
-              const tier = storeInventoryTiers.find((t) => t.sku === invItem.sku);
+              const tier =
+                storeInventoryTiers.find((t) => t.sku === invItem.sku && t.storeId === resolvedStoreId) ||
+                storeInventoryTiers.find((t) => t.sku === invItem.sku);
               if (tier) {
                 tier.physicalStock = Math.max(0, tier.physicalStock - qty);
                 tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
@@ -2862,6 +3157,23 @@ async function startServer() {
           custOrder.paymentStatus = 'paid';
           custOrder.qrisPaidAt = tx.paidAt;
           custOrder.status = 'in_transit';
+        }
+
+        // Event 2 & Event 6: Low-stock check & incoming fulfillment picking notification
+        if (inventoryDeductions.length > 0) {
+          checkAndNotifyLowStockForSkus(
+            inventoryDeductions.map((d) => d.sku),
+            resolvedStoreId
+          );
+          emitEnterpriseNotification({
+            dedupeKey: `PICKER_ORDER:${orderId}`,
+            category: 'FULFILLMENT',
+            severity: 'INFO',
+            title: `New B2C Order Ready for Picking (#${orderId})`,
+            message: `${customerName} settled Rp ${tx.amount.toLocaleString('id-ID')} via ${channel} (${inventoryDeductions.length} SKUs).`,
+            metadataLabel: `${orderId} • ${targetOutlet?.storeName || resolvedStoreId}`,
+            targetTab: 'picker',
+          });
         }
 
         const responsePayload = {
@@ -3286,6 +3598,10 @@ async function startServer() {
       description: `Stock adjustment for ${sku} (${delta > 0 ? '+' : ''}${delta} units): ${reason}`,
     });
 
+    if (delta < 0) {
+      checkAndNotifyLowStockForSkus([sku], storeId);
+    }
+
     res.json({ success: true, item, delta, costDelta, gleId });
   });
 
@@ -3695,6 +4011,16 @@ async function startServer() {
     }
     order.updatedAt = new Date().toISOString();
 
+    emitEnterpriseNotification({
+      dedupeKey: `PICKER_SUB:${orderId}:${itemId}`,
+      category: 'FULFILLMENT',
+      severity: 'ACTION_REQUIRED',
+      title: `Quick Substitution Processed (#${orderId})`,
+      message: `${originalSku} substituted with ${replacement.productName} (${replacementSku}) — Reason: ${reason}.`,
+      metadataLabel: `${orderId} • ${replacementSku}`,
+      targetTab: 'picker',
+    });
+
     return {
       statusCode: 200,
       payload: {
@@ -3828,6 +4154,15 @@ async function startServer() {
     };
 
     purchaseRequests.unshift(newPR);
+    emitEnterpriseNotification({
+      dedupeKey: `PR_APPROVAL:${newPR.id}`,
+      category: 'PROCUREMENT_FINANCE',
+      severity: 'ACTION_REQUIRED',
+      title: `Purchase Request Queued (${newPR.id})`,
+      message: `${newPR.productName} (${qty} units, Rp ${newPR.totalEstimatedCost.toLocaleString('id-ID')}) for ${newPR.storeName}.`,
+      metadataLabel: `${newPR.id} • ${newPR.sku}`,
+      targetTab: 'approvals',
+    });
     res.json({ success: true, purchaseRequest: newPR });
   });
 
@@ -3835,6 +4170,9 @@ async function startServer() {
     const { id } = req.params;
     const pr = purchaseRequests.find((p) => p.id === id);
     if (!pr) return res.status(404).json({ error: 'Purchase Request not found' });
+    if (pr.status === 'approved') {
+      return res.status(400).json({ error: `Purchase Request ${id} is already approved (PO #${pr.poId || 'issued'}).` });
+    }
 
     pr.status = 'approved';
     pr.approvedAt = new Date().toISOString();
@@ -4149,6 +4487,25 @@ async function startServer() {
       ],
       true
     );
+
+    const qcAlertsInGr = grItemsReceived.filter(
+      (gi) =>
+        String(gi.qualityCondition || '').toLowerCase().includes('quarantine') ||
+        String(gi.qualityCondition || '').toLowerCase().includes('hold') ||
+        (gi.tempCheckCelsius !== undefined && Number(gi.tempCheckCelsius) > 8)
+    );
+    if (qcAlertsInGr.length > 0) {
+      const firstAlert = qcAlertsInGr[0];
+      emitEnterpriseNotification({
+        dedupeKey: `GR_QC_HOLD:${grId}`,
+        category: 'QUALITY_CONTROL',
+        severity: 'CRITICAL',
+        title: `GR Quarantine / Cold-Chain Alert (${grId})`,
+        message: `${firstAlert.productName} on PO #${po.id} flagged (${firstAlert.qualityCondition}${firstAlert.tempCheckCelsius !== undefined ? `, ${firstAlert.tempCheckCelsius}°C` : ''}). Inspect before release.`,
+        metadataLabel: `${firstAlert.sku} • ${po.storeName}`,
+        targetTab: 'qc',
+      });
+    }
 
     res.json({
       success: true,
@@ -4813,6 +5170,16 @@ async function startServer() {
 
     substitutionPromptRecords.unshift(promptRecord);
 
+    emitEnterpriseNotification({
+      dedupeKey: `SUB_PROMPT:${promptId}`,
+      category: 'FULFILLMENT',
+      severity: 'ACTION_REQUIRED',
+      title: `Customer Substitution Prompt (#${orderId})`,
+      message: `Picker proposed ${replacement.productName} for ${item.productName} via ${channel}.`,
+      metadataLabel: `${orderId} • ${replacementSku}`,
+      targetTab: 'picker',
+    });
+
     res.json({
       success: true,
       message: `Customer prompt dispatched via ${channel}. Awaiting customer confirmation.`,
@@ -5152,6 +5519,32 @@ async function startServer() {
     }
 
     res.json({ success: true, authorized: true, message: `Access granted for zone '${zoneType}'.` });
+  });
+
+  app.post('/api/admin/rbac/handover', (req: Request, res: Response) => {
+    const { nextShift = 'Afternoon Shift', notes = '', outgoingUserId, outgoingUserName } = req.body || {};
+    const record: SecurityAuditTrailRecord = {
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp: new Date().toISOString(),
+      actionType: 'SHIFT_HANDOVER' as any,
+      resourceId: currentActiveStaffSession.activeShiftId,
+      userId: outgoingUserId || currentActiveStaffSession.userId,
+      userName: outgoingUserName || currentActiveStaffSession.userName,
+      userRole: currentActiveStaffSession.userRole,
+      storeId: currentActiveStaffSession.storeId,
+      shiftId: currentActiveStaffSession.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        nextShift,
+        notes: notes || 'Standard cold-chain shift handover sign-off completed.',
+      },
+    };
+    securityAuditTrail.unshift(record);
+    res.json({
+      success: true,
+      auditRecord: record,
+      message: `Shift handover to ${nextShift} signed off and stamped in security audit log (${record.id}).`,
+    });
   });
 
   // =============================================================
@@ -5792,6 +6185,12 @@ async function startServer() {
         activeShift.openingFloatIDR + activeShift.expectedCashSalesIDR - activeShift.cashRefundsIDR;
     }
 
+    // Event 2: Check reorder points for every SKU sold at POS
+    checkAndNotifyLowStockForSkus(
+      normalizedItems.map((ni) => ni.sku),
+      storeId
+    );
+
     res.json({
       success: true,
       receipt,
@@ -6338,6 +6737,17 @@ async function startServer() {
       };
       giroRecordsList.unshift(newGiro);
 
+      emitEnterpriseNotification({
+        dedupeKey: `GIRO_NEW:${giroId}`,
+        category: 'B2B_FINANCE',
+        severity: 'INFO',
+        title: `New Bilyet Giro Submitted (#${newGiro.giroNumber})`,
+        message: `${customer.companyName} issued Giro #${newGiro.giroNumber} (${newGiro.issuingBank}) for Rp ${totalAmountIDR.toLocaleString('id-ID')} booked to COA #1210.`,
+        metadataLabel: `${newGiro.giroNumber} • Rp ${totalAmountIDR.toLocaleString('id-ID')}`,
+        targetTab: 'accounting',
+        targetSubTab: 'b2b_ar',
+      });
+
       b2bRevenueGlBatch.push({
         id: gle1,
         timestamp,
@@ -6494,6 +6904,32 @@ async function startServer() {
 
     b2bOrdersList.unshift(newOrder);
 
+    // Event 2, 4, 6 triggers on B2B checkout
+    checkAndNotifyLowStockForSkus(
+      Array.from(b2bReqBySku.keys()),
+      'store-jkt-senopati'
+    );
+    if (requiresApproval && approvalRequestId) {
+      emitEnterpriseNotification({
+        dedupeKey: `APR_QUEUE:${approvalRequestId}`,
+        category: 'PROCUREMENT_FINANCE',
+        severity: 'ACTION_REQUIRED',
+        title: `B2B Order Approval Required (${orderId})`,
+        message: `${customer.companyName} order Rp ${totalAmountIDR.toLocaleString('id-ID')} routed to Finance Approval Matrix.`,
+        metadataLabel: `${orderId} • Rp ${totalAmountIDR.toLocaleString('id-ID')}`,
+        targetTab: 'approvals',
+      });
+    }
+    emitEnterpriseNotification({
+      dedupeKey: `B2B_PICKER:${orderId}`,
+      category: 'FULFILLMENT',
+      severity: 'INFO',
+      title: `Incoming B2B Order for Picking (${orderId})`,
+      message: `${customer.companyName} ordered ${totalBaseUnits} base units across ${items.length} lines.`,
+      metadataLabel: `${orderId} • ${totalBaseUnits} units`,
+      targetTab: 'picker',
+    });
+
     res.json({
       success: true,
       order: newOrder,
@@ -6593,6 +7029,17 @@ async function startServer() {
       customer.status = 'CREDIT_LOCKED';
       customer.lockReason = `DISHONORED BILYET GIRO: Giro #${giro.giroNumber} bounced (${reason}). Credit facility frozen pending full cashier restitution.`;
     }
+
+    emitEnterpriseNotification({
+      dedupeKey: `GIRO_BOUNCED:${giro.id}`,
+      category: 'B2B_FINANCE',
+      severity: 'CRITICAL',
+      title: `Bilyet Giro Tolakan / Bounced (#${giro.giroNumber})`,
+      message: `${giro.customerName} Giro Rp ${giro.amountIDR.toLocaleString('id-ID')} bounced. Credit FROZEN & COA #4090 penalty Rp ${penaltyFee.toLocaleString('id-ID')} booked.`,
+      metadataLabel: `${giro.giroNumber} • Frozen AR`,
+      targetTab: 'accounting',
+      targetSubTab: 'b2b_ar',
+    });
 
     const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
@@ -7119,6 +7566,16 @@ async function startServer() {
           reason: `3-Way Match ${billStatus} on PO #${poId} / GR #${goodsReceiptId} exceeding tolerance`,
         },
       });
+
+      emitEnterpriseNotification({
+        dedupeKey: `APR_QUEUE:${approvalRequestId}`,
+        category: 'PROCUREMENT_FINANCE',
+        severity: 'WARNING',
+        title: `3-Way Match Variance: ${billNumber}`,
+        message: `Vendor Bill ${billNumber} (${supplierName}) flagged ${billStatus} on PO #${poId} / GR #${goodsReceiptId} and routed to Approval Matrix.`,
+        metadataLabel: `${id} • Rp ${grandTotalIDR.toLocaleString('id-ID')}`,
+        targetTab: 'approvals',
+      });
     }
 
     res.json({
@@ -7135,6 +7592,12 @@ async function startServer() {
     const { approverName = currentActiveStaffSession.userName } = req.body;
     const bill = vendorBillsList.find((b) => b.id === id);
     if (!bill) return res.status(404).json({ error: 'Vendor Bill not found.' });
+    if (bill.status === 'VOID') {
+      return res.status(400).json({ error: `Cannot approve voided Vendor Bill #${bill.billNumber}.` });
+    }
+    if (bill.status === 'APPROVED' || bill.status === 'PAID') {
+      return res.status(400).json({ error: `Vendor Bill #${bill.billNumber} is already ${bill.status}.` });
+    }
 
     bill.status = 'APPROVED';
     bill.approvedBy = approverName;
@@ -7150,6 +7613,9 @@ async function startServer() {
     const { amountPaid, paymentMethod = 'BANK_TRANSFER', paymentReference } = req.body;
     const bill = vendorBillsList.find((b) => b.id === id);
     if (!bill) return res.status(404).json({ error: 'Vendor Bill not found.' });
+    if (bill.paymentStatus === 'PAID' || bill.remainingDue <= 0) {
+      return res.status(400).json({ error: `Vendor Bill #${bill.billNumber} is already paid in full.` });
+    }
 
     if (
       enterpriseSettings.threeWayMatching.blockPaymentOnMismatch !== false &&
@@ -7160,7 +7626,11 @@ async function startServer() {
       });
     }
 
-    const payAmt = Number(amountPaid) || bill.remainingDue;
+    const requestedAmt = amountPaid !== undefined ? Number(amountPaid) : bill.remainingDue;
+    if (!Number.isFinite(requestedAmt) || requestedAmt <= 0) {
+      return res.status(400).json({ error: 'Payment amount must be greater than zero.' });
+    }
+    const payAmt = Math.min(bill.remainingDue, requestedAmt);
     bill.amountPaid += payAmt;
     bill.remainingDue = Math.max(0, bill.grandTotal - bill.amountPaid);
     bill.remainingBalanceIDR = Math.round(bill.remainingDue * (bill.exchangeRate || 1));
@@ -7562,6 +8032,16 @@ async function startServer() {
 
     customerOrders.unshift(newOrder);
 
+    emitEnterpriseNotification({
+      dedupeKey: `QUO_PICKER:${orderId}`,
+      category: 'FULFILLMENT',
+      severity: 'INFO',
+      title: `Quotation Order Ready for Picking (${orderId})`,
+      message: `${quo.customerCompany || quo.customerName} quotation ${quo.quotationNumber} converted (Rp ${quo.total.toLocaleString('id-ID')}).`,
+      metadataLabel: `${orderId} • ${quo.items.length} SKUs`,
+      targetTab: 'picker',
+    });
+
     res.json({
       success: true,
       order: newOrder,
@@ -7602,6 +8082,170 @@ async function startServer() {
     res.json({ success: true, message: 'Promotion deactivated.' });
   });
 
+  app.post('/api/admin/promotions/evaluate', (req: Request, res: Response) => {
+    const { cartItems = [], couponCode = '', memberTier, memberId } = req.body || {};
+    const activeRules = promotionRulesList.filter((r) => r.active);
+    const normalizedCoupon = String(couponCode || '').trim().toUpperCase();
+    const upperMember = String(memberId || '').toUpperCase();
+    const effectiveTier =
+      memberTier ||
+      (upperMember.includes('VIP') || upperMember.includes('PLAT') || upperMember.endsWith('99')
+        ? 'PLATINUM'
+        : upperMember.includes('GOLD') || upperMember.endsWith('88')
+        ? 'GOLD'
+        : upperMember.includes('SILV') || upperMember.endsWith('77')
+        ? 'SILVER'
+        : undefined);
+
+    const normalizedCart = (Array.isArray(cartItems) ? cartItems : []).map((it: any) => {
+      const unitPrice = Number(it.unitPrice ?? it.product?.price ?? it.price ?? 0);
+      const quantity = Math.max(0, Number(it.quantity) || 1);
+      return {
+        sku: String(it.sku || it.product?.sku || ''),
+        name: String(it.name || it.product?.name || ''),
+        category: String(it.category || it.product?.category || ''),
+        quantity,
+        unitPrice,
+        lineTotal: Number(it.lineTotal ?? Math.round(unitPrice * quantity)),
+      };
+    });
+
+    const cartSubtotal = normalizedCart.reduce((sum, it) => sum + it.lineTotal, 0);
+    let totalPromoDiscountIDR = 0;
+    const appliedPromotions: any[] = [];
+    const lineDiscounts: Record<string, number> = {};
+
+    // 1. BOGO rules (apply automatically if eligible or when coupon matches)
+    for (const rule of activeRules.filter((r) => r.type === 'BOGO')) {
+      if (!rule.buyQty || !rule.getQty) continue;
+      const bundleSize = rule.buyQty + rule.getQty;
+      normalizedCart.forEach((item) => {
+        const isTarget =
+          rule.targetType === 'ALL' ||
+          (rule.targetType === 'SKU' && item.sku === rule.targetValue) ||
+          (rule.targetType === 'CATEGORY' && item.category === rule.targetValue);
+        if (isTarget && item.quantity >= bundleSize) {
+          const freeUnits = Math.floor(item.quantity / bundleSize) * rule.getQty!;
+          const discount = Math.round(freeUnits * item.unitPrice * ((rule.getDiscountPercent || 100) / 100));
+          if (discount > 0) {
+            totalPromoDiscountIDR += discount;
+            lineDiscounts[item.sku] = (lineDiscounts[item.sku] || 0) + discount;
+            appliedPromotions.push({
+              ruleId: rule.id,
+              ruleCode: rule.code,
+              name: rule.name,
+              discountAmountIDR: discount,
+              promoType: 'BOGO',
+              appliedSku: item.sku,
+              badgeLabel: `B${rule.buyQty}G${rule.getQty} (${freeUnits} Free)`,
+            });
+          }
+        }
+      });
+    }
+
+    // 2. Member tier automatic rules
+    if (effectiveTier) {
+      const tierRule = activeRules.find((r) => r.type === 'MEMBER_TIER' && r.memberTier === effectiveTier);
+      if (tierRule && tierRule.discountPercent) {
+        const discount = Math.round(cartSubtotal * (tierRule.discountPercent / 100));
+        if (discount > 0) {
+          totalPromoDiscountIDR += discount;
+          appliedPromotions.push({
+            ruleId: tierRule.id,
+            ruleCode: tierRule.code,
+            name: tierRule.name,
+            discountAmountIDR: discount,
+            promoType: 'MEMBER_TIER',
+            badgeLabel: `${effectiveTier} VIP -${tierRule.discountPercent}%`,
+          });
+        }
+      }
+    }
+
+    // 3. Explicit coupon code evaluation
+    if (normalizedCoupon) {
+      const matchedCoupon = activeRules.find((r) => r.code.toUpperCase() === normalizedCoupon);
+      if (matchedCoupon && matchedCoupon.type !== 'BOGO' && matchedCoupon.type !== 'MEMBER_TIER') {
+        const meetsMinSpend = !matchedCoupon.minOrderSubtotalIDR || cartSubtotal >= matchedCoupon.minOrderSubtotalIDR;
+        if (meetsMinSpend) {
+          let eligibleSubtotal = cartSubtotal;
+          if (matchedCoupon.targetType === 'CATEGORY') {
+            eligibleSubtotal = normalizedCart
+              .filter((it) => it.category === matchedCoupon.targetValue)
+              .reduce((sum, it) => sum + it.lineTotal, 0);
+          } else if (matchedCoupon.targetType === 'SKU') {
+            eligibleSubtotal = normalizedCart
+              .filter((it) => it.sku === matchedCoupon.targetValue)
+              .reduce((sum, it) => sum + it.lineTotal, 0);
+          }
+          let couponDiscount = 0;
+          if (matchedCoupon.discountPercent) {
+            couponDiscount = Math.round(eligibleSubtotal * (matchedCoupon.discountPercent / 100));
+          } else if (matchedCoupon.discountAmountIDR) {
+            couponDiscount = Math.min(eligibleSubtotal, matchedCoupon.discountAmountIDR);
+          }
+          if (couponDiscount > 0) {
+            totalPromoDiscountIDR += couponDiscount;
+            appliedPromotions.push({
+              ruleId: matchedCoupon.id,
+              ruleCode: matchedCoupon.code,
+              name: matchedCoupon.name,
+              discountAmountIDR: couponDiscount,
+              promoType: matchedCoupon.type,
+              badgeLabel: `Promo [${matchedCoupon.code}]`,
+            });
+          }
+        }
+      } else if (matchedCoupon && matchedCoupon.type === 'MEMBER_TIER' && matchedCoupon.discountPercent) {
+        const alreadyApplied = appliedPromotions.some((p) => p.ruleId === matchedCoupon.id);
+        if (!alreadyApplied) {
+          const couponDiscount = Math.round(cartSubtotal * (matchedCoupon.discountPercent / 100));
+          if (couponDiscount > 0) {
+            totalPromoDiscountIDR += couponDiscount;
+            appliedPromotions.push({
+              ruleId: matchedCoupon.id,
+              ruleCode: matchedCoupon.code,
+              name: matchedCoupon.name,
+              discountAmountIDR: couponDiscount,
+              promoType: matchedCoupon.type,
+              badgeLabel: `Promo [${matchedCoupon.code}]`,
+            });
+          }
+        }
+      } else if (normalizedCoupon === 'GROCEFRESH' && cartSubtotal > 0) {
+        const d = Math.min(cartSubtotal, 10000);
+        totalPromoDiscountIDR += d;
+        appliedPromotions.push({
+          ruleId: 'PRM-STORE-GROCEFRESH',
+          ruleCode: 'GROCEFRESH',
+          name: 'GroceMart Fresh Welcome Rp 10.000',
+          discountAmountIDR: d,
+          promoType: 'FIXED_DISCOUNT',
+          badgeLabel: 'Promo [GROCEFRESH]',
+        });
+      } else if (normalizedCoupon === 'FREEDELIVERY' && cartSubtotal > 0) {
+        const d = Math.min(cartSubtotal, 15000);
+        totalPromoDiscountIDR += d;
+        appliedPromotions.push({
+          ruleId: 'PRM-STORE-FREEDELIVERY',
+          ruleCode: 'FREEDELIVERY',
+          name: 'Free Courier Delivery Waiver',
+          discountAmountIDR: d,
+          promoType: 'FIXED_DISCOUNT',
+          badgeLabel: 'Promo [FREEDELIVERY]',
+        });
+      }
+    }
+
+    totalPromoDiscountIDR = Math.min(cartSubtotal, roundIDR(totalPromoDiscountIDR));
+    res.json({
+      totalPromoDiscountIDR,
+      appliedPromotions,
+      lineDiscounts,
+    });
+  });
+
   app.post('/api/admin/inventory/bulk-import', (req: Request, res: Response) => {
     const { rows = [] } = req.body as { rows: BulkInventoryImportRow[] };
     let imported = 0;
@@ -7629,31 +8273,146 @@ async function startServer() {
 
   app.post('/api/admin/inventory/stock-opname/reconcile', (req: Request, res: Response) => {
     const rawSession = req.body as Partial<StockOpnameSession>;
-    const glEntryIds = Array.isArray(rawSession.glEntryIds) && rawSession.glEntryIds.length > 0
-      ? rawSession.glEntryIds
-      : ['GLE-2026-0099'];
+    const timestamp = new Date().toISOString();
+    const storeId = rawSession.storeId || 'store-jkt-senopati';
+    const storeName = rawSession.storeName || 'GroceMart Senopati Flagship';
+    const items = Array.isArray(rawSession.items) ? rawSession.items : [];
+
+    let totalSystemUnits = 0;
+    let totalCountedUnits = 0;
+    let totalVarianceUnits = 0;
+    let netFinancialVarianceIDR = 0;
+
+    items.forEach((line) => {
+      const tier = storeInventoryTiers.find((t) => t.sku === line.sku && t.storeId === storeId);
+      const sysQty = Number(line.systemStock ?? tier?.physicalStock ?? 0);
+      const counted = Math.max(0, Number(line.countedStock ?? sysQty));
+      const variance = Number((counted - sysQty).toFixed(2));
+      const unitCost = Number(line.unitCost ?? tier?.unitCost ?? 15000);
+      const financialVar = Math.round(variance * unitCost);
+
+      totalSystemUnits += sysQty;
+      totalCountedUnits += counted;
+      totalVarianceUnits += variance;
+      netFinancialVarianceIDR += financialVar;
+
+      if (tier && variance !== 0) {
+        tier.physicalStock = counted;
+        tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+        tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+        tier.updatedAt = timestamp;
+      }
+      const inv = inventoryList.find((i) => i.sku === line.sku);
+      if (inv && variance !== 0) {
+        inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) + variance).toFixed(2)));
+      }
+    });
+
+    const glEntryIds: string[] = [];
+    const sessionId = rawSession.id || `OPN-2026-${(stockOpnameSessions.length + 1).toString().padStart(3, '0')}`;
+    if (netFinancialVarianceIDR !== 0) {
+      const absVal = Math.abs(roundIDR(netFinancialVarianceIDR));
+      const g1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const g2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      glEntryIds.push(g1, g2);
+
+      if (netFinancialVarianceIDR < 0) {
+        commitBalancedGlBatch(
+          [
+            {
+              id: g1,
+              timestamp,
+              storeId,
+              storeName,
+              accountCode: '5210',
+              accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
+              category: 'Expense',
+              debit: absVal,
+              credit: 0,
+              referenceType: 'STOCK_OPNAME',
+              referenceId: sessionId,
+              description: `Stock Opname Shortage Variance (${sessionId})`,
+            },
+            {
+              id: g2,
+              timestamp,
+              storeId,
+              storeName,
+              accountCode: '1040',
+              accountName: 'Merchandise Inventory Asset',
+              category: 'Asset',
+              debit: 0,
+              credit: absVal,
+              referenceType: 'STOCK_OPNAME',
+              referenceId: sessionId,
+              description: `Inventory Asset write-down for Stock Opname ${sessionId}`,
+            },
+          ],
+          true
+        );
+      } else {
+        commitBalancedGlBatch(
+          [
+            {
+              id: g1,
+              timestamp,
+              storeId,
+              storeName,
+              accountCode: '1040',
+              accountName: 'Merchandise Inventory Asset',
+              category: 'Asset',
+              debit: absVal,
+              credit: 0,
+              referenceType: 'STOCK_OPNAME',
+              referenceId: sessionId,
+              description: `Inventory Asset surplus adjustment for Stock Opname ${sessionId}`,
+            },
+            {
+              id: g2,
+              timestamp,
+              storeId,
+              storeName,
+              accountCode: '5210',
+              accountName: 'Inventory Shrinkage & Blind Opname Variance Expense',
+              category: 'Expense',
+              debit: 0,
+              credit: absVal,
+              referenceType: 'STOCK_OPNAME',
+              referenceId: sessionId,
+              description: `Stock Opname Surplus credit (${sessionId})`,
+            },
+          ],
+          true
+        );
+      }
+    }
+
     const session: StockOpnameSession = {
-      id: rawSession.id || `OPN-2026-${(stockOpnameSessions.length + 1).toString().padStart(3, '0')}`,
-      date: rawSession.date || new Date().toISOString(),
-      storeId: rawSession.storeId || 'ST-JKT-SEN',
-      storeName: rawSession.storeName || 'Senayan Hub',
+      id: sessionId,
+      date: rawSession.date || timestamp,
+      storeId,
+      storeName,
       warehouseZoneId: rawSession.warehouseZoneId || 'WH-JKT-SEN-COLD',
       auditorId: rawSession.auditorId || 'AUD-001',
-      auditorName: rawSession.auditorName || 'Admin Auditor',
+      auditorName: rawSession.auditorName || currentActiveStaffSession.userName,
       status: 'reconciled',
-      items: Array.isArray(rawSession.items) ? rawSession.items : [],
-      totalSystemUnits: rawSession.totalSystemUnits || 0,
-      totalCountedUnits: rawSession.totalCountedUnits || 0,
-      totalVarianceUnits: rawSession.totalVarianceUnits || 0,
-      netFinancialVarianceIDR: rawSession.netFinancialVarianceIDR || 0,
+      items,
+      totalSystemUnits: rawSession.totalSystemUnits ?? Number(totalSystemUnits.toFixed(2)),
+      totalCountedUnits: rawSession.totalCountedUnits ?? Number(totalCountedUnits.toFixed(2)),
+      totalVarianceUnits: rawSession.totalVarianceUnits ?? Number(totalVarianceUnits.toFixed(2)),
+      netFinancialVarianceIDR: rawSession.netFinancialVarianceIDR ?? roundIDR(netFinancialVarianceIDR),
       glEntryIds,
       notes: rawSession.notes || 'Periodic physical stocktake cycle count',
-      completedAt: rawSession.completedAt || new Date().toISOString(),
-      ...rawSession,
+      completedAt: rawSession.completedAt || timestamp,
     };
-    session.glEntryIds = glEntryIds;
     stockOpnameSessions.unshift(session);
-    res.json({ success: true, session, journalEntryIds: glEntryIds, message: 'Opname reconciled.' });
+    res.json({
+      success: true,
+      session,
+      journalEntryIds: glEntryIds,
+      message: `Stock Opname ${sessionId} reconciled across ${items.length} SKUs (${glEntryIds.length > 0 ? `GL posted: ${glEntryIds.join(', ')}` : 'zero variance — balanced'}).`,
+    });
   });
 
   const inTransitTransferLots = new Map<
@@ -7841,6 +8600,21 @@ async function startServer() {
     };
 
     stockTransfersList.unshift(record);
+
+    // Event 2 & Event 7 notifications
+    checkAndNotifyLowStockForSkus([sku], sourceStoreId);
+    if (normalizedStatus === 'in_transit') {
+      emitEnterpriseNotification({
+        dedupeKey: `TRANSFER_IN_TRANSIT:${recordId}`,
+        category: 'LOGISTICS',
+        severity: 'ACTION_REQUIRED',
+        title: `Transfer In-Transit (${recordId})`,
+        message: `${qty}x ${productName} dispatched from ${sourceStoreName} to ${destStoreName}. Destination hub must confirm arrival.`,
+        metadataLabel: `${recordId} • ${sku} • ${qty} units`,
+        targetTab: 'transfers',
+      });
+    }
+
     res.json({
       success: true,
       record,
@@ -7915,6 +8689,7 @@ async function startServer() {
     inTransitTransferLots.delete(id);
 
     record.status = 'completed';
+    markEnterpriseNotificationReadByDedupeKey(`TRANSFER_IN_TRANSIT:${id}`);
     res.json({ success: true, record, message: `Transfer #${id} received at ${record.destinationStoreName}.` });
   });
 
@@ -8021,6 +8796,10 @@ async function startServer() {
       status: 'AUTHORIZED_EXECUTED',
       metadata: { requestId, action, finalStatus: reqItem.status, amountIDR: reqItem.amountIDR },
     });
+
+    if (reqItem.status === 'APPROVED' || reqItem.status === 'REJECTED') {
+      markEnterpriseNotificationReadByDedupeKey(`APR_QUEUE:${reqItem.id}`);
+    }
 
     res.json({
       success: true,
@@ -8326,6 +9105,18 @@ async function startServer() {
       }
     }
 
+    if (newQc.disposition === 'QUARANTINED' || newQc.disposition === 'REJECTED') {
+      emitEnterpriseNotification({
+        dedupeKey: `QC_ALERT:${newQc.id}`,
+        category: 'QUALITY_CONTROL',
+        severity: 'CRITICAL',
+        title: `QC ${newQc.disposition}: ${newQc.productName}`,
+        message: `Lot ${newQc.batchNumber} (${qcQty} units) at ${newQc.storeName} marked ${newQc.disposition} (${newQc.actionTaken}).`,
+        metadataLabel: `${newQc.id} • ${newQc.sku} • ${newQc.parameters?.temperatureCelsius ?? 'N/A'}°C`,
+        targetTab: newQc.actionTaken === 'SCRAP_WASTE' ? 'waste' : 'qc',
+      });
+    }
+
     securityAuditTrail.unshift({
       id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
       timestamp: new Date().toISOString(),
@@ -8483,6 +9274,17 @@ async function startServer() {
       inspectorName: payload.inspectorName || 'Store IoT Logger',
     };
     coldChainLogs.unshift(newLog);
+    if (isExcursion) {
+      emitEnterpriseNotification({
+        dedupeKey: `COLD_EXCURSION:${newLog.id}`,
+        category: 'QUALITY_CONTROL',
+        severity: 'CRITICAL',
+        title: `Cold-Chain Excursion: ${newLog.zoneName}`,
+        message: `Sensor ${newLog.sensorId} recorded ${tempC}°C (${newLog.severity}) at ${newLog.storeName}. Immediate HACCP inspection needed.`,
+        metadataLabel: `${tempC}°C • ${newLog.zoneName}`,
+        targetTab: 'qc',
+      });
+    }
     res.json({ success: true, log: newLog, message: 'Cold chain telemetry recorded successfully' });
   });
 
@@ -8587,6 +9389,15 @@ async function startServer() {
     batch.status = 'quarantined';
     batch.notes = `Quarantined: ${reason || hazardDescription || recallClassification || 'Suspected contamination'}`;
     const quarantinedUnits = batch.remainingQuantity ?? batch.currentStock ?? 0;
+    emitEnterpriseNotification({
+      dedupeKey: `RECALL_QUARANTINE:${batchId}`,
+      category: 'QUALITY_CONTROL',
+      severity: 'CRITICAL',
+      title: `Batch Quarantine Lock: ${batch.productName}`,
+      message: `Lot ${batch.lotNumber} (${quarantinedUnits} units) locked from picking & POS sales (${reason || recallClassification || 'Recall Quarantine'}).`,
+      metadataLabel: `${batch.sku} • Lot ${batch.lotNumber}`,
+      targetTab: 'qc',
+    });
     res.json({
       success: true,
       message: `Batch ${batchId} has been locked and quarantined from all picking & POS sales.`,
@@ -10602,6 +11413,16 @@ async function startServer() {
       },
     });
 
+    emitEnterpriseNotification({
+      dedupeKey: `APR_QUEUE:${approvalId}`,
+      category: 'PROCUREMENT_FINANCE',
+      severity: 'ACTION_REQUIRED',
+      title: `Stocktake Variance Approval (${sheet.sheetNumber})`,
+      message: `${sheet.storeName} Blind Opname net variance Rp ${sheet.netVarianceValueIDR.toLocaleString('id-ID')} queued for Supervisor sign-off.`,
+      metadataLabel: `${sheet.sheetNumber} • Rp ${Math.abs(sheet.netVarianceValueIDR).toLocaleString('id-ID')}`,
+      targetTab: 'approvals',
+    });
+
     res.json({
       success: true,
       sheet,
@@ -10836,6 +11657,20 @@ async function startServer() {
     shift.edcVarianceIDR = edcVarianceIDR;
     shift.varianceGlVoucherIds = glIds;
     shift.notes = notes;
+
+    if (cashVarianceIDR !== 0 || qrisVarianceIDR !== 0 || edcVarianceIDR !== 0) {
+      const absCashVar = Math.abs(cashVarianceIDR);
+      const signPrefix = cashVarianceIDR < 0 ? '-' : cashVarianceIDR > 0 ? '+' : '';
+      emitEnterpriseNotification({
+        dedupeKey: `POS_SHIFT_VAR:${shift.id}`,
+        category: 'POS_OPERATIONS',
+        severity: absCashVar >= 50000 ? 'CRITICAL' : 'WARNING',
+        title: `POS Shift Variance (${zReportNumber})`,
+        message: `${shift.cashierName} closed ${shift.registerId} at ${shift.storeName} with COA #5220 variance ${signPrefix}Rp ${absCashVar.toLocaleString('id-ID')}.`,
+        metadataLabel: `${zReportNumber} • ${signPrefix}Rp ${absCashVar.toLocaleString('id-ID')}`,
+        targetTab: 'pos',
+      });
+    }
 
     res.json({
       success: true,

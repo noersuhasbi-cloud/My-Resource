@@ -149,7 +149,9 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
     return true;
   });
 
-  const pendingCount = activeQueue.filter((r) => r.status === 'PENDING').length;
+  const pendingCount = activeQueue.filter(
+    (r) => r.status === 'PENDING' && (selectedStore === 'ALL' || selectedStore === 'CONSOLIDATED' || r.storeId === selectedStore)
+  ).length;
 
   const cardClass = `rounded-2xl border transition-all ${
     isLight
@@ -464,6 +466,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                       <option value="store_manager">Store Manager / Supervisor</option>
                       <option value="admin">Supply Chain VP / Admin</option>
                       <option value="auditor">Inventory QA Auditor</option>
+                      <option value="executive">Executive / COO</option>
                     </select>
                   </div>
 

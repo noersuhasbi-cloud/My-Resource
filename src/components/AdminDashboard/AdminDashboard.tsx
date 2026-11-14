@@ -31,6 +31,7 @@ import type {
   RemovalStrategyConfig,
   VendorBill,
   EnterpriseSettingsConfig,
+  EnterpriseNotification,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -95,7 +96,7 @@ import { ProcurementModule } from './ProcurementModule';
 import { AccountingModule } from './AccountingModule';
 import { RbacModule } from './RbacModule';
 import { SecurityAuditModule } from './SecurityAuditModule';
-import { AdminSidebar, AdminDashboardTab, AccountingSubTab } from './AdminSidebar';
+import { AdminSidebar, AdminDashboardTab, AccountingSubTab, isDashboardTabAllowed } from './AdminSidebar';
 import { PosModule } from './PosModule';
 import { InventoryQCModule } from './InventoryQCModule';
 import { LogisticsDocsModal } from './LogisticsDocsModal';
@@ -104,6 +105,7 @@ import { GroceryReportsModule } from './GroceryReportsModule';
 import { SettingsModule } from './SettingsModule';
 import { OdooInventoryView } from './OdooInventoryView';
 import { QuotationsModule } from './QuotationsModule';
+import { NotificationCenterPopover } from './NotificationCenterPopover';
 
 interface AdminDashboardProps {
   initialStaffSession?: StaffShiftSession | null;
@@ -160,6 +162,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
   const [availableStaffProfiles, setAvailableStaffProfiles] = useState<StaffShiftSession[]>([]);
 
+  // Redirect activeTab automatically if role permission removes access
+  useEffect(() => {
+    if (activeStaffSession && !isDashboardTabAllowed(activeStaffSession, activeTab)) {
+      const fallback: AdminDashboardTab = activeStaffSession.permissions?.canViewPos
+        ? 'pos'
+        : activeStaffSession.permissions?.canViewInventory
+        ? 'inventory'
+        : 'overview';
+      setActiveTab(fallback);
+    }
+  }, [activeStaffSession, activeTab]);
+
   // Climate-Adaptive Cold Chain State (Module 4)
   const [climateConfigs, setClimateConfigs] = useState<ClimateAdaptiveThresholdConfig[]>([]);
 
@@ -168,6 +182,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Loading & refresh
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [notifications, setNotifications] = useState<EnterpriseNotification[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
 
   // Executive Omzet Analytics
   const [omzetData, setOmzetData] = useState<OmzetAnalyticsReport | null>(null);
@@ -286,6 +302,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         strategyRes,
         vendorBillsRes,
         enterpriseSettingsRes,
+        notifRes,
       ] = await Promise.all([
         apiClient.getOmzetAnalytics().catch(() => null),
         apiClient.getStoreStatus(),
@@ -314,6 +331,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         apiClient.getRemovalStrategies().catch(() => null),
         apiClient.getVendorBills().catch(() => []),
         apiClient.getEnterpriseSettings().catch(() => null),
+        apiClient.getAdminNotifications().catch(() => ({ notifications: [], unreadCount: 0 })),
       ]);
 
       if (rbacRes) {
@@ -361,6 +379,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (strategyRes) {
         setRemovalStrategies(strategyRes);
       }
+      if (notifRes) {
+        setNotifications(notifRes.notifications || []);
+        setUnreadNotificationsCount(notifRes.unreadCount || 0);
+      }
     } catch (err) {
       console.error('Failed to load dashboard data from backend:', err);
     } finally {
@@ -370,6 +392,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     refreshAllData();
+    const timer = window.setInterval(() => {
+      apiClient
+        .getAdminNotifications()
+        .then((res) => {
+          setNotifications(res.notifications || []);
+          setUnreadNotificationsCount(res.unreadCount || 0);
+        })
+        .catch(() => {});
+    }, 15000);
+    return () => window.clearInterval(timer);
   }, []);
 
   // Reload financials when store filter changes
@@ -693,6 +725,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onCloseToStorefront={onCloseToStorefront}
         onLogout={onLogout}
+        activeStaffSession={activeStaffSession}
       />
 
       {/* 2. Main Content Wrapper with Dynamic Left Margin corresponding to Sidebar */}
@@ -838,6 +871,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               </button>
+
+              {/* Real-Time Enterprise Notification Center */}
+              <NotificationCenterPopover
+                theme={theme}
+                notifications={notifications}
+                unreadCount={unreadNotificationsCount}
+                onMarkRead={async (id) => {
+                  try {
+                    const res = await apiClient.markNotificationsRead({ id });
+                    setNotifications(res.notifications || []);
+                    setUnreadNotificationsCount(res.unreadCount || 0);
+                  } catch {}
+                }}
+                onMarkAllRead={async () => {
+                  try {
+                    const res = await apiClient.markNotificationsRead({ markAll: true });
+                    setNotifications(res.notifications || []);
+                    setUnreadNotificationsCount(res.unreadCount || 0);
+                  } catch {}
+                }}
+                onClearRead={async () => {
+                  try {
+                    const res = await apiClient.clearAdminNotifications({ onlyRead: true });
+                    setNotifications(res.notifications || []);
+                    setUnreadNotificationsCount(res.unreadCount || 0);
+                  } catch {}
+                }}
+                onNavigate={(targetTab, targetSubTab) => {
+                  const nextTab = targetTab as AdminDashboardTab;
+                  if (activeStaffSession && !isDashboardTabAllowed(activeStaffSession, nextTab)) {
+                    onShowToast(
+                      'Role Access Restricted',
+                      `Current role (${activeStaffSession.userRole.replace(/_/g, ' ')}) cannot open this target module.`
+                    );
+                    return;
+                  }
+                  if (targetSubTab && nextTab === 'accounting') {
+                    setAccountingDeepSubTab(targetSubTab as AccountingSubTab);
+                  }
+                  setActiveTab(nextTab);
+                }}
+              />
 
               {/* Executive Dashboard PDF Report Export Button */}
               {activeTab === 'overview' && (
@@ -1618,6 +1693,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               warehouseBins={warehouseBins}
               purchaseOrders={purchaseOrders}
               qcInspections={qcInspections}
+              storeOutlets={storeOutlets}
               stockTransfers={stockTransfers}
               pickerOrders={pickerOrders}
               b2bOrders={b2bOrders}
@@ -1810,6 +1886,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             purchaseOrders={purchaseOrders}
             goodsReceipts={goodsReceipts}
             vendorBills={vendorBills}
+            storeOutlets={storeOutlets}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
           />
@@ -1971,6 +2048,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             selectedStore={selectedGlobalStore}
             inventory={inventory}
+            storeOutlets={storeOutlets}
             onShowToast={onShowToast}
           />
         )}

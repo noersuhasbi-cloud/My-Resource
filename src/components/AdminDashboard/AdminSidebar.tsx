@@ -1,4 +1,5 @@
 import React from 'react';
+import type { StaffShiftSession } from '../../types/index.ts';
 import {
   LayoutDashboard,
   Store,
@@ -97,6 +98,41 @@ interface AdminSidebarProps {
   // Storefront exit & logout
   onCloseToStorefront: () => void;
   onLogout?: () => void;
+  activeStaffSession?: StaffShiftSession | null;
+}
+
+export function isDashboardTabAllowed(session: StaffShiftSession | null | undefined, tab: AdminDashboardTab): boolean {
+  if (!session || session.userRole === 'executive') return true;
+  const p = session.permissions;
+  switch (tab) {
+    case 'pos':
+      return !!p?.canViewPos;
+    case 'inventory':
+    case 'fefo':
+    case 'waste':
+    case 'picker':
+    case 'qc':
+    case 'logistics':
+    case 'transfers':
+      return !!p?.canViewInventory;
+    case 'procurement':
+      return !!(p?.canReceiveGoods || p?.canApprovePurchaseOrder || p?.canViewInventory);
+    case 'accounting':
+    case 'reports':
+    case 'quotations':
+      return !!p?.canViewFinancePnL;
+    case 'operations':
+    case 'approvals':
+    case 'settings':
+      return !!p?.canManageOutlets;
+    case 'overview':
+    case 'rbac':
+    case 'audit':
+    case 'openapi':
+    case 'erd':
+    default:
+      return true;
+  }
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -118,8 +154,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onCloseMobile,
   onCloseToStorefront,
   onLogout,
+  activeStaffSession,
 }) => {
   const isLight = theme === 'light';
+  const allow = (tab: AdminDashboardTab) => isDashboardTabAllowed(activeStaffSession, tab);
 
   const handleTabClick = (tab: AdminDashboardTab) => {
     onSelectTab(tab);
@@ -240,6 +278,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             </button>
 
             {/* POS Cashier Register */}
+            {allow('pos') && (
             <button
               onClick={() => handleTabClick('pos')}
               title={isCollapsed ? 'POS / Cashier Station' : undefined}
@@ -274,8 +313,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
               )}
             </button>
+            )}
 
             {/* 2. Store & Outlet Management */}
+            {allow('operations') && (
             <button
               onClick={() => handleTabClick('operations')}
               title={isCollapsed ? 'Store & Outlet Management' : undefined}
@@ -314,8 +355,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </span>
               )}
             </button>
+            )}
 
             {/* 3. Inventory & Multi-Warehouse */}
+            {allow('inventory') && (
             <button
               onClick={() => handleTabClick('inventory')}
               title={isCollapsed ? 'Inventory & Multi-Warehouse' : undefined}
@@ -354,6 +397,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </span>
               )}
             </button>
+            )}
           </div>
         </div>
 
@@ -497,6 +541,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             </button>
 
             {/* 7Q. B2B Quotations & Pro Forma Invoices */}
+            {allow('quotations') && (
             <button
               onClick={() => handleTabClick('quotations')}
               title={isCollapsed ? 'B2B Quotations & Pro Forma Invoices' : undefined}
@@ -528,6 +573,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
 
             {/* 7A. Inventory QC & Spoilage Inspections */}
             <button
@@ -618,6 +664,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             </button>
 
             {/* 7D. Approval Matrix & Authorization Queue */}
+            {allow('approvals') && (
             <button
               onClick={() => handleTabClick('approvals')}
               title={isCollapsed ? 'Approval Matrix & Authorization Queue' : undefined}
@@ -649,8 +696,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
 
             {/* 7E. Specialized Grocery Intelligence & Reports */}
+            {allow('reports') && (
             <button
               onClick={() => handleTabClick('reports')}
               title={isCollapsed ? 'Grocery Analytics & FIFO Aging Reports' : undefined}
@@ -682,8 +731,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
 
             {/* 7F. Enterprise Settings Hub */}
+            {allow('settings') && (
             <button
               onClick={() => handleTabClick('settings')}
               title={isCollapsed ? 'Enterprise Settings Hub' : undefined}
@@ -715,10 +766,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
             </button>
+            )}
           </div>
         </div>
 
         {/* SECTION 3: FINANCE & CORE ACCOUNTING (Collapsible Nested Menu) */}
+        {allow('accounting') && (
         <div>
           {!isCollapsed ? (
             <div
@@ -910,6 +963,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             )}
           </div>
         </div>
+        )}
 
         {/* SECTION 4: SYSTEM & ARCHITECTURE */}
         <div>

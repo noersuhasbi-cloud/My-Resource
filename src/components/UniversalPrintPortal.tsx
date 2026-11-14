@@ -22,6 +22,18 @@ export function renderPrintDocument(
       // =====================================================================
       case 'pos_receipt': {
         const r = activePrintPayload.receipt;
+        const rKey = `${r.storeId || ''} ${r.storeName || ''}`.toLowerCase();
+        const outletAddress = rKey.includes('pik')
+          ? 'Pantai Indah Kapuk Blvd, Jakarta Utara 14470'
+          : rKey.includes('menteng')
+          ? 'Jl. HOS. Cokroaminoto No. 78, Jakarta Pusat 10310'
+          : rKey.includes('dago') || rKey.includes('bandung')
+          ? 'Jl. Ir. H. Juanda No. 114, Bandung 40132'
+          : rKey.includes('gubeng') || rKey.includes('surabaya')
+          ? 'Jl. Raya Gubeng No. 45, Surabaya 60281'
+          : rKey.includes('canggu') || rKey.includes('bali')
+          ? 'Jl. Pantai Berawa No. 88, Canggu, Bali 80361'
+          : 'Jl. Senopati No. 82, Jakarta Selatan 12110';
         return (
           <div className="print-page-thermal80 bg-white text-black font-mono text-[10.5px] leading-snug p-1 space-y-2.5">
             <div className="text-center space-y-1 pb-2 border-b border-dashed border-black">
@@ -34,7 +46,7 @@ export function renderPrintDocument(
               <p className="text-[9.5px] leading-tight">
                 {r.storeName}
                 <br />
-                Jl. Senopati No. 82, Jakarta Selatan 12110
+                {outletAddress}
               </p>
             </div>
 
@@ -82,7 +94,7 @@ export function renderPrintDocument(
                 </div>
               )}
               <div className="flex justify-between">
-                <span>PPN (11%):</span>
+                <span>Tax (PPN / PB1):</span>
                 <span>{formatIDR(r.tax)}</span>
               </div>
               <div className="flex justify-between text-[11px] font-black pt-1 border-t border-black">

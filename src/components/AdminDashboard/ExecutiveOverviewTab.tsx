@@ -47,7 +47,7 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`${cardClass} p-5`}>
           <div className={`flex items-center justify-between ${textMuted} text-xs font-medium`}>
-            <span>Gross Omzet (October MTD)</span>
+            <span>Gross Omzet (MTD)</span>
             <span className="p-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg">
               <TrendingUp className="w-4 h-4" />
             </span>
@@ -132,7 +132,7 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
               <p className={`text-xs ${textMuted}`}>Granular performance across Indonesian physical hubs</p>
             </div>
             <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-lg border border-emerald-500/20">
-              6 Active Outlets
+              {omzetData?.storeBreakdown?.length || 6} Active Outlets
             </span>
           </div>
 

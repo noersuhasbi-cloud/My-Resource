@@ -221,14 +221,16 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
               <span className="hidden sm:inline">Print Document</span>
             </button>
 
-            <button
-              onClick={onClose}
-              className={`p-2 rounded-xl transition-colors ${
-                isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'
-              }`}
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {!isStandalonePage && (
+              <button
+                onClick={onClose}
+                className={`p-2 rounded-xl transition-colors ${
+                  isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
 

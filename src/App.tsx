@@ -107,11 +107,35 @@ export default function App() {
   }, []);
 
   const [storeStatus, setStoreStatus] = useState<StoreOperationalStatus | null>(null);
+  const [syncedStoreLocations, setSyncedStoreLocations] = useState<StoreLocation[]>(STORE_LOCATIONS);
 
-  // Sync store operational status from backend
+  // Sync store operational status & per-outlet closures from backend
   useEffect(() => {
-    apiClient.getStoreStatus().then(setStoreStatus).catch((err) => {
-      console.warn('Backend store status notice:', err);
+    const LEGACY_TO_OUTLET: Record<string, string> = {
+      'store-sby-dharmahusada': 'store-sby-gubeng',
+      'store-bdg-riau': 'store-bdg-dago',
+      'store-bali-sanur': 'store-bali-canggu',
+    };
+    Promise.all([
+      apiClient.getStoreStatus().catch(() => null),
+      apiClient.getStoreOutlets().catch(() => []),
+    ]).then(([statusRes, outletsRes]) => {
+      if (statusRes) setStoreStatus(statusRes);
+      if (Array.isArray(outletsRes) && outletsRes.length > 0) {
+        setSyncedStoreLocations(
+          STORE_LOCATIONS.map((loc) => {
+            const mappedId = LEGACY_TO_OUTLET[loc.id] || loc.id;
+            const live = outletsRes.find((o) => o.storeId === loc.id || o.storeId === mappedId);
+            return live
+              ? {
+                  ...loc,
+                  isEmergencyClosed: live.isEmergencyClosed,
+                  closureReason: live.closureReason,
+                }
+              : loc;
+          })
+        );
+      }
     });
   }, []);
 
@@ -275,7 +299,9 @@ export default function App() {
   };
 
   // 5. Store & Delivery preferences
-  const [selectedPickupStore, setSelectedPickupStore] = useState<StoreLocation>(STORE_LOCATIONS[0]);
+  const [selectedPickupStoreId, setSelectedPickupStoreId] = useState<string>(STORE_LOCATIONS[0].id);
+  const selectedPickupStore = syncedStoreLocations.find((s) => s.id === selectedPickupStoreId) || syncedStoreLocations[0];
+  const setSelectedPickupStore = (store: StoreLocation) => setSelectedPickupStoreId(store.id);
   const [deliveryMethod, setDeliveryMethod] = useState<'instant' | 'scheduled' | 'pickup'>('instant');
   const [voucherCode, setVoucherCode] = useState<string>('');
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
@@ -339,20 +365,44 @@ export default function App() {
     setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
-  const handleApplyVoucher = (code: string) => {
-    if (code === 'GROCEFRESH') {
-      setVoucherCode('GROCEFRESH');
-      setAppliedDiscount(10000);
-      showToast('Voucher Applied: GROCEFRESH', 'Rp 10.000 discount applied to order');
-      return { success: true, message: 'Voucher GROCEFRESH applied: Rp 10.000 off your order!' };
+  const handleApplyVoucher = async (code: string): Promise<{ success: boolean; message: string }> => {
+    const normalized = code.trim().toUpperCase();
+    try {
+      const res = await apiClient.evaluatePromotions({
+        cartItems: cartItems.map((c) => ({
+          sku: c.product.sku,
+          category: c.product.category,
+          price: c.product.price,
+          quantity: c.quantity,
+        })),
+        couponCode: normalized,
+        memberTier: (customerAccount?.memberTier?.replace(' Member', '').toUpperCase() as any) || 'SILVER',
+        memberId: customerAccount?.id,
+      });
+      const couponMatched = res?.appliedPromotions?.some((p) => p.ruleCode?.toUpperCase() === normalized);
+      if (res && res.totalPromoDiscountIDR > 0 && couponMatched) {
+        setVoucherCode(normalized);
+        setAppliedDiscount(res.totalPromoDiscountIDR);
+        const desc = res.appliedPromotions?.[0]?.name || `Rp ${res.totalPromoDiscountIDR.toLocaleString('id-ID')} discount`;
+        showToast(`Voucher Applied: ${normalized}`, desc);
+        return { success: true, message: `Voucher ${normalized} applied: Rp ${res.totalPromoDiscountIDR.toLocaleString('id-ID')} off!` };
+      }
+    } catch {
+      // Offline fallback for standard storefront promo codes
+      if (normalized === 'GROCEFRESH') {
+        setVoucherCode('GROCEFRESH');
+        setAppliedDiscount(10000);
+        showToast('Voucher Applied: GROCEFRESH', 'Rp 10.000 discount applied to order');
+        return { success: true, message: 'Voucher GROCEFRESH applied: Rp 10.000 off your order!' };
+      }
+      if (normalized === 'FREEDELIVERY') {
+        setVoucherCode('FREEDELIVERY');
+        setAppliedDiscount(15000);
+        showToast('Voucher Applied: FREEDELIVERY', 'Free courier delivery waiver active');
+        return { success: true, message: 'Voucher FREEDELIVERY applied: Free delivery waiver active!' };
+      }
     }
-    if (code === 'FREEDELIVERY') {
-      setVoucherCode('FREEDELIVERY');
-      setAppliedDiscount(15000);
-      showToast('Voucher Applied: FREEDELIVERY', 'Free courier delivery waiver active');
-      return { success: true, message: 'Voucher FREEDELIVERY applied: Free delivery waiver active!' };
-    }
-    return { success: false, message: 'Invalid voucher code. Try GROCEFRESH or FREEDELIVERY.' };
+    return { success: false, message: 'Invalid or ineligible voucher code. Try GROCEFRESH or FREEDELIVERY.' };
   };
 
   const handleRemoveVoucher = () => {
@@ -631,6 +681,7 @@ export default function App() {
 
             {/* Store Locations Directory */}
             <StoreLocations
+              stores={syncedStoreLocations}
               selectedPickupStore={selectedPickupStore}
               onSelectPickupStore={(store) => {
                 setSelectedPickupStore(store);
@@ -681,6 +732,7 @@ export default function App() {
         onProceedToCheckout={handleProceedToCheckout}
         deliveryMethod={deliveryMethod}
         onChangeDeliveryMethod={setDeliveryMethod}
+        storeLocations={syncedStoreLocations}
         selectedPickupStore={selectedPickupStore}
         onSelectPickupStore={setSelectedPickupStore}
         voucherCode={voucherCode}

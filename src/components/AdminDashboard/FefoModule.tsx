@@ -429,11 +429,21 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                   : 'bg-zinc-800 border-zinc-700 text-zinc-100 focus:border-emerald-500'
               }`}
             >
-              <option value="SKU-PRD-001">SKU-PRD-001: Butterhead Lettuce (Multiple Harvest Lots)</option>
-              <option value="SKU-PRD-002">SKU-PRD-002: Vine Sweet Tomatoes (Multiple Lots)</option>
-              <option value="SKU-DAI-001">SKU-DAI-001: Pastured Omega-3 Eggs</option>
-              <option value="SKU-BAK-001">SKU-BAK-001: Artisan Country Sourdough Loaf</option>
-              <option value="SKU-MEA-001">SKU-MEA-001: Grass-Fed Angus Ribeye Steak</option>
+              {inventory.length > 0 ? (
+                Array.from(new Map(inventory.map((i) => [i.sku, i])).values()).map((item) => (
+                  <option key={item.sku} value={item.sku}>
+                    {item.sku}: {item.productName}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="SKU-PRD-001">SKU-PRD-001: Butterhead Lettuce (Multiple Harvest Lots)</option>
+                  <option value="SKU-PRD-002">SKU-PRD-002: Vine Sweet Tomatoes (Multiple Lots)</option>
+                  <option value="SKU-DAI-001">SKU-DAI-001: Pastured Omega-3 Eggs</option>
+                  <option value="SKU-BAK-001">SKU-BAK-001: Artisan Country Sourdough Loaf</option>
+                  <option value="SKU-MEA-001">SKU-MEA-001: Grass-Fed Angus Ribeye Steak</option>
+                </>
+              )}
             </select>
           </div>
 

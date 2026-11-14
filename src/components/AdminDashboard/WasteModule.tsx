@@ -9,6 +9,7 @@ import type {
   NaturalShrinkageAdjustment,
   VendorCreditNote,
   WasteDisposition,
+  StoreOutletSchedule,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -46,6 +47,7 @@ interface WasteModuleProps {
   theme: 'light' | 'dark';
   selectedStore: string;
   inventory: InventoryItem[];
+  storeOutlets?: StoreOutletSchedule[];
   onShowToast: (title: string, message: string) => void;
 }
 
@@ -53,6 +55,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
   theme,
   selectedStore,
   inventory,
+  storeOutlets = [],
   onShowToast,
 }) => {
   const { triggerPrint } = usePrint();
@@ -331,7 +334,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
             </h2>
             <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
               Manage physical product write-offs and physiological moisture transpiration loss.
-              Automatic GL postings debit Account #6030 (Inventory Shrinkage Expense) and credit Account #1030 (Inventory Asset)
+              Automatic GL postings debit Account #6030 (Inventory Shrinkage Expense) and credit Account #1040 (Merchandise Inventory Asset)
               without triggering anomalous theft auditing red flags.
             </p>
           </div>
@@ -1112,10 +1115,20 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                       isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
                     }`}
                   >
-                    <option value="store-jkt-senopati">Senopati Flagship</option>
-                    <option value="store-jkt-pik">PIK 2 The Avenue</option>
-                    <option value="store-jkt-menteng">Menteng Heritage</option>
-                    <option value="store-bdg-dago">Dago Green Market</option>
+                    {storeOutlets.length > 0 ? (
+                      storeOutlets.map((st) => (
+                        <option key={st.storeId} value={st.storeId}>
+                          {st.storeName}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="store-jkt-senopati">Senopati Flagship</option>
+                        <option value="store-jkt-pik">PIK 2 The Avenue</option>
+                        <option value="store-jkt-menteng">Menteng Heritage</option>
+                        <option value="store-bdg-dago">Dago Green Market</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -1398,10 +1411,20 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                       isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   >
-                    <option value="store-jkt-senopati">Senopati Flagship</option>
-                    <option value="store-jkt-pik">PIK 2 The Avenue</option>
-                    <option value="store-jkt-menteng">Menteng Heritage</option>
-                    <option value="store-bdg-dago">Dago Green Market</option>
+                    {storeOutlets.length > 0 ? (
+                      storeOutlets.map((st) => (
+                        <option key={st.storeId} value={st.storeId}>
+                          {st.storeName}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="store-jkt-senopati">Senopati Flagship</option>
+                        <option value="store-jkt-pik">PIK 2 The Avenue</option>
+                        <option value="store-jkt-menteng">Menteng Heritage</option>
+                        <option value="store-bdg-dago">Dago Green Market</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>

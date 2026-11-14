@@ -652,11 +652,16 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
             />
             <button
               type="button"
+              disabled={!npwpVerifyInput.trim()}
               onClick={async () => {
-                const res = await apiClient.validateNpwpOrNik(npwpVerifyInput);
-                setNpwpCheckRes(res);
+                try {
+                  const res = await apiClient.validateNpwpOrNik(npwpVerifyInput);
+                  setNpwpCheckRes(res);
+                } catch (err: any) {
+                  setNpwpCheckRes({ valid: false, error: err?.message || 'Validation service unavailable' });
+                }
               }}
-              className="px-3 py-1.5 rounded-lg bg-[#0F4C3A] text-white font-bold cursor-pointer whitespace-nowrap shrink-0"
+              className="px-3 py-1.5 rounded-lg bg-[#0F4C3A] text-white font-bold cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50"
             >
               Verify 16-Digit NPWP/NIK
             </button>

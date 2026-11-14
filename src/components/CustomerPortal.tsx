@@ -683,7 +683,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   }`}
                 >
                   <Package className="w-4 h-4" />
-                  <span>My Orders ({orders.length})</span>
+                  <span>My Orders ({myUserOrders.length})</span>
                 </button>
 
                 <button

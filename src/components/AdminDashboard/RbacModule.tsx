@@ -55,6 +55,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
   const [isHandoverModalOpen, setIsHandoverModalOpen] = useState<boolean>(false);
   const [handoverNotes, setHandoverNotes] = useState<string>('');
   const [handoverNextShift, setHandoverNextShift] = useState<string>('Afternoon Shift');
+  const [isSubmittingHandover, setIsSubmittingHandover] = useState<boolean>(false);
 
   const isLight = theme === 'light';
 
@@ -651,16 +652,31 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsHandoverModalOpen(false);
-                    onShowToast(
-                      'Shift Handover Certified',
-                      `Handover to ${handoverNextShift} signed off by ${currentSession?.userName}. Digital audit record generated.`
-                    );
+                  disabled={isSubmittingHandover}
+                  onClick={async () => {
+                    setIsSubmittingHandover(true);
+                    try {
+                      const res = await apiClient.submitRbacHandover({
+                        nextShift: handoverNextShift,
+                        notes: handoverNotes || 'Standard shift custody sign-off.',
+                        outgoingUserId: currentSession?.userId,
+                        outgoingUserName: currentSession?.userName,
+                      });
+                      setIsHandoverModalOpen(false);
+                      setHandoverNotes('');
+                      onShowToast(
+                        'Shift Handover Certified',
+                        res.message || `Handover to ${handoverNextShift} signed off by ${currentSession?.userName}. Audit ID: ${res.auditRecord?.id}`
+                      );
+                    } catch (err: any) {
+                      onShowToast('Handover Failed', err?.message || 'Failed to stamp handover');
+                    } finally {
+                      setIsSubmittingHandover(false);
+                    }
                   }}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0F4C3A]/90 text-white"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0F4C3A]/90 text-white disabled:opacity-50"
                 >
-                  Confirm &amp; Stamp Handover
+                  {isSubmittingHandover ? 'Stamping...' : 'Confirm & Stamp Handover'}
                 </button>
               </div>
             </div>

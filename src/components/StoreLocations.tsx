@@ -4,12 +4,14 @@ import type { StoreLocation } from '../types/index.ts';
 import { MapPin, Clock, Phone, Navigation, Search, CheckCircle2, Sparkles, X, ExternalLink } from 'lucide-react';
 
 interface StoreLocationsProps {
+  stores?: StoreLocation[];
   selectedPickupStore?: StoreLocation;
   onSelectPickupStore: (store: StoreLocation) => void;
   onShopStoreGroceries: (store: StoreLocation) => void;
 }
 
 export const StoreLocations: React.FC<StoreLocationsProps> = ({
+  stores,
   selectedPickupStore,
   onSelectPickupStore,
   onShopStoreGroceries,
@@ -18,10 +20,11 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeModalStore, setActiveModalStore] = useState<StoreLocation | null>(null);
 
+  const sourceStores = stores && stores.length > 0 ? stores : STORE_LOCATIONS;
   const cities = ['All', 'Jakarta', 'Bandung', 'Surabaya', 'Bali', 'Yogyakarta', 'Medan'];
 
   const filteredStores = useMemo(() => {
-    return STORE_LOCATIONS.filter((store) => {
+    return sourceStores.filter((store) => {
       const matchesCity = selectedCity === 'All' || store.city === selectedCity;
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -32,7 +35,7 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
         store.amenities.some((a) => a.toLowerCase().includes(q));
       return matchesCity && matchesSearch;
     });
-  }, [selectedCity, searchQuery]);
+  }, [sourceStores, selectedCity, searchQuery]);
 
   return (
     <section id="stores" className="py-16 sm:py-24 bg-white dark:bg-stone-950">
@@ -77,8 +80,8 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
           {cities.map((city) => {
             const isSelected = selectedCity === city;
             const count = city === 'All'
-              ? STORE_LOCATIONS.length
-              : STORE_LOCATIONS.filter((s) => s.city === city).length;
+              ? sourceStores.length
+              : sourceStores.filter((s) => s.city === city).length;
 
             return (
               <button
@@ -123,11 +126,15 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
                         {store.name}
                       </h3>
                     </div>
-                    {store.isFlagship && (
+                    {store.isEmergencyClosed ? (
+                      <span className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 uppercase tracking-wide px-2 py-0.5 bg-rose-100/80 dark:bg-rose-500/20 rounded shrink-0">
+                        Closed
+                      </span>
+                    ) : store.isFlagship ? (
                       <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide px-2 py-0.5 bg-emerald-100/60 dark:bg-emerald-500/20 rounded shrink-0">
                         Flagship
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed mt-2 flex items-start gap-1.5">

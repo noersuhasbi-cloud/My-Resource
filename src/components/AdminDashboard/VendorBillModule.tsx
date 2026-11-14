@@ -271,10 +271,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
     let unpaidCount = 0;
     let paidTotalIDR = 0;
     let varianceCount = 0;
+    let activeBillCount = 0;
 
     vendorBills.forEach((b) => {
       if (selectedStore === 'CONSOLIDATED' || b.storeId === selectedStore) {
         if (b.status === 'VOID') return;
+        activeBillCount += 1;
         if (b.paymentStatus === 'UNPAID' || b.paymentStatus === 'PARTIALLY_PAID') {
           totalApIDR += b.remainingDue * b.exchangeRate;
           unpaidCount += 1;
@@ -288,7 +290,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
       }
     });
 
-    return { totalApIDR, unpaidCount, paidTotalIDR, varianceCount };
+    return { totalApIDR, unpaidCount, paidTotalIDR, varianceCount, activeBillCount };
   }, [vendorBills, selectedStore]);
 
   // Handle Create Vendor Bill
@@ -505,8 +507,8 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
             <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
           <div className={`text-xl font-bold font-mono mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
-            {vendorBills.length > 0
-              ? `${Math.round(((vendorBills.length - stats.varianceCount) / vendorBills.length) * 100)}%`
+            {stats.activeBillCount > 0
+              ? `${Math.max(0, Math.round(((stats.activeBillCount - stats.varianceCount) / stats.activeBillCount) * 100))}%`
               : '100%'}
           </div>
           <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-1">

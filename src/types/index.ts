@@ -145,12 +145,16 @@ export interface CustomerAccount {
 // Role-Based Access Control (RBAC) & Operations
 // -------------------------------------------------------------
 export type UserRole =
-  | 'admin'
-  | 'customer'
   | 'cashier'
+  | 'warehouse'
+  | 'purchasing'
+  | 'store_manager'
+  | 'admin'
+  | 'coo'
+  | 'super_admin'
+  | 'customer'
   | 'warehouse_picker'
   | 'receiving_clerk'
-  | 'store_manager'
   | 'executive';
 
 export interface StoreOperationalStatus {
@@ -1033,6 +1037,19 @@ export interface StaffShiftSession {
     canViewFinancePnL: boolean;
     canManageOutlets: boolean;
     canOverrideStoreClosure: boolean;
+    // Granular 7-Role Enterprise Capabilities
+    canViewValuation?: boolean;
+    canCreatePrPo?: boolean;
+    canPayVendorBills?: boolean;
+    canManageGiro?: boolean;
+    canModifyCoa?: boolean;
+    canFactoryReset?: boolean;
+    canManagePromos?: boolean;
+    canOverridePosPrice?: boolean;
+    canApproveStocktake?: boolean;
+    canViewMultiBranchRevenue?: boolean;
+    canViewBranchMonitor?: boolean;
+    canConfirmArrival?: boolean;
   };
 }
 
@@ -2399,5 +2416,98 @@ export interface CoretaxExportRow {
   referenceId: string;
 }
 
+export type EnterpriseNotificationCategory =
+  | 'PERISHABLES'
+  | 'INVENTORY'
+  | 'QUALITY_CONTROL'
+  | 'PROCUREMENT_FINANCE'
+  | 'B2B_FINANCE'
+  | 'FULFILLMENT'
+  | 'LOGISTICS'
+  | 'POS_OPERATIONS';
 
+export type EnterpriseNotificationSeverity =
+  | 'CRITICAL'
+  | 'WARNING'
+  | 'ACTION_REQUIRED'
+  | 'INFO';
 
+export interface EnterpriseNotification {
+  id: string;
+  dedupeKey: string;
+  category: EnterpriseNotificationCategory;
+  severity: EnterpriseNotificationSeverity;
+  title: string;
+  message: string;
+  metadataLabel?: string;
+  targetTab: string;
+  targetSubTab?: string;
+  isRead: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface BranchMonitorHubSummary {
+  storeId: string;
+  branchCode: string;
+  storeName: string;
+  city: string;
+  district: string;
+  hubType: 'Retail Flagship' | 'Dark Store' | 'Central CDC';
+  status: 'Open' | 'Active' | 'Emergency Closed' | 'Holiday Mode';
+  isEmergencyClosed: boolean;
+  orderCount: number;
+  liveOmzetIDR: number;
+  posOmzetIDR: number;
+  b2cOmzetIDR: number;
+  b2bOmzetIDR: number;
+  stockValuationIDR: number;
+  totalStockUnits: number;
+  incomingPoCount: number;
+  inTransitTransferCount: number;
+}
+
+export interface BranchMonitorIncomingPO {
+  poId: string;
+  supplierName: string;
+  destinationBranchId: string;
+  destinationBranchName: string;
+  expectedItemsCount: number;
+  expectedUnitsQty: number;
+  remainingBackorderQty: number;
+  incomingValueIDR: number;
+  status: 'Pending' | 'Approved' | 'Partially Received' | 'Completed';
+  expectedDeliveryDate: string;
+  itemsSummary: string;
+}
+
+export interface BranchMonitorInTransitTransfer {
+  transferId: string;
+  sku: string;
+  productName: string;
+  originBranchId: string;
+  originBranchName: string;
+  destinationBranchId: string;
+  destinationBranchName: string;
+  quantity: number;
+  unitCostIDR: number;
+  totalTransferValueIDR: number;
+  waybillNumber?: string;
+  timestamp: string;
+  status: 'in_transit' | 'completed';
+}
+
+export interface BranchMonitorResponse {
+  generatedAt: string;
+  totals: {
+    totalBranches: number;
+    openBranches: number;
+    totalLiveOmzetIDR: number;
+    totalOrders: number;
+    totalStockValuationIDR: number;
+    openPoCount: number;
+    inTransitCount: number;
+  };
+  branches: BranchMonitorHubSummary[];
+  openPurchaseOrders: BranchMonitorIncomingPO[];
+  inTransitTransfers: BranchMonitorInTransitTransfer[];
+}

@@ -80,6 +80,11 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
 
   // Form State
   const [selectedSku, setSelectedSku] = useState<string>(inventory[0]?.sku || 'SKU-PRD-001');
+  React.useEffect(() => {
+    if (inventory.length > 0 && !inventory.some((i) => i.sku === selectedSku)) {
+      setSelectedSku(inventory[0].sku);
+    }
+  }, [inventory, selectedSku]);
   const [refType, setRefType] = useState<'INCOMING_PO' | 'INTER_WAREHOUSE_TRANSFER' | 'PERIODIC_SPOILAGE_CHECK'>('INCOMING_PO');
   const [refId, setRefId] = useState<string>('PO-2026-001');
   const [batchNumber, setBatchNumber] = useState<string>(`BAT-${Date.now().toString().slice(-6)}`);

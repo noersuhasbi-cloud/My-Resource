@@ -15,9 +15,11 @@ import type {
   StoreOutletSchedule,
   SupportedCurrency,
   PosRegisterShiftSession,
+  SkuTaxRule,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { computeIndonesianTax, inferDefaultTaxCategory } from '../../utils/indonesianCompliance';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   parseVariableWeightBarcode,
@@ -88,6 +90,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
   // 1. Catalog & Filter State
   const [products, setProducts] = useState<POSProductItem[]>([]);
+  const [skuTaxRules, setSkuTaxRules] = useState<SkuTaxRule[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -206,9 +209,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
     loadProducts();
     loadHistory();
     loadShiftState();
+    apiClient.getSkuTaxRules().then(setSkuTaxRules).catch(() => {});
   }, [effectiveStoreId]);
 
-  // Calculations
+  // Calculations (matching backend computeIndonesianTax per SKU)
   const subtotal = useMemo(() => {
     return cart.reduce((acc, item) => acc + item.lineTotal, 0);
   }, [cart]);
@@ -217,9 +221,33 @@ export const PosModule: React.FC<PosModuleProps> = ({
     return Math.round((subtotal * discountPercent) / 100);
   }, [subtotal, discountPercent]);
 
-  const taxableAmount = Math.max(0, subtotal - discountAmount);
-  const taxAmount = Math.round(taxableAmount * 0.11); // 11% PPN
-  const totalAmount = taxableAmount + taxAmount;
+  const { taxAmount, totalAmount } = useMemo(() => {
+    const netRevenue = Math.max(0, subtotal - discountAmount);
+    let remainingDiscount = discountAmount;
+    let totalTax = 0;
+
+    cart.forEach((item, idx) => {
+      const share =
+        idx === cart.length - 1
+          ? remainingDiscount
+          : subtotal > 0
+          ? Math.min(remainingDiscount, Math.round((item.lineTotal / subtotal) * discountAmount))
+          : 0;
+      remainingDiscount = Math.max(0, remainingDiscount - share);
+      const netLine = Math.max(0, item.lineTotal - share);
+      const rule = skuTaxRules.find((r) => r.sku === item.sku);
+      const taxCat = rule?.taxCategory || inferDefaultTaxCategory(item.category || '', item.name || '');
+      const stdRate = rule?.taxRatePercent ?? 11;
+      const calc = computeIndonesianTax(netLine, taxCat, false, stdRate);
+      totalTax += Math.round(calc.ppnIDR + calc.pb1IDR);
+    });
+
+    const resolvedTax = Math.round(totalTax);
+    return {
+      taxAmount: resolvedTax,
+      totalAmount: netRevenue + resolvedTax,
+    };
+  }, [cart, subtotal, discountAmount, skuTaxRules]);
 
   const totalInActiveCurrency = useMemo(() => {
     if (activeCurrency === 'IDR') return totalAmount;
@@ -228,7 +256,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
   const cashChange = Math.max(0, cashTendered - totalAmount);
 
-  // Cart operations
+  // Cart operations (with live availableStock cap)
   const addToCart = (
     product: POSProductItem,
     quantity = 1,
@@ -236,6 +264,18 @@ export const PosModule: React.FC<PosModuleProps> = ({
     weightGrams?: number,
     grossGrams?: number
   ) => {
+    const requestedAdd = isWeighted && weightGrams ? Number((weightGrams / 1000).toFixed(3)) : quantity;
+    const currentInCart = cart
+      .filter((c) => c.sku === product.sku)
+      .reduce((sum, c) => sum + c.quantity, 0);
+    if (product.availableStock >= 0 && currentInCart + requestedAdd > product.availableStock) {
+      onShowToast(
+        'Insufficient Outlet Stock',
+        `Only ${product.availableStock} ${product.unit} available for ${product.name} at ${currentStoreInfo.storeName}.`
+      );
+      return;
+    }
+
     playBeep();
     setCart((prev) => {
       const existingIdx = prev.findIndex((item) => item.sku === product.sku && !item.isWeighted);
@@ -252,7 +292,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
       }
 
       // Add as new line
-      const effectiveQty = isWeighted && weightGrams ? Number((weightGrams / 1000).toFixed(3)) : quantity;
+      const effectiveQty = requestedAdd;
       const fallbackPricePerKg = product.unit.includes('kg') ? product.sellingPrice : product.sellingPrice * 4;
       const unitPrice = isWeighted ? product.pricePerKg || fallbackPricePerKg : product.sellingPrice;
       const lineTotal = Math.round(unitPrice * effectiveQty);
@@ -284,6 +324,18 @@ export const PosModule: React.FC<PosModuleProps> = ({
   };
 
   const updateQuantity = (lineId: string, delta: number) => {
+    if (delta > 0) {
+      const targetLine = cart.find((c) => c.id === lineId);
+      const prod = targetLine ? products.find((p) => p.sku === targetLine.sku) : undefined;
+      if (targetLine && prod) {
+        const step = targetLine.isWeighted ? delta * 0.25 : delta;
+        const totalForSku = cart.filter((c) => c.sku === targetLine.sku).reduce((s, c) => s + c.quantity, 0);
+        if (totalForSku + step > prod.availableStock) {
+          onShowToast('Stock Cap Reached', `Maximum available at outlet: ${prod.availableStock} ${prod.unit}`);
+          return;
+        }
+      }
+    }
     setCart((prev) =>
       prev
         .map((item) => {
@@ -452,8 +504,24 @@ export const PosModule: React.FC<PosModuleProps> = ({
     });
   }, [products, selectedCategory, searchQuery]);
 
-  // Categories list
-  const categories = ['ALL', 'produce', 'dairy', 'bakery', 'meat_seafood', 'pantry', 'beverages'];
+  // Categories list matching catalog product categories
+  const categories = ['ALL', 'produce', 'dairy_eggs', 'bakery', 'meat_seafood', 'pantry_coffee'];
+  const formatCategoryLabel = (cat: string) => {
+    if (cat === 'ALL') return 'All Items';
+    if (cat === 'dairy_eggs') return 'DAIRY & EGGS';
+    if (cat === 'pantry_coffee') return 'PANTRY & COFFEE';
+    if (cat === 'meat_seafood') return 'MEAT & SEAFOOD';
+    return cat.replace('_', ' ').toUpperCase();
+  };
+  const getOutletAddress = (storeId?: string, storeName?: string) => {
+    const key = `${storeId || ''} ${storeName || ''}`.toLowerCase();
+    if (key.includes('pik')) return 'Pantai Indah Kapuk Blvd, Jakarta Utara 14470';
+    if (key.includes('menteng')) return 'Jl. HOS. Cokroaminoto No. 78, Jakarta Pusat 10310';
+    if (key.includes('dago') || key.includes('bandung')) return 'Jl. Ir. H. Juanda No. 114, Bandung 40132';
+    if (key.includes('gubeng') || key.includes('surabaya')) return 'Jl. Raya Gubeng No. 45, Surabaya 60281';
+    if (key.includes('canggu') || key.includes('bali')) return 'Jl. Pantai Berawa No. 88, Canggu, Bali 80361';
+    return 'Jl. Senopati No. 82, Jakarta Selatan 12110';
+  };
 
   return (
     <div className="space-y-4 font-sans animate-fadeIn">
@@ -630,7 +698,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700'
                   }`}
                 >
-                  {cat === 'ALL' ? 'All Items' : cat.replace('_', ' ').toUpperCase()}
+                  {formatCategoryLabel(cat)}
                 </button>
               ))}
             </div>
@@ -916,7 +984,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
             )}
 
             <div className="flex items-center justify-between text-xs text-slate-600 dark:text-zinc-300 font-medium">
-              <span>PPN / VAT (11%):</span>
+              <span>Tax (PPN / PB1):</span>
               <span className="font-mono">{formatCurrency(taxAmount)}</span>
             </div>
 
@@ -1329,7 +1397,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 <p className="text-[10px] text-zinc-500 leading-tight">
                   {completedReceipt.storeName}
                   <br />
-                  Jl. Senopati No. 82, Jakarta Selatan 12110
+                  {getOutletAddress(completedReceipt.storeId, completedReceipt.storeName)}
                 </p>
               </div>
 
@@ -1380,7 +1448,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span>PPN (11%):</span>
+                  <span>Tax (PPN/PB1):</span>
                   <span>{formatIDR(completedReceipt.tax)}</span>
                 </div>
                 <div className="flex justify-between text-xs font-bold pt-1 border-t border-zinc-900">

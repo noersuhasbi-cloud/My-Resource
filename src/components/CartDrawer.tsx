@@ -15,10 +15,11 @@ interface CartDrawerProps {
   deliveryMethod: 'instant' | 'scheduled' | 'pickup';
   onChangeDeliveryMethod: (method: 'instant' | 'scheduled' | 'pickup') => void;
   selectedPickupStore?: StoreLocation;
+  storeLocations?: StoreLocation[];
   onSelectPickupStore: (store: StoreLocation) => void;
   voucherCode: string;
   appliedDiscount: number;
-  onApplyVoucher: (code: string) => { success: boolean; message: string };
+  onApplyVoucher: (code: string) => Promise<{ success: boolean; message: string }> | { success: boolean; message: string };
   onRemoveVoucher: () => void;
   storeStatus?: StoreOperationalStatus | null;
 }
@@ -33,6 +34,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   deliveryMethod,
   onChangeDeliveryMethod,
   selectedPickupStore,
+  storeLocations,
   onSelectPickupStore,
   voucherCode,
   appliedDiscount,
@@ -42,6 +44,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 }) => {
   const [voucherInput, setVoucherInput] = useState<string>('');
   const [voucherFeedback, setVoucherFeedback] = useState<string | null>(null);
+  const availableStores = storeLocations && storeLocations.length > 0 ? storeLocations : STORE_LOCATIONS;
 
   if (!isOpen) return null;
 
@@ -49,10 +52,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const deliveryFee = deliveryMethod === 'pickup' ? 0 : deliveryMethod === 'instant' ? 15000 : 10000;
   const total = Math.max(0, subtotal + deliveryFee - appliedDiscount);
 
-  const handleApplyVoucher = (e: React.FormEvent) => {
+  const handleApplyVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!voucherInput.trim()) return;
-    const res = onApplyVoucher(voucherInput.trim().toUpperCase());
+    const res = await onApplyVoucher(voucherInput.trim().toUpperCase());
     setVoucherFeedback(res.message);
   };
 
@@ -145,16 +148,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     Choose Pickup Branch:
                   </span>
                   <select
-                    value={selectedPickupStore?.id || STORE_LOCATIONS[0].id}
+                    value={selectedPickupStore?.id || availableStores[0].id}
                     onChange={(e) => {
-                      const found = STORE_LOCATIONS.find((s) => s.id === e.target.value);
+                      const found = availableStores.find((s) => s.id === e.target.value);
                       if (found) onSelectPickupStore(found);
                     }}
                     className="w-full p-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg text-xs font-medium text-stone-800 dark:text-stone-100 focus:outline-none"
                   >
-                    {STORE_LOCATIONS.map((st) => (
+                    {availableStores.map((st) => (
                       <option key={st.id} value={st.id}>
-                        {st.name} ({st.city})
+                        {st.name} ({st.city}){st.isEmergencyClosed ? ' — CLOSED' : ''}
                       </option>
                     ))}
                   </select>
@@ -248,7 +251,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <span>(-{formatIDR(appliedDiscount)})</span>
                     </div>
                     <button
-                      onClick={onRemoveVoucher}
+                      onClick={() => {
+                        setVoucherFeedback(null);
+                        onRemoveVoucher();
+                      }}
                       className="text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 font-semibold underline text-[11px]"
                     >
                       Remove
@@ -259,7 +265,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <input
                       type="text"
                       value={voucherInput}
-                      onChange={(e) => setVoucherInput(e.target.value)}
+                      onChange={(e) => {
+                        setVoucherInput(e.target.value);
+                        if (voucherFeedback) setVoucherFeedback(null);
+                      }}
                       placeholder="Use 'GROCEFRESH' or 'FREEDELIVERY'"
                       className="flex-1 px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-xs font-mono uppercase text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-emerald-800 dark:focus:ring-emerald-500"
                     />

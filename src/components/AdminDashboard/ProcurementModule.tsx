@@ -8,6 +8,7 @@ import type {
   AutoReplenishmentConsolidatedPlan,
   AutoReplenishmentItemPlan,
   VendorBill,
+  StoreOutletSchedule,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -47,6 +48,7 @@ interface ProcurementModuleProps {
   purchaseOrders: PurchaseOrder[];
   goodsReceipts: GoodsReceiptRecord[];
   vendorBills?: VendorBill[];
+  storeOutlets?: StoreOutletSchedule[];
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -59,6 +61,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   purchaseOrders,
   goodsReceipts,
   vendorBills = [],
+  storeOutlets = [],
   onRefreshData,
   onShowToast,
 }) => {
@@ -1738,11 +1741,21 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     : 'bg-zinc-800 border-zinc-700 text-white'
                 }`}
               >
-                <option value="store-jkt-senopati">GroceMart Senopati Flagship (Jakarta)</option>
-                <option value="store-jkt-pik">GroceMart PIK 2 The Avenue (Jakarta)</option>
-                <option value="store-bdg-dago">GroceMart Dago Green Market (Bandung)</option>
-                <option value="store-sby-gubeng">GroceMart Gubeng Central Hub (Surabaya)</option>
-                <option value="store-bali-canggu">GroceMart Batu Bolong Organic (Bali)</option>
+                {storeOutlets.length > 0 ? (
+                  storeOutlets.map((st) => (
+                    <option key={st.storeId} value={st.storeId}>
+                      {st.storeName} ({st.city})
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="store-jkt-senopati">GroceMart Senopati Flagship (Jakarta)</option>
+                    <option value="store-jkt-pik">GroceMart PIK 2 The Avenue (Jakarta)</option>
+                    <option value="store-bdg-dago">GroceMart Dago Green Market (Bandung)</option>
+                    <option value="store-sby-gubeng">GroceMart Gubeng Central Hub (Surabaya)</option>
+                    <option value="store-bali-canggu">GroceMart Batu Bolong Organic (Bali)</option>
+                  </>
+                )}
               </select>
             </div>
 

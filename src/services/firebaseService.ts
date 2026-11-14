@@ -9,7 +9,7 @@ import {
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
-import { signInWithPopup, signOut, signInAnonymously, User as FirebaseUser } from 'firebase/auth';
+import { signInWithPopup, signOut, User as FirebaseUser } from 'firebase/auth';
 import { db, auth, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
 import type { CustomerAccount, Order, SavedAddress, OrderStatus } from '../types/index.ts';
 
@@ -18,17 +18,7 @@ export async function loginWithGoogle(): Promise<FirebaseUser> {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: any) {
-    if (error?.code === 'auth/unauthorized-domain' || error?.message?.includes('unauthorized-domain')) {
-      console.warn('Google Sign-In notice: Current domain is not in Firebase OAuth authorized domains. Attempting anonymous session fallback...');
-      try {
-        const anonResult = await signInAnonymously(auth);
-        return anonResult.user;
-      } catch (anonErr) {
-        console.warn('Anonymous auth fallback notice:', anonErr);
-      }
-    } else {
-      console.warn('Google Sign-In notice:', error);
-    }
+    console.warn('Google Sign-In notice:', error);
     throw error;
   }
 }
@@ -295,16 +285,29 @@ export async function updateOrderStatusInFirestore(
         { merge: true }
       );
     } else {
-      await setDoc(
-        orderDocRef,
-        {
-          orderId,
+      const existingSnap = await getDoc(orderDocRef);
+      if (existingSnap.exists()) {
+        await updateDoc(orderDocRef, {
           status: nextStatus,
           timeline: updatedTimeline,
           updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+        });
+      } else {
+        await setDoc(orderDocRef, {
+          orderId,
+          userId: auth.currentUser?.uid || 'guest-user',
+          customerName: 'GroceMart Customer',
+          customerEmail: '',
+          deliveryMethod: 'instant',
+          total: 0,
+          paymentMethod: 'qris',
+          paymentStatus: 'paid',
+          status: nextStatus,
+          timeline: updatedTimeline,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
     }
   } catch (error) {
     try {

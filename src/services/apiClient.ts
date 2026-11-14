@@ -85,18 +85,64 @@ import type {
   RmaDisposition,
   RmaRefundMethod,
   RmaSourceChannel,
+  EnterpriseNotification,
+  BranchMonitorResponse,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+let activeOperatorContext: { userRole: string; storeId: string; userId: string } | null = null;
+
+export function setApiOperatorContext(session: Pick<StaffShiftSession, 'userRole' | 'storeId' | 'userId'> | null) {
+  if (!session) {
+    activeOperatorContext = null;
+    return;
+  }
+  activeOperatorContext = {
+    userRole: session.userRole,
+    storeId: session.storeId,
+    userId: session.userId,
+  };
+}
+
+export function getApiOperatorContext(): { userRole: string; storeId: string; userId: string } | null {
+  if (activeOperatorContext) return activeOperatorContext;
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('grocemart_admin_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.userRole) {
+          activeOperatorContext = {
+            userRole: parsed.userRole,
+            storeId: parsed.storeId || 'ALL',
+            userId: parsed.userId || '',
+          };
+          return activeOperatorContext;
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
 async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const retryDelays = [500, 1000, 1500, 2500, 3500];
   let lastError: unknown = null;
 
+  const headers = new Headers(init?.headers || {});
+  const opCtx = getApiOperatorContext();
+  if (opCtx) {
+    if (!headers.has('x-operator-role')) headers.set('x-operator-role', opCtx.userRole);
+    if (!headers.has('x-operator-branch')) headers.set('x-operator-branch', opCtx.storeId || 'ALL');
+    if (opCtx.userId && !headers.has('x-operator-id')) headers.set('x-operator-id', opCtx.userId);
+  }
+  const finalInit: RequestInit = { ...init, headers };
+
   for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
     try {
-      const res = await fetch(input, init);
+      const res = await fetch(input, finalInit);
       const contentType = (res.headers.get('content-type') || '').toLowerCase();
       const isGatewayRetryable = res.status === 502 || res.status === 503 || res.status === 504;
       const isJsonContentType = contentType.includes('application/json') || contentType.includes('+json');
@@ -166,6 +212,8 @@ export const apiClient = {
     channel?: string;
     customerName: string;
     customerEmail: string;
+    storeId?: string;
+    discount?: number;
     items?: CartItem[];
   }): Promise<{ success: boolean; message: string; auditRecordId: string; journalEntryIds: string[] }> {
     const res = await fetchApi('/api/qris/simulate-pay', {
@@ -894,12 +942,20 @@ export const apiClient = {
   // -------------------------------------------------------------
   // MODULE 3: Granular RBAC by Shift, Physical Zone & Multi-Outlet
   // -------------------------------------------------------------
+  setOperatorContext(session: Pick<StaffShiftSession, 'userRole' | 'storeId' | 'userId'> | null) {
+    setApiOperatorContext(session);
+  },
+
   async getRbacSession(): Promise<{
     currentSession: StaffShiftSession;
     availableProfiles: StaffShiftSession[];
   }> {
     const res = await fetchApi('/api/admin/rbac/current-session');
-    return res.json();
+    const data = await res.json();
+    if (data?.currentSession) {
+      setApiOperatorContext(data.currentSession);
+    }
+    return data;
   },
 
   async switchRbacSession(userId: string): Promise<{
@@ -911,7 +967,19 @@ export const apiClient = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId }),
     });
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to switch RBAC session');
+    }
+    if (data?.session) {
+      setApiOperatorContext(data.session);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('grocemart_admin_session', JSON.stringify(data.session));
+        } catch {}
+      }
+    }
+    return data;
   },
 
   async adminLogin(params: {
@@ -930,11 +998,16 @@ export const apiClient = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Authentication failed. Please verify credentials or select a valid staff profile.');
     }
-    return res.json();
+    const data: AdminAuthResponse = await res.json();
+    if (data?.session) {
+      setApiOperatorContext(data.session);
+    }
+    return data;
   },
 
   async adminLogout(): Promise<{ success: boolean; message?: string }> {
     const res = await fetchApi('/api/admin/auth/logout', { method: 'POST' });
+    setApiOperatorContext(null);
     return res.json().catch(() => ({ success: true }));
   },
 
@@ -956,6 +1029,24 @@ export const apiClient = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ zoneType }),
     });
+    return res.json();
+  },
+
+  async submitRbacHandover(payload: {
+    nextShift: string;
+    notes: string;
+    outgoingUserId?: string;
+    outgoingUserName?: string;
+  }): Promise<{ success: boolean; auditRecord: SecurityAuditTrailRecord; message: string }> {
+    const res = await fetchApi('/api/admin/rbac/handover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to record shift handover');
+    }
     return res.json();
   },
 
@@ -1153,6 +1244,21 @@ export const apiClient = {
     if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
     const res = await fetchApi(`/api/admin/inventory/transfer?${params.toString()}`);
     return res.json().catch(() => []);
+  },
+
+  async receiveStockTransfer(id: string): Promise<{
+    success: boolean;
+    record: StockTransferRecord;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/inventory/transfer/${encodeURIComponent(id)}/receive`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to receive stock transfer');
+    }
+    return res.json();
   },
 
   // -------------------------------------------------------------
@@ -2423,6 +2529,86 @@ export const apiClient = {
     }
     return res.json();
   },
+
+  // -------------------------------------------------------------
+  // REAL-TIME ENTERPRISE NOTIFICATION CENTER APIS
+  // -------------------------------------------------------------
+  async getAdminNotifications(): Promise<{
+    notifications: EnterpriseNotification[];
+    unreadCount: number;
+  }> {
+    const res = await fetchApi('/api/admin/notifications');
+    if (!res.ok) {
+      return { notifications: [], unreadCount: 0 };
+    }
+    return res.json().catch(() => ({ notifications: [], unreadCount: 0 }));
+  },
+
+  async markNotificationsRead(payload: {
+    id?: string;
+    markAll?: boolean;
+  }): Promise<{
+    success: boolean;
+    notifications: EnterpriseNotification[];
+    unreadCount: number;
+  }> {
+    const res = await fetchApi('/api/admin/notifications/mark-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to mark notifications as read');
+    }
+    return res.json();
+  },
+
+  async clearAdminNotifications(payload?: { onlyRead?: boolean }): Promise<{
+    success: boolean;
+    notifications: EnterpriseNotification[];
+    unreadCount: number;
+  }> {
+    const res = await fetchApi('/api/admin/notifications/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || { onlyRead: true }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to clear notifications');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------
+  // MULTI-BRANCH NETWORK MONITOR & SYSTEM RESET APIS
+  // -------------------------------------------------------------
+  async getBranchMonitor(): Promise<BranchMonitorResponse> {
+    const res = await fetchApi('/api/admin/settings/branch-monitor');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to load multi-branch network monitor');
+    }
+    return res.json();
+  },
+
+  async resetDemoData(): Promise<{
+    success: boolean;
+    timestamp: string;
+    batchesCount: number;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/system/reset-demo-data', {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to reset demo data');
+    }
+    return res.json();
+  },
 };
+
 
 

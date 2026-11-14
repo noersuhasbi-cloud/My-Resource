@@ -107,6 +107,7 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
     }
     setIsSubmittingBin(true);
     try {
+      const matchedTier = newSku ? inventoryTiers.find((t) => t.sku === newSku) : undefined;
       const res = await apiClient.createWarehouseBin({
         binCode: newBinCode.trim().toUpperCase(),
         rack: newRack,
@@ -115,8 +116,8 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
         type: newBinType,
         capacityUnits: Number(newCapacity) || 60,
         currentSku: newSku || undefined,
-        storeId: 'store-jkt-senopati',
-        storeName: 'GroceMart Senopati Flagship',
+        storeId: matchedTier?.storeId || 'store-jkt-senopati',
+        storeName: matchedTier?.storeName || 'GroceMart Senopati Flagship',
       });
       if (res.success) {
         onShowToast('Location Registered', res.message);
@@ -341,6 +342,7 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
               <option value="ALL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">All Warehouse Zones</option>
               <option value="WH-JKT-SEN-COLD" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Chilled Cold Room</option>
               <option value="WH-JKT-SEN-DRY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Ambient Dry Shelf</option>
+              <option value="WH-JKT-SEN-MEZZ" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Mezzanine &amp; Packaging</option>
             </select>
 
             <select
@@ -496,6 +498,7 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                   >
                     <option value="WH-JKT-SEN-COLD" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Chilled Cold Room</option>
                     <option value="WH-JKT-SEN-DRY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Ambient Dry Room</option>
+                    <option value="WH-JKT-SEN-MEZZ" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Mezzanine &amp; Packaging</option>
                   </select>
                 </div>
                 <div>
@@ -555,9 +558,9 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                     className={`font-mono ${inputClass}`}
                   >
                     <option value="" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">-- None (Empty) --</option>
-                    {inventoryTiers.slice(0, 10).map((t) => (
+                    {Array.from(new Map(inventoryTiers.map((t) => [t.sku, t])).values()).map((t) => (
                       <option key={t.sku} value={t.sku} className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">
-                        {t.sku} ({t.productName.slice(0, 20)})
+                        {t.sku} ({t.productName.slice(0, 24)})
                       </option>
                     ))}
                   </select>
