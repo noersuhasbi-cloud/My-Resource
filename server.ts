@@ -128,6 +128,7 @@ import type {
 import {
   DEFAULT_MARKDOWN_CONFIG,
   MOCK_VENDOR_CREDIT_NOTES,
+  evaluateBatchMarkdown,
 } from './src/utils/groceryEngine.ts';
 import {
   inferDefaultTaxCategory,
@@ -2127,12 +2128,12 @@ async function startServer() {
         const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
         const gleId4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
 
-        // A. Cash Inflow / QRIS Settlement Clearing (Debit 1010)
+        // A. Cash Inflow / QRIS Settlement Clearing (Debit 1030)
         generalLedger.unshift({
           id: gleId1,
           timestamp,
-          accountCode: '1010',
-          accountName: 'Cash & QRIS Settlement Clearing',
+          accountCode: '1030',
+          accountName: 'QRIS Settlement Receivable (ASPI Clearing)',
           category: 'Asset',
           debit: tx.amount,
           credit: 0,
@@ -2169,12 +2170,12 @@ async function startServer() {
           description: `COGS recognized for products dispatched in Order #${orderId}`,
         });
 
-        // D. Inventory Asset Deduction (Credit 1020)
+        // D. Inventory Asset Deduction (Credit 1040)
         generalLedger.unshift({
           id: gleId4,
           timestamp,
-          accountCode: '1020',
-          accountName: 'Inventory Asset (Produce & Grocery)',
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
           category: 'Asset',
           debit: 0,
           credit: totalCogs,
@@ -2802,13 +2803,17 @@ async function startServer() {
     if (batchId) {
       const batch = inventoryBatches.find((b) => b.batchId === batchId);
       if (batch) {
-        batch.currentStock = Math.max(0, batch.currentStock - qty);
+        batch.currentStock = Math.max(0, Number((batch.currentStock - qty).toFixed(2)));
+        if (batch.currentStock === 0) batch.status = 'depleted';
         lotNumber = batch.lotNumber;
       }
     } else {
-      const earliestBatch = inventoryBatches.find((b) => b.sku === sku && b.storeId === storeId && b.currentStock > 0);
+      const earliestBatch = inventoryBatches.find(
+        (b) => b.sku === sku && (b.storeId === storeId || storeId === 'CONSOLIDATED') && b.currentStock > 0
+      );
       if (earliestBatch) {
-        earliestBatch.currentStock = Math.max(0, earliestBatch.currentStock - qty);
+        earliestBatch.currentStock = Math.max(0, Number((earliestBatch.currentStock - qty).toFixed(2)));
+        if (earliestBatch.currentStock === 0) earliestBatch.status = 'depleted';
         lotNumber = earliestBatch.lotNumber;
       }
     }
@@ -2942,9 +2947,39 @@ async function startServer() {
     const replacement = inventoryList.find((i) => i.sku === replacementSku);
     if (!replacement) return res.status(404).json({ error: 'Replacement SKU not found' });
 
+    const replacementTier = storeInventoryTiers.find(
+      (t) => t.sku === replacementSku && t.storeId === order.storeId
+    );
+    const availableReplacementStock = replacementTier
+      ? replacementTier.availableStock
+      : replacement.currentStock;
+
+    if (availableReplacementStock < item.orderedQty) {
+      return res.status(400).json({
+        error: `Insufficient available stock for replacement SKU ${replacementSku} (${availableReplacementStock} available, ${item.orderedQty} required).`,
+      });
+    }
+
+    // Deduct replacement inventory atomically across batches, store tier, and catalog
+    deductBatchesByStrategy(replacementSku, item.orderedQty, order.storeId, replacement.unitCost);
+    replacement.currentStock = Math.max(0, Number((replacement.currentStock - item.orderedQty).toFixed(2)));
+    if (replacementTier) {
+      replacementTier.physicalStock = Math.max(0, Number((replacementTier.physicalStock - item.orderedQty).toFixed(2)));
+      replacementTier.reservedStock = Math.min(replacementTier.reservedStock, replacementTier.physicalStock);
+      replacementTier.availableStock = Math.max(
+        0,
+        Number((replacementTier.physicalStock - replacementTier.reservedStock).toFixed(2))
+      );
+      replacementTier.totalValuation = Math.round(replacementTier.physicalStock * replacementTier.unitCost);
+      replacementTier.updatedAt = new Date().toISOString();
+    }
+
+    const originalSku = item.sku;
     const priceDelta = (replacement.sellingPrice * item.orderedQty) - item.finalPrice;
 
     item.status = 'substituted';
+    item.sku = replacement.sku;
+    item.pickedQty = item.orderedQty;
     item.substitution = {
       replacementProductId: replacement.productId,
       replacementSku: replacement.sku,
@@ -2963,6 +2998,8 @@ async function startServer() {
     order.pickedItems = order.items.filter((i) => i.status === 'picked' || i.status === 'substituted').length;
     if (order.pickedItems === order.totalItems) {
       order.pickerStatus = 'ready_for_packing';
+    } else if (order.pickerStatus === 'assigned') {
+      order.pickerStatus = 'in_progress';
     }
     order.updatedAt = new Date().toISOString();
 
@@ -2971,7 +3008,7 @@ async function startServer() {
       message: `Item substituted with ${replacement.productName}. Customer notified via SMS/App notification.`,
       order,
       item,
-      notificationMessage: `Hi ${order.customerName}, due to fresh stock freshness standard, we upgraded your ${item.sku} to ${replacement.productName} at no extra charge penalty!`,
+      notificationMessage: `Hi ${order.customerName}, due to fresh stock freshness standard, we upgraded your ${originalSku} to ${replacement.productName} at no extra charge penalty!`,
     });
   });
 
@@ -3020,7 +3057,17 @@ async function startServer() {
     item.pickedQty = 1;
 
     order.pickedItems = order.items.filter((i) => i.status === 'picked' || i.status === 'substituted').length;
+    if (order.pickedItems === order.totalItems) {
+      order.pickerStatus = 'ready_for_packing';
+    } else if (order.pickerStatus === 'assigned') {
+      order.pickerStatus = 'in_progress';
+    }
     order.updatedAt = new Date().toISOString();
+
+    const matchedOrder = customerOrders.find((o) => o.id === orderId);
+    if (matchedOrder) {
+      matchedOrder.total = Math.max(0, matchedOrder.total + (newPrice - previousFinalPrice));
+    }
 
     res.json({
       success: true,
@@ -3123,6 +3170,12 @@ async function startServer() {
 
     if (inv) {
       inv.incomingStock += pr.suggestedQuantity;
+    }
+    const prTier = storeInventoryTiers.find(
+      (t) => t.sku === pr.sku && t.storeId === (pr.storeId || 'store-jkt-senopati')
+    );
+    if (prTier) {
+      prTier.incomingStock += pr.suggestedQuantity;
     }
 
     res.json({ success: true, purchaseRequest: pr, purchaseOrder: newPO });
@@ -3257,6 +3310,10 @@ async function startServer() {
         });
       }
 
+      const isQuarantineHold =
+        String(itemInput.qualityCondition || '').toLowerCase().includes('quarantine') ||
+        String(itemInput.qualityCondition || '').toLowerCase().includes('hold');
+
       // Update multi-tier inventory tier for specific store & warehouse zone
       const tier = storeInventoryTiers.find((t) => t.sku === poItem.sku && t.storeId === po.storeId);
       if (tier) {
@@ -3270,6 +3327,9 @@ async function startServer() {
 
         tier.unitCost = tierNewWac;
         tier.physicalStock = tierNewStock;
+        if (isQuarantineHold) {
+          tier.reservedStock = Math.min(tierNewStock, (tier.reservedStock || 0) + receivedQty);
+        }
         tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
         tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
         tier.incomingStock = Math.max(0, tier.incomingStock - receivedQty);
@@ -3286,7 +3346,6 @@ async function startServer() {
         1,
         Math.ceil((new Date(expiryIso).getTime() - Date.now()) / 86400000)
       );
-      const isQuarantineHold = String(itemInput.qualityCondition || '').toLowerCase().includes('quarantine');
 
       inventoryBatches.unshift({
         batchId: `BAT-GR-${Date.now().toString().slice(-5)}-${inventoryBatches.length + 1}`,
@@ -3803,7 +3862,7 @@ async function startServer() {
     const storeName = store?.storeName || 'GroceMart Senopati Flagship';
     const warehouseZoneId = store?.activeWarehouses[1] || 'WH-JKT-SEN-COLD';
 
-    // Deduct stock mass from inventory tier
+    // Deduct stock mass from inventory tier, catalog item, and batch ledger
     const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
     if (tier && equivalentUnitsLost > 0) {
       tier.physicalStock = Math.max(0, Number((tier.physicalStock - equivalentUnitsLost).toFixed(2)));
@@ -3811,6 +3870,18 @@ async function startServer() {
       tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
       tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
       tier.updatedAt = new Date().toISOString();
+    }
+    if (equivalentUnitsLost > 0) {
+      item.currentStock = Math.max(0, Number((item.currentStock - equivalentUnitsLost).toFixed(2)));
+      if (batchId) {
+        const targetBatch = inventoryBatches.find((b) => b.batchId === batchId);
+        if (targetBatch) {
+          targetBatch.currentStock = Math.max(0, Number((targetBatch.currentStock - equivalentUnitsLost).toFixed(2)));
+          if (targetBatch.currentStock === 0) targetBatch.status = 'depleted';
+        }
+      } else {
+        deductBatchesByStrategy(sku, equivalentUnitsLost, storeId, item.unitCost);
+      }
     }
 
     // Auto-Post Double-Entry Accounting Entry:
@@ -4036,20 +4107,48 @@ async function startServer() {
     }
 
     // Customer Approved: Execute substitution with strict FIFO traceability and GL adjustment
-    prompt.promptStatus = 'approved_by_customer';
     const replacement = inventoryList.find((i) => i.sku === prompt.replacementSku);
+    const replacementTier = storeInventoryTiers.find(
+      (t) => t.sku === prompt.replacementSku && t.storeId === prompt.storeId
+    );
+    const availStock = replacementTier
+      ? replacementTier.availableStock
+      : (replacement?.currentStock ?? 0);
+
+    if (availStock < item.orderedQty) {
+      return res.status(400).json({
+        error: `Insufficient available stock for replacement SKU ${prompt.replacementSku} (${availStock} available, ${item.orderedQty} required).`,
+      });
+    }
+
+    prompt.promptStatus = 'approved_by_customer';
     const replacementBatch = inventoryBatches.find((b) => b.batchId === prompt.replacementBatchId);
 
-    // Deduct stock from replacement FIFO batch
-    if (replacementBatch) {
-      replacementBatch.currentStock = Math.max(0, replacementBatch.currentStock - item.orderedQty);
+    // Deduct stock from replacement FIFO/FEFO batch, store tier, and global catalog
+    if (replacementBatch && replacementBatch.currentStock >= item.orderedQty) {
+      replacementBatch.currentStock = Math.max(0, Number((replacementBatch.currentStock - item.orderedQty).toFixed(2)));
+      if (replacementBatch.currentStock === 0) replacementBatch.status = 'depleted';
+    } else {
+      deductBatchesByStrategy(prompt.replacementSku, item.orderedQty, prompt.storeId, replacement?.unitCost || 15000);
     }
     if (replacement) {
-      replacement.currentStock = Math.max(0, replacement.currentStock - item.orderedQty);
+      replacement.currentStock = Math.max(0, Number((replacement.currentStock - item.orderedQty).toFixed(2)));
+    }
+    if (replacementTier) {
+      replacementTier.physicalStock = Math.max(0, Number((replacementTier.physicalStock - item.orderedQty).toFixed(2)));
+      replacementTier.reservedStock = Math.min(replacementTier.reservedStock, replacementTier.physicalStock);
+      replacementTier.availableStock = Math.max(
+        0,
+        Number((replacementTier.physicalStock - replacementTier.reservedStock).toFixed(2))
+      );
+      replacementTier.totalValuation = Math.round(replacementTier.physicalStock * replacementTier.unitCost);
+      replacementTier.updatedAt = new Date().toISOString();
     }
 
     // Update item in picker order
     item.status = 'substituted';
+    item.sku = prompt.replacementSku;
+    item.pickedQty = item.orderedQty;
     item.substitution = {
       replacementProductId: replacement?.productId || 'prod-sub',
       replacementSku: prompt.replacementSku,
@@ -4451,19 +4550,37 @@ async function startServer() {
       const currentStock = tier ? tier.physicalStock : (inv ? inv.currentStock : 24);
       const availableStock = tier ? tier.availableStock : Math.max(0, currentStock - 2);
 
-      // Find nearest FEFO batch for this SKU
+      // Find nearest active sellable FEFO batch for this SKU (exclude quarantined/recalled/expired/depleted)
       const batchesForSku = inventoryBatches
-        .filter((b) => b.sku === sku && (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati'))
+        .filter(
+          (b) =>
+            b.sku === sku &&
+            (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati') &&
+            b.currentStock > 0 &&
+            b.status !== 'quarantined' &&
+            b.status !== 'recalled' &&
+            b.status !== 'expired' &&
+            b.status !== 'depleted'
+        )
         .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
 
       const nearestBatch = batchesForSku[0];
+      const activeMarkdownCandidate =
+        nearestBatch && nearestBatch.markdownDiscountPercent && nearestBatch.markdownDiscountPercent > 0
+          ? evaluateBatchMarkdown(nearestBatch, dynamicMarkdownConfig)
+          : null;
+      const effectiveSellingPrice = activeMarkdownCandidate
+        ? activeMarkdownCandidate.markdownPrice
+        : nearestBatch?.markdownDiscountPercent && nearestBatch.markdownDiscountPercent > 0
+        ? Math.round(prod.price * (1 - nearestBatch.markdownDiscountPercent / 100))
+        : prod.price;
 
       return {
         sku,
         productId: prod.id,
         name: prod.name,
         category: prod.category,
-        sellingPrice: prod.price,
+        sellingPrice: effectiveSellingPrice,
         unitCost: inv?.unitCost || Math.round(prod.price * 0.62),
         unit: prod.unit,
         barcode: sku, // SKU is barcode identifier
@@ -4471,7 +4588,7 @@ async function startServer() {
         currentStock,
         availableStock,
         isWeighted: Boolean(prod.isWeightBased || prod.category === 'produce' || prod.category === 'meat_seafood'),
-        pricePerKg: prod.pricePerKg || (prod.unit.includes('kg') ? prod.price : prod.price * 4),
+        pricePerKg: prod.pricePerKg || (prod.unit.includes('kg') ? effectiveSellingPrice : effectiveSellingPrice * 4),
         nearestBatchId: nearestBatch?.batchId,
         lotNumber: nearestBatch?.lotNumber,
         expiryDate: nearestBatch?.expiryDate,
@@ -4564,9 +4681,6 @@ async function startServer() {
       const unitCost = Number(item.unitCost ?? inv?.wacUnitCost ?? inv?.unitCost) || Math.round(unitPrice * 0.62);
       const lineTotal = Number(item.lineTotal) || Math.round(unitPrice * qty);
       computedSubtotal += lineTotal;
-      const cogsLine = Math.round(unitCost * qty);
-      totalCogsCost += cogsLine;
-      inventoryDeductedCount += qty;
 
       // A. Store Inventory Tiers
       const tier = storeInventoryTiers.find(
@@ -4586,7 +4700,10 @@ async function startServer() {
       }
 
       // C. Strategy-Aware Batch Deduction (FEFO vs FIFO, skipping quarantined/expired lots)
-      deductBatchesByStrategy(item.sku, qty, storeId, unitCost);
+      const batchDeduction = deductBatchesByStrategy(item.sku, qty, storeId, unitCost);
+      const cogsLine = batchDeduction.allocatedQty > 0 ? batchDeduction.totalCogs : Math.round(unitCost * qty);
+      totalCogsCost += cogsLine;
+      inventoryDeductedCount += qty;
 
       return {
         ...item,
@@ -5625,6 +5742,109 @@ async function startServer() {
   });
 
   // --- 5. PROCUREMENT 3-WAY MATCHING & VENDOR BILLS ---
+  function postVendorBillApprovalGL(bill: VendorBill, approverName: string): string[] {
+    if (bill.glEntryIds && bill.glEntryIds.length > 0) {
+      return bill.glEntryIds;
+    }
+
+    const timestamp = bill.approvedAt || new Date().toISOString();
+    const exRate = bill.exchangeRate || 1;
+    const billTotalIDR = bill.grandTotalIDR;
+    const billSubtotalIDR = Math.round(bill.subtotal * exRate);
+    const billTaxIDR = billTotalIDR - billSubtotalIDR;
+
+    const gr = goodsReceipts.find((g) => g.id === bill.goodsReceiptId && g.poId === bill.poId);
+    const po = purchaseOrders.find((p) => p.id === bill.poId);
+    const grAlreadyReconciled = vendorBillsList.some(
+      (b) =>
+        b.id !== bill.id &&
+        b.goodsReceiptId === bill.goodsReceiptId &&
+        (b.status === 'APPROVED' || b.status === 'PAID')
+    );
+
+    let grAccruedIDR = 0;
+    if (gr && !grAlreadyReconciled) {
+      grAccruedIDR = gr.items.reduce((sum, grIt) => {
+        const poIt = po?.items.find((p) => p.sku === grIt.sku);
+        const billIt = bill.items.find((bi) => bi.sku === grIt.sku);
+        const unitCost = poIt?.unitCost ?? (billIt ? Math.round(billIt.unitCost * exRate) : 0);
+        return sum + Math.round(grIt.quantityReceived * unitCost);
+      }, 0);
+    }
+
+    const netInventoryVarianceIDR = billSubtotalIDR - grAccruedIDR;
+    const netApAdjustmentIDR = billTotalIDR - grAccruedIDR;
+    const glIds: string[] = [];
+    let seqOffset = 1;
+    const nextGleId = () => `GLE-2026-${(generalLedger.length + seqOffset++).toString().padStart(4, '0')}`;
+
+    if (netInventoryVarianceIDR !== 0) {
+      const id = nextGleId();
+      glIds.push(id);
+      generalLedger.unshift({
+        id,
+        timestamp,
+        storeId: bill.storeId,
+        storeName: bill.storeName,
+        accountCode: '1040',
+        accountName: 'Merchandise Inventory Asset',
+        category: 'Asset',
+        debit: netInventoryVarianceIDR > 0 ? netInventoryVarianceIDR : 0,
+        credit: netInventoryVarianceIDR < 0 ? Math.abs(netInventoryVarianceIDR) : 0,
+        referenceType: 'VENDOR_BILL',
+        referenceId: bill.id,
+        description:
+          grAccruedIDR > 0
+            ? `Vendor Bill #${bill.id} invoice variance vs GR #${bill.goodsReceiptId} [${bill.billNumber}] (${approverName})`
+            : `Vendor Bill #${bill.id} approved [${bill.billNumber} - ${bill.supplierName}]`,
+      });
+    }
+
+    if (billTaxIDR > 0) {
+      const id = nextGleId();
+      glIds.push(id);
+      generalLedger.unshift({
+        id,
+        timestamp,
+        storeId: bill.storeId,
+        storeName: bill.storeName,
+        accountCode: '2026',
+        accountName: 'PPN Masukan (VAT Input Creditable)',
+        category: 'Asset',
+        debit: billTaxIDR,
+        credit: 0,
+        referenceType: 'VENDOR_BILL',
+        referenceId: bill.id,
+        description: `Input VAT (${bill.taxPercent}%) booked for Vendor Bill #${bill.id} [${bill.billNumber}]`,
+      });
+    }
+
+    if (netApAdjustmentIDR !== 0) {
+      const id = nextGleId();
+      glIds.push(id);
+      generalLedger.unshift({
+        id,
+        timestamp,
+        storeId: bill.storeId,
+        storeName: bill.storeName,
+        accountCode: '2010',
+        accountName: 'Trade Accounts Payable',
+        category: 'Liability',
+        debit: netApAdjustmentIDR < 0 ? Math.abs(netApAdjustmentIDR) : 0,
+        credit: netApAdjustmentIDR > 0 ? netApAdjustmentIDR : 0,
+        referenceType: 'VENDOR_BILL',
+        referenceId: bill.id,
+        description:
+          grAccruedIDR > 0
+            ? `Net AP reconciliation (incl. VAT/variance) for Vendor Bill #${bill.id} [${bill.billNumber}]`
+            : `Accounts Payable booked for vendor invoice #${bill.billNumber}`,
+      });
+    }
+
+    bill.glEntryIds = glIds;
+    return glIds;
+  }
+
   app.get('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
     const { storeId, status, currency } = req.query;
     let filtered = vendorBillsList;
@@ -5686,14 +5906,23 @@ async function startServer() {
       const grItem = gr?.items.find((g) => g.sku === it.sku);
 
       const poQty = poItem ? poItem.orderedQuantity : it.billedQuantity;
-      const grQty = grItem ? grItem.quantityReceived : poQty;
+      const qcRejectedQty = qcInspectionsList
+        .filter((q) => q.referenceId === poId && q.sku === it.sku && q.disposition === 'REJECTED')
+        .reduce((sum, q) => sum + (Number(q.totalBatchQuantity) || 0), 0);
+      const grQty =
+        enforcementMode === 'TWO_WAY'
+          ? (grItem ? grItem.quantityReceived : poQty)
+          : (grItem ? Math.max(0, grItem.quantityReceived - qcRejectedQty) : 0);
       const billedQty = Number(it.billedQuantity) || 0;
 
       const poPrice = poItem ? (currency === 'IDR' ? poItem.unitCost : poItem.unitCost / exchangeRate) : it.unitCost;
       const billedPrice = Number(it.unitCost) || 0;
 
       const compareQty = enforcementMode === 'TWO_WAY' ? poQty : grQty;
-      const qtyDiffPercent = compareQty > 0 ? (Math.abs(billedQty - compareQty) / compareQty) * 100 : 0;
+      const qtyDiffPercent =
+        compareQty > 0
+          ? (Math.abs(billedQty - compareQty) / compareQty) * 100
+          : (billedQty > 0 ? 100 : 0);
       const priceDiffPercent = poPrice > 0 ? (Math.abs(billedPrice - poPrice) / poPrice) * 100 : 0;
 
       const hasQtyVar = qtyDiffPercent > qtyTolPercent;
@@ -5737,43 +5966,6 @@ async function startServer() {
     const id = `VB-2026-${(vendorBillsList.length + 1).toString().padStart(3, '0')}`;
     const calculatedDueDate = dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
 
-    let glEntryIds: string[] = [];
-    if (billStatus === 'APPROVED') {
-      const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-      const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
-      glEntryIds = [gleId1, gleId2];
-
-      generalLedger.unshift({
-        id: gleId1,
-        timestamp,
-        storeId,
-        storeName,
-        accountCode: '1040',
-        accountName: 'Merchandise Inventory Asset',
-        category: 'Asset',
-        debit: grandTotalIDR,
-        credit: 0,
-        referenceType: 'VENDOR_BILL',
-        referenceId: id,
-        description: `Vendor Bill #${id} approved [${billNumber} - ${supplierName}]`,
-      });
-
-      generalLedger.unshift({
-        id: gleId2,
-        timestamp,
-        storeId,
-        storeName,
-        accountCode: '2010',
-        accountName: 'Trade Accounts Payable',
-        category: 'Liability',
-        debit: 0,
-        credit: grandTotalIDR,
-        referenceType: 'VENDOR_BILL',
-        referenceId: id,
-        description: `Accounts Payable booked for vendor invoice #${billNumber}`,
-      });
-    }
-
     const newBill: VendorBill = {
       id,
       billNumber,
@@ -5800,11 +5992,15 @@ async function startServer() {
       status: billStatus,
       paymentStatus: 'UNPAID',
       notes,
-      glEntryIds: glEntryIds.length > 0 ? glEntryIds : undefined,
       createdAt: timestamp,
       approvedBy: shouldApprove ? currentActiveStaffSession.userName : undefined,
       approvedAt: shouldApprove ? timestamp : undefined,
     };
+
+    let glEntryIds: string[] = [];
+    if (billStatus === 'APPROVED') {
+      glEntryIds = postVendorBillApprovalGL(newBill, currentActiveStaffSession.userName);
+    }
 
     vendorBillsList.unshift(newBill);
 
@@ -5857,41 +6053,7 @@ async function startServer() {
     bill.approvedBy = approverName;
     bill.approvedAt = new Date().toISOString();
 
-    if (!bill.glEntryIds || bill.glEntryIds.length === 0) {
-      const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-      const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
-      bill.glEntryIds = [gleId1, gleId2];
-
-      generalLedger.unshift({
-        id: gleId1,
-        timestamp: bill.approvedAt,
-        storeId: bill.storeId,
-        storeName: bill.storeName,
-        accountCode: '1040',
-        accountName: 'Merchandise Inventory Asset',
-        category: 'Asset',
-        debit: bill.grandTotalIDR,
-        credit: 0,
-        referenceType: 'VENDOR_BILL',
-        referenceId: bill.id,
-        description: `Vendor Bill #${bill.id} authorized & approved by ${approverName}`,
-      });
-
-      generalLedger.unshift({
-        id: gleId2,
-        timestamp: bill.approvedAt,
-        storeId: bill.storeId,
-        storeName: bill.storeName,
-        accountCode: '2010',
-        accountName: 'Trade Accounts Payable',
-        category: 'Liability',
-        debit: 0,
-        credit: bill.grandTotalIDR,
-        referenceType: 'VENDOR_BILL',
-        referenceId: bill.id,
-        description: `Trade Accounts Payable confirmed for ${bill.supplierName}`,
-      });
-    }
+    postVendorBillApprovalGL(bill, approverName);
 
     res.json({ success: true, vendorBill: bill, message: `Vendor Bill #${id} approved.` });
   });
@@ -6274,42 +6436,259 @@ async function startServer() {
     res.json({ success: true, session, journalEntryIds: glEntryIds, message: 'Opname reconciled.' });
   });
 
+  const inTransitTransferLots = new Map<
+    string,
+    { lotNumber: string; expiryDate: string; allocatedQty: number; unitCost: number; storageZone: StorageZoneType; sellingPrice: number; supplierName: string }[]
+  >();
+
   app.get('/api/admin/inventory/transfer', (_req: Request, res: Response) => {
     res.json(stockTransfersList);
   });
 
   app.post('/api/admin/inventory/transfer', (req: Request, res: Response) => {
-    const record: StockTransferRecord = {
-      id: `TRF-2026-${(stockTransfersList.length + 1).toString().padStart(3, '0')}`,
-      timestamp: new Date().toISOString(),
-      status: 'COMPLETED',
-      ...req.body,
-    };
+    const { sku, sourceStoreId, destinationStoreId, quantity, notes, status: reqStatus } = req.body;
+    const qty = Math.max(0, Number(quantity) || 0);
 
-    // Bidirectional inter-warehouse stock tier synchronization
-    const qty = Math.max(0, Number(record.quantity) || 0);
-    if (record.sku && qty > 0) {
-      const sourceTier = storeInventoryTiers.find(
-        (t) => t.sku === record.sku && t.storeId === record.sourceStoreId
-      );
-      if (sourceTier) {
-        sourceTier.physicalStock = Math.max(0, sourceTier.physicalStock - qty);
-        sourceTier.availableStock = Math.max(0, sourceTier.physicalStock - sourceTier.reservedStock);
-        sourceTier.updatedAt = record.timestamp;
-      }
-      const destTier = storeInventoryTiers.find(
-        (t) => t.sku === record.sku && t.storeId === record.destinationStoreId
-      );
-      if (destTier) {
-        destTier.physicalStock += qty;
-        destTier.availableStock = Math.max(0, destTier.physicalStock - destTier.reservedStock);
-        destTier.lastRestockedAt = record.timestamp;
-        destTier.updatedAt = record.timestamp;
-      }
+    if (!sku || !sourceStoreId || !destinationStoreId || qty <= 0) {
+      return res.status(400).json({ error: 'sku, sourceStoreId, destinationStoreId, and positive quantity are required.' });
+    }
+    if (sourceStoreId === destinationStoreId) {
+      return res.status(400).json({ error: 'Source and destination stores must be different.' });
     }
 
+    const sourceTier = storeInventoryTiers.find(
+      (t) => t.sku === sku && t.storeId === sourceStoreId
+    );
+    const inv = inventoryList.find((i) => i.sku === sku);
+    const availableAtSource = sourceTier ? sourceTier.availableStock : (inv?.currentStock ?? 0);
+    if (qty > availableAtSource) {
+      return res.status(400).json({
+        error: `Insufficient available stock at ${sourceTier?.storeName || sourceStoreId}: requested ${qty}, available ${availableAtSource}.`,
+      });
+    }
+
+    const timestamp = new Date().toISOString();
+    const srcSchedule = storeSchedules.find((s) => s.storeId === sourceStoreId);
+    const dstSchedule = storeSchedules.find((s) => s.storeId === destinationStoreId);
+    const resolvedUnitCost = Number(req.body.unitCost) || sourceTier?.unitCost || inv?.wacUnitCost || inv?.unitCost || 0;
+    const normalizedStatus: 'completed' | 'in_transit' =
+      String(reqStatus || '').toLowerCase() === 'in_transit' ? 'in_transit' : 'completed';
+
+    const destStoreName = req.body.destinationStoreName || dstSchedule?.storeName || destinationStoreId;
+    const sourceStoreName = req.body.sourceStoreName || sourceTier?.storeName || srcSchedule?.storeName || sourceStoreId;
+    const productName = req.body.productName || sourceTier?.productName || inv?.productName || inv?.name || sku;
+
+    // Deduct source tier stock
+    if (sourceTier) {
+      sourceTier.physicalStock = Math.max(0, Number((sourceTier.physicalStock - qty).toFixed(2)));
+      sourceTier.availableStock = Math.max(0, Number((sourceTier.physicalStock - sourceTier.reservedStock).toFixed(2)));
+      sourceTier.totalValuation = Math.round(sourceTier.physicalStock * sourceTier.unitCost);
+      sourceTier.updatedAt = timestamp;
+    }
+
+    // Relocate FEFO/FIFO batch lots from source store
+    const batchDeduction = deductBatchesByStrategy(sku, qty, sourceStoreId, resolvedUnitCost);
+    const movedLots = batchDeduction.allocations.length > 0
+      ? batchDeduction.allocations.map((al) => {
+          const orig = inventoryBatches.find((b) => b.batchId === al.batchId);
+          return {
+            lotNumber: al.lotNumber,
+            expiryDate: al.expiryDate,
+            allocatedQty: al.allocatedQty,
+            unitCost: al.unitCost,
+            storageZone: orig?.storageZone || sourceTier?.storageType || 'cold_chilled',
+            sellingPrice: orig?.sellingPrice || sourceTier?.sellingPrice || inv?.sellingPrice || Math.round(al.unitCost * 1.45),
+            supplierName: orig?.supplierName || sourceTier?.supplierName || 'Internal Hub Transfer',
+          };
+        })
+      : [
+          {
+            lotNumber: `TRF-LOT-${Date.now().toString().slice(-5)}`,
+            expiryDate: new Date(Date.now() + 86400000 * 14).toISOString(),
+            allocatedQty: qty,
+            unitCost: resolvedUnitCost,
+            storageZone: sourceTier?.storageType || 'cold_chilled',
+            sellingPrice: sourceTier?.sellingPrice || inv?.sellingPrice || Math.round(resolvedUnitCost * 1.45),
+            supplierName: sourceTier?.supplierName || 'Internal Hub Transfer',
+          },
+        ];
+
+    const recordId = `TRF-2026-${(stockTransfersList.length + 1).toString().padStart(3, '0')}`;
+    const destZone =
+      warehouseZones.find((z) => z.storeId === destinationStoreId && z.type === (sourceTier?.storageType || 'cold_chilled')) ||
+      warehouseZones.find((z) => z.storeId === destinationStoreId);
+
+    let destTier = storeInventoryTiers.find(
+      (t) => t.sku === sku && t.storeId === destinationStoreId
+    );
+    if (!destTier) {
+      destTier = {
+        id: `STK-TRF-${Date.now().toString().slice(-5)}`,
+        sku,
+        productId: sourceTier?.productId || inv?.productId || sku,
+        productName,
+        category: sourceTier?.category || inv?.category || 'produce',
+        storeId: destinationStoreId,
+        storeName: destStoreName,
+        warehouseZoneId: destZone?.id || `WH-${destinationStoreId.toUpperCase()}`,
+        storageType: sourceTier?.storageType || destZone?.type || 'cold_chilled',
+        physicalStock: 0,
+        availableStock: 0,
+        reservedStock: 0,
+        incomingStock: 0,
+        minimumThreshold: sourceTier?.minimumThreshold ?? 10,
+        safetyStockBuffer: sourceTier?.safetyStockBuffer ?? 5,
+        maxCapacity: sourceTier?.maxCapacity ?? 120,
+        reorderQuantity: sourceTier?.reorderQuantity ?? 30,
+        unitCost: resolvedUnitCost,
+        sellingPrice: sourceTier?.sellingPrice || inv?.sellingPrice || Math.round(resolvedUnitCost * 1.45),
+        unit: sourceTier?.unit || inv?.unit || 'pack',
+        handlingInstructions: sourceTier?.handlingInstructions || 'Standard cold-chain handling',
+        supplierId: sourceTier?.supplierId || 'SUP-INTERNAL',
+        supplierName: sourceTier?.supplierName || sourceStoreName,
+        lastRestockedAt: timestamp,
+        updatedAt: timestamp,
+      };
+      storeInventoryTiers.push(destTier);
+    }
+
+    if (normalizedStatus === 'completed') {
+      const oldDestStock = Math.max(0, Number(destTier.physicalStock) || 0);
+      const newDestStock = Number((oldDestStock + qty).toFixed(2));
+      const newDestWac =
+        newDestStock > 0
+          ? Math.round(((oldDestStock * (destTier.unitCost || resolvedUnitCost)) + (qty * resolvedUnitCost)) / newDestStock)
+          : resolvedUnitCost;
+      destTier.unitCost = newDestWac;
+      destTier.physicalStock = newDestStock;
+      destTier.availableStock = Math.max(0, Number((destTier.physicalStock - destTier.reservedStock).toFixed(2)));
+      destTier.totalValuation = Math.round(destTier.physicalStock * destTier.unitCost);
+      destTier.lastRestockedAt = timestamp;
+      destTier.updatedAt = timestamp;
+
+      movedLots.forEach((lot, idx) => {
+        const daysUntilExpiry = Math.max(1, Math.ceil((new Date(lot.expiryDate).getTime() - Date.now()) / 86400000));
+        inventoryBatches.unshift({
+          batchId: `BAT-TRF-${Date.now().toString().slice(-5)}-${idx + 1}`,
+          sku,
+          productName,
+          storeId: destinationStoreId,
+          storeName: destStoreName,
+          warehouseZoneId: destTier!.warehouseZoneId,
+          lotNumber: lot.lotNumber,
+          initialQuantity: lot.allocatedQty,
+          currentStock: lot.allocatedQty,
+          unitCost: lot.unitCost,
+          sellingPrice: lot.sellingPrice,
+          receivedDate: timestamp,
+          expiryDate: lot.expiryDate,
+          daysUntilExpiry,
+          status: daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
+          storageZone: lot.storageZone,
+          supplierName: lot.supplierName,
+          notes: `Transferred from ${sourceStoreName} (${recordId})`,
+        });
+      });
+    } else {
+      destTier.incomingStock = (destTier.incomingStock || 0) + qty;
+      destTier.updatedAt = timestamp;
+      inTransitTransferLots.set(recordId, movedLots);
+    }
+
+    const record: StockTransferRecord = {
+      id: recordId,
+      timestamp,
+      sku,
+      productName,
+      sourceStoreId,
+      sourceStoreName,
+      destinationStoreId,
+      destinationStoreName: destStoreName,
+      quantity: qty,
+      unitCost: resolvedUnitCost,
+      totalTransferValue: Number(req.body.totalTransferValue) || Math.round(qty * resolvedUnitCost),
+      transferredBy: req.body.transferredBy || currentActiveStaffSession.userName,
+      status: normalizedStatus,
+      notes,
+      suratJalanNumber: req.body.suratJalanNumber,
+    };
+
     stockTransfersList.unshift(record);
-    res.json({ success: true, record, message: 'Stock transferred and warehouse tiers synchronized.' });
+    res.json({
+      success: true,
+      record,
+      message:
+        normalizedStatus === 'in_transit'
+          ? `Transfer #${recordId} dispatched (in_transit) from ${sourceStoreName} to ${destStoreName}.`
+          : 'Stock transferred and warehouse tiers synchronized.',
+    });
+  });
+
+  app.post('/api/admin/inventory/transfer/:id/receive', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const record = stockTransfersList.find((t) => t.id === id);
+    if (!record) return res.status(404).json({ error: 'Stock transfer record not found.' });
+    if (record.status === 'completed') {
+      return res.json({ success: true, record, message: `Transfer #${id} already completed.` });
+    }
+
+    const timestamp = new Date().toISOString();
+    const destTier = storeInventoryTiers.find(
+      (t) => t.sku === record.sku && t.storeId === record.destinationStoreId
+    );
+    if (destTier) {
+      const oldStock = Math.max(0, Number(destTier.physicalStock) || 0);
+      const newStock = Number((oldStock + record.quantity).toFixed(2));
+      destTier.unitCost =
+        newStock > 0
+          ? Math.round(((oldStock * (destTier.unitCost || record.unitCost)) + (record.quantity * record.unitCost)) / newStock)
+          : record.unitCost;
+      destTier.physicalStock = newStock;
+      destTier.incomingStock = Math.max(0, (destTier.incomingStock || 0) - record.quantity);
+      destTier.availableStock = Math.max(0, Number((destTier.physicalStock - destTier.reservedStock).toFixed(2)));
+      destTier.totalValuation = Math.round(destTier.physicalStock * destTier.unitCost);
+      destTier.lastRestockedAt = timestamp;
+      destTier.updatedAt = timestamp;
+    }
+
+    const transitLots = inTransitTransferLots.get(id) || [
+      {
+        lotNumber: `TRF-LOT-${id.slice(-4)}`,
+        expiryDate: new Date(Date.now() + 86400000 * 14).toISOString(),
+        allocatedQty: record.quantity,
+        unitCost: record.unitCost,
+        storageZone: destTier?.storageType || ('cold_chilled' as StorageZoneType),
+        sellingPrice: destTier?.sellingPrice || Math.round(record.unitCost * 1.45),
+        supplierName: record.sourceStoreName,
+      },
+    ];
+    transitLots.forEach((lot, idx) => {
+      const daysUntilExpiry = Math.max(1, Math.ceil((new Date(lot.expiryDate).getTime() - Date.now()) / 86400000));
+      inventoryBatches.unshift({
+        batchId: `BAT-TRF-RCV-${Date.now().toString().slice(-5)}-${idx + 1}`,
+        sku: record.sku,
+        productName: record.productName,
+        storeId: record.destinationStoreId,
+        storeName: record.destinationStoreName,
+        warehouseZoneId: destTier?.warehouseZoneId || `WH-${record.destinationStoreId.toUpperCase()}`,
+        lotNumber: lot.lotNumber,
+        initialQuantity: lot.allocatedQty,
+        currentStock: lot.allocatedQty,
+        unitCost: lot.unitCost,
+        sellingPrice: lot.sellingPrice,
+        receivedDate: timestamp,
+        expiryDate: lot.expiryDate,
+        daysUntilExpiry,
+        status: daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh',
+        storageZone: lot.storageZone,
+        supplierName: lot.supplierName,
+        notes: `Received from ${record.sourceStoreName} (${record.id})`,
+      });
+    });
+    inTransitTransferLots.delete(id);
+
+    record.status = 'completed';
+    res.json({ success: true, record, message: `Transfer #${id} received at ${record.destinationStoreName}.` });
   });
 
   // --- 9. APPROVAL WORKFLOW & MATRIX APIS ---
@@ -6396,39 +6775,7 @@ async function startServer() {
             bill.status = 'APPROVED';
             bill.approvedBy = currentActiveStaffSession.userName;
             bill.approvedAt = new Date().toISOString();
-            if (!bill.glEntryIds || bill.glEntryIds.length === 0) {
-              const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-              const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
-              bill.glEntryIds = [gleId1, gleId2];
-              generalLedger.unshift({
-                id: gleId1,
-                timestamp: bill.approvedAt,
-                storeId: bill.storeId,
-                storeName: bill.storeName,
-                accountCode: '1040',
-                accountName: 'Merchandise Inventory Asset',
-                category: 'Asset',
-                debit: bill.grandTotalIDR,
-                credit: 0,
-                referenceType: 'VENDOR_BILL',
-                referenceId: bill.id,
-                description: `Vendor Bill #${bill.id} variance authorized by ${currentActiveStaffSession.userName}`,
-              });
-              generalLedger.unshift({
-                id: gleId2,
-                timestamp: bill.approvedAt,
-                storeId: bill.storeId,
-                storeName: bill.storeName,
-                accountCode: '2010',
-                accountName: 'Trade Accounts Payable',
-                category: 'Liability',
-                debit: 0,
-                credit: bill.grandTotalIDR,
-                referenceType: 'VENDOR_BILL',
-                referenceId: bill.id,
-                description: `Trade Accounts Payable confirmed for ${bill.supplierName}`,
-              });
-            }
+            postVendorBillApprovalGL(bill, currentActiveStaffSession.userName);
           }
         }
       }
@@ -6613,7 +6960,7 @@ async function startServer() {
     };
     qcInspectionsList.unshift(newQc);
 
-    // Sync QC disposition with Lot/Batch status and Available ATP stock
+    // Sync QC disposition with Lot/Batch status, Available ATP stock, and Scrap GL
     const qcQty = Math.max(0, Number(newQc.totalBatchQuantity) || 0);
     const matchingBatch = inventoryBatches.find(
       (b) =>
@@ -6625,12 +6972,89 @@ async function startServer() {
     const matchingTier = storeInventoryTiers.find(
       (t) => t.sku === newQc.sku && t.storeId === newQc.storeId
     );
+    const inv = inventoryList.find((i) => i.sku === newQc.sku);
+    const wasAlreadyQuarantined = matchingBatch?.status === 'quarantined';
 
-    if (newQc.disposition === 'QUARANTINED' || newQc.disposition === 'REJECTED') {
+    if (newQc.disposition === 'REJECTED' && newQc.actionTaken === 'SCRAP_WASTE') {
+      const scrapQty = qcQty > 0 ? qcQty : (matchingBatch?.currentStock || 0);
+      const unitCost = matchingBatch?.unitCost || matchingTier?.unitCost || inv?.wacUnitCost || inv?.unitCost || 15000;
+      const lossValue = Math.round(scrapQty * unitCost);
+
+      if (matchingBatch && scrapQty > 0) {
+        matchingBatch.currentStock = Math.max(0, Number((matchingBatch.currentStock - scrapQty).toFixed(2)));
+        matchingBatch.status = matchingBatch.currentStock === 0 ? 'depleted' : matchingBatch.status;
+        matchingBatch.notes = `Scrapped via QC ${newQc.id}`;
+      }
+      if (matchingTier && scrapQty > 0) {
+        matchingTier.physicalStock = Math.max(0, Number((matchingTier.physicalStock - scrapQty).toFixed(2)));
+        if (wasAlreadyQuarantined) {
+          matchingTier.reservedStock = Math.max(0, Number((matchingTier.reservedStock - scrapQty).toFixed(2)));
+        }
+        matchingTier.reservedStock = Math.min(matchingTier.reservedStock, matchingTier.physicalStock);
+        matchingTier.availableStock = Math.max(0, Number((matchingTier.physicalStock - matchingTier.reservedStock).toFixed(2)));
+        matchingTier.totalValuation = Math.round(matchingTier.physicalStock * matchingTier.unitCost);
+        matchingTier.updatedAt = newQc.timestamp;
+      }
+      if (inv && scrapQty > 0) {
+        inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) - scrapQty).toFixed(2)));
+      }
+      if (scrapQty > 0 && lossValue > 0) {
+        const gle1 = `GLE-QC-WST-${seq}-1`;
+        const gle2 = `GLE-QC-WST-${seq}-2`;
+        wasteRecords.unshift({
+          id: `WST-QC-${seq}`,
+          sku: newQc.sku,
+          productName: newQc.productName,
+          storeId: newQc.storeId,
+          storeName: newQc.storeName,
+          warehouseZoneId: matchingTier?.warehouseZoneId || 'WH-JKT-SEN-COLD',
+          batchId: matchingBatch?.batchId || newQc.batchNumber,
+          lotNumber: newQc.batchNumber,
+          quantityScrapped: scrapQty,
+          unit: inv?.unit || 'unit',
+          unitCost,
+          totalShrinkageCost: lossValue,
+          reason: 'supplier_defect',
+          actionTaken: 'safe_disposal',
+          disposition: 'unsalvageable_scrap',
+          reportedBy: newQc.inspectorName,
+          reportedAt: newQc.timestamp,
+          notes: `Auto-scrapped from QC Inspection ${newQc.id}`,
+          glEntryId: gle1,
+        });
+        generalLedger.unshift({
+          id: gle1,
+          timestamp: newQc.timestamp,
+          storeId: newQc.storeId,
+          storeName: newQc.storeName,
+          accountCode: '6030',
+          accountName: 'Perishable Spoilage & Shrinkage Expense',
+          category: 'Expense',
+          debit: lossValue,
+          credit: 0,
+          referenceType: 'WASTE_SHRINKAGE',
+          referenceId: newQc.id,
+          description: `QC Scrap Write-Off (${scrapQty} ${newQc.sku}) from inspection ${newQc.id}`,
+        });
+        generalLedger.unshift({
+          id: gle2,
+          timestamp: newQc.timestamp,
+          storeId: newQc.storeId,
+          storeName: newQc.storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
+          category: 'Asset',
+          debit: 0,
+          credit: lossValue,
+          referenceType: 'WASTE_SHRINKAGE',
+          referenceId: newQc.id,
+          description: `Inventory Asset reduced for QC Scrap ${newQc.id}`,
+        });
+      }
+    } else if (newQc.disposition === 'QUARANTINED' || newQc.disposition === 'REJECTED') {
       if (matchingBatch) {
         matchingBatch.status = 'quarantined';
       } else if (qcQty > 0) {
-        const inv = inventoryList.find((i) => i.sku === newQc.sku);
         inventoryBatches.unshift({
           batchId: `BAT-QC-${seq}`,
           sku: newQc.sku,
@@ -6652,7 +7076,7 @@ async function startServer() {
           notes: `Quarantined by QC ${newQc.id}`,
         });
       }
-      if (matchingTier && qcQty > 0) {
+      if (matchingTier && qcQty > 0 && !wasAlreadyQuarantined) {
         matchingTier.reservedStock = Math.min(
           matchingTier.physicalStock,
           matchingTier.reservedStock + qcQty
@@ -6665,9 +7089,10 @@ async function startServer() {
       }
     } else if (newQc.disposition === 'PASSED') {
       if (matchingBatch && matchingBatch.status === 'quarantined') {
-        matchingBatch.status = 'fresh';
+        matchingBatch.status = matchingBatch.daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh';
         if (matchingTier) {
-          matchingTier.reservedStock = Math.max(0, matchingTier.reservedStock - matchingBatch.currentStock);
+          const releaseQty = qcQty > 0 ? Math.min(qcQty, matchingBatch.currentStock) : matchingBatch.currentStock;
+          matchingTier.reservedStock = Math.max(0, matchingTier.reservedStock - releaseQty);
           matchingTier.availableStock = Math.max(0, matchingTier.physicalStock - matchingTier.reservedStock);
           matchingTier.updatedAt = newQc.timestamp;
         }
@@ -7649,27 +8074,97 @@ async function startServer() {
   app.post('/api/admin/vendor-credit-notes', (req: Request, res: Response) => {
     const payload = req.body as Partial<VendorCreditNote>;
     const noteId = `VCN-${Date.now().toString().slice(-4)}`;
-    const journalId = `GLE-VCN-${Date.now().toString().slice(-4)}`;
+    const journalDrId = `GLE-VCN-${Date.now().toString().slice(-4)}-AP`;
+    const journalCrId = `GLE-VCN-${Date.now().toString().slice(-4)}-INV`;
+    const timestamp = new Date().toISOString();
+
+    const sku = payload.sku || 'SKU-PRD-001';
+    const storeId = payload.storeId || 'store-jkt-senopati';
+    const storeName = payload.storeName || 'GroceMart Senopati Flagship';
+    const qty = Math.max(1, Number(payload.quantityReturned) || 1);
+    const inv = inventoryList.find((i) => i.sku === sku);
+    const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
+    const resolvedUnitCost = Number(payload.unitCost) || tier?.unitCost || inv?.wacUnitCost || 15000;
+    const totalCreditIDR = Number(payload.totalCreditIDR) || Math.round(qty * resolvedUnitCost);
+
+    // Deduct returned stock from batch, warehouse tier, and catalog
+    const matchingBatch = inventoryBatches.find(
+      (b) =>
+        b.sku === sku &&
+        b.currentStock > 0 &&
+        (payload.lotNumber ? b.lotNumber === payload.lotNumber : (b.storeId === storeId || storeId === 'ALL'))
+    );
+    if (matchingBatch) {
+      const wasQuarantined = matchingBatch.status === 'quarantined';
+      matchingBatch.currentStock = Math.max(0, Number((matchingBatch.currentStock - qty).toFixed(2)));
+      if (matchingBatch.currentStock === 0) matchingBatch.status = 'depleted';
+      if (tier && wasQuarantined) {
+        tier.reservedStock = Math.max(0, Number((tier.reservedStock - qty).toFixed(2)));
+      }
+    } else {
+      deductBatchesByStrategy(sku, qty, storeId, resolvedUnitCost);
+    }
+
+    if (tier) {
+      tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
+      tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+      tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+      tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+      tier.updatedAt = timestamp;
+    }
+    if (inv) {
+      inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) - qty).toFixed(2)));
+    }
+
+    // Post balanced double-entry GL: Debit 2010 Trade AP, Credit 1040 Inventory Asset
+    generalLedger.unshift({
+      id: journalDrId,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '2010',
+      accountName: 'Trade Accounts Payable',
+      category: 'Liability',
+      debit: totalCreditIDR,
+      credit: 0,
+      referenceType: 'PURCHASE_AP',
+      referenceId: noteId,
+      description: `Vendor Credit Note ${noteId} reducing AP to ${payload.supplierName || 'Vendor'}`,
+    });
+    generalLedger.unshift({
+      id: journalCrId,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '1040',
+      accountName: 'Merchandise Inventory Asset',
+      category: 'Asset',
+      debit: 0,
+      credit: totalCreditIDR,
+      referenceType: 'PURCHASE_AP',
+      referenceId: noteId,
+      description: `Inventory Asset credited for RTV ${noteId} (${qty} ${payload.unit || 'pack'} ${sku})`,
+    });
 
     const newNote: VendorCreditNote = {
       creditNoteId: noteId,
       rmaNumber: payload.rmaNumber || `RMA-${Date.now().toString().slice(-4)}`,
       supplierId: payload.supplierId || 'SUPP-AGRO-01',
       supplierName: payload.supplierName || 'PT Lembang Agro Sejahtera',
-      storeId: payload.storeId || 'store-jkt-senopati',
-      storeName: payload.storeName || 'GroceMart Senopati Flagship',
-      sku: payload.sku || 'SKU-PRD-001',
-      productName: payload.productName || 'Organic Hydroponic Produce',
+      storeId,
+      storeName,
+      sku,
+      productName: payload.productName || inv?.productName || 'Organic Hydroponic Produce',
       lotNumber: payload.lotNumber || 'LOT-RTV-DEFAULT',
-      quantityReturned: payload.quantityReturned || 1,
-      unit: payload.unit || 'pack',
-      unitCost: payload.unitCost || 15000,
-      totalCreditIDR: payload.totalCreditIDR || (payload.quantityReturned || 1) * (payload.unitCost || 15000),
+      quantityReturned: qty,
+      unit: payload.unit || inv?.unit || 'pack',
+      unitCost: resolvedUnitCost,
+      totalCreditIDR,
       reason: payload.reason || 'spoiled_on_arrival',
       status: 'pending_pickup',
-      createdAt: new Date().toISOString(),
+      createdAt: timestamp,
       approvedBy: payload.approvedBy || 'Store Manager',
-      journalEntryId: journalId,
+      journalEntryId: journalDrId,
       notes: payload.notes || 'RTV claim created from receiving inspection dock.',
     };
 
@@ -7678,7 +8173,7 @@ async function startServer() {
     res.json({
       success: true,
       creditNote: newNote,
-      journalEntryId: journalId,
+      journalEntryId: journalDrId,
       message: `Return-to-Vendor Credit Note ${noteId} created for ${newNote.supplierName}. Credit Rp ${newNote.totalCreditIDR.toLocaleString('id-ID')} logged.`,
     });
   });
@@ -7746,9 +8241,19 @@ async function startServer() {
     let count = 0;
     targetBatches.forEach((id) => {
       const b = inventoryBatches.find((batch) => batch.batchId === id);
-      if (b) {
-        b.markdownDiscountPercent = 25;
-        count++;
+      if (
+        b &&
+        b.currentStock > 0 &&
+        b.status !== 'quarantined' &&
+        b.status !== 'recalled' &&
+        b.status !== 'expired' &&
+        b.status !== 'depleted'
+      ) {
+        const candidate = evaluateBatchMarkdown(b, dynamicMarkdownConfig);
+        if (candidate) {
+          b.markdownDiscountPercent = candidate.discountPercent;
+          count++;
+        }
       }
     });
 
@@ -8252,6 +8757,12 @@ async function startServer() {
       return res.status(400).json({ error: 'SKU is required to generate an RTV Debit Note.' });
     }
 
+    if (qcInspectionId && vendorRtvList.some((r) => r.qcInspectionId === qcInspectionId)) {
+      return res.status(409).json({
+        error: `RTV Debit Note already issued for QC Inspection ${qcInspectionId}.`,
+      });
+    }
+
     const timestamp = new Date().toISOString();
     const seq = (vendorRtvList.length + 1).toString().padStart(4, '0');
     const rtvId = `RTV-2026-${seq}`;
@@ -8270,9 +8781,21 @@ async function startServer() {
     const ppnMasukanReversedIDR = taxCalc.ppnIDR;
     const totalDebitNoteIDR = subtotalReturnedIDR + ppnMasukanReversedIDR;
 
+    const matchingBatch =
+      inventoryBatches.find(
+        (b) => b.sku === sku && b.storeId === storeId && (b.lotNumber === lotNumber || b.status === 'quarantined')
+      ) ||
+      inventoryBatches.find(
+        (b) => b.sku === sku && (b.lotNumber === lotNumber || b.status === 'quarantined')
+      );
+    const wasQuarantined = matchingBatch?.status === 'quarantined';
+
     // Deduct stock from batch, tier, and catalog
     if (tier) {
       tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
+      if (wasQuarantined || qcInspectionId) {
+        tier.reservedStock = Math.max(0, Number((tier.reservedStock - qty).toFixed(2)));
+      }
       tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
       tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
       tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
@@ -8281,11 +8804,9 @@ async function startServer() {
     if (inv) {
       inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) - qty).toFixed(2)));
     }
-    const matchingBatch = inventoryBatches.find(
-      (b) => b.sku === sku && (b.lotNumber === lotNumber || b.status === 'quarantined')
-    );
     if (matchingBatch) {
       matchingBatch.currentStock = Math.max(0, Number((matchingBatch.currentStock - qty).toFixed(2)));
+      if (matchingBatch.currentStock === 0) matchingBatch.status = 'depleted';
       matchingBatch.notes = `Dispatched via RTV ${debitNoteNumber}`;
     }
 

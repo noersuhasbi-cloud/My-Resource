@@ -7,6 +7,7 @@ import type {
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { apiClient } from '../../services/apiClient';
+import { usePrint } from '../../context/PrintContext';
 import {
   Truck,
   FileText,
@@ -51,6 +52,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const { triggerPrint } = usePrint();
 
   // State for documents if not passed as props
   const [internalSjList, setInternalSjList] = useState<SuratJalanDocument[]>(propSjList || []);
@@ -111,7 +113,14 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
   if (!isOpen && !isStandalonePage) return null;
 
   const handlePrint = () => {
-    window.print();
+    triggerPrint({
+      type: 'logistics_doc',
+      format: 'a4',
+      activeTab,
+      selectedSj,
+      deliveryOrders,
+      shipments,
+    });
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -737,15 +746,20 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
       </div>
     );
 
-  if (isStandalonePage) {
-    return <div className="space-y-6">{content}</div>;
-  }
-
-  const modalNode = (
-    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      {content}
-    </div>
+  return isStandalonePage ? (
+    <div className="space-y-6">{content}</div>
+  ) : (
+    typeof document !== 'undefined'
+      ? createPortal(
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden">
+            {content}
+          </div>,
+          document.body
+        )
+      : (
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden">
+            {content}
+          </div>
+        )
   );
-
-  return typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode;
 };

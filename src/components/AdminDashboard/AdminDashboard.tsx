@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useDarkMode } from '../../context/DarkModeContext';
+import { usePrint } from '../../context/PrintContext';
 import type {
   StoreOperationalStatus,
   StoreOutletSchedule,
@@ -80,6 +82,7 @@ import {
   Droplets,
   Wind,
   LogOut,
+  Printer,
 } from 'lucide-react';
 
 import { FefoModule } from './FefoModule';
@@ -112,33 +115,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogout,
   onShowToast,
 }) => {
-  // Theme Toggle: Clean Light Mode (Default) & Dark Mode
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    try {
-      const saved = localStorage.getItem('grocemart_admin_theme');
-      if (saved === 'dark' || saved === 'light') return saved;
-    } catch {}
-    return 'light'; // Default clean light mode
-  });
-
-  const toggleTheme = () => {
-    const next = theme === 'light' ? 'dark' : 'light';
-    setTheme(next);
-    try {
-      localStorage.setItem('grocemart_admin_theme', next);
-    } catch {}
-  };
-
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    return () => {
-      document.documentElement.classList.remove('dark');
-    };
-  }, [theme]);
+  // Theme Toggle: Synchronized with global DarkModeContext
+  const { theme, toggleDarkMode: toggleTheme } = useDarkMode();
+  const { triggerPrint } = usePrint();
 
   const isLight = theme === 'light';
 
@@ -692,12 +671,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* 2. Main Content Wrapper with Dynamic Left Margin corresponding to Sidebar */}
       <div
         className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
-          isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'
+          isSidebarCollapsed ? 'lg:pl-20 print:pl-0' : 'lg:pl-64 print:pl-0'
         }`}
       >
         {/* Top Utility Header Bar */}
         <header
-          className={`${
+          className={`print:hidden ${
             isLight ? 'bg-white/95 border-slate-200 text-slate-900 shadow-xs' : 'bg-zinc-950/95 border-zinc-800 text-zinc-100'
           } backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-2.5 transition-colors duration-200`}
         >
@@ -832,6 +811,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               </button>
+
+              {/* Executive Dashboard PDF Report Export Button */}
+              {activeTab === 'overview' && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    triggerPrint({
+                      type: 'executive_report',
+                      format: 'a4',
+                      selectedGlobalStore,
+                      preparedBy: activeStaffSession?.userName,
+                      omzetData,
+                      inventoryMetrics,
+                    })
+                  }
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+                    isLight
+                      ? 'bg-[#0F4C3A] hover:bg-[#0b382b] border-[#0F4C3A] text-white shadow-2xs'
+                      : 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500 text-white shadow-2xs'
+                  }`}
+                  title="Print or Export Executive Dashboard as Clean A4 PDF Report"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print PDF Report</span>
+                </button>
+              )}
 
               {/* Refresh Sync Button */}
               <button

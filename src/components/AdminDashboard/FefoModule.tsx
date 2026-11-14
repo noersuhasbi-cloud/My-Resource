@@ -13,6 +13,7 @@ import {
   evaluateBatchMarkdown,
   DEFAULT_MARKDOWN_CONFIG,
 } from '../../utils/groceryEngine.ts';
+import { usePrint } from '../../context/PrintContext';
 import {
   Calendar,
   AlertTriangle,
@@ -54,6 +55,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
   onShowToast,
 }) => {
   // View Switcher: Standard FEFO Batches vs Dynamic Markdown Engine
+  const { triggerPrint } = usePrint();
   const [activeTab, setActiveTab] = useState<'batches' | 'markdown_engine'>('batches');
 
   const [batches, setBatches] = useState<InventoryBatch[]>([]);
@@ -1085,7 +1087,13 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
               </button>
               <button
                 onClick={() => {
-                  onShowToast('Sticker Printed', `Thermal clearance tag queued for Batch #${selectedBatchForSticker.batchId}`);
+                  const candidate = selectedBatchForSticker;
+                  triggerPrint({
+                    type: 'clearance_sticker',
+                    format: 'label50x30',
+                    candidate,
+                  });
+                  onShowToast('Sticker Printed', `Thermal clearance tag queued for Batch #${candidate.batchId}`);
                   setSelectedBatchForSticker(null);
                 }}
                 className="px-4 py-1.5 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"

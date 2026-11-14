@@ -12,6 +12,7 @@ import type {
 import { formatIDR } from '../utils/formatters';
 import { getOdooSkuProfile } from '../utils/inventoryOdooHelper';
 import { apiClient } from '../services/apiClient';
+import { usePrint } from '../context/PrintContext';
 import {
   Building2,
   CreditCard,
@@ -78,6 +79,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
   b2bOrders: propB2bOrders,
   onUpdateB2bOrders,
 }) => {
+  const { triggerPrint } = usePrint();
   // 1. Data State (synced with parent if supplied, fallback to local fetch)
   const [internalCustomers, setInternalCustomers] = useState<B2BCustomer[]>([]);
   const customers = propCustomers && propCustomers.length > 0 ? propCustomers : internalCustomers;
@@ -1344,7 +1346,13 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
               <div className="pt-2 flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() =>
+                    triggerPrint({
+                      type: 'b2b_invoice',
+                      format: 'a4',
+                      order: activeReceiptOrder,
+                    })
+                  }
                   className="flex-1 py-2.5 rounded-xl border border-stone-300 dark:border-zinc-700 text-xs font-bold hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />

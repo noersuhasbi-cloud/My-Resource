@@ -22,7 +22,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           {/* Left Text Column */}
           <div className="lg:col-span-6 flex flex-col justify-center">
             {/* Clean Unboxed Kicker (No Pill Badges) */}
-            <div className="text-xs font-semibold text-emerald-800 tracking-wider uppercase mb-3 flex items-center gap-2">
+            <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 tracking-wider uppercase mb-3 flex items-center gap-2">
               <span>PT Bumi Retail Sejahtera</span>
               <span aria-hidden="true">·</span>
               <span>Indonesian Grocery Chain</span>
@@ -30,11 +30,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <span>Established 1998</span>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-stone-900 leading-[1.15] font-display text-balance">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-stone-900 dark:text-stone-100 leading-[1.15] font-display text-balance">
               Harvest Freshness from Local Soil to Your Neighborhood Table
             </h1>
 
-            <p className="mt-5 text-base sm:text-lg text-stone-600 leading-relaxed text-pretty">
+            <p className="mt-5 text-base sm:text-lg text-stone-600 dark:text-stone-300 leading-relaxed text-pretty">
               Connecting 450+ Indonesian family farms directly to 34 modern supermarkets across Java, Bali, and Sumatra. Experience artisan bakeries, certified butcheries, and crisp hydroponic produce—available in-store or delivered to your door with instant QRIS checkout.
             </p>
 
@@ -42,21 +42,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <button
                 onClick={onNavigateToCatalog}
-                className="px-6 py-3.5 text-sm font-semibold text-white bg-emerald-800 hover:bg-emerald-900 rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer"
+                className="px-6 py-3.5 text-sm font-semibold text-white bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer"
               >
                 <span>Shop Online Catalog</span>
                 <ArrowRight className="w-4 h-4 text-amber-300" />
               </button>
               <button
                 onClick={onNavigateToStores}
-                className="px-6 py-3.5 text-sm font-semibold text-stone-800 bg-white hover:bg-stone-100 border border-stone-300 rounded-lg transition-all flex items-center gap-2 cursor-pointer"
+                className="px-6 py-3.5 text-sm font-semibold text-stone-800 dark:text-stone-100 bg-white dark:bg-stone-900 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-lg transition-all flex items-center gap-2 cursor-pointer"
               >
-                <Store className="w-4 h-4 text-emerald-800" />
+                <Store className="w-4 h-4 text-emerald-800 dark:text-emerald-400" />
                 <span>Explore 34 Store Locations</span>
               </button>
               <button
                 onClick={onNavigateToStory}
-                className="text-xs sm:text-sm font-medium text-stone-600 hover:text-emerald-800 underline underline-offset-4 transition-colors cursor-pointer"
+                className="text-xs sm:text-sm font-medium text-stone-600 dark:text-stone-400 hover:text-emerald-800 dark:hover:text-emerald-400 underline underline-offset-4 transition-colors cursor-pointer"
               >
                 Read 28-Year Heritage
               </button>
@@ -65,7 +65,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
           {/* Right Showcase Image Card */}
           <div className="lg:col-span-6">
-            <div className="relative rounded-2xl overflow-hidden border border-stone-200/80 shadow-md bg-stone-100 aspect-16/10">
+            <div className="relative rounded-2xl overflow-hidden border border-stone-200/80 dark:border-stone-800 shadow-md bg-stone-100 dark:bg-stone-900 aspect-16/10">
               <SafeImage
                 src={heroStoreImg}
                 fallbackSrc="/images/hero_grocemart_store_1791623358669.jpg"
@@ -89,39 +89,39 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         </div>
 
         {/* Adjacency Proof Row (Full-width 4-column strip below hero) */}
-        <div className="mt-14 pt-8 border-t border-stone-200 grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="mt-14 pt-8 border-t border-stone-200 dark:border-stone-800 grid grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="space-y-1">
-            <p className="text-2xl sm:text-3xl font-bold text-stone-900 font-display tabular-nums">
+            <p className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-100 font-display tabular-nums">
               34 Outlets
             </p>
-            <p className="text-xs sm:text-sm text-stone-600">
+            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400">
               Across Greater Jakarta, Bandung, Surabaya, Bali, Medan & Yogya
             </p>
           </div>
 
           <div className="space-y-1">
-            <p className="text-2xl sm:text-3xl font-bold text-stone-900 font-display tabular-nums">
+            <p className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-100 font-display tabular-nums">
               450+ Farms
             </p>
-            <p className="text-xs sm:text-sm text-stone-600">
+            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400">
               Contracted partner cooperatives in Lembang, Bedugul & Ciwidey
             </p>
           </div>
 
           <div className="space-y-1">
-            <p className="text-2xl sm:text-3xl font-bold text-stone-900 font-display tabular-nums">
+            <p className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-100 font-display tabular-nums">
               &lt; 12 Hours
             </p>
-            <p className="text-xs sm:text-sm text-stone-600">
+            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400">
               Average harvest-to-shelf duration via proprietary 4°C cold chain
             </p>
           </div>
 
           <div className="space-y-1">
-            <p className="text-2xl sm:text-3xl font-bold text-stone-900 font-display tabular-nums">
+            <p className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-100 font-display tabular-nums">
               Instant QRIS
             </p>
-            <p className="text-xs sm:text-sm text-stone-600">
+            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400">
               Zero-fee cashless checkout with 1-hour doorstep express delivery
             </p>
           </div>

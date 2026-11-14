@@ -128,11 +128,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     <div className="flex flex-col h-full select-none">
       {/* Brand Header */}
       <div
-        className={`h-16 flex items-center justify-between px-4 border-b flex-shrink-0 transition-colors ${
+        className={`border-b flex-shrink-0 transition-colors ${
+          isCollapsed
+            ? 'py-3 px-2 flex flex-col items-center justify-center gap-2'
+            : 'h-16 flex items-center justify-between px-4'
+        } ${
           isLight ? 'border-slate-200 bg-white' : 'border-zinc-800 bg-zinc-950'
         }`}
       >
-        <div className="flex items-center gap-3 overflow-hidden">
+        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 overflow-hidden'}`}>
           <div className="w-9 h-9 rounded-xl bg-[#0F4C3A] flex items-center justify-center shadow-md shadow-[#0F4C3A]/25 text-white font-extrabold text-sm tracking-wider flex-shrink-0">
             GM
           </div>
@@ -153,11 +157,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           )}
         </div>
 
-        {/* Desktop Collapse Button */}
+        {/* Desktop Collapse / Expand Button */}
         <button
           onClick={onToggleCollapse}
           title={isCollapsed ? 'Expand Sidebar (Ctrl+B)' : 'Collapse Sidebar (Ctrl+B)'}
-          className={`hidden lg:flex p-1.5 rounded-lg border text-xs transition-colors items-center justify-center ${
+          className={`hidden lg:flex items-center justify-center rounded-lg border text-xs transition-colors shrink-0 cursor-pointer ${
+            isCollapsed ? 'w-9 h-7' : 'p-1.5'
+          } ${
             isLight
               ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
               : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300'
@@ -178,7 +184,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </div>
 
       {/* Navigation Scrollable Body */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-zinc-800">
+      <nav
+        className={`flex-1 overflow-y-auto overflow-x-hidden ${
+          isCollapsed
+            ? 'no-scrollbar px-2 py-3 pb-4 space-y-2.5'
+            : 'px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-zinc-800'
+        }`}
+      >
         {/* SECTION 1: CORE OPERATIONS */}
         <div>
           {!isCollapsed && (
@@ -194,7 +206,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('overview')}
               title={isCollapsed ? 'Executive Dashboard' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'overview'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -207,7 +223,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <span className="truncate flex-1 text-left">Executive Dashboard</span>
               )}
               {isCollapsed && activeTab === 'overview' && (
-                <span className="absolute right-1 top-2 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
               )}
             </button>
 
@@ -215,7 +231,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('pos')}
               title={isCollapsed ? 'POS / Cashier Station' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'pos'
                   ? 'bg-emerald-700 text-white shadow-sm font-bold'
                   : isLight
@@ -239,7 +259,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
               {isCollapsed && activeTab === 'pos' && (
-                <span className="absolute right-1 top-2 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
               )}
             </button>
 
@@ -247,7 +267,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('operations')}
               title={isCollapsed ? 'Store & Outlet Management' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'operations'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -273,7 +297,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
               {isCollapsed && emergencyClosedCount > 0 && (
-                <span className="absolute right-1 top-2 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 text-[10px] font-bold rounded-full flex items-center justify-center bg-amber-400 text-zinc-950 ring-2 ring-white dark:ring-zinc-950">
+                  {emergencyClosedCount}
+                </span>
               )}
             </button>
 
@@ -281,7 +307,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('inventory')}
               title={isCollapsed ? 'Inventory & Multi-Warehouse' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'inventory'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -307,7 +337,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </>
               )}
               {isCollapsed && lowStockCount > 0 && (
-                <span className="absolute right-1 top-2 w-2 h-2 rounded-full bg-amber-400" />
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 text-[10px] font-bold rounded-full flex items-center justify-center bg-amber-400 text-zinc-950 ring-2 ring-white dark:ring-zinc-950">
+                  {lowStockCount}
+                </span>
               )}
             </button>
           </div>
@@ -328,7 +360,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('fefo')}
               title={isCollapsed ? 'FEFO & Batch Traceability' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'fefo'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -357,7 +393,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('waste')}
               title={isCollapsed ? 'Waste & Shrinkage Management' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'waste'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -386,7 +426,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('picker')}
               title={isCollapsed ? 'Fulfillment & Catch Weight' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'picker'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -404,7 +448,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('procurement')}
               title={isCollapsed ? 'Procurement & Supply Chain' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'procurement'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -429,13 +477,22 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   )}
                 </>
               )}
+              {isCollapsed && partialPoCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 text-[10px] font-bold rounded-full flex items-center justify-center bg-sky-400 text-zinc-950 ring-2 ring-white dark:ring-zinc-950">
+                  {partialPoCount}
+                </span>
+              )}
             </button>
 
             {/* 7A. Inventory QC & Spoilage Inspections */}
             <button
               onClick={() => handleTabClick('qc')}
               title={isCollapsed ? 'Quality Control (QC) & Spoilage Inspections' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'qc'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -464,7 +521,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('logistics')}
               title={isCollapsed ? 'Logistics & Shipping Documents (Surat Jalan)' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'logistics'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -493,7 +554,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('transfers')}
               title={isCollapsed ? 'Inter-Warehouse Stock Transfers' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'transfers'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -511,7 +576,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('approvals')}
               title={isCollapsed ? 'Approval Matrix & Authorization Queue' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'approvals'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -540,7 +609,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('reports')}
               title={isCollapsed ? 'Grocery Analytics & FIFO Aging Reports' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'reports'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -569,7 +642,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('settings')}
               title={isCollapsed ? 'Enterprise Settings Hub' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'settings'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -615,7 +692,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               </span>
             </div>
           ) : (
-            <div className="border-t border-slate-200 dark:border-zinc-800 my-2" />
+            <div className="border-t border-slate-200 dark:border-zinc-800 my-2 mx-2" />
           )}
 
           <div className="space-y-1">
@@ -627,7 +704,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 if (!isFinanceMenuOpen) onToggleFinanceMenu();
               }}
               title={isCollapsed ? 'Finance & Core Accounting' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'accounting'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -762,7 +843,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               </span>
             </div>
           ) : (
-            <div className="border-t border-slate-200 dark:border-zinc-800 my-2" />
+            <div className="border-t border-slate-200 dark:border-zinc-800 my-2 mx-2" />
           )}
 
           <div className="space-y-1">
@@ -770,7 +851,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('rbac')}
               title={isCollapsed ? 'Roles & Shifts (RBAC)' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'rbac'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -799,7 +884,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('audit')}
               title={isCollapsed ? 'Security & Audit Logs' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'audit'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -817,7 +906,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('openapi')}
               title={isCollapsed ? 'QRIS Open API Specifications' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'openapi'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -835,7 +928,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={() => handleTabClick('erd')}
               title={isCollapsed ? 'ERD & Technical Specs' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group relative ${
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
                 activeTab === 'erd'
                   ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
                   : isLight
@@ -865,15 +962,19 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
       {/* Footer / Storefront Exit Link */}
       <div
-        className={`p-3 border-t flex-shrink-0 transition-colors ${
-          isLight ? 'border-slate-200 bg-slate-50/70' : 'border-zinc-800 bg-zinc-950/80'
+        className={`p-3 border-t border-slate-200 dark:border-zinc-800 flex-shrink-0 transition-colors ${
+          isLight ? 'bg-slate-50/70' : 'bg-zinc-950/80'
         }`}
       >
         <div className="space-y-1.5">
           <button
             onClick={onCloseToStorefront}
             title={isCollapsed ? 'Back to Customer Storefront' : undefined}
-            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            className={`${
+              isCollapsed
+                ? 'w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                : 'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl'
+            } text-xs font-semibold transition-all cursor-pointer ${
               isLight
                 ? 'bg-white hover:bg-slate-100 border border-slate-200 text-gray-800 shadow-2xs'
                 : 'bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200'
@@ -887,13 +988,17 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <button
               onClick={onLogout}
               title={isCollapsed ? 'Lock ERP / Sign Out' : undefined}
-              className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`${
+                isCollapsed
+                  ? 'w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl'
+              } text-xs font-semibold transition-all cursor-pointer ${
                 isLight
                   ? 'bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 shadow-2xs'
-                  : 'bg-red-950/40 hover:bg-red-900/50 border border-red-800/40 text-red-300'
+                  : 'bg-rose-950/30 hover:bg-rose-900/50 border border-rose-900/50 text-rose-400'
               }`}
             >
-              <LogOut className="w-4 h-4 text-red-500 shrink-0" />
+              <LogOut className={`w-4 h-4 shrink-0 ${isLight ? 'text-red-500' : 'text-rose-400'}`} />
               {!isCollapsed && <span className="truncate">Lock / Sign Out</span>}
             </button>
           )}
@@ -906,7 +1011,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     <>
       {/* Desktop Persistent Sidebar (Collapsible: 64px icon rail vs 260px expanded) */}
       <aside
-        className={`hidden lg:block fixed inset-y-0 left-0 z-40 transition-all duration-300 ease-in-out border-r ${
+        className={`hidden lg:block print:hidden fixed inset-y-0 left-0 z-40 transition-all duration-300 ease-in-out border-r ${
           isCollapsed ? 'w-20' : 'w-64'
         } ${
           isLight
@@ -920,7 +1025,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       {/* Mobile Off-Canvas Drawer Backdrop */}
       {isMobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs transition-opacity animate-fadeIn"
+          className="lg:hidden print:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs transition-opacity animate-fadeIn"
           onClick={onCloseMobile}
           aria-hidden="true"
         />
@@ -928,7 +1033,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
       {/* Mobile Off-Canvas Sidebar Drawer */}
       <div
-        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] transition-transform duration-300 ease-in-out shadow-2xl ${
+        className={`lg:hidden print:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] transition-transform duration-300 ease-in-out shadow-2xl ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         } ${
           isLight ? 'bg-white border-r border-slate-200' : 'bg-zinc-950 border-r border-zinc-800'

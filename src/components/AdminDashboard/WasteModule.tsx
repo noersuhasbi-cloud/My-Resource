@@ -13,6 +13,7 @@ import type {
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import { generateRmaNumber } from '../../utils/groceryEngine.ts';
+import { usePrint } from '../../context/PrintContext';
 import {
   Trash2,
   AlertOctagon,
@@ -54,6 +55,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
   inventory,
   onShowToast,
 }) => {
+  const { triggerPrint } = usePrint();
   // Navigation View: Standard Scrap vs RTV Claims vs Natural Moisture Loss
   const [activeView, setActiveView] = useState<'spoilage' | 'rtv' | 'natural_shrinkage'>('spoilage');
 
@@ -167,10 +169,40 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
           `Created Credit Note ${rtvRes.creditNote.creditNoteId} (RMA: ${rmaNum}) for ${formatIDR(calculatedLoss)} against ${modalSupplierName}. Available to offset future vendor bills.`
         );
       } else if (modalDisposition === 'customer_return_restock') {
-        // Customer Return Restock Workflow
+        // Customer Return Restock Workflow: Restock Available ATP & post GL reversal via RMA endpoint
+        const storeNameLookup: Record<string, string> = {
+          'store-jkt-senopati': 'GroceMart Senopati Flagship',
+          'store-jkt-pik': 'GroceMart PIK 2 The Avenue',
+          'store-jkt-menteng': 'GroceMart Menteng Heritage',
+          'store-bdg-dago': 'GroceMart Dago Green Market',
+          'store-sby-gubeng': 'GroceMart Gubeng Central Hub',
+          'store-bali-canggu': 'GroceMart Batu Bolong Organic',
+        };
+        const rmaRes = await apiClient.createComplianceRma({
+          sourceChannel: 'POS',
+          sourceReferenceId: `RESTOCK-${Date.now().toString().slice(-6)}`,
+          storeId: modalStoreId,
+          storeName: storeNameLookup[modalStoreId] || 'GroceMart Senopati Flagship',
+          customerName: 'Store Counter Customer Return',
+          refundMethod: 'STORE_CREDIT',
+          items: [
+            {
+              sku: modalSku,
+              productName: selectedItem?.productName || modalSku,
+              category: selectedItem?.category,
+              quantity: modalQty,
+              unitPriceIDR: selectedItem?.sellingPrice || selectedItem?.unitCost || 0,
+              unitCostIDR: selectedItem?.unitCost || 0,
+              disposition: 'RESTOCK_ATP',
+              reason: modalNotes || 'Returned in sealed, sellable cold-chain condition.',
+            },
+          ],
+          notes: modalNotes || `Customer return restock logged via Waste & Shrinkage module (${modalQty} units).`,
+        });
+
         onShowToast(
           'Customer Return Restocked',
-          `Restocked ${modalQty} units of ${selectedItem?.productName || modalSku} back to store inventory. Inventory asset credited.`
+          `Restocked ${modalQty} units of ${selectedItem?.productName || modalSku} back to store inventory (${rmaRes.rma.notaReturNumber}). Inventory asset debited #1040.`
         );
       } else {
         // Unsalvageable Scrap Workflow: Route to waste cages/bio-compost
@@ -1677,7 +1709,11 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    window.print();
+                    triggerPrint({
+                      type: 'waste_rma_slip',
+                      format: 'a4',
+                      rma: selectedRmaForDetail,
+                    });
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-800 font-semibold"
                 >

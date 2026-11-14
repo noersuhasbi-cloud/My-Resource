@@ -12,6 +12,7 @@ import type {
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { apiClient } from '../../services/apiClient';
+import { usePrint } from '../../context/PrintContext';
 import {
   FileText,
   Search,
@@ -73,6 +74,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   initialPreselectedGrId,
 }) => {
   const isLight = theme === 'light';
+  const { triggerPrint } = usePrint();
 
   // State Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -1318,7 +1320,13 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() =>
+                    triggerPrint({
+                      type: 'vendor_bill',
+                      format: 'a4',
+                      bill: selectedBillForDetail,
+                    })
+                  }
                   className={`p-1.5 rounded-lg border text-xs flex items-center gap-1 ${
                     isLight ? 'bg-white border-gray-300 hover:bg-gray-100' : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700'
                   }`}

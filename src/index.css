@@ -69,3 +69,101 @@ button, input, select, textarea {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(120, 113, 108, 0.85);
 }
+
+/* Hide scrollbar cleanly for narrow collapsed navigation rail */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ========================================================================= */
+/* PRECISION PDF & THERMAL PRINT ISOLATION ARCHITECTURE                      */
+/* ========================================================================= */
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
+
+@page thermal80 {
+  size: 80mm auto;
+  margin: 3mm;
+}
+
+@page label50x30 {
+  size: 50mm 30mm;
+  margin: 1.5mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Isolate #printable-document-root whenever it holds an active print document */
+  body:has(#printable-document-root:not(:empty)) > *:not(#printable-document-root) {
+    display: none !important;
+  }
+
+  #printable-document-root {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  #printable-document-root:empty {
+    display: none !important;
+  }
+
+  .print-page-a4,
+  #grocery-analytics-print-sheet {
+    page: auto;
+    width: 100%;
+    max-width: 182mm;
+    margin: 0 auto;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-page-thermal80 {
+    page: thermal80;
+    width: 74mm;
+    max-width: 74mm;
+    margin: 0 auto;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .print-page-label50x30 {
+    page: label50x30;
+    width: 47mm;
+    height: 27mm;
+    max-width: 47mm;
+    margin: 0 auto;
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .print-page-label50x30:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+}

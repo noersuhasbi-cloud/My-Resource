@@ -41,10 +41,12 @@ import {
   UserCheck,
   RotateCcw,
   FileCode2,
+  Printer,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { VendorBillModule } from './VendorBillModule';
 import { ComplianceAccountingPanels } from './ComplianceAccountingPanels';
+import { usePrint } from '../../context/PrintContext';
 
 const FX_RATES: Record<SupportedCurrency, { symbol: string; rate: number; label: string }> = {
   IDR: { symbol: 'Rp', rate: 1, label: 'IDR (Base)' },
@@ -89,6 +91,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   onSubTabChange,
 }) => {
   const isLight = theme === 'light';
+  const { triggerPrint } = usePrint();
 
   // Multi-Currency Selection (Module 4)
   const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>('IDR');
@@ -307,6 +310,39 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 <option value="store-bali-canggu">Batu Bolong Organic Hub (Bali)</option>
               </select>
             </div>
+
+            {!complianceSubView && (
+              <button
+                type="button"
+                onClick={() =>
+                  triggerPrint({
+                    type: 'accounting_statement',
+                    format: 'a4',
+                    subTab,
+                    selectedStore,
+                    selectedCurrency,
+                    fxRate: FX_RATES[selectedCurrency].rate,
+                    fxSymbol: FX_RATES[selectedCurrency].symbol,
+                    pnlReport,
+                    balanceSheet,
+                    cashFlow,
+                    filteredLedger,
+                    filteredCOA,
+                    b2bCustomers,
+                    giroRecords,
+                  })
+                }
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                  isLight
+                    ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                }`}
+                title="Print Financial Statement (A4)"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Statement</span>
+              </button>
+            )}
 
             <button
               onClick={onRefreshData}

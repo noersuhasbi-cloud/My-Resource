@@ -565,7 +565,7 @@ export default function App() {
 
   // 3. PUBLIC CUSTOMER STOREFRONT
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans selection:bg-emerald-800 selection:text-white">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans selection:bg-emerald-800 selection:text-white transition-colors duration-200">
       {/* Top Navigation - Customer only, completely removed Admin HQ shortcut */}
       <Header
         cartItems={cartItems}

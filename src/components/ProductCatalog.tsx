@@ -80,18 +80,18 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
   };
 
   return (
-    <section id="catalog" className="py-14 sm:py-24 bg-stone-50 border-t border-stone-200">
+    <section id="catalog" className="py-14 sm:py-24 bg-stone-50 dark:bg-stone-950 border-t border-stone-200 dark:border-stone-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-stone-200">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-stone-200 dark:border-stone-800">
           <div>
-            <div className="text-xs font-semibold text-emerald-800 tracking-wider uppercase mb-1">
+            <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 tracking-wider uppercase mb-1">
               Online Grocery Order & Fulfillment
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-stone-900 font-display">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-stone-900 dark:text-stone-100 font-display">
               Artisan Groceries & Daily Farm Harvest
             </h2>
-            <p className="mt-1 text-xs sm:text-sm text-stone-600">
+            <p className="mt-1 text-xs sm:text-sm text-stone-600 dark:text-stone-400">
               {selectedStore
                 ? `Browsing fresh inventory fulfilled from ${selectedStore.name}`
                 : 'Selected for 1-hour chilled express delivery or neighborhood store pickup'}
@@ -107,14 +107,14 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search groceries, farms..."
-                className="w-full pl-9 pr-3 py-2 bg-white border border-stone-200 rounded-xl text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-800/20 focus:border-emerald-800 transition-all"
+                className="w-full pl-9 pr-3 py-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl text-xs sm:text-sm text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-800/20 focus:border-emerald-800 dark:focus:border-emerald-500 transition-all"
               />
             </div>
 
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="py-2 px-3 bg-white border border-stone-200 rounded-xl text-xs font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-800/20 transition-all"
+              className="py-2 px-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl text-xs font-medium text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-800/20 transition-all"
             >
               <option value="featured">Sort: Featured</option>
               <option value="price-asc">Price: Low to High</option>
@@ -127,7 +127,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
         {/* Category Tabs & Filter Toggles */}
         <div className="mt-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Interactive Category Segmented Control */}
-          <div className="flex items-center gap-1.5 p-1 bg-stone-200/70 rounded-xl overflow-x-auto pb-1 sm:pb-1">
+          <div className="flex items-center gap-1.5 p-1 bg-stone-200/70 dark:bg-stone-900 rounded-xl overflow-x-auto pb-1 sm:pb-1 border border-transparent dark:border-stone-800">
             {categories.map((cat) => {
               const isSelected = selectedCategory === cat.id;
               return (
@@ -136,8 +136,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                   onClick={() => setSelectedCategory(cat.id)}
                   className={`px-3 sm:px-4 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap shrink-0 cursor-pointer min-h-[38px] ${
                     isSelected
-                      ? 'bg-white text-stone-900 shadow-xs'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-white/40'
+                      ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-white/40 dark:hover:bg-stone-800/50'
                   }`}
                 >
                   {cat.label}
@@ -152,8 +152,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
               onClick={() => setFilterOrganicOnly(!filterOrganicOnly)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer min-h-[36px] ${
                 filterOrganicOnly
-                  ? 'bg-emerald-800 text-white border-emerald-800'
-                  : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
+                  ? 'bg-emerald-800 dark:bg-emerald-700 text-white border-emerald-800 dark:border-emerald-700'
+                  : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800'
               }`}
             >
               Organic Only
@@ -162,8 +162,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
               onClick={() => setFilterFarmDirectOnly(!filterFarmDirectOnly)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer min-h-[36px] ${
                 filterFarmDirectOnly
-                  ? 'bg-emerald-800 text-white border-emerald-800'
-                  : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
+                  ? 'bg-emerald-800 dark:bg-emerald-700 text-white border-emerald-800 dark:border-emerald-700'
+                  : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800'
               }`}
             >
               Farm Direct Only
@@ -179,11 +179,11 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
             return (
               <div
                 key={product.id}
-                className="group bg-white rounded-2xl border border-stone-200 overflow-hidden hover:border-stone-300 hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
+                className="group bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden hover:border-stone-300 dark:hover:border-stone-700 hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between"
               >
                 <div>
                   {/* Product Image Slot with SafeImage Fallback */}
-                  <div className="relative aspect-4/3 bg-stone-100 overflow-hidden">
+                  <div className="relative aspect-4/3 bg-stone-100 dark:bg-stone-800 overflow-hidden">
                     <SafeImage
                       src={product.image}
                       alt={product.name}
@@ -195,7 +195,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                     {/* Quick view button */}
                     <button
                       onClick={() => setQuickViewProduct(product)}
-                      className="absolute top-2 right-2 sm:top-3 sm:right-3 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/90 backdrop-blur-xs text-stone-700 hover:text-emerald-800 hover:bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-xs cursor-pointer z-10"
+                      className="absolute top-2 right-2 sm:top-3 sm:right-3 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-xs text-stone-700 dark:text-stone-200 hover:text-emerald-800 dark:hover:text-emerald-400 hover:bg-white dark:hover:bg-stone-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-xs cursor-pointer z-10"
                       title="Quick View Details"
                     >
                       <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -211,32 +211,32 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
 
                   {/* Product Metadata */}
                   <div className="p-3 sm:p-5">
-                    <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-stone-500 font-medium mb-1">
+                    <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium mb-1">
                       <span className="truncate">{product.categoryLabel}</span>
                       <span aria-hidden="true">·</span>
                       <span className="truncate max-w-[90px] sm:max-w-[130px]">{product.origin}</span>
                     </div>
 
-                    <h3 className="text-xs sm:text-base font-bold text-stone-900 group-hover:text-emerald-800 transition-colors line-clamp-2 leading-snug">
+                    <h3 className="text-xs sm:text-base font-bold text-stone-900 dark:text-stone-100 group-hover:text-emerald-800 dark:group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">
                       {product.name}
                     </h3>
 
                     <div className="mt-2 flex items-center justify-between text-[10px] sm:text-xs">
-                      <div className="flex items-center gap-1 text-amber-700 font-medium">
+                      <div className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
                         <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                         <span className="tabular-nums font-mono">{product.rating}</span>
                       </div>
-                      <span className="text-stone-500 truncate max-w-[80px]">{product.unit}</span>
+                      <span className="text-stone-500 dark:text-stone-400 truncate max-w-[80px]">{product.unit}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Pricing & Add To Cart Module */}
                 <div className="p-3 sm:p-5 pt-0">
-                  <div className="pt-2 sm:pt-3 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+                  <div className="pt-2 sm:pt-3 border-t border-stone-100 dark:border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
                     <div>
                       <span className="text-[10px] text-stone-400 block font-normal sm:hidden">Price</span>
-                      <span className="text-xs sm:text-base font-bold text-stone-900 font-mono tabular-nums">
+                      <span className="text-xs sm:text-base font-bold text-stone-900 dark:text-stone-100 font-mono tabular-nums">
                         {formatIDR(product.price)}
                       </span>
                     </div>
@@ -244,25 +244,25 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                     {quantityInCart === 0 ? (
                       <button
                         onClick={() => handleAddWithFeedback(product)}
-                        className="w-full sm:w-auto py-1.5 sm:py-2 px-2.5 sm:px-3.5 bg-emerald-800 hover:bg-emerald-900 active:scale-95 text-white text-[11px] sm:text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer min-h-[34px]"
+                        className="w-full sm:w-auto py-1.5 sm:py-2 px-2.5 sm:px-3.5 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 active:scale-95 text-white text-[11px] sm:text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer min-h-[34px]"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add</span>
                       </button>
                     ) : (
-                      <div className="flex items-center justify-between sm:justify-start gap-1 sm:gap-2 bg-stone-100 rounded-lg p-0.5 sm:p-1 border border-stone-200">
+                      <div className="flex items-center justify-between sm:justify-start gap-1 sm:gap-2 bg-stone-100 dark:bg-stone-800 rounded-lg p-0.5 sm:p-1 border border-stone-200 dark:border-stone-700">
                         <button
                           onClick={() => onUpdateQuantity(product.id, quantityInCart - 1)}
-                          className="w-6 h-6 rounded flex items-center justify-center text-stone-700 hover:bg-white transition-colors cursor-pointer"
+                          className="w-6 h-6 rounded flex items-center justify-center text-stone-700 dark:text-stone-200 hover:bg-white dark:hover:bg-stone-700 transition-colors cursor-pointer"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className="font-mono text-xs font-bold text-stone-900 px-1 tabular-nums">
+                        <span className="font-mono text-xs font-bold text-stone-900 dark:text-stone-100 px-1 tabular-nums">
                           {quantityInCart}
                         </span>
                         <button
                           onClick={() => handleAddWithFeedback(product)}
-                          className="w-6 h-6 rounded flex items-center justify-center text-stone-700 hover:bg-white transition-colors cursor-pointer"
+                          className="w-6 h-6 rounded flex items-center justify-center text-stone-700 dark:text-stone-200 hover:bg-white dark:hover:bg-stone-700 transition-colors cursor-pointer"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
@@ -276,10 +276,10 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
         </div>
 
         {filteredProducts.length === 0 && (
-          <div className="text-center py-16 bg-white rounded-2xl border border-stone-200 mt-6">
+          <div className="text-center py-16 bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 mt-6">
             <ShoppingBag className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-            <p className="text-stone-900 font-semibold text-sm">No Products Found</p>
-            <p className="text-stone-500 text-xs mt-1">
+            <p className="text-stone-900 dark:text-stone-100 font-semibold text-sm">No Products Found</p>
+            <p className="text-stone-500 dark:text-stone-400 text-xs mt-1">
               Try clearing your search keyword or relaxing filters.
             </p>
             <button
@@ -289,7 +289,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                 setFilterOrganicOnly(false);
                 setFilterFarmDirectOnly(false);
               }}
-              className="mt-4 px-4 py-2 bg-stone-900 text-white rounded-lg text-xs font-semibold"
+              className="mt-4 px-4 py-2 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-lg text-xs font-semibold"
             >
               Reset Filters
             </button>
@@ -300,16 +300,16 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
       {/* Product Quick View Modal */}
       {quickViewProduct && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-stone-200 relative animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] my-auto overflow-y-auto">
+          <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-xl w-full p-6 shadow-xl border border-stone-200 dark:border-stone-800 relative animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] my-auto overflow-y-auto">
             <button
               onClick={() => setQuickViewProduct(null)}
-              className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100 transition-colors"
+              className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
-              <div className="rounded-xl overflow-hidden aspect-square bg-stone-100 border border-stone-200">
+              <div className="rounded-xl overflow-hidden aspect-square bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700">
                 <SafeImage
                   src={quickViewProduct.image}
                   alt={quickViewProduct.name}
@@ -320,27 +320,27 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center gap-2 text-xs text-stone-500 font-medium mb-1">
+                <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-medium mb-1">
                   <span>{quickViewProduct.categoryLabel}</span>
                   <span aria-hidden="true">·</span>
                   <span>{quickViewProduct.origin}</span>
                 </div>
 
-                <h3 className="text-xl font-bold text-stone-900 font-display">
+                <h3 className="text-xl font-bold text-stone-900 dark:text-stone-100 font-display">
                   {quickViewProduct.name}
                 </h3>
 
-                <p className="mt-2 text-lg font-bold text-emerald-900 font-mono tabular-nums">
-                  {formatIDR(quickViewProduct.price)} <span className="text-xs font-normal text-stone-500">/ {quickViewProduct.unit}</span>
+                <p className="mt-2 text-lg font-bold text-emerald-900 dark:text-emerald-400 font-mono tabular-nums">
+                  {formatIDR(quickViewProduct.price)} <span className="text-xs font-normal text-stone-500 dark:text-stone-400">/ {quickViewProduct.unit}</span>
                 </p>
 
-                <p className="mt-3 text-xs text-stone-600 leading-relaxed">
+                <p className="mt-3 text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
                   {quickViewProduct.description}
                 </p>
 
                 {quickViewProduct.storageTip && (
-                  <div className="mt-4 p-3 bg-stone-50 rounded-lg border border-stone-100 text-xs text-stone-600">
-                    <span className="font-semibold text-stone-800">Storage Tip: </span>
+                  <div className="mt-4 p-3 bg-stone-50 dark:bg-stone-800/80 rounded-lg border border-stone-100 dark:border-stone-700 text-xs text-stone-600 dark:text-stone-300">
+                    <span className="font-semibold text-stone-800 dark:text-stone-100">Storage Tip: </span>
                     {quickViewProduct.storageTip}
                   </div>
                 )}
@@ -348,8 +348,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                 {quickViewProduct.nutritionHighlights && (
                   <div className="mt-3 space-y-1">
                     {quickViewProduct.nutritionHighlights.map((n) => (
-                      <div key={n} className="flex items-center gap-1.5 text-xs text-stone-600">
-                        <Check className="w-3.5 h-3.5 text-emerald-800 shrink-0" />
+                      <div key={n} className="flex items-center gap-1.5 text-xs text-stone-600 dark:text-stone-300">
+                        <Check className="w-3.5 h-3.5 text-emerald-800 dark:text-emerald-400 shrink-0" />
                         <span>{n}</span>
                       </div>
                     ))}
@@ -362,7 +362,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                       handleAddWithFeedback(quickViewProduct);
                       setQuickViewProduct(null);
                     }}
-                    className="flex-1 py-2.5 px-4 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs min-h-[42px]"
+                    className="flex-1 py-2.5 px-4 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs min-h-[42px]"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Add to Shopping Bag</span>

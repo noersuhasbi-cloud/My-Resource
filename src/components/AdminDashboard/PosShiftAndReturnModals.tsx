@@ -20,6 +20,7 @@ import type {
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { usePrint } from '../../context/PrintContext';
 
 const IDR_DENOMINATIONS = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 100];
 
@@ -49,6 +50,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const { triggerPrint } = usePrint();
   const [openingFloatIDR, setOpeningFloatIDR] = useState<number>(500000);
   const [registerId, setRegisterId] = useState<string>('REG-04');
   const [denomCounts, setDenomCounts] = useState<Record<number, number>>({
@@ -187,7 +189,13 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() =>
+                  triggerPrint({
+                    type: 'pos_zreport',
+                    format: 'thermal80',
+                    shift: finalizedZReport,
+                  })
+                }
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0F4C3A] text-white font-bold cursor-pointer whitespace-nowrap shrink-0"
               >
                 <Printer className="w-3.5 h-3.5" />

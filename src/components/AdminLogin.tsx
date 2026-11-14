@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import type { StaffShiftSession, UserRole, StorageZoneType } from '../types/index.ts';
 import { apiClient } from '../services/apiClient';
+import { useDarkMode } from '../context/DarkModeContext';
 import {
   Shield,
   ShieldCheck,
@@ -130,30 +131,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   onReturnToStorefront,
   onShowToast,
 }) => {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    try {
-      const saved = localStorage.getItem('grocemart_admin_theme');
-      if (saved === 'dark' || saved === 'light') return saved;
-    } catch {}
-    return 'light';
-  });
+  const { theme, toggleDarkMode: toggleTheme } = useDarkMode();
 
   const isLight = theme === 'light';
-
-  const toggleTheme = () => {
-    const next = theme === 'light' ? 'dark' : 'light';
-    setTheme(next);
-    try {
-      localStorage.setItem('grocemart_admin_theme', next);
-    } catch {}
-  };
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    return () => {
-      document.documentElement.classList.remove('dark');
-    };
-  }, [theme]);
 
   const [activeTab, setActiveTab] = useState<'roster' | 'credentials'>('roster');
   const [availableProfiles, setAvailableProfiles] = useState<StaffShiftSession[]>(FALLBACK_STAFF_ROSTER);

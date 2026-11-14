@@ -242,11 +242,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-2xl w-full max-w-[95vw] sm:max-w-2xl shadow-2xl border border-stone-200 overflow-hidden relative animate-in fade-in zoom-in-95 duration-200 my-auto">
+      <div className="bg-white dark:bg-stone-900 rounded-2xl w-full max-w-[95vw] sm:max-w-2xl shadow-2xl border border-stone-200 dark:border-stone-800 overflow-hidden relative animate-in fade-in zoom-in-95 duration-200 my-auto">
         {/* Modal Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100 transition-colors z-10"
+          className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors z-10"
         >
           <X className="w-5 h-5" />
         </button>
@@ -255,26 +255,26 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {step === 'details' && (
           <form onSubmit={handleProceedToPayment} className="p-4 sm:p-8 space-y-5 sm:space-y-6">
             <div>
-              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800 uppercase tracking-wider mb-1">
+              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider mb-1">
                 <span>Checkout</span>
                 <span aria-hidden="true">·</span>
                 <span>GroceMart Instant Fulfillment</span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-stone-900 font-display">
+              <h2 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-stone-100 font-display">
                 Fulfillment & Payment Setup
               </h2>
             </div>
 
             {/* Store Closed Warning Banner */}
             {isStoreClosed && (
-              <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-950 flex items-start gap-3 shadow-xs animate-in fade-in">
-                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 rounded-2xl text-xs text-amber-950 dark:text-amber-200 flex items-start gap-3 shadow-xs animate-in fade-in">
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-sm block">Checkout Blocked: Outlet Currently Closed</span>
-                  <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                  <p className="text-xs text-amber-900 dark:text-amber-300 mt-1 leading-relaxed">
                     {storeClosureNotice}
                   </p>
-                  <p className="text-[11px] text-amber-800 mt-1">
+                  <p className="text-[11px] text-amber-800 dark:text-amber-400 mt-1">
                     Cart items remain preserved. Online ordering will resume once operating hours reopen.
                   </p>
                 </div>
@@ -282,13 +282,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             )}
 
             {/* Customer Details */}
-            <div className="space-y-4 pt-2 border-t border-stone-200">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700">
+            <div className="space-y-4 pt-2 border-t border-stone-200 dark:border-stone-800">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
                 1. Recipient Information
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-stone-600 block mb-1">
+                  <label className="text-xs font-medium text-stone-600 dark:text-stone-400 block mb-1">
                     Full Name
                   </label>
                   <input
@@ -296,11 +296,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     required
                     value={recipientName}
                     onChange={(e) => setRecipientName(e.target.value)}
-                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-800"
+                    className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-xs font-medium text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-emerald-800 dark:focus:ring-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-stone-600 block mb-1">
+                  <label className="text-xs font-medium text-stone-600 dark:text-stone-400 block mb-1">
                     WhatsApp / Phone Number
                   </label>
                   <input
@@ -308,11 +308,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     required
                     value={recipientPhone}
                     onChange={(e) => setRecipientPhone(e.target.value)}
-                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-800"
+                    className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-xs font-medium text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-emerald-800 dark:focus:ring-emerald-500"
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-stone-600 block mb-1">
+                  <label className="text-xs font-medium text-stone-600 dark:text-stone-400 block mb-1">
                     Notification Email
                   </label>
                   <input
@@ -320,27 +320,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     required
                     value={recipientEmail}
                     onChange={(e) => setRecipientEmail(e.target.value)}
-                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-800"
+                    className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-xs font-medium text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-emerald-800 dark:focus:ring-emerald-500"
                   />
                 </div>
               </div>
             </div>
 
             {/* Delivery or Pickup Address */}
-            <div className="space-y-3 pt-2 border-t border-stone-200">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700">
+            <div className="space-y-3 pt-2 border-t border-stone-200 dark:border-stone-800">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
                 2. {deliveryMethod === 'pickup' ? 'Store Pickup Location' : 'Delivery Destination'}
               </h3>
               {deliveryMethod === 'pickup' ? (
-                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs">
-                  <p className="font-semibold text-stone-900">{selectedPickupStore?.name}</p>
-                  <p className="text-stone-600 mt-0.5">{selectedPickupStore?.address}</p>
-                  <p className="text-emerald-800 font-medium mt-1">Ready for pickup in 30 minutes after QRIS payment</p>
+                <div className="p-3 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 text-xs">
+                  <p className="font-semibold text-stone-900 dark:text-stone-100">{selectedPickupStore?.name}</p>
+                  <p className="text-stone-600 dark:text-stone-400 mt-0.5">{selectedPickupStore?.address}</p>
+                  <p className="text-emerald-800 dark:text-emerald-400 font-medium mt-1">Ready for pickup in 30 minutes after QRIS payment</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-medium text-stone-600 block mb-1">
+                    <label className="text-xs font-medium text-stone-600 dark:text-stone-400 block mb-1">
                       Street Address & Unit / House No.
                     </label>
                     <textarea
@@ -348,11 +348,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       rows={2}
                       value={addressLine}
                       onChange={(e) => setAddressLine(e.target.value)}
-                      className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-800"
+                      className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-xs font-medium text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-emerald-800 dark:focus:ring-emerald-500"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-stone-600 block mb-1">
+                    <label className="text-xs font-medium text-stone-600 dark:text-stone-400 block mb-1">
                       Courier Delivery Note (Optional)
                     </label>
                     <input
@@ -360,7 +360,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       value={deliveryNotes}
                       onChange={(e) => setDeliveryNotes(e.target.value)}
                       placeholder="e.g. Leave with security / gate passcode"
-                      className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-emerald-800"
+                      className="w-full px-3 py-2 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-emerald-800 dark:focus:ring-emerald-500"
                     />
                   </div>
                 </div>
@@ -369,8 +369,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             {/* Store Closed Banner Notice */}
             {(isStoreClosed || blockedNotice) && (
-              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs flex items-start gap-2.5 animate-in fade-in">
-                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2.5 animate-in fade-in">
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="font-bold text-sm">Storefront Checkout Temporarily Paused</h4>
                   <p className="mt-0.5 leading-relaxed">
@@ -381,39 +381,39 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             )}
 
             {/* Exclusive QRIS Payment Method Card */}
-            <div className="space-y-3 pt-2 border-t border-stone-200">
+            <div className="space-y-3 pt-2 border-t border-stone-200 dark:border-stone-800">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
                   3. Payment Method: National QRIS
                 </h3>
-                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded-full">
                   Zero Admin Fee
                 </span>
               </div>
 
-              <div className="p-4 rounded-2xl border-2 border-emerald-800 bg-emerald-50/50 relative">
+              <div className="p-4 rounded-2xl border-2 border-emerald-800 dark:border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 relative">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2.5">
                     <div className="px-2.5 py-1 bg-red-600 text-white font-black text-xs rounded tracking-wider shadow-xs">
                       QRIS
                     </div>
                     <div>
-                      <span className="text-xs font-bold text-stone-900 font-display block">
+                      <span className="text-xs font-bold text-stone-900 dark:text-stone-100 font-display block">
                         Indonesian National Standard QR Code (ASPI / Bank Indonesia)
                       </span>
-                      <span className="text-[11px] text-stone-600">
+                      <span className="text-[11px] text-stone-600 dark:text-stone-400">
                         Universal instant scan via any Indonesian E-Wallet or Mobile Banking
                       </span>
                     </div>
                   </div>
-                  <CheckCircle className="w-5 h-5 text-emerald-800 shrink-0" />
+                  <CheckCircle className="w-5 h-5 text-emerald-800 dark:text-emerald-400 shrink-0" />
                 </div>
 
-                <div className="pt-2.5 border-t border-emerald-800/20 flex flex-wrap items-center justify-between gap-2 text-[11px] text-stone-600">
+                <div className="pt-2.5 border-t border-emerald-800/20 dark:border-emerald-500/20 flex flex-wrap items-center justify-between gap-2 text-[11px] text-stone-600 dark:text-stone-400">
                   <span className="font-medium">
                     Supported: GoPay · OVO · ShopeePay · DANA · BCA mobile · Livin' Mandiri · BRImo · LinkAja
                   </span>
-                  <span className="text-emerald-800 font-bold font-mono">
+                  <span className="text-emerald-800 dark:text-emerald-400 font-bold font-mono">
                     Direct Backend Open API Clearing
                   </span>
                 </div>
@@ -421,17 +421,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             {/* Total breakdown & submit */}
-            <div className="p-4 bg-stone-50 rounded-xl border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="p-4 bg-stone-50 dark:bg-stone-800/80 rounded-xl border border-stone-200 dark:border-stone-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <span className="text-xs text-stone-500 block">Total Payment (IDR)</span>
-                <span className="text-xl font-bold text-stone-900 font-mono tabular-nums">
+                <span className="text-xs text-stone-500 dark:text-stone-400 block">Total Payment (IDR)</span>
+                <span className="text-xl font-bold text-stone-900 dark:text-stone-100 font-mono tabular-nums">
                   {formatIDR(total)}
                 </span>
               </div>
               <button
                 type="submit"
                 disabled={isStoreClosed}
-                className="py-3 px-6 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="py-3 px-6 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>{isStoreClosed ? 'Checkout Paused (Store Closed)' : 'Continue to QRIS Payment'}</span>
                 <ArrowRight className="w-4 h-4 text-amber-300" />
@@ -444,50 +444,50 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {step === 'qris_payment' && (
           <div className="p-4 sm:p-8 space-y-5 sm:space-y-6">
             {/* Official QRIS Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-stone-200">
+            <div className="flex items-center justify-between pb-4 border-b border-stone-200 dark:border-stone-800">
               <div className="flex items-center gap-3">
                 <div className="px-3 py-1 bg-red-600 text-white font-black text-sm tracking-wider rounded">
                   QRIS
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
+                  <h3 className="text-xs font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wider">
                     Quick Response Code Indonesian Standard
                   </h3>
-                  <p className="text-[11px] text-stone-500">
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
                     National Standard Payment Switch · Bank Indonesia
                   </p>
                 </div>
               </div>
 
               {/* Countdown badge */}
-              <div className="px-3 py-1.5 bg-amber-50 rounded-lg border border-amber-200 text-right">
-                <span className="text-[10px] text-amber-800 block leading-tight">Expires in</span>
-                <span className="text-xs font-mono font-bold text-amber-900 tabular-nums">
+              <div className="px-3 py-1.5 bg-amber-50 dark:bg-amber-500/10 rounded-lg border border-amber-200 dark:border-amber-500/30 text-right">
+                <span className="text-[10px] text-amber-800 dark:text-amber-300 block leading-tight">Expires in</span>
+                <span className="text-xs font-mono font-bold text-amber-900 dark:text-amber-200 tabular-nums">
                   {formatCountdown(qrisCountdownSeconds)}
                 </span>
               </div>
             </div>
 
             {/* Merchant Details Box */}
-            <div className="p-4 bg-stone-50 rounded-xl border border-stone-200 text-center space-y-1">
-              <p className="text-[11px] text-stone-500 uppercase tracking-widest font-semibold">
+            <div className="p-4 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 text-center space-y-1">
+              <p className="text-[11px] text-stone-500 dark:text-stone-400 uppercase tracking-widest font-semibold">
                 Merchant Name
               </p>
-              <h4 className="text-sm sm:text-base font-bold text-stone-900 font-display">
+              <h4 className="text-sm sm:text-base font-bold text-stone-900 dark:text-stone-100 font-display">
                 GROCEMART RETAIL INDONESIA
               </h4>
-              <p className="text-xs font-mono text-stone-500">
+              <p className="text-xs font-mono text-stone-500 dark:text-stone-400">
                 NMID: ID1020039281744 · Ref: {qrisReference}
               </p>
               <div className="pt-2">
-                <span className="text-xs text-stone-500 block">Total Due:</span>
-                <span className="text-2xl font-extrabold text-emerald-950 font-mono tabular-nums">
+                <span className="text-xs text-stone-500 dark:text-stone-400 block">Total Due:</span>
+                <span className="text-2xl font-extrabold text-emerald-950 dark:text-emerald-400 font-mono tabular-nums">
                   {formatIDR(total)}
                 </span>
               </div>
             </div>
 
-            {/* QR Code Presentation */}
+            {/* QR Code Presentation (Keep white background for scannable contrast) */}
             <div className="flex flex-col items-center justify-center p-6 bg-white rounded-2xl border-2 border-stone-300 shadow-inner max-w-xs mx-auto">
               <div className="p-3 bg-white rounded-xl shadow-xs border border-stone-200">
                 <QRCodeSVG
@@ -512,12 +512,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             {/* Simulator Action Button */}
-            <div className="pt-4 border-t border-stone-200 flex flex-col sm:flex-row items-center gap-3">
+            <div className="pt-4 border-t border-stone-200 dark:border-stone-800 flex flex-col sm:flex-row items-center gap-3">
               <button
                 type="button"
                 onClick={handleSimulateQRISPayment}
                 disabled={isSimulatingPayment}
-                className="w-full sm:flex-1 py-3 px-4 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full sm:flex-1 py-3 px-4 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isSimulatingPayment ? (
                   <>
@@ -535,7 +535,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <button
                 type="button"
                 onClick={() => setStep('details')}
-                className="w-full sm:w-auto py-3 px-4 text-stone-600 hover:text-stone-900 text-xs font-semibold cursor-pointer"
+                className="w-full sm:w-auto py-3 px-4 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 text-xs font-semibold cursor-pointer"
               >
                 Back to Details
               </button>
@@ -546,44 +546,44 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         {/* STEP 3: Order Confirmed & Success View */}
         {step === 'success' && completedOrder && (
           <div className="p-4 sm:p-8 space-y-5 sm:space-y-6 text-center">
-            <div className="w-16 h-16 bg-emerald-100 text-emerald-800 rounded-full flex items-center justify-center mx-auto shadow-inner">
+            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-inner">
               <CheckCircle className="w-10 h-10" />
             </div>
 
             <div>
-              <div className="text-xs font-semibold text-emerald-800 uppercase tracking-wider mb-1">
+              <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider mb-1">
                 Payment Received · Instant Fulfillment Active
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 font-display">
+              <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-100 font-display">
                 Order #{completedOrder.id} Confirmed!
               </h2>
-              <p className="mt-2 text-stone-600 text-xs sm:text-sm max-w-md mx-auto">
+              <p className="mt-2 text-stone-600 dark:text-stone-300 text-xs sm:text-sm max-w-md mx-auto">
                 Thank you, {completedOrder.customerName}. Your payment of{' '}
-                <span className="font-mono font-bold text-stone-900">{formatIDR(completedOrder.total)}</span> was verified instantly via QRIS.
+                <span className="font-mono font-bold text-stone-900 dark:text-stone-100">{formatIDR(completedOrder.total)}</span> was verified instantly via QRIS.
               </p>
             </div>
 
             {/* Summary Box */}
-            <div className="p-4 bg-stone-50 rounded-xl border border-stone-200 text-left text-xs space-y-2 max-w-md mx-auto">
+            <div className="p-4 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-200 dark:border-stone-700 text-left text-xs space-y-2 max-w-md mx-auto">
               <div className="flex justify-between">
-                <span className="text-stone-500">Order Reference</span>
-                <span className="font-mono font-bold text-stone-900">{completedOrder.id}</span>
+                <span className="text-stone-500 dark:text-stone-400">Order Reference</span>
+                <span className="font-mono font-bold text-stone-900 dark:text-stone-100">{completedOrder.id}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-stone-500">Payment Status</span>
-                <span className="font-semibold text-emerald-800">QRIS Paid ({completedOrder.qrisRef})</span>
+                <span className="text-stone-500 dark:text-stone-400">Payment Status</span>
+                <span className="font-semibold text-emerald-800 dark:text-emerald-400">QRIS Paid ({completedOrder.qrisRef})</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-stone-500">Fulfillment</span>
-                <span className="font-semibold text-stone-900">
+                <span className="text-stone-500 dark:text-stone-400">Fulfillment</span>
+                <span className="font-semibold text-stone-900 dark:text-stone-100">
                   {completedOrder.deliveryMethod === 'pickup'
                     ? `Pickup at ${completedOrder.pickupStore?.name}`
                     : `Express Delivery (${completedOrder.estimatedArrival})`}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-stone-500">Items Ordered</span>
-                <span>{completedOrder.items.length} grocery items</span>
+                <span className="text-stone-500 dark:text-stone-400">Items Ordered</span>
+                <span className="text-stone-800 dark:text-stone-200">{completedOrder.items.length} grocery items</span>
               </div>
             </div>
 
@@ -595,7 +595,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   onClose();
                   onOpenOrderTracking(completedOrder.id);
                 }}
-                className="w-full sm:w-auto py-3 px-6 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full sm:w-auto py-3 px-6 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>Track Order Live in Portal</span>
                 <ArrowRight className="w-4 h-4 text-amber-300" />
@@ -604,7 +604,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full sm:w-auto py-3 px-6 bg-stone-100 hover:bg-stone-200 text-stone-800 font-semibold text-xs sm:text-sm rounded-xl transition-all cursor-pointer"
+                className="w-full sm:w-auto py-3 px-6 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-semibold text-xs sm:text-sm rounded-xl transition-all cursor-pointer"
               >
                 Continue Browsing
               </button>

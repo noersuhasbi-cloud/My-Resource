@@ -25,6 +25,7 @@ import {
 } from '../../utils/groceryEngine.ts';
 import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
 import { PosRmaQuickModal, PosShiftModal } from './PosShiftAndReturnModals';
+import { usePrint } from '../../context/PrintContext';
 import {
   Scan,
   ShoppingCart,
@@ -83,6 +84,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
   onInventoryUpdated,
 }) => {
   const isLight = theme === 'light';
+  const { triggerPrint } = usePrint();
 
   // 1. Catalog & Filter State
   const [products, setProducts] = useState<POSProductItem[]>([]);
@@ -1311,7 +1313,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
       {completedReceipt &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto print:hidden"
             onClick={() => setCompletedReceipt(null)}
           >
             <div
@@ -1417,7 +1419,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    window.print();
+                    triggerPrint({
+                      type: 'pos_receipt',
+                      format: 'thermal80',
+                      receipt: completedReceipt,
+                    });
                   }}
                   className="flex-1 py-2 rounded-xl border border-slate-300 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-slate-50 cursor-pointer"
                 >

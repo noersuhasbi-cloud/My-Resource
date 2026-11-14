@@ -18,7 +18,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   category,
   fallbackSrc,
   className = 'w-full h-full object-cover',
-  containerClassName = 'relative w-full h-full overflow-hidden bg-stone-100',
+  containerClassName = 'relative w-full h-full overflow-hidden bg-stone-100 dark:bg-stone-800',
   ...rest
 }) => {
   const fallback = getCategoryFallback(category);
@@ -93,7 +93,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     <div className={containerClassName}>
       {/* Light shimmer placeholder while loading external network image */}
       {isLoading && !isBase64Image(currentSrc) && (
-        <div className="absolute inset-0 bg-stone-200 animate-pulse pointer-events-none" />
+        <div className="absolute inset-0 bg-stone-200 dark:bg-stone-800 animate-pulse pointer-events-none" />
       )}
 
       <img

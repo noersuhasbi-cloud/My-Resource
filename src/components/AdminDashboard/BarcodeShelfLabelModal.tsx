@@ -16,6 +16,7 @@ import {
   encodeEan13Bars,
   generateVariableWeightEan13,
 } from '../../utils/indonesianCompliance';
+import { usePrint } from '../../context/PrintContext';
 
 export interface LabelableProductItem {
   sku: string;
@@ -48,6 +49,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const { triggerPrint } = usePrint();
   const [selectedSku, setSelectedSku] = useState<string>(
     initialSku || products[0]?.sku || 'SKU-PRD-005'
   );
@@ -469,7 +471,23 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  window.print();
+                  triggerPrint({
+                    type: 'barcode_shelf_label',
+                    format: 'label50x30',
+                    product: activeProduct,
+                    ean13Code,
+                    barBits,
+                    plu5,
+                    weightGrams,
+                    effectivePricePerKg,
+                    computedWeighedPrice,
+                    shelfRetailPrice,
+                    pricePer100g,
+                    taxInclusiveDisplay,
+                    isHalalCertified,
+                    promoText,
+                    labelMode,
+                  });
                   onShowToast('Thermal Label Sent', `Printing label for ${activeProduct.productName} (${ean13Code}).`);
                 }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap shrink-0"

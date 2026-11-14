@@ -6,6 +6,7 @@ import {
   FileCode2,
   FileSpreadsheet,
   Plus,
+  Printer,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
@@ -21,6 +22,7 @@ import type {
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { usePrint } from '../../context/PrintContext';
 
 interface ComplianceAccountingPanelsProps {
   theme: 'light' | 'dark';
@@ -38,6 +40,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const { triggerPrint } = usePrint();
 
   // Module 1: RMA & RTV state
   const [rmaList, setRmaList] = useState<CustomerRmaRecord[]>([]);
@@ -412,6 +415,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                   <th className="py-2.5 px-3">Disposition</th>
                   <th className="py-2.5 px-3 text-right">PPN Adjusted</th>
                   <th className="py-2.5 px-3 text-right">Total Credit Note</th>
+                  <th className="py-2.5 px-3 text-right">Print</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
@@ -441,6 +445,27 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                     <td className="py-2.5 px-3 text-right font-mono font-bold tabular-nums">
                       {formatIDR(rma.totalCreditNoteIDR)}
                     </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          triggerPrint({
+                            type: 'nota_retur_customer',
+                            format: 'a4',
+                            rma,
+                          })
+                        }
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer ${
+                          isLight
+                            ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                        }`}
+                        title="Print Nota Retur Penjualan (DJP A4)"
+                      >
+                        <Printer className="w-3 h-3" />
+                        <span>Nota Retur</span>
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -458,6 +483,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                   <th className="py-2.5 px-3 text-center">Qty</th>
                   <th className="py-2.5 px-3 text-right">PPN Masukan Reversed</th>
                   <th className="py-2.5 px-3 text-right">Total AP Debit</th>
+                  <th className="py-2.5 px-3 text-right">Print</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
@@ -478,6 +504,27 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono font-bold tabular-nums">
                       {formatIDR(rtv.totalDebitNoteIDR)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          triggerPrint({
+                            type: 'nota_retur_vendor',
+                            format: 'a4',
+                            rtv,
+                          })
+                        }
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer ${
+                          isLight
+                            ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                        }`}
+                        title="Print Nota Retur Pembelian (DJP A4)"
+                      >
+                        <Printer className="w-3 h-3" />
+                        <span>Nota Retur</span>
+                      </button>
                     </td>
                   </tr>
                 ))}

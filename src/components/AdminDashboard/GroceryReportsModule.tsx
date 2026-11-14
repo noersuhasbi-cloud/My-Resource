@@ -8,6 +8,7 @@ import type {
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { apiClient } from '../../services/apiClient';
+import { usePrint } from '../../context/PrintContext';
 import {
   TrendingUp,
   Clock,
@@ -54,6 +55,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const { triggerPrint } = usePrint();
 
   // Sub-tabs: 'all' | 'fifo' | 'waste' | 'fulfillment' | 'recall'
   const [activeTab, setActiveTab] = useState<'all' | 'fifo' | 'waste' | 'fulfillment' | 'recall'>('all');
@@ -161,7 +163,26 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
   }, [selectedStore]);
 
   const handlePrint = () => {
-    window.print();
+    let operatorName = 'Operations Analyst';
+    try {
+      const saved = localStorage.getItem('grocemart_admin_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.userName) operatorName = parsed.userName;
+      }
+    } catch {
+      // fallback to default analyst label
+    }
+
+    triggerPrint({
+      type: 'grocery_analytics',
+      format: 'a4',
+      selectedStore,
+      activeTab,
+      operatorName,
+      reportData,
+      recallTraceResult,
+    });
   };
 
   const cardClass = `rounded-2xl border transition-all ${
