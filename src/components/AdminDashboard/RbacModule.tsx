@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { StaffShiftSession, StorageZoneType, UserRole } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import {
@@ -379,11 +380,11 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                   <span className="text-[11px] text-gray-400">Process checkout &amp; QRIS settlements</span>
                 </div>
                 {currentSession.permissions.canViewPos ? (
-                  <span className="flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-rose-500 font-bold text-[11px] bg-rose-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-rose-600 dark:text-rose-400 font-bold text-[11px] bg-rose-500/10 border border-rose-500/25 px-2 py-0.5 rounded-full">
                     <XCircle className="w-3.5 h-3.5" /> Restricted
                   </span>
                 )}
@@ -395,11 +396,11 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                   <span className="text-[11px] text-gray-400">Perform partial receipt &amp; lot logging</span>
                 </div>
                 {currentSession.permissions.canReceiveGoods ? (
-                  <span className="flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-rose-500 font-bold text-[11px] bg-rose-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-rose-600 dark:text-rose-400 font-bold text-[11px] bg-rose-500/10 border border-rose-500/25 px-2 py-0.5 rounded-full">
                     <XCircle className="w-3.5 h-3.5" /> Restricted
                   </span>
                 )}
@@ -411,11 +412,11 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                   <span className="text-[11px] text-gray-400">Authorize binding vendor orders &amp; AP balance</span>
                 </div>
                 {currentSession.permissions.canApprovePurchaseOrder ? (
-                  <span className="flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-rose-500 font-bold text-[11px] bg-rose-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-rose-600 dark:text-rose-400 font-bold text-[11px] bg-rose-500/10 border border-rose-500/25 px-2 py-0.5 rounded-full">
                     <XCircle className="w-3.5 h-3.5" /> Restricted
                   </span>
                 )}
@@ -427,11 +428,11 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                   <span className="text-[11px] text-gray-400">Inspect gross margins &amp; net profitability</span>
                 </div>
                 {currentSession.permissions.canViewFinancePnL ? (
-                  <span className="flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-rose-500 font-bold text-[11px] bg-rose-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-rose-600 dark:text-rose-400 font-bold text-[11px] bg-rose-500/10 border border-rose-500/25 px-2 py-0.5 rounded-full">
                     <XCircle className="w-3.5 h-3.5" /> Restricted
                   </span>
                 )}
@@ -443,11 +444,11 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                   <span className="text-[11px] text-gray-400">Modify physical stock count without GR</span>
                 </div>
                 {currentSession.permissions.canAdjustInventory ? (
-                  <span className="flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-rose-500 font-bold text-[11px] bg-rose-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-rose-600 dark:text-rose-400 font-bold text-[11px] bg-rose-500/10 border border-rose-500/25 px-2 py-0.5 rounded-full">
                     <XCircle className="w-3.5 h-3.5" /> Restricted
                   </span>
                 )}
@@ -459,11 +460,11 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                   <span className="text-[11px] text-gray-400">Halt online routing &amp; trigger customer broadcast</span>
                 </div>
                 {currentSession.permissions.canOverrideStoreClosure ? (
-                  <span className="flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-rose-500 font-bold text-[11px] bg-rose-500/10 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-rose-600 dark:text-rose-400 font-bold text-[11px] bg-rose-500/10 border border-rose-500/25 px-2 py-0.5 rounded-full">
                     <XCircle className="w-3.5 h-3.5" /> Restricted
                   </span>
                 )}
@@ -572,8 +573,8 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
       </div>
 
       {/* Shift Handover Sign-Off Modal */}
-      {isHandoverModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+      {isHandoverModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-md rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
@@ -664,7 +665,8 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

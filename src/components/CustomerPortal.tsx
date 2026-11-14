@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   CustomerAccount,
   Order,
@@ -105,6 +106,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const [requestedLimit, setRequestedLimit] = useState<number>(() => {
     return currentB2bCustomer ? currentB2bCustomer.creditLimit + 25000000 : 100000000;
   });
+  useEffect(() => {
+    if (currentB2bCustomer) {
+      setRequestedLimit(currentB2bCustomer.creditLimit + 25000000);
+      setCreditLimitSuccessMsg(null);
+    }
+  }, [currentB2bCustomer?.id, currentB2bCustomer?.creditLimit]);
   const [creditIncreaseReason, setCreditIncreaseReason] = useState<string>(
     'Persiapan Stok Menjelang Peak Season (Ramadan/Idul Fitri/Tahun Baru)'
   );
@@ -549,9 +556,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     onUpdateOrderStatus(orderId, next);
   };
 
-  return (
+  const portalModal = (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
-      <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-stone-200 overflow-hidden relative max-h-[92vh] flex flex-col">
+      <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-stone-200 overflow-hidden relative max-h-[92vh] my-auto flex flex-col">
         
         {/* Top Header - Context Aware Branding */}
         <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50/80">
@@ -2207,9 +2214,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           )}
 
           {/* Printable B2B Receipt Modal */}
-          {activeB2bReceiptOrder && (
-            <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-stone-200 space-y-4 max-h-[90vh] overflow-y-auto">
+          {activeB2bReceiptOrder && typeof document !== 'undefined' && createPortal(
+            <div className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-stone-200 space-y-4 max-h-[90vh] my-auto overflow-y-auto">
                 <div className="flex items-center justify-between border-b pb-3">
                   <div>
                     <h3 className="font-bold text-base text-stone-900">FAKTUR PENJUALAN GROSIR</h3>
@@ -2278,13 +2285,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   </button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
 
           {/* Viewing Bilyet Giro Physical Slip Modal */}
-          {viewingGiroSlip && (
-            <div className="fixed inset-0 z-70 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          {viewingGiroSlip && typeof document !== 'undefined' && createPortal(
+            <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
                 <div className="flex items-center justify-between border-b pb-3">
                   <div className="flex items-center gap-2">
                     <CreditCard className="w-5 h-5 text-indigo-700" />
@@ -2340,11 +2348,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   </button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
 
         </div>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(portalModal, document.body) : portalModal;
 };

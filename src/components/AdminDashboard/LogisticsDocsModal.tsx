@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   SuratJalanDocument,
   DeliveryOrderDocument,
@@ -541,7 +542,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                         </span>
                         <h4 className="text-sm font-bold mt-0.5">{doDoc.customerOrStoreName}</h4>
                       </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-800 dark:text-blue-300">
+                      <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-800 dark:text-blue-300 border border-blue-500/25">
                         {doDoc.status.toUpperCase()}
                       </span>
                     </div>
@@ -585,7 +586,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                           <h4 className="text-sm font-bold">{shp.vehicleType} ({shp.vehiclePlate})</h4>
                         </div>
                       </div>
-                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                      <span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/25">
                         {shp.status.replace(/_/g, ' ').toUpperCase()}
                       </span>
                     </div>
@@ -638,9 +639,9 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
         </div>
 
         {/* Modal Create Surat Jalan Drawer */}
-        {isCreatingSj && (
-          <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className={`w-full max-w-lg p-6 rounded-2xl border shadow-xl space-y-4 ${
+        {isCreatingSj && typeof document !== 'undefined' && createPortal(
+          <div className="fixed inset-0 z-[110] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+            <div className={`w-full max-w-lg p-6 rounded-2xl border shadow-xl space-y-4 my-auto ${
               isLight ? 'bg-white border-gray-300' : 'bg-zinc-900 border-zinc-800'
             }`}>
               <div className="flex justify-between items-center border-b pb-3">
@@ -730,7 +731,8 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                 </div>
               </form>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     );
@@ -739,9 +741,11 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
     return <div className="space-y-6">{content}</div>;
   }
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+  const modalNode = (
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
       {content}
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode;
 };

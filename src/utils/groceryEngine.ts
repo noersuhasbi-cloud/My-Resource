@@ -238,6 +238,7 @@ export function parseVariableWeightBarcode(
       '00301': 'SKU-DAI-001',
       '00302': 'SKU-DAI-002',
       '00401': 'SKU-BAK-001',
+      '00402': 'SKU-BAK-002',
       '00501': 'SKU-PAN-001',
       '00502': 'SKU-PAN-002',
     };

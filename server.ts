@@ -102,6 +102,7 @@ import type {
   BatchRecallTraceResult,
   POSHardwarePeripheralStatus,
   POSReturnRecord,
+  POSReturnItemLine,
   RefundPaymentChannel,
   AutoReplenishmentConsolidatedPlan,
   AutoReplenishmentItemPlan,
@@ -448,7 +449,9 @@ function applyBlindOpnameApproval(sheet: BlindOpnameSheet, approverName: string)
 
     if (tier && variance !== 0) {
       tier.physicalStock = Math.max(0, counted);
-      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+      tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+      tier.totalValuation = Math.round(tier.physicalStock * (tier.unitCost || unitCost));
       tier.updatedAt = timestamp;
     }
     const inv = inventoryList.find((i) => i.sku === line.sku);
@@ -2073,7 +2076,9 @@ async function startServer() {
               const tier = storeInventoryTiers.find((t) => t.sku === invItem.sku);
               if (tier) {
                 tier.physicalStock = Math.max(0, tier.physicalStock - qty);
-                tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+                tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+                tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+                tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
                 tier.updatedAt = new Date().toISOString();
               }
 
@@ -2597,7 +2602,9 @@ async function startServer() {
     const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
     if (tier) {
       tier.physicalStock = Math.max(0, tier.physicalStock + Number(adjustmentQty));
-      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+      tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+      tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
     }
 
     // Log GL adjustment
@@ -2698,7 +2705,9 @@ async function startServer() {
     );
     if (tier) {
       tier.physicalStock = Math.max(0, Number((tier.physicalStock - actualAllocated).toFixed(2)));
-      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+      tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+      tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
       tier.updatedAt = new Date().toISOString();
     }
 
@@ -2782,7 +2791,9 @@ async function startServer() {
     const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
     if (tier) {
       tier.physicalStock = Math.max(0, tier.physicalStock - qty);
-      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+      tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+      tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
       tier.updatedAt = new Date().toISOString();
     }
 
@@ -3221,10 +3232,20 @@ async function startServer() {
         tempCheckCelsius: itemInput.tempCheckCelsius,
       });
 
-      // Update catalog inventory item
+      // Update catalog inventory item with Moving Average Cost (WAC)
       const catalogItem = inventoryList.find((i) => i.sku === poItem.sku);
       if (catalogItem) {
-        catalogItem.currentStock += receivedQty;
+        const oldStock = Math.max(0, Number(catalogItem.currentStock) || 0);
+        const oldCost = Number(catalogItem.wacUnitCost ?? catalogItem.unitCost ?? poItem.unitCost) || 0;
+        const newTotalStock = oldStock + receivedQty;
+        const newWac =
+          newTotalStock > 0
+            ? Math.round(((oldStock * oldCost) + (receivedQty * poItem.unitCost)) / newTotalStock)
+            : poItem.unitCost;
+
+        catalogItem.currentStock = newTotalStock;
+        catalogItem.unitCost = newWac;
+        catalogItem.wacUnitCost = newWac;
         catalogItem.incomingStock = Math.max(0, catalogItem.incomingStock - receivedQty);
         catalogItem.lastRestockedAt = new Date().toISOString();
         catalogItem.stockBatches = catalogItem.stockBatches || [];
@@ -3239,8 +3260,18 @@ async function startServer() {
       // Update multi-tier inventory tier for specific store & warehouse zone
       const tier = storeInventoryTiers.find((t) => t.sku === poItem.sku && t.storeId === po.storeId);
       if (tier) {
-        tier.physicalStock += receivedQty;
+        const tierOldStock = Math.max(0, Number(tier.physicalStock) || 0);
+        const tierOldCost = Number(tier.unitCost ?? catalogItem?.wacUnitCost ?? poItem.unitCost) || 0;
+        const tierNewStock = tierOldStock + receivedQty;
+        const tierNewWac =
+          tierNewStock > 0
+            ? Math.round(((tierOldStock * tierOldCost) + (receivedQty * poItem.unitCost)) / tierNewStock)
+            : poItem.unitCost;
+
+        tier.unitCost = tierNewWac;
+        tier.physicalStock = tierNewStock;
         tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
         tier.incomingStock = Math.max(0, tier.incomingStock - receivedQty);
         tier.lastRestockedAt = new Date().toISOString();
         tier.updatedAt = new Date().toISOString();
@@ -3776,7 +3807,9 @@ async function startServer() {
     const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
     if (tier && equivalentUnitsLost > 0) {
       tier.physicalStock = Math.max(0, Number((tier.physicalStock - equivalentUnitsLost).toFixed(2)));
-      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+      tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+      tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
       tier.updatedAt = new Date().toISOString();
     }
 
@@ -4522,10 +4555,16 @@ async function startServer() {
     // 1. Real-time Inventory & FEFO Batch Deduction
     let totalCogsCost = 0;
     let inventoryDeductedCount = 0;
+    let computedSubtotal = 0;
 
-    items.forEach((item) => {
-      const qty = item.quantity;
-      const cogsLine = Math.round((item.unitCost || Math.round(item.unitPrice * 0.62)) * qty);
+    const normalizedItems = items.map((item: any) => {
+      const qty = Math.max(0, Number(item.quantity) || 1);
+      const inv = inventoryList.find((i) => i.sku === item.sku);
+      const unitPrice = Number(item.unitPrice ?? item.price ?? inv?.sellingPrice ?? 0) || 0;
+      const unitCost = Number(item.unitCost ?? inv?.wacUnitCost ?? inv?.unitCost) || Math.round(unitPrice * 0.62);
+      const lineTotal = Number(item.lineTotal) || Math.round(unitPrice * qty);
+      computedSubtotal += lineTotal;
+      const cogsLine = Math.round(unitCost * qty);
       totalCogsCost += cogsLine;
       inventoryDeductedCount += qty;
 
@@ -4535,19 +4574,32 @@ async function startServer() {
       );
       if (tier) {
         tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
-        tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+        tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+        tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
         tier.updatedAt = timestamp;
       }
 
       // B. Global Inventory List
-      const inv = inventoryList.find((i) => i.sku === item.sku);
       if (inv) {
         inv.currentStock = Math.max(0, Number((inv.currentStock - qty).toFixed(2)));
       }
 
       // C. Strategy-Aware Batch Deduction (FEFO vs FIFO, skipping quarantined/expired lots)
-      deductBatchesByStrategy(item.sku, qty, storeId, item.unitCost || Math.round(item.unitPrice * 0.62));
+      deductBatchesByStrategy(item.sku, qty, storeId, unitCost);
+
+      return {
+        ...item,
+        quantity: qty,
+        unitPrice,
+        unitCost,
+        lineTotal,
+      };
     });
+
+    const resolvedSubtotal = Number(subtotal) || computedSubtotal;
+    const resolvedTotal = Number(total) || Math.max(0, resolvedSubtotal - (Number(discount) || 0) + (Number(tax) || 0));
+    const resolvedCurrencyTotal = Number(currencyTotal) || resolvedTotal;
 
     // 2. Automatic Accounting & General Ledger Double-Entry
     // Asset Account Mapping: Cash: 1010, QRIS: 1030, Card/Bank: 1020
@@ -4576,11 +4628,11 @@ async function startServer() {
       accountCode: assetAccountCode,
       accountName: assetAccountName,
       category: 'Asset',
-      debit: total,
+      debit: resolvedTotal,
       credit: 0,
       referenceType: 'POS_SALE',
       referenceId: receiptNumber,
-      description: `POS Checkout #${receiptNumber} - Tender: ${paymentMethod.toUpperCase()}${currency !== 'IDR' ? ` (${currency} ${currencyTotal})` : ''}`,
+      description: `POS Checkout #${receiptNumber} - Tender: ${paymentMethod.toUpperCase()}${currency !== 'IDR' ? ` (${currency} ${resolvedCurrencyTotal})` : ''}`,
     });
 
     // Double-entry 2: Revenue Credit (Gross Sales Revenue)
@@ -4593,7 +4645,7 @@ async function startServer() {
       accountName: 'Grocery Sales Revenue',
       category: 'Revenue',
       debit: 0,
-      credit: total,
+      credit: resolvedTotal,
       referenceType: 'POS_SALE',
       referenceId: receiptNumber,
       description: `Sales Revenue recognized from POS Register (Cashier: ${cashierName})`,
@@ -4612,7 +4664,7 @@ async function startServer() {
       credit: 0,
       referenceType: 'POS_SALE',
       referenceId: receiptNumber,
-      description: `COGS realized for ${items.length} items sold via POS #${receiptNumber}`,
+      description: `COGS realized for ${normalizedItems.length} items sold via POS #${receiptNumber}`,
     });
 
     // Double-entry 4: Inventory Asset Credit (Deduction of stock balance)
@@ -4638,11 +4690,11 @@ async function startServer() {
       orderId: receiptNumber,
       customerName,
       customerEmail: customerPhone || 'cashier.counter@grocemart.co.id',
-      amount: total,
+      amount: resolvedTotal,
       paymentTimestamp: timestamp,
       settlementChannel: `POS Register (${paymentMethod.toUpperCase()})`,
       journalEntryIds,
-      inventoryDeducted: items.map((i) => ({
+      inventoryDeducted: normalizedItems.map((i) => ({
         sku: i.sku,
         quantity: i.quantity,
         cogsCost: Math.round((i.unitCost || 0) * i.quantity),
@@ -4663,11 +4715,11 @@ async function startServer() {
       status: 'AUTHORIZED_EXECUTED',
       metadata: {
         receiptNumber,
-        total,
+        total: resolvedTotal,
         currency,
-        currencyTotal,
+        currencyTotal: resolvedCurrencyTotal,
         paymentMethod,
-        itemCount: items.length,
+        itemCount: normalizedItems.length,
       },
     });
 
@@ -4682,13 +4734,13 @@ async function startServer() {
       cashierId,
       cashierName,
       shiftId: shiftId || 'SHIFT-01',
-      items,
-      subtotal,
+      items: normalizedItems,
+      subtotal: resolvedSubtotal,
       discount,
       tax,
-      total,
+      total: resolvedTotal,
       currency,
-      currencyTotal,
+      currencyTotal: resolvedCurrencyTotal,
       currencyRateToIDR,
       paymentMethod,
       cashTendered,
@@ -4707,11 +4759,11 @@ async function startServer() {
     if (activeShift) {
       activeShift.transactionCount += 1;
       if (paymentMethod === 'cash') {
-        activeShift.expectedCashSalesIDR += total;
+        activeShift.expectedCashSalesIDR += resolvedTotal;
       } else if (paymentMethod === 'qris') {
-        activeShift.expectedQrisSalesIDR += total;
+        activeShift.expectedQrisSalesIDR += resolvedTotal;
       } else {
-        activeShift.expectedEdcSalesIDR += total;
+        activeShift.expectedEdcSalesIDR += resolvedTotal;
       }
       activeShift.expectedTotalCashInDrawerIDR =
         activeShift.openingFloatIDR + activeShift.expectedCashSalesIDR - activeShift.cashRefundsIDR;
@@ -4828,7 +4880,13 @@ async function startServer() {
       items = [], // Array<{ sku: string; quantity: number }>
     } = req.body;
 
-    const totalLandedCostIDR = freightCostIDR + customsDutyIDR + handlingCostIDR + insuranceCostIDR + informalLaborCostIDR;
+    const safeFreight = Math.max(0, Number(freightCostIDR) || 0);
+    const safeCustoms = Math.max(0, Number(customsDutyIDR) || 0);
+    const safeHandling = Math.max(0, Number(handlingCostIDR) || 0);
+    const safeInsurance = Math.max(0, Number(insuranceCostIDR) || 0);
+    const safeInformalLabor = Math.max(0, Number(informalLaborCostIDR) || 0);
+
+    const totalLandedCostIDR = safeFreight + safeCustoms + safeHandling + safeInsurance + safeInformalLabor;
     if (totalLandedCostIDR <= 0) {
       return res.status(400).json({ error: 'Total landed cost must be greater than zero.' });
     }
@@ -4844,7 +4902,7 @@ async function startServer() {
     const allocatedItems = items.map((it: any) => {
       const inv = inventoryList.find((i) => i.sku === it.sku);
       const productName = inv?.productName || `Product ${it.sku}`;
-      const baseCost = inv?.unitCost || 15000;
+      const baseCost = inv?.wacUnitCost || inv?.unitCost || 15000;
       const qty = Number(it.quantity) || 1;
 
       let lineLandedShare = 0;
@@ -4861,6 +4919,7 @@ async function startServer() {
 
       if (inv) {
         inv.unitCost = newUnitCost;
+        inv.wacUnitCost = newUnitCost;
       }
       storeInventoryTiers.forEach((tier) => {
         if (tier.sku === it.sku) {
@@ -4880,9 +4939,9 @@ async function startServer() {
       };
     });
 
+    const glEntryIds: string[] = [];
     const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-    const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
-    const glEntryIds = [gleId1, gleId2];
+    glEntryIds.push(gleId1);
 
     // Debit Merchandise Inventory Asset #1040 for entire absorbed amount (including informal fees)
     generalLedger.unshift({
@@ -4901,8 +4960,10 @@ async function startServer() {
     });
 
     // Credit side: Split between Petty Cash #1015 (for informal labor) and Accrual Clearing #2040 (for formal freight/customs)
-    const formalAccrualIDR = totalLandedCostIDR - informalLaborCostIDR;
+    const formalAccrualIDR = totalLandedCostIDR - safeInformalLabor;
     if (formalAccrualIDR > 0) {
+      const gleId2 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      glEntryIds.push(gleId2);
       generalLedger.unshift({
         id: gleId2,
         timestamp,
@@ -4919,8 +4980,8 @@ async function startServer() {
       });
     }
 
-    if (informalLaborCostIDR > 0) {
-      const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
+    if (safeInformalLabor > 0) {
+      const gleId3 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
       glEntryIds.push(gleId3);
       generalLedger.unshift({
         id: gleId3,
@@ -4931,7 +4992,7 @@ async function startServer() {
         accountName: 'Petty Cash & Informal Labor Fund (Kas Kecil)',
         category: 'Asset',
         debit: 0,
-        credit: informalLaborCostIDR,
+        credit: safeInformalLabor,
         referenceType: 'LANDED_COST',
         referenceId: id,
         description: `Petty cash disbursement for informal unloading labor (Kuli Bongkar / Retribusi Non-Faktur) voucher #${id}`,
@@ -4947,11 +5008,11 @@ async function startServer() {
       description,
       currency: currency as SupportedCurrency,
       exchangeRate,
-      freightCostIDR,
-      customsDutyIDR,
-      handlingCostIDR,
-      insuranceCostIDR,
-      informalLaborCostIDR,
+      freightCostIDR: safeFreight,
+      customsDutyIDR: safeCustoms,
+      handlingCostIDR: safeHandling,
+      insuranceCostIDR: safeInsurance,
+      informalLaborCostIDR: safeInformalLabor,
       totalLandedCostIDR,
       allocationMethod,
       allocatedItems,
@@ -5027,6 +5088,28 @@ async function startServer() {
       return res.status(400).json({ error: 'Wholesale cart cannot be empty' });
     }
 
+    // Validate PWP (Tebus Murah) non-cumulative max 1 unit cap & restricted category exclusion
+    const pwpItems = items.filter((it: any) => Boolean(it.isPwpRedemption));
+    if (pwpItems.length > 1 || pwpItems.some((it: any) => (Number(it.quantity) || 1) > 1)) {
+      return res.status(400).json({
+        error: 'PWP Tebus Murah Policy Violation: Promo is non-cumulative and strictly capped at 1 unit per invoice.',
+      });
+    }
+    const primaryPwp = pwpRulesList[0];
+    if (pwpItems.length === 1 && primaryPwp) {
+      const eligibleSpend = items.reduce((sum: number, it: any) => {
+        if (it.isPwpRedemption) return sum;
+        const prod = wholesaleProductsList.find((p) => p.sku === (it.product?.sku || it.sku));
+        const isRestricted = Boolean(it.product?.isRestrictedForPwp ?? prod?.isRestrictedForPwp);
+        return isRestricted ? sum : sum + (Number(it.lineTotal) || 0);
+      }, 0);
+      if (eligibleSpend < primaryPwp.minSpendIDR) {
+        return res.status(400).json({
+          error: `PWP Tebus Murah requires Rp ${primaryPwp.minSpendIDR.toLocaleString('id-ID')} eligible spend (excluding restricted cigarettes/infant formula). Current eligible spend: Rp ${eligibleSpend.toLocaleString('id-ID')}.`,
+        });
+      }
+    }
+
     // Calculate subtotal, PWP discounts, tax, and base units
     let subtotalIDR = 0;
     let pwpDiscountIDR = 0;
@@ -5037,9 +5120,8 @@ async function startServer() {
       subtotalIDR += Number(item.lineTotal) || 0;
       totalBaseUnits += Number(item.baseUnitsCalculated) || 0;
       if (item.isPwpRedemption) {
-        // Savings = normal price - promo price
-        const normalPrice = 38000;
-        pwpDiscountIDR += Math.max(0, normalPrice - (item.unitPrice || 10000));
+        const normalPrice = primaryPwp?.normalPriceIDR || 38000;
+        pwpDiscountIDR += Math.max(0, normalPrice - (Number(item.unitPrice) || primaryPwp?.promoPriceIDR || 10000));
       }
     }
 
@@ -5047,7 +5129,8 @@ async function startServer() {
     const totalAmountIDR = subtotalIDR + taxPPN11IDR;
 
     // Strict Auto-Credit Lock & AR Validation
-    const isCreditPayment = paymentMethod.startsWith('term_') || paymentMethod === 'bilyet_giro';
+    const safePaymentMethod = String(paymentMethod || 'term_net14');
+    const isCreditPayment = safePaymentMethod.startsWith('term_') || safePaymentMethod === 'bilyet_giro';
     if (isCreditPayment) {
       if (customer.status === 'CREDIT_LOCKED') {
         return res.status(400).json({
@@ -5070,9 +5153,11 @@ async function startServer() {
 
     // Real-Time Fractional Strategy-Aware (FEFO/FIFO) Inventory Deduction & Moving Average COGS
     for (const cartIt of items) {
-      const prod = wholesaleProductsList.find((p) => p.id === cartIt.product.id || p.sku === cartIt.product.sku);
-      const targetSku = prod?.sku || cartIt.product.sku;
-      const unitsToDeduct = Number(cartIt.baseUnitsCalculated) || 1;
+      const prod = wholesaleProductsList.find(
+        (p) => p.id === (cartIt.product?.id || cartIt.productId) || p.sku === (cartIt.product?.sku || cartIt.sku)
+      );
+      const targetSku = prod?.sku || cartIt.product?.sku || cartIt.sku || '';
+      const unitsToDeduct = Number(cartIt.baseUnitsCalculated) || Number(cartIt.quantity) || 1;
       const fallbackCost = (prod?.baseUnitPrice || 20000) * 0.72;
 
       const batchDeduction = deductBatchesByStrategy(targetSku, unitsToDeduct, 'CONSOLIDATED', fallbackCost);
@@ -5091,7 +5176,9 @@ async function startServer() {
       const tier = storeInventoryTiers.find((t) => t.sku === targetSku);
       if (tier) {
         tier.physicalStock = Math.max(0, tier.physicalStock - unitsToDeduct);
-        tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+        tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+        tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
         tier.updatedAt = new Date().toISOString();
       }
     }
@@ -5153,7 +5240,7 @@ async function startServer() {
         customerName: customer.companyName,
         customerId: customer.id,
         giroNumber: giroDetails?.giroNumber || `BG-BCA-${Math.floor(1000000 + Math.random() * 9000000)}`,
-        issuingBank: giroDetails?.bankName || 'Bank Central Asia (BCA)',
+        issuingBank: giroDetails?.bankName || giroDetails?.issuingBank || 'Bank Central Asia (BCA)',
         amountIDR: totalAmountIDR,
         issueDate: timestamp,
         clearingDueDate: dueDate,
@@ -5581,8 +5668,15 @@ async function startServer() {
     const po = purchaseOrders.find((p) => p.id === poId);
     const gr = goodsReceipts.find((g) => g.id === goodsReceiptId);
 
-    const qtyTolPercent = enterpriseSettings.threeWayMatching.quantityTolerancePercent || 2.0;
-    const priceTolPercent = enterpriseSettings.threeWayMatching.priceTolerancePercent || 1.0;
+    const enforcementMode = enterpriseSettings.threeWayMatching.enforcementMode || 'TOLERANCE_3_WAY';
+    const qtyTolPercent =
+      enforcementMode === 'STRICT_3_WAY'
+        ? 0
+        : (enterpriseSettings.threeWayMatching.quantityTolerancePercent ?? 2.0);
+    const priceTolPercent =
+      enforcementMode === 'STRICT_3_WAY'
+        ? 0
+        : (enterpriseSettings.threeWayMatching.priceTolerancePercent ?? 1.0);
 
     let hasAnyPriceVariance = false;
     let hasAnyQtyVariance = false;
@@ -5598,7 +5692,8 @@ async function startServer() {
       const poPrice = poItem ? (currency === 'IDR' ? poItem.unitCost : poItem.unitCost / exchangeRate) : it.unitCost;
       const billedPrice = Number(it.unitCost) || 0;
 
-      const qtyDiffPercent = grQty > 0 ? (Math.abs(billedQty - grQty) / grQty) * 100 : 0;
+      const compareQty = enforcementMode === 'TWO_WAY' ? poQty : grQty;
+      const qtyDiffPercent = compareQty > 0 ? (Math.abs(billedQty - compareQty) / compareQty) * 100 : 0;
       const priceDiffPercent = poPrice > 0 ? (Math.abs(billedPrice - poPrice) / poPrice) * 100 : 0;
 
       const hasQtyVar = qtyDiffPercent > qtyTolPercent;
@@ -5713,11 +5808,42 @@ async function startServer() {
 
     vendorBillsList.unshift(newBill);
 
+    // Flag 3-Way Match Variances exceeding tolerance into Approval Matrix
+    let approvalRequestId: string | undefined;
+    if (
+      (billStatus === 'PRICE_VARIANCE' || billStatus === 'QTY_VARIANCE') &&
+      enterpriseSettings.threeWayMatching.requireManagerApprovalForVariance !== false
+    ) {
+      approvalRequestId = `APR-VB-${Date.now().toString().slice(-5)}`;
+      approvalQueueList.unshift({
+        id: approvalRequestId,
+        module: 'procurement_po',
+        documentId: id,
+        documentTitle: `3-Way Match Variance [${billStatus}]: ${billNumber} (${supplierName})`,
+        requestedBy: currentActiveStaffSession.userName,
+        requestedAt: timestamp,
+        amountIDR: grandTotalIDR,
+        storeId,
+        storeName,
+        currentTierLevel: 1,
+        requiredTierLevel: grandTotalIDR >= 10000000 ? 2 : 1,
+        status: 'PENDING',
+        history: [],
+        payloadSummary: {
+          sku: validatedItems[0]?.sku,
+          productName: validatedItems[0]?.productName,
+          quantity: validatedItems.reduce((s, it) => s + it.billedQuantity, 0),
+          reason: `3-Way Match ${billStatus} on PO #${poId} / GR #${goodsReceiptId} exceeding tolerance`,
+        },
+      });
+    }
+
     res.json({
       success: true,
       vendorBill: newBill,
+      approvalRequestId,
       journalEntryIds: glEntryIds,
-      message: `Vendor Bill #${id} created with 3-Way status [${billStatus}].`,
+      message: `Vendor Bill #${id} created with 3-Way status [${billStatus}]${approvalRequestId ? ' and flagged in Approval Matrix' : ''}.`,
     });
   });
 
@@ -5775,6 +5901,15 @@ async function startServer() {
     const { amountPaid, paymentMethod = 'BANK_TRANSFER', paymentReference } = req.body;
     const bill = vendorBillsList.find((b) => b.id === id);
     if (!bill) return res.status(404).json({ error: 'Vendor Bill not found.' });
+
+    if (
+      enterpriseSettings.threeWayMatching.blockPaymentOnMismatch !== false &&
+      (bill.status === 'PRICE_VARIANCE' || bill.status === 'QTY_VARIANCE' || bill.status === 'VOID')
+    ) {
+      return res.status(403).json({
+        error: `Payment Blocked by 3-Way Matching Policy: Vendor Bill #${bill.billNumber} has status [${bill.status}] and must be authorized in the Approval Matrix before disbursement.`,
+      });
+    }
 
     const payAmt = Number(amountPaid) || bill.remainingDue;
     bill.amountPaid += payAmt;
@@ -6241,6 +6376,9 @@ async function startServer() {
       if (reqItem.module === 'blind_stock_opname') {
         const sheet = blindOpnameSheetsList.find((s) => s.id === reqItem.documentId || s.approvalRequestId === reqItem.id);
         if (sheet) sheet.status = 'REJECTED';
+      } else if (reqItem.module === 'procurement_po' && reqItem.documentId.startsWith('VB-')) {
+        const bill = vendorBillsList.find((b) => b.id === reqItem.documentId);
+        if (bill) bill.status = 'VOID';
       }
     } else {
       if (reqItem.currentTierLevel < reqItem.requiredTierLevel) {
@@ -6251,6 +6389,46 @@ async function startServer() {
           const sheet = blindOpnameSheetsList.find((s) => s.id === reqItem.documentId || s.approvalRequestId === reqItem.id);
           if (sheet && sheet.status !== 'APPROVED') {
             applyBlindOpnameApproval(sheet, currentActiveStaffSession.userName);
+          }
+        } else if (reqItem.module === 'procurement_po' && reqItem.documentId.startsWith('VB-')) {
+          const bill = vendorBillsList.find((b) => b.id === reqItem.documentId);
+          if (bill && bill.status !== 'APPROVED' && bill.status !== 'PAID') {
+            bill.status = 'APPROVED';
+            bill.approvedBy = currentActiveStaffSession.userName;
+            bill.approvedAt = new Date().toISOString();
+            if (!bill.glEntryIds || bill.glEntryIds.length === 0) {
+              const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+              const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+              bill.glEntryIds = [gleId1, gleId2];
+              generalLedger.unshift({
+                id: gleId1,
+                timestamp: bill.approvedAt,
+                storeId: bill.storeId,
+                storeName: bill.storeName,
+                accountCode: '1040',
+                accountName: 'Merchandise Inventory Asset',
+                category: 'Asset',
+                debit: bill.grandTotalIDR,
+                credit: 0,
+                referenceType: 'VENDOR_BILL',
+                referenceId: bill.id,
+                description: `Vendor Bill #${bill.id} variance authorized by ${currentActiveStaffSession.userName}`,
+              });
+              generalLedger.unshift({
+                id: gleId2,
+                timestamp: bill.approvedAt,
+                storeId: bill.storeId,
+                storeName: bill.storeName,
+                accountCode: '2010',
+                accountName: 'Trade Accounts Payable',
+                category: 'Liability',
+                debit: 0,
+                credit: bill.grandTotalIDR,
+                referenceType: 'VENDOR_BILL',
+                referenceId: bill.id,
+                description: `Trade Accounts Payable confirmed for ${bill.supplierName}`,
+              });
+            }
           }
         }
       }
@@ -6439,7 +6617,9 @@ async function startServer() {
     const qcQty = Math.max(0, Number(newQc.totalBatchQuantity) || 0);
     const matchingBatch = inventoryBatches.find(
       (b) =>
-        (b.lotNumber === newQc.batchNumber || b.sku === newQc.sku) &&
+        (newQc.batchNumber
+          ? b.lotNumber === newQc.batchNumber && b.sku === newQc.sku
+          : b.sku === newQc.sku) &&
         (b.storeId === newQc.storeId || newQc.storeId === 'ALL')
     );
     const matchingTier = storeInventoryTiers.find(
@@ -6658,13 +6838,13 @@ async function startServer() {
   // =============================================================
   app.get('/api/admin/batch-recall/trace/:query', (req: Request, res: Response) => {
     const { query } = req.params;
-    const cleanQ = query.toLowerCase().trim();
+    const cleanQ = String(query ?? '').toLowerCase().trim();
     const batch = inventoryBatches.find(
       (b) =>
-        b.batchId.toLowerCase().includes(cleanQ) ||
-        b.lotNumber.toLowerCase().includes(cleanQ) ||
-        b.sku.toLowerCase().includes(cleanQ) ||
-        b.productName.toLowerCase().includes(cleanQ)
+        String(b.batchId ?? '').toLowerCase().includes(cleanQ) ||
+        String(b.lotNumber ?? '').toLowerCase().includes(cleanQ) ||
+        String(b.sku ?? '').toLowerCase().includes(cleanQ) ||
+        String(b.productName ?? '').toLowerCase().includes(cleanQ)
     ) || inventoryBatches[0];
 
     if (!batch) {
@@ -6748,19 +6928,21 @@ async function startServer() {
   app.post('/api/admin/batch-recall/quarantine', (req: Request, res: Response) => {
     const { batchId, reason, recallClassification, hazardDescription } = req.body;
     const batch = inventoryBatches.find((b) => b.batchId === batchId);
-    if (batch) {
-      batch.status = 'quarantined';
-      batch.notes = `Quarantined: ${reason || hazardDescription || recallClassification || 'Suspected contamination'}`;
+    if (!batch) {
+      return res.status(404).json({ error: `Batch ${batchId} not found` });
     }
+    batch.status = 'quarantined';
+    batch.notes = `Quarantined: ${reason || hazardDescription || recallClassification || 'Suspected contamination'}`;
+    const quarantinedUnits = batch.remainingQuantity ?? batch.currentStock ?? 0;
     res.json({
       success: true,
       message: `Batch ${batchId} has been locked and quarantined from all picking & POS sales.`,
-      quarantinedUnits: batch ? batch.remainingQuantity : 1,
+      quarantinedUnits,
     });
   });
 
   app.post('/api/admin/batch-recall/notify-customers', (req: Request, res: Response) => {
-    const { batchId, message, channel } = req.body;
+    const { batchId, channel } = req.body;
     const notifications = [
       {
         notificationId: `NOTIF-${Date.now()}-1`,
@@ -6789,10 +6971,11 @@ async function startServer() {
   app.post('/api/admin/batch-recall/release', (req: Request, res: Response) => {
     const { batchId } = req.body;
     const batch = inventoryBatches.find((b) => b.batchId === batchId);
-    if (batch) {
-      batch.status = 'active';
-      batch.notes = 'Released from quarantine after lab clearance verified.';
+    if (!batch) {
+      return res.status(404).json({ error: `Batch ${batchId} not found` });
     }
+    batch.status = (batch.daysUntilExpiry ?? 14) <= 7 ? 'near_expiry' : 'fresh';
+    batch.notes = 'Released from quarantine after lab clearance verified.';
     res.json({
       success: true,
       message: `Batch ${batchId} cleared and returned to active sellable inventory.`,
@@ -6903,10 +7086,54 @@ async function startServer() {
 
   app.get('/api/admin/returns/lookup-receipt/:query', (req: Request, res: Response) => {
     const { query } = req.params;
-    const cleanQ = query.toLowerCase().trim();
+    const cleanQ = String(query ?? '').toLowerCase().trim();
+    if (!cleanQ) {
+      return res.status(400).json({ error: 'Receipt search query is required' });
+    }
+
+    const posMatch = posTransactionsHistory.find(
+      (tx) =>
+        String(tx.receiptNumber ?? '').toLowerCase().includes(cleanQ) ||
+        String(tx.transactionId ?? '').toLowerCase().includes(cleanQ) ||
+        String(tx.orderId ?? '').toLowerCase().includes(cleanQ) ||
+        String(tx.cashierName ?? '').toLowerCase().includes(cleanQ) ||
+        (Array.isArray(tx.items) &&
+          tx.items.some(
+            (i) =>
+              String(i?.name ?? '').toLowerCase().includes(cleanQ) ||
+              String(i?.sku ?? '').toLowerCase().includes(cleanQ)
+          ))
+    );
+
+    if (posMatch) {
+      return res.json({
+        receiptNumber: posMatch.receiptNumber,
+        orderId: posMatch.orderId || posMatch.transactionId,
+        storeId: posMatch.storeId,
+        storeName: posMatch.storeName,
+        customerName: 'POS Walk-in Customer',
+        customerPhone: '+6281234567890',
+        timestamp: posMatch.timestamp,
+        totalAmountIDR: posMatch.total,
+        items: (posMatch.items || []).map((i) => ({
+          sku: i.sku,
+          name: i.name,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          lineTotal: i.lineTotal,
+          unit: i.unit || 'pack',
+          returnEligible: true,
+        })),
+      });
+    }
+
     const order = customerOrders.find(
-      (o) => o.id.toLowerCase().includes(cleanQ) || (o.items && o.items.some((i: any) => ((i.product?.name || i.name || '') as string).toLowerCase().includes(cleanQ)))
-    ) || customerOrders[0];
+      (o) =>
+        String(o.id ?? '').toLowerCase().includes(cleanQ) ||
+        String(o.customerName ?? '').toLowerCase().includes(cleanQ) ||
+        (Array.isArray(o.items) &&
+          o.items.some((i: any) => String(i?.product?.name || i?.name || '').toLowerCase().includes(cleanQ)))
+    );
 
     if (!order) {
       return res.status(404).json({ error: `Receipt '${query}' not found in POS archives` });
@@ -6931,8 +7158,8 @@ async function startServer() {
     res.json({
       receiptNumber: `RCP-${order.id}`,
       orderId: order.id,
-      storeId: 'store-jkt-senopati',
-      storeName: 'GroceMart Senopati Flagship',
+      storeId: order.pickupStore?.id || 'store-jkt-senopati',
+      storeName: order.pickupStore?.name || 'GroceMart Senopati Flagship',
       customerName: order.customerName || 'Walk-in Customer',
       customerPhone: order.customerPhone || '+6281234567890',
       timestamp: order.createdAt || new Date().toISOString(),
@@ -6945,46 +7172,223 @@ async function startServer() {
     const {
       originalReceiptNumber,
       originalOrderId,
-      storeId,
+      storeId = 'store-jkt-senopati',
       processedByUserId,
       processedByUserName,
-      items,
+      items = [],
       refundChannel,
       customerName,
       customerPhone,
     } = req.body;
 
-    const totalRefund = (items || []).reduce((sum: number, it: any) => sum + (Number(it.refundAmount) || 0), 0);
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'At least one return item is required.' });
+    }
+
+    const storeInfo = storeSchedules.find((s) => s.storeId === storeId);
+    const resolvedStoreName = storeInfo?.storeName || 'GroceMart Senopati Flagship';
+    const normalizedItems: POSReturnItemLine[] = items.map((it: any) => {
+      const inv = inventoryList.find((p) => p.sku === it.sku);
+      const returnQty = Math.max(0.01, Number(it.returnQuantity ?? it.quantity ?? 1));
+      const origQty = Math.max(returnQty, Number(it.originalQuantity ?? returnQty));
+      const uPrice = Number(it.unitPrice ?? inv?.sellingPrice ?? 0);
+      const uCost = Number(it.unitCost ?? inv?.unitCost ?? Math.round(uPrice * 0.65));
+      const refundAmt = Number(it.refundAmount ?? Math.round(returnQty * uPrice));
+      return {
+        sku: it.sku || inv?.sku || 'SKU-PRD-001',
+        productName: it.productName || it.name || inv?.productName || 'GroceMart Item',
+        category: it.category || inv?.category || 'produce',
+        originalQuantity: origQty,
+        returnQuantity: returnQty,
+        unitPrice: uPrice,
+        unitCost: uCost,
+        refundAmount: refundAmt,
+        returnReason: it.returnReason || 'PERISHABLE_DEFECT',
+        disposition: it.disposition === 'RESTOCK_INVENTORY' ? 'RESTOCK_INVENTORY' : 'RETURN_CAGE_WASTE',
+        conditionNotes: it.conditionNotes || it.reason,
+      };
+    });
+
+    const totalRefund = normalizedItems.reduce((sum, it) => sum + (Number(it.refundAmount) || 0), 0);
     const returnId = `RET-${Date.now()}`;
-    const glVoucherId = `GLE-RET-${Date.now()}`;
+    const timestamp = new Date().toISOString();
+    const resolvedChannel = (refundChannel as RefundPaymentChannel) || 'CASH_DRAWER';
+    const seq = `${Date.now().toString().slice(-6)}`;
+    const revGleId = `GLE-RET-${seq}-REV`;
+    const settleGleId = `GLE-RET-${seq}-SETTLE`;
+    const glVoucherIds: string[] = [revGleId, settleGleId];
+
+    // Double-entry 1: Debit Grocery Sales Revenue (#4010) / Credit Cash (#1010) or Store Credit (#2020)
+    generalLedger.unshift({
+      id: revGleId,
+      timestamp,
+      storeId,
+      storeName: resolvedStoreName,
+      accountCode: '4010',
+      accountName: 'Grocery Sales Revenue',
+      category: 'Revenue',
+      debit: totalRefund,
+      credit: 0,
+      referenceType: 'POS_SALE',
+      referenceId: returnId,
+      description: `POS Sales Return Reversal (${returnId}) for receipt ${originalReceiptNumber || 'Walk-in'}`,
+    });
+
+    if (resolvedChannel === 'CASH_DRAWER') {
+      generalLedger.unshift({
+        id: settleGleId,
+        timestamp,
+        storeId,
+        storeName: resolvedStoreName,
+        accountCode: '1010',
+        accountName: 'Cash on Hand & Store Registers',
+        category: 'Asset',
+        debit: 0,
+        credit: totalRefund,
+        referenceType: 'POS_SALE',
+        referenceId: returnId,
+        description: `POS Cash Drawer Refund for Return ${returnId}`,
+      });
+      const openShift = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
+      if (openShift) {
+        openShift.cashRefundsIDR += totalRefund;
+        openShift.expectedTotalCashInDrawerIDR =
+          openShift.openingFloatIDR + openShift.expectedCashSalesIDR - openShift.cashRefundsIDR;
+      }
+    } else {
+      generalLedger.unshift({
+        id: settleGleId,
+        timestamp,
+        storeId,
+        storeName: resolvedStoreName,
+        accountCode: '2020',
+        accountName: 'Customer Store Credit Liability',
+        category: 'Liability',
+        debit: 0,
+        credit: totalRefund,
+        referenceType: 'POS_SALE',
+        referenceId: returnId,
+        description: `Store Credit / E-Wallet Refund (${resolvedChannel}) for Return ${returnId}`,
+      });
+    }
+
+    let totalRestockCogs = 0;
+    let totalScrapCogs = 0;
+
+    // Restore restockable inventory & track restock vs scrap COGS
+    normalizedItems.forEach((it) => {
+      const lineCogs = Math.round(it.returnQuantity * it.unitCost);
+      if (it.disposition === 'RESTOCK_INVENTORY') {
+        totalRestockCogs += lineCogs;
+        const qty = it.returnQuantity;
+        const inv = inventoryList.find((p) => p.sku === it.sku);
+        if (inv) {
+          inv.currentStock = Number(((inv.currentStock || 0) + qty).toFixed(2));
+          if (typeof inv.stockLevel === 'number') {
+            inv.stockLevel = Number((inv.stockLevel + qty).toFixed(2));
+          }
+        }
+        const tier = storeInventoryTiers.find(
+          (t) => t.sku === it.sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
+        );
+        if (tier) {
+          tier.physicalStock = Number((tier.physicalStock + qty).toFixed(2));
+          tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+          tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+          tier.updatedAt = timestamp;
+        }
+      } else {
+        totalScrapCogs += lineCogs;
+      }
+    });
+
+    if (totalRestockCogs > 0) {
+      const invGle = `GLE-RET-${seq}-INV`;
+      const cogsGle = `GLE-RET-${seq}-COGS`;
+      glVoucherIds.push(invGle, cogsGle);
+      generalLedger.unshift({
+        id: invGle,
+        timestamp,
+        storeId,
+        storeName: resolvedStoreName,
+        accountCode: '1040',
+        accountName: 'Merchandise Inventory Asset',
+        category: 'Asset',
+        debit: totalRestockCogs,
+        credit: 0,
+        referenceType: 'POS_SALE',
+        referenceId: returnId,
+        description: `Good-condition POS return restocked to ATP (${returnId})`,
+      });
+      generalLedger.unshift({
+        id: cogsGle,
+        timestamp,
+        storeId,
+        storeName: resolvedStoreName,
+        accountCode: '5010',
+        accountName: 'Cost of Goods Sold (COGS)',
+        category: 'Expense',
+        debit: 0,
+        credit: totalRestockCogs,
+        referenceType: 'POS_SALE',
+        referenceId: returnId,
+        description: `COGS reversal for restocked POS return (${returnId})`,
+      });
+    }
+
+    if (totalScrapCogs > 0) {
+      const scrapDrGle = `GLE-RET-${seq}-SCRAP-DR`;
+      const scrapCrGle = `GLE-RET-${seq}-SCRAP-CR`;
+      glVoucherIds.push(scrapDrGle, scrapCrGle);
+      generalLedger.unshift({
+        id: scrapDrGle,
+        timestamp,
+        storeId,
+        storeName: resolvedStoreName,
+        accountCode: '6030',
+        accountName: 'Perishable Spoilage & Shrinkage Expense',
+        category: 'Expense',
+        debit: totalScrapCogs,
+        credit: 0,
+        referenceType: 'POS_SALE',
+        referenceId: returnId,
+        description: `Returned perishable waste written off on POS return (${returnId})`,
+      });
+      generalLedger.unshift({
+        id: scrapCrGle,
+        timestamp,
+        storeId,
+        storeName: resolvedStoreName,
+        accountCode: '5010',
+        accountName: 'Cost of Goods Sold (COGS)',
+        category: 'Expense',
+        debit: 0,
+        credit: totalScrapCogs,
+        referenceType: 'POS_SALE',
+        referenceId: returnId,
+        description: `COGS reclassification to Spoilage Waste for POS return (${returnId})`,
+      });
+    }
 
     const newReturn: POSReturnRecord = {
       id: returnId,
       originalReceiptNumber: originalReceiptNumber || `RCP-${Date.now()}`,
       originalOrderId,
-      storeId: storeId || 'store-jkt-senopati',
-      storeName: 'GroceMart Senopati Flagship',
-      processedByUserId: processedByUserId || 'usr-cashier-01',
-      processedByUserName: processedByUserName || 'Dewi Lestari',
-      timestamp: new Date().toISOString(),
-      items: items || [],
+      storeId,
+      storeName: resolvedStoreName,
+      processedByUserId: processedByUserId || currentActiveStaffSession.userId,
+      processedByUserName: processedByUserName || currentActiveStaffSession.userName,
+      timestamp,
+      items: normalizedItems,
       totalRefundAmountIDR: totalRefund,
-      refundChannel: (refundChannel as RefundPaymentChannel) || 'CASH_DRAWER',
-      glVoucherIds: [glVoucherId],
+      refundChannel: resolvedChannel,
+      glVoucherIds,
       status: 'COMPLETED',
       customerName,
       customerPhone,
     };
 
     posReturnsList.unshift(newReturn);
-
-    // If restockable items exist, restore inventory
-    (items || []).forEach((it: any) => {
-      if (it.disposition === 'RESTOCK_INVENTORY') {
-        const inv = inventoryList.find((p) => p.sku === it.sku);
-        if (inv) inv.stockLevel = (inv.stockLevel || 0) + (Number(it.quantity) || 0);
-      }
-    });
 
     const slipText = [
       '================================',
@@ -6996,18 +7400,18 @@ async function startServer() {
       `Cashier: ${newReturn.processedByUserName}`,
       `Customer: ${customerName || 'Walk-in'}`,
       '--------------------------------',
-      ...(items || []).map((it: any) => `${it.productName || it.sku} x${it.quantity} = Rp ${Number(it.refundAmount).toLocaleString('id-ID')}`),
+      ...normalizedItems.map((it) => `${it.productName || it.sku} x${it.returnQuantity} = Rp ${Number(it.refundAmount).toLocaleString('id-ID')}`),
       '--------------------------------',
       `TOTAL REFUND: Rp ${totalRefund.toLocaleString('id-ID')}`,
-      `CHANNEL: ${refundChannel || 'CASH_DRAWER'}`,
-      `GL ENTRY: ${glVoucherId}`,
+      `CHANNEL: ${resolvedChannel}`,
+      `GL ENTRY: ${glVoucherIds[0]}`,
       '================================',
     ].join('\n');
 
     res.json({
       success: true,
       returnRecord: newReturn,
-      glVoucherIds: [glVoucherId],
+      glVoucherIds,
       slipText,
       message: `Return ${returnId} processed successfully. Refund Rp ${totalRefund.toLocaleString('id-ID')} authorized.`,
     });
@@ -7018,43 +7422,58 @@ async function startServer() {
   // =============================================================
   app.get('/api/admin/replenishment/plan', (req: Request, res: Response) => {
     const { storeId } = req.query as { storeId?: string };
-    const targetStore = storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED' ? storeId : 'store-jkt-senopati';
-    const storeName = targetStore === 'store-jkt-senopati' ? 'GroceMart Senopati Flagship' : 'GroceMart Regional Outlet';
+    const isSpecificStore = Boolean(storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED');
+    const targetStore = isSpecificStore ? storeId! : 'store-jkt-senopati';
+    const storeInfo = storeSchedules.find((s) => s.storeId === targetStore);
+    const storeName = isSpecificStore
+      ? storeInfo?.storeName || 'GroceMart Regional Outlet'
+      : 'All Store Outlets (Consolidated Network)';
 
     const items: AutoReplenishmentItemPlan[] = inventoryList.map((item) => {
-      const minThresh = item.minimumThreshold || 20;
-      const currentStock = item.stockLevel || 0;
+      const tier = isSpecificStore
+        ? storeInventoryTiers.find((t) => t.sku === item.sku && t.storeId === targetStore)
+        : undefined;
+      const matchingTiers = storeInventoryTiers.filter((t) => t.sku === item.sku);
+      const minThresh = tier?.minimumThreshold ?? item.minimumThreshold ?? 20;
+      const physicalStock = tier ? tier.physicalStock : (item.currentStock ?? item.stockLevel ?? 0);
+      const reservedStock = tier
+        ? tier.reservedStock
+        : matchingTiers.reduce((sum, t) => sum + (t.reservedStock || 0), 0);
+      const availableStock = tier ? tier.availableStock : Math.max(0, physicalStock - reservedStock);
+      const incomingStock = tier ? tier.incomingStock : (item.incomingStock ?? 0);
       const reorderQty = item.reorderQuantity || Math.max(30, minThresh * 2);
-      const isCritical = currentStock <= minThresh / 2;
-      const needsRestock = currentStock < minThresh;
+      const needsRestock = availableStock + incomingStock <= minThresh;
+      const maxCapacity = Math.max(100, minThresh * 4);
       const suggestedOrderQty = needsRestock ? reorderQty : 0;
-      const uCost = item.wacUnitCost || Math.round(item.sellingPrice * 0.7);
+      const uCost = item.wacUnitCost ?? item.unitCost ?? Math.round(item.sellingPrice * 0.7);
       const estimatedOrderCostIDR = suggestedOrderQty * uCost;
 
       let urgencyLevel: AutoReplenishmentItemPlan['urgencyLevel'] = 'HEALTHY_STOCK';
-      if (currentStock <= 0) {
+      if (availableStock <= 0) {
         urgencyLevel = 'CRITICAL_OUT_OF_STOCK';
       } else if (needsRestock) {
         urgencyLevel = 'BELOW_SAFETY_STOCK';
+      } else if (availableStock > maxCapacity) {
+        urgencyLevel = 'OVERSTOCKED';
       }
 
       return {
         sku: item.sku,
-        productName: item.name || item.productName || 'GroceMart Item',
+        productName: item.productName || item.name || 'GroceMart Item',
         category: item.category,
         storeId: targetStore,
         storeName,
-        warehouseZoneId: 'zone-produce-01',
-        physicalStock: currentStock,
-        availableStock: currentStock,
-        reservedStock: 0,
-        incomingStock: 0,
+        warehouseZoneId: tier?.warehouseZoneId || 'WH-JKT-SEN-COLD',
+        physicalStock,
+        availableStock,
+        reservedStock,
+        incomingStock,
         minimumThreshold: minThresh,
-        safetyStockBuffer: Math.round(minThresh * 0.4),
-        maxCapacity: Math.max(100, minThresh * 4),
+        safetyStockBuffer: tier?.safetyStockBuffer ?? Math.round(minThresh * 0.4),
+        maxCapacity,
         reorderQuantity: reorderQty,
         dailySalesVelocity: 4.5,
-        daysOfInventoryLeft: currentStock > 0 ? Number((currentStock / 4.5).toFixed(1)) : 0,
+        daysOfInventoryLeft: availableStock > 0 ? Number((availableStock / 4.5).toFixed(1)) : 0,
         supplierLeadTimeDays: 3,
         reorderPoint: minThresh,
         isReorderTriggered: needsRestock,
@@ -7071,6 +7490,34 @@ async function startServer() {
     const critical = items.filter((i) => i.urgencyLevel === 'CRITICAL_OUT_OF_STOCK');
     const totalCost = needingRestock.reduce((sum, i) => sum + i.estimatedOrderCostIDR, 0);
 
+    const supplierGroupMap = new Map<string, {
+      supplierId: string;
+      supplierName: string;
+      skuCount: number;
+      totalOrderQty: number;
+      totalAmountIDR: number;
+      suggestedPoId: string;
+    }>();
+
+    needingRestock.forEach((it, idx) => {
+      const key = it.supplierName || it.supplierId || 'SUPP-AGRO-01';
+      const existing = supplierGroupMap.get(key);
+      if (existing) {
+        existing.skuCount += 1;
+        existing.totalOrderQty += it.suggestedOrderQty;
+        existing.totalAmountIDR += it.estimatedOrderCostIDR;
+      } else {
+        supplierGroupMap.set(key, {
+          supplierId: it.supplierId || `SUPP-${idx + 1}`,
+          supplierName: it.supplierName || 'PT Lembang Agro Sejahtera',
+          skuCount: 1,
+          totalOrderQty: it.suggestedOrderQty,
+          totalAmountIDR: it.estimatedOrderCostIDR,
+          suggestedPoId: `PO-AUTO-${Date.now().toString().slice(-4)}-${idx + 1}`,
+        });
+      }
+    });
+
     const plan: AutoReplenishmentConsolidatedPlan = {
       storeId: targetStore,
       storeName,
@@ -7080,69 +7527,110 @@ async function startServer() {
       criticalSkusCount: critical.length,
       totalSuggestedCostIDR: totalCost,
       items,
-      bySupplier: [
-        {
-          supplierId: 'SUPP-AGRO-01',
-          supplierName: 'PT Lembang Agro Sejahtera',
-          skuCount: needingRestock.length || 3,
-          totalOrderQty: needingRestock.reduce((sum, i) => sum + i.suggestedOrderQty, 0) || 150,
-          totalAmountIDR: totalCost || 4500000,
-          suggestedPoId: `PO-AUTO-${Date.now().toString().slice(-4)}`,
-        },
-      ],
+      bySupplier: Array.from(supplierGroupMap.values()),
     };
 
     res.json(plan);
   });
 
   app.post('/api/admin/replenishment/generate-po', (req: Request, res: Response) => {
-    const { storeId, selectedSkus } = req.body;
-    const targetSkus: string[] = selectedSkus && selectedSkus.length > 0 ? selectedSkus : inventoryList.filter((i) => (i.stockLevel ?? 0) < (i.minimumThreshold || 20)).map((i) => i.sku);
+    const { storeId, selectedSkus } = req.body as { storeId?: string; selectedSkus?: string[] };
+    const effectiveStore = storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED' ? storeId : 'store-jkt-senopati';
+    const storeInfo = storeSchedules.find((s) => s.storeId === effectiveStore);
+    const resolvedStoreName = storeInfo?.storeName || 'GroceMart Senopati Flagship';
 
-    const generatedPoId = `PO-REPL-${Date.now().toString().slice(-4)}`;
-    const poItems: PurchaseOrderItem[] = targetSkus.slice(0, 5).map((sku) => {
-      const item = inventoryList.find((p) => p.sku === sku) || inventoryList[0];
-      const qty = item.reorderQuantity || 30;
-      const uCost = item.wacUnitCost || Math.round(item.sellingPrice * 0.7);
-      return {
-        sku: item.sku,
-        productName: item.name || item.productName || 'Produce Item',
-        orderedQuantity: qty,
-        quantity: qty,
-        receivedQuantity: 0,
-        remainingBackorder: qty,
-        unitCost: uCost,
-        totalCost: qty * uCost,
-        lineTotal: qty * uCost,
-      };
+    const targetSkus: string[] =
+      Array.isArray(selectedSkus) && selectedSkus.length > 0
+        ? selectedSkus
+        : inventoryList
+            .filter((i) => {
+              const tier = storeInventoryTiers.find((t) => t.sku === i.sku && t.storeId === effectiveStore);
+              const stock = tier ? tier.availableStock : (i.stockLevel ?? i.currentStock ?? 0);
+              const incoming = tier ? tier.incomingStock : (i.incomingStock ?? 0);
+              return stock + incoming <= (tier?.minimumThreshold ?? i.minimumThreshold ?? 20);
+            })
+            .map((i) => i.sku);
+
+    if (targetSkus.length === 0) {
+      return res.status(400).json({ error: 'No low-stock SKUs selected or eligible for replenishment PO generation.' });
+    }
+
+    const bySupplier = new Map<string, InventoryItem[]>();
+    targetSkus.forEach((sku) => {
+      const item = inventoryList.find((p) => p.sku === sku);
+      if (!item) return;
+      const supplierKey = item.supplierName || item.supplierId || 'PT Lembang Agro Sejahtera';
+      const bucket = bySupplier.get(supplierKey) || [];
+      bucket.push(item);
+      bySupplier.set(supplierKey, bucket);
     });
 
-    const totalPoCost = poItems.reduce((sum, it) => sum + it.totalCost, 0) || 12500000;
+    const generatedOrders: PurchaseOrder[] = [];
+    let idxOffset = 0;
 
-    const newPo: PurchaseOrder = {
-      id: generatedPoId,
-      poNumber: generatedPoId,
-      supplierId: 'SUPP-AGRO-01',
-      supplierName: 'PT Lembang Agro Sejahtera',
-      status: 'pending_approval',
-      issueDate: new Date().toISOString().split('T')[0],
-      expectedDeliveryDate: new Date(Date.now() + 1000 * 3600 * 48).toISOString().split('T')[0],
-      storeId: storeId || 'store-jkt-senopati',
-      storeName: 'GroceMart Senopati Flagship',
-      items: poItems,
-      totalCost: totalPoCost,
-      totalAmount: totalPoCost,
-      notes: 'Auto-generated replenishment purchase order triggered by min-max inventory thresholds.',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    bySupplier.forEach((supplierItems, supplierName) => {
+      idxOffset += 1;
+      const generatedPoId = `PO-2026-${(purchaseOrders.length + idxOffset + 100).toString().padStart(3, '0')}`;
+      const poItems: PurchaseOrderItem[] = supplierItems.map((item) => {
+        const qty = item.reorderQuantity || 30;
+        const uCost = item.wacUnitCost ?? item.unitCost ?? Math.round(item.sellingPrice * 0.7);
+        item.incomingStock = (item.incomingStock || 0) + qty;
+        const tier = storeInventoryTiers.find((t) => t.sku === item.sku && t.storeId === effectiveStore);
+        if (tier) {
+          tier.incomingStock = (tier.incomingStock || 0) + qty;
+          tier.updatedAt = new Date().toISOString();
+        }
+        return {
+          sku: item.sku,
+          productName: item.productName || item.name || 'Produce Item',
+          orderedQuantity: qty,
+          quantity: qty,
+          receivedQuantity: 0,
+          remainingBackorder: qty,
+          unitCost: uCost,
+          totalCost: qty * uCost,
+          lineTotal: qty * uCost,
+          handlingNotes: item.handlingInstructions || 'Standard cold-chain replenishment delivery',
+        };
+      });
 
-    purchaseOrders.unshift(newPo);
+      const subtotalCost = poItems.reduce((sum, it) => sum + it.totalCost, 0);
+      const taxAmount = Math.round(subtotalCost * 0.11);
+      const totalPoCost = subtotalCost + taxAmount;
+
+      const newPo: PurchaseOrder = {
+        id: generatedPoId,
+        poNumber: generatedPoId,
+        supplierId: supplierItems[0]?.supplierId || 'SUPP-AGRO-01',
+        supplierName,
+        supplierContact: 'Vendor Dispatch Desk (+62 812 8000 9000)',
+        status: 'Sent',
+        issueDate: new Date().toISOString().split('T')[0],
+        expectedDeliveryDate: new Date(Date.now() + 1000 * 3600 * 48).toISOString().split('T')[0],
+        storeId: effectiveStore,
+        storeName: resolvedStoreName,
+        warehouseZoneId: 'WH-JKT-SEN-COLD',
+        items: poItems,
+        subtotalCost,
+        taxPercent: 11,
+        taxAmount,
+        totalCost: totalPoCost,
+        totalAmount: totalPoCost,
+        paymentTerms: 'Net 30',
+        goodsReceiptIds: [],
+        notes: 'Auto-generated replenishment purchase order triggered by min-max inventory thresholds.',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      purchaseOrders.unshift(newPo);
+      generatedOrders.push(newPo);
+    });
 
     res.json({
       success: true,
-      generatedOrders: [newPo],
-      message: `Automated Replenishment PO ${generatedPoId} generated and submitted to approval workflow.`,
+      generatedOrders,
+      message: `Generated ${generatedOrders.length} Replenishment PO(s) (${generatedOrders.map((o) => o.id).join(', ')}) and updated incoming stock projections.`,
     });
   });
 
@@ -7433,7 +7921,9 @@ async function startServer() {
         if (inv) {
           inv.currentStock = Number(((inv.currentStock || 0) + qty).toFixed(2));
         }
-        const batch = inventoryBatches.find((b) => b.sku === it.sku && b.status === 'active');
+        const batch = inventoryBatches.find(
+          (b) => b.sku === it.sku && (b.status === 'active' || b.status === 'fresh' || b.status === 'near_expiry')
+        );
         if (batch) {
           batch.currentStock = Number((batch.currentStock + qty).toFixed(2));
         }
@@ -7637,6 +8127,40 @@ async function startServer() {
       });
     }
 
+    if (totalScrapLoss > 0) {
+      const scrapDrGle = `GLE-RMA-${seq}-SCRAP`;
+      const scrapCrGle = `GLE-RMA-${seq}-SCRAP-CR`;
+      glIds.push(scrapDrGle, scrapCrGle);
+      generalLedger.unshift({
+        id: scrapDrGle,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '6030',
+        accountName: 'Perishable Spoilage & Shrinkage Expense',
+        category: 'Expense',
+        debit: totalScrapLoss,
+        credit: 0,
+        referenceType: 'WASTE_SHRINKAGE',
+        referenceId: notaReturNumber,
+        description: `RMA Spoilage/Quarantine Loss (${notaReturNumber})`,
+      });
+      generalLedger.unshift({
+        id: scrapCrGle,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '5010',
+        accountName: 'Cost of Goods Sold (COGS)',
+        category: 'Expense',
+        debit: 0,
+        credit: totalScrapLoss,
+        referenceType: 'WASTE_SHRINKAGE',
+        referenceId: notaReturNumber,
+        description: `COGS reclassification to Spoilage Expense for RMA (${notaReturNumber})`,
+      });
+    }
+
     const rmaRecord: CustomerRmaRecord = {
       id: rmaId,
       notaReturNumber,
@@ -7749,7 +8273,9 @@ async function startServer() {
     // Deduct stock from batch, tier, and catalog
     if (tier) {
       tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
-      tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
+      tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+      tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+      tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
       tier.updatedAt = timestamp;
     }
     if (inv) {
@@ -8340,8 +8866,8 @@ async function startServer() {
   });
 
   app.post('/api/admin/compliance/validate-npwp', (req: Request, res: Response) => {
-    const { npwpOrNik, b2bCustomerId } = req.body as { npwpOrNik: string; b2bCustomerId?: string };
-    const result = validateNpwpOrNik(npwpOrNik);
+    const { npwpOrNik, npwp, b2bCustomerId } = req.body as { npwpOrNik?: string; npwp?: string; b2bCustomerId?: string };
+    const result = validateNpwpOrNik(String(npwpOrNik ?? npwp ?? ''));
     if (result.valid && b2bCustomerId) {
       const cust = b2bCustomersList.find((c) => c.id === b2bCustomerId);
       if (cust) {

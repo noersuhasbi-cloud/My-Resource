@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   GroceryMetricsReport,
   InventoryBatch,
@@ -460,7 +461,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                   </div>
                 </div>
 
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-mono">
+                <span className="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 font-mono">
                   SLA Grade A+
                 </span>
               </div>
@@ -899,9 +900,9 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
       )}
 
       {/* Emergency Customer Advisory Broadcast Modal */}
-      {isNotifyModalOpen && recallTraceResult && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className={`${cardClass} max-w-lg w-full p-6 space-y-4 shadow-2xl`}>
+      {isNotifyModalOpen && recallTraceResult && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className={`${cardClass} max-w-lg w-full p-6 space-y-4 shadow-2xl my-auto`}>
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
@@ -987,7 +988,8 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -599,8 +599,8 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                       </td>
 
                       {/* System Book Count */}
-                      <td className="py-3 px-3 text-center font-mono font-bold">
-                        <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800">
+                      <td className="py-3 px-3 text-center font-mono font-bold whitespace-nowrap">
+                        <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700">
                           {tier.physicalStock} {tier.unit}
                         </span>
                       </td>
@@ -662,22 +662,22 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                       </td>
 
                       {/* Variance Status Badge */}
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
                         {isSurplus && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/30">
-                            <TrendingUp className="w-3 h-3 text-blue-600" />
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/30">
+                            <TrendingUp className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                             LEBIH (+{variance})
                           </span>
                         )}
                         {isShortage && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30">
-                            <TrendingDown className="w-3 h-3 text-rose-600" />
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30">
+                            <TrendingDown className="w-3 h-3 text-rose-600 dark:text-rose-400" />
                             KURANG ({variance})
                           </span>
                         )}
                         {!isSurplus && !isShortage && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-                            <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                            <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                             SESUAI (0)
                           </span>
                         )}

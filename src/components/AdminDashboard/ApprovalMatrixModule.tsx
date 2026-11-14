@@ -171,7 +171,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
                   Governance &amp; Controls
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-800 dark:text-indigo-300">
+                <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-800 dark:text-indigo-300 border border-indigo-500/20">
                   Multi-Tier Authorization Matrix
                 </span>
               </div>
@@ -290,16 +290,16 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                         <span className="font-mono text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">
                           {req.documentId}
                         </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-mono">
+                        <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 font-mono">
                           {req.module.replace(/_/g, ' ').toUpperCase()}
                         </span>
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                             req.status === 'APPROVED'
-                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
                               : req.status === 'REJECTED'
-                              ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300'
-                              : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                              ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
+                              : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25'
                           }`}
                         >
                           {req.status}

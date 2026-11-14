@@ -433,8 +433,8 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
                       </td>
 
                       {isCounting ? (
-                        <td className="py-3 px-3 text-center">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-500/10 text-zinc-500 dark:text-zinc-400 text-[10px] font-semibold">
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full bg-zinc-500/10 text-zinc-600 dark:text-zinc-300 border border-zinc-500/20 text-[10px] font-semibold">
                             <EyeOff className="w-3 h-3" />
                             HIDDEN (BLIND)
                           </span>

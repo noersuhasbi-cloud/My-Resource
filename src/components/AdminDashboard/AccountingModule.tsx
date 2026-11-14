@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   ChartOfAccount,
   GeneralLedgerEntry,
@@ -559,12 +560,12 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
               <div>
                 {balanceSheet.isBalanced ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     Balanced: Assets = Liabilities + Equity
                   </span>
                 ) : (
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+                  <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30">
                     Discrepancy Detected
                   </span>
                 )}
@@ -730,7 +731,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     <ReceiptText className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                     General Ledger (GL) Immutable Journal Vouchers
                   </h3>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
+                  <span className="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
                     GAAP/IFRS Immutability Enforced
                   </span>
                 </div>
@@ -847,8 +848,8 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                       <td className="py-3 px-4 text-right font-semibold text-amber-600 dark:text-amber-400">
                         {entry.credit > 0 ? formatIDR(entry.credit) : '-'}
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center whitespace-nowrap text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
                           entry.referenceType === 'REVERSING_ENTRY'
                             ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
                             : isLight
@@ -863,11 +864,11 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                       </td>
                       <td className="py-3 px-4 text-right font-sans">
                         {entry.isReversed ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                          <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                             Reversed
                           </span>
                         ) : entry.isReversal ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                          <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                             Counter-Voucher
                           </span>
                         ) : (
@@ -1134,27 +1135,27 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                         <td className="py-3.5 px-3.5 font-mono text-rose-600 dark:text-rose-400">
                           {cust.overdueDaysMax > 0 ? formatIDR(cust.outstandingAR * 0.1) : 'Rp 0'}
                         </td>
-                        <td className="py-3.5 px-3.5">
+                        <td className="py-3.5 px-3.5 whitespace-nowrap">
                           {isLocked ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1 w-max">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/25">
                               <ShieldAlert className="w-3 h-3" />
                               <span>CREDIT LOCKED</span>
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 w-max">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/25">
                               <CheckCircle2 className="w-3 h-3" />
                               <span>GOOD STANDING</span>
                             </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-3.5 text-right">
+                        <td className="py-3.5 px-3.5 text-right whitespace-nowrap">
                           <button
                             type="button"
                             onClick={() => handleToggleCustomerLock(cust)}
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer whitespace-nowrap ${
                               isLocked
-                                ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 hover:bg-emerald-100'
-                                : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-300 hover:bg-rose-100'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/25 dark:hover:bg-emerald-500/20'
+                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/25 dark:hover:bg-rose-500/20'
                             }`}
                           >
                             {isLocked ? 'Restore Facility' : 'Freeze Credit'}
@@ -1218,22 +1219,22 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                       <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-zinc-100">
                         {formatIDR(giro.amountIDR)}
                       </td>
-                      <td className="py-3.5 px-3.5">
+                      <td className="py-3.5 px-3.5 whitespace-nowrap">
                         {giro.status === 'CLEARED' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300">
+                          <span className="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/25">
                             CLEARED (CAIR)
                           </span>
                         )}
                         {giro.status === 'BOUNCED' && (
                           <div>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300">
+                            <span className="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/25">
                               BOUNCED (TOLAKAN)
                             </span>
-                            <span className="text-[9px] text-rose-600 block mt-0.5">{giro.bounceReason}</span>
+                            <span className="text-[9px] text-rose-600 dark:text-rose-400 block mt-0.5">{giro.bounceReason}</span>
                           </div>
                         )}
                         {giro.status === 'PENDING_CLEARING' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 flex items-center gap-1 w-max">
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/25">
                             <Clock className="w-3 h-3" />
                             <span>PENDING CLEARING</span>
                           </span>
@@ -1286,8 +1287,8 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       )}
 
       {/* MODAL: POST REVERSING JOURNAL ENTRY */}
-      {reversingEntry && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      {reversingEntry && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
             className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
@@ -1378,7 +1379,8 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -35,6 +35,7 @@ export function derivePlu5FromSku(sku: string): string {
     'SKU-DAI-001': '00301',
     'SKU-DAI-002': '00302',
     'SKU-BAK-001': '00401',
+    'SKU-BAK-002': '00402',
     'SKU-PAN-001': '00501',
     'SKU-PAN-002': '00502',
   };

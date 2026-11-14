@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Barcode,
@@ -57,6 +57,12 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
   const [promoText, setPromoText] = useState<string>('Tebus Murah s/d 30 Nov 2026');
   const [taxInclusiveDisplay, setTaxInclusiveDisplay] = useState<boolean>(true);
   const [labelMode, setLabelMode] = useState<'BOTH' | 'SCALE_ONLY' | 'SHELF_ONLY'>('BOTH');
+
+  useEffect(() => {
+    if (isOpen && initialSku) {
+      setSelectedSku(initialSku);
+    }
+  }, [isOpen, initialSku]);
 
   const activeProduct = useMemo(() => {
     return (

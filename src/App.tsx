@@ -205,7 +205,7 @@ export default function App() {
 
   // 4b. B2B Wholesale state & persistence
   const [b2bCustomers, setB2bCustomers] = useState<B2BCustomer[]>([]);
-  const [selectedB2bCustomerId, setSelectedB2bCustomerId] = useState<string>('cust-b2b-01');
+  const [selectedB2bCustomerId, setSelectedB2bCustomerId] = useState<string>('B2B-CUST-001');
   const [b2bOrders, setB2bOrders] = useState<B2BWholesaleOrder[]>([]);
   const [giroRecords, setGiroRecords] = useState<GiroPaymentRecord[]>([]);
   const [b2bCartItems, setB2bCartItems] = useState<B2BCartItem[]>(() => {
@@ -446,34 +446,32 @@ export default function App() {
   };
 
   const handleUpdateOrderStatus = (orderId: string, nextStatus: OrderStatus) => {
-    let updatedOrders: Order[] = [];
-    setOrders((prev) => {
-      updatedOrders = prev.map((ord) => {
-        if (ord.id !== orderId) return ord;
+    const updatedOrders = orders.map((ord) => {
+      if (ord.id !== orderId) return ord;
 
-        const updatedTimeline = ord.timeline.map((step) => {
-          if (
-            step.status === nextStatus ||
-            (nextStatus === 'ready_for_pickup' && (step.status === 'ready_for_pickup' || step.status === 'in_transit')) ||
-            (nextStatus === 'in_transit' && (step.status === 'ready_for_pickup' || step.status === 'in_transit'))
-          ) {
-            return {
-              ...step,
-              completed: true,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            };
-          }
-          return step;
-        });
-
-        return {
-          ...ord,
-          status: nextStatus,
-          timeline: updatedTimeline,
-        };
+      const updatedTimeline = ord.timeline.map((step) => {
+        if (
+          step.status === nextStatus ||
+          (nextStatus === 'ready_for_pickup' && (step.status === 'ready_for_pickup' || step.status === 'in_transit')) ||
+          (nextStatus === 'in_transit' && (step.status === 'ready_for_pickup' || step.status === 'in_transit'))
+        ) {
+          return {
+            ...step,
+            completed: true,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+        }
+        return step;
       });
-      return updatedOrders;
+
+      return {
+        ...ord,
+        status: nextStatus,
+        timeline: updatedTimeline,
+      };
     });
+
+    setOrders(updatedOrders);
 
     // Update in Firestore
     const changed = updatedOrders.find((o) => o.id === orderId);

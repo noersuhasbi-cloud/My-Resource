@@ -172,8 +172,8 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
                         </span>
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-right">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                    <td className="py-3 px-3 text-right whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         Open
                       </span>

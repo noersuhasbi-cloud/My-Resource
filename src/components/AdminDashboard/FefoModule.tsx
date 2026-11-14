@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   InventoryBatch,
   FEFOAllocationResult,
@@ -196,7 +197,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-600 text-white tracking-wide uppercase">
+              <span className="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-600 text-white tracking-wide uppercase">
                 FEFO &amp; Markdown Engine
               </span>
               <span
@@ -278,7 +279,13 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
             <Tag className="w-3.5 h-3.5 text-amber-300" />
             Dynamic Markdown &amp; Clearance Pricing Engine
             {markdownCandidates.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-white text-amber-700 font-bold">
+              <span
+                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                  activeTab === 'markdown_engine'
+                    ? 'bg-white/20 text-white border-white/30'
+                    : 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25'
+                }`}
+              >
                 {markdownCandidates.length} Active
               </span>
             )}
@@ -471,15 +478,15 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                 : 'bg-emerald-950/20 border-emerald-800/40 text-zinc-200'
             }`}
           >
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-emerald-200/50">
+            <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-emerald-200/50 dark:border-emerald-800/40">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-bold text-emerald-700">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
                   FEFO Allocation Trace ({simResult.productName})
                 </span>
               </div>
-              <span className="text-xs font-medium text-slate-600">
-                Total COGS: <strong className="text-emerald-700">{formatIDR(simResult.totalCogs)}</strong>
+              <span className="text-xs font-medium text-slate-600 dark:text-zinc-300">
+                Total COGS: <strong className="text-emerald-700 dark:text-emerald-400">{formatIDR(simResult.totalCogs)}</strong>
               </span>
             </div>
 
@@ -491,17 +498,17 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                     isLight ? 'bg-white border-emerald-100' : 'bg-zinc-900 border-zinc-800'
                   }`}
                 >
-                  <div className="flex items-center justify-between font-semibold">
+                  <div className="flex items-center justify-between font-semibold gap-2">
                     <span>Batch {trace.batchId}</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800">
+                    <span className="inline-flex items-center whitespace-nowrap px-1.5 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25">
                       Take {trace.allocatedQty} units
                     </span>
                   </div>
                   <div className="text-slate-600 dark:text-zinc-300 font-medium mt-1">Lot: {trace.lotNumber}</div>
-                  <div className="text-zinc-500">
+                  <div className="text-zinc-500 dark:text-zinc-400">
                     Expiry: {new Date(trace.expiryDate).toLocaleDateString('id-ID')}
                   </div>
-                  <div className="mt-1 pt-1 border-t border-slate-100 flex justify-between font-medium">
+                  <div className="mt-1 pt-1 border-t border-slate-100 dark:border-zinc-800 flex justify-between font-medium">
                     <span>Subtotal Cost:</span>
                     <span>{formatIDR(trace.subtotalCost)}</span>
                   </div>
@@ -509,7 +516,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
               ))}
             </div>
 
-            <p className="text-[11px] text-emerald-700 mt-3 italic">
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-3 italic">
               Rule Verified: Earlier expiring lots were drawn completely before the next lot was tapped.
             </p>
           </div>
@@ -623,12 +630,12 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
 
                       <td className="py-3 px-4">
                         <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                          className={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-md text-xs font-medium ${
                             batch.storageZone === 'cold_chilled'
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              ? 'bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/25'
                               : batch.storageZone === 'freezer'
-                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                              : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/25'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-zinc-800/90 dark:text-zinc-300 dark:border-zinc-700'
                           }`}
                         >
                           <Thermometer className="w-3 h-3" />
@@ -684,12 +691,12 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
 
                       <td className="py-3 px-4 text-center">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          className={`inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
                             isCritical
-                              ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
                               : isNear
-                              ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
-                              : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                           }`}
                         >
                           {batch.daysUntilExpiry <= 2
@@ -920,14 +927,14 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                             <div className="text-[11px] text-zinc-500 dark:text-zinc-400">{candidate.category}</div>
                           </td>
 
-                          <td className="py-3 px-4">
+                          <td className="py-3 px-4 whitespace-nowrap">
                             <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                              className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-bold border ${
                                 candidate.hoursRemaining <= 12
-                                  ? 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-300 dark:border-purple-500/25'
                                   : candidate.hoursRemaining <= 24
-                                  ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
-                                  : 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/25'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/25'
                               }`}
                             >
                               <Clock className="w-3 h-3" />
@@ -941,7 +948,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
 
                           <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
                             <div>{formatIDR(candidate.markdownPrice)}</div>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded-sm bg-rose-500/10 text-rose-600 font-bold">
+                            <span className="inline-flex items-center whitespace-nowrap text-[10px] px-1.5 py-0.2 rounded-sm bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold">
                               -{candidate.discountPercent}%
                             </span>
                           </td>
@@ -953,8 +960,16 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                             </div>
                           </td>
 
-                          <td className="py-3 px-4">
-                            <span className="font-mono text-[11px] font-bold px-2 py-1 rounded bg-yellow-100 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700/50">
+                          <td className="py-3 px-4 whitespace-nowrap align-middle">
+                            <span
+                              className={`inline-flex items-center whitespace-nowrap font-mono text-xs font-semibold px-2.5 py-1 rounded-md ${
+                                candidate.discountPercent >= 70
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/25'
+                                  : candidate.discountPercent >= 50
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/25'
+                                  : 'bg-yellow-50 text-yellow-700 border border-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-300 dark:border-yellow-500/25'
+                              }`}
+                            >
                               {candidate.markdownBarcode}
                             </span>
                           </td>
@@ -998,10 +1013,10 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
       )}
 
       {/* MODAL: PRINTABLE YELLOW CLEARANCE STICKER */}
-      {selectedBatchForSticker && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      {selectedBatchForSticker && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div
-            className={`max-w-md w-full rounded-2xl border p-6 space-y-4 shadow-2xl transition-all ${
+            className={`max-w-md w-full rounded-2xl border p-6 space-y-4 shadow-2xl my-auto transition-all ${
               isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
             }`}
           >
@@ -1080,14 +1095,15 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL: MARKDOWN POLICY TIERS CONFIG */}
-      {isConfigModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      {isConfigModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div
-            className={`max-w-md w-full rounded-2xl border p-6 space-y-4 shadow-2xl transition-all ${
+            className={`max-w-md w-full rounded-2xl border p-6 space-y-4 shadow-2xl my-auto transition-all ${
               isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
             }`}
           >
@@ -1164,7 +1180,8 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

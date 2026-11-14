@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import type {
   StoreOperationalStatus,
   StoreOutletSchedule,
@@ -224,8 +225,8 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
       </div>
 
       {/* Edit Outlet Modal */}
-      {editingOutlet && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      {editingOutlet && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className={`${modalClass} w-full max-w-[95vw] sm:max-w-lg p-4 sm:p-6 space-y-4 my-auto max-h-[90vh] overflow-y-auto`}>
             <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-zinc-800">
               <h3 className={`text-base font-bold ${textTitle}`}>Edit Schedule: {editingOutlet.storeName}</h3>
@@ -294,7 +295,8 @@ export const StoreOperationsTab: React.FC<StoreOperationsTabProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

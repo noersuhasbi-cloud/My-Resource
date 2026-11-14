@@ -266,6 +266,10 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
     setCartItems((prev) =>
       prev.map((it) => {
         if (it.id === cartItemId) {
+          if (it.isPwpRedemption && newQty > 1) {
+            onShowToast('Tebus Murah Limit', 'Maksimal 1 unit promo Tebus Murah per faktur (Tidak berlaku kelipatan).');
+            return it;
+          }
           const tier = it.product.uomTiers.find((t) => t.uom === it.selectedUoM) || it.product.uomTiers[0];
           return {
             ...it,
@@ -349,8 +353,8 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
       return;
     }
 
-    if (selectedPaymentMethod.startsWith('term_') && cannotUseTerm) {
-      onShowToast('Credit Blocked', 'Credit terms unavailable due to credit limit or overdue receivables.');
+    if ((selectedPaymentMethod.startsWith('term_') || selectedPaymentMethod === 'bilyet_giro') && cannotUseTerm) {
+      onShowToast('Credit Blocked', 'Credit terms and Bilyet Giro unavailable due to credit limit or overdue receivables.');
       return;
     }
 
@@ -818,9 +822,15 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
       </main>
 
       {/* Slide-Over B2B Wholesale Cart Drawer */}
-      {isCartDrawerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex justify-end">
-          <div className="w-full max-w-lg h-full bg-white dark:bg-zinc-900 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
+      {isCartDrawerOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex justify-end"
+          onClick={() => setIsCartDrawerOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg h-full bg-white dark:bg-zinc-900 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Drawer Header */}
             <div className="p-5 border-b border-stone-200 dark:border-zinc-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -964,7 +974,8 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* B2B Checkout & Payment Modal (Gap #2: Terms, Giro PDC, Transfer Proof) */}
@@ -1047,12 +1058,12 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedPaymentMethod('bilyet_giro')}
-                    disabled={isCreditLocked}
+                    disabled={cannotUseTerm}
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       selectedPaymentMethod === 'bilyet_giro'
                         ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 shadow-xs'
                         : 'border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-800/40 hover:border-stone-300'
-                    } ${isCreditLocked ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    } ${cannotUseTerm ? 'opacity-40 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-xs text-stone-900 dark:text-zinc-100">

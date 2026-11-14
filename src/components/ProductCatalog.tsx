@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { PRODUCTS } from '../data/mockData';
 import type { Product, ProductCategory, CartItem, StoreLocation } from '../types/index.ts';
 import { formatIDR } from '../utils/formatters';
@@ -297,9 +298,9 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
       </div>
 
       {/* Product Quick View Modal */}
-      {quickViewProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-stone-200 relative animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+      {quickViewProduct && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-stone-200 relative animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] my-auto overflow-y-auto">
             <button
               onClick={() => setQuickViewProduct(null)}
               className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100 transition-colors"
@@ -370,7 +371,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </section>
   );

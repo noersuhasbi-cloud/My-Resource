@@ -142,7 +142,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <span className={`text-sm font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
                   GroceMart
                 </span>
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 border border-[#0F4C3A]/20">
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-[#0F4C3A]/10 text-[#0F4C3A] border border-[#0F4C3A]/20 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25 whitespace-nowrap">
                   ERP
                 </span>
               </div>
@@ -170,7 +170,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         {/* Mobile Close Button */}
         <button
           onClick={onCloseMobile}
-          className="lg:hidden p-1.5 rounded-lg border text-slate-500 hover:text-slate-900 dark:hover:text-white"
+          className="lg:hidden p-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white"
           aria-label="Close menu"
         >
           <X className="w-5 h-5" />
@@ -227,7 +227,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">POS Cashier Station</span>
-                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-mono">
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold border font-mono whitespace-nowrap ${
+                      activeTab === 'pos'
+                        ? 'bg-white/15 text-emerald-100 border-white/25'
+                        : 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25'
+                    }`}
+                  >
                     LIVE
                   </span>
                 </>
@@ -254,7 +260,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <>
                   <span className="truncate flex-1 text-left">Store &amp; Outlets</span>
                   {emergencyClosedCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                        activeTab === 'operations'
+                          ? 'bg-white/15 text-amber-100 border-white/25'
+                          : 'bg-amber-500/15 text-amber-700 border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25'
+                      }`}
+                    >
                       {emergencyClosedCount}
                     </span>
                   )}
@@ -282,7 +294,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <>
                   <span className="truncate flex-1 text-left">Multi-Warehouse &amp; Stock</span>
                   {lowStockCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                        activeTab === 'inventory'
+                          ? 'bg-white/15 text-amber-100 border-white/25'
+                          : 'bg-amber-500/15 text-amber-700 border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25'
+                      }`}
+                    >
                       {lowStockCount}
                     </span>
                   )}
@@ -322,7 +340,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">FEFO &amp; Expiry Batches</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'fefo'
+                        ? 'bg-white/15 text-emerald-100 border-white/25'
+                        : 'bg-emerald-500/15 text-emerald-700 border-emerald-500/25 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25'
+                    }`}
+                  >
                     Auto
                   </span>
                 </>
@@ -345,7 +369,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Waste &amp; Shrinkage</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300">
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'waste'
+                        ? 'bg-white/15 text-rose-100 border-white/25'
+                        : 'bg-rose-500/15 text-rose-700 border-rose-500/25 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/25'
+                    }`}
+                  >
                     Scrap
                   </span>
                 </>
@@ -387,7 +417,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 <>
                   <span className="truncate flex-1 text-left">Procurement (PR/PO/GR)</span>
                   {partialPoCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-500/20 text-blue-700 dark:text-blue-300">
+                    <span
+                      className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                        activeTab === 'procurement'
+                          ? 'bg-white/15 text-sky-100 border-white/25'
+                          : 'bg-blue-500/15 text-blue-700 border-blue-500/25 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/25'
+                      }`}
+                    >
                       Partial
                     </span>
                   )}
@@ -411,7 +447,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Quality Control (QC)</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'qc'
+                        ? 'bg-white/15 text-emerald-100 border-white/25'
+                        : 'bg-emerald-500/15 text-emerald-700 border-emerald-500/25 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25'
+                    }`}
+                  >
                     HACCP
                   </span>
                 </>
@@ -434,7 +476,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Logistics &amp; Surat Jalan</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-700 dark:text-indigo-300">
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'logistics'
+                        ? 'bg-white/15 text-indigo-100 border-white/25'
+                        : 'bg-indigo-500/15 text-indigo-700 border-indigo-500/25 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/25'
+                    }`}
+                  >
                     Fleet
                   </span>
                 </>
@@ -475,7 +523,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Approval Matrix</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'approvals'
+                        ? 'bg-white/15 text-amber-100 border-white/25'
+                        : 'bg-amber-500/15 text-amber-700 border-amber-500/25 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25'
+                    }`}
+                  >
                     Tiered
                   </span>
                 </>
@@ -498,7 +552,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Grocery Analytics</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'reports'
+                        ? 'bg-white/15 text-emerald-100 border-white/25'
+                        : 'bg-emerald-500/15 text-emerald-700 border-emerald-500/25 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25'
+                    }`}
+                  >
                     FIFO
                   </span>
                 </>
@@ -521,7 +581,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Enterprise Settings Hub</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-purple-500/20 text-purple-700 dark:text-purple-300">
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'settings'
+                        ? 'bg-white/15 text-purple-100 border-white/25'
+                        : 'bg-purple-500/15 text-purple-700 border-purple-500/25 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/25'
+                    }`}
+                  >
                     Config
                   </span>
                 </>
@@ -573,7 +639,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Accounting Suite</span>
-                  <span className="text-[10px] opacity-75 font-mono">IDR</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border font-mono whitespace-nowrap ${
+                      activeTab === 'accounting'
+                        ? 'bg-white/15 text-emerald-100 border-white/25'
+                        : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-800/90 dark:text-zinc-300 dark:border-zinc-700'
+                    }`}
+                  >
+                    IDR
+                  </span>
                 </>
               )}
             </button>
@@ -708,7 +782,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">Roles &amp; Shifts (RBAC)</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400">
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'rbac'
+                        ? 'bg-white/15 text-emerald-100 border-white/25'
+                        : 'bg-[#0F4C3A]/10 text-[#0F4C3A] border-[#0F4C3A]/20 dark:bg-zinc-800/90 dark:text-emerald-300 dark:border-zinc-700'
+                    }`}
+                  >
                     Shift
                   </span>
                 </>
@@ -767,7 +847,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               {!isCollapsed && (
                 <>
                   <span className="truncate flex-1 text-left">ERD &amp; Schema Specs</span>
-                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400">
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'erd'
+                        ? 'bg-white/15 text-emerald-100 border-white/25'
+                        : 'bg-[#0F4C3A]/10 text-[#0F4C3A] border-[#0F4C3A]/20 dark:bg-zinc-800/90 dark:text-emerald-300 dark:border-zinc-700'
+                    }`}
+                  >
                     Docs
                   </span>
                 </>

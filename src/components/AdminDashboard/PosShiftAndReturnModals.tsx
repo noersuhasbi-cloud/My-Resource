@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
@@ -538,10 +538,19 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
   const [reason, setReason] = useState<string>('Damaged / Customer Return at Register');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  useEffect(() => {
+    if (receipt) {
+      setSelectedSkus({});
+      setDispositions({});
+      setCustomerNpwpOrNik('');
+      setReason('Damaged / Customer Return at Register');
+    }
+  }, [receipt?.receiptNumber]);
+
   if (!receipt) return null;
 
   const toggleSku = (sku: string) => {
-    setSelectedSkus((prev) => ({ ...prev, [sku]: !prev[sku] }));
+    setSelectedSkus((prev) => ({ ...prev, [sku]: !(prev[sku] ?? true) }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

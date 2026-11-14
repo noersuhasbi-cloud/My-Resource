@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   StoreOperationalStatus,
   StoreOutletSchedule,
@@ -727,7 +728,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </h1>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 hidden sm:flex">
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 border border-[#0F4C3A]/20">
+                  <span className="inline-flex items-center whitespace-nowrap px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-[#0F4C3A]/10 text-[#0F4C3A] border border-[#0F4C3A]/20 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25">
                     Supply Chain v2.4
                   </span>
                   <span className="text-[11px] text-slate-400">•</span>
@@ -750,7 +751,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
                   <span className="hidden xl:inline text-[11px] text-gray-500 dark:text-zinc-300 font-normal">Operator:</span>
                   <span className="font-bold truncate max-w-[120px]">{activeStaffSession.userName}</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#0F4C3A]/15 text-[#0F4C3A] dark:text-emerald-300 uppercase font-mono">
+                  <span className="inline-flex items-center whitespace-nowrap text-[10px] px-1.5 py-0.2 rounded bg-[#0F4C3A]/15 text-[#0F4C3A] dark:bg-emerald-500/15 dark:text-emerald-300 uppercase font-mono">
                     {activeStaffSession.userRole.replace(/_/g, ' ')}
                   </span>
                   <select
@@ -975,7 +976,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <h2 className={`text-base font-bold ${textTitle}`}>Omzet per Outlet Store</h2>
                     <p className={`text-xs ${textMuted}`}>Granular performance across Indonesian physical hubs</p>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-emerald-500/10 text-emerald-300 rounded-lg border border-emerald-500/20">
+                  <span className="inline-flex items-center whitespace-nowrap text-xs font-semibold px-2.5 py-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-lg border border-emerald-500/20">
                     6 Active Outlets
                   </span>
                 </div>
@@ -1016,8 +1017,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </span>
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-right">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                               Open
                             </span>
@@ -1284,9 +1285,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             {/* Edit Outlet Modal */}
-            {editingOutlet && (
-              <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4`}>
+            {editingOutlet && typeof document !== 'undefined' && createPortal(
+              <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4 my-auto`}>
                   <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                     <h3 className={`text-base font-bold ${textTitle}`}>Edit Schedule: {editingOutlet.storeName}</h3>
                     <button
@@ -1358,7 +1359,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         )}
@@ -1373,7 +1375,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-zinc-800">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0F4C3A] text-white uppercase tracking-wider">
+                    <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0F4C3A] text-white uppercase tracking-wider">
                       Module 4 • Global Scalability
                     </span>
                     <span className={`text-xs ${textMuted}`}>
@@ -1604,9 +1606,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             />
 
             {/* Edit Stock Tier Modal */}
-            {editingTier && (
-              <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4`}>
+            {editingTier && typeof document !== 'undefined' && createPortal(
+              <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4 my-auto`}>
                   <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                     <div>
                       <h3 className={`text-base font-bold ${textTitle}`}>Item Metadata &amp; Handling Notes</h3>
@@ -1692,13 +1694,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
 
             {/* Audit Adjustment Modal */}
-            {adjustingSku && (
-              <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-                <div className={`${modalClass} max-w-md w-full p-6 space-y-4`}>
+            {adjustingSku && typeof document !== 'undefined' && createPortal(
+              <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+                <div className={`${modalClass} max-w-md w-full p-6 space-y-4 my-auto`}>
                   <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                     <h3 className={`text-base font-bold ${textTitle}`}>Physical Stocktake Adjustment</h3>
                     <button
@@ -1757,7 +1760,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         )}
@@ -1883,8 +1887,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <td className={`py-3 px-3 ${isLight ? 'text-slate-700' : 'text-zinc-200'} font-sans`}>{aud.customerName}</td>
                         <td className="py-3 px-3 text-[#0F4C3A] dark:text-emerald-400 font-bold">{formatIDR(aud.amount)}</td>
                         <td className={`py-3 px-3 ${textMuted}`}>{aud.settlementChannel}</td>
-                        <td className="py-3 px-3 text-right">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                          <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                             {aud.status}
                           </span>
                         </td>
@@ -2043,9 +2047,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* State Machine Guard Y.4: Active Delivery In-Flight Store Closure Warning Modal */}
-        {closureWarningModal && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className={`${modalClass} max-w-md w-full p-6 space-y-4 shadow-2xl`}>
+        {closureWarningModal && typeof document !== 'undefined' && createPortal(
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+            <div className={`${modalClass} max-w-md w-full p-6 space-y-4 shadow-2xl my-auto`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
                   <AlertTriangle className="w-6 h-6" />
@@ -2097,7 +2101,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
         </main>
       </div>

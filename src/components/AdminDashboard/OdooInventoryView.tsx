@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   B2BWholesaleOrder,
   InventoryBatch,
@@ -1249,8 +1250,9 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
       {/* ===================================================================== */}
       {/* MODAL 1: FEFO / FIFO REMOVAL STRATEGY CONFIGURATION */}
       {/* ===================================================================== */}
-      {showStrategyModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
+      {showStrategyModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
           <div className={`${modalClass} max-w-2xl w-full p-6 space-y-4 my-auto`}>
             <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
               <div>
@@ -1313,7 +1315,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   {Object.entries(removalStrategies.skuOverrides).map(([sku, strat]) => (
                     <span
                       key={sku}
-                      className="px-2 py-0.5 rounded-md font-mono text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-300 border border-[#0F4C3A]/20"
+                      className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md font-mono text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] border border-[#0F4C3A]/20 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25"
                     >
                       {sku}: {strat}
                     </span>
@@ -1332,8 +1334,9 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
 
       {/* ===================================================================== */}
       {/* MODAL 2: B2B vs. B2C MEDIA, PACKAGING & MULTI-UOM INSPECTOR */}
@@ -1347,8 +1350,8 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         const skuLots = batches.filter((b) => b.sku === mediaInspector.sku);
         const multiUom = formatMultiUomStock(mediaInspector.physicalStock, profile.uomConversion);
 
-        return (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
+        return createPortal(
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
             <div className={`${modalClass} max-w-3xl w-full p-6 space-y-5 my-auto`}>
               <div className={`flex items-start justify-between gap-3 border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
                 <div>
@@ -1513,7 +1516,8 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 

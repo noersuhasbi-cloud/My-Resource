@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   VendorBill,
   VendorBillStatus,
@@ -785,10 +786,10 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
       </div>
 
       {/* 5. CREATE VENDOR BILL MODAL (3-WAY MATCHING) */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+      {isCreateModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
           <div
-            className={`w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${
+            className={`w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden my-auto ${
               isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
@@ -1103,14 +1104,15 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 6. SETTLE / RECORD PAYMENT MODAL */}
-      {billToPay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+      {billToPay && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
           <div
-            className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden ${
+            className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden my-auto max-h-[90vh] overflow-y-auto ${
               isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
@@ -1291,14 +1293,15 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 7. BILL DETAIL & PRINTABLE TAX INVOICE VOUCHER MODAL */}
-      {selectedBillForDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+      {selectedBillForDetail && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
           <div
-            className={`w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${
+            className={`w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden my-auto ${
               isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
             }`}
           >
@@ -1454,7 +1457,8 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

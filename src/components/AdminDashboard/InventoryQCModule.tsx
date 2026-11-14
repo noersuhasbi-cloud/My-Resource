@@ -203,7 +203,7 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
                   HACCP &amp; BPOM Standard
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/10 text-teal-800 dark:text-teal-300">
+                <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/10 text-teal-800 dark:text-teal-300 border border-teal-500/25">
                   Gate 1 Quality Control
                 </span>
               </div>

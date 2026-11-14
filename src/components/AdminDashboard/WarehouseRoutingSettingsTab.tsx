@@ -330,8 +330,8 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                   const pct = bin.capacityUnits > 0 ? Math.round((bin.occupancyUnits / bin.capacityUnits) * 100) : 0;
                   return (
                     <tr key={bin.id} className="hover:bg-gray-50/60 dark:hover:bg-zinc-800/40 transition-colors">
-                      <td className="py-3.5 px-3.5">
-                        <span className="font-mono font-bold text-xs text-[#0F4C3A] dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
+                      <td className="py-3.5 px-3.5 whitespace-nowrap">
+                        <span className="inline-flex items-center whitespace-nowrap font-mono font-bold text-xs text-[#0F4C3A] dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
                           {bin.binCode}
                         </span>
                       </td>

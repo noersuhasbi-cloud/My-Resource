@@ -227,7 +227,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const cashChange = Math.max(0, cashTendered - totalAmount);
 
   // Cart operations
-  const addToCart = (product: POSProductItem, quantity = 1, isWeighted = false, weightGrams?: number) => {
+  const addToCart = (
+    product: POSProductItem,
+    quantity = 1,
+    isWeighted = false,
+    weightGrams?: number,
+    grossGrams?: number
+  ) => {
     playBeep();
     setCart((prev) => {
       const existingIdx = prev.findIndex((item) => item.sku === product.sku && !item.isWeighted);
@@ -245,7 +251,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
       // Add as new line
       const effectiveQty = isWeighted && weightGrams ? Number((weightGrams / 1000).toFixed(3)) : quantity;
-      const unitPrice = isWeighted ? product.pricePerKg || product.sellingPrice : product.sellingPrice;
+      const fallbackPricePerKg = product.unit.includes('kg') ? product.sellingPrice : product.sellingPrice * 4;
+      const unitPrice = isWeighted ? product.pricePerKg || fallbackPricePerKg : product.sellingPrice;
       const lineTotal = Math.round(unitPrice * effectiveQty);
 
       const newLine: POSCartItem = {
@@ -259,7 +266,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
         quantity: effectiveQty,
         unit: isWeighted ? 'kg' : product.unit,
         isWeighted,
-        grossWeightGrams: isWeighted ? weightGrams : undefined,
+        grossWeightGrams: isWeighted ? (grossGrams ?? (weightGrams ? weightGrams + scaleTareGrams : undefined)) : undefined,
         tareWeightGrams: isWeighted ? scaleTareGrams : undefined,
         netWeightGrams: isWeighted ? weightGrams : undefined,
         batchId: product.nearestBatchId,
@@ -1068,7 +1075,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   type="button"
                   onClick={() => {
                     const netGrams = Math.max(0, scaleGrossGrams - scaleTareGrams);
-                    addToCart(scalingProduct, 1, true, netGrams);
+                    addToCart(scalingProduct, 1, true, netGrams, scaleGrossGrams);
                     setScalingProduct(null);
                     onShowToast('Weighed Item Added', `${scalingProduct.name} (${(netGrams / 1000).toFixed(3)}kg) added`);
                   }}
@@ -1442,74 +1449,76 @@ export const PosModule: React.FC<PosModuleProps> = ({
         )}
 
       {/* 6. RECENT TRANSACTIONS DRAWER */}
-      {isHistoryDrawerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex justify-end">
-          <div
-            className={`w-full max-w-md h-full p-6 shadow-2xl flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200 ${
-              isLight ? 'bg-white text-slate-900' : 'bg-zinc-900 text-white'
-            }`}
-          >
-            <div>
-              <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <History className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                  <h3 className="font-bold text-base">Recent POS Receipts</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsHistoryDrawerOpen(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {historyReceipts.length === 0 ? (
-                  <p className="text-xs text-zinc-400 text-center py-8">No POS transactions yet today.</p>
-                ) : (
-                  historyReceipts.map((rcp) => (
-                    <div
-                      key={rcp.receiptNumber}
-                      onClick={() => setCompletedReceipt(rcp)}
-                      className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-all hover:border-emerald-500/50 ${
-                        isLight ? 'bg-gray-50 border-gray-200 hover:bg-white' : 'bg-zinc-800/60 border-zinc-700 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between font-bold">
-                        <span className="font-mono">{rcp.receiptNumber}</span>
-                        <span className="text-emerald-600 dark:text-emerald-400">{formatIDR(rcp.total)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-zinc-400 mt-1">
-                        <span>{new Date(rcp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        <span className="uppercase font-mono">{rcp.paymentMethod}</span>
-                        <button
-                          type="button"
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            setRmaTargetReceipt(rcp);
-                          }}
-                          className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold hover:bg-amber-500/25 cursor-pointer"
-                        >
-                          Process RMA
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsHistoryDrawerOpen(false)}
-              className="w-full mt-4 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold cursor-pointer"
+      {isHistoryDrawerOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex justify-end">
+            <div
+              className={`w-full max-w-md h-full p-6 shadow-2xl flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200 ${
+                isLight ? 'bg-white text-slate-900' : 'bg-zinc-900 text-white'
+              }`}
             >
-              Close History
-            </button>
-          </div>
-        </div>
-      )}
+              <div>
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <History className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    <h3 className="font-bold text-base">Recent POS Receipts</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsHistoryDrawerOpen(false)}
+                    className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {historyReceipts.length === 0 ? (
+                    <p className="text-xs text-zinc-400 text-center py-8">No POS transactions yet today.</p>
+                  ) : (
+                    historyReceipts.map((rcp) => (
+                      <div
+                        key={rcp.receiptNumber}
+                        onClick={() => setCompletedReceipt(rcp)}
+                        className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-all hover:border-emerald-500/50 ${
+                          isLight ? 'bg-gray-50 border-gray-200 hover:bg-white' : 'bg-zinc-800/60 border-zinc-700 hover:bg-zinc-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-bold">
+                          <span className="font-mono">{rcp.receiptNumber}</span>
+                          <span className="text-emerald-600 dark:text-emerald-400">{formatIDR(rcp.total)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-zinc-400 mt-1">
+                          <span>{new Date(rcp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="uppercase font-mono">{rcp.paymentMethod}</span>
+                          <button
+                            type="button"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              setRmaTargetReceipt(rcp);
+                            }}
+                            className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold hover:bg-amber-500/25 cursor-pointer"
+                          >
+                            Process RMA
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsHistoryDrawerOpen(false)}
+                className="w-full mt-4 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold cursor-pointer"
+              >
+                Close History
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* 7. POS SHIFT & BLIND Z-REPORT MODAL */}
       <PosShiftModal

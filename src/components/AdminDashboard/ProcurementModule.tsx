@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   PurchaseRequest,
   PurchaseOrder,
@@ -212,7 +213,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const filteredPOs = useMemo(() => {
     return purchaseOrders.filter((po) => {
       if (selectedStore !== 'CONSOLIDATED' && po.storeId && po.storeId !== selectedStore) return false;
-      if (poFilter !== 'ALL' && po.status !== poFilter) return false;
+      if (poFilter !== 'ALL') {
+        if (poFilter === 'Pending') {
+          if (!['Pending', 'Sent', 'Draft', 'pending_approval'].includes(po.status)) return false;
+        } else if (po.status !== poFilter) {
+          return false;
+        }
+      }
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return (
@@ -510,7 +517,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           <Sparkles className="w-4 h-4 text-amber-400" />
           <span>Auto-Replenishment (Min-Max)</span>
           {replenishmentPlan && replenishmentPlan.skusNeedingRestockCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse">
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse whitespace-nowrap">
               {replenishmentPlan.skusNeedingRestockCount}
             </span>
           )}
@@ -529,7 +536,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         >
           <Clock className="w-4 h-4 text-emerald-500" />
           <span>Purchase Requests (PR)</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-[#0F4C3A] dark:text-emerald-300 font-bold">
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+              activeTab === 'pr'
+                ? 'bg-white/15 text-emerald-100 border-white/25'
+                : 'bg-emerald-500/15 text-[#0F4C3A] border-emerald-500/25 dark:text-emerald-300'
+            }`}
+          >
             {pendingPRCount}
           </span>
         </button>
@@ -547,7 +560,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         >
           <FileCheck2 className="w-4 h-4 text-blue-500" />
           <span>Purchase Orders (PO)</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-500/20 text-blue-700 dark:text-blue-300 font-bold">
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+              activeTab === 'po'
+                ? 'bg-white/15 text-sky-100 border-white/25'
+                : 'bg-blue-500/15 text-blue-700 border-blue-500/25 dark:text-blue-300'
+            }`}
+          >
             {purchaseOrders.length}
           </span>
         </button>
@@ -565,7 +584,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         >
           <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           <span>Goods Receipts (GR)</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-200 dark:bg-zinc-700 text-slate-700 dark:text-zinc-300 font-bold">
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+              activeTab === 'gr'
+                ? 'bg-white/15 text-zinc-100 border-white/25'
+                : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-zinc-700 dark:text-zinc-300 dark:border-zinc-600'
+            }`}
+          >
             {goodsReceipts.length}
           </span>
         </button>
@@ -588,7 +613,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           <Receipt className="w-4 h-4 text-indigo-500" />
           <span>Vendor Bills (3-Way Match)</span>
           {vendorBills.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-bold">
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                activeTab === 'vendor_bills'
+                  ? 'bg-white/15 text-indigo-100 border-white/25'
+                  : 'bg-indigo-500/15 text-indigo-700 border-indigo-500/25 dark:text-indigo-300'
+              }`}
+            >
               {vendorBills.length}
             </span>
           )}
@@ -609,7 +640,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                  <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
                     Predictive Inventory Intelligence
                   </span>
                   <span className="text-xs text-zinc-400 font-mono">
@@ -887,24 +918,24 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             @{formatIDR(item.unitCost)}/unit
                           </div>
                         </td>
-                        <td className="py-3 px-3 text-center">
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
                           {item.urgencyLevel === 'CRITICAL_OUT_OF_STOCK' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30">
                               <AlertTriangle className="w-3 h-3" /> Critical 0
                             </span>
                           )}
                           {item.urgencyLevel === 'BELOW_SAFETY_STOCK' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                               <ShieldAlert className="w-3 h-3" /> Below Safety
                             </span>
                           )}
                           {item.urgencyLevel === 'HEALTHY_STOCK' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
                               <CheckCircle2 className="w-3 h-3" /> Healthy Stock
                             </span>
                           )}
                           {item.urgencyLevel === 'OVERSTOCKED' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
                               <Clock className="w-3 h-3" /> Overstocked
                             </span>
                           )}
@@ -1379,8 +1410,8 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       )}
 
       {/* MODAL: INTERACTIVE PARTIAL GOODS RECEIPT */}
-      {activeReceivingPO && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      {activeReceivingPO && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
             className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto my-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
@@ -1638,12 +1669,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL: CREATE RESTOCK PR */}
-      {isCreatingPR && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      {isCreatingPR && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
             className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
@@ -1783,7 +1815,8 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -187,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               ) : memberTier ? (
                 <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded hidden sm:inline">
-                  Gold
+                  {memberTier.split(' ')[0]}
                 </span>
               ) : null}
             </button>

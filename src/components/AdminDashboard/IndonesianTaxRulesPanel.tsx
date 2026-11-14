@@ -218,13 +218,13 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
                     <span>{rule.taxRatePercent}%</span>
                   )}
                 </td>
-                <td className="py-2.5 px-3 text-center">
+                <td className="py-2.5 px-3 text-center whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() =>
                       handleUpdateTax(rule, rule.taxCategory, rule.taxRatePercent, !rule.b2cTaxInclusive)
                     }
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer ${
+                    className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer ${
                       rule.b2cTaxInclusive
                         ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                         : 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30'
@@ -233,8 +233,8 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
                     {rule.b2cTaxInclusive ? 'Tax-Inclusive' : 'Tax-Exclusive'}
                   </button>
                 </td>
-                <td className="py-2.5 px-3 text-center">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/10 text-slate-600 dark:text-zinc-300">
+                <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/10 text-slate-600 dark:text-zinc-300 border border-slate-500/20">
                     <ShieldCheck className="w-3 h-3" />
                     Tax-Exclusive (Faktur)
                   </span>
