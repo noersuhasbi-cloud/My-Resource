@@ -8,6 +8,8 @@ import type {
   ChartOfAccount,
   CustomerRmaRecord,
   DeliveryOrderDocument,
+  EnterpriseQuotation,
+  EnterpriseSettingsConfig,
   GeneralLedgerEntry,
   GiroPaymentRecord,
   GroceryMetricsReport,
@@ -25,6 +27,8 @@ import type {
   BatchMarkdownCandidate,
 } from '../types/index.ts';
 import type { LabelableProductItem } from '../components/AdminDashboard/BarcodeShelfLabelModal';
+import type { AccountingSubTab } from '../components/AdminDashboard/AdminSidebar';
+import { apiClient } from '../services/apiClient';
 
 export type PrintFormat = 'thermal80' | 'label50x30' | 'a4';
 
@@ -119,7 +123,7 @@ export type PrintPayload =
   | {
       type: 'accounting_statement';
       format: 'a4';
-      subTab: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar';
+      subTab: AccountingSubTab;
       selectedStore: string;
       selectedCurrency: SupportedCurrency;
       fxRate: number;
@@ -131,6 +135,13 @@ export type PrintPayload =
       filteredCOA: ChartOfAccount[];
       b2bCustomers: B2BCustomer[];
       giroRecords: GiroPaymentRecord[];
+      vendorBills?: VendorBill[];
+    }
+  | {
+      type: 'quotation';
+      format: 'a4';
+      quotation: EnterpriseQuotation;
+      termsText?: string;
     }
   | {
       type: 'grocery_analytics';
@@ -146,9 +157,12 @@ interface PrintTriggerOptions {
   skipPreview?: boolean;
 }
 
+export type InvoiceTrackingFlags = EnterpriseSettingsConfig['invoiceTracking'];
+
 interface PrintContextValue {
   activePrintPayload: PrintPayload | null;
   isPreviewOpen: boolean;
+  invoiceTracking: InvoiceTrackingFlags;
   triggerPrint: (payload: PrintPayload, options?: PrintTriggerOptions) => void;
   executePrint: () => void;
   clearPrint: () => void;
@@ -178,11 +192,33 @@ function applyDynamicPageStyle(format: PrintFormat | null) {
   styleEl.textContent = PAGE_CSS_BY_FORMAT[format];
 }
 
+const DEFAULT_INVOICE_TRACKING: InvoiceTrackingFlags = {
+  displayLotsOnInvoices: true,
+  displaySerialExpiryOnDeliveryDocs: true,
+  requireLotScanOnFulfillment: true,
+};
+
 export const PrintProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activePrintPayload, setActivePrintPayload] = useState<PrintPayload | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+  const [invoiceTracking, setInvoiceTracking] = useState<InvoiceTrackingFlags>(DEFAULT_INVOICE_TRACKING);
   const printTimerRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  const refreshInvoiceTracking = useCallback(() => {
+    apiClient
+      .getInvoiceTrackingSettings()
+      .then((res) => {
+        if (res && typeof res.displayLotsOnInvoices === 'boolean') {
+          setInvoiceTracking(res);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshInvoiceTracking();
+  }, [refreshInvoiceTracking]);
 
   const cancelScheduledPrint = useCallback(() => {
     if (printTimerRef.current !== null) {
@@ -228,6 +264,14 @@ export const PrintProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       cancelScheduledPrint();
       applyDynamicPageStyle(payload.format);
       setActivePrintPayload(payload);
+      if (
+        payload.type === 'b2c_receipt' ||
+        payload.type === 'b2b_invoice' ||
+        payload.type === 'logistics_doc' ||
+        payload.type === 'pos_receipt'
+      ) {
+        refreshInvoiceTracking();
+      }
 
       if (options?.skipPreview) {
         setIsPreviewOpen(false);
@@ -236,12 +280,12 @@ export const PrintProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setIsPreviewOpen(true);
       }
     },
-    [cancelScheduledPrint, executePrint]
+    [cancelScheduledPrint, executePrint, refreshInvoiceTracking]
   );
 
   return (
     <PrintContext.Provider
-      value={{ activePrintPayload, isPreviewOpen, triggerPrint, executePrint, clearPrint }}
+      value={{ activePrintPayload, isPreviewOpen, invoiceTracking, triggerPrint, executePrint, clearPrint }}
     >
       {children}
     </PrintContext.Provider>

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   EnterpriseSettingsConfig,
   LandedCostRecord,
   StoreInventoryStock,
   ChartOfAccount,
+  PurchaseOrder,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -22,6 +23,7 @@ import {
   Calculator,
   ArrowRight,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 
 interface ValuationCostingSettingsTabProps {
@@ -30,6 +32,7 @@ interface ValuationCostingSettingsTabProps {
   landedCosts: LandedCostRecord[];
   inventoryTiers: StoreInventoryStock[];
   chartOfAccounts: ChartOfAccount[];
+  purchaseOrders?: PurchaseOrder[];
   onUpdateSettings: (updated: Partial<EnterpriseSettingsConfig>) => Promise<void>;
   onRefreshLandedCosts: () => void;
   onShowToast: (title: string, message: string) => void;
@@ -41,6 +44,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
   landedCosts,
   inventoryTiers,
   chartOfAccounts,
+  purchaseOrders = [],
   onUpdateSettings,
   onRefreshLandedCosts,
   onShowToast,
@@ -51,6 +55,20 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
   const [config, setConfig] = useState(settings.landedCosts);
   const [invoiceTracking, setInvoiceTracking] = useState(settings.invoiceTracking);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+  useEffect(() => {
+    setConfig(settings.landedCosts);
+    setInvoiceTracking(settings.invoiceTracking);
+  }, [settings]);
+
+  // Unique SKU catalog for dynamic landed cost selection
+  const uniqueCatalogSkus = useMemo(() => {
+    const map = new Map<string, string>();
+    inventoryTiers.forEach((t) => {
+      if (!map.has(t.sku)) map.set(t.sku, t.productName);
+    });
+    return Array.from(map.entries()).map(([sku, productName]) => ({ sku, productName }));
+  }, [inventoryTiers]);
 
   // Landed Cost Entry Modal
   const [isLandedModalOpen, setIsLandedModalOpen] = useState(false);
@@ -71,6 +89,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
     { sku: 'SKU-PRD-002', quantity: 40 },
     { sku: 'SKU-DAI-001', quantity: 20 },
   ]);
+  const [skuToAdd, setSkuToAdd] = useState<string>('');
 
   const cardClass = `rounded-xl border transition-all ${
     isLight
@@ -527,16 +546,46 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className={labelClass}>Purchase Order Ref</label>
-                  <input
-                    type="text"
-                    value={lcPoId}
-                    onChange={(e) => setLcPoId(e.target.value)}
-                    className={`font-mono ${inputClass}`}
-                    placeholder="PO-2026-088"
-                  />
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={lcPoId}
+                      onChange={(e) => setLcPoId(e.target.value)}
+                      className={`font-mono ${inputClass}`}
+                      placeholder="PO-2026-088"
+                    />
+                    {purchaseOrders.length > 0 && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const po = purchaseOrders.find((p) => p.id === e.target.value);
+                          if (po) {
+                            setLcPoId(po.id);
+                            setSelectedSkus(
+                              po.items.map((it) => ({
+                                sku: it.sku,
+                                quantity: it.orderedQuantity || 1,
+                              }))
+                            );
+                          }
+                        }}
+                        className={`w-28 px-2 text-[11px] rounded-xl border ${
+                          isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-zinc-900 border-zinc-700 text-zinc-200'
+                        }`}
+                        title="Auto-load SKUs from Purchase Order"
+                      >
+                        <option value="">Load PO...</option>
+                        {purchaseOrders.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.id}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className={labelClass}>Supplier Bill Number</label>
@@ -633,9 +682,41 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 </select>
               </div>
 
-              {/* Items Table */}
-              <div>
-                <label className={labelClass}>Target Receiving Items ({selectedSkus.length} SKUs)</label>
+              {/* Dynamic Target Items Table */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelClass}>Target Receiving Items ({selectedSkus.length} SKUs)</label>
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={skuToAdd}
+                      onChange={(e) => setSkuToAdd(e.target.value)}
+                      className={`py-1 px-2 text-[11px] rounded-lg border font-mono ${
+                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-zinc-900 border-zinc-700 text-zinc-100'
+                      }`}
+                    >
+                      <option value="">+ Add SKU...</option>
+                      {uniqueCatalogSkus
+                        .filter((c) => !selectedSkus.some((s) => s.sku === c.sku))
+                        .map((c) => (
+                          <option key={c.sku} value={c.sku}>
+                            {c.sku} — {c.productName.slice(0, 22)}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!skuToAdd) return;
+                        setSelectedSkus((prev) => [...prev, { sku: skuToAdd, quantity: 25 }]);
+                        setSkuToAdd('');
+                      }}
+                      disabled={!skuToAdd}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#0F4C3A] text-white disabled:opacity-40"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
                 <div className="border border-gray-200 dark:border-zinc-700 rounded-xl overflow-hidden text-xs">
                   <table className="w-full text-left">
                     <thead className="bg-gray-50 dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700 uppercase text-[10px] font-bold text-gray-600 dark:text-zinc-300">
@@ -643,6 +724,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                         <th className="p-2.5">SKU</th>
                         <th className="p-2.5">Quantity</th>
                         <th className="p-2.5 text-right">Est. Cost Added / Unit</th>
+                        <th className="p-2.5 w-8"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-zinc-800 font-mono">
@@ -650,11 +732,36 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                         const estimatedShare = totalUnits > 0 ? Math.round((totalCalculatedLandedCost * item.quantity) / totalUnits) : 0;
                         const perUnit = item.quantity > 0 ? Math.round(estimatedShare / item.quantity) : 0;
                         return (
-                          <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-zinc-800/40">
+                          <tr key={item.sku} className="hover:bg-gray-50/50 dark:hover:bg-zinc-800/40">
                             <td className="p-2.5 font-bold text-[#0F4C3A] dark:text-emerald-400">{item.sku}</td>
-                            <td className="p-2.5 text-gray-700 dark:text-zinc-300">{item.quantity} units</td>
+                            <td className="p-2.5">
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const qty = Math.max(1, Number(e.target.value) || 1);
+                                  setSelectedSkus((prev) =>
+                                    prev.map((row, rIdx) => (rIdx === idx ? { ...row, quantity: qty } : row))
+                                  );
+                                }}
+                                className={`w-20 px-2 py-1 text-xs rounded border font-mono ${
+                                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                                }`}
+                              />
+                            </td>
                             <td className="p-2.5 text-right text-emerald-600 dark:text-emerald-400 font-bold">
                               +{formatIDR(perUnit)} / unit
+                            </td>
+                            <td className="p-2.5 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedSkus((prev) => prev.filter((_, rIdx) => rIdx !== idx))}
+                                className="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                                title="Remove SKU"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </td>
                           </tr>
                         );

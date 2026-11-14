@@ -1796,9 +1796,50 @@ export const apiClient = {
     return res.json();
   },
 
+  async getInvoiceTrackingSettings(): Promise<{
+    displayLotsOnInvoices: boolean;
+    displaySerialExpiryOnDeliveryDocs: boolean;
+    requireLotScanOnFulfillment: boolean;
+  }> {
+    const res = await fetchApi('/api/settings/invoice-tracking');
+    if (!res.ok) {
+      return {
+        displayLotsOnInvoices: true,
+        displaySerialExpiryOnDeliveryDocs: true,
+        requireLotScanOnFulfillment: false,
+      };
+    }
+    return res.json();
+  },
+
   async getAnalyticDepartments(): Promise<AnalyticDepartment[]> {
     const res = await fetchApi('/api/admin/accounting/analytic-departments');
     return res.json().catch(() => []);
+  },
+
+  async createAnalyticDepartment(payload: {
+    code: string;
+    name: string;
+    manager?: string;
+    annualBudgetIDR: number;
+    actualCostIDR?: number;
+    expectedRevenueIDR?: number;
+    actualRevenueIDR?: number;
+  }): Promise<{
+    success: boolean;
+    department: AnalyticDepartment;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/accounting/analytic-departments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create cost center');
+    }
+    return res.json();
   },
 
   async updateAnalyticDepartment(id: string, updates: Partial<AnalyticDepartment>): Promise<{

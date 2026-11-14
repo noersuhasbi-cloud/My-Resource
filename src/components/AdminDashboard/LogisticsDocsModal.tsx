@@ -52,7 +52,9 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
   onShowToast,
 }) => {
   const isLight = theme === 'light';
-  const { triggerPrint } = usePrint();
+  const { triggerPrint, invoiceTracking } = usePrint();
+  const showLots = invoiceTracking?.displayLotsOnInvoices ?? true;
+  const showDeliveryExpiry = invoiceTracking?.displaySerialExpiryOnDeliveryDocs ?? true;
 
   // State for documents if not passed as props
   const [internalSjList, setInternalSjList] = useState<SuratJalanDocument[]>(propSjList || []);
@@ -456,7 +458,9 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                             <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700 text-center w-8">No</th>
                             <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Kode SKU</th>
                             <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Nama Barang &amp; Spesifikasi</th>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Batch / Lot</th>
+                            {showLots && (
+                              <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Batch / Lot</th>
+                            )}
                             <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700 text-center">Jumlah</th>
                             <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Kemasan</th>
                             <th className="py-2 px-3">Kondisi / Keterangan</th>
@@ -474,9 +478,11 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                               <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 font-semibold">
                                 {item.productName}
                               </td>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 font-mono text-[11px]">
-                                {item.batchNumber}
-                              </td>
+                              {showLots && (
+                                <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 font-mono text-[11px]">
+                                  {item.batchNumber}
+                                </td>
+                              )}
                               <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 text-center font-bold">
                                 {item.quantity} {item.unit}
                               </td>
@@ -484,7 +490,12 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                                 {item.packagingType}
                               </td>
                               <td className="py-2 px-3 text-[11px] text-gray-600 dark:text-zinc-300">
-                                {item.condition} - {item.notes || 'Normal'}
+                                <div>{item.condition} - {item.notes || 'Normal'}</div>
+                                {showDeliveryExpiry && (
+                                  <div className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-semibold mt-0.5">
+                                    FEFO Expiry &amp; Cold-Chain Verified ({selectedSj.coldChainTempCelsius}°C)
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           ))}

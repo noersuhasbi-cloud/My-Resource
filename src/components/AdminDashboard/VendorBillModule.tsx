@@ -40,6 +40,7 @@ import {
   Truck,
   ExternalLink,
   RotateCcw,
+  Ban,
 } from 'lucide-react';
 
 const FX_RATES: Record<SupportedCurrency, { symbol: string; rate: number; label: string }> = {
@@ -85,6 +86,9 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(Boolean(initialPreselectedPoId || initialPreselectedGrId));
   const [selectedBillForDetail, setSelectedBillForDetail] = useState<VendorBill | null>(null);
   const [billToPay, setBillToPay] = useState<VendorBill | null>(null);
+  const [billToVoid, setBillToVoid] = useState<VendorBill | null>(null);
+  const [voidReasonInput, setVoidReasonInput] = useState<string>('Cancelled / Duplicate supplier invoice');
+  const [isVoidingBill, setIsVoidingBill] = useState<boolean>(false);
 
   // Return-to-Vendor (RTV) Credit Notes state
   const [vendorCreditNotes, setVendorCreditNotes] = useState<VendorCreditNote[]>([]);
@@ -189,6 +193,37 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
     setItemBilledOverrides({});
   };
 
+  useEffect(() => {
+    if (initialPreselectedPoId || initialPreselectedGrId) {
+      if (initialPreselectedPoId) {
+        setSelectedPoId(initialPreselectedPoId);
+        const matchingGrs = goodsReceipts.filter((g) => g.poId === initialPreselectedPoId);
+        setSelectedGrId(initialPreselectedGrId || (matchingGrs[0]?.id ?? ''));
+      } else if (initialPreselectedGrId) {
+        setSelectedGrId(initialPreselectedGrId);
+      }
+      setItemBilledOverrides({});
+      setIsCreateModalOpen(true);
+    }
+  }, [initialPreselectedPoId, initialPreselectedGrId, goodsReceipts]);
+
+  const draftTotals = useMemo(() => {
+    if (!activeSelectedPO) return { subtotal: 0, taxAmount: 0, grandTotal: 0, grandTotalIDR: 0 };
+    const subtotal = activeSelectedPO.items.reduce((sum, it) => {
+      const grItem = activeSelectedGR?.items.find((g) => g.sku === it.sku);
+      const grQty = grItem ? grItem.quantityReceived : 0;
+      const override = itemBilledOverrides[it.sku];
+      const billedQty = override !== undefined ? override.billedQty : grQty || it.orderedQuantity;
+      const defaultCost = currencyInput === 'IDR' ? it.unitCost : it.unitCost / FX_RATES[currencyInput].rate;
+      const unitCost = override !== undefined ? override.unitCost : defaultCost;
+      return sum + billedQty * unitCost;
+    }, 0);
+    const taxAmount = Math.round(subtotal * (taxPercentInput / 100) * 100) / 100;
+    const grandTotal = subtotal + taxAmount;
+    const grandTotalIDR = Math.round(grandTotal * (FX_RATES[currencyInput]?.rate || 1));
+    return { subtotal, taxAmount, grandTotal, grandTotalIDR };
+  }, [activeSelectedPO, activeSelectedGR, itemBilledOverrides, currencyInput, taxPercentInput]);
+
   // Format currency helper
   const formatAmount = (amount: number, curr: SupportedCurrency) => {
     if (curr === 'IDR') return formatIDR(amount);
@@ -239,6 +274,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
     vendorBills.forEach((b) => {
       if (selectedStore === 'CONSOLIDATED' || b.storeId === selectedStore) {
+        if (b.status === 'VOID') return;
         if (b.paymentStatus === 'UNPAID' || b.paymentStatus === 'PARTIALLY_PAID') {
           totalApIDR += b.remainingDue * b.exchangeRate;
           unpaidCount += 1;
@@ -362,6 +398,26 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
       onShowToast('Payment Error', err.message || 'Failed to record payment');
     } finally {
       setIsSubmittingPayment(false);
+    }
+  };
+
+  // Void Vendor Bill w/ GL Reversal
+  const handleConfirmVoidBill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!billToVoid) return;
+    setIsVoidingBill(true);
+    try {
+      const res = await apiClient.voidVendorBill(billToVoid.id, voidReasonInput.trim() || 'Voided by Finance');
+      onShowToast(
+        'Vendor Bill Voided',
+        res.message || `Bill #${billToVoid.billNumber} voided with reversing GL entries posted.`
+      );
+      setBillToVoid(null);
+      onRefreshData();
+    } catch (err: any) {
+      onShowToast('Void Failed', err.message || 'Could not void vendor bill');
+    } finally {
+      setIsVoidingBill(false);
     }
   };
 
@@ -608,13 +664,19 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               ) : (
                 filteredBills.map((bill) => {
                   const isOverdue =
-                    bill.paymentStatus !== 'PAID' && new Date(bill.dueDate) < new Date();
+                    bill.status !== 'VOID' && bill.paymentStatus !== 'PAID' && new Date(bill.dueDate) < new Date();
+                  const isVarianceBlocked =
+                    bill.status === 'PRICE_VARIANCE' || bill.status === 'QTY_VARIANCE';
 
                   return (
                     <tr
                       key={bill.id}
                       className={`transition-colors ${
-                        isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'
+                        bill.status === 'VOID'
+                          ? 'opacity-60 bg-gray-50/40 dark:bg-zinc-900/40'
+                          : isLight
+                          ? 'hover:bg-gray-50/80'
+                          : 'hover:bg-zinc-800/40'
                       }`}
                     >
                       {/* Bill ID & Official Invoice Number */}
@@ -692,7 +754,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
                       {/* 3-Way Match Status */}
                       <td className="py-3.5 px-4 text-center">
-                        {bill.status === 'MATCHED' || bill.status === 'APPROVED' || bill.status === 'PAID' ? (
+                        {bill.status === 'VOID' ? (
+                          <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                            <Ban className="w-3.5 h-3.5" />
+                            <span>Voided</span>
+                          </div>
+                        ) : bill.status === 'MATCHED' || bill.status === 'APPROVED' || bill.status === 'PAID' ? (
                           <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                             <span>Matched</span>
@@ -716,26 +783,32 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
                       {/* Payment Status */}
                       <td className="py-3.5 px-4 text-center">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                            bill.paymentStatus === 'PAID'
-                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                        {bill.status === 'VOID' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/30">
+                            Cancelled
+                          </span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                              bill.paymentStatus === 'PAID'
+                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                                : bill.paymentStatus === 'PARTIALLY_PAID'
+                                ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30'
+                                : isOverdue
+                                ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30'
+                                : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30'
+                            }`}
+                          >
+                            {bill.paymentStatus === 'PAID'
+                              ? 'Paid in Full'
                               : bill.paymentStatus === 'PARTIALLY_PAID'
-                              ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30'
+                              ? 'Partially Paid'
                               : isOverdue
-                              ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30'
-                              : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30'
-                          }`}
-                        >
-                          {bill.paymentStatus === 'PAID'
-                            ? 'Paid in Full'
-                            : bill.paymentStatus === 'PARTIALLY_PAID'
-                            ? 'Partially Paid'
-                            : isOverdue
-                            ? 'Past Due'
-                            : 'Unpaid (Due)'}
-                        </span>
-                        {bill.paymentStatus === 'PARTIALLY_PAID' && (
+                              ? 'Past Due'
+                              : 'Unpaid (Due)'}
+                          </span>
+                        )}
+                        {bill.status !== 'VOID' && bill.paymentStatus === 'PARTIALLY_PAID' && (
                           <div className="text-[10px] font-mono text-zinc-400 mt-0.5">
                             Due: {formatAmount(bill.remainingDue, bill.currency)}
                           </div>
@@ -745,24 +818,49 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {bill.status !== 'APPROVED' && bill.status !== 'PAID' && (
+                          {bill.status !== 'APPROVED' && bill.status !== 'PAID' && bill.status !== 'VOID' && (
                             <button
                               type="button"
                               onClick={() => handleApproveBill(bill.id)}
                               className="px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
-                              title="Approve 3-Way Match & Post to GL"
+                              title={isVarianceBlocked ? 'Override Variance & Approve 3-Way Match' : 'Approve 3-Way Match & Post to GL'}
                             >
                               Approve
                             </button>
                           )}
 
-                          {bill.paymentStatus !== 'PAID' && (
+                          {bill.paymentStatus !== 'PAID' && bill.status !== 'VOID' && (
+                            isVarianceBlocked ? (
+                              <span
+                                className="px-2 py-1 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 cursor-not-allowed"
+                                title="3-Way Match variance detected. Approve or resolve discrepancy before disbursement."
+                              >
+                                Pay Locked
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPayment(bill)}
+                                className="px-2.5 py-1 rounded text-[11px] font-semibold bg-[#0F4C3A] text-white hover:bg-[#0c3d2e] transition-colors"
+                              >
+                                Pay Bill
+                              </button>
+                            )
+                          )}
+
+                          {bill.paymentStatus !== 'PAID' && bill.status !== 'VOID' && (
                             <button
                               type="button"
-                              onClick={() => handleOpenPayment(bill)}
-                              className="px-2.5 py-1 rounded text-[11px] font-semibold bg-[#0F4C3A] text-white hover:bg-[#0c3d2e] transition-colors"
+                              onClick={() => {
+                                setBillToVoid(bill);
+                                setVoidReasonInput('Cancelled / Duplicate supplier invoice');
+                              }}
+                              className={`p-1.5 rounded transition-colors ${
+                                isLight ? 'hover:bg-rose-50 text-rose-600' : 'hover:bg-rose-950/50 text-rose-400'
+                              }`}
+                              title="Void Bill & Post GL Reversal"
                             >
-                              Pay Bill
+                              <Ban className="w-3.5 h-3.5" />
                             </button>
                           )}
 
@@ -789,7 +887,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
       {/* 5. CREATE VENDOR BILL MODAL (3-WAY MATCHING) */}
       {isCreateModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsCreateModalOpen(false);
+          }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+        >
           <div
             className={`w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden my-auto ${
               isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
@@ -1053,7 +1156,31 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 </div>
               )}
 
-              {/* Step 4: Accounting Impact Live Preview */}
+              {/* Step 4: Live Totals & Accounting Impact Preview */}
+              {activeSelectedPO && (
+                <div
+                  className={`p-3.5 rounded-xl border text-xs font-mono space-y-1.5 ${
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-zinc-950 border-zinc-800 text-zinc-200'
+                  }`}
+                >
+                  <div className="flex justify-between">
+                    <span className="font-sans text-zinc-500">Subtotal ({currencyInput}):</span>
+                    <span className="font-semibold">{formatAmount(draftTotals.subtotal, currencyInput)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-sans text-zinc-500">PPN Input Tax ({taxPercentInput}%):</span>
+                    <span className="font-semibold">{formatAmount(draftTotals.taxAmount, currencyInput)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-zinc-800 text-sm font-bold text-[#0F4C3A] dark:text-emerald-400">
+                    <span className="font-sans">Grand Total AP Liability:</span>
+                    <span>
+                      {formatAmount(draftTotals.grandTotal, currencyInput)}
+                      {currencyInput !== 'IDR' ? ` (≈ ${formatIDR(draftTotals.grandTotalIDR)})` : ''}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div
                 className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
                   isLight ? 'bg-emerald-50/50 border-emerald-200' : 'bg-emerald-950/20 border-emerald-800/40 text-emerald-200'
@@ -1066,7 +1193,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 <div className="font-mono text-[11px] space-y-1">
                   <div>• <strong>Debit 1040 (Merchandise Inventory Asset)</strong>: +Subtotal Asset Value</div>
                   {taxPercentInput > 0 && (
-                    <div>• <strong>Debit 1140 (Input VAT / Pajak Masukan 11%)</strong>: +VAT Credit Receivable</div>
+                    <div>• <strong>Debit 2026 (PPN Masukan / VAT Input Creditable)</strong>: +VAT Credit Receivable</div>
                   )}
                   <div>• <strong>Credit 2010 (Trade Accounts Payable)</strong>: +Liability recognized for vendor settlement</div>
                 </div>
@@ -1112,7 +1239,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
       {/* 6. SETTLE / RECORD PAYMENT MODAL */}
       {billToPay && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setBillToPay(null);
+          }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+        >
           <div
             className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden my-auto max-h-[90vh] overflow-y-auto ${
               isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
@@ -1301,7 +1433,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
       {/* 7. BILL DETAIL & PRINTABLE TAX INVOICE VOUCHER MODAL */}
       {selectedBillForDetail && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedBillForDetail(null);
+          }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+        >
           <div
             className={`w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden my-auto ${
               isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
@@ -1464,6 +1601,81 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 </div>
               )}
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 8. VOID VENDOR BILL CONFIRMATION MODAL */}
+      {billToVoid && typeof document !== 'undefined' && createPortal(
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setBillToVoid(null);
+          }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+        >
+          <div
+            className={`w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden my-auto ${
+              isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
+            }`}
+          >
+            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-rose-50/60' : 'border-zinc-800 bg-rose-950/20'}`}>
+              <div>
+                <h3 className="text-base font-bold flex items-center gap-2 text-rose-700 dark:text-rose-400">
+                  <Ban className="w-4 h-4" />
+                  Void Vendor Bill &amp; Reverse GL
+                </h3>
+                <p className={`text-xs ${isLight ? 'text-gray-600' : 'text-zinc-300'} mt-0.5 font-mono`}>
+                  {billToVoid.id} • {billToVoid.billNumber}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBillToVoid(null)}
+                className={`p-1.5 rounded-lg ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleConfirmVoidBill} className="p-5 space-y-4 text-xs">
+              <div className={`p-3 rounded-xl border leading-relaxed ${
+                isLight ? 'bg-amber-50/70 border-amber-200 text-amber-900' : 'bg-amber-950/30 border-amber-800/40 text-amber-200'
+              }`}>
+                Voiding <strong>{billToVoid.billNumber}</strong> ({formatAmount(billToVoid.grandTotal, billToVoid.currency)}) will post immutable reversing counter-entries to the General Ledger and clear pending Accounts Payable (#2010).
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">
+                  Void / Cancellation Reason *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={voidReasonInput}
+                  onChange={(e) => setVoidReasonInput(e.target.value)}
+                  className={`w-full p-2 rounded-lg border text-xs focus:ring-1 focus:ring-rose-500 ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                  }`}
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setBillToVoid(null)}
+                  className={`px-4 py-2 rounded-lg font-medium ${
+                    isLight ? 'hover:bg-gray-100 text-gray-700' : 'hover:bg-zinc-800 text-zinc-300'
+                  }`}
+                >
+                  Keep Active
+                </button>
+                <button
+                  type="submit"
+                  disabled={isVoidingBill || !voidReasonInput.trim()}
+                  className="px-4 py-2 rounded-lg font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow transition-all disabled:opacity-50"
+                >
+                  {isVoidingBill ? 'Posting Reversal...' : 'Confirm Void & Reverse'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>,
         document.body

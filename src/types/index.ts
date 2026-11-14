@@ -1912,6 +1912,11 @@ export interface EnterpriseSettingsConfig {
       annualBudgetIDR: number;
       actualCostIDR: number;
       committedCostIDR: number;
+      expectedRevenueIDR?: number;
+      actualRevenueIDR?: number;
+      varianceIDR?: number;
+      utilizationPercent?: number;
+      status?: 'ON_TRACK' | 'WARNING' | 'OVER_BUDGET';
     }>;
     marginWarningThresholdPercent: number; // e.g. 25%
   };
@@ -1985,6 +1990,7 @@ export interface WarehouseMultiStepRoute {
   name: string;
   routeType: 'DIRECT' | 'TWO_STEP' | 'THREE_STEP';
   description: string;
+  active?: boolean;
   steps: Array<{
     stepNumber: number;
     stepName: string;
@@ -2002,6 +2008,8 @@ export interface AnalyticDepartment {
   annualBudgetIDR: number;
   actualCostIDR: number;
   committedCostIDR: number;
+  expectedRevenueIDR?: number;
+  actualRevenueIDR?: number;
   varianceIDR: number;
   utilizationPercent: number;
   status: 'ON_TRACK' | 'WARNING' | 'OVER_BUDGET';

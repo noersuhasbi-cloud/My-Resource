@@ -62,23 +62,39 @@ export function evaluateBatchMarkdown(
 ): BatchMarkdownCandidate | null {
   if (!config.enabled || batch.currentStock <= 0) return null;
 
-  // Calculate remaining hours until expiration
-  const now = new Date();
-  const expiry = new Date(batch.expiryDate);
-  const diffMs = expiry.getTime() - now.getTime();
-  const hoursRemaining = Math.max(0, Math.round(diffMs / (1000 * 60 * 60)));
-
-  // If already expired (> 0 hours ago), it belongs in spoilage/waste, not markdown
-  if (diffMs <= 0 && batch.daysUntilExpiry <= 0) {
+  if (
+    batch.status === 'expired' ||
+    batch.status === 'quarantined' ||
+    batch.status === 'recalled' ||
+    batch.status === 'depleted'
+  ) {
     return null;
   }
+
+  // Calculate remaining hours dynamically relative to current clock
+  const nowMs = Date.now();
+  const expiryMs = new Date(batch.expiryDate).getTime();
+  const diffMs = expiryMs - nowMs;
+
+  // Strictly exclude any expired lot regardless of stale daysUntilExpiry field
+  if (!Number.isFinite(expiryMs) || diffMs <= 0) {
+    batch.status = 'expired';
+    batch.daysUntilExpiry = Number.isFinite(expiryMs)
+      ? Math.min(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
+      : 0;
+    return null;
+  }
+
+  const hoursRemainingRaw = diffMs / (1000 * 60 * 60);
+  const hoursRemaining = Math.max(1, Math.round(hoursRemainingRaw));
+  batch.daysUntilExpiry = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 
   // Sort tiers ascending by maxHoursUntilExpiry so tightest deadline applies first
   const sortedTiers = [...config.tiers].sort(
     (a, b) => a.maxHoursUntilExpiry - b.maxHoursUntilExpiry
   );
 
-  const matchedTier = sortedTiers.find((t) => hoursRemaining <= t.maxHoursUntilExpiry);
+  const matchedTier = sortedTiers.find((t) => hoursRemainingRaw <= t.maxHoursUntilExpiry);
   if (!matchedTier) return null;
 
   // Margin guard calculation: ensure discounted price does not violate hard margin floor unless final tier
@@ -97,8 +113,8 @@ export function evaluateBatchMarkdown(
     }
   }
 
-  const salvageRecoveryIDR = discountedPrice * batch.currentStock;
-  const fullWasteLossIDR = unitCost * batch.currentStock;
+  const salvageRecoveryIDR = Math.round(discountedPrice * batch.currentStock);
+  const fullWasteLossIDR = Math.round(unitCost * batch.currentStock);
 
   return {
     batchId: batch.batchId,

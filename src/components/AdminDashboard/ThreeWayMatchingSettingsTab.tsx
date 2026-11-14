@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type {
   EnterpriseSettingsConfig,
   VendorBill,
@@ -48,8 +48,23 @@ export const ThreeWayMatchingSettingsTab: React.FC<ThreeWayMatchingSettingsTabPr
 
   // Simulation state
   const [simPoId, setSimPoId] = useState<string>(purchaseOrders[0]?.id || 'PO-2026-088');
-  const [simBilledQty, setSimBilledQty] = useState<number>(50);
-  const [simBilledPrice, setSimBilledPrice] = useState<number>(11000);
+  const [simBilledQty, setSimBilledQty] = useState<number>(purchaseOrders[0]?.items[0]?.orderedQuantity || 50);
+  const [simBilledPrice, setSimBilledPrice] = useState<number>(purchaseOrders[0]?.items[0]?.unitCost || 11000);
+
+  useEffect(() => {
+    setConfig(settings.threeWayMatching);
+  }, [settings]);
+
+  useEffect(() => {
+    if (purchaseOrders.length > 0 && !purchaseOrders.some((p) => p.id === simPoId)) {
+      const first = purchaseOrders[0];
+      setSimPoId(first.id);
+      if (first.items[0]) {
+        setSimBilledQty(first.items[0].orderedQuantity || 0);
+        setSimBilledPrice(first.items[0].unitCost || 0);
+      }
+    }
+  }, [purchaseOrders, simPoId]);
 
   const cardClass = `rounded-xl border transition-all ${
     isLight

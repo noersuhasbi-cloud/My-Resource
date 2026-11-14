@@ -64,6 +64,11 @@ function getDocumentMeta(payload: PrintPayload): {
         ...base,
         title: `Financial Statement — ${payload.subTab.replace(/_/g, ' ').toUpperCase()}`,
       };
+    case 'quotation':
+      return {
+        ...base,
+        title: `${payload.quotation.isProForma ? 'Pro Forma Invoice' : 'Commercial Quotation'} — ${payload.quotation.quotationNumber}`,
+      };
     case 'grocery_analytics':
       return { ...base, title: 'Grocery Intelligence & Analytics Report' };
     default:
@@ -72,7 +77,7 @@ function getDocumentMeta(payload: PrintPayload): {
 }
 
 export const PrintPreviewModal: React.FC = () => {
-  const { activePrintPayload, isPreviewOpen, executePrint, clearPrint } = usePrint();
+  const { activePrintPayload, isPreviewOpen, invoiceTracking, executePrint, clearPrint } = usePrint();
   const [zoom, setZoom] = useState<ZoomLevel>(100);
 
   // Set helpful default zoom per paper format whenever a new document preview opens
@@ -217,6 +222,7 @@ export const PrintPreviewModal: React.FC = () => {
               {renderPrintDocument(activePrintPayload, {
                 printedAt: previewTimestamp,
                 isPreview: true,
+                invoiceTracking,
               })}
             </div>
           </div>

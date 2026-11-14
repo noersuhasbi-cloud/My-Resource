@@ -1,6 +1,8 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
+import fs from 'fs';
+import fsPromises from 'fs/promises';
 import path from 'path';
 import https from 'https';
 import { fileURLToPath } from 'url';
@@ -18,6 +20,7 @@ import {
   INITIAL_GENERAL_LEDGER,
   INITIAL_AUDIT_TRAIL,
   INITIAL_BATCHES,
+  createInitialBatches,
   INITIAL_WASTE_RECORDS,
   INITIAL_PICKER_ORDERS,
   INITIAL_VENDOR_BILLS,
@@ -198,6 +201,15 @@ let removalStrategiesConfig: RemovalStrategyConfig = {
 // =============================================================
 function ensureRegulatoryCoaAccounts() {
   const requiredAccounts: ChartOfAccount[] = [
+    {
+      accountCode: '1150',
+      accountName: 'Vendor Prepayments / Advances (Uang Muka Pembelian)',
+      category: 'Asset',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Receivable vendor advances from post-payment RTV claims & supplier credit offsets',
+    },
     {
       accountCode: '1300',
       accountName: 'Inventory Asset (Regulatory Valuation Ledger)',
@@ -587,23 +599,269 @@ function getEffectiveRemovalStrategy(sku: string, category?: string): RemovalStr
   return 'FEFO';
 }
 
+function syncBatchExpiryStatus(batch: InventoryBatch, nowMs: number = Date.now()): boolean {
+  if (batch.status === 'expired') return true;
+  const expiryMs = new Date(batch.expiryDate).getTime();
+  if (!Number.isFinite(expiryMs) || expiryMs <= nowMs) {
+    if (batch.status !== 'depleted') {
+      batch.status = 'expired';
+    }
+    batch.daysUntilExpiry = Number.isFinite(expiryMs)
+      ? Math.min(0, Math.floor((expiryMs - nowMs) / 86400000))
+      : 0;
+    return true;
+  }
+  batch.daysUntilExpiry = Math.max(1, Math.ceil((expiryMs - nowMs) / 86400000));
+  return false;
+}
+
+function syncAllBatchesExpiryStatus(nowMs: number = Date.now()): void {
+  inventoryBatches.forEach((b) => {
+    syncBatchExpiryStatus(b, nowMs);
+  });
+}
+
+function roundIDR(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value);
+}
+
+function getSellableNonExpiredAtpStock(sku: string, storeId: string = 'ALL'): {
+  hasBatchTracking: boolean;
+  batchSellableQty: number;
+  effectiveAtp: number;
+} {
+  const nowMs = Date.now();
+  const matchingAll = inventoryBatches.filter(
+    (b) =>
+      b.sku === sku &&
+      (storeId === 'ALL' || storeId === 'CONSOLIDATED' || b.storeId === storeId)
+  );
+  matchingAll.forEach((b) => syncBatchExpiryStatus(b, nowMs));
+
+  const sellableBatches = matchingAll.filter(
+    (b) =>
+      b.currentStock > 0 &&
+      b.status !== 'quarantined' &&
+      b.status !== 'recalled' &&
+      b.status !== 'expired' &&
+      b.status !== 'depleted' &&
+      new Date(b.expiryDate).getTime() > nowMs
+  );
+  const batchSellableQty = Number(
+    sellableBatches.reduce((sum, b) => sum + b.currentStock, 0).toFixed(2)
+  );
+
+  const tier = storeInventoryTiers.find(
+    (t) =>
+      t.sku === sku &&
+      (storeId === 'ALL' || storeId === 'CONSOLIDATED' || t.storeId === storeId)
+  );
+  const inv = inventoryList.find((i) => i.sku === sku);
+  const wholesaleProd = wholesaleProductsList.find((p) => p.sku === sku);
+
+  const hasBatchTracking = matchingAll.length > 0;
+  let stockCap = Infinity;
+  if (storeId !== 'ALL' && storeId !== 'CONSOLIDATED' && tier) {
+    stockCap = Math.max(0, Number(tier.availableStock) || 0);
+  } else if (inv) {
+    stockCap = Math.max(0, Number(inv.currentStock) || 0);
+  } else if (wholesaleProd) {
+    stockCap = Math.max(0, Number(wholesaleProd.currentStockBaseUnits) || 0);
+  }
+
+  const effectiveAtp = hasBatchTracking
+    ? Number(Math.min(batchSellableQty, stockCap).toFixed(2))
+    : Number((Number.isFinite(stockCap) ? stockCap : 0).toFixed(2));
+
+  return {
+    hasBatchTracking,
+    batchSellableQty,
+    effectiveAtp,
+  };
+}
+
+function updateCoaLedgerBalance(accountCode: string, debitAmount: number, creditAmount: number) {
+  const acc = chartOfAccounts.find((c) => c.accountCode === accountCode);
+  if (!acc) return;
+  const dr = roundIDR(Number(debitAmount) || 0);
+  const cr = roundIDR(Number(creditAmount) || 0);
+  if (acc.normalBalance === 'Debit') {
+    acc.balance = Math.max(0, Math.round(acc.balance + dr - cr));
+  } else {
+    acc.balance = Math.max(0, Math.round(acc.balance + cr - dr));
+  }
+}
+
+function commitBalancedGlBatch(entries: GeneralLedgerEntry[], updateCoa: boolean = true): void {
+  if (entries.length === 0) return;
+  for (const entry of entries) {
+    entry.debit = Math.max(0, roundIDR(Number(entry.debit) || 0));
+    entry.credit = Math.max(0, roundIDR(Number(entry.credit) || 0));
+  }
+  const totalDebit = entries.reduce((sum, e) => sum + e.debit, 0);
+  const totalCredit = entries.reduce((sum, e) => sum + e.credit, 0);
+  const drift = totalDebit - totalCredit;
+  if (drift !== 0) {
+    const revCredit = entries.find(
+      (e) => (e.accountCode === '4010' || e.accountCode === '4020') && e.credit > 0
+    );
+    if (revCredit && revCredit.credit + drift >= 0) {
+      revCredit.credit += drift;
+    } else if (drift > 0) {
+      const creditEntry = entries.find((e) => e.credit > 0);
+      if (creditEntry) creditEntry.credit += drift;
+    } else {
+      const debitEntry = entries.find((e) => e.debit > 0);
+      if (debitEntry) debitEntry.debit += Math.abs(drift);
+    }
+  }
+  for (const entry of entries) {
+    generalLedger.unshift(entry);
+    if (updateCoa) {
+      updateCoaLedgerBalance(entry.accountCode, entry.debit, entry.credit);
+    }
+  }
+}
+
+function getSupplierOpenAdvance1150IDR(supplierName: string): number {
+  const coa1150Balance = Math.max(
+    0,
+    roundIDR(chartOfAccounts.find((c) => c.accountCode === '1150')?.balance ?? 0)
+  );
+  if (coa1150Balance <= 0) return 0;
+
+  const normTarget = (supplierName || '').trim().toLowerCase();
+  if (!normTarget) return 0;
+
+  const coreTokens = normTarget
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/\b(pt|cv|ud|tbk|co|ltd|inc)\b/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 3);
+
+  const matchesSupplier = (candidate: string | undefined): boolean => {
+    const c = (candidate || '').trim().toLowerCase();
+    if (!c) return false;
+    if (c.includes(normTarget) || normTarget.includes(c)) return true;
+    if (coreTokens.length >= 2) {
+      return coreTokens.every((t) => c.includes(t));
+    }
+    return false;
+  };
+
+  let netSupplier1150 = 0;
+  for (const entry of generalLedger) {
+    if (entry.accountCode !== '1150' || entry.isReversed) continue;
+    let isMatch = matchesSupplier(entry.description);
+    if (!isMatch && entry.referenceId) {
+      const matchedVcn = vendorCreditNotesList.find(
+        (v) => v.creditNoteId === entry.referenceId || v.rmaNumber === entry.referenceId
+      );
+      if (matchedVcn && matchesSupplier(matchedVcn.supplierName)) {
+        isMatch = true;
+      }
+      if (!isMatch) {
+        const matchedRtv = vendorRtvList.find(
+          (r) => r.debitNoteNumber === entry.referenceId || r.id === entry.referenceId
+        );
+        if (matchedRtv && matchesSupplier(matchedRtv.supplierName)) {
+          isMatch = true;
+        }
+      }
+    }
+    if (isMatch) {
+      netSupplier1150 += roundIDR(Number(entry.debit) || 0) - roundIDR(Number(entry.credit) || 0);
+    }
+  }
+
+  return Math.max(0, Math.min(coa1150Balance, netSupplier1150));
+}
+
+function findLinkedVendorBillForRtv(params: {
+  vendorBillId?: string;
+  poId?: string;
+  qcInspectionId?: string;
+  supplierName?: string;
+  sku?: string;
+}): VendorBill | undefined {
+  const activeBills = vendorBillsList.filter((b) => b.status !== 'VOID');
+  if (params.vendorBillId) {
+    const exact = activeBills.find((b) => b.id === params.vendorBillId);
+    if (exact) return exact;
+  }
+  if (params.qcInspectionId) {
+    const qc = qcInspectionsList.find((q) => q.id === params.qcInspectionId);
+    if (qc?.referenceId) {
+      const byQcPo = activeBills.find(
+        (b) => b.poId === qc.referenceId || b.goodsReceiptId === qc.referenceId
+      );
+      if (byQcPo) return byQcPo;
+    }
+  }
+  if (params.poId) {
+    const byPo = activeBills.find((b) => b.poId === params.poId);
+    if (byPo) return byPo;
+  }
+
+  const normSupp = (params.supplierName || '').trim().toLowerCase();
+  const candidates = activeBills.filter((b) => {
+    const suppMatch =
+      normSupp &&
+      (b.supplierName.toLowerCase().includes(normSupp) ||
+        normSupp.includes(b.supplierName.toLowerCase()));
+    const skuMatch = params.sku ? b.items.some((it) => it.sku === params.sku) : false;
+    return suppMatch && skuMatch;
+  });
+  if (candidates.length > 0) {
+    return (
+      candidates.find((b) => b.status !== 'PAID' && (b.remainingDue ?? 0) > 0) || candidates[0]
+    );
+  }
+  if (normSupp) {
+    const bySupp = activeBills.filter(
+      (b) =>
+        b.supplierName.toLowerCase().includes(normSupp) ||
+        normSupp.includes(b.supplierName.toLowerCase())
+    );
+    if (bySupp.length > 0) {
+      return bySupp.find((b) => b.status !== 'PAID' && (b.remainingDue ?? 0) > 0) || bySupp[0];
+    }
+  }
+  if (params.sku) {
+    const bySku = activeBills.filter((b) => b.items.some((it) => it.sku === params.sku));
+    if (bySku.length > 0) {
+      return bySku.find((b) => b.status !== 'PAID' && (b.remainingDue ?? 0) > 0) || bySku[0];
+    }
+  }
+  return undefined;
+}
+
 function deductBatchesByStrategy(
   sku: string,
   qty: number,
   storeId: string = 'ALL',
-  fallbackUnitCost: number = 15000
+  fallbackUnitCost: number = 15000,
+  strictBatchCheck: boolean = false
 ) {
   const strategy = getEffectiveRemovalStrategy(sku);
-  const eligibleBatches = inventoryBatches
+  const nowMs = Date.now();
+  const matchingAll = inventoryBatches.filter(
+    (b) =>
+      b.sku === sku &&
+      (storeId === 'ALL' || storeId === 'CONSOLIDATED' || b.storeId === storeId)
+  );
+  matchingAll.forEach((b) => syncBatchExpiryStatus(b, nowMs));
+
+  const eligibleBatches = matchingAll
     .filter(
       (b) =>
-        b.sku === sku &&
-        (storeId === 'ALL' || storeId === 'CONSOLIDATED' || b.storeId === storeId) &&
         b.currentStock > 0 &&
         b.status !== 'quarantined' &&
         b.status !== 'recalled' &&
         b.status !== 'expired' &&
-        b.status !== 'depleted'
+        b.status !== 'depleted' &&
+        new Date(b.expiryDate).getTime() > nowMs
     )
     .sort((a, b) => {
       if (strategy === 'FIFO') {
@@ -611,6 +869,36 @@ function deductBatchesByStrategy(
       }
       return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
     });
+
+  const totalAvailableSellableQty = Number(
+    eligibleBatches.reduce((sum, b) => sum + b.currentStock, 0).toFixed(2)
+  );
+  const hasBatchRecords = matchingAll.length > 0;
+
+  if (qty <= 0) {
+    return {
+      strategyApplied: strategy,
+      allocations: [],
+      totalCogs: 0,
+      remainingShortage: 0,
+      allocatedQty: 0,
+      insufficientStock: false,
+      availableSellableQty: totalAvailableSellableQty,
+    };
+  }
+
+  // Atomic pre-check before mutating any batch row
+  if ((hasBatchRecords || strictBatchCheck) && qty > totalAvailableSellableQty) {
+    return {
+      strategyApplied: strategy,
+      allocations: [],
+      totalCogs: 0,
+      remainingShortage: qty,
+      allocatedQty: 0,
+      insufficientStock: true,
+      availableSellableQty: totalAvailableSellableQty,
+    };
+  }
 
   let remaining = Math.max(0, qty);
   const allocations: {
@@ -656,6 +944,8 @@ function deductBatchesByStrategy(
     totalCogs,
     remainingShortage: remaining,
     allocatedQty: Number((qty - remaining).toFixed(2)),
+    insufficientStock: false,
+    availableSellableQty: totalAvailableSellableQty,
   };
 }
 
@@ -1716,6 +2006,217 @@ function generateQRISPayload(orderId: string, amount: number): string {
   return `${rawPayloadWithoutCRC}${checksum}`;
 }
 
+// -------------------------------------------------------------
+// NON-VOLATILE STATE PERSISTENCE SNAPSHOT (.grocematrix-state.json)
+// -------------------------------------------------------------
+const STATE_SNAPSHOT_PATH = path.resolve(__dirname, '.grocematrix-state.json');
+const STATE_SNAPSHOT_TMP_PATH = path.resolve(__dirname, '.grocematrix-state.json.tmp');
+
+function captureServerState() {
+  return {
+    savedAt: new Date().toISOString(),
+    storeStatus,
+    storeSchedules,
+    warehouseZones,
+    storeInventoryTiers,
+    inventoryList,
+    purchaseRequests,
+    purchaseOrders,
+    goodsReceipts,
+    chartOfAccounts,
+    generalLedger,
+    auditTrail,
+    inventoryBatches,
+    wasteRecords,
+    pickerOrders,
+    customerOrders,
+    enterpriseSettings,
+    landedCostsList,
+    warehouseBins,
+    warehouseRoutes,
+    vendorBillsList,
+    enterpriseQuotationsList,
+    b2bCustomersList,
+    wholesaleProductsList,
+    pwpRulesList,
+    giroRecordsList,
+    b2bOrdersList,
+    vendorCreditNotesList,
+    dynamicMarkdownConfig,
+    removalStrategiesConfig,
+    skuTaxRulesList,
+    customerRmaList,
+    vendorRtvList,
+    blindOpnameSheetsList,
+    posShiftsList,
+    posHardwareStatus,
+    coldChainLogs,
+    posReturnsList,
+    coaMappingConfig,
+    posCheckoutConfig,
+    stockOpnameSessions,
+    stockTransfersList,
+    approvalRulesList,
+    approvalQueueList,
+    suratJalanList,
+    deliveryOrdersList,
+    shipmentsList,
+    qcInspectionsList,
+    promotionRulesList,
+    posTransactionsHistory,
+    weightToleranceConfigs,
+    naturalShrinkageAdjustments,
+    substitutionPromptRecords,
+    securityAuditTrail,
+    climateAdaptiveConfigs,
+    qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
+    idempotencyStoreEntries: Array.from(idempotencyStore.entries()),
+  };
+}
+
+function applyServerState(snap: any) {
+  if (!snap || typeof snap !== 'object') return;
+  if (snap.storeStatus) storeStatus = snap.storeStatus;
+  if (Array.isArray(snap.storeSchedules)) storeSchedules = snap.storeSchedules;
+  if (Array.isArray(snap.warehouseZones)) warehouseZones = snap.warehouseZones;
+  if (Array.isArray(snap.storeInventoryTiers)) storeInventoryTiers = snap.storeInventoryTiers;
+  if (Array.isArray(snap.inventoryList)) inventoryList = snap.inventoryList;
+  if (Array.isArray(snap.purchaseRequests)) purchaseRequests = snap.purchaseRequests;
+  if (Array.isArray(snap.purchaseOrders)) purchaseOrders = snap.purchaseOrders;
+  if (Array.isArray(snap.goodsReceipts)) goodsReceipts = snap.goodsReceipts;
+  if (Array.isArray(snap.chartOfAccounts)) chartOfAccounts = snap.chartOfAccounts;
+  if (Array.isArray(snap.generalLedger)) generalLedger = snap.generalLedger;
+  if (Array.isArray(snap.auditTrail)) auditTrail = snap.auditTrail;
+  if (Array.isArray(snap.inventoryBatches)) inventoryBatches = snap.inventoryBatches;
+  if (Array.isArray(snap.wasteRecords)) wasteRecords = snap.wasteRecords;
+  if (Array.isArray(snap.pickerOrders)) pickerOrders = snap.pickerOrders;
+  if (Array.isArray(snap.customerOrders)) customerOrders = snap.customerOrders;
+  if (snap.enterpriseSettings) enterpriseSettings = snap.enterpriseSettings;
+  if (Array.isArray(snap.landedCostsList)) landedCostsList = snap.landedCostsList;
+  if (Array.isArray(snap.warehouseBins)) warehouseBins = snap.warehouseBins;
+  if (Array.isArray(snap.warehouseRoutes)) warehouseRoutes = snap.warehouseRoutes;
+  if (Array.isArray(snap.vendorBillsList)) vendorBillsList = snap.vendorBillsList;
+  if (Array.isArray(snap.enterpriseQuotationsList)) enterpriseQuotationsList = snap.enterpriseQuotationsList;
+  if (Array.isArray(snap.b2bCustomersList)) b2bCustomersList = snap.b2bCustomersList;
+  if (Array.isArray(snap.wholesaleProductsList)) wholesaleProductsList = snap.wholesaleProductsList;
+  if (Array.isArray(snap.pwpRulesList)) pwpRulesList = snap.pwpRulesList;
+  if (Array.isArray(snap.giroRecordsList)) giroRecordsList = snap.giroRecordsList;
+  if (Array.isArray(snap.b2bOrdersList)) b2bOrdersList = snap.b2bOrdersList;
+  if (Array.isArray(snap.vendorCreditNotesList)) vendorCreditNotesList = snap.vendorCreditNotesList;
+  if (snap.dynamicMarkdownConfig) dynamicMarkdownConfig = snap.dynamicMarkdownConfig;
+  if (snap.removalStrategiesConfig) removalStrategiesConfig = snap.removalStrategiesConfig;
+  if (Array.isArray(snap.skuTaxRulesList)) skuTaxRulesList = snap.skuTaxRulesList;
+  if (Array.isArray(snap.customerRmaList)) customerRmaList = snap.customerRmaList;
+  if (Array.isArray(snap.vendorRtvList)) vendorRtvList = snap.vendorRtvList;
+  if (Array.isArray(snap.blindOpnameSheetsList)) blindOpnameSheetsList = snap.blindOpnameSheetsList;
+  if (Array.isArray(snap.posShiftsList)) posShiftsList = snap.posShiftsList;
+  if (snap.posHardwareStatus) posHardwareStatus = snap.posHardwareStatus;
+  if (Array.isArray(snap.coldChainLogs)) coldChainLogs = snap.coldChainLogs;
+  if (Array.isArray(snap.posReturnsList)) posReturnsList = snap.posReturnsList;
+  if (snap.coaMappingConfig) coaMappingConfig = snap.coaMappingConfig;
+  if (snap.posCheckoutConfig) posCheckoutConfig = snap.posCheckoutConfig;
+  if (Array.isArray(snap.stockOpnameSessions)) stockOpnameSessions = snap.stockOpnameSessions;
+  if (Array.isArray(snap.stockTransfersList)) stockTransfersList = snap.stockTransfersList;
+  if (Array.isArray(snap.approvalRulesList)) approvalRulesList = snap.approvalRulesList;
+  if (Array.isArray(snap.approvalQueueList)) approvalQueueList = snap.approvalQueueList;
+  if (Array.isArray(snap.suratJalanList)) suratJalanList = snap.suratJalanList;
+  if (Array.isArray(snap.deliveryOrdersList)) deliveryOrdersList = snap.deliveryOrdersList;
+  if (Array.isArray(snap.shipmentsList)) shipmentsList = snap.shipmentsList;
+  if (Array.isArray(snap.qcInspectionsList)) qcInspectionsList = snap.qcInspectionsList;
+  if (Array.isArray(snap.promotionRulesList)) promotionRulesList = snap.promotionRulesList;
+  if (Array.isArray(snap.posTransactionsHistory)) posTransactionsHistory = snap.posTransactionsHistory;
+  if (Array.isArray(snap.weightToleranceConfigs)) weightToleranceConfigs = snap.weightToleranceConfigs;
+  if (Array.isArray(snap.naturalShrinkageAdjustments)) naturalShrinkageAdjustments = snap.naturalShrinkageAdjustments;
+  if (Array.isArray(snap.substitutionPromptRecords)) substitutionPromptRecords = snap.substitutionPromptRecords;
+  if (Array.isArray(snap.securityAuditTrail)) securityAuditTrail = snap.securityAuditTrail;
+  if (Array.isArray(snap.climateAdaptiveConfigs)) climateAdaptiveConfigs = snap.climateAdaptiveConfigs;
+  qrisTransactions.clear();
+  if (Array.isArray(snap.qrisTransactionsEntries)) {
+    snap.qrisTransactionsEntries.forEach(([k, v]: [string, any]) => qrisTransactions.set(k, v));
+  }
+  idempotencyStore.clear();
+  if (Array.isArray(snap.idempotencyStoreEntries)) {
+    snap.idempotencyStoreEntries.forEach(([k, v]: [string, any]) => idempotencyStore.set(k, v));
+  }
+}
+
+const INITIAL_STATE_BASELINE_JSON = JSON.stringify(captureServerState());
+
+let snapshotSaveTimer: NodeJS.Timeout | null = null;
+let snapshotWriteQueue: Promise<void> = Promise.resolve();
+let isResettingState = false;
+
+function flushSnapshotAtomic(): Promise<void> {
+  if (isResettingState) return snapshotWriteQueue;
+  snapshotWriteQueue = snapshotWriteQueue
+    .catch(() => {})
+    .then(async () => {
+      if (isResettingState) return;
+      try {
+        const payload = JSON.stringify(captureServerState());
+        await fsPromises.writeFile(STATE_SNAPSHOT_TMP_PATH, payload, 'utf-8');
+        await fsPromises.rename(STATE_SNAPSHOT_TMP_PATH, STATE_SNAPSHOT_PATH);
+      } catch (err) {
+        console.warn('[GroceMart Snapshot] Failed to persist state snapshot:', err);
+      }
+    });
+  return snapshotWriteQueue;
+}
+
+function scheduleStateSave() {
+  if (isResettingState) return;
+  if (snapshotSaveTimer) clearTimeout(snapshotSaveTimer);
+  snapshotSaveTimer = setTimeout(() => {
+    snapshotSaveTimer = null;
+    void flushSnapshotAtomic();
+  }, 250);
+}
+
+function hydrateStateFromSnapshot() {
+  try {
+    if (fs.existsSync(STATE_SNAPSHOT_PATH)) {
+      const raw = fs.readFileSync(STATE_SNAPSHOT_PATH, 'utf-8');
+      if (raw && raw.trim()) {
+        const parsed = JSON.parse(raw);
+        applyServerState(parsed);
+        ensureRegulatoryCoaAccounts();
+        syncAllBatchesExpiryStatus(Date.now());
+        console.log(`[GroceMart Snapshot] Hydrated persistent state from ${STATE_SNAPSHOT_PATH}`);
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('[GroceMart Snapshot] Failed to load snapshot, falling back to baseline seed:', err);
+  }
+  inventoryBatches = createInitialBatches();
+  ensureRegulatoryCoaAccounts();
+}
+
+async function resetDemoStateToBaseline() {
+  isResettingState = true;
+  if (snapshotSaveTimer) {
+    clearTimeout(snapshotSaveTimer);
+    snapshotSaveTimer = null;
+  }
+  try {
+    await snapshotWriteQueue.catch(() => {});
+    const baseline = JSON.parse(INITIAL_STATE_BASELINE_JSON);
+    applyServerState(baseline);
+    inventoryBatches = createInitialBatches();
+    ensureRegulatoryCoaAccounts();
+    if (fs.existsSync(STATE_SNAPSHOT_TMP_PATH)) {
+      await fsPromises.unlink(STATE_SNAPSHOT_TMP_PATH).catch(() => {});
+    }
+    if (fs.existsSync(STATE_SNAPSHOT_PATH)) {
+      await fsPromises.unlink(STATE_SNAPSHOT_PATH).catch(() => {});
+    }
+  } finally {
+    isResettingState = false;
+  }
+}
+
+hydrateStateFromSnapshot();
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
@@ -1792,8 +2293,34 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Debounced atomic snapshot persistence on every successful mutating API request
+  app.use('/api', (req: Request, res: Response, next) => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      res.on('finish', () => {
+        if (
+          res.statusCode < 400 &&
+          !isResettingState &&
+          !req.originalUrl.includes('reset-demo-data')
+        ) {
+          scheduleStateSave();
+        }
+      });
+    }
+    next();
+  });
+
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  app.post(['/api/admin/system/reset-demo-data', '/api/admin/reset-demo-data'], async (_req: Request, res: Response) => {
+    await resetDemoStateToBaseline();
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      batchesCount: inventoryBatches.length,
+      message: 'Demo state snapshot cleared and re-initialized with fresh relative-date seed baseline.',
+    });
   });
 
   // -------------------------------------------------------------
@@ -1927,14 +2454,15 @@ async function startServer() {
       });
     }
 
+    const roundedAmount = Math.max(0, roundIDR(Number(amount)));
     const qrisRef = `QRIS-GCM-${Date.now().toString().slice(-6)}`;
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    const qrPayload = generateQRISPayload(orderId, amount);
+    const qrPayload = generateQRISPayload(orderId, roundedAmount);
 
     qrisTransactions.set(orderId, {
       orderId,
       qrisReference: qrisRef,
-      amount,
+      amount: roundedAmount,
       status: 'unpaid',
       expiresAt,
     });
@@ -1947,7 +2475,7 @@ async function startServer() {
       merchantName: 'GROCEMART RETAIL INDONESIA',
       merchantCity: 'JAKARTA',
       postalCode: '12110',
-      amount,
+      amount: roundedAmount,
       currency: 'IDR',
       qrPayloadString: qrPayload,
       expiresAt,
@@ -2026,15 +2554,27 @@ async function startServer() {
     try {
       // Execute within atomic concurrency lock (SELECT FOR UPDATE emulation)
       const result = await inventoryConcurrencyManager.runWithLock(lockKeys, async () => {
-        // Anti-Overselling Guard: verify real-time available stock
+        // Anti-Overselling & Non-Expired ATP Guard: verify real-time sellable stock atomically before mutating anything
+        const skuTotals = new Map<string, number>();
         if (Array.isArray(items) && items.length > 0) {
           for (const item of items) {
             const prodId = item.product?.id || item.productId;
-            const qty = item.quantity || 1;
+            const qty = Math.max(0, Number(item.quantity) || 1);
             const invItem = inventoryList.find((inv) => inv.productId === prodId || inv.sku === item.sku);
-            if (invItem && invItem.currentStock < qty) {
-              const conflictErr = new Error(`Anti-Overselling Guard: Insufficient inventory for "${invItem.productName}". Available: ${invItem.currentStock}, Requested: ${qty}. Allocation rejected.`);
-              (conflictErr as any).statusCode = 409;
+            const targetSku = invItem?.sku || item.sku;
+            if (targetSku) {
+              skuTotals.set(targetSku, (skuTotals.get(targetSku) || 0) + qty);
+            }
+          }
+          for (const [targetSku, totalReqQty] of skuTotals.entries()) {
+            const invItem = inventoryList.find((inv) => inv.sku === targetSku);
+            const atpCheck = getSellableNonExpiredAtpStock(targetSku, 'store-jkt-senopati');
+            const maxSellable = invItem ? Math.min(invItem.currentStock, atpCheck.effectiveAtp) : atpCheck.effectiveAtp;
+            if (totalReqQty > maxSellable) {
+              const conflictErr = new Error(
+                `Insufficient non-expired ATP stock for SKU ${targetSku}${invItem ? ` ("${invItem.productName}")` : ''}. Available: ${maxSellable}, Requested: ${totalReqQty}. Allocation rejected.`
+              );
+              (conflictErr as any).statusCode = 400;
               throw conflictErr;
             }
           }
@@ -2043,37 +2583,104 @@ async function startServer() {
         const tx = existingTx || {
           orderId,
           qrisReference: `QRIS-GCM-${Date.now().toString().slice(-6)}`,
-          amount: req.body.amount || 75000,
+          amount: roundIDR(Number(req.body.amount) || 75000),
           status: 'unpaid' as const,
           expiresAt: new Date().toISOString(),
           paidAt: undefined as string | undefined,
           settlementChannel: undefined as string | undefined,
         };
 
+        tx.amount = Math.max(0, roundIDR(Number(tx.amount) || 0));
         tx.status = 'paid';
         tx.paidAt = new Date().toISOString();
         tx.settlementChannel = channel;
         qrisTransactions.set(orderId, tx);
 
-        // 1. Deduct Inventory Stock & Calculate COGS
+        // 1. Deduct Inventory Stock, Calculate COGS & Post-Markdown Net VAT Split
         const inventoryDeductions: { sku: string; quantity: number; cogsCost: number }[] = [];
         let totalCogs = 0;
         const triggeredPRs: PurchaseRequest[] = [];
+        let computedLineNetSum = 0;
+        let computedPpnIDR = 0;
+        let computedPb1IDR = 0;
 
         if (Array.isArray(items) && items.length > 0) {
-          for (const item of items) {
+          const rawLineItems = items.map((item: any) => {
             const prodId = item.product?.id || item.productId;
-            const qty = item.quantity || 1;
+            const qty = Math.max(0, Number(item.quantity) || 1);
             const invItem = inventoryList.find((inv) => inv.productId === prodId || inv.sku === item.sku);
+            const targetSku = invItem?.sku || item.sku || '';
+            const catalogPrice = Number(item.product?.price ?? item.unitPrice ?? item.price ?? invItem?.sellingPrice ?? 0) || 0;
+            const nearestSellableBatch = inventoryBatches
+              .filter((b) => {
+                syncBatchExpiryStatus(b);
+                return (
+                  b.sku === targetSku &&
+                  b.storeId === 'store-jkt-senopati' &&
+                  b.currentStock > 0 &&
+                  b.status !== 'quarantined' &&
+                  b.status !== 'recalled' &&
+                  b.status !== 'expired' &&
+                  b.status !== 'depleted'
+                );
+              })
+              .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime())[0];
+            const mdCandidate = nearestSellableBatch
+              ? evaluateBatchMarkdown(nearestSellableBatch, dynamicMarkdownConfig)
+              : null;
+            let unitPrice = catalogPrice;
+            if (mdCandidate && mdCandidate.markdownPrice > 0 && unitPrice >= mdCandidate.originalPrice - 1) {
+              unitPrice = mdCandidate.markdownPrice;
+            } else if (
+              nearestSellableBatch?.markdownDiscountPercent &&
+              nearestSellableBatch.markdownDiscountPercent > 0 &&
+              unitPrice >= nearestSellableBatch.sellingPrice - 1
+            ) {
+              unitPrice = Math.round(nearestSellableBatch.sellingPrice * (1 - nearestSellableBatch.markdownDiscountPercent / 100));
+            }
+            return {
+              item,
+              qty,
+              invItem,
+              lineSubtotal: Math.round(unitPrice * qty),
+              category: item.product?.category || item.category || invItem?.category || '',
+              name: item.product?.name || item.name || invItem?.productName || targetSku,
+              sku: targetSku,
+            };
+          });
+
+          const rawGrossSum = rawLineItems.reduce((acc, r) => acc + r.lineSubtotal, 0);
+          const cartDiscount = Math.min(rawGrossSum, Math.max(0, roundIDR(Number(req.body.discount) || 0)));
+          const effectiveAfterDiscount = Math.max(0, rawGrossSum - cartDiscount);
+          const isInclusivePriceMode = Math.abs(effectiveAfterDiscount - tx.amount) <= Math.max(5, rawLineItems.length * 2);
+
+          let remainingDiscount = cartDiscount;
+          rawLineItems.forEach((entry, idx) => {
+            const { qty, invItem } = entry;
+            const share =
+              idx === rawLineItems.length - 1
+                ? remainingDiscount
+                : rawGrossSum > 0
+                ? Math.min(remainingDiscount, Math.round((entry.lineSubtotal / rawGrossSum) * cartDiscount))
+                : 0;
+            remainingDiscount = Math.max(0, remainingDiscount - share);
+            const netLine = Math.max(0, entry.lineSubtotal - share);
+
+            const rule = skuTaxRulesList.find((r) => r.sku === entry.sku);
+            const taxCat: IndonesianTaxCategory =
+              rule?.taxCategory || inferDefaultTaxCategory(entry.category, entry.name);
+            const stdRate = rule?.taxRatePercent ?? posCheckoutConfig.ppnTaxPercent ?? 11;
+            const taxCalc = computeIndonesianTax(netLine, taxCat, isInclusivePriceMode, stdRate);
+            computedLineNetSum += roundIDR(taxCalc.dppIDR);
+            computedPpnIDR += roundIDR(taxCalc.ppnIDR);
+            computedPb1IDR += roundIDR(taxCalc.pb1IDR);
 
             if (invItem) {
               invItem.currentStock = Math.max(0, invItem.currentStock - qty);
               invItem.outgoingStock += qty;
 
-              // Deduct from batches respecting FEFO vs FIFO removal strategy
               const batchResult = deductBatchesByStrategy(invItem.sku, qty, 'store-jkt-senopati', invItem.unitCost);
 
-              // Also update store warehouse tiers
               const tier = storeInventoryTiers.find((t) => t.sku === invItem.sku);
               if (tier) {
                 tier.physicalStock = Math.max(0, tier.physicalStock - qty);
@@ -2083,15 +2690,17 @@ async function startServer() {
                 tier.updatedAt = new Date().toISOString();
               }
 
-              const itemCogs = batchResult.allocations.length > 0 ? batchResult.totalCogs : invItem.unitCost * qty;
-              totalCogs += itemCogs;
+              const itemCogs =
+                batchResult.allocations.length > 0
+                  ? roundIDR(batchResult.totalCogs)
+                  : roundIDR(invItem.unitCost * qty);
+              totalCogs = roundIDR(totalCogs + itemCogs);
               inventoryDeductions.push({
                 sku: invItem.sku,
                 quantity: qty,
                 cogsCost: itemCogs,
               });
 
-              // Check if fallen below minimum threshold -> AUTO TRIGGER REORDER
               if (invItem.currentStock <= invItem.minimumThreshold) {
                 const existingPendingPR = purchaseRequests.find(
                   (pr) => pr.sku === invItem.sku && pr.status === 'pending'
@@ -2106,7 +2715,7 @@ async function startServer() {
                     productName: invItem.productName,
                     suggestedQuantity: invItem.reorderQuantity || 50,
                     estimatedUnitCost: invItem.unitCost,
-                    totalEstimatedCost: (invItem.reorderQuantity || 50) * invItem.unitCost,
+                    totalEstimatedCost: roundIDR((invItem.reorderQuantity || 50) * invItem.unitCost),
                     status: 'pending',
                     reason: 'low_stock_auto_trigger',
                     priority: 'high',
@@ -2116,10 +2725,20 @@ async function startServer() {
                 }
               }
             }
-          }
+          });
         } else {
-          totalCogs = Math.round(tx.amount * 0.6); // Default realistic 60% COGS ratio
+          totalCogs = Math.round(tx.amount * 0.6);
+          computedLineNetSum = tx.amount;
         }
+
+        // Reconcile GL Credits so DR 1030 === CR 4010 + CR 2025 + CR 2027 (strict integer IDR)
+        const qrisPpnIDR = Math.min(tx.amount, roundIDR(computedPpnIDR));
+        const qrisPb1IDR = Math.min(Math.max(0, tx.amount - qrisPpnIDR), roundIDR(computedPb1IDR));
+        const qrisRevenueIDR =
+          Array.isArray(items) && items.length > 0
+            ? Math.max(0, tx.amount - qrisPpnIDR - qrisPb1IDR)
+            : tx.amount;
+        totalCogs = Math.max(0, roundIDR(totalCogs));
 
         // 2. Automated Double-Entry General Ledger (GL) Recording
         const timestamp = new Date().toISOString();
@@ -2127,62 +2746,99 @@ async function startServer() {
         const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
         const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
         const gleId4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
+        const qrisJournalIds = [gleId1, gleId2];
 
-        // A. Cash Inflow / QRIS Settlement Clearing (Debit 1030)
-        generalLedger.unshift({
-          id: gleId1,
-          timestamp,
-          accountCode: '1030',
-          accountName: 'QRIS Settlement Receivable (ASPI Clearing)',
-          category: 'Asset',
-          debit: tx.amount,
-          credit: 0,
-          referenceType: 'QRIS_SALE',
-          referenceId: orderId,
-          description: `QRIS Settlement via ${channel} for Order #${orderId}`,
-        });
+        const qrisRevenueGlBatch: GeneralLedgerEntry[] = [
+          {
+            id: gleId1,
+            timestamp,
+            accountCode: '1030',
+            accountName: 'QRIS Settlement Receivable (ASPI Clearing)',
+            category: 'Asset',
+            debit: tx.amount,
+            credit: 0,
+            referenceType: 'QRIS_SALE',
+            referenceId: orderId,
+            description: `QRIS Settlement via ${channel} for Order #${orderId}`,
+          },
+          {
+            id: gleId2,
+            timestamp,
+            accountCode: '4010',
+            accountName: 'Grocery Sales Revenue',
+            category: 'Revenue',
+            debit: 0,
+            credit: qrisRevenueIDR,
+            referenceType: 'QRIS_SALE',
+            referenceId: orderId,
+            description: `Net sales revenue recognized for Order #${orderId}`,
+          },
+        ];
 
-        // B. Sales Revenue (Credit 4010)
-        generalLedger.unshift({
-          id: gleId2,
-          timestamp,
-          accountCode: '4010',
-          accountName: 'Grocery Sales Revenue',
-          category: 'Revenue',
-          debit: 0,
-          credit: tx.amount,
-          referenceType: 'QRIS_SALE',
-          referenceId: orderId,
-          description: `Sales revenue recognized for Order #${orderId}`,
-        });
+        if (qrisPpnIDR > 0) {
+          const gleTaxPpn = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}-VAT`;
+          qrisJournalIds.push(gleTaxPpn);
+          qrisRevenueGlBatch.push({
+            id: gleTaxPpn,
+            timestamp,
+            accountCode: '2025',
+            accountName: 'PPN Keluaran (VAT Output Payable 11%/12%)',
+            category: 'Liability',
+            debit: 0,
+            credit: qrisPpnIDR,
+            referenceType: 'QRIS_SALE',
+            referenceId: orderId,
+            description: `PPN Output VAT accrued for QRIS Order #${orderId}`,
+          });
+        }
+        if (qrisPb1IDR > 0) {
+          const gleTaxPb1 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}-PB1`;
+          qrisJournalIds.push(gleTaxPb1);
+          qrisRevenueGlBatch.push({
+            id: gleTaxPb1,
+            timestamp,
+            accountCode: '2027',
+            accountName: 'Pajak Daerah PB1 (10% Ready-to-Eat Deli)',
+            category: 'Liability',
+            debit: 0,
+            credit: qrisPb1IDR,
+            referenceType: 'QRIS_SALE',
+            referenceId: orderId,
+            description: `PB1 10% Deli tax accrued for QRIS Order #${orderId}`,
+          });
+        }
+        commitBalancedGlBatch(qrisRevenueGlBatch, true);
 
-        // C. Cost of Goods Sold (Debit 5010)
-        generalLedger.unshift({
-          id: gleId3,
-          timestamp,
-          accountCode: '5010',
-          accountName: 'Cost of Goods Sold (COGS)',
-          category: 'Expense',
-          debit: totalCogs,
-          credit: 0,
-          referenceType: 'QRIS_SALE',
-          referenceId: orderId,
-          description: `COGS recognized for products dispatched in Order #${orderId}`,
-        });
-
-        // D. Inventory Asset Deduction (Credit 1040)
-        generalLedger.unshift({
-          id: gleId4,
-          timestamp,
-          accountCode: '1040',
-          accountName: 'Merchandise Inventory Asset',
-          category: 'Asset',
-          debit: 0,
-          credit: totalCogs,
-          referenceType: 'QRIS_SALE',
-          referenceId: orderId,
-          description: `Inventory reduction for order dispatch #${orderId}`,
-        });
+        qrisJournalIds.push(gleId3, gleId4);
+        commitBalancedGlBatch(
+          [
+            {
+              id: gleId3,
+              timestamp,
+              accountCode: '5010',
+              accountName: 'Cost of Goods Sold (COGS)',
+              category: 'Expense',
+              debit: totalCogs,
+              credit: 0,
+              referenceType: 'QRIS_SALE',
+              referenceId: orderId,
+              description: `COGS recognized for products dispatched in Order #${orderId}`,
+            },
+            {
+              id: gleId4,
+              timestamp,
+              accountCode: '1040',
+              accountName: 'Merchandise Inventory Asset',
+              category: 'Asset',
+              debit: 0,
+              credit: totalCogs,
+              referenceType: 'QRIS_SALE',
+              referenceId: orderId,
+              description: `Inventory reduction for order dispatch #${orderId}`,
+            },
+          ],
+          true
+        );
 
         // 3. Record in Transaction Audit Trail
         const auditRecord: TransactionAuditRecord = {
@@ -2194,7 +2850,7 @@ async function startServer() {
           amount: tx.amount,
           paymentTimestamp: timestamp,
           settlementChannel: channel as any,
-          journalEntryIds: [gleId1, gleId2, gleId3, gleId4],
+          journalEntryIds: qrisJournalIds,
           inventoryDeducted: inventoryDeductions,
           status: 'SETTLED',
         };
@@ -2215,7 +2871,10 @@ async function startServer() {
           qrisReference: tx.qrisReference,
           paidAt: tx.paidAt,
           settlementChannel: channel,
-          journalEntryIds: [gleId1, gleId2, gleId3, gleId4],
+          netRevenueIDR: qrisRevenueIDR,
+          ppnIDR: qrisPpnIDR,
+          pb1IDR: qrisPb1IDR,
+          journalEntryIds: qrisJournalIds,
           auditRecordId: auditRecord.id,
           inventoryDeductions,
           triggeredPRsCount: triggeredPRs.length,
@@ -2239,8 +2898,8 @@ async function startServer() {
       res.setHeader('X-Concurrency-Lock', 'RELEASED');
       res.json(result);
     } catch (err: any) {
-      if (err.statusCode === 409) {
-        return res.status(409).json({
+      if (err.statusCode === 400 || err.statusCode === 409) {
+        return res.status(err.statusCode).json({
           success: false,
           error: err.message,
           orderId,
@@ -2519,13 +3178,14 @@ async function startServer() {
   // MULTI-WAREHOUSE & INVENTORY MANAGEMENT ENDPOINTS
   // -------------------------------------------------------------
   app.get('/api/admin/inventory', (_req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     let totalStockCount = 0;
     let totalValuationWAC = 0;
     let lowStockCount = 0;
 
     inventoryList.forEach((item) => {
       totalStockCount += item.currentStock;
-      totalValuationWAC += item.currentStock * item.unitCost;
+      totalValuationWAC += Math.round(item.currentStock * item.unitCost);
       if (item.currentStock <= item.minimumThreshold) {
         lowStockCount++;
       }
@@ -2543,6 +3203,7 @@ async function startServer() {
   });
 
   app.get('/api/admin/inventory/matrix', (_req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     res.json({
       warehouseZones,
       storeInventoryTiers,
@@ -2633,6 +3294,7 @@ async function startServer() {
   // -------------------------------------------------------------
   app.get('/api/admin/inventory/batches', (req: Request, res: Response) => {
     const { storeId, sku, status } = req.query;
+    syncAllBatchesExpiryStatus(Date.now());
     let list = [...inventoryBatches];
 
     if (storeId && storeId !== 'ALL') {
@@ -2694,11 +3356,24 @@ async function startServer() {
       return res.status(404).json({ error: 'SKU not found in inventory catalog' });
     }
 
-    const deduction = deductBatchesByStrategy(sku, reqQty, storeId, item.unitCost);
+    // Atomic non-expired ATP stock pre-check
+    const atpCheck = getSellableNonExpiredAtpStock(sku, storeId);
+    if (reqQty > atpCheck.effectiveAtp) {
+      return res.status(400).json({
+        error: `Insufficient non-expired ATP stock for SKU ${sku}: requested ${reqQty}, available ${atpCheck.effectiveAtp}.`,
+      });
+    }
+
+    const deduction = deductBatchesByStrategy(sku, reqQty, storeId, item.unitCost, atpCheck.hasBatchTracking);
+    if (deduction.insufficientStock) {
+      return res.status(400).json({
+        error: `Insufficient non-expired ATP stock for SKU ${sku}: requested ${reqQty}, available ${deduction.availableSellableQty}.`,
+      });
+    }
     const actualAllocated = deduction.allocatedQty;
 
     // Also deduct catalog & store tier stock
-    item.currentStock = Math.max(0, item.currentStock - actualAllocated);
+    item.currentStock = Math.max(0, Number((item.currentStock - actualAllocated).toFixed(2)));
     item.outgoingStock += actualAllocated;
 
     const tier = storeInventoryTiers.find(
@@ -2934,34 +3609,51 @@ async function startServer() {
     res.json({ success: true, order, item });
   });
 
-  app.post('/api/admin/picker/orders/:orderId/items/:itemId/substitute', (req: Request, res: Response) => {
-    const { orderId, itemId } = req.params;
-    const { replacementSku, reason = 'Out of Stock on Shelf' } = req.body;
-
+  const executeFulfillmentSubstitution = (
+    orderId: string,
+    itemId: string,
+    replacementSku: string,
+    reason: string = 'Out of Stock on Shelf'
+  ): { statusCode: number; payload: Record<string, any> } => {
     const order = pickerOrders.find((o) => o.orderId === orderId);
-    if (!order) return res.status(404).json({ error: 'Picker order not found' });
+    if (!order) return { statusCode: 404, payload: { error: 'Picker order not found' } };
 
     const item = order.items.find((i) => i.id === itemId);
-    if (!item) return res.status(404).json({ error: 'Item not found in order' });
+    if (!item) return { statusCode: 404, payload: { error: 'Item not found in order' } };
 
     const replacement = inventoryList.find((i) => i.sku === replacementSku);
-    if (!replacement) return res.status(404).json({ error: 'Replacement SKU not found' });
+    if (!replacement) return { statusCode: 404, payload: { error: 'Replacement SKU not found' } };
+
+    const atpCheck = getSellableNonExpiredAtpStock(replacementSku, order.storeId);
+    if (item.orderedQty > atpCheck.effectiveAtp) {
+      return {
+        statusCode: 400,
+        payload: {
+          error: `Insufficient non-expired ATP stock for SKU ${replacementSku} (${atpCheck.effectiveAtp} available, ${item.orderedQty} required).`,
+        },
+      };
+    }
+
+    // Atomic batch deduction check before mutating tier/catalog/order
+    const batchDeduction = deductBatchesByStrategy(
+      replacementSku,
+      item.orderedQty,
+      order.storeId,
+      replacement.unitCost,
+      atpCheck.hasBatchTracking
+    );
+    if (batchDeduction.insufficientStock) {
+      return {
+        statusCode: 400,
+        payload: {
+          error: `Insufficient non-expired ATP stock for SKU ${replacementSku} (${batchDeduction.availableSellableQty} available, ${item.orderedQty} required).`,
+        },
+      };
+    }
 
     const replacementTier = storeInventoryTiers.find(
       (t) => t.sku === replacementSku && t.storeId === order.storeId
     );
-    const availableReplacementStock = replacementTier
-      ? replacementTier.availableStock
-      : replacement.currentStock;
-
-    if (availableReplacementStock < item.orderedQty) {
-      return res.status(400).json({
-        error: `Insufficient available stock for replacement SKU ${replacementSku} (${availableReplacementStock} available, ${item.orderedQty} required).`,
-      });
-    }
-
-    // Deduct replacement inventory atomically across batches, store tier, and catalog
-    deductBatchesByStrategy(replacementSku, item.orderedQty, order.storeId, replacement.unitCost);
     replacement.currentStock = Math.max(0, Number((replacement.currentStock - item.orderedQty).toFixed(2)));
     if (replacementTier) {
       replacementTier.physicalStock = Math.max(0, Number((replacementTier.physicalStock - item.orderedQty).toFixed(2)));
@@ -3003,13 +3695,32 @@ async function startServer() {
     }
     order.updatedAt = new Date().toISOString();
 
-    res.json({
-      success: true,
-      message: `Item substituted with ${replacement.productName}. Customer notified via SMS/App notification.`,
-      order,
-      item,
-      notificationMessage: `Hi ${order.customerName}, due to fresh stock freshness standard, we upgraded your ${originalSku} to ${replacement.productName} at no extra charge penalty!`,
-    });
+    return {
+      statusCode: 200,
+      payload: {
+        success: true,
+        message: `Item substituted with ${replacement.productName}. Customer notified via SMS/App notification.`,
+        order,
+        item,
+        notificationMessage: `Hi ${order.customerName}, due to fresh stock freshness standard, we upgraded your ${originalSku} to ${replacement.productName} at no extra charge penalty!`,
+      },
+    };
+  };
+
+  app.post('/api/admin/picker/orders/:orderId/items/:itemId/substitute', (req: Request, res: Response) => {
+    const { orderId, itemId } = req.params;
+    const { replacementSku, reason = 'Out of Stock on Shelf' } = req.body;
+    const result = executeFulfillmentSubstitution(orderId, itemId, replacementSku, reason);
+    res.status(result.statusCode).json(result.payload);
+  });
+
+  app.post('/api/admin/fulfillment/substitute', (req: Request, res: Response) => {
+    const { orderId, itemId, replacementSku, reason = 'Out of Stock on Shelf' } = req.body;
+    if (!orderId || !itemId || !replacementSku) {
+      return res.status(400).json({ error: 'orderId, itemId, and replacementSku are required.' });
+    }
+    const result = executeFulfillmentSubstitution(orderId, itemId, replacementSku, reason);
+    res.status(result.statusCode).json(result.payload);
   });
 
   app.post('/api/admin/picker/orders/:orderId/complete', (req: Request, res: Response) => {
@@ -3404,35 +4115,40 @@ async function startServer() {
     // Auto-Post Double Entry to General Ledger:
     // Debit 1040 Merchandise Inventory Asset
     // Credit 2010 Trade Accounts Payable
-    generalLedger.unshift({
-      id: gleId1,
-      timestamp: new Date().toISOString(),
-      storeId: po.storeId,
-      storeName: po.storeName,
-      accountCode: '1040',
-      accountName: 'Merchandise Inventory Asset',
-      category: 'Asset',
-      debit: grTotalCost,
-      credit: 0,
-      referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
-      referenceId: grId,
-      description: `${grId}: ${isPartial ? 'Partial' : 'Full'} Goods receipt on PO #${po.id} from ${po.supplierName}`,
-    });
-
-    generalLedger.unshift({
-      id: gleId2,
-      timestamp: new Date().toISOString(),
-      storeId: po.storeId,
-      storeName: po.storeName,
-      accountCode: '2010',
-      accountName: 'Trade Accounts Payable (Vendors)',
-      category: 'Liability',
-      debit: 0,
-      credit: grTotalCost,
-      referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
-      referenceId: grId,
-      description: `${grId}: Trade liability accrued for received items on PO #${po.id}`,
-    });
+    const roundedGrTotalCost = Math.max(0, roundIDR(grTotalCost));
+    commitBalancedGlBatch(
+      [
+        {
+          id: gleId1,
+          timestamp: new Date().toISOString(),
+          storeId: po.storeId,
+          storeName: po.storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
+          category: 'Asset',
+          debit: roundedGrTotalCost,
+          credit: 0,
+          referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
+          referenceId: grId,
+          description: `${grId}: ${isPartial ? 'Partial' : 'Full'} Goods receipt on PO #${po.id} from ${po.supplierName}`,
+        },
+        {
+          id: gleId2,
+          timestamp: new Date().toISOString(),
+          storeId: po.storeId,
+          storeName: po.storeName,
+          accountCode: '2010',
+          accountName: 'Trade Accounts Payable (Vendors)',
+          category: 'Liability',
+          debit: 0,
+          credit: roundedGrTotalCost,
+          referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
+          referenceId: grId,
+          description: `${grId}: Trade liability accrued for received items on PO #${po.id}`,
+        },
+      ],
+      true
+    );
 
     res.json({
       success: true,
@@ -3448,10 +4164,12 @@ async function startServer() {
   // STORE-SPECIFIC CHART OF ACCOUNTS & FINANCIAL ACCOUNTING
   // -------------------------------------------------------------
   app.get('/api/admin/accounting/coa', (_req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     res.json(chartOfAccounts);
   });
 
   app.get('/api/admin/accounting/general-ledger', (req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     const { storeId } = req.query;
     if (storeId && storeId !== 'CONSOLIDATED') {
       return res.json(generalLedger.filter((g) => g.storeId === storeId));
@@ -3502,6 +4220,7 @@ async function startServer() {
     original.reversedByVoucherId = reversingId;
 
     generalLedger.unshift(reversingEntry);
+    updateCoaLedgerBalance(reversingEntry.accountCode, reversingEntry.debit, reversingEntry.credit);
 
     res.json({
       success: true,
@@ -3533,6 +4252,7 @@ async function startServer() {
   app.delete('/api/admin/waste/:id', forbidHardDelete('Waste/Shrinkage Records'));
 
   app.get('/api/admin/accounting/pnl', (req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     const { storeId } = req.query;
     let relevantEntries = generalLedger;
     let storeName = 'Consolidated Company-Wide';
@@ -3592,6 +4312,7 @@ async function startServer() {
   });
 
   app.get('/api/admin/accounting/balance-sheet', (req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     const { storeId } = req.query;
     const isSingleStore = storeId && storeId !== 'CONSOLIDATED';
     const factor = isSingleStore ? 0.25 : 1.0;
@@ -3651,6 +4372,7 @@ async function startServer() {
   });
 
   app.get('/api/admin/accounting/cash-flow', (req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     const { storeId } = req.query;
     const factor = storeId && storeId !== 'CONSOLIDATED' ? 0.25 : 1.0;
 
@@ -3697,6 +4419,7 @@ async function startServer() {
   // MULTI-DIMENSIONAL REVENUE (OMZET) ANALYTICS ENDPOINT
   // -------------------------------------------------------------
   app.get('/api/admin/analytics/omzet', (_req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     const totalRevenueMTD = 388500000;
     const storeBreakdown = [
       { storeId: 'store-jkt-senopati', storeName: 'GroceMart Senopati Flagship', city: 'Jakarta', omzet: 124500000, orderCount: 412, sharePercent: 32.0, status: 'Open' as const },
@@ -3776,6 +4499,7 @@ async function startServer() {
   });
 
   app.get('/api/admin/accounting/audit-trail', (_req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     res.json(auditTrail);
   });
 
@@ -4020,9 +4744,29 @@ async function startServer() {
     const replacement = inventoryList.find((i) => i.sku === replacementSku);
     if (!replacement) return res.status(404).json({ error: 'Replacement SKU not found' });
 
-    // FIFO allocation check on replacement stock
+    const atpCheck = getSellableNonExpiredAtpStock(replacementSku, order.storeId);
+    if (item.orderedQty > atpCheck.effectiveAtp) {
+      return res.status(400).json({
+        error: `Insufficient non-expired ATP stock for SKU ${replacementSku} (${atpCheck.effectiveAtp} available, ${item.orderedQty} required).`,
+      });
+    }
+
+    // FIFO/FEFO non-expired sellable batch allocation check on replacement stock
+    const nowMs = Date.now();
     const availableReplacementBatches = inventoryBatches
-      .filter((b) => b.sku === replacementSku && b.storeId === order.storeId && b.currentStock > 0)
+      .filter((b) => {
+        syncBatchExpiryStatus(b, nowMs);
+        return (
+          b.sku === replacementSku &&
+          b.storeId === order.storeId &&
+          b.currentStock > 0 &&
+          b.status !== 'expired' &&
+          b.status !== 'quarantined' &&
+          b.status !== 'recalled' &&
+          b.status !== 'depleted' &&
+          new Date(b.expiryDate).getTime() > nowMs
+        );
+      })
       .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
 
     const replacementBatch = availableReplacementBatches[0] || {
@@ -4093,9 +4837,8 @@ async function startServer() {
     const item = order.items.find((i) => i.id === prompt.itemId);
     if (!item) return res.status(404).json({ error: 'Order item not found' });
 
-    prompt.decidedAt = new Date().toISOString();
-
     if (action === 'decline') {
+      prompt.decidedAt = new Date().toISOString();
       prompt.promptStatus = 'declined_by_customer';
       item.status = 'out_of_stock';
       order.updatedAt = new Date().toISOString();
@@ -4106,31 +4849,48 @@ async function startServer() {
       });
     }
 
-    // Customer Approved: Execute substitution with strict FIFO traceability and GL adjustment
+    // Customer Approved: Verify non-expired ATP stock atomically BEFORE mutating prompt or stock
     const replacement = inventoryList.find((i) => i.sku === prompt.replacementSku);
     const replacementTier = storeInventoryTiers.find(
       (t) => t.sku === prompt.replacementSku && t.storeId === prompt.storeId
     );
-    const availStock = replacementTier
-      ? replacementTier.availableStock
-      : (replacement?.currentStock ?? 0);
-
-    if (availStock < item.orderedQty) {
+    const atpCheck = getSellableNonExpiredAtpStock(prompt.replacementSku, prompt.storeId);
+    if (item.orderedQty > atpCheck.effectiveAtp) {
       return res.status(400).json({
-        error: `Insufficient available stock for replacement SKU ${prompt.replacementSku} (${availStock} available, ${item.orderedQty} required).`,
+        error: `Insufficient non-expired ATP stock for SKU ${prompt.replacementSku} (${atpCheck.effectiveAtp} available, ${item.orderedQty} required).`,
       });
     }
 
-    prompt.promptStatus = 'approved_by_customer';
+    const nowMs = Date.now();
     const replacementBatch = inventoryBatches.find((b) => b.batchId === prompt.replacementBatchId);
+    const batchIsSellable =
+      replacementBatch &&
+      !syncBatchExpiryStatus(replacementBatch, nowMs) &&
+      replacementBatch.status !== 'quarantined' &&
+      replacementBatch.status !== 'recalled' &&
+      replacementBatch.status !== 'depleted' &&
+      replacementBatch.currentStock >= item.orderedQty;
 
-    // Deduct stock from replacement FIFO/FEFO batch, store tier, and global catalog
-    if (replacementBatch && replacementBatch.currentStock >= item.orderedQty) {
+    if (!batchIsSellable) {
+      const deduction = deductBatchesByStrategy(
+        prompt.replacementSku,
+        item.orderedQty,
+        prompt.storeId,
+        replacement?.unitCost || 15000,
+        atpCheck.hasBatchTracking
+      );
+      if (deduction.insufficientStock) {
+        return res.status(400).json({
+          error: `Insufficient non-expired ATP stock for SKU ${prompt.replacementSku} (${deduction.availableSellableQty} available, ${item.orderedQty} required).`,
+        });
+      }
+    } else if (replacementBatch) {
       replacementBatch.currentStock = Math.max(0, Number((replacementBatch.currentStock - item.orderedQty).toFixed(2)));
       if (replacementBatch.currentStock === 0) replacementBatch.status = 'depleted';
-    } else {
-      deductBatchesByStrategy(prompt.replacementSku, item.orderedQty, prompt.storeId, replacement?.unitCost || 15000);
     }
+
+    prompt.decidedAt = new Date().toISOString();
+    prompt.promptStatus = 'approved_by_customer';
     if (replacement) {
       replacement.currentStock = Math.max(0, Number((replacement.currentStock - item.orderedQty).toFixed(2)));
     }
@@ -4456,6 +5216,7 @@ async function startServer() {
 
   // Multi-Currency Financial Statement API (Converts GL / P&L based on target currency)
   app.get('/api/admin/accounting/pnl-multicurrency', (req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     const { storeId, currency = 'IDR' } = req.query;
     const targetCurrency = (String(currency).toUpperCase() as SupportedCurrency) || 'IDR';
     const rateInfo = CURRENCY_RATES[targetCurrency] || CURRENCY_RATES.IDR;
@@ -4537,20 +5298,25 @@ async function startServer() {
     const { storeId = 'store-jkt-senopati', search = '', category = 'ALL' } = req.query;
     const cleanSearch = String(search).toLowerCase().trim();
     const cleanCategory = String(category).toLowerCase().trim();
+    const nowMs = Date.now();
+    inventoryBatches.forEach((b) => syncBatchExpiryStatus(b, nowMs));
 
     const posCatalog: POSProductItem[] = PRODUCTS.map((prod) => {
-      // Find SKU in inventoryList
       const inv = inventoryList.find((i) => i.productId === prod.id || i.productName.toLowerCase() === prod.name.toLowerCase());
       const sku = inv?.sku || `SKU-${prod.category.slice(0, 3).toUpperCase()}-${prod.id.replace(/\D/g, '').padStart(3, '0')}`;
 
-      // Find store stock tier
       const tier = storeInventoryTiers.find(
         (t) => t.sku === sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
       );
       const currentStock = tier ? tier.physicalStock : (inv ? inv.currentStock : 24);
-      const availableStock = tier ? tier.availableStock : Math.max(0, currentStock - 2);
+      const atpInfo = getSellableNonExpiredAtpStock(sku, String(storeId));
+      const availableStock = atpInfo.hasBatchTracking
+        ? atpInfo.effectiveAtp
+        : tier
+        ? tier.availableStock
+        : Math.max(0, currentStock - 2);
 
-      // Find nearest active sellable FEFO batch for this SKU (exclude quarantined/recalled/expired/depleted)
+      // Find nearest active sellable non-expired FEFO batch for this SKU
       const batchesForSku = inventoryBatches
         .filter(
           (b) =>
@@ -4560,14 +5326,16 @@ async function startServer() {
             b.status !== 'quarantined' &&
             b.status !== 'recalled' &&
             b.status !== 'expired' &&
-            b.status !== 'depleted'
+            b.status !== 'depleted' &&
+            new Date(b.expiryDate).getTime() > nowMs
         )
         .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
 
       const nearestBatch = batchesForSku[0];
+      const evaluatedMarkdown = nearestBatch ? evaluateBatchMarkdown(nearestBatch, dynamicMarkdownConfig) : null;
       const activeMarkdownCandidate =
-        nearestBatch && nearestBatch.markdownDiscountPercent && nearestBatch.markdownDiscountPercent > 0
-          ? evaluateBatchMarkdown(nearestBatch, dynamicMarkdownConfig)
+        nearestBatch && ((nearestBatch.markdownDiscountPercent && nearestBatch.markdownDiscountPercent > 0) || evaluatedMarkdown)
+          ? evaluatedMarkdown
           : null;
       const effectiveSellingPrice = activeMarkdownCandidate
         ? activeMarkdownCandidate.markdownPrice
@@ -4583,7 +5351,7 @@ async function startServer() {
         sellingPrice: effectiveSellingPrice,
         unitCost: inv?.unitCost || Math.round(prod.price * 0.62),
         unit: prod.unit,
-        barcode: sku, // SKU is barcode identifier
+        barcode: sku,
         image: prod.image,
         currentStock,
         availableStock,
@@ -4628,20 +5396,14 @@ async function startServer() {
       cashierName = currentActiveStaffSession.userName,
       shiftId = currentActiveStaffSession.activeShiftId,
       items = [],
-      subtotal = 0,
       discount = 0,
-      tax = 0,
-      total = 0,
       currency = 'IDR',
-      currencyTotal = total,
       currencyRateToIDR = 1,
       paymentMethod = 'cash',
       cashTendered,
       cashChange,
       customerName = 'Walk-in Retail Shopper',
       customerPhone,
-      customerMemberId,
-      notes,
     } = req.body as POSTransactionRequest;
 
     if (!items || items.length === 0) {
@@ -4662,6 +5424,27 @@ async function startServer() {
       });
     }
 
+    // ATOMIC PRE-CHECK: Aggregate requested qty per SKU & validate sellable non-expired ATP before any mutation
+    const nowMs = Date.now();
+    const requestedBySku = new Map<string, number>();
+    for (const item of items as any[]) {
+      const sku = String(item.sku || '').trim();
+      const qty = Number(item.quantity);
+      if (!sku || !Number.isFinite(qty) || qty <= 0) {
+        return res.status(400).json({ error: `Invalid SKU or quantity in POS cart (${sku || 'unknown'}).` });
+      }
+      requestedBySku.set(sku, Number(((requestedBySku.get(sku) || 0) + qty).toFixed(3)));
+    }
+
+    for (const [sku, totalReqQty] of requestedBySku.entries()) {
+      const atpCheck = getSellableNonExpiredAtpStock(sku, storeId);
+      if (totalReqQty > atpCheck.effectiveAtp) {
+        return res.status(400).json({
+          error: `Insufficient non-expired ATP stock for SKU ${sku}: requested ${totalReqQty}, available ${atpCheck.effectiveAtp}.`,
+        });
+      }
+    }
+
     const timestamp = new Date().toISOString();
     const shortCode = Math.random().toString(36).substring(2, 7).toUpperCase();
     const cleanStoreCode = storeId.replace('store-', '').substring(0, 3).toUpperCase();
@@ -4669,17 +5452,61 @@ async function startServer() {
     const transactionId = `TXN-POS-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`;
     const orderId = `GCM-POS-${Date.now().toString().slice(-6)}`;
 
-    // 1. Real-time Inventory & FEFO Batch Deduction
+    // 1. Real-time Inventory, FEFO Batch Deduction, and Post-Markdown Net Pricing
     let totalCogsCost = 0;
     let inventoryDeductedCount = 0;
     let computedSubtotal = 0;
 
-    const normalizedItems = items.map((item: any) => {
+    const normalizedItems = (items as any[]).map((item: any) => {
       const qty = Math.max(0, Number(item.quantity) || 1);
       const inv = inventoryList.find((i) => i.sku === item.sku);
-      const unitPrice = Number(item.unitPrice ?? item.price ?? inv?.sellingPrice ?? 0) || 0;
-      const unitCost = Number(item.unitCost ?? inv?.wacUnitCost ?? inv?.unitCost) || Math.round(unitPrice * 0.62);
-      const lineTotal = Number(item.lineTotal) || Math.round(unitPrice * qty);
+      const prod = PRODUCTS.find(
+        (p) => p.id === (item.productId || inv?.productId) || p.name.toLowerCase() === String(item.name || inv?.productName || '').toLowerCase()
+      );
+
+      // Evaluate nearest active non-expired sellable batch for dynamic markdown pricing
+      const nearestBatch = inventoryBatches
+        .filter((b) => {
+          syncBatchExpiryStatus(b, nowMs);
+          return (
+            b.sku === item.sku &&
+            (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati') &&
+            b.currentStock > 0 &&
+            b.status !== 'quarantined' &&
+            b.status !== 'recalled' &&
+            b.status !== 'expired' &&
+            b.status !== 'depleted' &&
+            new Date(b.expiryDate).getTime() > nowMs
+          );
+        })
+        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime())[0];
+
+      const mdCandidate = nearestBatch ? evaluateBatchMarkdown(nearestBatch, dynamicMarkdownConfig) : null;
+      const catalogBasePrice = nearestBatch?.sellingPrice || prod?.price || inv?.sellingPrice || 0;
+      const markdownUnitPrice = mdCandidate
+        ? mdCandidate.markdownPrice
+        : nearestBatch?.markdownDiscountPercent && nearestBatch.markdownDiscountPercent > 0
+        ? Math.round(catalogBasePrice * (1 - nearestBatch.markdownDiscountPercent / 100))
+        : 0;
+
+      const rawUnitPrice = Number(item.unitPrice ?? item.price ?? inv?.sellingPrice ?? catalogBasePrice) || 0;
+      let effectiveUnitPrice = rawUnitPrice;
+      if (
+        !item.isWeighted &&
+        markdownUnitPrice > 0 &&
+        markdownUnitPrice < catalogBasePrice &&
+        rawUnitPrice >= catalogBasePrice - 1
+      ) {
+        effectiveUnitPrice = markdownUnitPrice;
+      }
+
+      const unitCost = roundIDR(
+        Number(item.unitCost ?? inv?.wacUnitCost ?? inv?.unitCost) || Math.round(effectiveUnitPrice * 0.62)
+      );
+      const lineTotal =
+        effectiveUnitPrice !== rawUnitPrice || !item.lineTotal
+          ? Math.round(effectiveUnitPrice * qty)
+          : Math.round(Number(item.lineTotal));
       computedSubtotal += lineTotal;
 
       // A. Store Inventory Tiers
@@ -4701,25 +5528,61 @@ async function startServer() {
 
       // C. Strategy-Aware Batch Deduction (FEFO vs FIFO, skipping quarantined/expired lots)
       const batchDeduction = deductBatchesByStrategy(item.sku, qty, storeId, unitCost);
-      const cogsLine = batchDeduction.allocatedQty > 0 ? batchDeduction.totalCogs : Math.round(unitCost * qty);
-      totalCogsCost += cogsLine;
+      const cogsLine =
+        batchDeduction.allocatedQty > 0 ? roundIDR(batchDeduction.totalCogs) : roundIDR(unitCost * qty);
+      totalCogsCost = roundIDR(totalCogsCost + cogsLine);
       inventoryDeductedCount += qty;
 
       return {
         ...item,
+        category: item.category || inv?.category || prod?.category || 'produce',
+        name: item.name || inv?.productName || prod?.name || item.sku,
         quantity: qty,
-        unitPrice,
+        unitPrice: roundIDR(effectiveUnitPrice),
         unitCost,
         lineTotal,
       };
     });
 
-    const resolvedSubtotal = Number(subtotal) || computedSubtotal;
-    const resolvedTotal = Number(total) || Math.max(0, resolvedSubtotal - (Number(discount) || 0) + (Number(tax) || 0));
-    const resolvedCurrencyTotal = Number(currencyTotal) || resolvedTotal;
+    // 2. Post-Markdown Net VAT (PPN) Calculation Accuracy (strict integer IDR)
+    const resolvedSubtotal = roundIDR(computedSubtotal);
+    const discountAmount = Math.min(resolvedSubtotal, Math.max(0, roundIDR(Number(discount) || 0)));
+    const netRevenueIDR = Math.max(0, resolvedSubtotal - discountAmount);
 
-    // 2. Automatic Accounting & General Ledger Double-Entry
-    // Asset Account Mapping: Cash: 1010, QRIS: 1030, Card/Bank: 1020
+    let remainingCartDiscount = discountAmount;
+    let resolvedPpn = 0;
+    let resolvedPb1 = 0;
+
+    normalizedItems.forEach((normItem, idx) => {
+      const discountShare =
+        idx === normalizedItems.length - 1
+          ? remainingCartDiscount
+          : resolvedSubtotal > 0
+          ? Math.min(remainingCartDiscount, Math.round((normItem.lineTotal / resolvedSubtotal) * discountAmount))
+          : 0;
+      remainingCartDiscount = Math.max(0, remainingCartDiscount - discountShare);
+      const netDiscountedLineTotal = Math.max(0, normItem.lineTotal - discountShare);
+
+      const rule = skuTaxRulesList.find((r) => r.sku === normItem.sku);
+      const taxCat: IndonesianTaxCategory =
+        rule?.taxCategory || inferDefaultTaxCategory(normItem.category || '', normItem.name || '');
+      const stdRate = rule?.taxRatePercent ?? posCheckoutConfig.ppnTaxPercent ?? 11;
+      const taxCalc = computeIndonesianTax(netDiscountedLineTotal, taxCat, false, stdRate);
+      resolvedPpn += roundIDR(taxCalc.ppnIDR);
+      resolvedPb1 += roundIDR(taxCalc.pb1IDR);
+    });
+
+    resolvedPpn = roundIDR(resolvedPpn);
+    resolvedPb1 = roundIDR(resolvedPb1);
+    const resolvedTax = resolvedPpn + resolvedPb1;
+    const resolvedTotal = netRevenueIDR + resolvedTax;
+    totalCogsCost = Math.max(0, roundIDR(totalCogsCost));
+    const resolvedCurrencyTotal =
+      currency !== 'IDR' && currencyRateToIDR > 0
+        ? Number((resolvedTotal / currencyRateToIDR).toFixed(2))
+        : resolvedTotal;
+
+    // 3. Automatic Accounting & General Ledger Double-Entry (Exact DR === CR Parity)
     let assetAccountCode: AccountCode = '1010';
     let assetAccountName = 'Cash on Hand & Store Registers';
     if (paymentMethod === 'qris') {
@@ -4734,73 +5597,113 @@ async function startServer() {
     const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
     const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
     const gleId4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
-    const journalEntryIds = [gleId1, gleId2, gleId3, gleId4];
+    const journalEntryIds = [gleId1, gleId2];
 
-    // Double-entry 1: Asset Debit (Cash/Bank/QRIS received)
-    generalLedger.unshift({
-      id: gleId1,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: assetAccountCode,
-      accountName: assetAccountName,
-      category: 'Asset',
-      debit: resolvedTotal,
-      credit: 0,
-      referenceType: 'POS_SALE',
-      referenceId: receiptNumber,
-      description: `POS Checkout #${receiptNumber} - Tender: ${paymentMethod.toUpperCase()}${currency !== 'IDR' ? ` (${currency} ${resolvedCurrencyTotal})` : ''}`,
-    });
+    const posRevenueGlBatch: GeneralLedgerEntry[] = [
+      {
+        id: gleId1,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: assetAccountCode,
+        accountName: assetAccountName,
+        category: 'Asset',
+        debit: resolvedTotal,
+        credit: 0,
+        referenceType: 'POS_SALE',
+        referenceId: receiptNumber,
+        description: `POS Checkout #${receiptNumber} - Tender: ${paymentMethod.toUpperCase()}${currency !== 'IDR' ? ` (${currency} ${resolvedCurrencyTotal})` : ''}`,
+      },
+      {
+        id: gleId2,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '4010',
+        accountName: 'Grocery Sales Revenue',
+        category: 'Revenue',
+        debit: 0,
+        credit: netRevenueIDR,
+        referenceType: 'POS_SALE',
+        referenceId: receiptNumber,
+        description: `Net Sales Revenue (post-markdown) from POS Register #${receiptNumber} (Cashier: ${cashierName})`,
+      },
+    ];
 
-    // Double-entry 2: Revenue Credit (Gross Sales Revenue)
-    generalLedger.unshift({
-      id: gleId2,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: '4010',
-      accountName: 'Grocery Sales Revenue',
-      category: 'Revenue',
-      debit: 0,
-      credit: resolvedTotal,
-      referenceType: 'POS_SALE',
-      referenceId: receiptNumber,
-      description: `Sales Revenue recognized from POS Register (Cashier: ${cashierName})`,
-    });
+    if (resolvedPpn > 0) {
+      const gleTaxPpn = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}-VAT`;
+      journalEntryIds.push(gleTaxPpn);
+      posRevenueGlBatch.push({
+        id: gleTaxPpn,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '2025',
+        accountName: 'PPN Keluaran (VAT Output Payable 11%/12%)',
+        category: 'Liability',
+        debit: 0,
+        credit: resolvedPpn,
+        referenceType: 'POS_SALE',
+        referenceId: receiptNumber,
+        description: `Post-markdown VAT Output PPN accrued for POS #${receiptNumber}`,
+      });
+    }
+    if (resolvedPb1 > 0) {
+      const gleTaxPb1 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}-PB1`;
+      journalEntryIds.push(gleTaxPb1);
+      posRevenueGlBatch.push({
+        id: gleTaxPb1,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '2027',
+        accountName: 'Pajak Daerah PB1 (10% Ready-to-Eat Deli)',
+        category: 'Liability',
+        debit: 0,
+        credit: resolvedPb1,
+        referenceType: 'POS_SALE',
+        referenceId: receiptNumber,
+        description: `PB1 10% Deli tax accrued for POS #${receiptNumber}`,
+      });
+    }
+    commitBalancedGlBatch(posRevenueGlBatch, true);
 
-    // Double-entry 3: COGS Debit (Cost of Goods Sold Expense)
-    generalLedger.unshift({
-      id: gleId3,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: '5010',
-      accountName: 'Cost of Goods Sold (COGS)',
-      category: 'Expense',
-      debit: totalCogsCost,
-      credit: 0,
-      referenceType: 'POS_SALE',
-      referenceId: receiptNumber,
-      description: `COGS realized for ${normalizedItems.length} items sold via POS #${receiptNumber}`,
-    });
+    journalEntryIds.push(gleId3, gleId4);
+    commitBalancedGlBatch(
+      [
+        {
+          id: gleId3,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '5010',
+          accountName: 'Cost of Goods Sold (COGS)',
+          category: 'Expense',
+          debit: totalCogsCost,
+          credit: 0,
+          referenceType: 'POS_SALE',
+          referenceId: receiptNumber,
+          description: `COGS realized for ${normalizedItems.length} items sold via POS #${receiptNumber}`,
+        },
+        {
+          id: gleId4,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
+          category: 'Asset',
+          debit: 0,
+          credit: totalCogsCost,
+          referenceType: 'POS_SALE',
+          referenceId: receiptNumber,
+          description: `Inventory balance reduction upon in-store POS dispatch #${receiptNumber}`,
+        },
+      ],
+      true
+    );
 
-    // Double-entry 4: Inventory Asset Credit (Deduction of stock balance)
-    generalLedger.unshift({
-      id: gleId4,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: '1040',
-      accountName: 'Merchandise Inventory Asset',
-      category: 'Asset',
-      debit: 0,
-      credit: totalCogsCost,
-      referenceType: 'POS_SALE',
-      referenceId: receiptNumber,
-      description: `Inventory balance reduction upon in-store POS dispatch #${receiptNumber}`,
-    });
-
-    // 3. Audit Trail Records
+    // 4. Audit Trail Records
     auditTrail.unshift({
       id: `AUD-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`,
       qrisReference: paymentMethod === 'qris' ? `QRIS-POS-${shortCode}` : undefined,
@@ -4833,6 +5736,9 @@ async function startServer() {
       metadata: {
         receiptNumber,
         total: resolvedTotal,
+        netRevenueIDR,
+        ppnIDR: resolvedPpn,
+        pb1IDR: resolvedPb1,
         currency,
         currencyTotal: resolvedCurrencyTotal,
         paymentMethod,
@@ -4840,7 +5746,7 @@ async function startServer() {
       },
     });
 
-    // 4. Construct Complete Receipt
+    // 5. Construct Complete Receipt
     const receipt: POSTransactionReceipt = {
       receiptNumber,
       transactionId,
@@ -4853,8 +5759,8 @@ async function startServer() {
       shiftId: shiftId || 'SHIFT-01',
       items: normalizedItems,
       subtotal: resolvedSubtotal,
-      discount,
-      tax,
+      discount: discountAmount,
+      tax: resolvedTax,
       total: resolvedTotal,
       currency,
       currencyTotal: resolvedCurrencyTotal,
@@ -4889,6 +5795,11 @@ async function startServer() {
     res.json({
       success: true,
       receipt,
+      taxBreakdown: {
+        netRevenueIDR,
+        ppnIDR: resolvedPpn,
+        pb1IDR: resolvedPb1,
+      },
       message: `POS checkout completed! Receipt #${receiptNumber}. Stock deducted across ${items.length} items & GL ledger posted.`,
     });
   });
@@ -4910,6 +5821,10 @@ async function startServer() {
   // --- 1. ENTERPRISE SETTINGS MASTER CONFIG ---
   app.get('/api/admin/settings/enterprise', (_req: Request, res: Response) => {
     res.json(enterpriseSettings);
+  });
+
+  app.get('/api/settings/invoice-tracking', (_req: Request, res: Response) => {
+    res.json(enterpriseSettings.invoiceTracking);
   });
 
   app.put('/api/admin/settings/enterprise', (req: Request, res: Response) => {
@@ -5164,6 +6079,7 @@ async function startServer() {
   });
 
   app.get('/api/b2b/products', (_req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     // Sync current stock from live inventory list
     wholesaleProductsList.forEach((prod) => {
       const inv = inventoryList.find((i) => i.sku.includes(prod.sku.replace('B2B-SKU-', '')) || i.productName.toLowerCase().includes(prod.name.slice(0, 8).toLowerCase()));
@@ -5227,22 +6143,74 @@ async function startServer() {
       }
     }
 
-    // Calculate subtotal, PWP discounts, tax, and base units
+    // Atomic non-expired ATP stock pre-check across all wholesale cart items BEFORE any mutation
+    const b2bReqBySku = new Map<string, number>();
+    for (const cartIt of items) {
+      const prod = wholesaleProductsList.find(
+        (p) => p.id === (cartIt.product?.id || cartIt.productId) || p.sku === (cartIt.product?.sku || cartIt.sku)
+      );
+      const targetSku = String(prod?.sku || cartIt.product?.sku || cartIt.sku || '').trim();
+      const unitsToDeduct = Number(cartIt.baseUnitsCalculated) || Number(cartIt.quantity) || 1;
+      if (!targetSku || !Number.isFinite(unitsToDeduct) || unitsToDeduct <= 0) {
+        return res.status(400).json({ error: `Invalid wholesale SKU or quantity (${targetSku || 'unknown'}).` });
+      }
+      b2bReqBySku.set(targetSku, Number(((b2bReqBySku.get(targetSku) || 0) + unitsToDeduct).toFixed(3)));
+    }
+    for (const [targetSku, totalUnits] of b2bReqBySku.entries()) {
+      const prod = wholesaleProductsList.find((p) => p.sku === targetSku);
+      const atpCheck = getSellableNonExpiredAtpStock(targetSku, 'CONSOLIDATED');
+      const avail = prod
+        ? atpCheck.hasBatchTracking
+          ? Math.min(prod.currentStockBaseUnits, atpCheck.batchSellableQty)
+          : prod.currentStockBaseUnits
+        : atpCheck.effectiveAtp;
+      if (totalUnits > avail) {
+        return res.status(400).json({
+          error: `Insufficient non-expired ATP stock for SKU ${targetSku}: requested ${totalUnits}, available ${avail}.`,
+        });
+      }
+    }
+
+    // Calculate subtotal, PWP discounts, post-markdown/discount net VAT (PPN), and base units (strict integer IDR)
     let subtotalIDR = 0;
     let pwpDiscountIDR = 0;
     let totalBaseUnits = 0;
     let totalCogsIDR = 0;
+    let totalPpnIDR = 0;
+    let totalPb1IDR = 0;
 
     for (const item of items) {
-      subtotalIDR += Number(item.lineTotal) || 0;
-      totalBaseUnits += Number(item.baseUnitsCalculated) || 0;
+      const prod = wholesaleProductsList.find(
+        (p) => p.id === (item.product?.id || item.productId) || p.sku === (item.product?.sku || item.sku)
+      );
+      const targetSku = prod?.sku || item.product?.sku || item.sku || '';
+      const rawLineTotal =
+        item.lineTotal !== undefined
+          ? Number(item.lineTotal)
+          : (Number(item.unitPrice ?? item.price ?? prod?.baseUnitPrice ?? 0) || 0) *
+            (Number(item.quantity) || 1);
+      const lineNet = Math.max(0, roundIDR(rawLineTotal));
+      subtotalIDR += lineNet;
+      totalBaseUnits += Number(item.baseUnitsCalculated) || Number(item.quantity) || 0;
       if (item.isPwpRedemption) {
         const normalPrice = primaryPwp?.normalPriceIDR || 38000;
-        pwpDiscountIDR += Math.max(0, normalPrice - (Number(item.unitPrice) || primaryPwp?.promoPriceIDR || 10000));
+        pwpDiscountIDR += Math.max(0, roundIDR(normalPrice - (Number(item.unitPrice) || primaryPwp?.promoPriceIDR || 10000)));
       }
+
+      const rule = skuTaxRulesList.find((r) => r.sku === targetSku);
+      const taxCat: IndonesianTaxCategory =
+        rule?.taxCategory || inferDefaultTaxCategory(prod?.category || item.product?.category || '', prod?.name || item.product?.name || '');
+      const stdRate = rule?.taxRatePercent ?? posCheckoutConfig.ppnTaxPercent ?? 11;
+      const taxCalc = computeIndonesianTax(lineNet, taxCat, false, stdRate);
+      totalPpnIDR += roundIDR(taxCalc.ppnIDR);
+      totalPb1IDR += roundIDR(taxCalc.pb1IDR);
     }
 
-    const taxPPN11IDR = Math.round(subtotalIDR * 0.11);
+    subtotalIDR = roundIDR(subtotalIDR);
+    pwpDiscountIDR = roundIDR(pwpDiscountIDR);
+    totalPpnIDR = roundIDR(totalPpnIDR);
+    totalPb1IDR = roundIDR(totalPb1IDR);
+    const taxPPN11IDR = totalPpnIDR + totalPb1IDR;
     const totalAmountIDR = subtotalIDR + taxPPN11IDR;
 
     // Strict Auto-Credit Lock & AR Validation
@@ -5278,7 +6246,7 @@ async function startServer() {
       const fallbackCost = (prod?.baseUnitPrice || 20000) * 0.72;
 
       const batchDeduction = deductBatchesByStrategy(targetSku, unitsToDeduct, 'CONSOLIDATED', fallbackCost);
-      totalCogsIDR += Math.round(batchDeduction.totalCogs);
+      totalCogsIDR = roundIDR(totalCogsIDR + roundIDR(batchDeduction.totalCogs));
 
       if (prod) {
         prod.currentStockBaseUnits = Math.max(0, prod.currentStockBaseUnits - unitsToDeduct);
@@ -5300,16 +6268,18 @@ async function startServer() {
       }
     }
 
+    totalCogsIDR = Math.max(0, roundIDR(totalCogsIDR));
+
     const timestamp = new Date().toISOString();
     const orderId = `B2B-2026-${(b2bOrdersList.length + 80).toString().padStart(4, '0')}`;
     const journalEntryIds: string[] = [];
 
-    // General Ledger Automation
+    // General Ledger Automation (Exact DR === CR Parity with split Revenue #4020 and Output VAT #2025)
     const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
     const gle3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
     const gle4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
-    journalEntryIds.push(gle1, gle2, gle3, gle4);
+    journalEntryIds.push(gle1, gle2);
 
     let paymentStatus: B2BWholesaleOrder['paymentStatus'] = 'APPROVED_CREDIT';
     let orderStatus: B2BWholesaleOrder['status'] = 'CONFIRMED';
@@ -5345,6 +6315,8 @@ async function startServer() {
       });
     }
 
+    const b2bRevenueGlBatch: GeneralLedgerEntry[] = [];
+
     if (paymentMethod === 'bilyet_giro') {
       paymentStatus = 'GIRO_PENDING';
       const giroId = `GIRO-2026-${(giroRecordsList.length + 1).toString().padStart(3, '0')}`;
@@ -5366,8 +6338,7 @@ async function startServer() {
       };
       giroRecordsList.unshift(newGiro);
 
-      // Debit Giro Receivable #1210 / Credit Wholesale Revenue #4020
-      generalLedger.unshift({
+      b2bRevenueGlBatch.push({
         id: gle1,
         timestamp,
         storeId: 'CONSOLIDATED',
@@ -5382,8 +6353,7 @@ async function startServer() {
         description: `B2B Wholesale Order [${orderId}]: Giro PDC received #${newGiro.giroNumber} from ${customer.companyName}`,
       });
     } else {
-      // Debit Accounts Receivable #1200 / Credit Wholesale Revenue #4020
-      generalLedger.unshift({
+      b2bRevenueGlBatch.push({
         id: gle1,
         timestamp,
         storeId: 'CONSOLIDATED',
@@ -5399,8 +6369,8 @@ async function startServer() {
       });
     }
 
-    // Credit Wholesale Revenue #4020
-    generalLedger.unshift({
+    // Credit Net Wholesale Revenue #4020
+    b2bRevenueGlBatch.push({
       id: gle2,
       timestamp,
       storeId: 'CONSOLIDATED',
@@ -5409,42 +6379,86 @@ async function startServer() {
       accountName: 'B2B Wholesale Grocery Revenue',
       category: 'Revenue',
       debit: 0,
-      credit: totalAmountIDR,
+      credit: subtotalIDR,
       referenceType: 'B2B_WHOLESALE_ORDER',
       referenceId: orderId,
-      description: `B2B Wholesale Order [${orderId}]: Gross revenue recognized for ${items.length} wholesale lines`,
+      description: `B2B Wholesale Order [${orderId}]: Net revenue recognized for ${items.length} wholesale lines`,
     });
+
+    // Credit Output VAT #2025 / PB1 #2027
+    if (totalPpnIDR > 0) {
+      const gleTax = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}-VAT`;
+      journalEntryIds.push(gleTax);
+      b2bRevenueGlBatch.push({
+        id: gleTax,
+        timestamp,
+        storeId: 'CONSOLIDATED',
+        storeName: 'Consolidated Company-Wide',
+        accountCode: '2025',
+        accountName: 'PPN Keluaran (VAT Output Payable 11%/12%)',
+        category: 'Liability',
+        debit: 0,
+        credit: totalPpnIDR,
+        referenceType: 'B2B_WHOLESALE_ORDER',
+        referenceId: orderId,
+        description: `B2B Wholesale Order [${orderId}]: VAT Output PPN accrued`,
+      });
+    }
+    if (totalPb1IDR > 0) {
+      const glePb1 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}-PB1`;
+      journalEntryIds.push(glePb1);
+      b2bRevenueGlBatch.push({
+        id: glePb1,
+        timestamp,
+        storeId: 'CONSOLIDATED',
+        storeName: 'Consolidated Company-Wide',
+        accountCode: '2027',
+        accountName: 'Pajak Daerah PB1 (10% Ready-to-Eat Deli)',
+        category: 'Liability',
+        debit: 0,
+        credit: totalPb1IDR,
+        referenceType: 'B2B_WHOLESALE_ORDER',
+        referenceId: orderId,
+        description: `B2B Wholesale Order [${orderId}]: PB1 10% tax accrued`,
+      });
+    }
+    commitBalancedGlBatch(b2bRevenueGlBatch, true);
 
     // Debit COGS #5010 / Credit Merchandise Inventory #1040
-    generalLedger.unshift({
-      id: gle3,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: '5010',
-      accountName: 'Cost of Goods Sold (COGS) - FIFO / WAC',
-      category: 'Expense',
-      debit: totalCogsIDR,
-      credit: 0,
-      referenceType: 'B2B_WHOLESALE_ORDER',
-      referenceId: orderId,
-      description: `B2B Wholesale Order [${orderId}]: FEFO moving average cost recognized (${totalBaseUnits} base units)`,
-    });
-
-    generalLedger.unshift({
-      id: gle4,
-      timestamp,
-      storeId: 'CONSOLIDATED',
-      storeName: 'Consolidated Company-Wide',
-      accountCode: '1040',
-      accountName: 'Merchandise Inventory Asset',
-      category: 'Asset',
-      debit: 0,
-      credit: totalCogsIDR,
-      referenceType: 'B2B_WHOLESALE_ORDER',
-      referenceId: orderId,
-      description: `B2B Wholesale Order [${orderId}]: Stock inventory deduction via FEFO`,
-    });
+    journalEntryIds.push(gle3, gle4);
+    commitBalancedGlBatch(
+      [
+        {
+          id: gle3,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '5010',
+          accountName: 'Cost of Goods Sold (COGS) - FIFO / WAC',
+          category: 'Expense',
+          debit: totalCogsIDR,
+          credit: 0,
+          referenceType: 'B2B_WHOLESALE_ORDER',
+          referenceId: orderId,
+          description: `B2B Wholesale Order [${orderId}]: FEFO moving average cost recognized (${totalBaseUnits} base units)`,
+        },
+        {
+          id: gle4,
+          timestamp,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
+          category: 'Asset',
+          debit: 0,
+          credit: totalCogsIDR,
+          referenceType: 'B2B_WHOLESALE_ORDER',
+          referenceId: orderId,
+          description: `B2B Wholesale Order [${orderId}]: Stock inventory deduction via FEFO`,
+        },
+      ],
+      true
+    );
 
     // Update Customer Accounts Receivable & Credit Balance
     customer.outstandingAR += totalAmountIDR;
@@ -5749,7 +6763,7 @@ async function startServer() {
 
     const timestamp = bill.approvedAt || new Date().toISOString();
     const exRate = bill.exchangeRate || 1;
-    const billTotalIDR = bill.grandTotalIDR;
+    const billTotalIDR = roundIDR(bill.grandTotalIDR);
     const billSubtotalIDR = Math.round(bill.subtotal * exRate);
     const billTaxIDR = billTotalIDR - billSubtotalIDR;
 
@@ -5759,7 +6773,7 @@ async function startServer() {
       (b) =>
         b.id !== bill.id &&
         b.goodsReceiptId === bill.goodsReceiptId &&
-        (b.status === 'APPROVED' || b.status === 'PAID')
+        (b.status === 'APPROVED' || b.status === 'PAID' || b.status === 'PARTIALLY_PAID')
     );
 
     let grAccruedIDR = 0;
@@ -5778,10 +6792,12 @@ async function startServer() {
     let seqOffset = 1;
     const nextGleId = () => `GLE-2026-${(generalLedger.length + seqOffset++).toString().padStart(4, '0')}`;
 
+    const approvalGlBatch: GeneralLedgerEntry[] = [];
+
     if (netInventoryVarianceIDR !== 0) {
       const id = nextGleId();
       glIds.push(id);
-      generalLedger.unshift({
+      approvalGlBatch.push({
         id,
         timestamp,
         storeId: bill.storeId,
@@ -5803,7 +6819,7 @@ async function startServer() {
     if (billTaxIDR > 0) {
       const id = nextGleId();
       glIds.push(id);
-      generalLedger.unshift({
+      approvalGlBatch.push({
         id,
         timestamp,
         storeId: bill.storeId,
@@ -5822,7 +6838,7 @@ async function startServer() {
     if (netApAdjustmentIDR !== 0) {
       const id = nextGleId();
       glIds.push(id);
-      generalLedger.unshift({
+      approvalGlBatch.push({
         id,
         timestamp,
         storeId: bill.storeId,
@@ -5839,6 +6855,76 @@ async function startServer() {
             ? `Net AP reconciliation (incl. VAT/variance) for Vendor Bill #${bill.id} [${bill.billNumber}]`
             : `Accounts Payable booked for vendor invoice #${bill.billNumber}`,
       });
+    }
+
+    commitBalancedGlBatch(approvalGlBatch, true);
+
+    // Automatic Settlement of Vendor Prepayments (COA #1150 Auto-Offset on Approved Vendor Bill)
+    const billPayableIDR =
+      bill.remainingBalanceIDR !== undefined
+        ? Math.max(0, roundIDR(bill.remainingBalanceIDR))
+        : Math.max(0, roundIDR((bill.remainingDue ?? bill.grandTotal) * exRate));
+    const supplierAdvanceIDR = getSupplierOpenAdvance1150IDR(bill.supplierName);
+    const autoOffsetIDR = Math.min(supplierAdvanceIDR, billPayableIDR);
+
+    if (autoOffsetIDR > 0) {
+      const apOffsetGlId = `${nextGleId()}-ADV-DR`;
+      const prepayCreditGlId = `${nextGleId()}-ADV-CR`;
+      glIds.push(apOffsetGlId, prepayCreditGlId);
+
+      commitBalancedGlBatch(
+        [
+          {
+            id: apOffsetGlId,
+            timestamp,
+            storeId: bill.storeId,
+            storeName: bill.storeName,
+            accountCode: '2010',
+            accountName: 'Trade Accounts Payable',
+            category: 'Liability',
+            debit: autoOffsetIDR,
+            credit: 0,
+            referenceType: 'VENDOR_PAYMENT',
+            referenceId: bill.id,
+            description: `Auto-offset Vendor Prepayment #1150 for ${bill.supplierName} applied to Bill #${bill.id} [${bill.billNumber}]`,
+          },
+          {
+            id: prepayCreditGlId,
+            timestamp,
+            storeId: bill.storeId,
+            storeName: bill.storeName,
+            accountCode: '1150',
+            accountName: 'Vendor Prepayments / Advances (Uang Muka Pembelian)',
+            category: 'Asset',
+            debit: 0,
+            credit: autoOffsetIDR,
+            referenceType: 'VENDOR_PAYMENT',
+            referenceId: bill.id,
+            description: `Vendor Prepayment #1150 settled against Vendor Bill #${bill.id} [${bill.billNumber}] for ${bill.supplierName}`,
+          },
+        ],
+        true
+      );
+
+      const newRemainingIDR = Math.max(0, billPayableIDR - autoOffsetIDR);
+      const offsetInBillCurrency =
+        exRate > 1 ? Number((autoOffsetIDR / exRate).toFixed(2)) : autoOffsetIDR;
+      bill.amountPaid =
+        exRate > 1
+          ? Number(((bill.amountPaid || 0) + offsetInBillCurrency).toFixed(2))
+          : roundIDR((bill.amountPaid || 0) + offsetInBillCurrency);
+      bill.remainingBalanceIDR = newRemainingIDR;
+      bill.remainingDue =
+        exRate > 1 ? Number((newRemainingIDR / exRate).toFixed(2)) : newRemainingIDR;
+      bill.paymentStatus = newRemainingIDR === 0 ? 'PAID' : 'PARTIALLY_PAID';
+      if (newRemainingIDR === 0) {
+        bill.status = 'PAID';
+        bill.paidAt = timestamp;
+      }
+      const offsetNote = `Auto-offset Rp ${autoOffsetIDR.toLocaleString('id-ID')} from Vendor Prepayments (#1150).`;
+      bill.notes = bill.notes ? `${bill.notes} | ${offsetNote}` : offsetNote;
+    } else if (bill.remainingBalanceIDR === undefined) {
+      bill.remainingBalanceIDR = billPayableIDR;
     }
 
     bill.glEntryIds = glIds;
@@ -5989,6 +7075,7 @@ async function startServer() {
       grandTotalIDR,
       amountPaid: 0,
       remainingDue: grandTotal,
+      remainingBalanceIDR: grandTotalIDR,
       status: billStatus,
       paymentStatus: 'UNPAID',
       notes,
@@ -6076,6 +7163,7 @@ async function startServer() {
     const payAmt = Number(amountPaid) || bill.remainingDue;
     bill.amountPaid += payAmt;
     bill.remainingDue = Math.max(0, bill.grandTotal - bill.amountPaid);
+    bill.remainingBalanceIDR = Math.round(bill.remainingDue * (bill.exchangeRate || 1));
     bill.paymentStatus = bill.remainingDue <= 0 ? 'PAID' : 'PARTIALLY_PAID';
     if (bill.paymentStatus === 'PAID') bill.status = 'PAID';
     bill.paymentMethod = paymentMethod as VendorBillPaymentMethod;
@@ -6086,42 +7174,124 @@ async function startServer() {
     const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
     const payAmountIDR = Math.round(payAmt * bill.exchangeRate);
 
-    generalLedger.unshift({
-      id: gleId1,
-      timestamp: bill.paidAt,
-      storeId: bill.storeId,
-      storeName: bill.storeName,
-      accountCode: '2010',
-      accountName: 'Trade Accounts Payable',
-      category: 'Liability',
-      debit: payAmountIDR,
-      credit: 0,
-      referenceType: 'VENDOR_PAYMENT',
-      referenceId: bill.id,
-      description: `Disbursement: Payment for Bill #${bill.billNumber} (${bill.supplierName})`,
-    });
-
-    generalLedger.unshift({
-      id: gleId2,
-      timestamp: bill.paidAt,
-      storeId: bill.storeId,
-      storeName: bill.storeName,
-      accountCode: '1020',
-      accountName: 'Bank BCA Operational Clearing',
-      category: 'Asset',
-      debit: 0,
-      credit: payAmountIDR,
-      referenceType: 'VENDOR_PAYMENT',
-      referenceId: bill.id,
-      description: `Bank Wire disbursement for bill #${bill.id} via ${paymentMethod}`,
-    });
+    commitBalancedGlBatch(
+      [
+        {
+          id: gleId1,
+          timestamp: bill.paidAt,
+          storeId: bill.storeId,
+          storeName: bill.storeName,
+          accountCode: '2010',
+          accountName: 'Trade Accounts Payable',
+          category: 'Liability',
+          debit: payAmountIDR,
+          credit: 0,
+          referenceType: 'VENDOR_PAYMENT',
+          referenceId: bill.id,
+          description: `Disbursement: Payment for Bill #${bill.billNumber} (${bill.supplierName})`,
+        },
+        {
+          id: gleId2,
+          timestamp: bill.paidAt,
+          storeId: bill.storeId,
+          storeName: bill.storeName,
+          accountCode: '1020',
+          accountName: 'Bank BCA Operational Clearing',
+          category: 'Asset',
+          debit: 0,
+          credit: payAmountIDR,
+          referenceType: 'VENDOR_PAYMENT',
+          referenceId: bill.id,
+          description: `Bank Wire disbursement for bill #${bill.id} via ${paymentMethod}`,
+        },
+      ],
+      true
+    );
 
     res.json({ success: true, vendorBill: bill, message: `Payment of ${payAmt} recorded for Bill #${id}.` });
   });
 
+  app.post('/api/admin/procurement/vendor-bills/:id/void', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { reason = 'Invoice cancelled or superseded by supplier credit note' } = req.body || {};
+    const bill = vendorBillsList.find((b) => b.id === id);
+    if (!bill) return res.status(404).json({ error: 'Vendor Bill not found.' });
+    if (bill.paymentStatus === 'PAID' || bill.status === 'PAID') {
+      return res.status(400).json({ error: 'Cannot void a Vendor Bill that has already been paid in full.' });
+    }
+    if (bill.status === 'VOID') {
+      return res.status(400).json({ error: `Vendor Bill #${id} is already voided.` });
+    }
+
+    const timestamp = new Date().toISOString();
+    const reversingIds: string[] = [];
+
+    // Reverse any GL entries previously posted when the bill was approved
+    if (bill.glEntryIds && bill.glEntryIds.length > 0) {
+      bill.glEntryIds.forEach((origId, idx) => {
+        const orig = generalLedger.find((g) => g.id === origId);
+        if (orig && !orig.isReversed) {
+          const revId = `GLE-2026-${(generalLedger.length + idx + 1).toString().padStart(4, '0')}`;
+          reversingIds.push(revId);
+          orig.isReversed = true;
+          orig.reversedByVoucherId = revId;
+          orig.reversalReason = reason;
+          const revEntry: GeneralLedgerEntry = {
+            id: revId,
+            timestamp,
+            storeId: orig.storeId,
+            storeName: orig.storeName,
+            accountCode: orig.accountCode,
+            accountName: orig.accountName,
+            category: orig.category,
+            debit: orig.credit,
+            credit: orig.debit,
+            referenceType: 'REVERSING_ENTRY',
+            referenceId: bill.id,
+            description: `Void Reversal of #${orig.id} for Vendor Bill #${bill.billNumber}: ${reason}`,
+            isReversal: true,
+            reversesVoucherId: orig.id,
+            reversalReason: reason,
+          };
+          generalLedger.unshift(revEntry);
+          updateCoaLedgerBalance(revEntry.accountCode, revEntry.debit, revEntry.credit);
+        }
+      });
+    }
+
+    // Clear pending variance items in Approval Matrix for this bill
+    approvalQueueList.forEach((apr) => {
+      if (apr.documentId === bill.id && apr.status === 'PENDING') {
+        apr.status = 'REJECTED';
+        apr.history.push({
+          tierLevel: apr.currentTierLevel,
+          tierName: `Tier ${apr.currentTierLevel} Void Override`,
+          approverId: currentActiveStaffSession.userId,
+          approverName: currentActiveStaffSession.userName,
+          approverRole: currentActiveStaffSession.userRole,
+          action: 'REJECTED',
+          timestamp,
+          comments: `Bill voided: ${reason}`,
+        });
+      }
+    });
+
+    bill.status = 'VOID';
+    bill.remainingDue = 0;
+    bill.notes = bill.notes ? `${bill.notes} | VOIDED: ${reason}` : `VOIDED: ${reason}`;
+
+    res.json({
+      success: true,
+      vendorBill: bill,
+      reversingEntryIds: reversingIds,
+      message: `Vendor Bill #${bill.billNumber} marked VOID${reversingIds.length > 0 ? ` with ${reversingIds.length} reversing GL counter-entries` : ''}.`,
+    });
+  });
+
   // --- 6. ANALYTIC ACCOUNTING & MARGIN ANALYSIS ---
   app.get('/api/admin/accounting/analytic-departments', (_req: Request, res: Response) => {
-    const departments = enterpriseSettings.analyticAccounting.departments.map((dept) => {
+    syncAllBatchesExpiryStatus(Date.now());
+    const departments: AnalyticDepartment[] = enterpriseSettings.analyticAccounting.departments.map((dept) => {
       const variance = dept.annualBudgetIDR - dept.actualCostIDR;
       const utilization = dept.annualBudgetIDR > 0 ? (dept.actualCostIDR / dept.annualBudgetIDR) * 100 : 0;
       let status: 'ON_TRACK' | 'WARNING' | 'OVER_BUDGET' = 'ON_TRACK';
@@ -6130,6 +7300,9 @@ async function startServer() {
 
       return {
         ...dept,
+        committedCostIDR: dept.committedCostIDR ?? 0,
+        expectedRevenueIDR: dept.expectedRevenueIDR ?? 0,
+        actualRevenueIDR: dept.actualRevenueIDR ?? 0,
         varianceIDR: variance,
         utilizationPercent: Number(utilization.toFixed(1)),
         status,
@@ -6138,23 +7311,59 @@ async function startServer() {
     res.json(departments);
   });
 
+  app.post('/api/admin/accounting/analytic-departments', (req: Request, res: Response) => {
+    const { code, name, manager, annualBudgetIDR = 100000000, actualCostIDR = 0, committedCostIDR = 0, actualRevenueIDR = 0, expectedRevenueIDR = 0 } = req.body || {};
+    if (!code || !name) {
+      return res.status(400).json({ error: 'Department code and name are required.' });
+    }
+    const budget = Math.max(0, Number(annualBudgetIDR) || 0);
+    const actualCost = Math.max(0, Number(actualCostIDR) || 0);
+    const utilization = budget > 0 ? Number(((actualCost / budget) * 100).toFixed(1)) : 0;
+    const status: 'ON_TRACK' | 'WARNING' | 'OVER_BUDGET' =
+      utilization > 100 ? 'OVER_BUDGET' : utilization > 80 ? 'WARNING' : 'ON_TRACK';
+
+    const newDept: AnalyticDepartment = {
+      id: `DEPT-${Date.now().toString().slice(-4)}`,
+      code: String(code).trim().toUpperCase(),
+      name: String(name).trim(),
+      manager: String(manager || currentActiveStaffSession.userName),
+      annualBudgetIDR: budget,
+      actualCostIDR: actualCost,
+      committedCostIDR: Math.max(0, Number(committedCostIDR) || 0),
+      expectedRevenueIDR: Math.max(0, Number(expectedRevenueIDR) || 0),
+      actualRevenueIDR: Math.max(0, Number(actualRevenueIDR) || 0),
+      utilizationPercent: utilization,
+      varianceIDR: budget - actualCost,
+      status,
+    };
+
+    enterpriseSettings.analyticAccounting.departments.push(newDept);
+    res.json({ success: true, department: newDept, message: `Analytic cost center ${newDept.code} created.` });
+  });
+
   app.put('/api/admin/accounting/analytic-departments/:id', (req: Request, res: Response) => {
     const { id } = req.params;
     const dept = enterpriseSettings.analyticAccounting.departments.find((d) => d.id === id);
     if (!dept) return res.status(404).json({ error: 'Department cost center not found.' });
     Object.assign(dept, req.body);
+    dept.varianceIDR = dept.annualBudgetIDR - dept.actualCostIDR;
+    dept.utilizationPercent = dept.annualBudgetIDR > 0
+      ? Number(((dept.actualCostIDR / dept.annualBudgetIDR) * 100).toFixed(1))
+      : 0;
+    dept.status = dept.utilizationPercent > 100 ? 'OVER_BUDGET' : dept.utilizationPercent > 80 ? 'WARNING' : 'ON_TRACK';
     res.json({ success: true, department: dept, message: `Department budget updated.` });
   });
 
   app.get('/api/admin/accounting/margin-analysis', (_req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     const warningThreshold = enterpriseSettings.analyticAccounting.marginWarningThresholdPercent || 25.0;
 
-    const margins: ProductMarginRecord[] = PRODUCTS.map((prod) => {
+    const margins: ProductMarginRecord[] = PRODUCTS.map((prod, idx) => {
       const inv = inventoryList.find((i) => i.productId === prod.id || i.productName.toLowerCase() === prod.name.toLowerCase());
       const sku = inv?.sku || `SKU-${prod.category.slice(0, 3).toUpperCase()}-001`;
       const sellingPrice = prod.price;
 
-      const baseCost = inv ? inv.unitCost : Math.round(prod.price * 0.62);
+      const totalUnitCost = inv ? inv.unitCost : Math.round(prod.price * 0.62);
 
       let landedAbsorption = 0;
       landedCostsList.forEach((lc) => {
@@ -6162,10 +7371,21 @@ async function startServer() {
         if (match) landedAbsorption += match.allocatedCostIDR;
       });
 
-      const totalUnitCost = baseCost;
+      const baseCost = Math.max(0, totalUnitCost - landedAbsorption);
       const grossProfit = sellingPrice - totalUnitCost;
       const marginPercent = sellingPrice > 0 ? Number(((grossProfit / sellingPrice) * 100).toFixed(1)) : 0;
-      const unitsSoldMonth = Math.floor(Math.random() * 80) + 40;
+
+      // Deterministic monthly volume: real orders + POS receipts + stable per-SKU retail baseline
+      const b2cQty = customerOrders.reduce((sum, ord) => {
+        const matched = ord.items.filter((it) => it.product.id === prod.id || it.product.name.toLowerCase() === prod.name.toLowerCase());
+        return sum + matched.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+      }, 0);
+      const posQty = posTransactionsHistory.reduce((sum, rec) => {
+        const matched = rec.items.filter((it) => it.sku === sku || it.productId === prod.id);
+        return sum + matched.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+      }, 0);
+      const baselineQty = 45 + ((idx * 17) % 65);
+      const unitsSoldMonth = baselineQty + Math.round(b2cQty + posQty);
       const totalGrossProfitMonth = grossProfit * unitsSoldMonth;
 
       return {
@@ -6173,7 +7393,7 @@ async function startServer() {
         name: prod.name,
         category: prod.category,
         sellingPrice,
-        baseCost: baseCost - landedAbsorption,
+        baseCost,
         landedCostAbsorption: landedAbsorption,
         totalUnitCost,
         grossProfit,
@@ -6460,10 +7680,10 @@ async function startServer() {
       (t) => t.sku === sku && t.storeId === sourceStoreId
     );
     const inv = inventoryList.find((i) => i.sku === sku);
-    const availableAtSource = sourceTier ? sourceTier.availableStock : (inv?.currentStock ?? 0);
-    if (qty > availableAtSource) {
+    const atpCheck = getSellableNonExpiredAtpStock(sku, sourceStoreId);
+    if (qty > atpCheck.effectiveAtp) {
       return res.status(400).json({
-        error: `Insufficient available stock at ${sourceTier?.storeName || sourceStoreId}: requested ${qty}, available ${availableAtSource}.`,
+        error: `Insufficient non-expired ATP stock for SKU ${sku} at ${sourceTier?.storeName || sourceStoreId}: requested ${qty}, available ${atpCheck.effectiveAtp}.`,
       });
     }
 
@@ -6471,6 +7691,15 @@ async function startServer() {
     const srcSchedule = storeSchedules.find((s) => s.storeId === sourceStoreId);
     const dstSchedule = storeSchedules.find((s) => s.storeId === destinationStoreId);
     const resolvedUnitCost = Number(req.body.unitCost) || sourceTier?.unitCost || inv?.wacUnitCost || inv?.unitCost || 0;
+
+    // Atomic batch pre-check before mutating source tier
+    const batchDeduction = deductBatchesByStrategy(sku, qty, sourceStoreId, resolvedUnitCost, atpCheck.hasBatchTracking);
+    if (batchDeduction.insufficientStock) {
+      return res.status(400).json({
+        error: `Insufficient non-expired ATP stock for SKU ${sku} at ${sourceTier?.storeName || sourceStoreId}: requested ${qty}, available ${batchDeduction.availableSellableQty}.`,
+      });
+    }
+
     const normalizedStatus: 'completed' | 'in_transit' =
       String(reqStatus || '').toLowerCase() === 'in_transit' ? 'in_transit' : 'completed';
 
@@ -6481,13 +7710,11 @@ async function startServer() {
     // Deduct source tier stock
     if (sourceTier) {
       sourceTier.physicalStock = Math.max(0, Number((sourceTier.physicalStock - qty).toFixed(2)));
+      sourceTier.reservedStock = Math.min(sourceTier.reservedStock, sourceTier.physicalStock);
       sourceTier.availableStock = Math.max(0, Number((sourceTier.physicalStock - sourceTier.reservedStock).toFixed(2)));
       sourceTier.totalValuation = Math.round(sourceTier.physicalStock * sourceTier.unitCost);
       sourceTier.updatedAt = timestamp;
     }
-
-    // Relocate FEFO/FIFO batch lots from source store
-    const batchDeduction = deductBatchesByStrategy(sku, qty, sourceStoreId, resolvedUnitCost);
     const movedLots = batchDeduction.allocations.length > 0
       ? batchDeduction.allocations.map((al) => {
           const orig = inventoryBatches.find((b) => b.batchId === al.batchId);
@@ -7172,6 +8399,7 @@ async function startServer() {
 
   // --- 13. SPECIALIZED GROCERY METRICS & INTELLIGENCE REPORT ---
   app.get('/api/admin/reports/grocery-metrics', (req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     const { storeId } = req.query as { storeId?: string };
     const targetStore = storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED' ? storeId : 'store-jkt-senopati';
 
@@ -7846,6 +9074,7 @@ async function startServer() {
   // 18. AUTO-REPLENISHMENT & MIN-MAX PLANNING
   // =============================================================
   app.get('/api/admin/replenishment/plan', (req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     const { storeId } = req.query as { storeId?: string };
     const isSpecificStore = Boolean(storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED');
     const targetStore = isSpecificStore ? storeId! : 'store-jkt-senopati';
@@ -8072,9 +9301,9 @@ async function startServer() {
   });
 
   app.post('/api/admin/vendor-credit-notes', (req: Request, res: Response) => {
-    const payload = req.body as Partial<VendorCreditNote>;
+    const payload = req.body as Partial<VendorCreditNote> & { vendorBillId?: string; poId?: string };
     const noteId = `VCN-${Date.now().toString().slice(-4)}`;
-    const journalDrId = `GLE-VCN-${Date.now().toString().slice(-4)}-AP`;
+    const journalDrId = `GLE-VCN-${Date.now().toString().slice(-4)}-DR`;
     const journalCrId = `GLE-VCN-${Date.now().toString().slice(-4)}-INV`;
     const timestamp = new Date().toISOString();
 
@@ -8085,7 +9314,26 @@ async function startServer() {
     const inv = inventoryList.find((i) => i.sku === sku);
     const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
     const resolvedUnitCost = Number(payload.unitCost) || tier?.unitCost || inv?.wacUnitCost || 15000;
-    const totalCreditIDR = Number(payload.totalCreditIDR) || Math.round(qty * resolvedUnitCost);
+
+    const baseSubtotal = Math.round(qty * resolvedUnitCost);
+    const rule = skuTaxRulesList.find((r) => r.sku === sku);
+    const taxCat: IndonesianTaxCategory =
+      rule?.taxCategory || inferDefaultTaxCategory(inv?.category || '', payload.productName || inv?.productName || '');
+    const taxCalc = computeIndonesianTax(baseSubtotal, taxCat, false, rule?.taxRatePercent || 11);
+
+    let subtotalReturnedIDR = baseSubtotal;
+    let ppnMasukanReversedIDR = taxCalc.ppnIDR;
+    let totalCreditIDR = baseSubtotal + ppnMasukanReversedIDR;
+
+    if (payload.totalCreditIDR !== undefined && Number.isFinite(Number(payload.totalCreditIDR))) {
+      totalCreditIDR = Math.max(0, Math.round(Number(payload.totalCreditIDR)));
+      if (ppnMasukanReversedIDR > 0 && Math.abs(totalCreditIDR - (baseSubtotal + ppnMasukanReversedIDR)) <= 5) {
+        subtotalReturnedIDR = totalCreditIDR - ppnMasukanReversedIDR;
+      } else {
+        subtotalReturnedIDR = totalCreditIDR;
+        ppnMasukanReversedIDR = 0;
+      }
+    }
 
     // Deduct returned stock from batch, warehouse tier, and catalog
     const matchingBatch = inventoryBatches.find(
@@ -8116,21 +9364,88 @@ async function startServer() {
       inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) - qty).toFixed(2)));
     }
 
-    // Post balanced double-entry GL: Debit 2010 Trade AP, Credit 1040 Inventory Asset
-    generalLedger.unshift({
-      id: journalDrId,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: '2010',
-      accountName: 'Trade Accounts Payable',
-      category: 'Liability',
-      debit: totalCreditIDR,
-      credit: 0,
-      referenceType: 'PURCHASE_AP',
-      referenceId: noteId,
-      description: `Vendor Credit Note ${noteId} reducing AP to ${payload.supplierName || 'Vendor'}`,
+    // Post-Approval RTV & Vendor Credit Balance Guard: prevent negative COA #2010 / #2100
+    const linkedBill = findLinkedVendorBillForRtv({
+      vendorBillId: payload.vendorBillId,
+      poId: payload.poId,
+      supplierName: payload.supplierName,
+      sku,
     });
+    const billRemainingIDR = linkedBill
+      ? linkedBill.remainingBalanceIDR ?? Math.round((linkedBill.remainingDue ?? 0) * (linkedBill.exchangeRate || 1))
+      : 0;
+    const ap2010Balance = chartOfAccounts.find((c) => c.accountCode === '2010')?.balance ?? 0;
+
+    let apOffsetIDR = 0;
+    let prepaymentAdvanceIDR = 0;
+
+    if (linkedBill) {
+      if (linkedBill.status !== 'PAID' && billRemainingIDR > 0 && ap2010Balance > 0) {
+        apOffsetIDR = Math.min(totalCreditIDR, billRemainingIDR, ap2010Balance);
+        prepaymentAdvanceIDR = Math.max(0, totalCreditIDR - apOffsetIDR);
+
+        const newRemIDR = Math.max(0, billRemainingIDR - apOffsetIDR);
+        linkedBill.remainingBalanceIDR = newRemIDR;
+        linkedBill.remainingDue =
+          linkedBill.exchangeRate && linkedBill.exchangeRate > 1
+            ? Number((newRemIDR / linkedBill.exchangeRate).toFixed(2))
+            : newRemIDR;
+        if (newRemIDR === 0) {
+          linkedBill.status = 'PAID';
+          linkedBill.paymentStatus = 'PAID';
+        } else {
+          linkedBill.status = 'PARTIALLY_PAID';
+          linkedBill.paymentStatus = 'PARTIALLY_PAID';
+        }
+      } else {
+        // Linked bill already PAID or zero remaining: book full claim to #1150 Vendor Prepayments
+        apOffsetIDR = 0;
+        prepaymentAdvanceIDR = totalCreditIDR;
+      }
+    } else if (ap2010Balance >= totalCreditIDR) {
+      apOffsetIDR = totalCreditIDR;
+    } else {
+      apOffsetIDR = 0;
+      prepaymentAdvanceIDR = totalCreditIDR;
+    }
+
+    if (apOffsetIDR > 0) {
+      generalLedger.unshift({
+        id: journalDrId,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '2010',
+        accountName: 'Trade Accounts Payable',
+        category: 'Liability',
+        debit: apOffsetIDR,
+        credit: 0,
+        referenceType: 'PURCHASE_AP',
+        referenceId: noteId,
+        description: `Vendor Credit Note ${noteId} reducing AP to ${payload.supplierName || 'Vendor'}`,
+      });
+      updateCoaLedgerBalance('2010', apOffsetIDR, 0);
+    }
+
+    if (prepaymentAdvanceIDR > 0) {
+      const advGlId = apOffsetIDR > 0 ? `${journalDrId}-ADV` : journalDrId;
+      generalLedger.unshift({
+        id: advGlId,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '1150',
+        accountName: 'Vendor Prepayments / Advances (Uang Muka Pembelian)',
+        category: 'Asset',
+        debit: prepaymentAdvanceIDR,
+        credit: 0,
+        referenceType: 'PURCHASE_AP',
+        referenceId: noteId,
+        description: `Post-payment Vendor Advance ${noteId} (${linkedBill ? `Bill ${linkedBill.id} ${linkedBill.status}` : 'No open AP'}) to ${payload.supplierName || 'Vendor'}`,
+      });
+      updateCoaLedgerBalance('1150', prepaymentAdvanceIDR, 0);
+    }
+
     generalLedger.unshift({
       id: journalCrId,
       timestamp,
@@ -8140,11 +9455,30 @@ async function startServer() {
       accountName: 'Merchandise Inventory Asset',
       category: 'Asset',
       debit: 0,
-      credit: totalCreditIDR,
+      credit: subtotalReturnedIDR,
       referenceType: 'PURCHASE_AP',
       referenceId: noteId,
       description: `Inventory Asset credited for RTV ${noteId} (${qty} ${payload.unit || 'pack'} ${sku})`,
     });
+    updateCoaLedgerBalance('1040', 0, subtotalReturnedIDR);
+
+    if (ppnMasukanReversedIDR > 0) {
+      generalLedger.unshift({
+        id: `GLE-VCN-${Date.now().toString().slice(-4)}-VAT`,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '2026',
+        accountName: 'PPN Masukan (VAT Input Creditable)',
+        category: 'Asset',
+        debit: 0,
+        credit: ppnMasukanReversedIDR,
+        referenceType: 'TAX_ADJUSTMENT',
+        referenceId: noteId,
+        description: `PPN Masukan reversed for Vendor Credit Note ${noteId}`,
+      });
+      updateCoaLedgerBalance('2026', 0, ppnMasukanReversedIDR);
+    }
 
     const newNote: VendorCreditNote = {
       creditNoteId: noteId,
@@ -8161,11 +9495,15 @@ async function startServer() {
       unitCost: resolvedUnitCost,
       totalCreditIDR,
       reason: payload.reason || 'spoiled_on_arrival',
-      status: 'pending_pickup',
+      status: apOffsetIDR > 0 && linkedBill ? 'applied_to_bill' : 'pending_pickup',
+      appliedToBillId: apOffsetIDR > 0 && linkedBill ? linkedBill.id : undefined,
       createdAt: timestamp,
       approvedBy: payload.approvedBy || 'Store Manager',
       journalEntryId: journalDrId,
-      notes: payload.notes || 'RTV claim created from receiving inspection dock.',
+      notes:
+        prepaymentAdvanceIDR > 0
+          ? `${payload.notes || 'RTV claim created.'} (Rp ${prepaymentAdvanceIDR.toLocaleString('id-ID')} booked to #1150 Vendor Prepayments)`
+          : payload.notes || 'RTV claim created from receiving inspection dock.',
     };
 
     vendorCreditNotesList.unshift(newNote);
@@ -8174,6 +9512,9 @@ async function startServer() {
       success: true,
       creditNote: newNote,
       journalEntryId: journalDrId,
+      apOffsetIDR,
+      vendorPrepaymentAdvanceIDR: prepaymentAdvanceIDR,
+      linkedBillId: linkedBill?.id,
       message: `Return-to-Vendor Credit Note ${noteId} created for ${newNote.supplierName}. Credit Rp ${newNote.totalCreditIDR.toLocaleString('id-ID')} logged.`,
     });
   });
@@ -8186,30 +9527,93 @@ async function startServer() {
     if (!note) {
       return res.status(404).json({ error: `Vendor Credit Note ${id} not found` });
     }
+    if (note.status === 'applied_to_bill') {
+      return res.status(400).json({
+        error: `Vendor Credit Note ${id} is already applied to bill ${note.appliedToBillId}.`,
+      });
+    }
+
+    const bill = vendorBillsList.find((b) => b.id === vendorBillId);
+    if (!bill) {
+      return res.status(404).json({ error: `Vendor Bill ${vendorBillId} not found` });
+    }
+
+    const curDueIDR =
+      bill.remainingBalanceIDR !== undefined
+        ? bill.remainingBalanceIDR
+        : Math.round((bill.remainingDue ?? bill.grandTotal ?? 0) * (bill.exchangeRate || 1));
+
+    if (bill.status === 'PAID' || curDueIDR <= 0) {
+      return res.status(400).json({
+        error: `Cannot apply Credit Note ${id}: Vendor Bill ${vendorBillId} is already PAID (remaining balance Rp 0). Claim remains in #1150 Vendor Prepayments / Advances.`,
+      });
+    }
+
+    const appliedIDR = Math.min(curDueIDR, note.totalCreditIDR);
+    const excessAdvanceIDR = Math.max(0, note.totalCreditIDR - appliedIDR);
+    const newDueIDR = Math.max(0, curDueIDR - appliedIDR);
+
+    bill.remainingBalanceIDR = newDueIDR;
+    bill.remainingDue =
+      bill.exchangeRate && bill.exchangeRate > 1
+        ? Number((newDueIDR / bill.exchangeRate).toFixed(2))
+        : newDueIDR;
+    if (newDueIDR === 0) {
+      bill.status = 'PAID';
+      bill.paymentStatus = 'PAID';
+    } else {
+      bill.status = 'PARTIALLY_PAID';
+      bill.paymentStatus = 'PARTIALLY_PAID';
+    }
+
+    if (excessAdvanceIDR > 0) {
+      const advGlId = `GLE-VCN-ADV-${Date.now().toString().slice(-4)}`;
+      const ap2010 = chartOfAccounts.find((c) => c.accountCode === '2010')?.balance ?? 0;
+      const reclassAmount = Math.min(excessAdvanceIDR, ap2010);
+      generalLedger.unshift({
+        id: advGlId,
+        timestamp: new Date().toISOString(),
+        storeId: note.storeId,
+        storeName: note.storeName,
+        accountCode: '1150',
+        accountName: 'Vendor Prepayments / Advances (Uang Muka Pembelian)',
+        category: 'Asset',
+        debit: excessAdvanceIDR,
+        credit: 0,
+        referenceType: 'PURCHASE_AP',
+        referenceId: note.creditNoteId,
+        description: `Excess credit Rp ${excessAdvanceIDR.toLocaleString('id-ID')} from ${note.creditNoteId} (${note.supplierName}) reclassified to Vendor Prepayment after settling ${vendorBillId}`,
+      });
+      updateCoaLedgerBalance('1150', excessAdvanceIDR, 0);
+      if (reclassAmount > 0) {
+        generalLedger.unshift({
+          id: `${advGlId}-CR`,
+          timestamp: new Date().toISOString(),
+          storeId: note.storeId,
+          storeName: note.storeName,
+          accountCode: '2010',
+          accountName: 'Trade Accounts Payable',
+          category: 'Liability',
+          debit: 0,
+          credit: reclassAmount,
+          referenceType: 'PURCHASE_AP',
+          referenceId: note.creditNoteId,
+          description: `Reverse excess AP debit on ${note.creditNoteId}`,
+        });
+        updateCoaLedgerBalance('2010', 0, reclassAmount);
+      }
+    }
 
     note.status = 'applied_to_bill';
     note.appliedToBillId = vendorBillId;
-
-    const bill = vendorBillsList.find((b) => b.id === vendorBillId);
-    if (bill) {
-      const curDue = bill.remainingDue !== undefined ? bill.remainingDue : (bill.remainingBalanceIDR ?? bill.grandTotalIDR ?? bill.grandTotal ?? 0);
-      const newDue = Math.max(0, curDue - note.totalCreditIDR);
-      bill.remainingDue = newDue;
-      bill.remainingBalanceIDR = newDue;
-      if (newDue === 0) {
-        bill.status = 'PAID';
-        bill.paymentStatus = 'PAID';
-      } else {
-        bill.status = 'PARTIALLY_PAID';
-        bill.paymentStatus = 'PARTIALLY_PAID';
-      }
-    }
 
     res.json({
       success: true,
       creditNote: note,
       vendorBill: bill,
-      message: `Credit Note ${id} (Rp ${note.totalCreditIDR.toLocaleString('id-ID')}) offset against Vendor Bill ${vendorBillId}.`,
+      appliedAmountIDR: appliedIDR,
+      vendorPrepaymentExcessIDR: excessAdvanceIDR,
+      message: `Credit Note ${id} applied Rp ${appliedIDR.toLocaleString('id-ID')} against Vendor Bill ${vendorBillId}.${excessAdvanceIDR > 0 ? ` Excess Rp ${excessAdvanceIDR.toLocaleString('id-ID')} held in #1150 Vendor Prepayments.` : ''}`,
     });
   });
 
@@ -8217,6 +9621,7 @@ async function startServer() {
   // 20. DYNAMIC MARKDOWN & EXPIRY DISCOUNT ENGINE
   // =============================================================
   app.get('/api/admin/markdown-rules', (_req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
     res.json(dynamicMarkdownConfig);
   });
 
@@ -8237,12 +9642,18 @@ async function startServer() {
   app.post('/api/admin/markdown-rules/apply-batches', (req: Request, res: Response) => {
     const { batchIds } = req.body as { batchIds: string[] };
     const targetBatches = Array.isArray(batchIds) && batchIds.length > 0 ? batchIds : inventoryBatches.map((b) => b.batchId);
+    const nowMs = Date.now();
 
     let count = 0;
     targetBatches.forEach((id) => {
       const b = inventoryBatches.find((batch) => batch.batchId === id);
+      if (!b) return;
+      const isExpired = syncBatchExpiryStatus(b, nowMs);
+      if (isExpired) {
+        b.markdownDiscountPercent = 0;
+        return;
+      }
       if (
-        b &&
         b.currentStock > 0 &&
         b.status !== 'quarantined' &&
         b.status !== 'recalled' &&
@@ -8739,6 +10150,8 @@ async function startServer() {
   app.post('/api/admin/compliance/rtv', (req: Request, res: Response) => {
     const {
       qcInspectionId,
+      vendorBillId,
+      poId,
       supplierId = 'SUPP-AGRO-01',
       supplierName = 'PT Lembang Agro Sejahtera',
       supplierNpwp = '013084492007000',
@@ -8810,25 +10223,97 @@ async function startServer() {
       matchingBatch.notes = `Dispatched via RTV ${debitNoteNumber}`;
     }
 
-    // GL Double-Entry: Debit Vendor AP (#2010), Credit Inventory Asset (#1040), Credit PPN Masukan (#2026)
-    const g1 = `GLE-RTV-${seq}-AP`;
-    const g2 = `GLE-RTV-${seq}-INV`;
-    const glIds = [g1, g2];
-
-    generalLedger.unshift({
-      id: g1,
-      timestamp,
-      storeId,
-      storeName,
-      accountCode: '2010',
-      accountName: 'Trade Accounts Payable',
-      category: 'Liability',
-      debit: totalDebitNoteIDR,
-      credit: 0,
-      referenceType: 'PURCHASE_AP',
-      referenceId: debitNoteNumber,
-      description: `RTV Debit Note ${debitNoteNumber} reducing AP to ${supplierName} (QC: ${qcInspectionId || 'Manual'})`,
+    // Post-Approval RTV & Vendor Credit Balance Guard:
+    // Prevent COA #2010 / #2100 from going negative or over-crediting a PAID Vendor Bill.
+    const linkedBill = findLinkedVendorBillForRtv({
+      vendorBillId,
+      poId,
+      qcInspectionId,
+      supplierName,
+      sku,
     });
+    const billRemainingIDR = linkedBill
+      ? linkedBill.remainingBalanceIDR ?? Math.round((linkedBill.remainingDue ?? 0) * (linkedBill.exchangeRate || 1))
+      : 0;
+    const ap2010Balance = chartOfAccounts.find((c) => c.accountCode === '2010')?.balance ?? 0;
+
+    let apOffsetIDR = 0;
+    let prepaymentAdvanceIDR = 0;
+
+    if (linkedBill) {
+      if (linkedBill.status !== 'PAID' && billRemainingIDR > 0 && ap2010Balance > 0) {
+        apOffsetIDR = Math.min(totalDebitNoteIDR, billRemainingIDR, ap2010Balance);
+        prepaymentAdvanceIDR = Math.max(0, totalDebitNoteIDR - apOffsetIDR);
+
+        const newRemIDR = Math.max(0, billRemainingIDR - apOffsetIDR);
+        linkedBill.remainingBalanceIDR = newRemIDR;
+        linkedBill.remainingDue =
+          linkedBill.exchangeRate && linkedBill.exchangeRate > 1
+            ? Number((newRemIDR / linkedBill.exchangeRate).toFixed(2))
+            : newRemIDR;
+        if (newRemIDR === 0) {
+          linkedBill.status = 'PAID';
+          linkedBill.paymentStatus = 'PAID';
+        } else {
+          linkedBill.status = 'PARTIALLY_PAID';
+          linkedBill.paymentStatus = 'PARTIALLY_PAID';
+        }
+      } else {
+        // Bill already PAID or remaining balance is 0 -> post full RTV claim to #1150 Vendor Prepayments / Advances
+        apOffsetIDR = 0;
+        prepaymentAdvanceIDR = totalDebitNoteIDR;
+      }
+    } else if (ap2010Balance >= totalDebitNoteIDR) {
+      apOffsetIDR = totalDebitNoteIDR;
+    } else {
+      apOffsetIDR = 0;
+      prepaymentAdvanceIDR = totalDebitNoteIDR;
+    }
+
+    const g1 = `GLE-RTV-${seq}-AP`;
+    const gAdv = `GLE-RTV-${seq}-ADV`;
+    const g2 = `GLE-RTV-${seq}-INV`;
+    const glIds: string[] = [];
+
+    if (apOffsetIDR > 0) {
+      glIds.push(g1);
+      generalLedger.unshift({
+        id: g1,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '2010',
+        accountName: 'Trade Accounts Payable',
+        category: 'Liability',
+        debit: apOffsetIDR,
+        credit: 0,
+        referenceType: 'PURCHASE_AP',
+        referenceId: debitNoteNumber,
+        description: `RTV Debit Note ${debitNoteNumber} reducing AP to ${supplierName} (Bill: ${linkedBill?.id || 'Open AP'}, QC: ${qcInspectionId || 'Manual'})`,
+      });
+      updateCoaLedgerBalance('2010', apOffsetIDR, 0);
+    }
+
+    if (prepaymentAdvanceIDR > 0) {
+      glIds.push(gAdv);
+      generalLedger.unshift({
+        id: gAdv,
+        timestamp,
+        storeId,
+        storeName,
+        accountCode: '1150',
+        accountName: 'Vendor Prepayments / Advances (Uang Muka Pembelian)',
+        category: 'Asset',
+        debit: prepaymentAdvanceIDR,
+        credit: 0,
+        referenceType: 'PURCHASE_AP',
+        referenceId: debitNoteNumber,
+        description: `Post-payment RTV Debit Note ${debitNoteNumber} (${linkedBill ? `Bill ${linkedBill.id} ${linkedBill.status}` : 'Insufficient AP'}) booked as Vendor Advance to ${supplierName}`,
+      });
+      updateCoaLedgerBalance('1150', prepaymentAdvanceIDR, 0);
+    }
+
+    glIds.push(g2);
     generalLedger.unshift({
       id: g2,
       timestamp,
@@ -8843,6 +10328,8 @@ async function startServer() {
       referenceId: debitNoteNumber,
       description: `Inventory Asset deducted for RTV ${debitNoteNumber} (${qty} ${unit} ${sku})`,
     });
+    updateCoaLedgerBalance('1040', 0, subtotalReturnedIDR);
+
     if (ppnMasukanReversedIDR > 0) {
       const g3 = `GLE-RTV-${seq}-VAT`;
       glIds.push(g3);
@@ -8860,6 +10347,7 @@ async function startServer() {
         referenceId: debitNoteNumber,
         description: `PPN Masukan reversed on Nota Retur Pembelian ${debitNoteNumber}`,
       });
+      updateCoaLedgerBalance('2026', 0, ppnMasukanReversedIDR);
     }
 
     const vcnId = `VCN-2026-${seq}`;
@@ -8878,11 +10366,15 @@ async function startServer() {
       unitCost: resolvedUnitCost,
       totalCreditIDR: totalDebitNoteIDR,
       reason: 'spoiled_on_arrival',
-      status: 'pending_pickup',
+      status: apOffsetIDR > 0 && linkedBill ? 'applied_to_bill' : 'pending_pickup',
+      appliedToBillId: apOffsetIDR > 0 && linkedBill ? linkedBill.id : undefined,
       createdAt: timestamp,
       approvedBy: currentActiveStaffSession.userName,
-      journalEntryId: g1,
-      notes: `Linked to ${debitNoteNumber} (${reason})`,
+      journalEntryId: glIds[0],
+      notes:
+        prepaymentAdvanceIDR > 0
+          ? `Linked to ${debitNoteNumber} (${reason}) — Rp ${prepaymentAdvanceIDR.toLocaleString('id-ID')} booked to #1150 Vendor Prepayments`
+          : `Linked to ${debitNoteNumber} (${reason})`,
     });
 
     const newRtv: VendorRtvDebitNote = {
@@ -8915,7 +10407,13 @@ async function startServer() {
     res.json({
       success: true,
       rtv: newRtv,
-      message: `Vendor Debit Note ${debitNoteNumber} issued for ${supplierName}. AP & PPN Masukan adjusted.`,
+      apOffsetIDR,
+      vendorPrepaymentAdvanceIDR: prepaymentAdvanceIDR,
+      linkedBillId: linkedBill?.id,
+      message:
+        prepaymentAdvanceIDR > 0 && apOffsetIDR === 0
+          ? `Vendor Debit Note ${debitNoteNumber} issued for ${supplierName}. Linked bill already settled; Rp ${prepaymentAdvanceIDR.toLocaleString('id-ID')} recorded in #1150 Vendor Prepayments & PPN Masukan adjusted.`
+          : `Vendor Debit Note ${debitNoteNumber} issued for ${supplierName}. AP & PPN Masukan adjusted.`,
     });
   });
 

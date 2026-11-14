@@ -1344,13 +1344,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 <th className="py-3 px-4">Vendor / Store</th>
                 <th className="py-3 px-4">Shipment Type</th>
                 <th className="py-3 px-4">Officer / Temp</th>
-                <th className="py-3 px-4 text-right">Linked GL Voucher</th>
+                <th className="py-3 px-4">Linked GL Voucher</th>
+                <th className="py-3 px-4 text-right">AP Actions</th>
               </tr>
             </thead>
             <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
               {filteredGRs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className={`py-8 text-center text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                  <td colSpan={8} className={`py-8 text-center text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
                     No goods receipts recorded yet.
                   </td>
                 </tr>
@@ -1397,8 +1398,22 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                         {gr.items[0]?.tempCheckCelsius ? `${gr.items[0].tempCheckCelsius}°C Verified` : 'Temp OK'}
                       </div>
                     </td>
-                    <td className={`py-3.5 px-4 text-right font-mono text-[11px] ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                    <td className={`py-3.5 px-4 font-mono text-[11px] ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
                       {gr.glEntryId || 'GLE-Posted'}
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreselectedPoId(gr.poId);
+                          setPreselectedGrId(gr.id);
+                          setActiveTab('vendor_bills');
+                        }}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
+                        title="Create or match Vendor Bill for this Goods Receipt"
+                      >
+                        Match Bill
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -1407,6 +1422,21 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           </table>
         </div>
       </div>
+      )}
+
+      {/* SECTION 4: VENDOR BILLS (3-WAY MATCH AP) */}
+      {activeTab === 'vendor_bills' && (
+        <VendorBillModule
+          theme={theme}
+          selectedStore={selectedStore}
+          vendorBills={vendorBills}
+          purchaseOrders={purchaseOrders}
+          goodsReceipts={goodsReceipts}
+          onRefreshData={onRefreshData}
+          onShowToast={onShowToast}
+          initialPreselectedPoId={preselectedPoId}
+          initialPreselectedGrId={preselectedGrId}
+        />
       )}
 
       {/* MODAL: INTERACTIVE PARTIAL GOODS RECEIPT */}

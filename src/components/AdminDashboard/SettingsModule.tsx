@@ -104,6 +104,10 @@ interface SettingsModuleProps {
   initialSubTab?: SettingsSubTab;
   onShowToast: (title: string, message: string) => void;
   onRefreshData?: () => void;
+  onNavigateToVendorBills?: () => void;
+  onNavigateToAnalytic?: () => void;
+  onNavigateToMargin?: () => void;
+  onNavigateToQuotations?: () => void;
 }
 
 export const SettingsModule: React.FC<SettingsModuleProps> = ({
@@ -115,6 +119,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   initialSubTab,
   onShowToast,
   onRefreshData,
+  onNavigateToVendorBills,
+  onNavigateToAnalytic,
+  onNavigateToMargin,
+  onNavigateToQuotations,
 }) => {
   const isLight = theme === 'light';
 
@@ -334,6 +342,15 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     try {
       const res = await apiClient.getWarehouseBins();
       setWarehouseBins(res);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleRefreshRoutes = async () => {
+    try {
+      const res = await apiClient.getWarehouseRoutes();
+      setWarehouseRoutes(res);
     } catch {
       // ignore
     }
@@ -1344,6 +1361,31 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       );
                     })}
                   </div>
+
+                  {(onNavigateToAnalytic || onNavigateToMargin) && (
+                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-zinc-800">
+                      {onNavigateToAnalytic && (
+                        <button
+                          type="button"
+                          onClick={onNavigateToAnalytic}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-400 hover:underline cursor-pointer"
+                        >
+                          <span>Manage Analytic Budgets</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {onNavigateToMargin && (
+                        <button
+                          type="button"
+                          onClick={onNavigateToMargin}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer ml-auto"
+                        >
+                          <span>Live Margin Analysis</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1476,6 +1518,19 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       <span className="text-gray-700 dark:text-zinc-300">Auto PDF Generation</span>
                     </label>
                   </div>
+
+                  {onNavigateToQuotations && (
+                    <div className="flex items-center justify-end pt-2 border-t border-gray-100 dark:border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={onNavigateToQuotations}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                      >
+                        <span>Open Quotations &amp; Pro Forma Engine</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1562,6 +1617,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           landedCosts={landedCosts}
           inventoryTiers={inventoryTiers}
           chartOfAccounts={chartOfAccounts}
+          purchaseOrders={purchaseOrders}
           onUpdateSettings={handleUpdateEnterpriseSettings}
           onRefreshLandedCosts={handleRefreshLandedCosts}
           onShowToast={onShowToast}
@@ -1580,6 +1636,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           inventoryTiers={inventoryTiers}
           onUpdateSettings={handleUpdateEnterpriseSettings}
           onRefreshBins={handleRefreshBins}
+          onRefreshRoutes={handleRefreshRoutes}
           onShowToast={onShowToast}
         />
       )}
@@ -1596,6 +1653,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           goodsReceipts={goodsReceipts}
           onUpdateSettings={handleUpdateEnterpriseSettings}
           onRefreshData={fetchAllSettings}
+          onOpenVendorBillsModal={onNavigateToVendorBills}
           onShowToast={onShowToast}
         />
       )}

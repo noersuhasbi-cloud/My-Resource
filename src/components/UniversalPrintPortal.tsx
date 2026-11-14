@@ -1,11 +1,11 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { usePrint, type PrintPayload } from '../context/PrintContext';
+import { usePrint, type PrintPayload, type InvoiceTrackingFlags } from '../context/PrintContext';
 import { formatIDR } from '../utils/formatters';
 
 export function renderPrintDocument(
   activePrintPayload: PrintPayload,
-  options?: { printedAt?: string; isPreview?: boolean }
+  options?: { printedAt?: string; isPreview?: boolean; invoiceTracking?: InvoiceTrackingFlags }
 ): React.ReactNode {
   const printedAt =
     options?.printedAt ??
@@ -13,6 +13,8 @@ export function renderPrintDocument(
       dateStyle: 'medium',
       timeStyle: 'short',
     });
+  const showLots = options?.invoiceTracking?.displayLotsOnInvoices ?? true;
+  const showDeliveryExpiry = options?.invoiceTracking?.displaySerialExpiryOnDeliveryDocs ?? true;
 
   switch (activePrintPayload.type) {
       // =====================================================================
@@ -62,7 +64,7 @@ export function renderPrintDocument(
                     <span>
                       {item.quantity} {item.unit} x {formatIDR(item.unitPrice)}
                     </span>
-                    {item.lotNumber && <span>LOT: {item.lotNumber}</span>}
+                    {showLots && item.lotNumber && <span>LOT: {item.lotNumber}</span>}
                   </div>
                 </div>
               ))}
@@ -308,8 +310,16 @@ export function renderPrintDocument(
                     <span className="truncate">{it.product.name}</span>
                     <span className="shrink-0">{formatIDR(it.product.price * it.quantity)}</span>
                   </div>
-                  <div className="text-[8.5px]">
-                    {it.quantity} {it.product.unit} x {formatIDR(it.product.price)}
+                  <div className="text-[8.5px] flex justify-between gap-2">
+                    <span>
+                      {it.quantity} {it.product.unit} x {formatIDR(it.product.price)}
+                    </span>
+                    {showLots && (
+                      <span className="font-bold">
+                        LOT: BAT-{it.product.sku || it.product.id}
+                        {it.product.removalStrategy ? ` · ${it.product.removalStrategy}` : ''}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -616,7 +626,9 @@ export function renderPrintDocument(
                     <th className="py-2 px-2.5 border-r border-slate-300 text-center w-8">No</th>
                     <th className="py-2 px-2.5 border-r border-slate-300">Kode SKU</th>
                     <th className="py-2 px-2.5 border-r border-slate-300">Nama Barang &amp; Spesifikasi</th>
-                    <th className="py-2 px-2.5 border-r border-slate-300">Batch / Lot</th>
+                    {showLots && (
+                      <th className="py-2 px-2.5 border-r border-slate-300">Batch / Lot</th>
+                    )}
                     <th className="py-2 px-2.5 border-r border-slate-300 text-center">Jumlah</th>
                     <th className="py-2 px-2.5 border-r border-slate-300">Kemasan</th>
                     <th className="py-2 px-2.5">Kondisi / Keterangan</th>
@@ -628,10 +640,19 @@ export function renderPrintDocument(
                       <td className="py-2 px-2.5 border-r border-slate-300 text-center font-mono">{idx + 1}</td>
                       <td className="py-2 px-2.5 border-r border-slate-300 font-mono font-bold text-[#0F4C3A]">{item.sku}</td>
                       <td className="py-2 px-2.5 border-r border-slate-300 font-semibold text-slate-900">{item.productName}</td>
-                      <td className="py-2 px-2.5 border-r border-slate-300 font-mono text-[11px]">{item.batchNumber}</td>
+                      {showLots && (
+                        <td className="py-2 px-2.5 border-r border-slate-300 font-mono text-[11px]">{item.batchNumber}</td>
+                      )}
                       <td className="py-2 px-2.5 border-r border-slate-300 text-center font-bold">{item.quantity} {item.unit}</td>
                       <td className="py-2 px-2.5 border-r border-slate-300">{item.packagingType}</td>
-                      <td className="py-2 px-2.5 text-[11px] text-slate-700">{item.condition} - {item.notes || 'Normal'}</td>
+                      <td className="py-2 px-2.5 text-[11px] text-slate-700">
+                        <div>{item.condition} - {item.notes || 'Normal'}</div>
+                        {showDeliveryExpiry && (
+                          <div className="font-mono text-[9.5px] text-[#0F4C3A] font-semibold mt-0.5">
+                            FEFO Expiry &amp; Cold-Chain Verified ({selectedSj.coldChainTempCelsius}°C)
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -901,7 +922,10 @@ export function renderPrintDocument(
                     <td className="py-2 px-2.5 border-r border-slate-300 text-center font-mono">{idx + 1}</td>
                     <td className="py-2 px-2.5 border-r border-slate-300">
                       <div className="font-semibold text-slate-900">{it.product.name}</div>
-                      <div className="font-mono text-[10px] text-slate-500">{it.product.sku}</div>
+                      <div className="font-mono text-[10px] text-slate-500">
+                        {it.product.sku}
+                        {showLots && ` · LOT: BAT-${it.product.sku}`}
+                      </div>
                     </td>
                     <td className="py-2 px-2.5 border-r border-slate-300 text-center font-mono font-bold">
                       {it.quantity} {it.selectedUoM}
@@ -1513,6 +1537,8 @@ export function renderPrintDocument(
           coa: 'CHART OF ACCOUNTS (COA) SCHEDULE',
           vendor_bills: 'ACCOUNTS PAYABLE & VENDOR BILLS',
           b2b_ar: 'B2B WHOLESALE AR & BILYET GIRO REGISTER',
+          analytic_budgets: 'ANALYTIC COST CENTERS & DEPARTMENTAL BUDGETS',
+          margin_analysis: 'REAL-TIME PRODUCT MARGIN ANALYSIS',
         };
 
         return (
@@ -1686,7 +1712,47 @@ export function renderPrintDocument(
               </table>
             )}
 
-            {(a.subTab === 'b2b_ar' || a.subTab === 'vendor_bills') && (
+            {a.subTab === 'vendor_bills' && (
+              <div className="space-y-4">
+                <h4 className="text-xs font-black uppercase">Accounts Payable (AP) &amp; Vendor Bills Schedule (3-Way Match)</h4>
+                <table className="w-full text-left text-xs border border-slate-400 border-collapse">
+                  <thead className="bg-slate-100 border-b border-slate-400 font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="py-1.5 px-2 border-r border-slate-300">Bill #</th>
+                      <th className="py-1.5 px-2 border-r border-slate-300">Supplier</th>
+                      <th className="py-1.5 px-2 border-r border-slate-300">PO / GR Ref</th>
+                      <th className="py-1.5 px-2 border-r border-slate-300">Due Date</th>
+                      <th className="py-1.5 px-2 border-r border-slate-300 text-right">Amount (IDR)</th>
+                      <th className="py-1.5 px-2 border-r border-slate-300 text-center">Match</th>
+                      <th className="py-1.5 px-2 text-center">Payment</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-300">
+                    {(a.vendorBills || []).length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-4 text-center text-slate-500">
+                          No vendor bills recorded in AP register.
+                        </td>
+                      </tr>
+                    ) : (
+                      (a.vendorBills || []).map((bill) => (
+                        <tr key={bill.id}>
+                          <td className="py-1.5 px-2 border-r border-slate-300 font-mono font-bold">{bill.billNumber}</td>
+                          <td className="py-1.5 px-2 border-r border-slate-300 font-semibold">{bill.supplierName}</td>
+                          <td className="py-1.5 px-2 border-r border-slate-300 font-mono text-[10px]">{bill.poId} → {bill.goodsReceiptId}</td>
+                          <td className="py-1.5 px-2 border-r border-slate-300 font-mono">{bill.dueDate}</td>
+                          <td className="py-1.5 px-2 border-r border-slate-300 text-right font-mono font-bold">{formatIDR(bill.grandTotalIDR)}</td>
+                          <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono text-[10px] font-bold">{bill.status}</td>
+                          <td className="py-1.5 px-2 text-center font-mono text-[10px] font-bold">{bill.paymentStatus}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {a.subTab === 'b2b_ar' && (
               <div className="space-y-4">
                 <h4 className="text-xs font-black uppercase">Wholesale B2B AR &amp; Bilyet Giro Clearing Register</h4>
                 <table className="w-full text-left text-xs border border-slate-400 border-collapse">
@@ -2249,18 +2315,177 @@ export function renderPrintDocument(
         );
       }
 
+      // =====================================================================
+      // FORMAT GROUP C: A4 B2B QUOTATION / PRO FORMA INVOICE
+      // =====================================================================
+      case 'quotation': {
+        const { quotation: q, termsText } = activePrintPayload;
+        return (
+          <div className="print-page-a4 bg-white text-slate-900 p-2 font-sans space-y-5">
+            <div className="border-b-2 border-slate-900 pb-4 flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs tracking-wider">GROCEMART</span>
+                  <span className="text-sm font-black uppercase tracking-wider">PT GROCEMART RETAIL INDONESIA</span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">B2B Commercial Desk &amp; Cold-Chain HoReCa Supply</p>
+                <p className="text-[10px] font-mono text-slate-500">NPWP PKP: 01.345.678.9-012.000 · Jl. Senopati No. 42, Jakarta Selatan</p>
+              </div>
+              <div className="text-right">
+                <h3 className="text-lg font-black uppercase tracking-wider text-[#0F4C3A]">
+                  {q.isProForma ? 'PRO FORMA INVOICE' : 'COMMERCIAL QUOTATION'}
+                </h3>
+                <p className="text-xs font-mono font-bold text-slate-900 mt-0.5">{q.quotationNumber}</p>
+                <p className="text-[11px] font-mono text-slate-600">
+                  Issue: {q.date} · Valid Until: <strong className="text-slate-900">{q.validUntil}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-xs p-3.5 rounded-xl bg-slate-50 border border-slate-300">
+              <div className="space-y-1">
+                <div className="text-[10px] uppercase font-bold text-slate-500">Prepared For (Buyer)</div>
+                <div className="font-bold text-sm text-slate-900">{q.customerCompany || q.customerName}</div>
+                <div className="text-slate-700">PIC: {q.customerName}</div>
+                <div className="text-[11px] font-mono text-slate-600">
+                  {q.customerEmail} · {q.customerPhone}
+                </div>
+              </div>
+              <div className="space-y-1 text-right">
+                <div className="text-[10px] uppercase font-bold text-slate-500">Commercial &amp; Deposit Policy</div>
+                <div className="font-mono font-bold text-slate-900">
+                  Status: {q.status} · Currency: {q.currency}
+                </div>
+                <div className="text-[11px] font-mono text-[#0F4C3A] font-bold">
+                  Confirmation Deposit ({q.requiredDepositPercent}%): {formatIDR(q.depositAmount)}
+                </div>
+                {q.convertedOrderId && (
+                  <div className="text-[10px] font-mono text-emerald-700 font-bold">
+                    Converted Order: {q.convertedOrderId}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <table className="w-full text-left text-xs border border-slate-400 border-collapse">
+              <thead className="bg-slate-100 border-b border-slate-400 font-bold uppercase text-[10px]">
+                <tr>
+                  <th className="py-2 px-2.5 border-r border-slate-300 text-center w-8">No</th>
+                  <th className="py-2 px-2.5 border-r border-slate-300">SKU &amp; Item Description</th>
+                  <th className="py-2 px-2.5 border-r border-slate-300 text-center">Qty / Unit</th>
+                  <th className="py-2 px-2.5 border-r border-slate-300 text-right">Unit Price</th>
+                  <th className="py-2 px-2.5 text-right">Line Total (IDR)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-300">
+                {q.items.map((it, idx) => (
+                  <tr key={`${it.sku}-${idx}`} className="break-inside-avoid">
+                    <td className="py-2 px-2.5 border-r border-slate-300 text-center font-mono">{idx + 1}</td>
+                    <td className="py-2 px-2.5 border-r border-slate-300">
+                      <div className="font-semibold text-slate-900">
+                        {it.productName}
+                        {it.isMandatoryAddon && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold uppercase">
+                            Mandatory HACCP Add-On
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-mono text-[10px] text-slate-500">{it.sku} · {it.category}</div>
+                    </td>
+                    <td className="py-2 px-2.5 border-r border-slate-300 text-center font-mono font-bold">
+                      {it.quantity} {it.unit}
+                    </td>
+                    <td className="py-2 px-2.5 border-r border-slate-300 text-right font-mono">
+                      {formatIDR(it.unitPrice)}
+                    </td>
+                    <td className="py-2 px-2.5 text-right font-mono font-bold">
+                      {formatIDR(it.lineTotal)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+              <div className="p-3.5 rounded-xl border border-slate-300 bg-slate-50 text-[11px] space-y-1.5">
+                <div className="font-bold uppercase text-[10px] text-slate-600">Terms, Cold-Chain &amp; Validity</div>
+                <p className="text-slate-700 leading-relaxed">
+                  {termsText || 'Prices quoted in IDR subject to Indonesian PPN 11%. Perishable cold-chain packaging fees apply per HACCP regulations.'}
+                </p>
+                {q.notes && (
+                  <p className="text-slate-600 italic pt-1 border-t border-slate-200">Notes: {q.notes}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5 text-xs font-mono border border-slate-300 rounded-xl p-3.5 bg-slate-50">
+                <div className="flex justify-between">
+                  <span>DPP / Subtotal:</span>
+                  <span>{formatIDR(q.subtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>PPN Keluaran (11%):</span>
+                  <span>{formatIDR(q.taxAmount)}</span>
+                </div>
+                <div className="flex justify-between text-sm font-black pt-2 border-t border-slate-400 text-[#0F4C3A]">
+                  <span>TOTAL QUOTED:</span>
+                  <span>{formatIDR(q.total)}</span>
+                </div>
+                <div className="flex justify-between text-[11px] font-bold text-amber-800 pt-1">
+                  <span>Required Deposit ({q.requiredDepositPercent}%):</span>
+                  <span>{formatIDR(q.depositAmount)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-8 text-center text-xs pt-4 border-t border-slate-300 break-inside-avoid">
+              <div className="space-y-3">
+                <span className="font-semibold text-slate-600 block">Client Acceptance &amp; Digital Signature</span>
+                {q.signatureStatus === 'SIGNED' && q.signatureDataUrl ? (
+                  <div className="flex flex-col items-center">
+                    <img
+                      src={q.signatureDataUrl}
+                      alt="Client Digital Signature"
+                      className="h-16 object-contain border border-slate-200 rounded bg-white px-2"
+                    />
+                    <div className="font-bold text-slate-900 mt-1">{q.signedBy || q.customerName}</div>
+                    {q.signedAt && (
+                      <div className="text-[10px] font-mono text-emerald-700">
+                        Digitally Signed: {new Date(q.signedAt).toLocaleString('id-ID')}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="pt-12">
+                    <div className="border-b border-slate-500 mx-8 pb-1 font-bold">{q.customerName}</div>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-14">
+                <span className="font-semibold text-slate-600 block">Authorized Commercial Desk</span>
+                <div className="border-b border-slate-500 mx-8 pb-1 font-bold">PT GroceMart Retail Indonesia</div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+              <span>GroceMart Enterprise ERP · B2B Commercial Quote &amp; Pro Forma Engine</span>
+              <span>Printed: {printedAt}</span>
+            </div>
+          </div>
+        );
+      }
+
       default:
         return null;
   }
 }
 
 export const UniversalPrintPortal: React.FC = () => {
-  const { activePrintPayload } = usePrint();
+  const { activePrintPayload, invoiceTracking } = usePrint();
 
   if (!activePrintPayload || typeof document === 'undefined') return null;
 
   const printRoot = document.getElementById('printable-document-root');
   if (!printRoot) return null;
 
-  return createPortal(renderPrintDocument(activePrintPayload), printRoot);
+  return createPortal(renderPrintDocument(activePrintPayload, { invoiceTracking }), printRoot);
 };

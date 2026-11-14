@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   EnterpriseSettingsConfig,
@@ -31,6 +31,7 @@ interface WarehouseRoutingSettingsTabProps {
   inventoryTiers: StoreInventoryStock[];
   onUpdateSettings: (updated: Partial<EnterpriseSettingsConfig>) => Promise<void>;
   onRefreshBins: () => void;
+  onRefreshRoutes?: () => void;
   onShowToast: (title: string, message: string) => void;
 }
 
@@ -42,6 +43,7 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
   inventoryTiers,
   onUpdateSettings,
   onRefreshBins,
+  onRefreshRoutes,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
@@ -49,6 +51,10 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
   // Config state
   const [config, setConfig] = useState(settings.warehouseRouting);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+  useEffect(() => {
+    setConfig(settings.warehouseRouting);
+  }, [settings]);
 
   // Filter state
   const [zoneFilter, setZoneFilter] = useState<string>('ALL');
@@ -124,6 +130,29 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
       onShowToast('Error', msg);
     } finally {
       setIsSubmittingBin(false);
+    }
+  };
+
+  const handleToggleRouteActive = async (rt: WarehouseMultiStepRoute) => {
+    const nextActive = !(rt.active !== false);
+    try {
+      await apiClient.updateWarehouseRoute(rt.id, { active: nextActive });
+      onShowToast('Route Updated', `${rt.name} is now ${nextActive ? 'ACTIVE' : 'PAUSED'}.`);
+      onRefreshRoutes?.();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Error', msg);
+    }
+  };
+
+  const handleUpdateBinStatus = async (bin: WarehouseBinLocation, status: WarehouseBinLocation['status']) => {
+    try {
+      await apiClient.updateWarehouseBin(bin.id, { status });
+      onShowToast('Bin Status Updated', `${bin.binCode} marked as ${status}.`);
+      onRefreshBins();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Error', msg);
     }
   };
 
@@ -218,21 +247,39 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {routes.map((rt) => (
+          {routes.map((rt) => {
+            const isActive = rt.active !== false;
+            return (
             <div
               key={rt.id}
               className={`p-4 rounded-xl border space-y-3 transition-all ${
-                isLight ? 'bg-gray-50/70 border-gray-200 hover:border-gray-300' : 'bg-zinc-800/40 border-zinc-800 hover:border-zinc-700'
+                isActive
+                  ? isLight
+                    ? 'bg-gray-50/70 border-emerald-300/80 hover:border-emerald-400'
+                    : 'bg-zinc-800/40 border-emerald-700/60 hover:border-emerald-600'
+                  : isLight
+                  ? 'bg-gray-50/40 border-gray-200 opacity-75'
+                  : 'bg-zinc-900/60 border-zinc-800 opacity-75'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:bg-emerald-500/15 dark:text-emerald-400 border border-[#0F4C3A]/20 dark:border-emerald-500/30">
                     {rt.routeType}
                   </span>
-                  <h4 className="text-xs font-bold text-gray-900 dark:text-zinc-100">{rt.name}</h4>
+                  <h4 className="text-xs font-bold text-gray-900 dark:text-zinc-100 truncate">{rt.name}</h4>
                 </div>
-                <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-300 font-mono">{rt.steps.length} Steps</span>
+                <button
+                  type="button"
+                  onClick={() => handleToggleRouteActive(rt)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 transition-colors cursor-pointer ${
+                    isActive
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+                      : 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-300 border-zinc-500/30 hover:bg-zinc-500/25'
+                  }`}
+                >
+                  {isActive ? `Active · ${rt.steps.length} Steps` : 'Paused'}
+                </button>
               </div>
 
               <p className="text-[11px] text-gray-500 dark:text-zinc-300 leading-relaxed">{rt.description}</p>
@@ -256,7 +303,8 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -370,15 +418,21 @@ export const WarehouseRoutingSettingsTab: React.FC<WarehouseRoutingSettingsTabPr
                         </div>
                       </td>
                       <td className="py-3.5 px-3.5">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                          bin.status === 'OCCUPIED'
-                            ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20'
-                            : bin.status === 'AVAILABLE'
-                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                            : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                        }`}>
-                          {bin.status}
-                        </span>
+                        <select
+                          value={bin.status}
+                          onChange={(e) => handleUpdateBinStatus(bin, e.target.value as WarehouseBinLocation['status'])}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer focus:outline-none ${
+                            bin.status === 'OCCUPIED'
+                              ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20'
+                              : bin.status === 'AVAILABLE'
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                              : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                          }`}
+                        >
+                          <option value="AVAILABLE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">AVAILABLE</option>
+                          <option value="OCCUPIED" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">OCCUPIED</option>
+                          <option value="MAINTENANCE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">MAINTENANCE</option>
+                        </select>
                       </td>
                     </tr>
                   );

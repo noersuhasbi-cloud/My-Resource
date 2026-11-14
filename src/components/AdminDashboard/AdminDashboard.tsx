@@ -29,6 +29,8 @@ import type {
   WholesaleProduct,
   WasteRecord,
   RemovalStrategyConfig,
+  VendorBill,
+  EnterpriseSettingsConfig,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -101,6 +103,7 @@ import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { GroceryReportsModule } from './GroceryReportsModule';
 import { SettingsModule } from './SettingsModule';
 import { OdooInventoryView } from './OdooInventoryView';
+import { QuotationsModule } from './QuotationsModule';
 
 interface AdminDashboardProps {
   initialStaffSession?: StaffShiftSession | null;
@@ -213,10 +216,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [adjustQty, setAdjustQty] = useState<number>(0);
   const [adjustReason, setAdjustReason] = useState<string>('Stocktake physical audit');
 
-  // Procurement & Goods Receipts
+  // Procurement, Vendor Bills & Enterprise Settings
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptRecord[]>([]);
+  const [vendorBills, setVendorBills] = useState<VendorBill[]>([]);
+  const [enterpriseSettings, setEnterpriseSettings] = useState<EnterpriseSettingsConfig | null>(null);
   const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
   const [selectedPrSku, setSelectedPrSku] = useState<string>('');
   const [prQuantity, setPrQuantity] = useState<number>(50);
@@ -279,6 +284,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         b2bProdsRes,
         wasteRes,
         strategyRes,
+        vendorBillsRes,
+        enterpriseSettingsRes,
       ] = await Promise.all([
         apiClient.getOmzetAnalytics().catch(() => null),
         apiClient.getStoreStatus(),
@@ -305,6 +312,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         apiClient.getB2BProducts().catch(() => []),
         apiClient.getWasteRecords().catch(() => ({ records: [] })),
         apiClient.getRemovalStrategies().catch(() => null),
+        apiClient.getVendorBills().catch(() => []),
+        apiClient.getEnterpriseSettings().catch(() => null),
       ]);
 
       if (rbacRes) {
@@ -329,6 +338,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setPurchaseRequests(prRes);
       setPurchaseOrders(poRes);
       setGoodsReceipts(grRes);
+      setVendorBills(vendorBillsRes || []);
+      if (enterpriseSettingsRes) {
+        setEnterpriseSettings(enterpriseSettingsRes);
+      }
 
       setChartOfAccounts(coaRes);
       setLedgerEntries(glRes);
@@ -629,6 +642,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         return 'Fulfillment & Catch-Weight Terminal';
       case 'procurement':
         return 'Procurement & Supply Chain (PR/PO/GR)';
+      case 'quotations':
+        return 'B2B Quotations & Pro Forma Invoices';
+      case 'qc':
+        return 'Quality Control (QC) & HACCP Inspections';
+      case 'logistics':
+        return 'Logistics & Shipping Documents (Surat Jalan)';
+      case 'transfers':
+        return 'Inter-Warehouse Stock Transfers';
+      case 'approvals':
+        return 'Approval Matrix & Authorization Queue';
+      case 'reports':
+        return 'Grocery Analytics & FIFO Aging Reports';
+      case 'settings':
+        return 'Enterprise Settings Hub';
       case 'accounting':
         return 'Financial Accounting & Multi-Store COA';
       case 'openapi':
@@ -1782,6 +1809,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             purchaseRequests={purchaseRequests}
             purchaseOrders={purchaseOrders}
             goodsReceipts={goodsReceipts}
+            vendorBills={vendorBills}
+            onRefreshData={refreshAllData}
+            onShowToast={onShowToast}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4B: B2B QUOTATIONS & PRO FORMA INVOICES ENGINE */}
+        {/* ========================================================================= */}
+        {activeTab === 'quotations' && (
+          <QuotationsModule
+            theme={theme}
+            inventory={inventory}
+            enterpriseSettings={enterpriseSettings}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
           />
@@ -1803,6 +1844,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             pnlReport={pnlReport}
             balanceSheet={balanceSheet}
             cashFlow={cashFlow}
+            vendorBills={vendorBills}
+            purchaseOrders={purchaseOrders}
+            goodsReceipts={goodsReceipts}
+            enterpriseSettings={enterpriseSettings}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
             activeSubTab={accountingDeepSubTab}
@@ -2048,6 +2093,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             inventoryTiers={inventoryTiers}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}
+            onNavigateToVendorBills={() => {
+              setAccountingDeepSubTab('vendor_bills');
+              setActiveTab('accounting');
+            }}
+            onNavigateToAnalytic={() => {
+              setAccountingDeepSubTab('analytic_budgets');
+              setActiveTab('accounting');
+            }}
+            onNavigateToMargin={() => {
+              setAccountingDeepSubTab('margin_analysis');
+              setActiveTab('accounting');
+            }}
+            onNavigateToQuotations={() => setActiveTab('quotations')}
           />
         )}
 

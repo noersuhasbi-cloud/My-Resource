@@ -12,6 +12,7 @@ import type {
   GoodsReceiptRecord,
   B2BCustomer,
   GiroPaymentRecord,
+  EnterpriseSettingsConfig,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import {
@@ -42,11 +43,15 @@ import {
   RotateCcw,
   FileCode2,
   Printer,
+  PieChart,
+  BarChart3,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { VendorBillModule } from './VendorBillModule';
 import { ComplianceAccountingPanels } from './ComplianceAccountingPanels';
+import { AnalyticMarginModule } from './AnalyticMarginModule';
 import { usePrint } from '../../context/PrintContext';
+import type { AccountingSubTab } from './AdminSidebar';
 
 const FX_RATES: Record<SupportedCurrency, { symbol: string; rate: number; label: string }> = {
   IDR: { symbol: 'Rp', rate: 1, label: 'IDR (Base)' },
@@ -67,10 +72,11 @@ interface AccountingModuleProps {
   vendorBills?: VendorBill[];
   purchaseOrders?: PurchaseOrder[];
   goodsReceipts?: GoodsReceiptRecord[];
+  enterpriseSettings?: EnterpriseSettingsConfig | null;
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
-  activeSubTab?: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar';
-  onSubTabChange?: (subTab: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar') => void;
+  activeSubTab?: AccountingSubTab;
+  onSubTabChange?: (subTab: AccountingSubTab) => void;
 }
 
 export const AccountingModule: React.FC<AccountingModuleProps> = ({
@@ -85,6 +91,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   vendorBills = [],
   purchaseOrders = [],
   goodsReceipts = [],
+  enterpriseSettings,
   onRefreshData,
   onShowToast,
   activeSubTab,
@@ -104,7 +111,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   };
 
   // Sub-tabs (controlled or internal) + additive Indonesian Compliance Views
-  const [internalSubTab, setInternalSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar'>('pnl');
+  const [internalSubTab, setInternalSubTab] = useState<AccountingSubTab>('pnl');
   const [complianceSubView, setComplianceSubView] = useState<'rma_rtv' | 'coretax_djp' | null>(null);
   const subTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
 
@@ -114,7 +121,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
     }
   }, [activeSubTab]);
 
-  const setSubTab = (val: 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar') => {
+  const setSubTab = (val: AccountingSubTab) => {
     setComplianceSubView(null);
     setInternalSubTab(val);
     if (onSubTabChange) onSubTabChange(val);
@@ -330,6 +337,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     filteredCOA,
                     b2bCustomers,
                     giroRecords,
+                    vendorBills,
                   })
                 }
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
@@ -368,6 +376,8 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             { id: 'coa', label: 'Chart of Accounts (COA)', icon: Building2 },
             { id: 'vendor_bills', label: 'Vendor Bills & AP', icon: FileCheck },
             { id: 'b2b_ar', label: 'B2B AR & Giro Clearing', icon: CreditCard },
+            { id: 'analytic_budgets', label: 'Analytic Budgets', icon: PieChart },
+            { id: 'margin_analysis', label: 'Margin Analysis', icon: BarChart3 },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = !complianceSubView && subTab === tab.id;
@@ -805,6 +815,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   <option value="QRIS_SALE">QRIS Sales</option>
                   <option value="PURCHASE_ORDER">PO Accrual</option>
                   <option value="PARTIAL_GR">Goods Receipt</option>
+                  <option value="VENDOR_BILL">Vendor Bills (AP)</option>
+                  <option value="VENDOR_PAYMENT">Vendor Payments (Disbursement)</option>
+                  <option value="LANDED_COST">Landed Cost Absorption</option>
+                  <option value="B2B_WHOLESALE_ORDER">B2B Wholesale Orders</option>
+                  <option value="GIRO_CLEARING">Bilyet Giro Clearing</option>
+                  <option value="GIRO_BOUNCED">Dishonored Giro / Penalty</option>
+                  <option value="PURCHASE_AP">Purchase AP</option>
                   <option value="INVENTORY_ADJUSTMENT">Stock Adjustments</option>
                   <option value="WASTE_SHRINKAGE">Waste Shrinkage</option>
                   <option value="REVERSING_ENTRY">Reversing Counter-Entries</option>
@@ -1309,6 +1326,17 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* SUB-TAB 8 & 9: ANALYTIC BUDGETS & REAL-TIME MARGIN ANALYSIS */}
+      {!complianceSubView && (subTab === 'analytic_budgets' || subTab === 'margin_analysis') && (
+        <AnalyticMarginModule
+          theme={theme}
+          mode={subTab}
+          enterpriseSettings={enterpriseSettings}
+          onRefreshData={onRefreshData}
+          onShowToast={onShowToast}
+        />
       )}
 
       {/* ADDITIVE COMPLIANCE PANELS: RETURNS / NOTA RETUR & CORETAX DJP */}

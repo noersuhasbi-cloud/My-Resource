@@ -36,6 +36,8 @@ import {
   ArrowRightLeft,
   BarChart3,
   FileText,
+  FileSpreadsheet,
+  PieChart,
   Sliders,
   Settings,
 } from 'lucide-react';
@@ -49,6 +51,7 @@ export type AdminDashboardTab =
   | 'waste'
   | 'picker'
   | 'procurement'
+  | 'quotations'
   | 'qc'
   | 'logistics'
   | 'transfers'
@@ -61,7 +64,16 @@ export type AdminDashboardTab =
   | 'rbac'
   | 'audit';
 
-export type AccountingSubTab = 'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa' | 'vendor_bills' | 'b2b_ar';
+export type AccountingSubTab =
+  | 'pnl'
+  | 'balance_sheet'
+  | 'cash_flow'
+  | 'gl'
+  | 'coa'
+  | 'vendor_bills'
+  | 'b2b_ar'
+  | 'analytic_budgets'
+  | 'margin_analysis';
 
 interface AdminSidebarProps {
   theme: 'light' | 'dark';
@@ -484,6 +496,39 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               )}
             </button>
 
+            {/* 7Q. B2B Quotations & Pro Forma Invoices */}
+            <button
+              onClick={() => handleTabClick('quotations')}
+              title={isCollapsed ? 'B2B Quotations & Pro Forma Invoices' : undefined}
+              className={`${
+                isCollapsed
+                  ? 'relative w-10 h-10 mx-auto flex items-center justify-center rounded-xl'
+                  : 'w-full flex items-center gap-3 px-3 py-2 rounded-xl relative'
+              } text-xs font-semibold transition-all group ${
+                activeTab === 'quotations'
+                  ? 'bg-[#0F4C3A] text-white shadow-sm font-bold'
+                  : isLight
+                  ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-900/80'
+              }`}
+            >
+              <FileSpreadsheet className={`w-4 h-4 flex-shrink-0 ${activeTab === 'quotations' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`} />
+              {!isCollapsed && (
+                <>
+                  <span className="truncate flex-1 text-left">Quotations &amp; Pro Forma</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold border whitespace-nowrap ${
+                      activeTab === 'quotations'
+                        ? 'bg-white/15 text-amber-100 border-white/25'
+                        : 'bg-amber-500/15 text-amber-700 border-amber-500/25 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25'
+                    }`}
+                  >
+                    B2B
+                  </span>
+                </>
+              )}
+            </button>
+
             {/* 7A. Inventory QC & Spoilage Inspections */}
             <button
               onClick={() => handleTabClick('qc')}
@@ -807,6 +852,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 </button>
 
                 <button
+                  onClick={() => handleAccountingSubClick('vendor_bills')}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                    activeTab === 'accounting' && accountingSubTab === 'vendor_bills'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      : isLight
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60'
+                  }`}
+                >
+                  <FileCheck2 className="w-3 h-3 text-indigo-600" />
+                  <span className="truncate">Vendor Bills &amp; AP</span>
+                </button>
+
+                <button
                   onClick={() => handleAccountingSubClick('b2b_ar')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'b2b_ar'
@@ -818,6 +877,34 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 >
                   <CreditCard className="w-3 h-3 text-emerald-600" />
                   <span className="truncate">B2B AR &amp; Giro Clearing</span>
+                </button>
+
+                <button
+                  onClick={() => handleAccountingSubClick('analytic_budgets')}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                    activeTab === 'accounting' && accountingSubTab === 'analytic_budgets'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      : isLight
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60'
+                  }`}
+                >
+                  <PieChart className="w-3 h-3 text-purple-600" />
+                  <span className="truncate">Analytic Budgets</span>
+                </button>
+
+                <button
+                  onClick={() => handleAccountingSubClick('margin_analysis')}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                    activeTab === 'accounting' && accountingSubTab === 'margin_analysis'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      : isLight
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60'
+                  }`}
+                >
+                  <BarChart3 className="w-3 h-3 text-emerald-600" />
+                  <span className="truncate">Real-Time Margin Analysis</span>
                 </button>
               </div>
             )}
