@@ -14,6 +14,7 @@ import type {
   GiroPaymentRecord,
   EnterpriseSettingsConfig,
   StaffShiftSession,
+  SettlementReconcileResponse,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import {
@@ -121,7 +122,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
   // Sub-tabs (controlled or internal) + additive Indonesian Compliance Views
   const [internalSubTab, setInternalSubTab] = useState<AccountingSubTab>('pnl');
-  const [complianceSubView, setComplianceSubView] = useState<'rma_rtv' | 'coretax_djp' | null>(null);
+  const [complianceSubView, setComplianceSubView] = useState<'rma_rtv' | 'coretax_djp' | 'settlement_giro' | null>(null);
   const subTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
 
   useEffect(() => {
@@ -145,6 +146,40 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   const [isProcessingGiro, setIsProcessingGiro] = useState<boolean>(false);
   const [bouncedReasonPrompt, setBouncedReasonPrompt] = useState<string>('Saldo giro tidak mencukupi (SKNBI Tolakan)');
 
+  // QRIS/EDC Settlement & Standalone Post-Dated Bilyet Giro State
+  const [settlementData, setSettlementData] = useState<SettlementReconcileResponse | null>(null);
+  const [isLoadingSettlement, setIsLoadingSettlement] = useState<boolean>(false);
+  const [settlementChannel, setSettlementChannel] = useState<'QRIS' | 'EDC'>('QRIS');
+  const [selectedTenderIds, setSelectedTenderIds] = useState<string[]>([]);
+  const [settlementGrossOverride, setSettlementGrossOverride] = useState<number>(100000);
+  const [settlementMdrPercent, setSettlementMdrPercent] = useState<number>(0.7);
+  const [settlementDestCode, setSettlementDestCode] = useState<'1020' | '1010'>('1020');
+  const [settlementNotes, setSettlementNotes] = useState<string>('');
+  const [isPostingSettlement, setIsPostingSettlement] = useState<boolean>(false);
+
+  const [giroDirection, setGiroDirection] = useState<'INCOMING' | 'OUTGOING'>('INCOMING');
+  const [giroCounterparty, setGiroCounterparty] = useState<string>('');
+  const [giroNumber, setGiroNumber] = useState<string>('');
+  const [giroBank, setGiroBank] = useState<string>('Bank BCA');
+  const [giroAmount, setGiroAmount] = useState<number>(15000000);
+  const [giroDueDate, setGiroDueDate] = useState<string>(() =>
+    new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]
+  );
+  const [giroRef, setGiroRef] = useState<string>('');
+  const [isCreatingGiro, setIsCreatingGiro] = useState<boolean>(false);
+
+  const loadSettlementData = async () => {
+    setIsLoadingSettlement(true);
+    try {
+      const res = await apiClient.getSettlementReconcile();
+      setSettlementData(res);
+    } catch {
+      // ignore if restricted
+    } finally {
+      setIsLoadingSettlement(false);
+    }
+  };
+
   const loadB2bAccountingData = async () => {
     try {
       const [custs, giros] = await Promise.all([
@@ -161,6 +196,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   useEffect(() => {
     loadB2bAccountingData();
   }, []);
+
+  useEffect(() => {
+    if (complianceSubView === 'settlement_giro') {
+      loadSettlementData();
+      loadB2bAccountingData();
+    }
+  }, [complianceSubView]);
 
   const handleClearGiro = async (giroId: string) => {
     setIsProcessingGiro(true);
@@ -183,7 +225,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       const res = await apiClient.bounceGiro(giroId, bouncedReasonPrompt);
       onShowToast(
         'Giro Marked as BOUNCED',
-        `Giro marked as dishonored. AR debt re-opened, Rp 150.000 penalty assessed, and customer ${res.customer.companyName} credit FROZEN.`
+        res.customer?.companyName
+          ? `Giro marked as dishonored. AR debt re-opened, Rp 150.000 penalty assessed, and customer ${res.customer.companyName} credit FROZEN.`
+          : `Bilyet Giro #${res.giro?.giroNumber || giroId} marked as dishonored (Tolak Kliring). GL reversal entries posted cleanly.`
       );
       await loadB2bAccountingData();
       onRefreshData();
@@ -438,6 +482,20 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           >
             <FileCode2 className="w-3.5 h-3.5" />
             Coretax e-Faktur &amp; PPh
+          </button>
+          <button
+            type="button"
+            onClick={() => setComplianceSubView('settlement_giro')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+              complianceSubView === 'settlement_giro'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <CreditCard className="w-3.5 h-3.5" />
+            QRIS/EDC Settlement &amp; Giro
           </button>
         </div>
       </div>
@@ -1380,7 +1438,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       )}
 
       {/* ADDITIVE COMPLIANCE PANELS: RETURNS / NOTA RETUR & CORETAX DJP */}
-      {complianceSubView && (
+      {complianceSubView && complianceSubView !== 'settlement_giro' && (
         <ComplianceAccountingPanels
           theme={theme}
           mode={complianceSubView}
@@ -1389,6 +1447,430 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           onRefreshData={onRefreshData}
           onShowToast={onShowToast}
         />
+      )}
+
+      {/* ADDITIVE PRECISION PANEL: QRIS/EDC BATCH SETTLEMENT & POST-DATED BILYET GIRO CLEARING */}
+      {complianceSubView === 'settlement_giro' && (
+        <div className="space-y-6">
+          {/* Card 1: QRIS / EDC Batch Settlement & MDR Auto-Reconciliation */}
+          <div
+            className={`p-5 rounded-2xl border space-y-4 ${
+              isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 dark:border-zinc-800 pb-3">
+              <div>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                  QRIS / EDC Batch Settlement &amp; MDR Fee Auto-Reconciliation
+                </h3>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                  Settle clearing balances cleanly: DR #{settlementDestCode} (Net Settled) + DR #6040 (MDR Fee Expense) / CR #{settlementChannel === 'QRIS' ? '1030' : '1020'} (Gross).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadSettlementData}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer ${
+                  isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                }`}
+              >
+                {isLoadingSettlement ? 'Refreshing...' : 'Refresh Queue'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
+                <div className="text-[11px] font-medium text-gray-500 dark:text-zinc-400">QRIS Unsettled Balance (#1030)</div>
+                <div className="text-lg font-bold font-mono text-[#0F4C3A] dark:text-emerald-400 mt-1">
+                  {formatIDR(settlementData?.qrisReceivableCoaBalanceIDR ?? 0)}
+                </div>
+              </div>
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
+                <div className="text-[11px] font-medium text-gray-500 dark:text-zinc-400">EDC Bank Clearing (#1020)</div>
+                <div className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-1">
+                  {formatIDR(settlementData?.edcClearingPendingIDR ?? 0)}
+                </div>
+              </div>
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
+                <div className="text-[11px] font-medium text-gray-500 dark:text-zinc-400">Pending Tender Receipts</div>
+                <div className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400 mt-1">
+                  {(settlementData?.unsettledQrisItems?.length ?? 0) + (settlementData?.unsettledEdcItems?.length ?? 0)} receipts
+                </div>
+              </div>
+            </div>
+
+            {canManageAccountingAndGiro && (() => {
+              const matchingTenders =
+                settlementChannel === 'QRIS'
+                  ? settlementData?.unsettledQrisItems || []
+                  : settlementData?.unsettledEdcItems || [];
+              const selectedTenders = matchingTenders.filter((t) => selectedTenderIds.includes(t.id));
+              const activeGross =
+                selectedTenders.length > 0
+                  ? selectedTenders.reduce((sum, t) => sum + t.amountIDR, 0)
+                  : settlementGrossOverride;
+              const estMdr = Math.round((activeGross * settlementMdrPercent) / 100);
+              const estNet = Math.max(0, activeGross - estMdr);
+
+              return (
+                <div className="space-y-3">
+                  {matchingTenders.length > 0 && (
+                    <div className="overflow-x-auto max-h-48 border rounded-xl border-gray-200 dark:border-zinc-800">
+                      <table className="w-full text-left text-xs">
+                        <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-zinc-800/60 text-zinc-300'}>
+                          <tr>
+                            <th className="py-2 px-3 w-8">Pick</th>
+                            <th className="py-2 px-3">Receipt #</th>
+                            <th className="py-2 px-3">Channel</th>
+                            <th className="py-2 px-3">Amount (IDR)</th>
+                            <th className="py-2 px-3">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                          {matchingTenders.map((t) => (
+                            <tr key={t.id}>
+                              <td className="py-2 px-3">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTenderIds.includes(t.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedTenderIds((prev) => [...prev, t.id]);
+                                    } else {
+                                      setSelectedTenderIds((prev) => prev.filter((id) => id !== t.id));
+                                    }
+                                  }}
+                                />
+                              </td>
+                              <td className="py-2 px-3 font-mono font-semibold">{t.id}</td>
+                              <td className="py-2 px-3">{t.channel}</td>
+                              <td className="py-2 px-3 font-mono">{formatIDR(t.amountIDR)}</td>
+                              <td className="py-2 px-3 text-[11px]">{new Date(t.timestamp).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">Tender Channel</label>
+                      <select
+                        value={settlementChannel}
+                        onChange={(e) => {
+                          const ch = e.target.value as 'QRIS' | 'EDC';
+                          setSettlementChannel(ch);
+                          setSelectedTenderIds([]);
+                          setSettlementMdrPercent(ch === 'QRIS' ? 0.7 : 1.0);
+                        }}
+                        className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
+                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                        }`}
+                      >
+                        <option value="QRIS">QRIS (Default 0.7% MDR)</option>
+                        <option value="EDC">EDC / Kartu Debit-Kredit (1.0%)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">
+                        {selectedTenders.length > 0 ? 'Selected Gross (IDR)' : 'Batch Gross Amount (IDR)'}
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        disabled={selectedTenders.length > 0}
+                        value={activeGross}
+                        onChange={(e) => setSettlementGrossOverride(Math.max(1, Number(e.target.value) || 0))}
+                        className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border disabled:opacity-70 ${
+                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">MDR Fee %</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={0.1}
+                        value={settlementMdrPercent}
+                        onChange={(e) => setSettlementMdrPercent(Math.max(0, Number(e.target.value) || 0))}
+                        className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
+                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">Destination Bank/Cash</label>
+                      <select
+                        value={settlementDestCode}
+                        onChange={(e) => setSettlementDestCode(e.target.value as '1020' | '1010')}
+                        className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
+                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                        }`}
+                      >
+                        <option value="1020">1020 Bank BCA</option>
+                        <option value="1010">1010 Kas Operasional</option>
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isPostingSettlement || activeGross <= 0}
+                      onClick={async () => {
+                        setIsPostingSettlement(true);
+                        try {
+                          const res = await apiClient.postSettlementReconcile({
+                            channel: settlementChannel,
+                            grossAmountIDR: activeGross,
+                            receiptIds: selectedTenders.length > 0 ? selectedTenders.map((t) => t.id) : undefined,
+                            mdrPercent: settlementMdrPercent,
+                            destinationAccountCode: settlementDestCode,
+                            sourceAccountCode: settlementChannel === 'QRIS' ? '1030' : '1020',
+                            storeId: selectedStore !== 'CONSOLIDATED' ? selectedStore : undefined,
+                            notes: settlementNotes.trim() || undefined,
+                          });
+                          onShowToast('Settlement Reconciled', res.message);
+                          setSelectedTenderIds([]);
+                          setSettlementNotes('');
+                          await loadSettlementData();
+                          onRefreshData();
+                        } catch (err: unknown) {
+                          onShowToast('Settlement Failed', err instanceof Error ? err.message : String(err));
+                        } finally {
+                          setIsPostingSettlement(false);
+                        }
+                      }}
+                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white cursor-pointer disabled:opacity-50"
+                    >
+                      {isPostingSettlement
+                        ? 'Reconciling...'
+                        : `Reconcile (${formatIDR(estNet)} net · MDR ${formatIDR(estMdr)})`}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {(settlementData?.batches?.length ?? 0) > 0 && (
+              <div className="overflow-x-auto pt-2">
+                <table className="w-full text-left text-xs">
+                  <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-zinc-800/50 text-zinc-300'}>
+                    <tr>
+                      <th className="py-2.5 px-3">Batch ID</th>
+                      <th className="py-2.5 px-3">Channel</th>
+                      <th className="py-2.5 px-3">Gross</th>
+                      <th className="py-2.5 px-3">MDR Fee (#6040)</th>
+                      <th className="py-2.5 px-3">Net Settled</th>
+                      <th className="py-2.5 px-3">GL Refs</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                    {settlementData!.batches.map((b) => (
+                      <tr key={b.id}>
+                        <td className="py-2.5 px-3 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{b.id}</td>
+                        <td className="py-2.5 px-3">{b.channel} ({b.mdrPercent}%)</td>
+                        <td className="py-2.5 px-3 font-mono">{formatIDR(b.grossAmountIDR)}</td>
+                        <td className="py-2.5 px-3 font-mono text-rose-600 dark:text-rose-400">-{formatIDR(b.mdrFeeIDR)}</td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-emerald-700 dark:text-emerald-400">{formatIDR(b.netSettledIDR)}</td>
+                        <td className="py-2.5 px-3 font-mono text-[11px]">{b.glEntryIds.join(', ')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Post-Dated Bilyet Giro Clearing Ledger (COA #1030 & #2030) */}
+          <div
+            className={`p-5 rounded-2xl border space-y-4 ${
+              isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+            }`}
+          >
+            <div className="border-b border-gray-200 dark:border-zinc-800 pb-3">
+              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                Post-Dated Bilyet Giro Clearing Ledger (COA #1030 Incoming &amp; #2030 Outgoing)
+              </h3>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                Register incoming customer Bilyet Giro (DR #1030 / CR #1200) or outgoing vendor post-dated Giro (DR #2010 / CR #2030) and execute SKNBI Clear / Bounce actions.
+              </p>
+            </div>
+
+            {canManageAccountingAndGiro && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!giroCounterparty.trim() || !giroNumber.trim() || giroAmount <= 0) {
+                    onShowToast('Missing Giro Details', 'Enter counterparty, Giro number, and positive amount.');
+                    return;
+                  }
+                  setIsCreatingGiro(true);
+                  try {
+                    const res = await apiClient.createStandaloneGiro({
+                      direction: giroDirection,
+                      counterpartyName: giroCounterparty.trim(),
+                      giroNumber: giroNumber.trim(),
+                      issuingBank: giroBank,
+                      amountIDR: giroAmount,
+                      clearingDueDate: giroDueDate,
+                      orderOrBillRef: giroRef.trim() || undefined,
+                    });
+                    onShowToast('Bilyet Giro Registered', res.message);
+                    setGiroCounterparty('');
+                    setGiroNumber('');
+                    setGiroRef('');
+                    await loadB2bAccountingData();
+                    onRefreshData();
+                  } catch (err: unknown) {
+                    onShowToast('Giro Registration Failed', err instanceof Error ? err.message : String(err));
+                  } finally {
+                    setIsCreatingGiro(false);
+                  }
+                }}
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end p-4 rounded-xl border border-gray-200 dark:border-zinc-800 bg-gray-50/70 dark:bg-zinc-800/40"
+              >
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1">Giro Direction</label>
+                  <select
+                    value={giroDirection}
+                    onChange={(e) => setGiroDirection(e.target.value as 'INCOMING' | 'OUTGOING')}
+                    className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    }`}
+                  >
+                    <option value="INCOMING">Incoming Customer Giro (#1030)</option>
+                    <option value="OUTGOING">Outgoing Vendor Giro (#2030)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1">Counterparty Name</label>
+                  <input
+                    type="text"
+                    value={giroCounterparty}
+                    onChange={(e) => setGiroCounterparty(e.target.value)}
+                    placeholder="e.g. PT Sinar Jaya"
+                    className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1">Bilyet Giro Number</label>
+                  <input
+                    type="text"
+                    value={giroNumber}
+                    onChange={(e) => setGiroNumber(e.target.value)}
+                    placeholder="BG-BCA-889012"
+                    className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1">Amount (IDR)</label>
+                  <input
+                    type="number"
+                    min={1000}
+                    step={1000}
+                    value={giroAmount}
+                    onChange={(e) => setGiroAmount(Math.max(1, Number(e.target.value) || 0))}
+                    className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1">Due Date (Jatuh Tempo)</label>
+                  <input
+                    type="date"
+                    value={giroDueDate}
+                    onChange={(e) => setGiroDueDate(e.target.value)}
+                    className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    }`}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isCreatingGiro}
+                  className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white cursor-pointer disabled:opacity-50"
+                >
+                  {isCreatingGiro ? 'Registering...' : 'Register Giro'}
+                </button>
+              </form>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-zinc-800/50 text-zinc-300'}>
+                  <tr>
+                    <th className="py-3 px-3.5">Giro # / Bank</th>
+                    <th className="py-3 px-3.5">Direction &amp; COA</th>
+                    <th className="py-3 px-3.5">Counterparty</th>
+                    <th className="py-3 px-3.5">Due Date</th>
+                    <th className="py-3 px-3.5">Nominal</th>
+                    <th className="py-3 px-3.5">Status</th>
+                    <th className="py-3 px-3.5 text-right">SKNBI Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                  {giroRecords.map((giro) => (
+                    <tr key={giro.id}>
+                      <td className="py-3 px-3.5">
+                        <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{giro.giroNumber}</div>
+                        <div className="text-[11px] text-gray-500">{giro.issuingBank}</div>
+                      </td>
+                      <td className="py-3 px-3.5 font-mono text-[11px]">
+                        {giro.direction === 'OUTGOING' ? 'OUTGOING (#2030)' : `INCOMING (#${giro.settlementCoaCode || '1210'})`}
+                      </td>
+                      <td className="py-3 px-3.5 font-semibold">{giro.customerName}</td>
+                      <td className="py-3 px-3.5 font-mono">{new Date(giro.clearingDueDate).toLocaleDateString()}</td>
+                      <td className="py-3 px-3.5 font-mono font-bold">{formatIDR(giro.amountIDR)}</td>
+                      <td className="py-3 px-3.5">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            giro.status === 'CLEARED'
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                              : giro.status === 'BOUNCED'
+                              ? 'bg-rose-500/15 text-rose-700 dark:text-rose-400'
+                              : 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                          }`}
+                        >
+                          {giro.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3.5 text-right">
+                        {giro.status === 'PENDING_CLEARING' && canManageAccountingAndGiro ? (
+                          <div className="inline-flex gap-1.5">
+                            <button
+                              type="button"
+                              disabled={isProcessingGiro}
+                              onClick={() => handleClearGiro(giro.id)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
+                            >
+                              Mark Cleared
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isProcessingGiro}
+                              onClick={() => handleBounceGiro(giro.id)}
+                              className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold cursor-pointer"
+                            >
+                              Tolak Kliring
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-gray-400 font-mono">{giro.status === 'PENDING_CLEARING' ? 'Treasury Only' : 'Completed'}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL: POST REVERSING JOURNAL ENTRY */}

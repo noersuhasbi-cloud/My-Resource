@@ -220,8 +220,11 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
         });
 
         onShowToast(
-          'Waste Logged & Routed to Scrap Cage',
-          `Recorded ${modalQty} units of ${res.wasteRecord.productName}. Disposed via ${modalAction.replace(/_/g, ' ')}. GL shrinkage debited #6030.`
+          modalReason === 'NATURAL_MOISTURE_SHRINKAGE'
+            ? 'Susut Timbang Alami Recorded'
+            : 'Waste Logged & Routed to Scrap Cage',
+          res.message ||
+            `Recorded ${modalQty} units of ${res.wasteRecord.productName}. Disposed via ${modalAction.replace(/_/g, ' ')}. GL shrinkage debited #${modalReason === 'NATURAL_MOISTURE_SHRINKAGE' ? '5020' : '6030'}.`
         );
       }
 
@@ -570,6 +573,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                 <option value="chiller_temp_breach">Chiller Temp Breach</option>
                 <option value="pest_spoilage">Pest / Spoilage</option>
                 <option value="trimming_loss">Butchery / Trimming Loss</option>
+                <option value="NATURAL_MOISTURE_SHRINKAGE">Susut Timbang Alami (Moisture &le; 2.5%)</option>
               </select>
             </div>
           </div>
@@ -1506,6 +1510,7 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                       <option value="chiller_temp_breach">Chiller Temp Breach</option>
                       <option value="pest_spoilage">Pest / Spoilage</option>
                       <option value="trimming_loss">Trimming / Butchery Loss</option>
+                      <option value="NATURAL_MOISTURE_SHRINKAGE">Susut Timbang Alami (Moisture Loss &le; 2.5%)</option>
                     </select>
                   </div>
 
@@ -1525,6 +1530,13 @@ export const WasteModule: React.FC<WasteModuleProps> = ({
                       <option value="donated_animal_feed">Donated Animal Feed</option>
                     </select>
                   </div>
+
+                  {modalReason === 'NATURAL_MOISTURE_SHRINKAGE' && (
+                    <div className="col-span-2 text-[11px] text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
+                      <strong>Indonesian Commodity Tolerance (&le; 2.5%):</strong> Moisture loss within 2.5% posts directly to{' '}
+                      <span className="font-mono font-bold">DR #5020 / CR #1040</span> without executive penalty. Any excess above 2.5% routes to Approval Matrix &amp; COA #6030.
+                    </div>
+                  )}
                 </div>
               )}
 

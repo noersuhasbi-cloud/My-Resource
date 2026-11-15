@@ -799,7 +799,19 @@ export const apiClient = {
     actionTaken?: string;
     reportedBy?: string;
     notes?: string;
-  }): Promise<{ success: boolean; wasteRecord: WasteRecord; journalEntryIds: string[] }> {
+  }): Promise<{
+    success: boolean;
+    wasteRecord: WasteRecord;
+    journalEntryIds: string[];
+    message?: string;
+    naturalMoistureShrinkage?: {
+      tolerancePercent: number;
+      actualShrinkagePercent: number;
+      withinToleranceQty: number;
+      excessQtyPendingApproval: number;
+      approvalRequestId?: string;
+    };
+  }> {
     const res = await fetchApi('/api/admin/waste', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

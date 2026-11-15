@@ -12,6 +12,8 @@ import type {
   StaffShiftSession,
   VendorScorecardResponse,
   VendorScorecardRecord,
+  SupplierDebitNote,
+  SupplierDebitNoteCategory,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -110,6 +112,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       string,
       {
         quantityReceived: number;
+        bonusQty: number;
         batchNumber: string;
         expiryDate: string;
         qualityCondition: 'Cold-Chain Verified' | 'Passed - Grade A' | 'Minor Discrepancy';
@@ -130,6 +133,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [directPoSupplier, setDirectPoSupplier] = useState<string>('');
   const [directPoSku, setDirectPoSku] = useState<string>('');
   const [directPoQty, setDirectPoQty] = useState<number>(25);
+  const [directPoBonusQty, setDirectPoBonusQty] = useState<number>(0);
   const [directPoExpectedDate, setDirectPoExpectedDate] = useState<string>(() =>
     new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0]
   );
@@ -141,15 +145,26 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [scorecardData, setScorecardData] = useState<VendorScorecardResponse | null>(null);
   const [isLoadingScorecard, setIsLoadingScorecard] = useState<boolean>(false);
 
+  // Supplier Rafaksi & Trading Term Debit Notes (Nota Debet) State
+  const [debitNotesList, setDebitNotesList] = useState<SupplierDebitNote[]>([]);
+  const [isLoadingDebitNotes, setIsLoadingDebitNotes] = useState<boolean>(false);
+  const [isSubmittingDebitNote, setIsSubmittingDebitNote] = useState<boolean>(false);
+  const [dnSupplierName, setDnSupplierName] = useState<string>('');
+  const [dnCategory, setDnCategory] = useState<SupplierDebitNoteCategory>('RAFAKSI_HARGA');
+  const [dnVendorBillId, setDnVendorBillId] = useState<string>('');
+  const [dnSku, setDnSku] = useState<string>('');
+  const [dnAmountIDR, setDnAmountIDR] = useState<number>(250000);
+  const [dnDescription, setDnDescription] = useState<string>('');
+
   // Active Module Sub-Tab
-  const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'smart_forecast' | 'pr' | 'po' | 'gr' | 'vendor_bills' | 'vendor_scorecard'>(
+  const [activeTab, setActiveTab] = useState<'auto_replenishment' | 'smart_forecast' | 'pr' | 'po' | 'gr' | 'vendor_bills' | 'vendor_scorecard' | 'debit_notes'>(
     canonicalRole === 'warehouse' ? 'gr' : 'auto_replenishment'
   );
   const [preselectedPoId, setPreselectedPoId] = useState<string>('');
   const [preselectedGrId, setPreselectedGrId] = useState<string>('');
 
   React.useEffect(() => {
-    if (isWarehouseRole && (activeTab === 'auto_replenishment' || activeTab === 'smart_forecast' || activeTab === 'vendor_bills')) {
+    if (isWarehouseRole && (activeTab === 'auto_replenishment' || activeTab === 'smart_forecast' || activeTab === 'vendor_bills' || activeTab === 'debit_notes')) {
       setActiveTab('gr');
     }
   }, [isWarehouseRole, activeTab]);
@@ -254,11 +269,31 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     setDirectPoSupplier(fallbackSupplier);
     setDirectPoSku(matchingInv?.sku || '');
     setDirectPoQty(25);
+    setDirectPoBonusQty(0);
     setDirectPoExpectedDate(new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0]);
     setDirectPoPaymentTerms('Net 30');
     setDirectPoNotes('');
     setIsCreatingDirectPO(true);
   };
+
+  const loadDebitNotes = React.useCallback(async () => {
+    if (isWarehouseRole) return;
+    setIsLoadingDebitNotes(true);
+    try {
+      const notes = await apiClient.getSupplierDebitNotes(selectedStore);
+      setDebitNotesList(notes);
+    } catch {
+      // keep existing list
+    } finally {
+      setIsLoadingDebitNotes(false);
+    }
+  }, [isWarehouseRole, selectedStore]);
+
+  React.useEffect(() => {
+    if (activeTab === 'debit_notes') {
+      loadDebitNotes();
+    }
+  }, [activeTab, loadDebitNotes]);
 
   const handleCreateDirectPO = async () => {
     if (!directPoSupplier || !directPoSku || directPoQty <= 0) {
@@ -272,6 +307,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         supplierName: directPoSupplier,
         sku: directPoSku,
         quantity: directPoQty,
+        bonusQty: directPoBonusQty > 0 ? directPoBonusQty : undefined,
         expectedDeliveryDate: directPoExpectedDate,
         paymentTerms: directPoPaymentTerms,
         notes: directPoNotes,
@@ -478,6 +514,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     po.items.forEach((item) => {
       initialMap[item.sku] = {
         quantityReceived: item.remainingBackorder > 0 ? item.remainingBackorder : item.orderedQuantity,
+        bonusQty: item.bonusQty || 0,
         batchNumber: `BAT-${Date.now().toString().slice(-6)}`,
         expiryDate: new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString().split('T')[0],
         qualityCondition: 'Cold-Chain Verified',
@@ -559,6 +596,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       const itemsPayload = Object.entries(receivingItemsState).map(([sku, data]) => ({
         sku,
         quantityReceived: data.quantityReceived,
+        bonusQty: data.bonusQty || 0,
         batchNumber: data.batchNumber,
         expiryDate: data.expiryDate,
         qualityCondition: data.qualityCondition,
@@ -917,6 +955,23 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             </span>
           )}
         </button>
+
+        {!isWarehouseRole && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('debit_notes')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'debit_notes'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+            }`}
+          >
+            <Receipt className="w-4 h-4 text-rose-500" />
+            <span>Rafaksi &amp; Nota Debet</span>
+          </button>
+        )}
       </div>
 
       {/* SECTION 0: PREDICTIVE AUTO-REPLENISHMENT & MIN-MAX PLANNING */}
@@ -1968,6 +2023,206 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         />
       )}
 
+      {/* SECTION 7: SUPPLIER RAFAKSI & TRADING TERM DEBIT NOTES (NOTA DEBET) */}
+      {activeTab === 'debit_notes' && !isWarehouseRole && (
+        <div
+          className={`rounded-2xl border p-5 space-y-5 ${
+            isLight
+              ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
+              : 'bg-zinc-900/90 border-zinc-800'
+          }`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 dark:border-zinc-800 pb-4">
+            <div>
+              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                Supplier Rafaksi &amp; Trading Term Debit Notes (Nota Debet)
+              </h3>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                Claim post-invoice price protection (Rafaksi -&gt; DR #2010 / CR #1040) or Gondola/Listing rebates (DR #2010 / CR #4080) and automatically reduce open AP balances.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadDebitNotes}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer ${
+                isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+              }`}
+            >
+              {isLoadingDebitNotes ? 'Syncing...' : 'Refresh Nota Debet'}
+            </button>
+          </div>
+
+          {canManagePrPo && (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const supplier = dnSupplierName || supplierOptions[0] || '';
+                if (!supplier || dnAmountIDR <= 0 || !dnDescription.trim()) {
+                  onShowToast('Missing Debit Note Fields', 'Select supplier, enter amount > 0, and provide description.');
+                  return;
+                }
+                setIsSubmittingDebitNote(true);
+                try {
+                  const res = await apiClient.createSupplierDebitNote({
+                    storeId: selectedStore !== 'CONSOLIDATED' ? selectedStore : 'store-jkt-senopati',
+                    supplierName: supplier,
+                    category: dnCategory,
+                    vendorBillId: dnVendorBillId || undefined,
+                    sku: dnSku || undefined,
+                    amountIDR: dnAmountIDR,
+                    description: dnDescription.trim(),
+                  });
+                  onShowToast('Nota Debet Issued', res.message);
+                  setDnDescription('');
+                  setDnVendorBillId('');
+                  setDnSku('');
+                  await loadDebitNotes();
+                  onRefreshData();
+                } catch (err: unknown) {
+                  onShowToast('Debit Note Failed', err instanceof Error ? err.message : String(err));
+                } finally {
+                  setIsSubmittingDebitNote(false);
+                }
+              }}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end p-4 rounded-xl border border-gray-200 dark:border-zinc-800 bg-gray-50/70 dark:bg-zinc-800/40"
+            >
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  Supplier
+                </label>
+                <select
+                  value={dnSupplierName || supplierOptions[0] || ''}
+                  onChange={(e) => setDnSupplierName(e.target.value)}
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                  }`}
+                >
+                  {supplierOptions.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  Claim Category
+                </label>
+                <select
+                  value={dnCategory}
+                  onChange={(e) => setDnCategory(e.target.value as SupplierDebitNoteCategory)}
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                  }`}
+                >
+                  <option value="RAFAKSI_HARGA">Rafaksi Harga (CR #1040 HPP)</option>
+                  <option value="GONDOLA_REBATE">Gondola / Listing Rebate (CR #4080)</option>
+                </select>
+              </div>
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  Offset Vendor Bill (Optional)
+                </label>
+                <select
+                  value={dnVendorBillId}
+                  onChange={(e) => setDnVendorBillId(e.target.value)}
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                  }`}
+                >
+                  <option value="">-- Open AP General --</option>
+                  {vendorBills
+                    .filter((b) => b.status !== 'VOID' && b.remainingDue > 0)
+                    .map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.billNumber} ({b.supplierName}) · Due {formatIDR(b.remainingDue * b.exchangeRate)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  Amount (IDR)
+                </label>
+                <input
+                  type="number"
+                  min={1000}
+                  step={1000}
+                  value={dnAmountIDR}
+                  onChange={(e) => setDnAmountIDR(Math.max(1, Number(e.target.value) || 0))}
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                  }`}
+                />
+              </div>
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  Claim Description / Memo
+                </label>
+                <input
+                  type="text"
+                  value={dnDescription}
+                  onChange={(e) => setDnDescription(e.target.value)}
+                  placeholder="e.g. Rafaksi harga promo minyak Q2"
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                  }`}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSubmittingDebitNote}
+                className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white cursor-pointer disabled:opacity-50"
+              >
+                {isSubmittingDebitNote ? 'Posting...' : 'Post Nota Debet'}
+              </button>
+            </form>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className={`border-b ${isLight ? 'bg-gray-50 border-gray-200 text-gray-600' : 'bg-zinc-800/50 border-zinc-800 text-zinc-300'}`}>
+                <tr>
+                  <th className="py-3 px-4 font-semibold">Nota Debet #</th>
+                  <th className="py-3 px-4 font-semibold">Supplier</th>
+                  <th className="py-3 px-4 font-semibold">Category</th>
+                  <th className="py-3 px-4 font-semibold">Linked Bill</th>
+                  <th className="py-3 px-4 font-semibold">Credit Account</th>
+                  <th className="py-3 px-4 font-semibold">Amount (IDR)</th>
+                  <th className="py-3 px-4 font-semibold">Audit &amp; Memo</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+                {debitNotesList.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-xs text-gray-500 dark:text-zinc-400">
+                      No supplier Rafaksi or Trading Term Debit Notes posted yet.
+                    </td>
+                  </tr>
+                ) : (
+                  debitNotesList.map((dn) => (
+                    <tr key={dn.id} className="hover:bg-zinc-500/5">
+                      <td className="py-3 px-4 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{dn.id}</td>
+                      <td className="py-3 px-4 font-semibold">{dn.supplierName}</td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
+                          {dn.category.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px]">{dn.vendorBillId || 'General AP'}</td>
+                      <td className="py-3 px-4 font-mono text-[11px]">DR 2010 / CR {dn.category === 'GONDOLA_REBATE' ? '4080' : '1040'}</td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-700 dark:text-emerald-400">{formatIDR(dn.amountIDR)}</td>
+                      <td className="py-3 px-4">
+                        <div className="text-xs">{dn.description}</div>
+                        <div className="text-[10px] text-gray-400 font-mono">{dn.glEntryIds.join(', ')} · {dn.issuedBy}</div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: INTERACTIVE PARTIAL GOODS RECEIPT */}
       {activeReceivingPO && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -2110,6 +2365,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               {activeReceivingPO.items.map((item, idx) => {
                 const itemState = receivingItemsState[item.sku] || {
                   quantityReceived: item.remainingBackorder,
+                  bonusQty: item.bonusQty || 0,
                   batchNumber: 'BAT-NEW',
                   expiryDate: '',
                   qualityCondition: 'Cold-Chain Verified' as const,
@@ -2137,11 +2393,17 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                         </span>
                       </div>
                       <div className={`text-xs font-mono ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
-                        Ordered: <strong>{item.orderedQuantity}</strong> | Remaining: <strong className="text-amber-600 dark:text-amber-400">{item.remainingBackorder}</strong>
+                        Ordered: <strong>{item.orderedQuantity}</strong>
+                        {(item.bonusQty || 0) > 0 && (
+                          <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold text-[10px]">
+                            +{item.bonusQty} FOC
+                          </span>
+                        )}{' '}
+                        | Remaining: <strong className="text-amber-600 dark:text-amber-400">{item.remainingBackorder}</strong>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                       <div>
                         <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>
                           Quantity Received Now
@@ -2163,6 +2425,30 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                               ? 'bg-white border-slate-300 focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
                               : 'bg-zinc-900 border-zinc-600'
                           }`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>
+                          FOC Bonus Qty (Gratis)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={itemState.bonusQty || 0}
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0);
+                            setReceivingItemsState((prev) => ({
+                              ...prev,
+                              [item.sku]: { ...itemState, bonusQty: val },
+                            }));
+                          }}
+                          className={`w-full px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg border text-emerald-700 dark:text-emerald-300 ${
+                            isLight
+                              ? 'bg-white border-slate-300 focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
+                              : 'bg-zinc-900 border-zinc-600'
+                          }`}
+                          title="Free bonus goods dilute WAC without creating AP liability"
                         />
                       </div>
 
@@ -2652,10 +2938,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
                 <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
-                  Order Qty
+                  Order Qty (Paid)
                 </label>
                 <input
                   type="number"
@@ -2665,6 +2951,21 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
                     isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
                   }`}
+                />
+              </div>
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  FOC Bonus Qty (Free)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={directPoBonusQty}
+                  onChange={(e) => setDirectPoBonusQty(Math.max(0, Number(e.target.value) || 0))}
+                  className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  }`}
+                  title="Free-of-charge bonus units dilute Moving Average Cost cleanly"
                 />
               </div>
               <div>

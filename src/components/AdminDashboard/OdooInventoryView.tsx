@@ -17,6 +17,8 @@ import type {
   StoreOutletSchedule,
   StaffShiftSession,
   WarehouseRackConfig,
+  ReturnableContainerRecord,
+  ReturnableDirection,
 } from '../../types/index.ts';
 import type { AdminDashboardTab } from './AdminSidebar';
 import { apiClient } from '../../services/apiClient';
@@ -93,7 +95,7 @@ interface OdooInventoryViewProps {
   onShowToast: (title: string, message: string) => void;
 }
 
-type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'blind_opname' | 'repack_bundle';
+type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'blind_opname' | 'repack_bundle' | 'returnables';
 type ChannelFilter = 'ALL' | 'B2C' | 'B2B' | 'BOTH';
 type HubScope = 'ALL' | 'CDC' | 'DARK_STORE' | 'RETAIL_FRONTS';
 
@@ -206,6 +208,43 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   const [mediaInspector, setMediaInspector] = useState<MediaInspectorTarget | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [warehouseRacks, setWarehouseRacks] = useState<WarehouseRackConfig[]>([]);
+  const [returnableRecords, setReturnableRecords] = useState<ReturnableContainerRecord[]>([]);
+  const [returnableSummary, setReturnableSummary] = useState<{
+    totalIssuedUnits: number;
+    totalReturnedUnits: number;
+    totalOutstandingUnits: number;
+    customerDepositLiabilityIDR: number;
+    supplierDepositAssetIDR: number;
+  } | null>(null);
+  const [isLoadingReturnables, setIsLoadingReturnables] = useState<boolean>(false);
+  const [isSubmittingReturnable, setIsSubmittingReturnable] = useState<boolean>(false);
+  const [retDirection, setRetDirection] = useState<ReturnableDirection>('OUT_TO_CUSTOMER');
+  const [retContainerType, setRetContainerType] = useState<string>('KRAT_PLASTIK_BUAH');
+  const [retCounterparty, setRetCounterparty] = useState<string>('');
+  const [retQtyIssued, setRetQtyIssued] = useState<number>(10);
+  const [retDepositPerUnit, setRetDepositPerUnit] = useState<number>(50000);
+  const [retRefDoc, setRetRefDoc] = useState<string>('');
+  const [retSettlementAccount, setRetSettlementAccount] = useState<'1010' | '1020' | '1200'>('1010');
+  const [retPartialReturnMap, setRetPartialReturnMap] = useState<Record<string, number>>({});
+
+  const loadReturnables = React.useCallback(async () => {
+    setIsLoadingReturnables(true);
+    try {
+      const res = await apiClient.getReturnableContainers({ storeId: selectedOutletFilter });
+      setReturnableRecords(res.records || []);
+      setReturnableSummary(res.summary || null);
+    } catch {
+      // keep silent on initial load if forbidden for restricted viewer
+    } finally {
+      setIsLoadingReturnables(false);
+    }
+  }, [selectedOutletFilter]);
+
+  React.useEffect(() => {
+    if (viewMode === 'returnables') {
+      loadReturnables();
+    }
+  }, [viewMode, loadReturnables]);
 
   React.useEffect(() => {
     if (viewMode !== 'repack_bundle') return;
@@ -782,6 +821,22 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   >
                     <Scissors className="w-3.5 h-3.5" />
                     Repacking &amp; Bundling
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === 'returnables'}
+                    onClick={() => setViewMode('returnables')}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                      viewMode === 'returnables'
+                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        : isLight
+                        ? 'text-slate-600 hover:text-slate-900'
+                        : 'text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <Boxes className="w-3.5 h-3.5" />
+                    Krat &amp; Galon (Returnable)
                   </button>
                 </>
               )}
@@ -1483,6 +1538,294 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
           }}
           onShowToast={onShowToast}
         />
+      )}
+
+      {/* ===================================================================== */}
+      {/* VIEW 6: RETURNABLE PACKAGING / KRAT & GALON DEPOSIT LEDGER */}
+      {/* ===================================================================== */}
+      {viewMode === 'returnables' && canManageWarehouseTopology && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className={`${cardClass} p-4`}>
+              <div className={`text-xs font-medium ${textMuted}`}>Total Issued Containers</div>
+              <div className={`text-xl font-bold mt-1 font-mono ${textTitle}`}>
+                {returnableSummary?.totalIssuedUnits ?? 0} units
+              </div>
+              <div className={`text-[11px] mt-0.5 ${textMuted}`}>Segregated from COA #1040 Merchandise</div>
+            </div>
+            <div className={`${cardClass} p-4`}>
+              <div className={`text-xs font-medium ${textMuted}`}>Outstanding / Unreturned</div>
+              <div className="text-xl font-bold mt-1 font-mono text-amber-600 dark:text-amber-400">
+                {returnableSummary?.totalOutstandingUnits ?? 0} units
+              </div>
+              <div className={`text-[11px] mt-0.5 ${textMuted}`}>
+                Returned: {returnableSummary?.totalReturnedUnits ?? 0} units
+              </div>
+            </div>
+            <div className={`${cardClass} p-4`}>
+              <div className={`text-xs font-medium ${textMuted}`}>Customer Deposit Liability (#2150)</div>
+              <div className="text-xl font-bold mt-1 font-mono text-[#0F4C3A] dark:text-emerald-400">
+                {formatIDR(returnableSummary?.customerDepositLiabilityIDR ?? 0)}
+              </div>
+              <div className={`text-[11px] mt-0.5 ${textMuted}`}>Krat/Galon on loan to HORECA/B2B</div>
+            </div>
+            <div className={`${cardClass} p-4`}>
+              <div className={`text-xs font-medium ${textMuted}`}>Supplier Deposit Receivable (#1120)</div>
+              <div className="text-xl font-bold mt-1 font-mono text-indigo-600 dark:text-indigo-400">
+                {formatIDR(returnableSummary?.supplierDepositAssetIDR ?? 0)}
+              </div>
+              <div className={`text-[11px] mt-0.5 ${textMuted}`}>Supplier crates/cylinders held in store</div>
+            </div>
+          </div>
+
+          <div className={`${cardClass} p-5 space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className={`text-sm font-bold ${textTitle}`}>
+                  Issue Returnable Container &amp; Book Security Deposit (COA #2150 / #1120)
+                </h3>
+                <p className={`text-xs ${textMuted}`}>
+                  Tracks reusable crates, 19L mineral water galon, LPG cylinders, and wooden pallets cleanly off-inventory.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadReturnables}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer ${
+                  isLight ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                }`}
+              >
+                {isLoadingReturnables ? 'Refreshing...' : 'Refresh Ledger'}
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!retCounterparty.trim() || retQtyIssued <= 0) {
+                  onShowToast('Missing Container Details', 'Enter counterparty name and positive issued quantity.');
+                  return;
+                }
+                setIsSubmittingReturnable(true);
+                try {
+                  const labelMap: Record<string, string> = {
+                    KRAT_PLASTIK_BUAH: 'Krat Plastik Buah/Sayur',
+                    GALON_AIR_19L: 'Galon Air Mineral 19L',
+                    TABUNG_GAS_LPG_12KG: 'Tabung Gas LPG 12kg',
+                    PALLET_KAYU_B2B: 'Pallet Kayu B2B',
+                  };
+                  const res = await apiClient.postReturnableContainer({
+                    action: 'ISSUE',
+                    storeId: selectedOutletFilter === 'CONSOLIDATED' ? 'store-jkt-senopati' : selectedOutletFilter,
+                    direction: retDirection,
+                    containerType: retContainerType,
+                    containerLabel: labelMap[retContainerType] || retContainerType,
+                    counterpartyName: retCounterparty.trim(),
+                    qtyIssued: retQtyIssued,
+                    depositPerUnitIDR: retDepositPerUnit,
+                    referenceDoc: retRefDoc.trim() || undefined,
+                    settlementAccountCode: retSettlementAccount,
+                  });
+                  onShowToast('Returnable Deposit Recorded', res.message);
+                  setRetCounterparty('');
+                  setRetRefDoc('');
+                  await loadReturnables();
+                  if (onRefreshData) await onRefreshData();
+                } catch (err: unknown) {
+                  onShowToast('Returnable Issue Failed', err instanceof Error ? err.message : String(err));
+                } finally {
+                  setIsSubmittingReturnable(false);
+                }
+              }}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end"
+            >
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Direction</label>
+                <select
+                  value={retDirection}
+                  onChange={(e) => setRetDirection(e.target.value as ReturnableDirection)}
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs ${inputClass}`}
+                >
+                  <option value="OUT_TO_CUSTOMER">Out to B2B/HORECA Customer (#2150)</option>
+                  <option value="IN_FROM_SUPPLIER">Held from Supplier (#1120)</option>
+                </select>
+              </div>
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Container Type</label>
+                <select
+                  value={retContainerType}
+                  onChange={(e) => setRetContainerType(e.target.value)}
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs ${inputClass}`}
+                >
+                  <option value="KRAT_PLASTIK_BUAH">Krat Plastik Buah/Sayur</option>
+                  <option value="GALON_AIR_19L">Galon Air Mineral 19L</option>
+                  <option value="TABUNG_GAS_LPG_12KG">Tabung Gas LPG 12kg</option>
+                  <option value="PALLET_KAYU_B2B">Pallet Kayu B2B</option>
+                </select>
+              </div>
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Counterparty Name</label>
+                <input
+                  type="text"
+                  value={retCounterparty}
+                  onChange={(e) => setRetCounterparty(e.target.value)}
+                  placeholder="e.g. Hotel Mulia Senayan"
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs ${inputClass}`}
+                />
+              </div>
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Qty Issued</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={retQtyIssued}
+                  onChange={(e) => setRetQtyIssued(Math.max(1, Number(e.target.value) || 1))}
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono ${inputClass}`}
+                />
+              </div>
+              <div>
+                <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Deposit / Unit (IDR)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1000}
+                  value={retDepositPerUnit}
+                  onChange={(e) => setRetDepositPerUnit(Math.max(0, Number(e.target.value) || 0))}
+                  className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono ${inputClass}`}
+                />
+              </div>
+              <div className="flex gap-2 items-center">
+                <select
+                  value={retSettlementAccount}
+                  onChange={(e) => setRetSettlementAccount(e.target.value as '1010' | '1020' | '1200')}
+                  className={`w-24 px-2 py-2 rounded-lg text-xs font-mono ${inputClass}`}
+                  title="Cash/Bank/AR Counter Account"
+                >
+                  <option value="1010">1010 Kas</option>
+                  <option value="1020">1020 BCA</option>
+                  <option value="1200">1200 AR</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={isSubmittingReturnable}
+                  className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingReturnable ? 'Saving...' : 'Issue Deposit'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className={`${cardClass} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className={tableHeaderClass}>
+                  <tr>
+                    <th className="py-3 px-4">Ref / Store</th>
+                    <th className="py-3 px-4">Container &amp; Direction</th>
+                    <th className="py-3 px-4">Counterparty</th>
+                    <th className="py-3 px-4">Issued / Returned</th>
+                    <th className="py-3 px-4">Deposit Held</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Return Units</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                  {returnableRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className={`py-8 text-center text-xs ${textMuted}`}>
+                        No returnable container movements recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    returnableRecords.map((rec) => {
+                      const outstanding = Math.max(0, rec.qtyIssued - rec.qtyReturned);
+                      const returnInput = retPartialReturnMap[rec.id] ?? outstanding;
+                      return (
+                        <tr key={rec.id} className="hover:bg-zinc-500/5">
+                          <td className="py-3 px-4">
+                            <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{rec.id}</div>
+                            <div className={`text-[11px] ${textMuted}`}>{rec.storeName}</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold">{rec.containerLabel}</div>
+                            <div className={`text-[10px] font-mono ${textMuted}`}>
+                              {rec.direction === 'OUT_TO_CUSTOMER' ? 'Out to Customer (#2150)' : 'In from Supplier (#1120)'}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-medium">{rec.counterpartyName}</td>
+                          <td className="py-3 px-4 font-mono">
+                            <span className="font-bold">{rec.qtyIssued}</span> issued ·{' '}
+                            <span className="text-emerald-600 dark:text-emerald-400">{rec.qtyReturned}</span> returned
+                          </td>
+                          <td className="py-3 px-4 font-mono font-semibold">{formatIDR(rec.depositHeldIDR)}</td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                                rec.status === 'RETURNED'
+                                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                  : rec.status === 'PARTIAL_RETURNED'
+                                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                                  : 'bg-blue-500/15 text-blue-700 dark:text-blue-400'
+                              }`}
+                            >
+                              {rec.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {outstanding > 0 ? (
+                              <div className="inline-flex items-center gap-1.5">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={outstanding}
+                                  value={returnInput}
+                                  onChange={(e) =>
+                                    setRetPartialReturnMap((prev) => ({
+                                      ...prev,
+                                      [rec.id]: Math.max(1, Math.min(outstanding, Number(e.target.value) || 1)),
+                                    }))
+                                  }
+                                  className={`w-16 px-2 py-1 rounded-md text-xs font-mono ${inputClass}`}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isSubmittingReturnable}
+                                  onClick={async () => {
+                                    setIsSubmittingReturnable(true);
+                                    try {
+                                      const res = await apiClient.postReturnableContainer({
+                                        action: 'RETURN',
+                                        id: rec.id,
+                                        qtyReturned: returnInput,
+                                      });
+                                      onShowToast('Containers Returned', res.message);
+                                      await loadReturnables();
+                                      if (onRefreshData) await onRefreshData();
+                                    } catch (err: unknown) {
+                                      onShowToast('Return Failed', err instanceof Error ? err.message : String(err));
+                                    } finally {
+                                      setIsSubmittingReturnable(false);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 rounded-md bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-semibold cursor-pointer disabled:opacity-50"
+                                >
+                                  Return
+                                </button>
+                              </div>
+                            ) : (
+                              <span className={`text-[11px] font-mono ${textMuted}`}>Settled</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ===================================================================== */}

@@ -189,6 +189,12 @@ import type {
   KanvasLedgerResponse,
   PphWithholdingType,
   PphWithholdingRecord,
+  ReturnableContainerRecord,
+  ReturnableDirection,
+  SupplierDebitNote,
+  SupplierDebitNoteCategory,
+  SettlementBatchRecord,
+  UnsettledTenderItem,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -539,6 +545,9 @@ let recallEventsList: Array<{
   affectedUnits: number;
   reason?: string;
 }> = [];
+let returnableContainersList: ReturnableContainerRecord[] = [];
+let supplierDebitNotesList: SupplierDebitNote[] = [];
+let settlementBatchesList: SettlementBatchRecord[] = [];
 
 function createInitialKanvasRoutes(): KanvasRouteRecord[] {
   return [
@@ -1664,6 +1673,60 @@ function ensureRegulatoryCoaAccounts() {
       storeId: 'CONSOLIDATED',
       balance: 0,
       description: 'Creditable Indonesian withholding tax (PPh 22 1.5% / PPh 23 2%) deducted by institutional/HoReCa buyers',
+    },
+    {
+      accountCode: '1120',
+      accountName: 'Returnable Container Deposit Receivable',
+      category: 'Asset',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Refundable deposits placed with suppliers for crates, pallets, 19L galons, and LPG cylinders',
+    },
+    {
+      accountCode: '2030',
+      accountName: 'Outgoing Post-Dated Bilyet Giro Payable',
+      category: 'Liability',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Post-dated supplier Bilyet Giro warkat issued pending bank clearing',
+    },
+    {
+      accountCode: '2150',
+      accountName: 'Returnable Container Deposit Liability',
+      category: 'Liability',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Customer security deposits held for reusable Krat, Galon 19L, and LPG 12kg containers',
+    },
+    {
+      accountCode: '4080',
+      accountName: 'Supplier Rebate & Promotional Income',
+      category: 'Revenue',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Trading term gondola display rebates, listing allowances, and supplier promo credits',
+    },
+    {
+      accountCode: '5020',
+      accountName: 'Natural Commodity Shrinkage (COGS)',
+      category: 'Expense',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Susut timbang alami within configured <=2.5% moisture evaporation tolerance',
+    },
+    {
+      accountCode: '6040',
+      accountName: 'Bank & MDR Fee Expense',
+      category: 'Expense',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'QRIS (0.7%) and EDC card acquiring Merchant Discount Rate (MDR) settlement fees',
     },
   ];
   requiredAccounts.forEach((acc) => {
@@ -5536,6 +5599,9 @@ function captureServerState() {
     consignmentLedger,
     safeDropsList,
     recallEventsList,
+    returnableContainersList,
+    supplierDebitNotesList,
+    settlementBatchesList,
     kanvasRoutes,
     warungKasbonAccounts,
     pphWithholdingList,
@@ -5637,6 +5703,9 @@ function applyServerState(snap: any) {
   consignmentLedger = Array.isArray(snap.consignmentLedger) ? snap.consignmentLedger : [];
   safeDropsList = Array.isArray(snap.safeDropsList) ? snap.safeDropsList : [];
   recallEventsList = Array.isArray(snap.recallEventsList) ? snap.recallEventsList : [];
+  returnableContainersList = Array.isArray(snap.returnableContainersList) ? snap.returnableContainersList : [];
+  supplierDebitNotesList = Array.isArray(snap.supplierDebitNotesList) ? snap.supplierDebitNotesList : [];
+  settlementBatchesList = Array.isArray(snap.settlementBatchesList) ? snap.settlementBatchesList : [];
   kanvasRoutes =
     Array.isArray(snap.kanvasRoutes) && snap.kanvasRoutes.length > 0
       ? snap.kanvasRoutes
@@ -5760,6 +5829,9 @@ async function resetDemoStateToBaseline() {
     consignmentLedger = [];
     safeDropsList = [];
     recallEventsList = [];
+    returnableContainersList = [];
+    supplierDebitNotesList = [];
+    settlementBatchesList = [];
     kanvasRoutes = createInitialKanvasRoutes();
     warungKasbonAccounts = createInitialWarungKasbon();
     pphWithholdingList = createInitialPphWithholdings();
@@ -6103,6 +6175,14 @@ async function startServer() {
       }
 
       if (
+        urlPath === '/admin/procurement/debit-notes' ||
+        urlPath.startsWith('/admin/procurement/debit-notes/')
+      ) {
+        const allowed: CanonicalServerRole[] = ['purchasing', 'admin', 'store_manager', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
+      if (
         urlPath.startsWith('/admin/procurement/requests') ||
         urlPath.startsWith('/admin/procurement/orders') ||
         urlPath === '/admin/procurement/demand-forecast/create-pr' ||
@@ -6120,7 +6200,8 @@ async function startServer() {
       if (
         urlPath === '/admin/procurement/gr/receive-partial' ||
         urlPath === '/admin/procurement/cross-dock' ||
-        urlPath === '/admin/qc/inspections'
+        urlPath === '/admin/qc/inspections' ||
+        urlPath === '/admin/qc/putaway-suggestion'
       ) {
         if (method !== 'GET') {
           const allowed: CanonicalServerRole[] = ['warehouse', 'purchasing', 'store_manager', 'coo', 'super_admin'];
@@ -7616,6 +7697,7 @@ async function startServer() {
       actionTaken = 'bio_compost',
       reportedBy = 'Store Quality Inspector',
       notes = '',
+      toleranceCapPercent,
     } = req.body;
 
     const qty = Number(quantityScrapped);
@@ -7628,84 +7710,155 @@ async function startServer() {
 
     const outlet = storeSchedules.find((s) => s.storeId === storeId);
     const storeName = outlet?.storeName || 'GroceMart Senopati Flagship';
-    const unitCost = item.unitCost;
-    const totalShrinkageCost = qty * unitCost;
-
-    // Deduct stock from catalog
-    item.currentStock = Math.max(0, item.currentStock - qty);
-
-    // Deduct stock from store inventory tier
+    const unitCost = roundIDR(item.unitCost);
+    const totalShrinkageCost = roundIDR(qty * unitCost);
     const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
-    if (tier) {
-      tier.physicalStock = Math.max(0, tier.physicalStock - qty);
-      tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
-      tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
-      tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
-      tier.updatedAt = new Date().toISOString();
+
+    const targetBatch = batchId
+      ? inventoryBatches.find((b) => b.batchId === batchId)
+      : inventoryBatches.find(
+          (b) => b.sku === sku && (b.storeId === storeId || storeId === 'CONSOLIDATED') && b.currentStock > 0
+        );
+
+    const isNaturalMoistureReason = reason === 'NATURAL_MOISTURE_SHRINKAGE';
+    const capPercent = Math.min(15, Math.max(0.1, Number(toleranceCapPercent) || 2.5));
+    const storeBasisQty = Math.max(
+      Number(targetBatch?.initialQuantity || 0),
+      Number(targetBatch?.currentStock || 0),
+      Number(tier?.physicalStock || 0)
+    );
+    const refBasisQty = Math.max(
+      storeBasisQty > 0 && storeId !== 'CONSOLIDATED'
+        ? storeBasisQty
+        : Number(item.currentStock || 0),
+      qty
+    );
+    const shrinkagePercent = refBasisQty > 0 ? Number(((qty / refBasisQty) * 100).toFixed(2)) : 100;
+    const isWithinMoistureCap = isNaturalMoistureReason && shrinkagePercent <= capPercent;
+
+    let immediateQty = qty;
+    let excessQty = 0;
+    if (isNaturalMoistureReason && !isWithinMoistureCap) {
+      immediateQty = Math.min(qty, Number(((refBasisQty * capPercent) / 100).toFixed(2)));
+      excessQty = Math.max(0, Number((qty - immediateQty).toFixed(2)));
     }
 
-    // Deduct from batch if specified or find earliest matching batch
-    let lotNumber = '';
-    if (batchId) {
-      const batch = inventoryBatches.find((b) => b.batchId === batchId);
-      if (batch) {
-        batch.currentStock = Math.max(0, Number((batch.currentStock - qty).toFixed(2)));
-        if (batch.currentStock === 0) batch.status = 'depleted';
-        lotNumber = batch.lotNumber;
+    if (tier && immediateQty > 0 && tier.physicalStock - immediateQty < (tier.reservedStock || 0)) {
+      return res.status(409).json({
+        error: `Cannot write off ${immediateQty} units of ${sku}: ${tier.reservedStock} units currently reserved for active orders.`,
+      });
+    }
+
+    // Deduct immediate stock from catalog, tier, and batch
+    if (immediateQty > 0) {
+      item.currentStock = Math.max(0, Number((item.currentStock - immediateQty).toFixed(2)));
+      if (tier) {
+        tier.physicalStock = Math.max(0, Number((tier.physicalStock - immediateQty).toFixed(2)));
+        tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+        tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+        tier.updatedAt = new Date().toISOString();
       }
-    } else {
-      const earliestBatch = inventoryBatches.find(
-        (b) => b.sku === sku && (b.storeId === storeId || storeId === 'CONSOLIDATED') && b.currentStock > 0
-      );
-      if (earliestBatch) {
-        earliestBatch.currentStock = Math.max(0, Number((earliestBatch.currentStock - qty).toFixed(2)));
-        if (earliestBatch.currentStock === 0) earliestBatch.status = 'depleted';
-        lotNumber = earliestBatch.lotNumber;
+      if (targetBatch) {
+        targetBatch.currentStock = Math.max(0, Number((targetBatch.currentStock - immediateQty).toFixed(2)));
+        if (targetBatch.currentStock === 0) targetBatch.status = 'depleted';
       }
     }
+    const lotNumber = targetBatch?.lotNumber || '';
 
     const wasteId = `WST-2026-${(wasteRecords.length + 1).toString().padStart(3, '0')}`;
     const timestamp = new Date().toISOString();
 
-    // Auto-Post Double-Entry General Ledger journal:
-    // Debit 6030: Inventory Shrinkage & Spoilage Expense
-    // Credit 1040: Merchandise Inventory Asset
-    const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-    const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    ensureRegulatoryCoaAccounts();
+    const immediateCost = isNaturalMoistureReason && excessQty > 0
+      ? roundIDR(immediateQty * unitCost)
+      : totalShrinkageCost;
+    const excessCost = Math.max(0, totalShrinkageCost - immediateCost);
 
-    commitBalancedGlBatch(
-      [
-        {
-          id: gleId1,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: '6030',
-          accountName: 'Inventory Shrinkage & Spoilage Expense',
-          category: 'Expense',
-          debit: totalShrinkageCost,
-          credit: 0,
-          referenceType: 'WASTE_SHRINKAGE',
-          referenceId: wasteId,
-          description: `Shrinkage write-off: ${qty} units of ${item.productName} (${reason.replace(/_/g, ' ')})`,
+    const journalEntryIds: string[] = [];
+    let gleId1 = '';
+    if (immediateCost > 0) {
+      gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      journalEntryIds.push(gleId1, gleId2);
+      const debitCode = isNaturalMoistureReason ? '5020' : '6030';
+      const debitName = isNaturalMoistureReason
+        ? 'Natural Commodity Shrinkage (COGS)'
+        : 'Inventory Shrinkage & Spoilage Expense';
+
+      commitBalancedGlBatch(
+        [
+          {
+            id: gleId1,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: debitCode,
+            accountName: debitName,
+            category: 'Expense',
+            debit: immediateCost,
+            credit: 0,
+            referenceType: 'WASTE_SHRINKAGE',
+            referenceId: wasteId,
+            description: isNaturalMoistureReason
+              ? `Susut Timbang Alami (<= ${capPercent}% tolerance): ${immediateQty} units ${item.productName} (${shrinkagePercent}% vs lot ${refBasisQty})`
+              : `Shrinkage write-off: ${immediateQty} units of ${item.productName} (${reason.replace(/_/g, ' ')})`,
+          },
+          {
+            id: gleId2,
+            timestamp,
+            storeId,
+            storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: 0,
+            credit: immediateCost,
+            referenceType: 'WASTE_SHRINKAGE',
+            referenceId: wasteId,
+            description: `Inventory reduction for ${isNaturalMoistureReason ? 'natural moisture loss' : 'waste loss'} #${wasteId}`,
+          },
+        ],
+        true
+      );
+    }
+
+    let approvalRequestId: string | undefined;
+    if (isNaturalMoistureReason && excessQty > 0) {
+      const actorName = getEffectiveOperatorName(req);
+      approvalRequestId = `APR-SHR-${Date.now().toString().slice(-5)}`;
+      const docId = `STK-SHR-${Date.now().toString().slice(-5)}`;
+      approvalQueueList.unshift({
+        id: approvalRequestId,
+        module: 'stock_adjustment',
+        documentId: docId,
+        documentTitle: `Excess Natural Moisture Shrinkage (${shrinkagePercent}% > ${capPercent}%): ${item.productName}`,
+        requestedBy: reportedBy || actorName,
+        requestedAt: timestamp,
+        amountIDR: excessCost,
+        storeId,
+        storeName,
+        currentTierLevel: 1,
+        requiredTierLevel: excessCost >= 1000000 ? 2 : 1,
+        status: 'PENDING',
+        history: [],
+        payloadSummary: {
+          sku,
+          productName: item.productName,
+          quantity: -excessQty,
+          reason: `Susut timbang ${shrinkagePercent}% exceeds ${capPercent}% cap (${excessQty} excess units -> COA #6030 upon approval)`,
         },
-        {
-          id: gleId2,
-          timestamp,
-          storeId,
-          storeName,
-          accountCode: '1040',
-          accountName: 'Merchandise Inventory Asset',
-          category: 'Asset',
-          debit: 0,
-          credit: totalShrinkageCost,
-          referenceType: 'WASTE_SHRINKAGE',
-          referenceId: wasteId,
-          description: `Inventory reduction for waste loss #${wasteId}`,
-        },
-      ],
-      true
-    );
+      });
+      emitEnterpriseNotification({
+        dedupeKey: `APR_QUEUE:${approvalRequestId}`,
+        category: 'INVENTORY',
+        severity: 'WARNING',
+        title: `Excess Moisture Shrinkage Routed (${item.sku})`,
+        message: `${item.productName} logged ${shrinkagePercent}% loss (exceeds ${capPercent}% cap). Excess ${excessQty} units (Rp ${excessCost.toLocaleString('id-ID')}) pending Approval Matrix -> COA #6030.`,
+        metadataLabel: `${wasteId} • ${shrinkagePercent}%`,
+        targetTab: 'approvals',
+      });
+    }
 
     const newRecord: WasteRecord = {
       id: wasteId,
@@ -7716,25 +7869,46 @@ async function startServer() {
       warehouseZoneId: tier?.warehouseZoneId || 'WH-JKT-SEN-COLD',
       batchId,
       lotNumber: lotNumber || `LOT-${sku.slice(-3)}-MANUAL`,
-      quantityScrapped: qty,
+      quantityScrapped: immediateQty,
       unit: item.unit,
       unitCost,
-      totalShrinkageCost,
+      totalShrinkageCost: immediateCost,
       reason,
       actionTaken,
       reportedBy,
       reportedAt: timestamp,
-      glEntryId: gleId1,
-      notes,
+      glEntryId: gleId1 || undefined,
+      notes: isNaturalMoistureReason
+        ? `${notes ? `${notes} | ` : ''}Susut timbang ${shrinkagePercent}% (Cap ${capPercent}%)${approvalRequestId ? ` — Excess ${excessQty} units queued (${approvalRequestId})` : ' — Within tolerance (COA #5020)'}`
+        : notes,
     };
 
     wasteRecords.unshift(newRecord);
+    scheduleStateSave();
 
     res.json({
       success: true,
-      message: 'Waste logged, inventory deducted, and shrinkage GL journal accrued.',
+      message: isNaturalMoistureReason
+        ? isWithinMoistureCap
+          ? `Natural moisture shrinkage (${shrinkagePercent}% <= ${capPercent}%) posted cleanly to COA #5020 / #1040.`
+          : `Within-cap (${capPercent}%) posted to COA #5020; excess ${excessQty} units (${shrinkagePercent}%) routed to Approval Matrix (${approvalRequestId}) -> COA #6030.`
+        : 'Waste logged, inventory deducted, and shrinkage GL journal accrued.',
       wasteRecord: newRecord,
-      journalEntryIds: [gleId1, gleId2],
+      journalEntryIds,
+      withinTolerance: isNaturalMoistureReason ? isWithinMoistureCap : undefined,
+      shrinkagePercent: isNaturalMoistureReason ? shrinkagePercent : undefined,
+      toleranceCapPercent: isNaturalMoistureReason ? capPercent : undefined,
+      excessRoutedQty: isNaturalMoistureReason ? excessQty : 0,
+      approvalRequestId,
+      naturalMoistureShrinkage: isNaturalMoistureReason
+        ? {
+            tolerancePercent: capPercent,
+            actualShrinkagePercent: shrinkagePercent,
+            withinToleranceQty: immediateQty,
+            excessQtyPendingApproval: excessQty,
+            approvalRequestId,
+          }
+        : undefined,
     });
   });
 
@@ -9185,9 +9359,11 @@ async function startServer() {
       if (!poItem) return;
 
       const receivedQty = Math.max(0, Number(itemInput.quantityReceived) || 0);
-      if (receivedQty === 0) return;
+      const bonusQty = Math.max(0, Number(itemInput.bonusQty) || 0);
+      if (receivedQty === 0 && bonusQty === 0) return;
+      const totalStockAdded = receivedQty + bonusQty;
 
-      // Update PO item line
+      // Update PO item line (only paid quantity reduces backorder)
       poItem.receivedQuantity += receivedQty;
       poItem.remainingBackorder = Math.max(0, poItem.orderedQuantity - poItem.receivedQuantity);
 
@@ -9196,6 +9372,7 @@ async function startServer() {
         poItem.isConsignment || catalogItem?.isConsignment || itemInput.isConsignment
       );
 
+      // FOC bonus goods carry Rp 0 additional payable; Moving Average Cost dilutes over (paid + bonus)
       const itemCost = receivedQty * poItem.unitCost;
       grTotalCost += itemCost;
       if (isConsignmentItem) {
@@ -9203,12 +9380,15 @@ async function startServer() {
       } else {
         ownedGrTotalCost += itemCost;
       }
+      const dilutedUnitCost =
+        totalStockAdded > 0 ? Math.round(itemCost / totalStockAdded) : poItem.unitCost;
 
       grItemsReceived.push({
         sku: poItem.sku,
         productName: poItem.productName,
         quantityOrdered: poItem.orderedQuantity,
         quantityReceived: receivedQty,
+        bonusQty: bonusQty > 0 ? bonusQty : undefined,
         batchNumber: itemInput.batchNumber || `BAT-${Date.now().toString().slice(-6)}`,
         expiryDate: itemInput.expiryDate,
         qualityCondition: itemInput.qualityCondition || 'Passed - Grade A',
@@ -9216,11 +9396,11 @@ async function startServer() {
         isConsignment: isConsignmentItem,
       });
 
-      // Update catalog inventory item with Moving Average Cost (WAC)
+      // Update catalog inventory item with Moving Average Cost (WAC) diluted across paid + FOC bonus units
       if (catalogItem) {
         const oldStock = Math.max(0, Number(catalogItem.currentStock) || 0);
         const oldCost = Number(catalogItem.wacUnitCost ?? catalogItem.unitCost ?? poItem.unitCost) || 0;
-        const newTotalStock = oldStock + receivedQty;
+        const newTotalStock = oldStock + totalStockAdded;
         const newWac =
           newTotalStock > 0
             ? Math.round(((oldStock * oldCost) + (receivedQty * poItem.unitCost)) / newTotalStock)
@@ -9236,8 +9416,8 @@ async function startServer() {
         catalogItem.stockBatches = catalogItem.stockBatches || [];
         catalogItem.stockBatches.push({
           batchId: itemInput.batchNumber || `BAT-${Date.now().toString().slice(-6)}`,
-          quantity: receivedQty,
-          unitCost: poItem.unitCost,
+          quantity: totalStockAdded,
+          unitCost: dilutedUnitCost,
           receivedAt: new Date().toISOString(),
         });
       }
@@ -9251,7 +9431,7 @@ async function startServer() {
       if (tier) {
         const tierOldStock = Math.max(0, Number(tier.physicalStock) || 0);
         const tierOldCost = Number(tier.unitCost ?? catalogItem?.wacUnitCost ?? poItem.unitCost) || 0;
-        const tierNewStock = tierOldStock + receivedQty;
+        const tierNewStock = tierOldStock + totalStockAdded;
         const tierNewWac =
           tierNewStock > 0
             ? Math.round(((tierOldStock * tierOldCost) + (receivedQty * poItem.unitCost)) / tierNewStock)
@@ -9262,7 +9442,7 @@ async function startServer() {
         }
         tier.physicalStock = tierNewStock;
         if (isQuarantineHold) {
-          tier.reservedStock = Math.min(tierNewStock, (tier.reservedStock || 0) + receivedQty);
+          tier.reservedStock = Math.min(tierNewStock, (tier.reservedStock || 0) + totalStockAdded);
         }
         tier.availableStock = Math.max(0, tier.physicalStock - tier.reservedStock);
         tier.totalValuation = isConsignmentItem ? 0 : Math.round(tier.physicalStock * tier.unitCost);
@@ -9290,9 +9470,9 @@ async function startServer() {
         storeName: po.storeName,
         warehouseZoneId: tier?.warehouseZoneId || warehouseZoneId,
         lotNumber: lotCode,
-        initialQuantity: receivedQty,
-        currentStock: receivedQty,
-        unitCost: poItem.unitCost,
+        initialQuantity: totalStockAdded,
+        currentStock: totalStockAdded,
+        unitCost: dilutedUnitCost,
         sellingPrice: catalogItem?.sellingPrice || Math.round(poItem.unitCost * 1.45),
         receivedDate: new Date().toISOString(),
         expiryDate: expiryIso,
@@ -9309,6 +9489,8 @@ async function startServer() {
         sourcePoNumber: po.id,
         notes: isConsignmentItem
           ? `Consignment (Titip Jual) received via GR against ${po.id} — Zero #1040/#2010 GL on receipt`
+          : bonusQty > 0
+          ? `Received ${receivedQty} paid + ${bonusQty} FOC bonus via GR against ${po.id} (WAC diluted to Rp ${dilutedUnitCost.toLocaleString('id-ID')})`
           : `Received via GR against ${po.id}`,
         isConsignment: isConsignmentItem,
         consignmentSupplier: isConsignmentItem ? (poItem.consignmentSupplier || catalogItem?.consignmentSupplier || po.supplierName) : undefined,
@@ -9959,6 +10141,12 @@ async function startServer() {
       ? 'Natural Shrinkage / Evaporation Loss'
       : 'Anomalous Spoilage Loss';
 
+    ensureRegulatoryCoaAccounts();
+    const shrinkAccountCode = isWithinNaturalTolerance ? '5020' : '6030';
+    const shrinkAccountName = isWithinNaturalTolerance
+      ? 'Natural Commodity Shrinkage (COGS)'
+      : 'Inventory Shrinkage & Spoilage Expense';
+
     commitBalancedGlBatch(
       [
         {
@@ -9966,8 +10154,8 @@ async function startServer() {
           timestamp,
           storeId,
           storeName,
-          accountCode: '6030',
-          accountName: 'Inventory Shrinkage & Spoilage Expense',
+          accountCode: shrinkAccountCode,
+          accountName: shrinkAccountName,
           category: 'Expense',
           debit: totalLossCost,
           credit: 0,
@@ -13080,54 +13268,261 @@ async function startServer() {
     });
   });
 
+  // Standalone Post-Dated Bilyet Giro Registration (INCOMING COA #1030 / OUTGOING COA #2030)
+  app.post('/api/b2b/giro', (req: Request, res: Response) => {
+    const {
+      direction = 'INCOMING',
+      counterpartyName,
+      giroNumber,
+      issuingBank,
+      amountIDR,
+      clearingDueDate,
+      orderOrBillRef,
+    } = (req.body || {}) as {
+      direction?: 'INCOMING' | 'OUTGOING';
+      counterpartyName?: string;
+      giroNumber?: string;
+      issuingBank?: string;
+      amountIDR?: number;
+      clearingDueDate?: string;
+      orderOrBillRef?: string;
+    };
+
+    const cleanCounterparty = String(counterpartyName || '').trim();
+    const cleanGiroNo = String(giroNumber || '').trim();
+    const cleanBank = String(issuingBank || '').trim() || 'Bank Central Asia (BCA)';
+    const nominal = roundIDR(Number(amountIDR) || 0);
+    if (!cleanCounterparty || !cleanGiroNo || nominal <= 0) {
+      return res.status(400).json({
+        error: 'counterpartyName, giroNumber, and positive amountIDR are required.',
+      });
+    }
+
+    ensureRegulatoryCoaAccounts();
+    const timestamp = new Date().toISOString();
+    const giroId = `GIRO-2026-${(giroRecordsList.length + 1).toString().padStart(3, '0')}`;
+    const dueIso = clearingDueDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+    const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const isOutgoing = direction === 'OUTGOING';
+    const settlementCoaCode = isOutgoing ? '2030' : '1030';
+
+    if (isOutgoing) {
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '2010',
+            accountName: 'Trade Accounts Payable (Vendors)',
+            category: 'Liability',
+            debit: nominal,
+            credit: 0,
+            referenceType: 'GIRO_PDC_ISSUE',
+            referenceId: giroId,
+            description: `Outgoing Bilyet Giro #${cleanGiroNo} (${cleanBank}) issued to ${cleanCounterparty}`,
+          },
+          {
+            id: gle2,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '2030',
+            accountName: 'Outgoing Post-Dated Bilyet Giro Payable',
+            category: 'Liability',
+            debit: 0,
+            credit: nominal,
+            referenceType: 'GIRO_PDC_ISSUE',
+            referenceId: giroId,
+            description: `Post-dated supplier Giro Warkat #${cleanGiroNo} maturity ${dueIso}`,
+          },
+        ],
+        true
+      );
+    } else {
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '1030',
+            accountName: 'QRIS Settlement & PDC Giro Receivable',
+            category: 'Asset',
+            debit: nominal,
+            credit: 0,
+            referenceType: 'GIRO_PDC_ISSUE',
+            referenceId: giroId,
+            description: `Incoming Bilyet Giro #${cleanGiroNo} (${cleanBank}) received from ${cleanCounterparty}`,
+          },
+          {
+            id: gle2,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '1200',
+            accountName: 'Accounts Receivable - B2B Wholesale',
+            category: 'Asset',
+            debit: 0,
+            credit: nominal,
+            referenceType: 'GIRO_PDC_ISSUE',
+            referenceId: giroId,
+            description: `B2B AR settled into post-dated Giro clearing #${cleanGiroNo}`,
+          },
+        ],
+        true
+      );
+    }
+
+    const matchedCust = b2bCustomersList.find(
+      (c) => c.companyName.toLowerCase() === cleanCounterparty.toLowerCase()
+    );
+    const matchedBill = isOutgoing && orderOrBillRef
+      ? vendorBillsList.find((b) => b.id === orderOrBillRef || b.billNumber === orderOrBillRef)
+      : undefined;
+
+    const newGiro: GiroPaymentRecord = {
+      id: giroId,
+      orderId: String(orderOrBillRef || '').trim() || (isOutgoing ? `AP-${cleanGiroNo}` : `AR-${cleanGiroNo}`),
+      customerName: cleanCounterparty,
+      customerId: matchedCust?.id || 'STANDALONE-COUNTERPARTY',
+      giroNumber: cleanGiroNo,
+      issuingBank: cleanBank,
+      amountIDR: nominal,
+      issueDate: timestamp,
+      clearingDueDate: dueIso,
+      status: 'PENDING_CLEARING',
+      direction: isOutgoing ? 'OUTGOING' : 'INCOMING',
+      vendorBillId: matchedBill?.id,
+      settlementCoaCode,
+      journalEntryIds: [gle1, gle2],
+    };
+
+    giroRecordsList.unshift(newGiro);
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'FINANCE',
+      action: 'BILYET_GIRO_REGISTERED',
+      referenceId: cleanGiroNo,
+      summary: `Registered ${direction} Bilyet Giro #${cleanGiroNo} (${cleanBank}) for ${cleanCounterparty} Rp ${nominal.toLocaleString('id-ID')} via COA #${settlementCoaCode}.`,
+    });
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      giro: newGiro,
+      glEntryIds: [gle1, gle2],
+      message: `${direction} Bilyet Giro #${cleanGiroNo} (Rp ${nominal.toLocaleString('id-ID')}) registered on COA #${settlementCoaCode}.`,
+    });
+  });
+
   // Giro Clearing Action
   app.post('/api/b2b/giro/:id/clear', (req: Request, res: Response) => {
     const { id } = req.params;
     const giro = giroRecordsList.find((g) => g.id === id);
     if (!giro) return res.status(404).json({ error: 'Giro record not found' });
     if (giro.status === 'CLEARED') return res.status(400).json({ error: 'Giro has already been cleared' });
+    if (giro.status === 'BOUNCED') {
+      return res.status(400).json({ error: 'Cannot clear a Bilyet Giro that has already BOUNCED.' });
+    }
 
+    ensureRegulatoryCoaAccounts();
     const timestamp = new Date().toISOString();
     giro.status = 'CLEARED';
     giro.clearedAt = timestamp;
 
     const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const isOutgoing = giro.direction === 'OUTGOING' || giro.settlementCoaCode === '2030';
+    const clearingCoa = giro.settlementCoaCode || '1210';
+    const requestedDest = req.body?.destinationAccountCode === '1010'
+      ? '1010'
+      : req.body?.destinationAccountCode === '1020'
+      ? '1020'
+      : clearingCoa === '1030' || isOutgoing
+      ? '1010'
+      : '1020';
+    const destName =
+      requestedDest === '1010'
+        ? 'Cash on Hand & Store Registers'
+        : 'Bank BCA Operational Clearing';
 
-    // Debit Bank BCA #1020 / Credit Giro Receivable #1210 via balanced COA-synced GL batch
-    commitBalancedGlBatch(
-      [
-        {
-          id: gle1,
-          timestamp,
-          storeId: 'CONSOLIDATED',
-          storeName: 'Consolidated Company-Wide',
-          accountCode: '1020',
-          accountName: 'Bank BCA Operational Clearing',
-          category: 'Asset',
-          debit: giro.amountIDR,
-          credit: 0,
-          referenceType: 'GIRO_CLEARING',
-          referenceId: giro.id,
-          description: `Bilyet Giro #${giro.giroNumber} cleared into Bank BCA from ${giro.customerName}`,
-        },
-        {
-          id: gle2,
-          timestamp,
-          storeId: 'CONSOLIDATED',
-          storeName: 'Consolidated Company-Wide',
-          accountCode: '1210',
-          accountName: 'Bilyet Giro & PDC Clearing Receivable',
-          category: 'Asset',
-          debit: 0,
-          credit: giro.amountIDR,
-          referenceType: 'GIRO_CLEARING',
-          referenceId: giro.id,
-          description: `Settlement of cleared Giro Warkat #${giro.giroNumber}`,
-        },
-      ],
-      true
-    );
+    if (isOutgoing) {
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '2030',
+            accountName: 'Outgoing Post-Dated Bilyet Giro Payable',
+            category: 'Liability',
+            debit: giro.amountIDR,
+            credit: 0,
+            referenceType: 'GIRO_CLEARING',
+            referenceId: giro.id,
+            description: `Outgoing Bilyet Giro #${giro.giroNumber} cleared to ${giro.customerName}`,
+          },
+          {
+            id: gle2,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: requestedDest,
+            accountName: destName,
+            category: 'Asset',
+            debit: 0,
+            credit: giro.amountIDR,
+            referenceType: 'GIRO_CLEARING',
+            referenceId: giro.id,
+            description: `Bank/Cash disbursement for cleared outgoing Giro #${giro.giroNumber}`,
+          },
+        ],
+        true
+      );
+    } else {
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: requestedDest,
+            accountName: destName,
+            category: 'Asset',
+            debit: giro.amountIDR,
+            credit: 0,
+            referenceType: 'GIRO_CLEARING',
+            referenceId: giro.id,
+            description: `Bilyet Giro #${giro.giroNumber} cleared into #${requestedDest} from ${giro.customerName}`,
+          },
+          {
+            id: gle2,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: clearingCoa,
+            accountName:
+              clearingCoa === '1030'
+                ? 'QRIS Settlement & PDC Giro Receivable'
+                : 'Bilyet Giro & PDC Clearing Receivable',
+            category: 'Asset',
+            debit: 0,
+            credit: giro.amountIDR,
+            referenceType: 'GIRO_CLEARING',
+            referenceId: giro.id,
+            description: `Settlement of cleared Giro Warkat #${giro.giroNumber}`,
+          },
+        ],
+        true
+      );
+    }
 
     const linkedOrder = b2bOrdersList.find((o) => o.id === giro.orderId);
     if (linkedOrder) {
@@ -13135,8 +13530,8 @@ async function startServer() {
       if (linkedOrder.status === 'PENDING_FINANCE') linkedOrder.status = 'CONFIRMED';
     }
 
-    // Update customer available credit
-    const customer = b2bCustomersList.find((c) => c.id === giro.customerId);
+    // Update customer available credit for incoming B2B giros
+    const customer = !isOutgoing ? b2bCustomersList.find((c) => c.id === giro.customerId) : undefined;
     if (customer) {
       customer.outstandingAR = Math.max(0, customer.outstandingAR - giro.amountIDR);
       customer.availableCredit = Math.max(0, customer.creditLimit - customer.outstandingAR);
@@ -13152,14 +13547,15 @@ async function startServer() {
       module: 'FINANCE',
       action: 'BILYET_GIRO_CLEARED',
       referenceId: giro.giroNumber,
-      summary: `Cleared Bilyet Giro #${giro.giroNumber} (Rp ${giro.amountIDR.toLocaleString('id-ID')}) from ${giro.customerName} into Bank BCA (#1020).`,
+      summary: `Cleared ${isOutgoing ? 'OUTGOING' : 'INCOMING'} Bilyet Giro #${giro.giroNumber} (Rp ${giro.amountIDR.toLocaleString('id-ID')}) with ${giro.customerName} via COA #${requestedDest}.`,
     });
+    scheduleStateSave();
 
     res.json({
       success: true,
       giro,
       journalEntryIds: [gle1, gle2],
-      message: `Bilyet Giro #${giro.giroNumber} marked as CLEARED. Funds deposited into Bank BCA (#1020).`,
+      message: `Bilyet Giro #${giro.giroNumber} marked as CLEARED (COA #${requestedDest}).`,
     });
   });
 
@@ -13170,113 +13566,161 @@ async function startServer() {
     const giro = giroRecordsList.find((g) => g.id === id);
     if (!giro) return res.status(404).json({ error: 'Giro record not found' });
     if (giro.status === 'BOUNCED') return res.status(400).json({ error: 'Giro has already been marked as bounced' });
+    if (giro.status === 'CLEARED') {
+      return res.status(400).json({ error: 'Cannot bounce a Bilyet Giro that has already CLEARED into Bank BCA.' });
+    }
 
+    ensureRegulatoryCoaAccounts();
     const timestamp = new Date().toISOString();
-    const penaltyFee = 150000; // Rp 150,000 standard bounced check administrative penalty fee
+    const isOutgoing = giro.direction === 'OUTGOING' || giro.settlementCoaCode === '2030';
+    const penaltyFee = isOutgoing ? 0 : 150000; // Rp 150,000 standard bounced check administrative penalty fee for incoming customer checks
     giro.status = 'BOUNCED';
     giro.bouncedAt = timestamp;
     giro.bounceReason = reason;
     giro.penaltyFeeIDR = penaltyFee;
 
-    const customer = b2bCustomersList.find((c) => c.id === giro.customerId);
-    if (customer) {
-      // Re-open debt and auto-lock customer credit
-      customer.outstandingAR += penaltyFee;
-      customer.availableCredit = Math.max(0, customer.creditLimit - customer.outstandingAR);
-      customer.status = 'CREDIT_LOCKED';
-      customer.lockReason = `DISHONORED BILYET GIRO: Giro #${giro.giroNumber} bounced (${reason}). Credit facility frozen pending full cashier restitution.`;
-    }
-
-    emitEnterpriseNotification({
-      dedupeKey: `GIRO_BOUNCED:${giro.id}`,
-      category: 'B2B_FINANCE',
-      severity: 'CRITICAL',
-      title: `Bilyet Giro Tolakan / Bounced (#${giro.giroNumber})`,
-      message: `${giro.customerName} Giro Rp ${giro.amountIDR.toLocaleString('id-ID')} bounced. Credit FROZEN & COA #4090 penalty Rp ${penaltyFee.toLocaleString('id-ID')} booked.`,
-      metadataLabel: `${giro.giroNumber} • Frozen AR`,
-      targetTab: 'accounting',
-      targetSubTab: 'b2b_ar',
-    });
-
-    const linkedOrder = b2bOrdersList.find((o) => o.id === giro.orderId);
-    if (linkedOrder) {
-      linkedOrder.paymentStatus = 'BOUNCED';
-    }
-
     const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
     const gle3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
     const gle4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
+    const journalEntryIds: string[] = [gle1, gle2];
 
-    // Re-open AR: Debit AR #1200 / Credit Giro Receivable #1210 via balanced COA-synced batch
-    commitBalancedGlBatch(
-      [
-        {
-          id: gle1,
-          timestamp,
-          storeId: 'CONSOLIDATED',
-          storeName: 'Consolidated Company-Wide',
-          accountCode: '1200',
-          accountName: 'Accounts Receivable - B2B Wholesale',
-          category: 'Asset',
-          debit: giro.amountIDR,
-          credit: 0,
-          referenceType: 'GIRO_BOUNCED',
-          referenceId: giro.id,
-          description: `Dishonored Giro #${giro.giroNumber}: Re-opened AR debt for ${giro.customerName}`,
-        },
-        {
-          id: gle2,
-          timestamp,
-          storeId: 'CONSOLIDATED',
-          storeName: 'Consolidated Company-Wide',
-          accountCode: '1210',
-          accountName: 'Bilyet Giro & PDC Clearing Receivable',
-          category: 'Asset',
-          debit: 0,
-          credit: giro.amountIDR,
-          referenceType: 'GIRO_BOUNCED',
-          referenceId: giro.id,
-          description: `Removal of bounced Giro Warkat #${giro.giroNumber} from clearing queue`,
-        },
-      ],
-      true
-    );
+    let customer: B2BCustomer | undefined;
 
-    // Penalty Fee: Debit AR #1200 / Credit Giro Penalty Income #4090 via balanced COA-synced batch
-    commitBalancedGlBatch(
-      [
-        {
-          id: gle3,
-          timestamp,
-          storeId: 'CONSOLIDATED',
-          storeName: 'Consolidated Company-Wide',
-          accountCode: '1200',
-          accountName: 'Accounts Receivable - B2B Wholesale',
-          category: 'Asset',
-          debit: penaltyFee,
-          credit: 0,
-          referenceType: 'GIRO_BOUNCED_PENALTY',
-          referenceId: giro.id,
-          description: `Administrative penalty surcharge on bounced Giro #${giro.giroNumber}`,
-        },
-        {
-          id: gle4,
-          timestamp,
-          storeId: 'CONSOLIDATED',
-          storeName: 'Consolidated Company-Wide',
-          accountCode: '4090',
-          accountName: 'Giro Bounced Penalty & Admin Surcharge Income',
-          category: 'Revenue',
-          debit: 0,
-          credit: penaltyFee,
-          referenceType: 'GIRO_BOUNCED_PENALTY',
-          referenceId: giro.id,
-          description: `Fee income recognized on dishonored check #${giro.giroNumber}`,
-        },
-      ],
-      true
-    );
+    if (isOutgoing) {
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '2030',
+            accountName: 'Outgoing Post-Dated Bilyet Giro Payable',
+            category: 'Liability',
+            debit: giro.amountIDR,
+            credit: 0,
+            referenceType: 'GIRO_BOUNCED',
+            referenceId: giro.id,
+            description: `Reversed dishonored outgoing Giro #${giro.giroNumber} (${giro.customerName})`,
+          },
+          {
+            id: gle2,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '2010',
+            accountName: 'Trade Accounts Payable (Vendors)',
+            category: 'Liability',
+            debit: 0,
+            credit: giro.amountIDR,
+            referenceType: 'GIRO_BOUNCED',
+            referenceId: giro.id,
+            description: `Re-instated supplier AP for bounced outgoing Giro #${giro.giroNumber}`,
+          },
+        ],
+        true
+      );
+    } else {
+      customer = b2bCustomersList.find((c) => c.id === giro.customerId);
+      if (customer) {
+        customer.outstandingAR += penaltyFee;
+        customer.availableCredit = Math.max(0, customer.creditLimit - customer.outstandingAR);
+        customer.status = 'CREDIT_LOCKED';
+        customer.lockReason = `DISHONORED BILYET GIRO: Giro #${giro.giroNumber} bounced (${reason}). Credit facility frozen pending full cashier restitution.`;
+      }
+
+      emitEnterpriseNotification({
+        dedupeKey: `GIRO_BOUNCED:${giro.id}`,
+        category: 'B2B_FINANCE',
+        severity: 'CRITICAL',
+        title: `Bilyet Giro Tolakan / Bounced (#${giro.giroNumber})`,
+        message: `${giro.customerName} Giro Rp ${giro.amountIDR.toLocaleString('id-ID')} bounced. Credit FROZEN & COA #4090 penalty Rp ${penaltyFee.toLocaleString('id-ID')} booked.`,
+        metadataLabel: `${giro.giroNumber} • Frozen AR`,
+        targetTab: 'accounting',
+        targetSubTab: 'b2b_ar',
+      });
+
+      const linkedOrder = b2bOrdersList.find((o) => o.id === giro.orderId);
+      if (linkedOrder) {
+        linkedOrder.paymentStatus = 'BOUNCED';
+      }
+
+      const clearingCoa = giro.settlementCoaCode || '1210';
+      // Re-open AR: Debit AR #1200 / Credit Giro Receivable (#1210 or #1030)
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '1200',
+            accountName: 'Accounts Receivable - B2B Wholesale',
+            category: 'Asset',
+            debit: giro.amountIDR,
+            credit: 0,
+            referenceType: 'GIRO_BOUNCED',
+            referenceId: giro.id,
+            description: `Dishonored Giro #${giro.giroNumber}: Re-opened AR debt for ${giro.customerName}`,
+          },
+          {
+            id: gle2,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: clearingCoa,
+            accountName:
+              clearingCoa === '1030'
+                ? 'QRIS Settlement & PDC Giro Receivable'
+                : 'Bilyet Giro & PDC Clearing Receivable',
+            category: 'Asset',
+            debit: 0,
+            credit: giro.amountIDR,
+            referenceType: 'GIRO_BOUNCED',
+            referenceId: giro.id,
+            description: `Removal of bounced Giro Warkat #${giro.giroNumber} from clearing queue`,
+          },
+        ],
+        true
+      );
+
+      // Penalty Fee: Debit AR #1200 / Credit Giro Penalty Income #4090
+      journalEntryIds.push(gle3, gle4);
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle3,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '1200',
+            accountName: 'Accounts Receivable - B2B Wholesale',
+            category: 'Asset',
+            debit: penaltyFee,
+            credit: 0,
+            referenceType: 'GIRO_BOUNCED_PENALTY',
+            referenceId: giro.id,
+            description: `Administrative penalty surcharge on bounced Giro #${giro.giroNumber}`,
+          },
+          {
+            id: gle4,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '4090',
+            accountName: 'Giro Bounced Penalty & Admin Surcharge Income',
+            category: 'Revenue',
+            debit: 0,
+            credit: penaltyFee,
+            referenceType: 'GIRO_BOUNCED_PENALTY',
+            referenceId: giro.id,
+            description: `Fee income recognized on dishonored check #${giro.giroNumber}`,
+          },
+        ],
+        true
+      );
+    }
 
     appendAuditTrailLog({
       req,
@@ -13284,16 +13728,19 @@ async function startServer() {
       module: 'FINANCE',
       action: 'BILYET_GIRO_BOUNCED',
       referenceId: giro.giroNumber,
-      summary: `Marked Bilyet Giro #${giro.giroNumber} (Rp ${giro.amountIDR.toLocaleString('id-ID')}) BOUNCED for ${giro.customerName}; Rp 150.000 penalty booked & credit frozen.`,
+      summary: `Marked ${isOutgoing ? 'OUTGOING' : 'INCOMING'} Bilyet Giro #${giro.giroNumber} (Rp ${giro.amountIDR.toLocaleString('id-ID')}) BOUNCED for ${giro.customerName}.`,
     });
+    scheduleStateSave();
 
     res.json({
       success: true,
       giro,
       customer,
       penaltyFee,
-      journalEntryIds: [gle1, gle2, gle3, gle4],
-      message: `Giro #${giro.giroNumber} marked as BOUNCED. AR re-opened, Rp 150.000 penalty assessed, and customer credit frozen.`,
+      journalEntryIds,
+      message: isOutgoing
+        ? `Outgoing Giro #${giro.giroNumber} marked BOUNCED and Trade AP (#2010) reinstated.`
+        : `Giro #${giro.giroNumber} marked as BOUNCED. AR re-opened, Rp 150.000 penalty assessed, and customer credit frozen.`,
     });
   });
 
@@ -13445,19 +13892,24 @@ async function startServer() {
     if (billTaxIDR > 0) {
       const id = nextGleId();
       glIds.push(id);
+      const isNonCreditable = Boolean(bill.isNonCreditableVat);
       approvalGlBatch.push({
         id,
         timestamp,
         storeId: bill.storeId,
         storeName: bill.storeName,
-        accountCode: '2026',
-        accountName: 'PPN Masukan (VAT Input Creditable)',
+        accountCode: isNonCreditable ? '1040' : '2026',
+        accountName: isNonCreditable
+          ? 'Merchandise Inventory Asset (Capitalized Non-Creditable VAT)'
+          : 'PPN Masukan (VAT Input Creditable)',
         category: 'Asset',
         debit: billTaxIDR,
         credit: 0,
         referenceType: 'VENDOR_BILL',
         referenceId: bill.id,
-        description: `Input VAT (${bill.taxPercent}%) booked for Vendor Bill #${bill.id} [${bill.billNumber}]`,
+        description: isNonCreditable
+          ? `Non-Creditable Input VAT (${bill.taxPercent}%) capitalized to Inventory Asset #1040 for Vendor Bill #${bill.id} [${bill.billNumber}]`
+          : `Input VAT (${bill.taxPercent}%) booked for Vendor Bill #${bill.id} [${bill.billNumber}]`,
       });
     }
 
@@ -13589,6 +14041,7 @@ async function startServer() {
       exchangeRate = 1,
       items = [],
       taxPercent = 11,
+      isNonCreditableVat = false,
       notes,
       autoApprove = false,
     } = req.body;
@@ -13699,6 +14152,7 @@ async function startServer() {
       subtotal,
       taxPercent: Number(taxPercent) || 0,
       taxAmount,
+      isNonCreditableVat: Boolean(isNonCreditableVat),
       grandTotal,
       grandTotalIDR,
       amountPaid: 0,
@@ -20637,6 +21091,7 @@ async function startServer() {
       const g1 = `GLE-STK-SH-${batchTag}-1`;
       const g2 = `GLE-STK-SH-${batchTag}-2`;
       glIds.push(g1, g2);
+      const isNaturalMoisture = Boolean((sub as any).isNaturalMoistureWithinCap);
       commitBalancedGlBatch(
         [
           {
@@ -20644,14 +21099,18 @@ async function startServer() {
             timestamp,
             storeId: sub.storeId,
             storeName: sub.storeName,
-            accountCode: '6030',
-            accountName: 'Inventory Shrinkage Expense',
+            accountCode: isNaturalMoisture ? '5020' : '6030',
+            accountName: isNaturalMoisture
+              ? 'Natural Commodity Shrinkage (COGS)'
+              : 'Inventory Shrinkage Expense',
             category: 'Expense',
             debit: sub.totalShortageValueIDR,
             credit: 0,
             referenceType: 'STOCK_OPNAME',
             referenceId: sub.sheetNumber,
-            description: `Rack Blind Opname Shortage (${sub.rackBinCode} · ${sub.sheetNumber}) authorized by ${approverName}`,
+            description: isNaturalMoisture
+              ? `Rack Opname Susut Timbang Alami (${sub.rackBinCode} · ${sub.sheetNumber}) <= 2.5%`
+              : `Rack Blind Opname Shortage (${sub.rackBinCode} · ${sub.sheetNumber}) authorized by ${approverName}`,
           },
           {
             id: g2,
@@ -21500,7 +21959,13 @@ async function startServer() {
           : Math.abs(varianceQty) > 0
           ? 100
           : 0;
-      if (linePct > Number(tolerancePercent) && Math.abs(varianceQty) > 2) {
+      const lineReason = (c as any).reason || (req.body as any)?.reason;
+      const isNaturalMoistureLine = lineReason === 'NATURAL_MOISTURE_SHRINKAGE' && varianceQty < 0;
+      if (isNaturalMoistureLine) {
+        if (linePct > 2.5) {
+          exceedsThreshold = true;
+        }
+      } else if (linePct > Number(tolerancePercent) && Math.abs(varianceQty) > 2) {
         exceedsThreshold = true;
       }
 
@@ -21533,8 +21998,9 @@ async function startServer() {
       }
     }
 
+    const isNaturalOpnameRequest = (req.body as any)?.reason === 'NATURAL_MOISTURE_SHRINKAGE';
     const totalAbsVarianceIDR = totalSurplusValueIDR + totalShortageValueIDR;
-    if (totalAbsVarianceIDR > Number(toleranceValueIDR)) {
+    if (!isNaturalOpnameRequest && totalAbsVarianceIDR > Number(toleranceValueIDR)) {
       exceedsThreshold = true;
     }
 
@@ -21561,6 +22027,9 @@ async function startServer() {
       lines,
       notes,
     };
+    if (isNaturalOpnameRequest && !exceedsThreshold) {
+      (submission as any).isNaturalMoistureWithinCap = true;
+    }
 
     const mustRouteToApproval =
       exceedsThreshold && (!isSupervisorRole || supervisorAuthorized === false);
@@ -24187,6 +24656,7 @@ async function startServer() {
       supplierName,
       sku,
       quantity,
+      bonusQty = 0,
       expectedDeliveryDate,
       paymentTerms = 'Net 30',
       notes,
@@ -24195,6 +24665,7 @@ async function startServer() {
       supplierName?: string;
       sku?: string;
       quantity?: number;
+      bonusQty?: number;
       expectedDeliveryDate?: string;
       paymentTerms?: 'Net 30' | 'COD' | 'Advance Payment';
       notes?: string;
@@ -24203,6 +24674,7 @@ async function startServer() {
     const cleanSupplier = String(supplierName || '').trim();
     const cleanSku = String(sku || '').trim();
     const qty = Math.floor(Number(quantity));
+    const parsedBonusQty = Math.max(0, Math.floor(Number(bonusQty) || 0));
     if (!cleanSupplier || !cleanSku || !Number.isFinite(qty) || qty <= 0) {
       return res.status(400).json({
         error: 'Supplier, product SKU, and positive quantity are required to issue a Purchase Order.',
@@ -24241,6 +24713,7 @@ async function startServer() {
           sku: cleanSku,
           productName: inv?.productName || tier?.productName || cleanSku,
           orderedQuantity: qty,
+          bonusQty: parsedBonusQty > 0 ? parsedBonusQty : undefined,
           receivedQuantity: 0,
           remainingBackorder: qty,
           unitCost,
@@ -24939,6 +25412,774 @@ async function startServer() {
         totalWithheldIDR: totalPph22IDR + totalPph23IDR,
       },
       message: `Bukti Potong ${pphType} (${ratePercent}%) Rp ${withheldAmountIDR.toLocaleString('id-ID')} berhasil diposting (DR 1160 / CR 1200).`,
+    });
+  });
+
+  // =============================================================
+  // PRECISION PACK: RETURNABLE CONTAINERS, SUPPLIER DEBIT NOTES & SETTLEMENT RECONCILE
+  // =============================================================
+  app.get('/api/admin/inventory/returnable-containers', (req: Request, res: Response) => {
+    const { storeId, direction } = req.query as { storeId?: string; direction?: ReturnableDirection | 'ALL' };
+    const scope = resolveRequestBranchScope(req);
+    let list = [...returnableContainersList];
+    if (scope.isBranchScoped && scope.storeId !== 'ALL' && scope.storeId !== 'CONSOLIDATED') {
+      list = list.filter((r) => r.storeId === scope.storeId);
+    } else if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((r) => r.storeId === storeId);
+    }
+    if (direction && direction !== 'ALL') {
+      list = list.filter((r) => r.direction === direction);
+    }
+
+    const totalIssuedUnits = list.reduce((s, r) => s + r.qtyIssued, 0);
+    const totalReturnedUnits = list.reduce((s, r) => s + r.qtyReturned, 0);
+    const totalOutstandingUnits = list.reduce((s, r) => s + r.qtyOutstanding, 0);
+    const customerDepositLiabilityIDR = list
+      .filter((r) => r.direction === 'OUT_TO_CUSTOMER')
+      .reduce((s, r) => s + r.depositHeldIDR, 0);
+    const supplierDepositAssetIDR = list
+      .filter((r) => r.direction === 'IN_FROM_SUPPLIER')
+      .reduce((s, r) => s + r.depositHeldIDR, 0);
+
+    res.json({
+      records: list,
+      summary: {
+        totalIssuedUnits,
+        totalReturnedUnits,
+        totalOutstandingUnits,
+        customerDepositLiabilityIDR,
+        supplierDepositAssetIDR,
+      },
+    });
+  });
+
+  app.post('/api/admin/inventory/returnable-containers', (req: Request, res: Response) => {
+    const {
+      action = 'ISSUE',
+      id,
+      storeId = 'store-jkt-senopati',
+      containerType = 'KRAT_PLASTIK_BUAH',
+      containerLabel,
+      direction = 'OUT_TO_CUSTOMER',
+      counterpartyName,
+      referenceDoc,
+      settlementAccountCode = '1010',
+      qtyIssued,
+      qtyReturned,
+      depositPerUnitIDR = 0,
+      notes,
+    } = (req.body || {}) as {
+      action?: 'ISSUE' | 'RETURN';
+      id?: string;
+      storeId?: string;
+      containerType?: string;
+      containerLabel?: string;
+      direction?: ReturnableDirection;
+      counterpartyName?: string;
+      referenceDoc?: string;
+      settlementAccountCode?: '1010' | '1020' | '1200';
+      qtyIssued?: number;
+      qtyReturned?: number;
+      depositPerUnitIDR?: number;
+      notes?: string;
+    };
+
+    ensureRegulatoryCoaAccounts();
+    const timestamp = new Date().toISOString();
+    const actorName = getEffectiveOperatorName(req);
+
+    if (action === 'RETURN') {
+      const record = returnableContainersList.find((r) => r.id === id);
+      if (!record) return res.status(404).json({ error: `Returnable container record '${id}' not found.` });
+
+      const branchViolation = checkBranchIsolationViolation(req, record.storeId);
+      if (branchViolation) {
+        return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: branchViolation });
+      }
+
+      const retQty = Math.floor(Number(qtyReturned) || 0);
+      if (!Number.isFinite(retQty) || retQty <= 0) {
+        return res.status(400).json({ error: 'Positive qtyReturned is required.' });
+      }
+      if (retQty > record.qtyOutstanding) {
+        return res.status(400).json({
+          error: `Return quantity (${retQty}) exceeds outstanding units (${record.qtyOutstanding}).`,
+        });
+      }
+
+      const newOutstanding = record.qtyOutstanding - retQty;
+      const refundDepositIDR =
+        newOutstanding === 0
+          ? record.depositHeldIDR
+          : Math.min(record.depositHeldIDR, roundIDR(retQty * record.depositPerUnitIDR));
+
+      record.qtyReturned += retQty;
+      record.qtyOutstanding = newOutstanding;
+      record.depositHeldIDR = Math.max(0, record.depositHeldIDR - refundDepositIDR);
+      record.status = newOutstanding === 0 ? 'RETURNED' : 'PARTIAL_RETURNED';
+      record.updatedAt = timestamp;
+      if (notes) record.notes = `${record.notes ? `${record.notes} | ` : ''}${notes}`;
+
+      const glIds: string[] = [];
+      if (refundDepositIDR > 0) {
+        const g1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+        const g2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+        glIds.push(g1, g2);
+        const cashOrBankCode = record.settlementAccountCode || '1010';
+        const cashOrBankName =
+          cashOrBankCode === '1020'
+            ? 'Bank BCA Operational Clearing'
+            : cashOrBankCode === '1200'
+            ? 'Accounts Receivable - B2B Wholesale'
+            : 'Cash on Hand & Store Registers';
+
+        if (record.direction === 'OUT_TO_CUSTOMER') {
+          commitBalancedGlBatch(
+            [
+              {
+                id: g1,
+                timestamp,
+                storeId: record.storeId,
+                storeName: record.storeName,
+                accountCode: '2150',
+                accountName: 'Returnable Container Deposit Liability',
+                category: 'Liability',
+                debit: refundDepositIDR,
+                credit: 0,
+                referenceType: 'RETURNABLE_CONTAINER',
+                referenceId: record.id,
+                description: `Reversed container deposit liability on return of ${retQty}x ${record.containerLabel} (${record.counterpartyName})`,
+              },
+              {
+                id: g2,
+                timestamp,
+                storeId: record.storeId,
+                storeName: record.storeName,
+                accountCode: cashOrBankCode,
+                accountName: cashOrBankName,
+                category: 'Asset',
+                debit: 0,
+                credit: refundDepositIDR,
+                referenceType: 'RETURNABLE_CONTAINER',
+                referenceId: record.id,
+                description: `Deposit refunded/credited for returned ${record.containerLabel} #${record.id}`,
+              },
+            ],
+            true
+          );
+        } else {
+          commitBalancedGlBatch(
+            [
+              {
+                id: g1,
+                timestamp,
+                storeId: record.storeId,
+                storeName: record.storeName,
+                accountCode: cashOrBankCode === '1200' ? '1010' : cashOrBankCode,
+                accountName: cashOrBankCode === '1020' ? 'Bank BCA Operational Clearing' : 'Cash on Hand & Store Registers',
+                category: 'Asset',
+                debit: refundDepositIDR,
+                credit: 0,
+                referenceType: 'RETURNABLE_CONTAINER',
+                referenceId: record.id,
+                description: `Supplier container deposit refunded on return of ${retQty}x ${record.containerLabel} to ${record.counterpartyName}`,
+              },
+              {
+                id: g2,
+                timestamp,
+                storeId: record.storeId,
+                storeName: record.storeName,
+                accountCode: '1120',
+                accountName: 'Returnable Container Deposit Receivable',
+                category: 'Asset',
+                debit: 0,
+                credit: refundDepositIDR,
+                referenceType: 'RETURNABLE_CONTAINER',
+                referenceId: record.id,
+                description: `Cleared supplier container deposit receivable #${record.id}`,
+              },
+            ],
+            true
+          );
+        }
+        record.glEntryIds.push(...glIds);
+      }
+
+      appendAuditTrailLog({
+        req,
+        actorName,
+        branchScope: record.storeId,
+        module: 'INVENTORY',
+        action: 'RETURNABLE_CONTAINER_RETURNED',
+        referenceId: record.id,
+        summary: `Returned ${retQty}x ${record.containerLabel} (${record.direction}) with ${record.counterpartyName}; deposit reversed Rp ${refundDepositIDR.toLocaleString('id-ID')}.`,
+      });
+      scheduleStateSave();
+
+      return res.json({
+        success: true,
+        record,
+        glEntryIds: glIds,
+        message: `Returned ${retQty}x ${record.containerLabel}. Deposit Rp ${refundDepositIDR.toLocaleString('id-ID')} reversed cleanly.`,
+      });
+    }
+
+    // ISSUE new returnable container record
+    const cleanCounterparty = String(counterpartyName || '').trim();
+    const issued = Math.floor(Number(qtyIssued) || 0);
+    const unitDeposit = Math.max(0, roundIDR(Number(depositPerUnitIDR) || 0));
+    if (!cleanCounterparty || !Number.isFinite(issued) || issued <= 0) {
+      return res.status(400).json({ error: 'counterpartyName and positive qtyIssued are required.' });
+    }
+
+    const outlet = resolveOutletFromCodeOrId(storeId) || {
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+    };
+    const branchViolation = checkBranchIsolationViolation(req, outlet.storeId);
+    if (branchViolation) {
+      return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: branchViolation });
+    }
+
+    const labelMap: Record<string, string> = {
+      KRAT_PLASTIK_BUAH: 'Krat Plastik Buah/Sayur',
+      GALON_AIR_19L: 'Galon Air Mineral 19L',
+      TABUNG_GAS_LPG_12KG: 'Tabung Gas LPG 12kg',
+      PALLET_KAYU_B2B: 'Pallet Kayu B2B',
+    };
+    const resolvedLabel = String(containerLabel || '').trim() || labelMap[containerType] || containerType;
+    const totalDepositIDR = roundIDR(issued * unitDeposit);
+    const recId = `KRT-2026-${(returnableContainersList.length + 1).toString().padStart(3, '0')}`;
+    const settleAcc: '1010' | '1020' | '1200' =
+      settlementAccountCode === '1020' ? '1020' : settlementAccountCode === '1200' ? '1200' : '1010';
+    const settleAccName =
+      settleAcc === '1020'
+        ? 'Bank BCA Operational Clearing'
+        : settleAcc === '1200'
+        ? 'Accounts Receivable - B2B Wholesale'
+        : 'Cash on Hand & Store Registers';
+
+    const glIds: string[] = [];
+    if (totalDepositIDR > 0) {
+      const g1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const g2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      glIds.push(g1, g2);
+
+      if (direction === 'OUT_TO_CUSTOMER') {
+        commitBalancedGlBatch(
+          [
+            {
+              id: g1,
+              timestamp,
+              storeId: outlet.storeId,
+              storeName: outlet.storeName,
+              accountCode: settleAcc,
+              accountName: settleAccName,
+              category: 'Asset',
+              debit: totalDepositIDR,
+              credit: 0,
+              referenceType: 'RETURNABLE_CONTAINER',
+              referenceId: recId,
+              description: `Container security deposit received for ${issued}x ${resolvedLabel} loaned to ${cleanCounterparty}`,
+            },
+            {
+              id: g2,
+              timestamp,
+              storeId: outlet.storeId,
+              storeName: outlet.storeName,
+              accountCode: '2150',
+              accountName: 'Returnable Container Deposit Liability',
+              category: 'Liability',
+              debit: 0,
+              credit: totalDepositIDR,
+              referenceType: 'RETURNABLE_CONTAINER',
+              referenceId: recId,
+              description: `Container deposit liability held for ${cleanCounterparty} (#${recId})`,
+            },
+          ],
+          true
+        );
+      } else {
+        commitBalancedGlBatch(
+          [
+            {
+              id: g1,
+              timestamp,
+              storeId: outlet.storeId,
+              storeName: outlet.storeName,
+              accountCode: '1120',
+              accountName: 'Returnable Container Deposit Receivable',
+              category: 'Asset',
+              debit: totalDepositIDR,
+              credit: 0,
+              referenceType: 'RETURNABLE_CONTAINER',
+              referenceId: recId,
+              description: `Deposit placed with supplier ${cleanCounterparty} for ${issued}x ${resolvedLabel}`,
+            },
+            {
+              id: g2,
+              timestamp,
+              storeId: outlet.storeId,
+              storeName: outlet.storeName,
+              accountCode: settleAcc === '1200' ? '1010' : settleAcc,
+              accountName: settleAcc === '1020' ? 'Bank BCA Operational Clearing' : 'Cash on Hand & Store Registers',
+              category: 'Asset',
+              debit: 0,
+              credit: totalDepositIDR,
+              referenceType: 'RETURNABLE_CONTAINER',
+              referenceId: recId,
+              description: `Cash/Bank deposit paid for returnable supplier containers #${recId}`,
+            },
+          ],
+          true
+        );
+      }
+    }
+
+    const newRec: ReturnableContainerRecord = {
+      id: recId,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      storeId: outlet.storeId,
+      storeName: outlet.storeName,
+      containerType,
+      containerLabel: resolvedLabel,
+      direction,
+      counterpartyName: cleanCounterparty,
+      referenceDoc: referenceDoc ? String(referenceDoc).trim() : undefined,
+      settlementAccountCode: settleAcc,
+      qtyIssued: issued,
+      qtyReturned: 0,
+      qtyOutstanding: issued,
+      depositPerUnitIDR: unitDeposit,
+      totalDepositIDR,
+      depositHeldIDR: totalDepositIDR,
+      status: 'OPEN',
+      glEntryIds: glIds,
+      notes: notes ? String(notes).trim() : undefined,
+    };
+
+    returnableContainersList.unshift(newRec);
+    appendAuditTrailLog({
+      req,
+      actorName,
+      branchScope: outlet.storeId,
+      module: 'INVENTORY',
+      action: 'RETURNABLE_CONTAINER_ISSUED',
+      referenceId: recId,
+      summary: `Issued ${issued}x ${resolvedLabel} (${direction}) with ${cleanCounterparty}; deposit Rp ${totalDepositIDR.toLocaleString('id-ID')}.`,
+    });
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      record: newRec,
+      glEntryIds: glIds,
+      message: `Recorded ${issued}x ${resolvedLabel} (${direction}) with Rp ${totalDepositIDR.toLocaleString('id-ID')} deposit.`,
+    });
+  });
+
+  app.get('/api/admin/procurement/debit-notes', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    let list = [...supplierDebitNotesList];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((d) => d.storeId === storeId);
+    }
+    res.json(list);
+  });
+
+  app.post('/api/admin/procurement/debit-notes', (req: Request, res: Response) => {
+    const {
+      storeId = 'store-jkt-senopati',
+      supplierName,
+      category = 'RAFAKSI_HARGA',
+      sku,
+      vendorBillId,
+      amountIDR,
+      description,
+    } = (req.body || {}) as {
+      storeId?: string;
+      supplierName?: string;
+      category?: SupplierDebitNoteCategory;
+      sku?: string;
+      vendorBillId?: string;
+      amountIDR?: number;
+      description?: string;
+    };
+
+    const cleanSupplier = String(supplierName || '').trim();
+    const cleanDesc = String(description || '').trim();
+    const nominal = roundIDR(Number(amountIDR) || 0);
+    if (!cleanSupplier || !cleanDesc || nominal <= 0) {
+      return res.status(400).json({
+        error: 'supplierName, positive amountIDR, and description are required.',
+      });
+    }
+
+    const outlet = resolveOutletFromCodeOrId(storeId) || {
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+    };
+    const branchViolation = checkBranchIsolationViolation(req, outlet.storeId);
+    if (branchViolation) {
+      return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: branchViolation });
+    }
+
+    if (vendorBillId) {
+      const bill = vendorBillsList.find((b) => b.id === vendorBillId || b.billNumber === vendorBillId);
+      if (!bill) return res.status(404).json({ error: `Vendor Bill '${vendorBillId}' not found.` });
+      if (bill.status === 'VOID') {
+        return res.status(400).json({ error: `Cannot apply Debit Note to VOID Vendor Bill #${bill.billNumber}.` });
+      }
+      const exRate = bill.exchangeRate || 1;
+      const openIDR =
+        bill.remainingBalanceIDR !== undefined
+          ? roundIDR(bill.remainingBalanceIDR)
+          : roundIDR(bill.remainingDue * exRate);
+      if (nominal > openIDR) {
+        return res.status(400).json({
+          error: `Debit Note amount (Rp ${nominal.toLocaleString('id-ID')}) exceeds open Vendor Bill balance (Rp ${openIDR.toLocaleString('id-ID')}).`,
+        });
+      }
+      const nextDueIDR = Math.max(0, openIDR - nominal);
+      const deductionInBillCurrency = exRate > 1 ? Number((nominal / exRate).toFixed(2)) : nominal;
+      bill.amountPaid =
+        exRate > 1
+          ? Number(((bill.amountPaid || 0) + deductionInBillCurrency).toFixed(2))
+          : roundIDR((bill.amountPaid || 0) + deductionInBillCurrency);
+      bill.remainingBalanceIDR = nextDueIDR;
+      bill.remainingDue = exRate > 1 ? Number((nextDueIDR / exRate).toFixed(2)) : nextDueIDR;
+      bill.paymentStatus = nextDueIDR === 0 ? 'PAID' : 'PARTIALLY_PAID';
+      if (nextDueIDR === 0) {
+        bill.status = 'PAID';
+        bill.paidAt = new Date().toISOString();
+      }
+      const dnNoteTag = `Debit Note offset Rp ${nominal.toLocaleString('id-ID')} (${category})`;
+      bill.notes = bill.notes ? `${bill.notes} | ${dnNoteTag}` : dnNoteTag;
+    }
+
+    ensureRegulatoryCoaAccounts();
+    const timestamp = new Date().toISOString();
+    const dnId = `DN-2026-${(supplierDebitNotesList.length + 1).toString().padStart(3, '0')}`;
+    const g1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const g2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const isRebate = category === 'GONDOLA_REBATE';
+    const invItem = sku ? inventoryList.find((i) => i.sku === sku) : undefined;
+
+    commitBalancedGlBatch(
+      [
+        {
+          id: g1,
+          timestamp,
+          storeId: outlet.storeId,
+          storeName: outlet.storeName,
+          accountCode: '2010',
+          accountName: 'Trade Accounts Payable (Vendors)',
+          category: 'Liability',
+          debit: nominal,
+          credit: 0,
+          referenceType: 'SUPPLIER_DEBIT_NOTE',
+          referenceId: dnId,
+          description: `Nota Debet #${dnId} (${category}) reducing AP for ${cleanSupplier}`,
+        },
+        {
+          id: g2,
+          timestamp,
+          storeId: outlet.storeId,
+          storeName: outlet.storeName,
+          accountCode: isRebate ? '4080' : '1040',
+          accountName: isRebate
+            ? 'Supplier Rebate & Promotional Income'
+            : 'Merchandise Inventory Asset',
+          category: isRebate ? 'Revenue' : 'Asset',
+          debit: 0,
+          credit: nominal,
+          referenceType: 'SUPPLIER_DEBIT_NOTE',
+          referenceId: dnId,
+          description: isRebate
+            ? `Trading term / gondola rebate recognized from ${cleanSupplier} (#${dnId})`
+            : `Rafaksi Harga inventory cost adjustment credit from ${cleanSupplier} (#${dnId})`,
+        },
+      ],
+      true
+    );
+
+    const actorName = getEffectiveOperatorName(req);
+    const newDn: SupplierDebitNote = {
+      id: dnId,
+      createdAt: timestamp,
+      storeId: outlet.storeId,
+      storeName: outlet.storeName,
+      supplierName: cleanSupplier,
+      category,
+      sku: invItem?.sku || (sku ? String(sku).trim() : undefined),
+      productName: invItem?.productName,
+      vendorBillId: vendorBillId ? String(vendorBillId).trim() : undefined,
+      amountIDR: nominal,
+      description: cleanDesc,
+      issuedBy: actorName,
+      glEntryIds: [g1, g2],
+    };
+
+    supplierDebitNotesList.unshift(newDn);
+    appendAuditTrailLog({
+      req,
+      actorName,
+      branchScope: outlet.storeId,
+      module: 'PROCUREMENT',
+      action: 'SUPPLIER_DEBIT_NOTE_ISSUED',
+      referenceId: dnId,
+      summary: `Issued Supplier Debit Note ${dnId} (${category}) to ${cleanSupplier} for Rp ${nominal.toLocaleString('id-ID')}.`,
+    });
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      debitNote: newDn,
+      glEntryIds: [g1, g2],
+      message: `Nota Debet ${dnId} (${category}) Rp ${nominal.toLocaleString('id-ID')} posted cleanly.`,
+    });
+  });
+
+  app.get('/api/admin/accounting/settlement-reconcile', (_req: Request, res: Response) => {
+    ensureRegulatoryCoaAccounts();
+    const settledIds = new Set(settlementBatchesList.flatMap((b) => b.receiptIds || []));
+    const unsettledQrisItems: UnsettledTenderItem[] = [];
+    const unsettledEdcItems: UnsettledTenderItem[] = [];
+
+    posTransactionsHistory.forEach((rcpt) => {
+      if (settledIds.has(rcpt.receiptNumber)) return;
+      const splitLegs = (rcpt as any).splitPayments as Array<{ method: string; amountIDR: number }> | undefined;
+      if (Array.isArray(splitLegs) && splitLegs.length > 0) {
+        const qrisSum = splitLegs
+          .filter((l) => l.method === 'QRIS')
+          .reduce((s, l) => s + roundIDR(l.amountIDR || 0), 0);
+        const edcSum = splitLegs
+          .filter((l) => l.method === 'DEBIT_CARD' || l.method === 'CREDIT_CARD')
+          .reduce((s, l) => s + roundIDR(l.amountIDR || 0), 0);
+        if (qrisSum > 0) {
+          unsettledQrisItems.push({
+            id: rcpt.receiptNumber,
+            timestamp: rcpt.timestamp,
+            storeId: rcpt.storeId,
+            storeName: rcpt.storeName,
+            channel: 'QRIS',
+            paymentMethod: 'QRIS (Split)',
+            amountIDR: qrisSum,
+            customerOrRef: rcpt.qrisRef || rcpt.receiptNumber,
+          });
+        }
+        if (edcSum > 0) {
+          unsettledEdcItems.push({
+            id: rcpt.receiptNumber,
+            timestamp: rcpt.timestamp,
+            storeId: rcpt.storeId,
+            storeName: rcpt.storeName,
+            channel: 'EDC',
+            paymentMethod: 'EDC Card (Split)',
+            amountIDR: edcSum,
+            customerOrRef: rcpt.receiptNumber,
+          });
+        }
+      } else if (rcpt.paymentMethod === 'qris') {
+        unsettledQrisItems.push({
+          id: rcpt.receiptNumber,
+          timestamp: rcpt.timestamp,
+          storeId: rcpt.storeId,
+          storeName: rcpt.storeName,
+          channel: 'QRIS',
+          paymentMethod: 'QRIS',
+          amountIDR: roundIDR(rcpt.total || 0),
+          customerOrRef: rcpt.qrisRef || rcpt.receiptNumber,
+        });
+      } else if (rcpt.paymentMethod === 'debit_card' || rcpt.paymentMethod === 'credit_card') {
+        unsettledEdcItems.push({
+          id: rcpt.receiptNumber,
+          timestamp: rcpt.timestamp,
+          storeId: rcpt.storeId,
+          storeName: rcpt.storeName,
+          channel: 'EDC',
+          paymentMethod: rcpt.paymentMethod === 'debit_card' ? 'Debit Card' : 'Credit Card',
+          amountIDR: roundIDR(rcpt.total || 0),
+          customerOrRef: rcpt.receiptNumber,
+        });
+      }
+    });
+
+    const qrisAcc = chartOfAccounts.find((c) => c.accountCode === '1030');
+    const edcPendingSum = unsettledEdcItems.reduce((s, i) => s + i.amountIDR, 0);
+
+    res.json({
+      qrisReceivableCoaBalanceIDR: roundIDR(qrisAcc?.balance || 0),
+      edcClearingPendingIDR: edcPendingSum,
+      defaultQrisMdrPercent: 0.7,
+      defaultEdcMdrPercent: 1.0,
+      unsettledQrisItems,
+      unsettledEdcItems,
+      batches: settlementBatchesList,
+    });
+  });
+
+  app.post('/api/admin/accounting/settlement-reconcile', (req: Request, res: Response) => {
+    const {
+      channel = 'QRIS',
+      grossAmountIDR,
+      mdrPercent,
+      destinationAccountCode = '1020',
+      sourceAccountCode,
+      receiptIds = [],
+      storeId = 'CONSOLIDATED',
+      notes,
+    } = (req.body || {}) as {
+      channel?: 'QRIS' | 'EDC';
+      grossAmountIDR?: number;
+      mdrPercent?: number;
+      destinationAccountCode?: '1020' | '1010';
+      sourceAccountCode?: '1030' | '1020';
+      receiptIds?: string[];
+      storeId?: string;
+      notes?: string;
+    };
+
+    const resolvedChannel: 'QRIS' | 'EDC' = channel === 'EDC' ? 'EDC' : 'QRIS';
+    const effectiveMdrPercent =
+      mdrPercent !== undefined && mdrPercent !== null && String(mdrPercent) !== ''
+        ? Number(mdrPercent)
+        : resolvedChannel === 'QRIS'
+        ? 0.7
+        : 1.0;
+
+    if (!Number.isFinite(effectiveMdrPercent) || effectiveMdrPercent < 0 || effectiveMdrPercent > 15) {
+      return res.status(400).json({ error: 'mdrPercent must be between 0% and 15%.' });
+    }
+
+    const grossIDR = roundIDR(Number(grossAmountIDR) || 0);
+    if (!Number.isFinite(grossIDR) || grossIDR <= 0) {
+      return res.status(400).json({ error: 'Positive grossAmountIDR is required to reconcile settlement batch.' });
+    }
+
+    ensureRegulatoryCoaAccounts();
+    const mdrFeeIDR = Math.round((grossIDR * effectiveMdrPercent) / 100);
+    const netSettledIDR = grossIDR - mdrFeeIDR;
+    const srcCode: '1030' | '1020' =
+      sourceAccountCode === '1020' || sourceAccountCode === '1030'
+        ? sourceAccountCode
+        : resolvedChannel === 'QRIS'
+        ? '1030'
+        : '1020';
+    const destCode: '1020' | '1010' = destinationAccountCode === '1010' ? '1010' : '1020';
+
+    const srcName =
+      srcCode === '1030'
+        ? 'QRIS Settlement Receivable (ASPI Clearing)'
+        : 'Bank BCA Operational Clearing';
+    const destName =
+      destCode === '1010'
+        ? 'Cash on Hand & Store Registers'
+        : 'Bank BCA Operational Clearing';
+
+    const outlet = storeId && storeId !== 'CONSOLIDATED' ? resolveOutletFromCodeOrId(storeId) : null;
+    const resolvedStoreId = outlet?.storeId || 'CONSOLIDATED';
+    const resolvedStoreName = outlet?.storeName || 'Consolidated Company-Wide';
+
+    const timestamp = new Date().toISOString();
+    const batchId = `STL-2026-${(settlementBatchesList.length + 1).toString().padStart(3, '0')}`;
+    const g1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const g2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+    const g3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
+
+    const glBatch: GeneralLedgerEntry[] = [
+      {
+        id: g1,
+        timestamp,
+        storeId: resolvedStoreId,
+        storeName: resolvedStoreName,
+        accountCode: destCode,
+        accountName: destName,
+        category: 'Asset',
+        debit: netSettledIDR,
+        credit: 0,
+        referenceType: 'SETTLEMENT_RECONCILE',
+        referenceId: batchId,
+        description: `${resolvedChannel} Batch Settlement #${batchId} net proceeds (MDR ${effectiveMdrPercent}%)`,
+      },
+    ];
+    const glIds = [g1];
+
+    if (mdrFeeIDR > 0) {
+      glIds.push(g2);
+      glBatch.push({
+        id: g2,
+        timestamp,
+        storeId: resolvedStoreId,
+        storeName: resolvedStoreName,
+        accountCode: '6040',
+        accountName: 'Bank & MDR Fee Expense',
+        category: 'Expense',
+        debit: mdrFeeIDR,
+        credit: 0,
+        referenceType: 'SETTLEMENT_RECONCILE',
+        referenceId: batchId,
+        description: `${resolvedChannel} MDR Fee (${effectiveMdrPercent}%) deducted on batch #${batchId}`,
+      });
+    }
+
+    glIds.push(g3);
+    glBatch.push({
+      id: g3,
+      timestamp,
+      storeId: resolvedStoreId,
+      storeName: resolvedStoreName,
+      accountCode: srcCode,
+      accountName: srcName,
+      category: 'Asset',
+      debit: 0,
+      credit: grossIDR,
+      referenceType: 'SETTLEMENT_RECONCILE',
+      referenceId: batchId,
+      description: `Cleared ${resolvedChannel} gross clearing balance #${batchId}`,
+    });
+
+    commitBalancedGlBatch(glBatch, true);
+
+    const actorName = getEffectiveOperatorName(req);
+    const cleanReceiptIds = Array.isArray(receiptIds) ? receiptIds.map((r) => String(r)) : [];
+    const newBatch: SettlementBatchRecord = {
+      id: batchId,
+      timestamp,
+      storeId: resolvedStoreId,
+      storeName: resolvedStoreName,
+      channel: resolvedChannel,
+      grossAmountIDR: grossIDR,
+      mdrPercent: effectiveMdrPercent,
+      mdrFeeIDR,
+      netSettledIDR,
+      sourceAccountCode: srcCode,
+      destinationAccountCode: destCode,
+      receiptCount: cleanReceiptIds.length,
+      receiptIds: cleanReceiptIds,
+      reconciledBy: actorName,
+      glEntryIds: glIds,
+      notes: notes ? String(notes).trim() : undefined,
+    };
+
+    settlementBatchesList.unshift(newBatch);
+    appendAuditTrailLog({
+      req,
+      actorName,
+      branchScope: resolvedStoreId,
+      module: 'FINANCE',
+      action: 'SETTLEMENT_BATCH_RECONCILED',
+      referenceId: batchId,
+      summary: `Reconciled ${resolvedChannel} batch ${batchId}: Gross Rp ${grossIDR.toLocaleString('id-ID')} -> Net Rp ${netSettledIDR.toLocaleString('id-ID')} (#${destCode}) + MDR Rp ${mdrFeeIDR.toLocaleString('id-ID')} (#6040, ${effectiveMdrPercent}%).`,
+    });
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      batch: newBatch,
+      glEntryIds: glIds,
+      message: `${resolvedChannel} batch ${batchId} reconciled: Net Rp ${netSettledIDR.toLocaleString('id-ID')} to #${destCode} & MDR Rp ${mdrFeeIDR.toLocaleString('id-ID')} to #6040.`,
     });
   });
 

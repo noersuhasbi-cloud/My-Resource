@@ -158,6 +158,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   const [currencyInput, setCurrencyInput] = useState<SupportedCurrency>('IDR');
   const [taxPercentInput, setTaxPercentInput] = useState<number>(11);
   const [billNotesInput, setBillNotesInput] = useState<string>('');
+  const [isNonCreditableVatInput, setIsNonCreditableVatInput] = useState<boolean>(false);
   const [autoApproveInput, setAutoApproveInput] = useState<boolean>(canApprovePayVoidBill);
   const [isSubmittingBill, setIsSubmittingBill] = useState(false);
 
@@ -344,6 +345,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
         exchangeRate: FX_RATES[currencyInput].rate,
         items: itemsPayload,
         taxPercent: taxPercentInput,
+        isNonCreditableVat: isNonCreditableVatInput,
         notes: billNotesInput.trim(),
         autoApprove: autoApproveInput,
       });
@@ -356,6 +358,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
         setIsCreateModalOpen(false);
         setInvoiceNumberInput('');
         setBillNotesInput('');
+        setIsNonCreditableVatInput(false);
         setItemBilledOverrides({});
         onRefreshData();
       }
@@ -1208,11 +1211,29 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 <div className="font-mono text-[11px] space-y-1">
                   <div>• <strong>Debit 1040 (Merchandise Inventory Asset)</strong>: +Subtotal Asset Value</div>
                   {taxPercentInput > 0 && (
-                    <div>• <strong>Debit 2026 (PPN Masukan / VAT Input Creditable)</strong>: +VAT Credit Receivable</div>
+                    isNonCreditableVatInput ? (
+                      <div className="text-amber-700 dark:text-amber-300">
+                        • <strong>Debit 1040 (Capitalized Input VAT &rarr; HPP / Inventory)</strong>: +Non-Creditable PPN
+                      </div>
+                    ) : (
+                      <div>• <strong>Debit 2026 (PPN Masukan / VAT Input Creditable)</strong>: +VAT Credit Receivable</div>
+                    )
                   )}
                   <div>• <strong>Credit 2010 (Trade Accounts Payable)</strong>: +Liability recognized for vendor settlement</div>
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isNonCreditableVatInput}
+                  onChange={(e) => setIsNonCreditableVatInput(e.target.checked)}
+                  className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span className="font-medium text-xs">
+                  PPN Masukan Tidak Dapat Dikreditkan (Kapitalisasi ke HPP)
+                </span>
+              </label>
 
               {/* Checkbox for Immediate Approval */}
               {canApprovePayVoidBill && (
