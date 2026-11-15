@@ -120,33 +120,30 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
     }
   };
 
-  const inputCls = `w-full px-3 py-2 rounded-xl border text-xs ${
-    isLight ? 'bg-white border-stone-300 text-stone-900' : 'bg-zinc-950 border-zinc-700 text-zinc-100'
-  }`;
+  const inputCls =
+    'w-full px-3 py-2 rounded-xl border text-xs bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100';
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold flex items-center gap-2">
-            <Layers className="w-4 h-4 text-emerald-500" />
+          <h3 className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+            <Layers className="w-4 h-4 text-[#164E29] dark:text-emerald-400" />
             <span>Warehouse Repacking (Break-Bulk) &amp; Bundle Assembly</span>
           </h3>
-          <p className={`text-xs ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Converts bulk SKUs into retail packs or assembles hampers while inheriting parent/earliest expiry dates and posting balanced #1040 GL.
           </p>
         </div>
 
-        <div className={`inline-flex rounded-xl border p-1 ${isLight ? 'bg-stone-100 border-stone-200' : 'bg-zinc-950 border-zinc-800'}`}>
+        <div className="inline-flex rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 p-1">
           <button
             type="button"
             onClick={() => setMode('REPACK')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] ${
               mode === 'REPACK'
-                ? 'bg-emerald-600 text-white'
-                : isLight
-                ? 'text-stone-600 hover:bg-white'
-                : 'text-zinc-400 hover:bg-zinc-900'
+                ? 'bg-[#164E29] text-white dark:bg-emerald-950 dark:text-emerald-400 dark:border dark:border-emerald-700/70'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900'
             }`}
           >
             <Scissors className="w-3.5 h-3.5" />
@@ -155,12 +152,10 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
           <button
             type="button"
             onClick={() => setMode('BUNDLE')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] ${
               mode === 'BUNDLE'
-                ? 'bg-emerald-600 text-white'
-                : isLight
-                ? 'text-stone-600 hover:bg-white'
-                : 'text-zinc-400 hover:bg-zinc-900'
+                ? 'bg-[#164E29] text-white dark:bg-emerald-950 dark:text-emerald-400 dark:border dark:border-emerald-700/70'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900'
             }`}
           >
             <PackagePlus className="w-3.5 h-3.5" />
@@ -173,8 +168,8 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
         <div
           className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
             feedback.type === 'ok'
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
-              : 'border-rose-500/30 bg-rose-500/10 text-rose-400'
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+              : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400'
           }`}
         >
           {feedback.type === 'ok' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
@@ -184,9 +179,7 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
 
       <form
         onSubmit={handleSubmit}
-        className={`p-4 rounded-2xl border space-y-4 ${
-          isLight ? 'bg-white border-stone-200' : 'bg-zinc-900/70 border-zinc-800'
-        }`}
+        className="p-4 rounded-2xl border space-y-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs"
       >
         {mode === 'REPACK' ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -435,7 +428,7 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
           <button
             type="submit"
             disabled={submitting}
-            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
+            className="px-5 py-2.5 rounded-xl bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
           >
             {submitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             <span>{mode === 'REPACK' ? 'Execute Break-Bulk Repack' : 'Assemble Bundle & Mint Batch'}</span>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Barcode,
   CheckCircle2,
   ClipboardCheck,
   EyeOff,
@@ -8,6 +9,7 @@ import {
   Printer,
   ShieldAlert,
 } from 'lucide-react';
+import { QuickBarcodeScannerBar } from './QuickBarcodeScannerBar';
 import type {
   InventoryBatch,
   InventoryItem,
@@ -79,6 +81,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
   const [supervisorAuthorizeNow, setSupervisorAuthorizeNow] = useState<boolean>(false);
   const [isCommitting, setIsCommitting] = useState<boolean>(false);
   const [lastResult, setLastResult] = useState<RackStocktakeCommitResponse | null>(null);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState<boolean>(false);
 
   useEffect(() => {
     if (lockedBranchId) {
@@ -228,16 +231,12 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
     }
   };
 
-  const cardClass = isLight
-    ? 'bg-white border border-slate-200 rounded-2xl shadow-xs'
-    : 'bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xs';
-  const inputClass = `px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] ${
-    isLight
-      ? 'bg-white border-slate-300 text-slate-900'
-      : 'bg-zinc-950 border-zinc-700 text-zinc-100'
-  }`;
-  const textTitle = isLight ? 'text-slate-900' : 'text-zinc-100';
-  const textMuted = isLight ? 'text-slate-500' : 'text-zinc-400';
+  const cardClass =
+    'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs transition-colors duration-200';
+  const inputClass =
+    'px-3 py-2 rounded-xl border text-xs bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#164E29] dark:focus:ring-emerald-400';
+  const textTitle = 'text-slate-900 dark:text-slate-100';
+  const textMuted = 'text-slate-500 dark:text-slate-400';
 
   return (
     <div className="space-y-4">
@@ -247,7 +246,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className={`text-sm sm:text-base font-bold ${textTitle} flex items-center gap-2`}>
-                <ClipboardCheck className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                <ClipboardCheck className="w-4 h-4 text-[#164E29] dark:text-emerald-400" />
                 Rack-Scoped Blind Stock Opname (Cycle Count)
               </h3>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30">
@@ -260,16 +259,79 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handlePrintBlindSheet}
-            disabled={scopedBatches.length === 0}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-50 text-white transition-all cursor-pointer shadow-xs shrink-0"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            Print Blind Count Sheet (A4)
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowBarcodeScanner((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer shrink-0 ${
+                showBarcodeScanner
+                  ? 'bg-[#164E29] border-[#164E29] text-white dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700/70'
+                  : 'bg-white dark:bg-slate-950 border-emerald-300 dark:border-emerald-700 text-[#164E29] dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Barcode className="w-3.5 h-3.5" />
+              {showBarcodeScanner ? 'Hide Barcode Scanner' : 'Quick Barcode Scan'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrintBlindSheet}
+              disabled={scopedBatches.length === 0}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 disabled:opacity-50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-xs shrink-0"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Print Blind Count Sheet (A4)
+            </button>
+          </div>
         </div>
+
+        {showBarcodeScanner && (
+          <QuickBarcodeScannerBar
+            theme={theme}
+            title="Rack-Scoped Blind Count Barcode / QR Scanner"
+            placeholder="Scan Lot #, SKU, or EAN-13 barcode (Enter)..."
+            sampleCodes={scopedBatches.slice(0, 4).map((b) => ({
+              label: b.productName.split(' ').slice(0, 2).join(' '),
+              code: b.lotNumber || b.sku,
+            }))}
+            onScan={(code, mode) => {
+              const q = code.toLowerCase();
+              const matchedBatch = scopedBatches.find((b) => {
+                const invMeta = invBySku[b.sku];
+                return (
+                  b.lotNumber.toLowerCase() === q ||
+                  b.batchId.toLowerCase() === q ||
+                  b.sku.toLowerCase() === q ||
+                  (invMeta?.barcode && invMeta.barcode.toLowerCase() === q)
+                );
+              });
+              if (!matchedBatch) {
+                return { matched: false, detail: `No active batch in current rack/zone matched "${code}"` };
+              }
+              if (
+                matchedBatch.status === 'quarantined' ||
+                matchedBatch.status === 'recalled' ||
+                matchedBatch.status === 'expired'
+              ) {
+                return {
+                  matched: false,
+                  detail: `Batch ${matchedBatch.lotNumber} is LOCKED (${matchedBatch.status.toUpperCase()})`,
+                };
+              }
+              const cur = Number(countsByBatch[matchedBatch.batchId] || 0);
+              const nextVal = Math.max(0, mode === 'increment' ? cur + 1 : cur - 1);
+              setCountsByBatch((prev) => ({
+                ...prev,
+                [matchedBatch.batchId]: String(nextVal),
+              }));
+              return {
+                matched: true,
+                label: `${matchedBatch.productName} (${matchedBatch.lotNumber})`,
+                detail: `Physical Count = ${nextVal}`,
+              };
+            }}
+          />
+        )}
 
         {/* Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -481,7 +543,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
           </table>
         </div>
 
-        <div className={`p-4 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isLight ? 'border-slate-200 bg-slate-50/70' : 'border-zinc-800 bg-zinc-950/70'}`}>
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
             <span className={`text-xs font-semibold ${textTitle} block`}>
               {enteredLinesCount} of {scopedBatches.length} batches counted
@@ -492,7 +554,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
                   type="checkbox"
                   checked={supervisorAuthorizeNow}
                   onChange={(e) => setSupervisorAuthorizeNow(e.target.checked)}
-                  className="rounded border-slate-300 text-[#0F4C3A] focus:ring-[#0F4C3A]"
+                  className="rounded border-slate-300 text-[#164E29] focus:ring-[#164E29]"
                 />
                 <span className={textMuted}>
                   Direct Supervisor Override (commit over-threshold variance immediately without Approval Matrix queue)
@@ -510,7 +572,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
             type="button"
             disabled={isCommitting || enteredLinesCount === 0}
             onClick={handleCommitStocktake}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-50 text-white transition-all cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 disabled:opacity-50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-xs"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             {isCommitting ? 'Reconciling...' : 'Commit Rack Blind Stock Opname'}

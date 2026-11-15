@@ -44,6 +44,8 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { BatchRecallTraceModal } from './BatchRecallTraceModal';
+import { FefoHeatmapRackVisualizer } from './FefoHeatmapRackVisualizer';
+import { FlashSaleClearanceModal } from './FlashSaleClearanceModal';
 
 interface FefoModuleProps {
   theme: 'light' | 'dark';
@@ -62,7 +64,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
 }) => {
   // View Switcher: Standard FEFO Batches vs Dynamic Markdown Engine
   const { triggerPrint } = usePrint();
-  const [activeTab, setActiveTab] = useState<'batches' | 'markdown_engine'>('batches');
+  const [activeTab, setActiveTab] = useState<'batches' | 'markdown_engine' | 'rack_heatmap'>('batches');
   const canConfigureMarkdownPolicy =
     !activeStaffSession ||
     ['store_manager', 'coo', 'super_admin'].includes(normalizeEnterpriseRole(activeStaffSession.userRole));
@@ -85,6 +87,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
   const [isPushingMarkdown, setIsPushingMarkdown] = useState<boolean>(false);
   const [selectedBatchForSticker, setSelectedBatchForSticker] = useState<BatchMarkdownCandidate | null>(null);
   const [recallTargetLot, setRecallTargetLot] = useState<string | null>(null);
+  const [flashSaleBatch, setFlashSaleBatch] = useState<InventoryBatch | null>(null);
 
   const isLight = theme === 'light';
 
@@ -305,6 +308,21 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                 {markdownCandidates.length} Active
               </span>
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('rack_heatmap')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === 'rack_heatmap'
+                ? 'bg-[#164E29] text-white shadow-xs'
+                : isLight
+                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-[#22C55E]" />
+            FEFO Rack Heatmap &amp; Visualizer
           </button>
         </div>
       </div>
@@ -740,7 +758,30 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                             ? 'Near Expiry'
                             : 'Fresh'}
                         </span>
-                        <div>
+                        <div className="flex flex-wrap items-center justify-center gap-1">
+                          {batch.currentStock > 0 &&
+                            batch.daysUntilExpiry > 0 &&
+                            batch.daysUntilExpiry <= 7 &&
+                            batch.status !== 'recalled' &&
+                            batch.status !== 'quarantined' && (
+                              <button
+                                type="button"
+                                onClick={() => setFlashSaleBatch(batch)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap ${
+                                  (batch.markdownDiscountPercent || 0) >= 50
+                                    ? 'bg-emerald-100 text-[#164E29] border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700 shadow-xs'
+                                    : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-900/20'
+                                }`}
+                                title="1-Click Flash Sale 50% Generator & POS Markdown"
+                              >
+                                <Zap className="w-3 h-3" />
+                                <span>
+                                  {(batch.markdownDiscountPercent || 0) >= 50
+                                    ? 'Obrar 50% Aktif'
+                                    : '⚡ Obrar Kilat 50%'}
+                                </span>
+                              </button>
+                            )}
                           <button
                             type="button"
                             onClick={() => setRecallTargetLot(batch.lotNumber)}
@@ -1062,6 +1103,19 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
         </div>
       )}
 
+      {/* VIEW 3: LIVE COLOR-CODED FEFO MATRIX & HEATMAP RACK VISUALIZER */}
+      {activeTab === 'rack_heatmap' && (
+        <FefoHeatmapRackVisualizer
+          theme={theme}
+          selectedStore={selectedStore}
+          batches={batches}
+          inventory={inventory}
+          activeStaffSession={activeStaffSession}
+          onRefreshData={loadBatches}
+          onShowToast={onShowToast}
+        />
+      )}
+
       {/* MODAL: PRINTABLE YELLOW CLEARANCE STICKER */}
       {selectedBatchForSticker && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -1259,6 +1313,16 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
           onRecallExecuted={() => loadBatches()}
         />
       )}
+
+      <FlashSaleClearanceModal
+        isOpen={Boolean(flashSaleBatch)}
+        onClose={() => setFlashSaleBatch(null)}
+        theme={theme}
+        batch={flashSaleBatch}
+        inventory={inventory}
+        onCompleted={() => loadBatches()}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };

@@ -22,7 +22,10 @@ import {
   SlidersHorizontal,
   Plus,
   Minus,
+  Barcode,
 } from 'lucide-react';
+import { INITIAL_INVENTORY } from '../../data/inventoryData';
+import { QuickBarcodeScannerBar } from './QuickBarcodeScannerBar';
 
 interface StockOpnameViewProps {
   theme: 'light' | 'dark';
@@ -72,6 +75,9 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [zoneFilter, setZoneFilter] = useState<string>('ALL');
+  const [isPartialCycleMode, setIsPartialCycleMode] = useState<boolean>(false);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState<boolean>(false);
   const [varianceFilter, setVarianceFilter] = useState<
     'ALL' | 'DISCREPANCY_ONLY' | 'SURPLUS_ONLY' | 'DEFICIT_ONLY'
   >('ALL');
@@ -100,21 +106,32 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
     return inventoryTiers.filter((t) => t.storeId === selectedWarehouseId);
   }, [inventoryTiers, selectedWarehouseId]);
 
-  // Filtered tiers for the table
-  const displayedTiers = useMemo(() => {
+  const availableZones = useMemo(() => {
+    const zones = new Set<string>();
+    warehouseTiers.forEach((t) => {
+      if (t.warehouseZoneId) zones.add(t.warehouseZoneId);
+    });
+    return Array.from(zones);
+  }, [warehouseTiers]);
+
+  // Partitioned subset for Partial Cycle Counting (Zone / Category / Search)
+  const partitionedTiers = useMemo(() => {
     return warehouseTiers.filter((tier) => {
-      // Search
+      if (zoneFilter !== 'ALL' && tier.warehouseZoneId !== zoneFilter) return false;
+      if (categoryFilter !== 'ALL' && tier.category !== categoryFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const matchSku = tier.sku.toLowerCase().includes(q);
         const matchName = tier.productName.toLowerCase().includes(q);
         if (!matchSku && !matchName) return false;
       }
-      // Category
-      if (categoryFilter !== 'ALL' && tier.category !== categoryFilter) {
-        return false;
-      }
-      // Variance filter
+      return true;
+    });
+  }, [warehouseTiers, zoneFilter, categoryFilter, searchQuery]);
+
+  // Filtered tiers for the table
+  const displayedTiers = useMemo(() => {
+    return partitionedTiers.filter((tier) => {
       const counted = physicalCounts[tier.sku] !== undefined ? physicalCounts[tier.sku] : tier.physicalStock;
       const variance = Number((counted - tier.physicalStock).toFixed(2));
       if (varianceFilter === 'DISCREPANCY_ONLY' && variance === 0) return false;
@@ -123,7 +140,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
 
       return true;
     });
-  }, [warehouseTiers, searchQuery, categoryFilter, varianceFilter, physicalCounts]);
+  }, [partitionedTiers, varianceFilter, physicalCounts]);
 
   // Real-time calculated aggregate summary metrics
   const opnameStats = useMemo(() => {
@@ -223,9 +240,17 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
       return;
     }
 
+    const usePartition =
+      isPartialCycleMode || categoryFilter !== 'ALL' || zoneFilter !== 'ALL' || searchQuery.trim().length > 0;
+    const targetTiers = usePartition ? partitionedTiers : warehouseTiers;
+    if (targetTiers.length === 0) {
+      onShowToast('No Partition Items', 'No inventory tiers matched the active cycle count partition.');
+      return;
+    }
+
     setIsReconciling(true);
     try {
-      const itemsPayload: StockOpnameItem[] = warehouseTiers.map((tier) => {
+      const itemsPayload: StockOpnameItem[] = targetTiers.map((tier) => {
         const counted =
           physicalCounts[tier.sku] !== undefined ? physicalCounts[tier.sku] : tier.physicalStock;
         const varianceQty = Number((counted - tier.physicalStock).toFixed(2));
@@ -252,11 +277,13 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
       const res = await apiClient.reconcileStockOpname({
         storeId: selectedWarehouseId,
         storeName: currentOutlet.storeName,
-        warehouseZoneId: warehouseTiers[0]?.warehouseZoneId || 'WH-JKT-SEN-COLD',
+        warehouseZoneId: zoneFilter !== 'ALL' ? zoneFilter : targetTiers[0]?.warehouseZoneId || 'WH-JKT-SEN-COLD',
         auditorId: 'USR-AUD-01',
         auditorName: auditorName || 'Stocktake Auditor Lead',
         items: itemsPayload,
-        notes: sessionNotes || 'Physical stocktake discrepancy reconciliation',
+        notes: usePartition
+          ? `Partial Cycle Opname (${targetTiers.length}/${warehouseTiers.length} SKUs) — ${sessionNotes || 'Zone/Category Cycle'}`
+          : sessionNotes || 'Physical stocktake discrepancy reconciliation',
       });
 
       onShowToast('Stock Opname Reconciled', res.message);
@@ -445,6 +472,45 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
               <option value="pantry_coffee">Pantry &amp; Coffee</option>
             </select>
 
+            {/* Zone / Rack Partition Filter */}
+            <select
+              value={zoneFilter}
+              onChange={(e) => setZoneFilter(e.target.value)}
+              className={`px-3 py-1.5 text-xs rounded-xl font-mono ${inputClass}`}
+            >
+              <option value="ALL">All Storage Zones</option>
+              {availableZones.map((z) => (
+                <option key={z} value={z}>
+                  {z}
+                </option>
+              ))}
+            </select>
+
+            <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-[11px] font-semibold cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isPartialCycleMode}
+                onChange={(e) => setIsPartialCycleMode(e.target.checked)}
+                className="rounded border-gray-300 text-[#0F4C3A] focus:ring-[#0F4C3A]"
+              />
+              <span>Partial Cycle ({partitionedTiers.length}/{warehouseTiers.length} SKUs)</span>
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setShowBarcodeScanner((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                showBarcodeScanner
+                  ? 'bg-emerald-600 border-emerald-600 text-white'
+                  : isLight
+                  ? 'bg-white border-emerald-300 text-[#0F4C3A] hover:bg-emerald-50'
+                  : 'bg-zinc-800 border-emerald-700 text-emerald-300 hover:bg-zinc-700'
+              }`}
+            >
+              <Barcode className="w-3.5 h-3.5" />
+              {showBarcodeScanner ? 'Hide Scanner' : 'Quick Scan'}
+            </button>
+
             {/* Variance Status Filter */}
             <div
               className={`inline-flex items-center p-0.5 rounded-xl border ${
@@ -529,6 +595,44 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
             </button>
           </div>
         </div>
+
+        {showBarcodeScanner && (
+          <QuickBarcodeScannerBar
+            theme={theme}
+            title="Cycle Count Barcode / QR Scanner"
+            sampleCodes={displayedTiers.slice(0, 4).map((t) => {
+              const invMatch = INITIAL_INVENTORY.find((i) => i.sku === t.sku);
+              return {
+                label: t.productName.split(' ').slice(0, 2).join(' '),
+                code: invMatch?.barcode || t.sku,
+              };
+            })}
+            onScan={(code, mode) => {
+              const q = code.toLowerCase();
+              const matchedTier = partitionedTiers.find((t) => {
+                const invMatch = INITIAL_INVENTORY.find((i) => i.sku === t.sku);
+                return (
+                  t.sku.toLowerCase() === q ||
+                  (invMatch?.barcode && invMatch.barcode.toLowerCase() === q)
+                );
+              });
+              if (!matchedTier) {
+                return { matched: false, detail: `No SKU in current partition matched barcode "${code}"` };
+              }
+              const cur =
+                physicalCounts[matchedTier.sku] !== undefined
+                  ? physicalCounts[matchedTier.sku]
+                  : matchedTier.physicalStock;
+              const nextVal = Math.max(0, Number((mode === 'increment' ? cur + 1 : cur - 1).toFixed(2)));
+              setPhysicalCounts((prev) => ({ ...prev, [matchedTier.sku]: nextVal }));
+              return {
+                matched: true,
+                label: `${matchedTier.productName} (${matchedTier.sku})`,
+                detail: `Physical Count = ${nextVal} ${matchedTier.unit}`,
+              };
+            }}
+          />
+        )}
 
         {/* Itemized Physical Count & Variance Table */}
         <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-zinc-800">

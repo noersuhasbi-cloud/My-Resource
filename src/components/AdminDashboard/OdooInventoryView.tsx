@@ -57,12 +57,15 @@ import {
   Warehouse,
   X,
   Scissors,
+  Zap,
 } from 'lucide-react';
 import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
 import { SkuImportModal } from './SkuImportModal';
 import { WarehouseRackSetupPanel } from './WarehouseRackSetupPanel';
 import { RackBlindOpnamePanel } from './RackBlindOpnamePanel';
 import { RepackBundlePanel } from './RepackBundlePanel';
+import { FefoHeatmapRackVisualizer } from './FefoHeatmapRackVisualizer';
+import { FlashSaleClearanceModal } from './FlashSaleClearanceModal';
 
 interface OdooInventoryViewProps {
   theme: 'light' | 'dark';
@@ -95,7 +98,7 @@ interface OdooInventoryViewProps {
   onShowToast: (title: string, message: string) => void;
 }
 
-type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'blind_opname' | 'repack_bundle' | 'returnables';
+type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'fefo_heatmap' | 'blind_opname' | 'repack_bundle' | 'returnables';
 type ChannelFilter = 'ALL' | 'B2C' | 'B2B' | 'BOTH';
 type HubScope = 'ALL' | 'CDC' | 'DARK_STORE' | 'RETAIL_FRONTS';
 
@@ -208,6 +211,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   const [mediaInspector, setMediaInspector] = useState<MediaInspectorTarget | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [warehouseRacks, setWarehouseRacks] = useState<WarehouseRackConfig[]>([]);
+  const [flashSaleTargetBatch, setFlashSaleTargetBatch] = useState<InventoryBatch | null>(null);
   const [returnableRecords, setReturnableRecords] = useState<ReturnableContainerRecord[]>([]);
   const [returnableSummary, setReturnableSummary] = useState<{
     totalIssuedUnits: number;
@@ -254,23 +258,18 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
       .catch(() => {});
   }, [viewMode, selectedOutletFilter]);
 
-  const cardClass = isLight
-    ? 'bg-white border border-slate-200 shadow-sm text-slate-900 rounded-2xl'
-    : 'bg-zinc-900/90 border border-zinc-800 text-zinc-100 rounded-2xl';
-  const subCardClass = isLight
-    ? 'bg-slate-50/80 border border-slate-200 text-slate-900 rounded-xl'
-    : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-xl';
-  const textTitle = isLight ? 'text-slate-900' : 'text-zinc-100';
-  const textMuted = isLight ? 'text-slate-500' : 'text-zinc-400';
-  const tableHeaderClass = isLight
-    ? 'border-b border-slate-200 bg-slate-50/90 text-slate-600 font-semibold uppercase text-[10px] tracking-wider'
-    : 'border-b border-zinc-800 bg-zinc-900/70 text-zinc-300 font-semibold uppercase text-[10px] tracking-wider';
-  const inputClass = isLight
-    ? 'bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-    : 'bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-500';
-  const modalClass = isLight
-    ? 'bg-white border border-slate-200 text-slate-900 shadow-2xl rounded-2xl'
-    : 'bg-zinc-950 border border-zinc-800 text-zinc-100 shadow-2xl rounded-2xl';
+  const cardClass =
+    'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-slate-900 dark:text-slate-100 rounded-2xl transition-colors duration-200';
+  const subCardClass =
+    'bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl transition-colors duration-200';
+  const textTitle = 'text-slate-900 dark:text-slate-100';
+  const textMuted = 'text-slate-500 dark:text-slate-400';
+  const tableHeaderClass =
+    'border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-300 font-semibold uppercase text-[10px] tracking-wider';
+  const inputClass =
+    'bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-[#164E29] dark:focus:border-emerald-400 focus:ring-1 focus:ring-[#164E29] dark:focus:ring-emerald-400';
+  const modalClass =
+    'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-2xl rounded-2xl';
 
   // Aggregate summary metrics across retail tiers + B2B catalog
   const summaryMetrics = useMemo(() => {
@@ -617,6 +616,19 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         },
       ];
 
+      const safeStockSkus = hubTiers.filter((t) => {
+        const atp = Math.max(0, t.physicalStock - t.reservedStock);
+        return atp > t.minimumThreshold;
+      }).length;
+      const approachingSafetySkus = hubTiers.filter((t) => {
+        const atp = Math.max(0, t.physicalStock - t.reservedStock);
+        return atp > 0 && atp <= t.minimumThreshold;
+      }).length;
+      const criticalOutSkus = hubTiers.filter((t) => {
+        const atp = Math.max(0, t.physicalStock - t.reservedStock);
+        return atp <= 0;
+      }).length;
+
       return {
         hub,
         skuCount: hubTiers.length + (hub.id === 'CDC' ? wholesaleProducts.length : 0),
@@ -625,6 +637,11 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
           (hub.id === 'CDC'
             ? wholesaleProducts.reduce((s, p) => s + p.currentStockBaseUnits, 0)
             : 0),
+        healthSummary: {
+          safe: safeStockSkus,
+          approaching: approachingSafetySkus,
+          critical: criticalOutSkus,
+        },
         operations,
       };
     });
@@ -712,147 +729,163 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
     );
   };
 
+  const mostUrgentClearanceBatch = useMemo(() => {
+    const candidates = batches
+      .filter(
+        (b) =>
+          b.currentStock > 0 &&
+          b.daysUntilExpiry > 0 &&
+          b.daysUntilExpiry <= 7 &&
+          b.status !== 'expired' &&
+          b.status !== 'recalled' &&
+          b.status !== 'quarantined' &&
+          (selectedOutletFilter === 'ALL' ||
+            selectedOutletFilter === 'CONSOLIDATED' ||
+            b.storeId === selectedOutletFilter)
+      )
+      .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+    return candidates[0] || null;
+  }, [batches, selectedOutletFilter]);
+
+  const tabButtonBase =
+    'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer';
+  const tabButtonActive =
+    'bg-[#164E29] text-white shadow-sm dark:bg-emerald-950 dark:text-emerald-400 dark:border dark:border-emerald-700/70';
+  const tabButtonInactive =
+    'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-[#164E29] dark:hover:text-emerald-400';
+
   return (
-    <div className="space-y-5">
-      {/* Odoo Inventory Operations Command Header + View Switcher */}
-      <div className={`${cardClass} p-4 sm:p-5`}>
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-[#0F4C3A] text-white">
+    <div className="space-y-5 text-slate-900 dark:text-slate-100">
+      {/* Odoo Inventory Operations Command Header + View Switcher (3-Row Stacked Hierarchy) */}
+      <div className={`${cardClass} p-4 sm:p-5 space-y-3.5`}>
+        {/* ROW 1: Full-width Deep Forest Green Header Banner (Clean single-line desktop title, zero collision) */}
+        <div className="w-full rounded-xl bg-[#164E29] dark:bg-emerald-950 border border-[#164E29] dark:border-emerald-800/70 text-white dark:text-slate-100 px-5 py-4 shadow-sm">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-emerald-100 dark:text-emerald-300">
+              <span className="font-bold uppercase tracking-wider text-white dark:text-emerald-400">
                 Odoo Inventory Standard
               </span>
-              <span className={`text-xs font-medium ${textMuted}`}>
-                Multi-Warehouse Operations · B2B/B2C Catalog Split · FEFO/FIFO Engine
-              </span>
+              <span aria-hidden="true" className="opacity-60">·</span>
+              <span>Multi-Warehouse Operations</span>
+              <span aria-hidden="true" className="opacity-60">·</span>
+              <span>B2B/B2C Catalog Split</span>
+              <span aria-hidden="true" className="opacity-60">·</span>
+              <span>FEFO/FIFO Engine</span>
             </div>
-            <h2 className={`text-base sm:text-lg font-bold tracking-tight ${textTitle}`}>
+            <h2 className="text-lg sm:text-xl font-bold tracking-tight leading-snug text-white dark:text-slate-50 lg:whitespace-nowrap lg:truncate">
               Warehouse Operations, Stock Quants &amp; Lot Traceability
             </h2>
           </div>
+        </div>
 
-          {/* Top-Right Compact View Switcher + Removal Strategy Config */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div
-              className={`inline-flex items-center p-1 rounded-xl border ${
-                isLight ? 'bg-slate-100 border-slate-200' : 'bg-zinc-950 border-zinc-800'
+        {/* ROW 2: Dedicated White/Dark Card Container for Navigation Tabs */}
+        <div
+          className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs p-1.5 overflow-x-auto"
+          role="tablist"
+          aria-label="Inventory view switcher"
+        >
+          <div className="flex items-center gap-1.5 min-w-max">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'kanban'}
+              onClick={() => setViewMode('kanban')}
+              className={`${tabButtonBase} ${
+                viewMode === 'kanban' ? tabButtonActive : tabButtonInactive
               }`}
-              role="tablist"
-              aria-label="Inventory view switcher"
             >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={viewMode === 'kanban'}
-                onClick={() => setViewMode('kanban')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                  viewMode === 'kanban'
-                    ? 'bg-[#0F4C3A] text-white shadow-xs'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900'
-                    : 'text-zinc-300 hover:text-white'
-                }`}
-              >
-                <Kanban className="w-3.5 h-3.5" />
-                Kanban Operations
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={viewMode === 'list'}
-                onClick={() => setViewMode('list')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                  viewMode === 'list'
-                    ? 'bg-[#0F4C3A] text-white shadow-xs'
-                    : isLight
-                    ? 'text-slate-600 hover:text-slate-900'
-                    : 'text-zinc-300 hover:text-white'
-                }`}
-              >
-                <List className="w-3.5 h-3.5" />
-                Stock &amp; Lot List
-              </button>
-              {canManageWarehouseTopology && (
-                <>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={viewMode === 'racks'}
-                    onClick={() => setViewMode('racks')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                      viewMode === 'racks'
-                        ? 'bg-[#0F4C3A] text-white shadow-xs'
-                        : isLight
-                        ? 'text-slate-600 hover:text-slate-900'
-                        : 'text-zinc-300 hover:text-white'
-                    }`}
-                  >
-                    <Warehouse className="w-3.5 h-3.5" />
-                    Warehouse Rack &amp; FEFO/FIFO Setup
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={viewMode === 'blind_opname'}
-                    onClick={() => setViewMode('blind_opname')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                      viewMode === 'blind_opname'
-                        ? 'bg-[#0F4C3A] text-white shadow-xs'
-                        : isLight
-                        ? 'text-slate-600 hover:text-slate-900'
-                        : 'text-zinc-300 hover:text-white'
-                    }`}
-                  >
-                    <ClipboardList className="w-3.5 h-3.5" />
-                    Rack Blind Opname
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={viewMode === 'repack_bundle'}
-                    onClick={() => setViewMode('repack_bundle')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                      viewMode === 'repack_bundle'
-                        ? 'bg-[#0F4C3A] text-white shadow-xs'
-                        : isLight
-                        ? 'text-slate-600 hover:text-slate-900'
-                        : 'text-zinc-300 hover:text-white'
-                    }`}
-                  >
-                    <Scissors className="w-3.5 h-3.5" />
-                    Repacking &amp; Bundling
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={viewMode === 'returnables'}
-                    onClick={() => setViewMode('returnables')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                      viewMode === 'returnables'
-                        ? 'bg-[#0F4C3A] text-white shadow-xs'
-                        : isLight
-                        ? 'text-slate-600 hover:text-slate-900'
-                        : 'text-zinc-300 hover:text-white'
-                    }`}
-                  >
-                    <Boxes className="w-3.5 h-3.5" />
-                    Krat &amp; Galon (Returnable)
-                  </button>
-                </>
-              )}
-            </div>
+              <Kanban className="w-3.5 h-3.5" />
+              Kanban Operations
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'list'}
+              onClick={() => setViewMode('list')}
+              className={`${tabButtonBase} ${
+                viewMode === 'list' ? tabButtonActive : tabButtonInactive
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              Stock &amp; Lot List
+            </button>
+            {canManageWarehouseTopology && (
+              <>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'racks'}
+                  onClick={() => setViewMode('racks')}
+                  className={`${tabButtonBase} ${
+                    viewMode === 'racks' ? tabButtonActive : tabButtonInactive
+                  }`}
+                >
+                  <Warehouse className="w-3.5 h-3.5" />
+                  Warehouse Rack Setup
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'fefo_heatmap'}
+                  onClick={() => setViewMode('fefo_heatmap')}
+                  className={`${tabButtonBase} ${
+                    viewMode === 'fefo_heatmap' ? tabButtonActive : tabButtonInactive
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  FEFO Rack Heatmap
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'blind_opname'}
+                  onClick={() => setViewMode('blind_opname')}
+                  className={`${tabButtonBase} ${
+                    viewMode === 'blind_opname' ? tabButtonActive : tabButtonInactive
+                  }`}
+                >
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  Rack Blind Opname
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'repack_bundle'}
+                  onClick={() => setViewMode('repack_bundle')}
+                  className={`${tabButtonBase} ${
+                    viewMode === 'repack_bundle' ? tabButtonActive : tabButtonInactive
+                  }`}
+                >
+                  <Scissors className="w-3.5 h-3.5" />
+                  Repacking
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'returnables'}
+                  onClick={() => setViewMode('returnables')}
+                  className={`${tabButtonBase} ${
+                    viewMode === 'returnables' ? tabButtonActive : tabButtonInactive
+                  }`}
+                >
+                  <Boxes className="w-3.5 h-3.5" />
+                  Krat &amp; Galon
+                </button>
+              </>
+            )}
+          </div>
+        </div>
 
+        {/* ROW 3: Secondary Action Buttons & High-Intent Flash Sale Trigger */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             {canManageWarehouseTopology && (
               <button
                 type="button"
                 onClick={() => setShowSkuImportModal(true)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                  isLight
-                    ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
-                }`}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
               >
-                <Upload className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
+                <Upload className="w-3.5 h-3.5 text-[#164E29] dark:text-emerald-400" />
                 Import SKU (CSV)
               </button>
             )}
@@ -860,30 +893,54 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             <button
               type="button"
               onClick={() => setShowStrategyModal(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                isLight
-                  ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
-              }`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
             >
-              <Settings2 className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
+              <Settings2 className="w-3.5 h-3.5 text-[#164E29] dark:text-emerald-400" />
               FEFO / FIFO Rules
             </button>
 
             <button
               type="button"
               onClick={() => setShowBarcodeLabelModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
             >
               <Barcode className="w-3.5 h-3.5" />
               Barcode &amp; Shelf Labels
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (mostUrgentClearanceBatch) {
+                setFlashSaleTargetBatch(mostUrgentClearanceBatch);
+              } else {
+                setViewMode('fefo_heatmap');
+                onShowToast(
+                  'FEFO Clearance Monitor',
+                  'Menampilkan peta rak FEFO — pilih batch mendekati kedaluwarsa untuk aktivasi Obrar Kilat 50%.'
+                );
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-900/20 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer"
+            title={
+              mostUrgentClearanceBatch
+                ? `Aktivasi Obrar Kilat 50% untuk ${mostUrgentClearanceBatch.productName} (${mostUrgentClearanceBatch.lotNumber})`
+                : 'Buka FEFO Rack Heatmap untuk Clearance Flash Sale'
+            }
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>
+              {mostUrgentClearanceBatch
+                ? `⚡ Obrar Kilat 50% (${mostUrgentClearanceBatch.daysUntilExpiry}h lagi)`
+                : '⚡ Flash Sale Clearance 50%'}
+            </span>
+          </button>
         </div>
 
         {/* Valuation & Traceability KPI Strip (Max 4 metrics, crisp tabular numerals) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800">
-          <div className={`${subCardClass} p-3`}>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+          <div className={`${subCardClass} p-3.5`}>
             <span className={`text-[11px] font-medium ${textMuted} block`}>
               {canViewValuation ? 'Asset Valuation (COA #1040)' : 'Active Tracked Quants'}
             </span>
@@ -894,16 +951,16 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             </span>
           </div>
 
-          <div className={`${subCardClass} p-3`}>
+          <div className={`${subCardClass} p-3.5`}>
             <span className={`text-[11px] font-medium ${textMuted} block`}>
               On-Hand Quants (B2C + B2B)
             </span>
-            <span className="text-sm sm:text-base font-bold font-mono tabular-nums text-[#0F4C3A] dark:text-emerald-400 mt-0.5 block">
+            <span className="text-sm sm:text-base font-bold font-mono tabular-nums text-[#164E29] dark:text-emerald-400 mt-0.5 block">
               {summaryMetrics.totalPhysicalBaseUnits.toLocaleString('id-ID')} Base Units
             </span>
           </div>
 
-          <div className={`${subCardClass} p-3`}>
+          <div className={`${subCardClass} p-3.5`}>
             <span className={`text-[11px] font-medium ${textMuted} block`}>
               Reserved / Locked Picks
             </span>
@@ -912,7 +969,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             </span>
           </div>
 
-          <div className={`${subCardClass} p-3`}>
+          <div className={`${subCardClass} p-3.5`}>
             <span className={`text-[11px] font-medium ${textMuted} block`}>
               Near-Expiry &amp; Quarantined Lots
             </span>
@@ -947,12 +1004,10 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   key={tab.id}
                   type="button"
                   onClick={() => setHubFilter(tab.id as HubScope)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer ${
                     hubFilter === tab.id
-                      ? 'bg-[#0F4C3A] border-[#0F4C3A] text-white'
-                      : isLight
-                      ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                      ? 'bg-[#164E29] border-[#164E29] text-white dark:bg-emerald-950 dark:border-emerald-700/70 dark:text-emerald-400'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   {tab.label}
@@ -963,14 +1018,14 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             <button
               type="button"
               onClick={() => setViewMode('list')}
-              className="text-xs font-semibold text-[#0F4C3A] dark:text-emerald-400 hover:underline inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer"
+              className="text-xs font-semibold text-[#164E29] dark:text-emerald-400 hover:underline inline-flex items-center gap-1 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer"
             >
               Inspect Granular Stock Quants &amp; Lots →
             </button>
           </div>
 
           {/* Hub Sections */}
-          {hubKanbanCards.map(({ hub, skuCount, totalUnits, operations }) => (
+          {hubKanbanCards.map(({ hub, skuCount, totalUnits, healthSummary, operations }) => (
             <div key={hub.id} className="space-y-3">
               {/* Hub Group Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
@@ -988,9 +1043,27 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                     <p className={`text-[11px] ${textMuted}`}>{hub.subtitle}</p>
                   </div>
                 </div>
-                <div className={`text-xs font-mono tabular-nums ${textMuted}`}>
-                  <strong className={textTitle}>{skuCount}</strong> Active SKUs ·{' '}
-                  <strong className={textTitle}>{totalUnits.toLocaleString('id-ID')}</strong> Units On Hand
+                <div className={`flex items-center flex-wrap gap-2 text-xs font-mono tabular-nums ${textMuted}`}>
+                  <span>
+                    <strong className={textTitle}>{skuCount}</strong> Active SKUs ·{' '}
+                    <strong className={textTitle}>{totalUnits.toLocaleString('id-ID')}</strong> Units On Hand
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    {healthSummary.safe} Safe
+                  </span>
+                  {healthSummary.approaching > 0 && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      {healthSummary.approaching} Low
+                    </span>
+                  )}
+                  {healthSummary.critical > 0 && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/15 text-rose-700 dark:text-rose-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      {healthSummary.critical} Out
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1072,22 +1145,18 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                       </div>
 
                       {/* Primary + Secondary Action Footer */}
-                      <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-zinc-800">
+                      <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
                         <button
                           type="button"
                           onClick={() => onNavigateTab(op.targetTab)}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all whitespace-nowrap shrink-0 cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer"
                         >
                           {op.primaryLabel}
                         </button>
                         <button
                           type="button"
                           onClick={() => onNavigateTab(op.secondaryAction.tab)}
-                          className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                            isLight
-                              ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                              : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
-                          }`}
+                          className="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer"
                         >
                           {op.secondaryAction.label}
                         </button>
@@ -1209,7 +1278,26 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 </thead>
                 <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-zinc-800'}`}>
                   {enrichedListRows.map(({ row, safeReserved, safeAvailable, profile, strategy, lotInfo, uomBreakdown, availableUom, totalValuation }) => {
-                    const isLowStock = !row.isWholesaleRow && 'minimumThreshold' in row && safeAvailable <= row.minimumThreshold;
+                    const safetyThreshold = !row.isWholesaleRow && 'minimumThreshold' in row ? row.minimumThreshold : 10;
+                    const isLowStock = safeAvailable > 0 && safeAvailable <= safetyThreshold;
+                    const isOutOfStock = safeAvailable <= 0;
+                    const healthStatus = isOutOfStock
+                      ? {
+                          label: 'Out of Stock / Critical',
+                          dotClass: 'bg-rose-500',
+                          badgeClass: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30',
+                        }
+                      : isLowStock
+                      ? {
+                          label: 'Approaching Safety',
+                          dotClass: 'bg-amber-500',
+                          badgeClass: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30',
+                        }
+                      : {
+                          label: 'Safe Stock',
+                          dotClass: 'bg-emerald-500',
+                          badgeClass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30',
+                        };
                     const displayThumb =
                       profile.salesChannel === 'B2B' ? profile.b2bImageUrl : profile.b2cImageUrl;
 
@@ -1243,6 +1331,13 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                     : profile.salesChannel === 'B2B'
                                     ? 'B2B Wholesale'
                                     : 'B2C Retail'}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${healthStatus.badgeClass}`}
+                                  title={`ATP ${safeAvailable} vs safety threshold ${safetyThreshold}`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${healthStatus.dotClass}`} />
+                                  {healthStatus.label}
                                 </span>
                               </div>
                               <div className={`font-bold ${textTitle} text-xs line-clamp-1 mt-0.5`}>
@@ -1351,11 +1446,11 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                 ? 'Click to toggle FEFO / FIFO picking priority'
                                 : 'Read-Only for your role'
                             }
-                            className={`px-2 py-1 rounded-lg text-[10px] font-bold font-mono border transition-all whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed ${
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold font-mono border transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed ${
                               canManageWarehouseTopology ? 'cursor-pointer' : ''
                             } ${
                               strategy === 'FEFO'
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-[#0F4C3A] dark:text-emerald-300 hover:bg-emerald-500/20'
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-[#164E29] dark:text-emerald-400 hover:bg-emerald-500/20'
                                 : 'bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20'
                             }`}
                           >
@@ -1383,7 +1478,9 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                               </span>
                               <span
                                 className={`font-bold whitespace-nowrap ${
-                                  isLowStock || lotInfo.isQuarantined
+                                  isOutOfStock || lotInfo.isQuarantined
+                                    ? 'text-rose-600 dark:text-rose-400'
+                                    : isLowStock
                                     ? 'text-amber-600 dark:text-amber-400'
                                     : 'text-[#0F4C3A] dark:text-emerald-400'
                                 }`}
@@ -1428,11 +1525,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                   strategy,
                                 })
                               }
-                              className={`px-2 py-1 text-[11px] font-semibold rounded-lg border transition-all inline-flex items-center gap-1 cursor-pointer ${
-                                isLight
-                                  ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
-                              }`}
+                              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] inline-flex items-center gap-1 cursor-pointer"
                               title="Inspect B2B vs B2C Media, Packaging & Multi-UoM"
                             >
                               <Eye className="w-3 h-3" />
@@ -1444,23 +1537,51 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => onAuditSku(row.sku)}
-                                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all border cursor-pointer ${
-                                    isLight
-                                      ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                                      : 'bg-zinc-700 border-zinc-600 text-zinc-200 hover:bg-zinc-600'
-                                  }`}
+                                  className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                                 >
                                   Audit Count
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => onEditTier(row.sourceTier!)}
-                                  className="px-2.5 py-1 text-[11px] font-semibold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-300 border border-[#0F4C3A]/20 hover:bg-[#0F4C3A]/20 rounded-lg transition-all cursor-pointer"
+                                  className="px-2.5 py-1 text-[11px] font-semibold bg-[#164E29]/10 text-[#164E29] dark:bg-emerald-950 dark:text-emerald-400 border border-[#164E29]/20 dark:border-emerald-700/60 hover:bg-[#164E29]/20 dark:hover:bg-emerald-900 rounded-lg transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                                 >
                                   Edit Notes
                                 </button>
                               </>
                             )}
+
+                            {(() => {
+                              const urgentBatch = batches.find(
+                                (b) =>
+                                  b.sku === row.sku &&
+                                  (b.storeId === row.storeId || row.storeId === 'CONSOLIDATED') &&
+                                  b.currentStock > 0 &&
+                                  b.daysUntilExpiry > 0 &&
+                                  b.daysUntilExpiry <= 7 &&
+                                  b.status !== 'expired' &&
+                                  b.status !== 'recalled' &&
+                                  b.status !== 'quarantined' &&
+                                  (lotInfo.lotNumber ? b.lotNumber === lotInfo.lotNumber : true)
+                              );
+                              if (!urgentBatch) return null;
+                              const isPromoActive = (urgentBatch.markdownDiscountPercent || 0) >= 50;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => setFlashSaleTargetBatch(urgentBatch)}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer whitespace-nowrap ${
+                                    isPromoActive
+                                      ? 'bg-emerald-100 text-[#164E29] border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700 shadow-xs'
+                                      : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-900/20'
+                                  }`}
+                                  title={`1-Click Flash Sale 50% untuk batch ${urgentBatch.lotNumber}`}
+                                >
+                                  <Zap className="w-3 h-3" />
+                                  <span>{isPromoActive ? 'Obrar 50% Aktif' : '⚡ Obrar Kilat 50%'}</span>
+                                </button>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>
@@ -1496,6 +1617,25 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
           batches={batches}
           onRefreshAll={async () => {
             if (onRefreshData) await onRefreshData();
+          }}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {viewMode === 'fefo_heatmap' && canManageWarehouseTopology && (
+        <FefoHeatmapRackVisualizer
+          theme={theme}
+          selectedStore={selectedOutletFilter}
+          batches={batches}
+          racks={warehouseRacks}
+          inventory={inventory}
+          activeStaffSession={activeStaffSession}
+          onRefreshData={async () => {
+            if (onRefreshData) await onRefreshData();
+            apiClient
+              .getWarehouseRacks(selectedOutletFilter)
+              .then((res) => setWarehouseRacks(res.racks || []))
+              .catch(() => {});
           }}
           onShowToast={onShowToast}
         />
@@ -1591,9 +1731,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
               <button
                 type="button"
                 onClick={loadReturnables}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer ${
-                  isLight ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
-                }`}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
               >
                 {isLoadingReturnables ? 'Refreshing...' : 'Refresh Ledger'}
               </button>
@@ -1708,7 +1846,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmittingReturnable}
-                  className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all cursor-pointer disabled:opacity-50"
+                  className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-50"
                 >
                   {isSubmittingReturnable ? 'Saving...' : 'Issue Deposit'}
                 </button>
@@ -1808,7 +1946,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                       setIsSubmittingReturnable(false);
                                     }
                                   }}
-                                  className="px-2.5 py-1 rounded-md bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-semibold cursor-pointer disabled:opacity-50"
+                                  className="px-2.5 py-1 rounded-md bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white text-[11px] font-semibold transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-50"
                                 >
                                   Return
                                 </button>
@@ -1905,11 +2043,11 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
               </div>
             )}
 
-            <div className={`flex justify-end pt-3 border-t ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
+            <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setShowStrategyModal(false)}
-                className="px-4 py-2 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl transition-all cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white rounded-xl transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
               >
                 Done
               </button>
@@ -2087,11 +2225,11 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 )}
               </div>
 
-              <div className={`flex justify-end pt-3 border-t ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
+              <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setMediaInspector(null)}
-                  className="px-4 py-2 text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white rounded-xl transition-all cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white rounded-xl transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                 >
                   Close Inspector
                 </button>
@@ -2130,6 +2268,20 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         activeStaffSession={activeStaffSession}
         storeOutlets={storeOutlets}
         onImported={async () => {
+          if (onRefreshData) await onRefreshData();
+        }}
+        onShowToast={onShowToast}
+      />
+
+      {/* 1-Click Flash Sale / Clearance Generator Modal */}
+      <FlashSaleClearanceModal
+        isOpen={Boolean(flashSaleTargetBatch)}
+        onClose={() => setFlashSaleTargetBatch(null)}
+        theme={theme}
+        batch={flashSaleTargetBatch}
+        inventory={inventory}
+        racks={warehouseRacks}
+        onCompleted={async () => {
           if (onRefreshData) await onRefreshData();
         }}
         onShowToast={onShowToast}

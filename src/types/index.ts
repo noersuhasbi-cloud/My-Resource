@@ -823,7 +823,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'GIRO_PDC_ISSUE' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK' | 'KASBON_COLLECTION' | 'PPH_WITHHOLDING' | 'RETURNABLE_CONTAINER' | 'SUPPLIER_DEBIT_NOTE' | 'SETTLEMENT_RECONCILE';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'GIRO_PDC_ISSUE' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK' | 'KASBON_COLLECTION' | 'PPH_WITHHOLDING' | 'RETURNABLE_CONTAINER' | 'SUPPLIER_DEBIT_NOTE' | 'SETTLEMENT_RECONCILE' | 'BANK_MUTATION_RECONCILE';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -3607,6 +3607,92 @@ export interface SettlementReconcileResponse {
   unsettledEdcItems: UnsettledTenderItem[];
   batches: SettlementBatchRecord[];
 }
+
+export interface LastPurchasePriceResponse {
+  found: boolean;
+  sku: string;
+  supplierName: string;
+  matchedSameSupplier: boolean;
+  lastUnitCostIDR: number | null;
+  lastOrderDate: string | null;
+  lastPoId: string | null;
+  lastVendorName: string | null;
+  currentCatalogCostIDR: number;
+  priceVariancePercent: number | null;
+  historicalCount: number;
+}
+
+export interface BankMutationRowInput {
+  date: string;
+  description: string;
+  amountIDR: number;
+  type?: 'CR' | 'DB';
+  referenceCode?: string;
+}
+
+export interface BankMutationMatchItem {
+  rowNumber: number;
+  mutationDate: string;
+  description: string;
+  amountIDR: number;
+  bankFormat: 'BCA' | 'MANDIRI' | 'GENERIC';
+  status: 'MATCHED_AND_SETTLED' | 'MATCHED_PREVIEW' | 'UNMATCHED' | 'IGNORED_DEBIT';
+  matchedOrderId?: string;
+  matchedCustomerName?: string;
+  matchedCustomerId?: string;
+  previousPaymentStatus?: string;
+  glEntryIds?: string[];
+  reason?: string;
+}
+
+export interface BankMutationCsvReconcileResponse {
+  success: boolean;
+  previewOnly: boolean;
+  bankAccountCode: string;
+  parsedRowsCount: number;
+  creditMutationsCount: number;
+  matchedCount: number;
+  settledCount: number;
+  totalMatchedIDR: number;
+  unmatchedCount: number;
+  matches: BankMutationMatchItem[];
+  message: string;
+}
+
+export interface ExecutiveFinancialHealthSummary {
+  generatedAt: string;
+  storeId: string;
+  storeName: string;
+  cashAndBank: {
+    totalLiquidCashIDR: number;
+    vaultAndRegistersIDR: number;
+    posDrawerIDR: number;
+    storeBankVaultIDR: number;
+    bankBcaClearingIDR: number;
+    qrisReceivablePendingIDR: number;
+  };
+  receivablesAging: {
+    totalOutstandingArIDR: number;
+    coaArBalanceIDR: number;
+    pendingGiroReceivableIDR: number;
+    current0To30IDR: number;
+    days31To60IDR: number;
+    over60DaysIDR: number;
+    lockedCustomersCount: number;
+    unpaidB2bOrdersCount: number;
+  };
+  upcomingPayables: {
+    totalOpenApIDR: number;
+    coaApBalanceIDR: number;
+    overduePayablesIDR: number;
+    dueWithin7DaysIDR: number;
+    dueWithin30DaysIDR: number;
+    outgoingGiroPayableIDR: number;
+    consignmentPayableIDR: number;
+    openVendorBillsCount: number;
+  };
+}
+
 
 
 

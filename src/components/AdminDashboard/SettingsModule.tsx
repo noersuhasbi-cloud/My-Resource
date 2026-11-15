@@ -34,6 +34,7 @@ import {
   INITIAL_LANDED_COSTS,
   INITIAL_WAREHOUSE_BINS,
   INITIAL_WAREHOUSE_ROUTES,
+  INITIAL_INVENTORY,
 } from '../../data/inventoryData';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -89,6 +90,7 @@ import {
   MapPin,
   Mail,
   History,
+  Barcode,
 } from 'lucide-react';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { ValuationCostingSettingsTab } from './ValuationCostingSettingsTab';
@@ -98,6 +100,7 @@ import { BlindOpnamePanel } from './BlindOpnamePanel';
 import { IndonesianTaxRulesPanel } from './IndonesianTaxRulesPanel';
 import { CommunicationGatewaySettingsTab } from './CommunicationGatewaySettingsTab';
 import { AuditTrailKpiTab } from './AuditTrailKpiTab';
+import { QuickBarcodeScannerBar } from './QuickBarcodeScannerBar';
 
 export type SettingsSubTab =
   | 'enterprise'
@@ -265,7 +268,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   // 3. Stock Opname State
   const [opnameStoreId, setOpnameStoreId] = useState<string>('store-jkt-senopati');
   const [opnameCategoryFilter, setOpnameCategoryFilter] = useState<string>('ALL');
+  const [opnameZoneFilter, setOpnameZoneFilter] = useState<string>('ALL');
   const [opnameSearch, setOpnameSearch] = useState<string>('');
+  const [isPartialCycleMode, setIsPartialCycleMode] = useState<boolean>(false);
+  const [showOpnameBarcodeScanner, setShowOpnameBarcodeScanner] = useState<boolean>(false);
   const [opnameItems, setOpnameItems] = useState<Record<string, number>>({});
   const [opnameNotes, setOpnameNotes] = useState<Record<string, string>>({});
   const [opnameSessions, setOpnameSessions] = useState<StockOpnameSession[]>([]);
@@ -765,14 +771,21 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
     }
   };
 
-  // Handle Execute Stock Opname Reconcile
+  // Handle Execute Stock Opname Reconcile (supports Partial Cycle Counting partition)
   const handleExecuteOpname = async () => {
     const targetStore = storeOutlets.find((s) => s.storeId === opnameStoreId);
     const storeName = targetStore?.storeName || 'Senopati Flagship';
 
-    const relevantTiers = inventoryTiers.filter((t) => t.storeId === opnameStoreId);
+    const storeTiers = inventoryTiers.filter((t) => t.storeId === opnameStoreId);
+    const usePartition =
+      isPartialCycleMode ||
+      opnameCategoryFilter !== 'ALL' ||
+      opnameZoneFilter !== 'ALL' ||
+      opnameSearch.trim().length > 0;
+    const relevantTiers = usePartition ? filteredOpnameTiers : storeTiers;
+
     if (relevantTiers.length === 0) {
-      onShowToast('No Items', `No inventory items mapped to ${storeName}`);
+      onShowToast('No Items', `No inventory items matched for cycle count at ${storeName}`);
       return;
     }
 
@@ -803,9 +816,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       const res = await apiClient.reconcileStockOpname({
         storeId: opnameStoreId,
         storeName,
-        warehouseZoneId: relevantTiers[0]?.warehouseZoneId || 'WH-JKT-SEN-COLD',
+        warehouseZoneId: opnameZoneFilter !== 'ALL' ? opnameZoneFilter : relevantTiers[0]?.warehouseZoneId || 'WH-JKT-SEN-COLD',
         items: payloadItems,
-        notes: `Periodic physical stocktake cycle count for ${storeName}`,
+        notes: usePartition
+          ? `Partial Cycle Opname (${relevantTiers.length} of ${storeTiers.length} warehouse SKUs) for ${storeName}`
+          : `Periodic physical stocktake cycle count for ${storeName}`,
       });
 
       if (res.success) {
@@ -854,9 +869,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
     }
   };
 
+  const opnameStoreTiers = inventoryTiers.filter((t) => t.storeId === opnameStoreId);
+  const opnameAvailableZones = Array.from(new Set(opnameStoreTiers.map((t) => t.warehouseZoneId).filter(Boolean)));
+
   // Filtered stock opname rows
-  const filteredOpnameTiers = inventoryTiers
-    .filter((t) => t.storeId === opnameStoreId)
+  const filteredOpnameTiers = opnameStoreTiers
+    .filter((t) => (opnameZoneFilter === 'ALL' ? true : t.warehouseZoneId === opnameZoneFilter))
     .filter((t) => (opnameCategoryFilter === 'ALL' ? true : t.category === opnameCategoryFilter))
     .filter((t) =>
       opnameSearch ? t.productName.toLowerCase().includes(opnameSearch.toLowerCase()) || t.sku.toLowerCase().includes(opnameSearch.toLowerCase()) : true
@@ -3846,7 +3864,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </div>
                 </div>
 
-                {/* Search & Category Filter Toolbar */}
+                {/* Search, Zone/Category Partition & Barcode Scanner Toolbar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-zinc-800">
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
@@ -3872,6 +3890,44 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       <option value="bakery">Bakery</option>
                       <option value="pantry_coffee">Pantry &amp; Coffee</option>
                     </select>
+
+                    <select
+                      value={opnameZoneFilter}
+                      onChange={(e) => setOpnameZoneFilter(e.target.value)}
+                      className={`px-3 py-1.5 text-xs rounded-xl font-mono ${inputClass}`}
+                    >
+                      <option value="ALL">All Zones / Racks</option>
+                      {opnameAvailableZones.map((z) => (
+                        <option key={z} value={z}>
+                          {z}
+                        </option>
+                      ))}
+                    </select>
+
+                    <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-[11px] font-semibold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isPartialCycleMode}
+                        onChange={(e) => setIsPartialCycleMode(e.target.checked)}
+                        className="rounded border-gray-300 text-[#0F4C3A] focus:ring-[#0F4C3A]"
+                      />
+                      <span>Partial Cycle ({filteredOpnameTiers.length}/{opnameStoreTiers.length} SKUs)</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowOpnameBarcodeScanner((v) => !v)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        showOpnameBarcodeScanner
+                          ? 'bg-emerald-600 border-emerald-600 text-white'
+                          : isLight
+                          ? 'bg-white border-emerald-300 text-[#0F4C3A] hover:bg-emerald-50'
+                          : 'bg-zinc-800 border-emerald-700 text-emerald-300 hover:bg-zinc-700'
+                      }`}
+                    >
+                      <Barcode className="w-3.5 h-3.5" />
+                      <span>{showOpnameBarcodeScanner ? 'Hide Scanner' : 'Quick Barcode Scan'}</span>
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -3899,10 +3955,54 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       {isReconciling ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileCheck2 className="w-4 h-4" />}
-                      <span>{canMutateStock ? 'Post GL Reconciliations' : 'Read-Only Mode'}</span>
+                      <span>
+                        {!canMutateStock
+                          ? 'Read-Only Mode'
+                          : isPartialCycleMode || opnameCategoryFilter !== 'ALL' || opnameZoneFilter !== 'ALL' || opnameSearch.trim().length > 0
+                          ? `Post Partial Cycle (${filteredOpnameTiers.length} SKUs)`
+                          : 'Post GL Reconciliations'}
+                      </span>
                     </button>
                   </div>
                 </div>
+
+                {showOpnameBarcodeScanner && (
+                  <QuickBarcodeScannerBar
+                    theme={theme}
+                    title="Stock Opname Quick Barcode / QR Scanner Mode"
+                    sampleCodes={filteredOpnameTiers.slice(0, 4).map((t) => {
+                      const invMatch = INITIAL_INVENTORY.find((i) => i.sku === t.sku);
+                      return {
+                        label: t.productName.split(' ').slice(0, 2).join(' '),
+                        code: invMatch?.barcode || t.sku,
+                      };
+                    })}
+                    onScan={(code, mode) => {
+                      const q = code.toLowerCase();
+                      const matchedTier = filteredOpnameTiers.find((t) => {
+                        const invMatch = INITIAL_INVENTORY.find((i) => i.sku === t.sku);
+                        return (
+                          t.sku.toLowerCase() === q ||
+                          (invMatch?.barcode && invMatch.barcode.toLowerCase() === q)
+                        );
+                      });
+                      if (!matchedTier) {
+                        return { matched: false, detail: `No SKU in active partition matched "${code}"` };
+                      }
+                      const cur =
+                        opnameItems[matchedTier.sku] !== undefined
+                          ? opnameItems[matchedTier.sku]
+                          : matchedTier.physicalStock;
+                      const nextVal = Math.max(0, Number((mode === 'increment' ? cur + 1 : cur - 1).toFixed(2)));
+                      setOpnameItems((prev) => ({ ...prev, [matchedTier.sku]: nextVal }));
+                      return {
+                        matched: true,
+                        label: `${matchedTier.productName} (${matchedTier.sku})`,
+                        detail: `Physical Count = ${nextVal} ${matchedTier.unit}`,
+                      };
+                    }}
+                  />
+                )}
 
                 {/* Stocktake Itemized Table with Live Surplus/Deficit Calculations */}
                 <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-zinc-800">

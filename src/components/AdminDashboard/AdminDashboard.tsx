@@ -108,6 +108,7 @@ import { OdooInventoryView } from './OdooInventoryView';
 import { QuotationsModule } from './QuotationsModule';
 import { CrmLoyaltyModule } from './CrmLoyaltyModule';
 import { NotificationCenterPopover } from './NotificationCenterPopover';
+import { ExecutiveStockTicker } from './ExecutiveStockTicker';
 import {
   normalizeEnterpriseRole,
   isBranchScopedRole,
@@ -760,7 +761,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   })();
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'dark' : ''} ${isLight ? 'bg-slate-50 text-slate-900' : 'bg-zinc-950 text-zinc-100'} flex font-sans transition-colors duration-200 overflow-x-hidden`}>
+    <div className={`min-h-screen ${theme === 'dark' ? 'dark' : ''} bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans transition-colors duration-200 overflow-x-hidden`}>
       {/* 1. Left Vertical Sidebar Component */}
       <AdminSidebar
         theme={theme}
@@ -792,9 +793,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       >
         {/* Top Utility Header Bar */}
         <header
-          className={`print:hidden ${
-            isLight ? 'bg-white/95 border-slate-200 text-slate-900 shadow-xs' : 'bg-zinc-950/95 border-zinc-800 text-zinc-100'
-          } backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-2.5 transition-colors duration-200`}
+          className="print:hidden bg-white/95 dark:bg-slate-900/95 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-xs backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-2.5 transition-colors duration-200"
         >
           <div className="flex items-center justify-between gap-3 flex-wrap">
             {/* Left: Mobile Hamburger Toggle + Current Module Breadcrumb */}
@@ -1038,6 +1037,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
         </header>
+
+        {/* Executive Stock Ticker (Top Bar Status Widget) */}
+        <ExecutiveStockTicker
+          selectedStore={selectedGlobalStore}
+          omzetData={omzetData}
+          batches={inventoryBatches}
+          storeOutlets={storeOutlets}
+          lowStockCount={inventoryMetrics.lowStockCount}
+          totalStockCount={inventoryMetrics.totalStockCount}
+          onNavigateTab={(tab) => setActiveTab(tab)}
+        />
 
         {/* 3. Main Content Area */}
         <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">

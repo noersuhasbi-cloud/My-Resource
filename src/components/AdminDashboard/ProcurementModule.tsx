@@ -14,6 +14,8 @@ import type {
   VendorScorecardRecord,
   SupplierDebitNote,
   SupplierDebitNoteCategory,
+  LastPurchasePriceResponse,
+  DemandForecastResponse,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -47,11 +49,14 @@ import {
   MessageCircle,
   Award,
   TrendingUp,
+  Barcode,
+  History,
 } from 'lucide-react';
 import { VendorBillModule } from './VendorBillModule';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
 import { VendorScorecardTab } from './VendorScorecardTab';
 import { SmartDemandForecastTab } from './SmartDemandForecastTab';
+import { QuickBarcodeScannerBar } from './QuickBarcodeScannerBar';
 
 interface ProcurementModuleProps {
   theme: 'light' | 'dark';
@@ -140,6 +145,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [directPoPaymentTerms, setDirectPoPaymentTerms] = useState<'Net 30' | 'COD' | 'Advance Payment'>('Net 30');
   const [directPoNotes, setDirectPoNotes] = useState<string>('');
   const [isSubmittingDirectPO, setIsSubmittingDirectPO] = useState<boolean>(false);
+  const [showGrScanner, setShowGrScanner] = useState<boolean>(false);
+  const [lastPriceInfo, setLastPriceInfo] = useState<LastPurchasePriceResponse | null>(null);
+  const [isLoadingLastPrice, setIsLoadingLastPrice] = useState<boolean>(false);
+  const [reorderSuggestions, setReorderSuggestions] = useState<DemandForecastResponse | null>(null);
+  const [isCreatingQuickPR, setIsCreatingQuickPR] = useState<string | null>(null);
+  const [showReorderWidget, setShowReorderWidget] = useState<boolean>(true);
 
   // Vendor Scorecard (SRM) State
   const [scorecardData, setScorecardData] = useState<VendorScorecardResponse | null>(null);
@@ -294,6 +305,126 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       loadDebitNotes();
     }
   }, [activeTab, loadDebitNotes]);
+
+  React.useEffect(() => {
+    if (!isCreatingDirectPO || !directPoSku) {
+      setLastPriceInfo(null);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingLastPrice(true);
+    apiClient
+      .getLastPurchasePrice(directPoSku, directPoSupplier || undefined)
+      .then((res) => {
+        if (!cancelled) setLastPriceInfo(res);
+      })
+      .catch(() => {
+        if (!cancelled) setLastPriceInfo(null);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingLastPrice(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isCreatingDirectPO, directPoSku, directPoSupplier]);
+
+  const loadReorderSuggestions = React.useCallback(async () => {
+    if (isWarehouseRole) return;
+    try {
+      const res = await apiClient.getDemandForecast({
+        storeId: selectedStore !== 'CONSOLIDATED' ? selectedStore : undefined,
+      });
+      setReorderSuggestions(res);
+    } catch {
+      // silent fallback
+    }
+  }, [isWarehouseRole, selectedStore]);
+
+  React.useEffect(() => {
+    if ((activeTab === 'pr' || activeTab === 'po') && !isWarehouseRole) {
+      void loadReorderSuggestions();
+    }
+  }, [activeTab, isWarehouseRole, loadReorderSuggestions]);
+
+  const handleOneClickReorderPR = async (
+    itemsToOrder: Array<{ sku: string; quantity?: number; supplierName?: string }>,
+    keyLabel: string
+  ) => {
+    if (!itemsToOrder.length) return;
+    setIsCreatingQuickPR(keyLabel);
+    try {
+      const res = await apiClient.createSmartForecastPRs({
+        storeId: selectedStore !== 'CONSOLIDATED' ? selectedStore : undefined,
+        items: itemsToOrder,
+      });
+      onShowToast(
+        'Draft PR Created',
+        res.message || `Generated ${res.purchaseRequests.length} Draft PR(s) with top-SRM vendor routing.`
+      );
+      onRefreshData();
+      await loadReorderSuggestions();
+    } catch (err: unknown) {
+      onShowToast('Auto-PR Failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsCreatingQuickPR(null);
+    }
+  };
+
+  const getLocalLastPoPrice = React.useCallback(
+    (
+      sku: string,
+      supplierHint?: string
+    ): { price: number; date: string; docRef: string; vendorName: string; matchedSameSupplier: boolean } | null => {
+      const hintNorm = (supplierHint || '').toLowerCase().trim();
+      const hintToken = hintNorm.split(' ').filter((w) => w.length > 2 && w !== 'pt' && w !== 'cv')[0] || hintNorm;
+      const matchesSup = (vendor: string) =>
+        Boolean(hintNorm && vendor.toLowerCase().includes(hintToken));
+
+      const records: Array<{ price: number; date: string; docRef: string; vendorName: string; sameSup: boolean }> = [];
+
+      for (const gr of goodsReceipts) {
+        if (!gr.items.some((it) => it.sku === sku)) continue;
+        const linkedPo = purchaseOrders.find((p) => p.id === gr.poId);
+        const line = linkedPo?.items.find((it) => it.sku === sku);
+        if (!line || !(line.unitCost > 0)) continue;
+        const vendor = gr.vendorName || linkedPo?.supplierName || '';
+        records.push({
+          price: line.unitCost,
+          date: gr.receivedAt.split('T')[0],
+          docRef: gr.id,
+          vendorName: vendor,
+          sameSup: matchesSup(vendor),
+        });
+      }
+
+      for (const po of purchaseOrders) {
+        if (po.status === 'Cancelled') continue;
+        const line = po.items.find((it) => it.sku === sku);
+        if (!line || !(line.unitCost > 0)) continue;
+        records.push({
+          price: line.unitCost,
+          date: (po.issueDate || po.createdAt).split('T')[0],
+          docRef: po.id,
+          vendorName: po.supplierName || '',
+          sameSup: matchesSup(po.supplierName || ''),
+        });
+      }
+
+      records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const sameSup = hintNorm ? records.filter((r) => r.sameSup) : [];
+      const chosen = sameSup[0] || records[0];
+      if (!chosen) return null;
+      return {
+        price: chosen.price,
+        date: chosen.date,
+        docRef: chosen.docRef,
+        vendorName: chosen.vendorName,
+        matchedSameSupplier: hintNorm ? sameSup.length > 0 : true,
+      };
+    },
+    [goodsReceipts, purchaseOrders]
+  );
 
   const handleCreateDirectPO = async () => {
     if (!directPoSupplier || !directPoSku || directPoQty <= 0) {
@@ -1283,6 +1414,23 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           <div className="text-[10px] text-zinc-400 font-normal">
                             @{formatIDR(item.unitCost)}/unit
                           </div>
+                          {(() => {
+                            const hist = getLocalLastPoPrice(item.sku, item.supplierName);
+                            if (!hist) return null;
+                            const diffPct =
+                              hist.price > 0 ? Math.round(((item.unitCost - hist.price) / hist.price) * 100) : 0;
+                            return (
+                              <div
+                                className={`text-[10px] font-normal mt-0.5 ${
+                                  diffPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-400'
+                                }`}
+                                title={`Last bought from ${hist.vendorName || item.supplierName} (${hist.docRef})`}
+                              >
+                                Last bought: {formatIDR(hist.price)} on {hist.date}
+                                {diffPct > 0 ? ` (+${diffPct}%)` : diffPct < 0 ? ` (${diffPct}%)` : ''}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap">
                           {item.urgencyLevel === 'CRITICAL_OUT_OF_STOCK' && (
@@ -1318,6 +1466,120 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       {/* SECTION 1: PURCHASE REQUESTS (PR) */}
       {(activeTab === 'pr') && (
+      <div className="space-y-4">
+        {!isWarehouseRole && reorderSuggestions && (() => {
+          const urgentItems = reorderSuggestions.items
+            .filter((f) => f.urgencyStatus === 'STOCKOUT_IMMINENT' || f.urgencyStatus === 'REORDER_SOON')
+            .slice(0, 6);
+          if (urgentItems.length === 0) return null;
+          return (
+            <div
+              className={`rounded-2xl border p-4 space-y-3 ${
+                isLight ? 'bg-amber-50/50 border-amber-200' : 'bg-amber-950/15 border-amber-800/40'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <div>
+                    <h4 className={`text-xs font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                      One-Click Reorder Recommendations ({urgentItems.length} SKUs at/below safety stock)
+                    </h4>
+                    <p className={`text-[11px] ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                      Based on 30-day average daily sales velocity &amp; lead time — routes automatically to top-graded SRM vendor.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {canManagePrPo && (
+                    <button
+                      type="button"
+                      disabled={isCreatingQuickPR !== null}
+                      onClick={() =>
+                        handleOneClickReorderPR(
+                          urgentItems.map((u) => ({
+                            sku: u.sku,
+                            quantity: u.recommendedReorderQty,
+                            supplierName: u.recommendedSupplierName,
+                          })),
+                          'ALL'
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-300" />
+                      {isCreatingQuickPR === 'ALL' ? 'Generating...' : `Generate All ${urgentItems.length} Draft PRs`}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowReorderWidget((v) => !v)}
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border cursor-pointer ${
+                      isLight ? 'bg-white border-amber-200 text-gray-700' : 'bg-zinc-900 border-zinc-700 text-zinc-200'
+                    }`}
+                  >
+                    {showReorderWidget ? 'Collapse' : 'Show'}
+                  </button>
+                </div>
+              </div>
+
+              {showReorderWidget && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {urgentItems.map((item) => (
+                    <div
+                      key={item.sku}
+                      className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${
+                        isLight ? 'bg-white border-amber-200/80' : 'bg-zinc-900 border-zinc-800'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                              item.urgencyStatus === 'STOCKOUT_IMMINENT'
+                                ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                            }`}
+                          >
+                            {item.urgencyStatus === 'STOCKOUT_IMMINENT' ? 'Critical' : 'Reorder Soon'}
+                          </span>
+                          <span className="font-mono text-[10px] text-gray-500 dark:text-zinc-400">{item.sku}</span>
+                        </div>
+                        <div className={`text-xs font-bold truncate mt-0.5 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                          {item.productName}
+                        </div>
+                        <div className={`text-[10px] font-mono ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                          ATP {item.availableStock} • Avg {item.adjustedDailySales}/day • Sugg: +{item.recommendedReorderQty}
+                        </div>
+                      </div>
+                      {canManagePrPo && (
+                        <button
+                          type="button"
+                          disabled={isCreatingQuickPR !== null}
+                          onClick={() =>
+                            handleOneClickReorderPR(
+                              [
+                                {
+                                  sku: item.sku,
+                                  quantity: item.recommendedReorderQty,
+                                  supplierName: item.recommendedSupplierName,
+                                },
+                              ],
+                              item.sku
+                            )
+                          }
+                          className="px-2.5 py-1.5 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-[10px] font-bold whitespace-nowrap shrink-0 disabled:opacity-50 cursor-pointer"
+                        >
+                          {isCreatingQuickPR === item.sku ? 'Creating...' : 'Create Draft PR'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       <div
         className={`rounded-2xl border transition-all overflow-hidden ${
           isLight
@@ -1407,7 +1669,18 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       {pr.suggestedQuantity}
                     </td>
                     <td className="py-3.5 px-4 font-mono font-semibold text-[#0F4C3A] dark:text-emerald-400">
-                      {formatIDR(pr.totalEstimatedCost)}
+                      <div>{formatIDR(pr.totalEstimatedCost)}</div>
+                      {(() => {
+                        const hist = getLocalLastPoPrice(pr.sku);
+                        if (!hist || pr.suggestedQuantity <= 0) return null;
+                        const estUnit = Math.round(pr.totalEstimatedCost / pr.suggestedQuantity);
+                        const diffPct = hist.price > 0 ? Math.round(((estUnit - hist.price) / hist.price) * 100) : 0;
+                        return (
+                          <div className={`text-[10px] font-normal mt-0.5 ${diffPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-zinc-400'}`}>
+                            Last: {formatIDR(hist.price)} ({hist.date}) {diffPct > 0 ? `▲+${diffPct}%` : diffPct < 0 ? `▼${diffPct}%` : ''}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-1.5">
@@ -1496,6 +1769,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             </tbody>
           </table>
         </div>
+      </div>
       </div>
       )}
 
@@ -2356,11 +2630,86 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
             {/* Items with partial quantity inputs */}
             <div className="space-y-3">
-              <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
-                {receiveMode === 'cross_dock'
-                  ? 'Cross-Dock Branch Allocation (Zero CDC Shelf Putaway)'
-                  : 'Specify Received Items (Partial Fulfillment Supported)'}
-              </h4>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  {receiveMode === 'cross_dock'
+                    ? 'Cross-Dock Branch Allocation (Zero CDC Shelf Putaway)'
+                    : 'Specify Received Items (Partial Fulfillment Supported)'}
+                </h4>
+                {receiveMode === 'standard' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowGrScanner((v) => !v)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer shrink-0 ${
+                      showGrScanner
+                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                        : isLight
+                        ? 'bg-white border-emerald-300 text-[#0F4C3A] hover:bg-emerald-50'
+                        : 'bg-zinc-800 border-emerald-700 text-emerald-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    <Barcode className="w-3.5 h-3.5" />
+                    {showGrScanner ? 'Hide GR Barcode Scanner' : 'Quick Scan Box (+1 Receive)'}
+                  </button>
+                )}
+              </div>
+
+              {showGrScanner && receiveMode === 'standard' && (
+                <QuickBarcodeScannerBar
+                  theme={theme}
+                  title="Goods Receipt Box / Carton Scanner (+1 Unit)"
+                  placeholder="Scan item EAN-13 barcode or SKU to increment received qty (Enter)..."
+                  allowDecrement={false}
+                  sampleCodes={activeReceivingPO.items.slice(0, 4).map((it) => {
+                    const invMatch = inventory.find((i) => i.sku === it.sku);
+                    return {
+                      label: it.productName.split(' ').slice(0, 2).join(' '),
+                      code: invMatch?.barcode || it.sku,
+                    };
+                  })}
+                  onScan={(code) => {
+                    const q = code.toLowerCase();
+                    const poItem = activeReceivingPO.items.find((it) => {
+                      const invMatch = inventory.find((i) => i.sku === it.sku);
+                      return (
+                        it.sku.toLowerCase() === q ||
+                        (invMatch?.barcode && invMatch.barcode.toLowerCase() === q)
+                      );
+                    });
+                    if (!poItem) {
+                      return { matched: false, detail: `Barcode "${code}" is not on PO ${activeReceivingPO.id}` };
+                    }
+                    const currentItem = receivingItemsState[poItem.sku];
+                    const curQty = currentItem ? currentItem.quantityReceived : 0;
+                    if (curQty >= poItem.remainingBackorder) {
+                      return {
+                        matched: false,
+                        detail: `${poItem.productName} already reached max remaining qty (${poItem.remainingBackorder})`,
+                      };
+                    }
+                    const nextQty = curQty + 1;
+                    setReceivingItemsState((prev) => ({
+                      ...prev,
+                      [poItem.sku]: {
+                        ...(prev[poItem.sku] || {
+                          quantityReceived: 0,
+                          bonusQty: poItem.bonusQty || 0,
+                          batchNumber: `BAT-${Date.now().toString().slice(-6)}`,
+                          expiryDate: new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString().split('T')[0],
+                          qualityCondition: 'Cold-Chain Verified' as const,
+                          tempCheckCelsius: 3.8,
+                        }),
+                        quantityReceived: nextQty,
+                      },
+                    }));
+                    return {
+                      matched: true,
+                      label: `${poItem.productName} (${poItem.sku})`,
+                      detail: `Received Qty = ${nextQty} / ${poItem.remainingBackorder}`,
+                    };
+                  }}
+                />
+              )}
 
               {activeReceivingPO.items.map((item, idx) => {
                 const itemState = receivingItemsState[item.sku] || {
@@ -2936,6 +3285,82 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   </option>
                 ))}
               </select>
+
+              {/* Smart Price Comparison / Last Purchase Price Tracker */}
+              {directPoSku && (() => {
+                const selectedInv = inventory.find((i) => i.sku === directPoSku);
+                const currentUnitCost = selectedInv?.unitCost || 25000;
+                const localHist = getLocalLastPoPrice(directPoSku, directPoSupplier);
+                const resolved = lastPriceInfo?.found
+                  ? {
+                      found: true,
+                      price: lastPriceInfo.lastUnitCostIDR || currentUnitCost,
+                      date: lastPriceInfo.lastOrderDate ? lastPriceInfo.lastOrderDate.split('T')[0] : '',
+                      docRef: lastPriceInfo.lastPoId || '',
+                      supplier: lastPriceInfo.lastVendorName || directPoSupplier,
+                      matchedSameSupplier: directPoSupplier ? lastPriceInfo.matchedSameSupplier : true,
+                      diffPct: lastPriceInfo.priceVariancePercent ?? 0,
+                    }
+                  : localHist
+                  ? {
+                      found: true,
+                      price: localHist.price,
+                      date: localHist.date,
+                      docRef: localHist.docRef,
+                      supplier: localHist.vendorName || directPoSupplier,
+                      matchedSameSupplier: localHist.matchedSameSupplier,
+                      diffPct: localHist.price > 0 ? Math.round(((currentUnitCost - localHist.price) / localHist.price) * 1000) / 10 : 0,
+                    }
+                  : null;
+
+                if (isLoadingLastPrice && !resolved) {
+                  return (
+                    <p className="mt-1.5 text-[11px] text-gray-400 flex items-center gap-1">
+                      <History className="w-3 h-3 animate-pulse" />
+                      Checking historical GR/PO purchase price...
+                    </p>
+                  );
+                }
+                if (!resolved) {
+                  return (
+                    <p className="mt-1.5 text-[11px] text-gray-500 dark:text-zinc-400 flex items-center gap-1">
+                      <History className="w-3 h-3" />
+                      No prior GR/PO price record found for this SKU yet.
+                    </p>
+                  );
+                }
+                const isMarkup = resolved.diffPct > 0;
+                return (
+                  <p
+                    title={`Reference: ${resolved.docRef}${resolved.supplier ? ` · Supplier: ${resolved.supplier}` : ''}`}
+                    className={`mt-1.5 text-[11px] flex items-center justify-between gap-2 ${
+                      isMarkup
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : resolved.diffPct < 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : isLight
+                        ? 'text-gray-600'
+                        : 'text-zinc-300'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <History className="w-3 h-3 shrink-0" />
+                      <span>
+                        Last bought: <strong className="font-mono">{formatIDR(resolved.price)}</strong> on{' '}
+                        <span className="font-mono">{resolved.date}</span>
+                        {!resolved.matchedSameSupplier && resolved.supplier ? ` (via ${resolved.supplier})` : ` (${resolved.docRef})`}
+                      </span>
+                    </span>
+                    <span className="font-mono font-semibold shrink-0">
+                      {isMarkup
+                        ? `▲ +${resolved.diffPct}% vs last`
+                        : resolved.diffPct < 0
+                        ? `▼ ${resolved.diffPct}% lower`
+                        : 'Same price'}
+                    </span>
+                  </p>
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">

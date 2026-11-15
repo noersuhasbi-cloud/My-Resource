@@ -6169,7 +6169,11 @@ async function startServer() {
       }
 
       // 7. Procurement PR/PO vs Dock Goods Receipt (GR) & QC
-      if (urlPath === '/admin/procurement/vendor-scorecard' || urlPath === '/admin/procurement/demand-forecast') {
+      if (
+        urlPath === '/admin/procurement/vendor-scorecard' ||
+        urlPath === '/admin/procurement/demand-forecast' ||
+        urlPath === '/admin/procurement/last-purchase-price'
+      ) {
         const allowed: CanonicalServerRole[] = ['purchasing', 'warehouse', 'store_manager', 'admin', 'coo', 'super_admin'];
         if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
       }
@@ -9627,7 +9631,14 @@ async function startServer() {
   // Formal Reversing Counter-Entry (Audit-Compliant Reversing Journal Voucher)
   app.post('/api/admin/accounting/general-ledger/:id/reverse', (req: Request, res: Response) => {
     const { id } = req.params;
-    const { reason = 'Auditor correction counter-entry' } = req.body;
+    const reason = String(req.body?.reason ?? '').trim();
+
+    if (reason.length < 5) {
+      return res.status(400).json({
+        error: 'MANDATORY_AUDIT_NOTE_REQUIRED',
+        message: 'Mandatory audit justification note (at least 5 characters) is required before posting a reversing journal entry.',
+      });
+    }
 
     const original = generalLedger.find((g) => g.id === id);
     if (!original) {
@@ -9640,40 +9651,93 @@ async function startServer() {
       });
     }
 
-    const reversingId = `GLE-2026-REV-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+    const sameTimestampGroup = generalLedger.filter(
+      (g) =>
+        g.referenceId === original.referenceId &&
+        g.referenceType === original.referenceType &&
+        g.timestamp === original.timestamp &&
+        !g.isReversed &&
+        !g.isReversal
+    );
+    const tsDr = sameTimestampGroup.reduce((s, g) => s + Number(g.debit || 0), 0);
+    const tsCr = sameTimestampGroup.reduce((s, g) => s + Number(g.credit || 0), 0);
+
+    const sameRefGroup = generalLedger.filter(
+      (g) =>
+        g.referenceId === original.referenceId &&
+        g.referenceType === original.referenceType &&
+        !g.isReversed &&
+        !g.isReversal
+    );
+    const refDr = sameRefGroup.reduce((s, g) => s + Number(g.debit || 0), 0);
+    const refCr = sameRefGroup.reduce((s, g) => s + Number(g.credit || 0), 0);
+
+    const targetBatch =
+      sameTimestampGroup.length >= 2 && tsDr === tsCr
+        ? sameTimestampGroup
+        : sameRefGroup.length >= 2 && refDr === refCr
+          ? sameRefGroup
+          : [original];
+
     const timestamp = new Date().toISOString();
+    const reversalEntries: GeneralLedgerEntry[] = [];
+    let mainReversingEntry: GeneralLedgerEntry | null = null;
 
-    // Create counter-entry with flipped debit & credit
-    const reversingEntry: GeneralLedgerEntry = {
-      id: reversingId,
-      timestamp,
-      storeId: original.storeId,
-      storeName: original.storeName,
-      accountCode: original.accountCode,
-      accountName: original.accountName,
-      category: original.category,
-      debit: original.credit,  // Flipped
-      credit: original.debit,  // Flipped
-      referenceType: 'REVERSING_ENTRY',
-      referenceId: original.id,
-      description: `[REVERSAL] ${reason} (Counter-entry for ${original.id})`,
-      isReversal: true,
-      reversesVoucherId: original.id,
-      reversalReason: reason,
-    };
+    targetBatch.forEach((line, idx) => {
+      const reversingId = `GLE-2026-REV-${(generalLedger.length + idx + 1).toString().padStart(4, '0')}`;
+      const revEntry: GeneralLedgerEntry = {
+        id: reversingId,
+        timestamp,
+        storeId: line.storeId,
+        storeName: line.storeName,
+        accountCode: line.accountCode,
+        accountName: line.accountName,
+        category: line.category,
+        debit: line.credit,  // Flipped
+        credit: line.debit,  // Flipped
+        referenceType: 'REVERSING_ENTRY',
+        referenceId: line.id,
+        description: `[REVERSAL] ${reason} (Counter-entry for ${line.id} / ${line.referenceId})`,
+        isReversal: true,
+        reversesVoucherId: line.id,
+        reversalReason: reason,
+      };
+      line.isReversed = true;
+      line.reversedByVoucherId = reversingId;
+      reversalEntries.push(revEntry);
+      if (line.id === original.id) {
+        mainReversingEntry = revEntry;
+      }
+    });
 
-    // Mark original as reversed (audit trail immutability preserved)
-    original.isReversed = true;
-    original.reversedByVoucherId = reversingId;
+    const batchDr = reversalEntries.reduce((s, e) => s + Number(e.debit || 0), 0);
+    const batchCr = reversalEntries.reduce((s, e) => s + Number(e.credit || 0), 0);
+    if (batchDr === batchCr) {
+      commitBalancedGlBatch(reversalEntries);
+    } else {
+      for (const entry of reversalEntries) {
+        generalLedger.unshift(entry);
+        updateCoaLedgerBalance(entry.accountCode, entry.debit, entry.credit);
+      }
+    }
 
-    generalLedger.unshift(reversingEntry);
-    updateCoaLedgerBalance(reversingEntry.accountCode, reversingEntry.debit, reversingEntry.credit);
+    const primaryRevId = (mainReversingEntry || reversalEntries[0])?.id || id;
+    appendAuditTrailLog({
+      req,
+      branchScope: original.storeId || 'CONSOLIDATED',
+      module: 'FINANCE',
+      action: 'GL_ENTRY_REVERSED',
+      referenceId: primaryRevId,
+      summary: `Reversed GL voucher #${original.id} (${reversalEntries.length} balanced journal line${reversalEntries.length > 1 ? 's' : ''}) via #${primaryRevId}. Mandatory Audit Reason: "${reason}"`,
+    });
+    scheduleStateSave();
 
     res.json({
       success: true,
-      message: `Reversing journal voucher #${reversingId} successfully posted. Original voucher #${original.id} marked as reversed.`,
+      message: `Reversing journal batch #${primaryRevId} (${reversalEntries.length} line${reversalEntries.length > 1 ? 's' : ''}) successfully posted. Original voucher #${original.id} marked as reversed.`,
       originalVoucher: original,
-      reversingVoucher: reversingEntry,
+      reversingVoucher: mainReversingEntry || reversalEntries[0],
+      reversingVouchers: reversalEntries,
     });
   });
 
@@ -18426,17 +18490,28 @@ async function startServer() {
   });
 
   app.post('/api/admin/markdown-rules/apply-batches', (req: Request, res: Response) => {
-    const { batchIds } = req.body as { batchIds: string[] };
+    const { batchIds, discountPercentOverride } = req.body as {
+      batchIds: string[];
+      discountPercentOverride?: number;
+    };
     const targetBatches = Array.isArray(batchIds) && batchIds.length > 0 ? batchIds : inventoryBatches.map((b) => b.batchId);
     const nowMs = Date.now();
+    const hasOverride =
+      typeof discountPercentOverride === 'number' &&
+      Number.isFinite(discountPercentOverride) &&
+      discountPercentOverride >= 1 &&
+      discountPercentOverride <= 80;
+    const clampedOverride = hasOverride ? Math.round(discountPercentOverride) : 0;
 
     let count = 0;
+    let skippedExpiredCount = 0;
     targetBatches.forEach((id) => {
       const b = inventoryBatches.find((batch) => batch.batchId === id);
       if (!b) return;
       const isExpired = syncBatchExpiryStatus(b, nowMs);
       if (isExpired) {
         b.markdownDiscountPercent = 0;
+        skippedExpiredCount++;
         return;
       }
       if (
@@ -18446,10 +18521,15 @@ async function startServer() {
         b.status !== 'expired' &&
         b.status !== 'depleted'
       ) {
-        const candidate = evaluateBatchMarkdown(b, dynamicMarkdownConfig);
-        if (candidate) {
-          b.markdownDiscountPercent = candidate.discountPercent;
+        if (hasOverride) {
+          b.markdownDiscountPercent = clampedOverride;
           count++;
+        } else {
+          const candidate = evaluateBatchMarkdown(b, dynamicMarkdownConfig);
+          if (candidate) {
+            b.markdownDiscountPercent = candidate.discountPercent;
+            count++;
+          }
         }
       }
     });
@@ -18458,15 +18538,24 @@ async function startServer() {
       req,
       branchScope: 'CONSOLIDATED',
       module: 'POS',
-      action: 'BATCH_MARKDOWN_OVERRIDE',
+      action: hasOverride ? 'FLASH_SALE_MARKDOWN_50' : 'BATCH_MARKDOWN_OVERRIDE',
       referenceId: `MD-BATCH-${count}`,
-      summary: `Applied dynamic shelf-life markdown price overrides across ${count} batch lot(s).`,
+      summary: hasOverride
+        ? `Activated Flash Sale ${clampedOverride}% clearance markdown across ${count} critical batch lot(s).`
+        : `Applied dynamic shelf-life markdown price overrides across ${count} batch lot(s).`,
     });
+    scheduleStateSave();
 
     res.json({
       success: true,
       appliedCount: count,
-      message: `Dynamic markdowns applied to ${count} near-expiry batch lots across storefront & POS registers.`,
+      skippedExpiredCount,
+      message:
+        skippedExpiredCount > 0 && count === 0
+          ? `HACCP Safety Block: ${skippedExpiredCount} lot sudah kadaluarsa dan tidak dapat didiskon ke POS. Pindahkan ke Quarantine Hold Cage.`
+          : hasOverride
+            ? `Flash Sale ${clampedOverride}% aktif untuk ${count} batch kritis di POS & Storefront.`
+            : `Dynamic markdowns applied to ${count} near-expiry batch lots across storefront & POS registers.`,
     });
   });
 
@@ -26180,6 +26269,640 @@ async function startServer() {
       batch: newBatch,
       glEntryIds: glIds,
       message: `${resolvedChannel} batch ${batchId} reconciled: Net Rp ${netSettledIDR.toLocaleString('id-ID')} to #${destCode} & MDR Rp ${mdrFeeIDR.toLocaleString('id-ID')} to #6040.`,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // SMART PRICE COMPARISON: LAST PURCHASE PRICE TRACKER
+  // -------------------------------------------------------------
+  app.get('/api/admin/procurement/last-purchase-price', (req: Request, res: Response) => {
+    const sku = String(req.query?.sku || '').trim();
+    const supplierName = String(req.query?.supplierName || '').trim();
+    if (!sku) {
+      return res.status(400).json({ error: 'sku query parameter is required.' });
+    }
+
+    const inv = inventoryList.find((i) => i.sku === sku);
+    const tier = storeInventoryTiers.find((t) => t.sku === sku);
+    const currentCatalogCostIDR = roundIDR(inv?.unitCost || tier?.unitCost || 0);
+
+    const normalizeSup = (v: string) =>
+      v
+        .toLowerCase()
+        .replace(/eco-farm|pt\.|cv\.|ud\./g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+    const targetSupNorm = normalizeSup(supplierName);
+
+    const candidates: Array<{
+      unitCostIDR: number;
+      date: string;
+      poId: string;
+      vendorName: string;
+      isSameSupplier: boolean;
+    }> = [];
+
+    const sortedPOs = [...purchaseOrders].sort(
+      (a, b) => new Date(b.issueDate || b.createdAt).getTime() - new Date(a.issueDate || a.createdAt).getTime()
+    );
+    for (const po of sortedPOs) {
+      const statusLower = String(po.status || '').toLowerCase();
+      if (statusLower === 'cancelled' || statusLower === 'void') continue;
+      const line = po.items.find((it) => it.sku === sku);
+      if (!line || !(Number(line.unitCost) > 0)) continue;
+      const poSupNorm = normalizeSup(po.supplierName || '');
+      const isSameSupplier = Boolean(
+        targetSupNorm &&
+          poSupNorm &&
+          (poSupNorm === targetSupNorm || poSupNorm.includes(targetSupNorm) || targetSupNorm.includes(poSupNorm))
+      );
+      candidates.push({
+        unitCostIDR: roundIDR(line.unitCost),
+        date: po.issueDate || po.createdAt,
+        poId: po.id,
+        vendorName: po.supplierName,
+        isSameSupplier,
+      });
+    }
+
+    const sortedGRs = [...goodsReceipts].sort(
+      (a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+    );
+    for (const gr of sortedGRs) {
+      const grItem = gr.items.find((it) => it.sku === sku);
+      if (!grItem) continue;
+      const linkedBill = vendorBillsList.find(
+        (b) => b.status !== 'VOID' && b.goodsReceiptId === gr.id && b.items.some((it) => it.sku === sku)
+      );
+      const linkedBillLine = linkedBill?.items.find((it) => it.sku === sku);
+      const linkedPo = purchaseOrders.find((p) => p.id === gr.poId);
+      const linkedPoLine = linkedPo?.items.find((it) => it.sku === sku);
+      const resolvedCost =
+        linkedBillLine && Number(linkedBillLine.unitCost) > 0
+          ? roundIDR(Number(linkedBillLine.unitCost) * (Number(linkedBill?.exchangeRate) || 1))
+          : linkedPoLine && Number(linkedPoLine.unitCost) > 0
+            ? roundIDR(Number(linkedPoLine.unitCost))
+            : 0;
+      if (!(resolvedCost > 0)) continue;
+      const grVendorName = gr.vendorName || linkedPo?.supplierName || linkedBill?.supplierName || '';
+      const grSupNorm = normalizeSup(grVendorName);
+      const isSameSupplier = Boolean(
+        targetSupNorm &&
+          grSupNorm &&
+          (grSupNorm === targetSupNorm || grSupNorm.includes(targetSupNorm) || targetSupNorm.includes(grSupNorm))
+      );
+      candidates.push({
+        unitCostIDR: resolvedCost,
+        date: gr.receivedAt,
+        poId: gr.id,
+        vendorName: grVendorName,
+        isSameSupplier,
+      });
+    }
+
+    const sortedBills = [...vendorBillsList]
+      .filter((b) => b.status !== 'VOID')
+      .sort((a, b) => new Date(b.billDate).getTime() - new Date(a.billDate).getTime());
+    for (const bill of sortedBills) {
+      const line = bill.items.find((it) => it.sku === sku);
+      if (!line || !(Number(line.unitCost) > 0)) continue;
+      const billCostIDR = roundIDR(Number(line.unitCost) * (Number(bill.exchangeRate) || 1));
+      const bSupNorm = normalizeSup(bill.supplierName || '');
+      const isSameSupplier = Boolean(
+        targetSupNorm &&
+          bSupNorm &&
+          (bSupNorm === targetSupNorm || bSupNorm.includes(targetSupNorm) || targetSupNorm.includes(bSupNorm))
+      );
+      candidates.push({
+        unitCostIDR: billCostIDR,
+        date: bill.billDate,
+        poId: bill.poId || bill.billNumber,
+        vendorName: bill.supplierName,
+        isSameSupplier,
+      });
+    }
+
+    candidates.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const sameSupplierHistory = candidates.filter((c) => c.isSameSupplier);
+    const chosen = sameSupplierHistory[0] || candidates[0] || null;
+    const priceVariancePercent =
+      chosen && chosen.unitCostIDR > 0 && currentCatalogCostIDR > 0
+        ? Number((((currentCatalogCostIDR - chosen.unitCostIDR) / chosen.unitCostIDR) * 100).toFixed(1))
+        : null;
+
+    res.json({
+      found: Boolean(chosen),
+      sku,
+      supplierName: supplierName || chosen?.vendorName || '',
+      matchedSameSupplier: sameSupplierHistory.length > 0,
+      lastUnitCostIDR: chosen ? chosen.unitCostIDR : null,
+      lastOrderDate: chosen ? chosen.date : null,
+      lastPoId: chosen ? chosen.poId : null,
+      lastVendorName: chosen ? chosen.vendorName : null,
+      currentCatalogCostIDR,
+      priceVariancePercent,
+      historicalCount: sameSupplierHistory.length > 0 ? sameSupplierHistory.length : candidates.length,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // ACCOUNTING: BANK MUTATION CSV IMPORT & B2B AUTO-MATCHING
+  // -------------------------------------------------------------
+  const parseCsvLineCells = (line: string, delimiter: string): string[] => {
+    const cells: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+      } else if (ch === delimiter && !inQuotes) {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    cells.push(current.trim());
+    return cells;
+  };
+
+  const parseBankCurrencyIDR = (raw: string): number => {
+    const cleaned = String(raw || '')
+      .replace(/rp|idr|cr|db|\s/gi, '')
+      .trim();
+    if (!cleaned) return 0;
+    // Handle decimals like 1,250,000.00 or 1.250.000,00
+    if (/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(cleaned)) {
+      return roundIDR(Number(cleaned.replace(/,/g, '')));
+    }
+    if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(cleaned)) {
+      return roundIDR(Number(cleaned.replace(/\./g, '').replace(',', '.')));
+    }
+    if (/^\d+\.\d{2}$/.test(cleaned)) {
+      return roundIDR(Number(cleaned));
+    }
+    return roundIDR(Number(cleaned.replace(/[^0-9.-]/g, '')) || 0);
+  };
+
+  app.post('/api/admin/accounting/bank-mutation-reconcile', (req: Request, res: Response) => {
+    const {
+      csvText,
+      mutations: providedMutations,
+      bankAccountCode = '1020',
+      previewOnly = false,
+    } = (req.body || {}) as {
+      csvText?: string;
+      mutations?: Array<{ date: string; description: string; amountIDR: number; type?: 'CR' | 'DB' }>;
+      bankAccountCode?: '1020' | '1015' | '1010';
+      previewOnly?: boolean;
+    };
+
+    ensureRegulatoryCoaAccounts();
+    const resolvedBankCode: '1020' | '1015' | '1010' =
+      bankAccountCode === '1015' || bankAccountCode === '1010' ? bankAccountCode : '1020';
+    const bankCoaName =
+      resolvedBankCode === '1010'
+        ? 'Cash on Hand & Store Registers'
+        : resolvedBankCode === '1015'
+        ? 'Bank Transfer & Store Cash Vault'
+        : 'Bank BCA Operational Clearing';
+
+    const parsedRows: Array<{
+      rowNumber: number;
+      date: string;
+      description: string;
+      amountIDR: number;
+      type: 'CR' | 'DB';
+      bankFormat: 'BCA' | 'MANDIRI' | 'GENERIC';
+    }> = [];
+
+    if (Array.isArray(providedMutations) && providedMutations.length > 0) {
+      providedMutations.forEach((m, idx) => {
+        const amt = roundIDR(Number(m.amountIDR) || 0);
+        parsedRows.push({
+          rowNumber: idx + 1,
+          date: String(m.date || new Date().toISOString().split('T')[0]),
+          description: String(m.description || '').trim(),
+          amountIDR: Math.abs(amt),
+          type: m.type === 'DB' || amt < 0 ? 'DB' : 'CR',
+          bankFormat: 'GENERIC',
+        });
+      });
+    } else if (typeof csvText === 'string' && csvText.trim().length > 0) {
+      const lines = csvText
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+      const firstDelimiter = lines[0]?.includes(';') ? ';' : ',';
+      let headerIdx = -1;
+      let colMap = {
+        date: 0,
+        description: 1,
+        amount: 3,
+        type: 4,
+        creditCol: -1,
+        debitCol: -1,
+        bankFormat: 'GENERIC' as 'BCA' | 'MANDIRI' | 'GENERIC',
+      };
+
+      for (let i = 0; i < Math.min(lines.length, 6); i++) {
+        const cells = parseCsvLineCells(lines[i], firstDelimiter).map((c) => c.toLowerCase());
+        const joined = cells.join(' ');
+        if (
+          joined.includes('keterangan') ||
+          joined.includes('description') ||
+          joined.includes('mutasi') ||
+          joined.includes('credit') ||
+          joined.includes('tanggal')
+        ) {
+          headerIdx = i;
+          const findCol = (keys: string[]) => cells.findIndex((c) => keys.some((k) => c.includes(k)));
+          const dIdx = findCol(['tanggal', 'posting date', 'date', 'tgl']);
+          const descIdx = findCol(['keterangan', 'description', 'remark', 'uraian']);
+          const amtIdx = findCol(['jumlah', 'amount', 'nominal']);
+          const typeIdx = findCol(['mutasi', 'type', 'db/cr', 'd/c']);
+          const crIdx = findCol(['credit', 'kredit', 'cr']);
+          const dbIdx = findCol(['debit', 'debet', 'db']);
+          const isBca = joined.includes('keterangan') || joined.includes('cabang');
+          const isMandiri = joined.includes('posting date') || (crIdx >= 0 && dbIdx >= 0);
+          colMap = {
+            date: dIdx >= 0 ? dIdx : 0,
+            description: descIdx >= 0 ? descIdx : 1,
+            amount: amtIdx >= 0 ? amtIdx : crIdx >= 0 ? crIdx : 2,
+            type: typeIdx,
+            creditCol: crIdx >= 0 && crIdx !== typeIdx ? crIdx : -1,
+            debitCol: dbIdx >= 0 && dbIdx !== typeIdx ? dbIdx : -1,
+            bankFormat: isBca ? 'BCA' : isMandiri ? 'MANDIRI' : 'GENERIC',
+          };
+          break;
+        }
+      }
+
+      const startIdx = headerIdx >= 0 ? headerIdx + 1 : 0;
+      for (let i = startIdx; i < lines.length; i++) {
+        const cells = parseCsvLineCells(lines[i], firstDelimiter);
+        if (cells.length < 2) continue;
+        const dateVal = cells[colMap.date] || new Date().toISOString().split('T')[0];
+        const descVal = cells[colMap.description] || cells.slice(1, Math.max(2, cells.length - 1)).join(' ');
+        let amountIDR = 0;
+        let mutType: 'CR' | 'DB' = 'CR';
+
+        if (colMap.creditCol >= 0 || colMap.debitCol >= 0) {
+          const crAmt = colMap.creditCol >= 0 ? parseBankCurrencyIDR(cells[colMap.creditCol] || '') : 0;
+          const dbAmt = colMap.debitCol >= 0 ? parseBankCurrencyIDR(cells[colMap.debitCol] || '') : 0;
+          if (crAmt > 0) {
+            amountIDR = crAmt;
+            mutType = 'CR';
+          } else if (dbAmt > 0) {
+            amountIDR = dbAmt;
+            mutType = 'DB';
+          }
+        } else {
+          const rawAmt = cells[colMap.amount] ?? cells[cells.length - 1] ?? '';
+          const rawType = colMap.type >= 0 ? (cells[colMap.type] || '').toUpperCase() : '';
+          const parsedAmt = parseBankCurrencyIDR(rawAmt);
+          const looksDebit =
+            rawType === 'DB' ||
+            rawType === 'D' ||
+            rawType.includes('DEBIT') ||
+            String(rawAmt).toUpperCase().includes('DB') ||
+            parsedAmt < 0;
+          amountIDR = Math.abs(parsedAmt);
+          mutType = looksDebit ? 'DB' : 'CR';
+        }
+
+        if (amountIDR <= 0 && !descVal) continue;
+        parsedRows.push({
+          rowNumber: i + 1,
+          date: dateVal,
+          description: descVal,
+          amountIDR,
+          type: mutType,
+          bankFormat: colMap.bankFormat,
+        });
+      }
+    } else {
+      return res.status(400).json({ error: 'Provide csvText or mutations array to reconcile bank statements.' });
+    }
+
+    if (parsedRows.length === 0) {
+      return res.status(400).json({ error: 'No valid bank mutation rows could be parsed from the uploaded CSV.' });
+    }
+
+    const claimedOrderIds = new Set<string>();
+    const matches: Array<{
+      rowNumber: number;
+      mutationDate: string;
+      description: string;
+      amountIDR: number;
+      bankFormat: 'BCA' | 'MANDIRI' | 'GENERIC';
+      status: 'MATCHED_AND_SETTLED' | 'MATCHED_PREVIEW' | 'UNMATCHED' | 'IGNORED_DEBIT';
+      matchedOrderId?: string;
+      matchedCustomerName?: string;
+      matchedCustomerId?: string;
+      previousPaymentStatus?: string;
+      glEntryIds?: string[];
+      reason?: string;
+    }> = [];
+
+    const timestamp = new Date().toISOString();
+    let settledCount = 0;
+    let totalMatchedIDR = 0;
+
+    for (const row of parsedRows) {
+      if (row.type === 'DB') {
+        matches.push({
+          rowNumber: row.rowNumber,
+          mutationDate: row.date,
+          description: row.description,
+          amountIDR: row.amountIDR,
+          bankFormat: row.bankFormat,
+          status: 'IGNORED_DEBIT',
+          reason: 'Outgoing debit row skipped (only incoming credit transfers settle AR)',
+        });
+        continue;
+      }
+
+      const unpaidCandidates = b2bOrdersList.filter(
+        (o) =>
+          o.paymentStatus !== 'SETTLED' &&
+          !claimedOrderIds.has(o.id) &&
+          roundIDR(o.totalAmountIDR) === row.amountIDR
+      );
+
+      if (unpaidCandidates.length === 0) {
+        matches.push({
+          rowNumber: row.rowNumber,
+          mutationDate: row.date,
+          description: row.description,
+          amountIDR: row.amountIDR,
+          bankFormat: row.bankFormat,
+          status: 'UNMATCHED',
+          reason: `No open unpaid B2B order matches exact Rp ${row.amountIDR.toLocaleString('id-ID')}`,
+        });
+        continue;
+      }
+
+      const descLower = row.description.toLowerCase();
+      const matchedOrder =
+        unpaidCandidates.find((o) => descLower.includes(o.id.toLowerCase())) ||
+        unpaidCandidates.find((o) =>
+          o.companyName
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((tok) => tok.length >= 4 && tok !== 'hotel' && tok !== 'resto')
+            .some((tok) => descLower.includes(tok))
+        ) ||
+        unpaidCandidates[0];
+
+      claimedOrderIds.add(matchedOrder.id);
+      totalMatchedIDR += row.amountIDR;
+      const prevStatus = matchedOrder.paymentStatus;
+
+      if (previewOnly) {
+        matches.push({
+          rowNumber: row.rowNumber,
+          mutationDate: row.date,
+          description: row.description,
+          amountIDR: row.amountIDR,
+          bankFormat: row.bankFormat,
+          status: 'MATCHED_PREVIEW',
+          matchedOrderId: matchedOrder.id,
+          matchedCustomerName: matchedOrder.companyName,
+          matchedCustomerId: matchedOrder.customerId,
+          previousPaymentStatus: prevStatus,
+        });
+        continue;
+      }
+
+      // Apply Settlement & Post Balanced GL Entry
+      const linkedGiro = giroRecordsList.find(
+        (g) => g.orderId === matchedOrder.id && g.status === 'PENDING_CLEARING' && g.direction !== 'OUTGOING'
+      );
+      const creditAccountCode = linkedGiro
+        ? linkedGiro.settlementCoaCode === '1030'
+          ? '1030'
+          : '1210'
+        : '1200';
+      const creditAccountName =
+        creditAccountCode === '1030'
+          ? 'QRIS Settlement & PDC Giro Receivable'
+          : creditAccountCode === '1210'
+          ? 'Bilyet Giro & PDC Clearing Receivable'
+          : 'Accounts Receivable - B2B Wholesale';
+
+      if (linkedGiro) {
+        linkedGiro.status = 'CLEARED';
+        linkedGiro.clearedAt = timestamp;
+      }
+
+      matchedOrder.paymentStatus = 'SETTLED';
+      if (matchedOrder.status === 'PENDING_FINANCE') {
+        matchedOrder.status = 'CONFIRMED';
+      }
+
+      const customer = b2bCustomersList.find((c) => c.id === matchedOrder.customerId);
+      if (customer) {
+        customer.outstandingAR = Math.max(0, roundIDR(customer.outstandingAR - matchedOrder.totalAmountIDR));
+        customer.availableCredit = Math.max(0, roundIDR(customer.creditLimit - customer.outstandingAR));
+        if (
+          customer.status === 'CREDIT_LOCKED' &&
+          customer.outstandingAR < customer.creditLimit &&
+          customer.overdueDaysMax <= 7
+        ) {
+          customer.status = 'ACTIVE';
+          customer.lockReason = undefined;
+        }
+      }
+
+      const gle1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const gle2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: resolvedBankCode,
+            accountName: bankCoaName,
+            category: 'Asset',
+            debit: row.amountIDR,
+            credit: 0,
+            referenceType: 'BANK_MUTATION_RECONCILE',
+            referenceId: matchedOrder.id,
+            description: `Bank CSV auto-match deposit for ${matchedOrder.id} (${matchedOrder.companyName}): ${row.description}`,
+          },
+          {
+            id: gle2,
+            timestamp,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: creditAccountCode,
+            accountName: creditAccountName,
+            category: 'Asset',
+            debit: 0,
+            credit: row.amountIDR,
+            referenceType: 'BANK_MUTATION_RECONCILE',
+            referenceId: matchedOrder.id,
+            description: `Settled B2B invoice ${matchedOrder.id} via incoming bank transfer (${row.date})`,
+          },
+        ],
+        true
+      );
+      matchedOrder.journalEntryIds = [...(matchedOrder.journalEntryIds || []), gle1, gle2];
+      settledCount++;
+
+      matches.push({
+        rowNumber: row.rowNumber,
+        mutationDate: row.date,
+        description: row.description,
+        amountIDR: row.amountIDR,
+        bankFormat: row.bankFormat,
+        status: 'MATCHED_AND_SETTLED',
+        matchedOrderId: matchedOrder.id,
+        matchedCustomerName: matchedOrder.companyName,
+        matchedCustomerId: matchedOrder.customerId,
+        previousPaymentStatus: prevStatus,
+        glEntryIds: [gle1, gle2],
+      });
+    }
+
+    if (!previewOnly && settledCount > 0) {
+      appendAuditTrailLog({
+        req,
+        branchScope: 'CONSOLIDATED',
+        module: 'FINANCE',
+        action: 'BANK_MUTATION_AUTO_RECONCILED',
+        referenceId: matches
+          .filter((m) => m.status === 'MATCHED_AND_SETTLED')
+          .map((m) => m.matchedOrderId)
+          .join(', '),
+        summary: `Reconciled ${settledCount} incoming bank mutation(s) via CSV import totaling Rp ${totalMatchedIDR.toLocaleString('id-ID')} into COA #${resolvedBankCode}.`,
+      });
+      scheduleStateSave();
+    }
+
+    const creditRowsCount = parsedRows.filter((r) => r.type === 'CR').length;
+    const matchedCount = matches.filter(
+      (m) => m.status === 'MATCHED_AND_SETTLED' || m.status === 'MATCHED_PREVIEW'
+    ).length;
+
+    res.json({
+      success: true,
+      previewOnly: Boolean(previewOnly),
+      bankAccountCode: resolvedBankCode,
+      parsedRowsCount: parsedRows.length,
+      creditMutationsCount: creditRowsCount,
+      matchedCount,
+      settledCount,
+      totalMatchedIDR,
+      unmatchedCount: matches.filter((m) => m.status === 'UNMATCHED').length,
+      matches,
+      message: previewOnly
+        ? `Previewed ${parsedRows.length} CSV rows: ${matchedCount} exact B2B invoice match(es) totaling Rp ${totalMatchedIDR.toLocaleString('id-ID')}.`
+        : `Settled ${settledCount} B2B order(s) totaling Rp ${totalMatchedIDR.toLocaleString('id-ID')} into COA #${resolvedBankCode} cleanly.`,
+    });
+  });
+
+  // -------------------------------------------------------------
+  // ACCOUNTING: EXECUTIVE FINANCIAL HEALTH SUMMARY DASHBOARD
+  // -------------------------------------------------------------
+  app.get('/api/admin/accounting/executive-summary', (req: Request, res: Response) => {
+    ensureRegulatoryCoaAccounts();
+    const rawStoreId = typeof req.query?.storeId === 'string' ? req.query.storeId.trim() : 'CONSOLIDATED';
+    const isSingleStore = Boolean(rawStoreId && rawStoreId !== 'CONSOLIDATED' && rawStoreId !== 'ALL');
+    const outlet = isSingleStore ? resolveOutletFromCodeOrId(rawStoreId) : null;
+    const storeId = outlet?.storeId || (isSingleStore ? rawStoreId : 'CONSOLIDATED');
+    const storeName = outlet?.storeName || 'Consolidated Company-Wide';
+
+    const getCoaBal = (code: string) => {
+      if (!isSingleStore) {
+        return roundIDR(chartOfAccounts.find((c) => c.accountCode === code)?.balance ?? 0);
+      }
+      const baseline = Math.round((BASELINE_COA_BY_CODE[code]?.balance ?? 0) * 0.25);
+      const delta = generalLedger
+        .filter((e) => e.accountCode === code && e.storeId === storeId && !INITIAL_SEED_GL_IDS.has(e.id))
+        .reduce((sum, e) => {
+          const isDebitNormal = e.category === 'Asset' || e.category === 'Expense';
+          return sum + (isDebitNormal ? roundIDR(e.debit) - roundIDR(e.credit) : roundIDR(e.credit) - roundIDR(e.debit));
+        }, 0);
+      return roundIDR(baseline + delta);
+    };
+
+    const vaultAndRegistersIDR = getCoaBal('1010');
+    const posDrawerIDR = getCoaBal('1011');
+    const storeBankVaultIDR = getCoaBal('1015');
+    const bankBcaClearingIDR = getCoaBal('1020');
+    const qrisReceivablePendingIDR = getCoaBal('1030');
+    const totalLiquidCashIDR = vaultAndRegistersIDR + posDrawerIDR + storeBankVaultIDR + bankBcaClearingIDR;
+
+    const totalCustomerAr = b2bCustomersList.reduce((s, c) => s + roundIDR(c.outstandingAR || 0), 0);
+    const current0To30IDR = b2bCustomersList.reduce((s, c) => s + roundIDR((c.outstandingAR || 0) * (c.overdueDaysMax > 0 ? 0.7 : 1)), 0);
+    const days31To60IDR = b2bCustomersList.reduce((s, c) => s + roundIDR(c.overdueDaysMax > 0 ? (c.outstandingAR || 0) * 0.2 : 0), 0);
+    const over60DaysIDR = Math.max(0, totalCustomerAr - current0To30IDR - days31To60IDR);
+    const pendingGiroReceivableIDR = giroRecordsList
+      .filter((g) => g.status === 'PENDING_CLEARING' && g.direction !== 'OUTGOING')
+      .reduce((s, g) => s + roundIDR(g.amountIDR || 0), 0);
+    const unpaidB2bOrdersCount = b2bOrdersList.filter((o) => o.paymentStatus !== 'SETTLED').length;
+
+    const nowMs = Date.now();
+    const scopedBills = vendorBillsList.filter((b) => {
+      if (b.status === 'VOID' || b.status === 'PAID' || (b.remainingDue || 0) <= 0) return false;
+      if (isSingleStore && b.storeId && b.storeId !== storeId) return false;
+      return true;
+    });
+    let overduePayablesIDR = 0;
+    let dueWithin7DaysIDR = 0;
+    let dueWithin30DaysIDR = 0;
+    for (const bill of scopedBills) {
+      const remIDR = roundIDR((Number(bill.remainingDue) || 0) * (Number(bill.exchangeRate) || 1));
+      const daysToDue = Math.ceil((new Date(bill.dueDate).getTime() - nowMs) / 86400000);
+      if (daysToDue < 0) overduePayablesIDR += remIDR;
+      else if (daysToDue <= 7) dueWithin7DaysIDR += remIDR;
+      else dueWithin30DaysIDR += remIDR;
+    }
+    const outgoingGiroPayableIDR = giroRecordsList
+      .filter((g) => g.status === 'PENDING_CLEARING' && (g.direction === 'OUTGOING' || g.settlementCoaCode === '2030'))
+      .reduce((s, g) => s + roundIDR(g.amountIDR || 0), 0);
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      storeId,
+      storeName,
+      cashAndBank: {
+        totalLiquidCashIDR,
+        vaultAndRegistersIDR,
+        posDrawerIDR,
+        storeBankVaultIDR,
+        bankBcaClearingIDR,
+        qrisReceivablePendingIDR,
+      },
+      receivablesAging: {
+        totalOutstandingArIDR: totalCustomerAr,
+        coaArBalanceIDR: getCoaBal('1200'),
+        pendingGiroReceivableIDR,
+        current0To30IDR,
+        days31To60IDR,
+        over60DaysIDR,
+        lockedCustomersCount: b2bCustomersList.filter((c) => c.status === 'CREDIT_LOCKED').length,
+        unpaidB2bOrdersCount,
+      },
+      upcomingPayables: {
+        totalOpenApIDR: overduePayablesIDR + dueWithin7DaysIDR + dueWithin30DaysIDR,
+        coaApBalanceIDR: getCoaBal('2010'),
+        overduePayablesIDR,
+        dueWithin7DaysIDR,
+        dueWithin30DaysIDR,
+        outgoingGiroPayableIDR,
+        consignmentPayableIDR: getCoaBal('2015'),
+        openVendorBillsCount: scopedBills.length,
+      },
     });
   });
 

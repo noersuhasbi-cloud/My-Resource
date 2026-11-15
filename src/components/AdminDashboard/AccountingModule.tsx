@@ -15,6 +15,8 @@ import type {
   EnterpriseSettingsConfig,
   StaffShiftSession,
   SettlementReconcileResponse,
+  ExecutiveFinancialHealthSummary,
+  BankMutationCsvReconcileResponse,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import {
@@ -48,6 +50,9 @@ import {
   PieChart,
   BarChart3,
   Handshake,
+  Upload,
+  FileSpreadsheet,
+  Activity,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { VendorBillModule } from './VendorBillModule';
@@ -122,7 +127,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
   // Sub-tabs (controlled or internal) + additive Indonesian Compliance Views
   const [internalSubTab, setInternalSubTab] = useState<AccountingSubTab>('pnl');
-  const [complianceSubView, setComplianceSubView] = useState<'rma_rtv' | 'coretax_djp' | 'settlement_giro' | null>(null);
+  const [complianceSubView, setComplianceSubView] = useState<'rma_rtv' | 'coretax_djp' | 'settlement_giro' | 'executive_health' | null>(null);
   const subTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
 
   useEffect(() => {
@@ -168,6 +173,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   const [giroRef, setGiroRef] = useState<string>('');
   const [isCreatingGiro, setIsCreatingGiro] = useState<boolean>(false);
 
+  // Executive Financial Health Summary & Bank Mutation CSV Reconcile State
+  const [execSummary, setExecSummary] = useState<ExecutiveFinancialHealthSummary | null>(null);
+  const [isLoadingExecSummary, setIsLoadingExecSummary] = useState<boolean>(false);
+  const [bankCsvText, setBankCsvText] = useState<string>('');
+  const [bankAccountCode, setBankAccountCode] = useState<'1020' | '1015' | '1010'>('1020');
+  const [bankMatchResult, setBankMatchResult] = useState<BankMutationCsvReconcileResponse | null>(null);
+  const [isMatchingBankCsv, setIsMatchingBankCsv] = useState<boolean>(false);
+
   const loadSettlementData = async () => {
     setIsLoadingSettlement(true);
     try {
@@ -197,12 +210,26 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
     loadB2bAccountingData();
   }, []);
 
+  const loadExecSummary = React.useCallback(async () => {
+    setIsLoadingExecSummary(true);
+    try {
+      const res = await apiClient.getExecutiveAccountingSummary(selectedStore);
+      setExecSummary(res);
+    } catch {
+      // silent fallback
+    } finally {
+      setIsLoadingExecSummary(false);
+    }
+  }, [selectedStore]);
+
   useEffect(() => {
     if (complianceSubView === 'settlement_giro') {
       loadSettlementData();
       loadB2bAccountingData();
+    } else if (complianceSubView === 'executive_health') {
+      void loadExecSummary();
     }
-  }, [complianceSubView]);
+  }, [complianceSubView, loadExecSummary]);
 
   const handleClearGiro = async (giroId: string) => {
     setIsProcessingGiro(true);
@@ -261,21 +288,29 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
     }
   };
 
-  // Immutability & Reversing Journal Entry State
+  // Immutability & Reversing Journal Entry State (Mandatory Audit Note Enforced)
   const [reversingEntry, setReversingEntry] = useState<GeneralLedgerEntry | null>(null);
-  const [reversalReason, setReversalReason] = useState<string>('Auditor correction / price variance offset');
+  const [reversalReason, setReversalReason] = useState<string>('');
   const [isSubmittingReversal, setIsSubmittingReversal] = useState<boolean>(false);
 
   const handlePostReversal = async () => {
     if (!reversingEntry) return;
+    if (reversalReason.trim().length < 5) {
+      onShowToast(
+        'Mandatory Audit Note Required',
+        'Enter an explicit audit correction justification (minimum 5 characters).'
+      );
+      return;
+    }
     setIsSubmittingReversal(true);
     try {
-      const res = await apiClient.reverseGeneralLedgerEntry(reversingEntry.id, reversalReason);
+      const res = await apiClient.reverseGeneralLedgerEntry(reversingEntry.id, reversalReason.trim());
       onShowToast(
         'Reversing Counter-Entry Posted',
         `Reversing voucher #${res.reversingVoucher.id} posted. Original #${res.originalVoucher.id} marked as reversed.`
       );
       setReversingEntry(null);
+      setReversalReason('');
       onRefreshData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -496,6 +531,20 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           >
             <CreditCard className="w-3.5 h-3.5" />
             QRIS/EDC Settlement &amp; Giro
+          </button>
+          <button
+            type="button"
+            onClick={() => setComplianceSubView('executive_health')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+              complianceSubView === 'executive_health'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            Financial Health Overview
           </button>
         </div>
       </div>
@@ -1002,8 +1051,11 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           </span>
                         ) : canManageAccountingAndGiro ? (
                           <button
-                            onClick={() => setReversingEntry(entry)}
-                            className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all ${
+                            onClick={() => {
+                              setReversalReason('');
+                              setReversingEntry(entry);
+                            }}
+                            className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
                               isLight
                                 ? 'bg-white hover:bg-gray-100 border-gray-300 text-gray-700 shadow-2xs'
                                 : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300'
@@ -1412,6 +1464,207 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </table>
             </div>
           </div>
+
+          {/* Card 3: Bank Mutation CSV Import & Auto-Matching (BCA / Mandiri) */}
+          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'} space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-zinc-800">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                  <span>Bank Mutation CSV Import &amp; B2B Auto-Matching (BCA / Mandiri)</span>
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  Upload or paste CSV bank statements to auto-match incoming CR transfers against unpaid B2B wholesale invoices (DR #1020 / CR #1200).
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer ${
+                  isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                }`}>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload CSV</span>
+                  <input
+                    type="file"
+                    accept=".csv,.txt"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        setBankCsvText(String(reader.result || ''));
+                        setBankMatchResult(null);
+                      };
+                      reader.readAsText(file);
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBankCsvText(
+                      `Tanggal,Keterangan,Cabang,Jumlah,Saldo\n` +
+                      `2026-11-15,TRSF E-BANKING CR B2B-1002 HOTEL KEMANG,0095,12500000,145000000\n` +
+                      `2026-11-15,BIAYA ADM BULANAN BANK,0095,25000 DB,144975000`
+                    );
+                    setBankMatchResult(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer ${
+                    isLight ? 'bg-emerald-50 border-emerald-200 text-[#0F4C3A] hover:bg-emerald-100' : 'bg-emerald-950/30 border-emerald-800 text-emerald-300'
+                  }`}
+                >
+                  Load Sample CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              <div className="lg:col-span-2 space-y-2">
+                <textarea
+                  rows={4}
+                  value={bankCsvText}
+                  onChange={(e) => {
+                    setBankCsvText(e.target.value);
+                    setBankMatchResult(null);
+                  }}
+                  placeholder={`Paste BCA or Mandiri CSV rows here, e.g.:\nTanggal,Keterangan,Jumlah,Tipe\n2026-11-15,TRANSFER MASUK B2B-1001 PT KULINER,8500000,CR`}
+                  className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
+                    isLight ? 'bg-slate-50 border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-zinc-100'
+                  }`}
+                />
+              </div>
+              <div className="flex flex-col justify-between gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1 text-gray-600 dark:text-zinc-300">
+                    Bank Settlement Account
+                  </label>
+                  <select
+                    value={bankAccountCode}
+                    onChange={(e) => setBankAccountCode(e.target.value as '1020' | '1015' | '1010')}
+                    className={`w-full px-3 py-2 rounded-xl text-xs border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                    }`}
+                  >
+                    <option value="1020">Bank BCA / Mandiri Operasional (#1020)</option>
+                    <option value="1015">Store Bank Vault (#1015)</option>
+                    <option value="1010">Cash / Operational Register (#1010)</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isMatchingBankCsv || !bankCsvText.trim()}
+                    onClick={async () => {
+                      setIsMatchingBankCsv(true);
+                      try {
+                        const res = await apiClient.reconcileBankMutationCsv({
+                          csvText: bankCsvText,
+                          bankAccountCode,
+                          previewOnly: true,
+                        });
+                        setBankMatchResult(res);
+                        onShowToast('CSV Parsed', res.message);
+                      } catch (err: unknown) {
+                        onShowToast('CSV Match Error', err instanceof Error ? err.message : String(err));
+                      } finally {
+                        setIsMatchingBankCsv(false);
+                      }
+                    }}
+                    className={`flex-1 px-3 py-2 rounded-xl text-xs font-bold border transition-all disabled:opacity-50 cursor-pointer ${
+                      isLight ? 'bg-white border-gray-300 text-gray-800 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-100 hover:bg-zinc-700'
+                    }`}
+                  >
+                    Preview Matches
+                  </button>
+                  {canManageAccountingAndGiro && (
+                    <button
+                      type="button"
+                      disabled={isMatchingBankCsv || !bankCsvText.trim()}
+                      onClick={async () => {
+                        setIsMatchingBankCsv(true);
+                        try {
+                          const res = await apiClient.reconcileBankMutationCsv({
+                            csvText: bankCsvText,
+                            bankAccountCode,
+                            previewOnly: false,
+                          });
+                          setBankMatchResult(res);
+                          onShowToast('Bank Reconciliation Committed', res.message);
+                          await loadB2bAccountingData();
+                          onRefreshData();
+                        } catch (err: unknown) {
+                          onShowToast('Reconciliation Failed', err instanceof Error ? err.message : String(err));
+                        } finally {
+                          setIsMatchingBankCsv(false);
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {isMatchingBankCsv ? 'Matching...' : 'Auto-Settle Matches'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {bankMatchResult && (
+              <div className="space-y-2 pt-2">
+                <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
+                    Matched: {bankMatchResult.matchedCount} ({formatIDR(bankMatchResult.totalMatchedIDR)})
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold">
+                    Unmatched CR: {bankMatchResult.unmatchedCount}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-slate-200/70 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300">
+                    Skipped Debits: {bankMatchResult.matches.filter((m) => m.status === 'IGNORED_DEBIT').length}
+                  </span>
+                </div>
+                {bankMatchResult.matches.length > 0 && (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+                    <table className="w-full text-left text-xs">
+                      <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-zinc-800/50 text-zinc-300'}>
+                        <tr>
+                          <th className="py-2 px-3">Date</th>
+                          <th className="py-2 px-3">Mutation Description</th>
+                          <th className="py-2 px-3 text-right">Amount</th>
+                          <th className="py-2 px-3">Status</th>
+                          <th className="py-2 px-3">Matched Order / Buyer</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                        {bankMatchResult.matches.map((m, idx) => (
+                          <tr key={idx}>
+                            <td className="py-2 px-3 font-mono">{m.mutationDate}</td>
+                            <td className="py-2 px-3 max-w-xs truncate">{m.description}</td>
+                            <td className="py-2 px-3 font-mono font-bold text-right">{formatIDR(m.amountIDR)}</td>
+                            <td className="py-2 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  m.status === 'MATCHED_AND_SETTLED'
+                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                    : m.status === 'MATCHED_PREVIEW'
+                                    ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                                    : m.status === 'UNMATCHED'
+                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                    : 'bg-gray-100 dark:bg-zinc-800 text-gray-500'
+                                }`}
+                              >
+                                {m.status}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-[11px]">
+                              {m.matchedOrderId ? `${m.matchedOrderId} • ${m.matchedCustomerName || ''}` : m.reason || '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1438,7 +1691,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       )}
 
       {/* ADDITIVE COMPLIANCE PANELS: RETURNS / NOTA RETUR & CORETAX DJP */}
-      {complianceSubView && complianceSubView !== 'settlement_giro' && (
+      {complianceSubView && complianceSubView !== 'settlement_giro' && complianceSubView !== 'executive_health' && (
         <ComplianceAccountingPanels
           theme={theme}
           mode={complianceSubView}
@@ -1447,6 +1700,130 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           onRefreshData={onRefreshData}
           onShowToast={onShowToast}
         />
+      )}
+
+      {/* ADDITIVE VIEW: 1-CLICK EXECUTIVE FINANCIAL HEALTH DASHBOARD */}
+      {complianceSubView === 'executive_health' && (
+        <div className="space-y-5">
+          <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+            isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+          }`}>
+            <div>
+              <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <Activity className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                Executive Summary — Real-Time Financial Health Dashboard
+              </h3>
+              <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                1-click liquidity overview across Cash &amp; Bank balances, Aging Wholesale Receivables, and Upcoming Supplier Payables.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadExecSummary()}
+              disabled={isLoadingExecSummary}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+              }`}
+            >
+              {isLoadingExecSummary ? 'Refreshing...' : 'Refresh Financial Health'}
+            </button>
+          </div>
+
+          {execSummary ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* 1. Cash & Bank Balance Card */}
+              <div className={`p-5 rounded-2xl border space-y-3 ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#0F4C3A] dark:text-emerald-400">
+                    1. Cash &amp; Bank Balance
+                  </span>
+                  <DollarSign className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className={`text-2xl font-bold font-mono ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                  {formatIDR(execSummary.cashAndBank.totalLiquidCashIDR)}
+                </div>
+                <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-zinc-800 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="font-sans text-gray-500">Cash &amp; Store Vault (#1010/#1015):</span>
+                    <span>
+                      {formatIDR(
+                        execSummary.cashAndBank.vaultAndRegistersIDR +
+                          execSummary.cashAndBank.posDrawerIDR +
+                          execSummary.cashAndBank.storeBankVaultIDR
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-sans text-gray-500">Bank BCA / Operational (#1020):</span>
+                    <span>{formatIDR(execSummary.cashAndBank.bankBcaClearingIDR)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-sans text-gray-500">QRIS / In-Transit Clearing (#1030):</span>
+                    <span>{formatIDR(execSummary.cashAndBank.qrisReceivablePendingIDR)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Total Aging Receivables Card */}
+              <div className={`p-5 rounded-2xl border space-y-3 ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                    2. Total Aging Receivables (AR)
+                  </span>
+                  <CreditCard className="w-4 h-4 text-blue-600" />
+                </div>
+                <div className={`text-2xl font-bold font-mono ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                  {formatIDR(execSummary.receivablesAging.totalOutstandingArIDR)}
+                </div>
+                <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-zinc-800 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="font-sans text-gray-500">Current (0 - 30 Days):</span>
+                    <span className="text-emerald-600 dark:text-emerald-400">{formatIDR(execSummary.receivablesAging.current0To30IDR)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-sans text-gray-500">31 - 60 Days:</span>
+                    <span className="text-amber-600 dark:text-amber-400">{formatIDR(execSummary.receivablesAging.days31To60IDR)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-sans text-gray-500">&gt; 60 Days ({execSummary.receivablesAging.lockedCustomersCount} locked / {execSummary.receivablesAging.unpaidB2bOrdersCount} unpaid):</span>
+                    <span className="text-rose-600 dark:text-rose-400 font-bold">{formatIDR(execSummary.receivablesAging.over60DaysIDR)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Upcoming Supplier Payables Card */}
+              <div className={`p-5 rounded-2xl border space-y-3 ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    3. Upcoming Supplier Payables (AP)
+                  </span>
+                  <FileCheck className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className={`text-2xl font-bold font-mono ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                  {formatIDR(execSummary.upcomingPayables.totalOpenApIDR)}
+                </div>
+                <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-zinc-800 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="font-sans text-gray-500">Overdue Unpaid Bills:</span>
+                    <span className="text-rose-600 dark:text-rose-400 font-bold">{formatIDR(execSummary.upcomingPayables.overduePayablesIDR)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-sans text-gray-500">Due within 7 Days:</span>
+                    <span className="text-amber-600 dark:text-amber-400">{formatIDR(execSummary.upcomingPayables.dueWithin7DaysIDR)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-sans text-gray-500">Due 8 - 30 Days ({execSummary.upcomingPayables.openVendorBillsCount} bills):</span>
+                    <span>{formatIDR(execSummary.upcomingPayables.dueWithin30DaysIDR)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={`p-8 rounded-2xl border text-center text-xs text-gray-500 ${isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800'}`}>
+              {isLoadingExecSummary ? 'Computing executive financial summary...' : 'Click Refresh Financial Health to load real-time balances.'}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ADDITIVE PRECISION PANEL: QRIS/EDC BATCH SETTLEMENT & POST-DATED BILYET GIRO CLEARING */}
@@ -1931,19 +2308,24 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
             <div>
               <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
-                Reason for Reversal / Counter-Entry (Required)
+                Mandatory Audit Trail Correction Note (Min. 5 characters)
               </label>
               <input
                 type="text"
                 value={reversalReason}
                 onChange={(e) => setReversalReason(e.target.value)}
-                placeholder="e.g. Supplier invoice mismatch / Audit variance reconciliation"
+                placeholder="Enter specific audit reason, e.g. Supplier invoice mismatch / Qty correction"
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
                   isLight
                     ? 'bg-white border-gray-300 text-gray-900'
                     : 'bg-zinc-800 border-zinc-700 text-white'
                 }`}
               />
+              <p className={`text-[10px] mt-1 ${reversalReason.trim().length >= 5 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                {reversalReason.trim().length >= 5
+                  ? 'Audit note verified — entry will be permanently recorded in Immutable Audit Trail.'
+                  : `Required: ${Math.max(0, 5 - reversalReason.trim().length)} more character(s) needed to unlock GL reversal.`}
+              </p>
             </div>
 
             <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
@@ -1959,7 +2341,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </button>
               <button
                 onClick={handlePostReversal}
-                disabled={isSubmittingReversal || !reversalReason.trim()}
+                disabled={isSubmittingReversal || reversalReason.trim().length < 5}
                 className="px-4 py-2 text-xs font-semibold bg-purple-700 hover:bg-purple-800 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isSubmittingReversal ? 'Posting Counter-Entry...' : 'Post Reversing Entry'}

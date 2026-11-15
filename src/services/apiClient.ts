@@ -139,6 +139,10 @@ import type {
   SupplierDebitNoteCategory,
   SettlementBatchRecord,
   SettlementReconcileResponse,
+  LastPurchasePriceResponse,
+  BankMutationRowInput,
+  BankMutationCsvReconcileResponse,
+  ExecutiveFinancialHealthSummary,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
@@ -2367,15 +2371,22 @@ export const apiClient = {
     return res.json();
   },
 
-  async applyDynamicBatchMarkdowns(batchIds: string[]): Promise<{
+  async applyDynamicBatchMarkdowns(
+    batchIds: string[],
+    discountPercentOverride?: number
+  ): Promise<{
     success: boolean;
     appliedCount: number;
+    skippedExpiredCount?: number;
     message: string;
   }> {
     const res = await fetchApi('/api/admin/markdown-rules/apply-batches', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ batchIds }),
+      body: JSON.stringify({
+        batchIds,
+        ...(typeof discountPercentOverride === 'number' ? { discountPercentOverride } : {}),
+      }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -3870,6 +3881,39 @@ export const apiClient = {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Failed to register Bilyet Giro');
+    return data;
+  },
+
+  async getLastPurchasePrice(sku: string, supplierName?: string): Promise<LastPurchasePriceResponse> {
+    const params = new URLSearchParams({ sku });
+    if (supplierName) params.append('supplierName', supplierName);
+    const res = await fetchApi(`/api/admin/procurement/last-purchase-price?${params.toString()}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to look up last purchase price');
+    return data;
+  },
+
+  async reconcileBankMutationCsv(payload: {
+    csvText?: string;
+    mutations?: BankMutationRowInput[];
+    bankAccountCode?: '1020' | '1015' | '1010';
+    previewOnly?: boolean;
+  }): Promise<BankMutationCsvReconcileResponse> {
+    const res = await fetchApi('/api/admin/accounting/bank-mutation-reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to reconcile bank mutation CSV');
+    return data;
+  },
+
+  async getExecutiveAccountingSummary(storeId?: string): Promise<ExecutiveFinancialHealthSummary> {
+    const query = storeId && storeId !== 'CONSOLIDATED' ? `?storeId=${encodeURIComponent(storeId)}` : '';
+    const res = await fetchApi(`/api/admin/accounting/executive-summary${query}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load executive financial summary');
     return data;
   },
 };
