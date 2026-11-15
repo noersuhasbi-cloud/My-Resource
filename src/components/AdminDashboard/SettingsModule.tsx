@@ -289,6 +289,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [transferQty, setTransferQty] = useState<number>(10);
   const [transferNotes, setTransferNotes] = useState<string>('Weekly stock rebalance');
   const [transferFilterStatus, setTransferFilterStatus] = useState<string>('ALL');
+  const [transferAssetType, setTransferAssetType] = useState<string>('NONE');
+  const [transferAssetIds, setTransferAssetIds] = useState<string>('');
+  const [transferAssetQty, setTransferAssetQty] = useState<number>(2);
+  const [returningAssetTransferId, setReturningAssetTransferId] = useState<string | null>(null);
 
   // 6. Approval Matrix State
   const [approvalRules, setApprovalRules] = useState<ApprovalTierRule[]>([]);
@@ -849,17 +853,28 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
     setIsTransferring(true);
     try {
+      const hasReturnable = transferAssetType !== 'NONE' && transferAssetQty > 0;
       const res = await apiClient.transferStock({
         sku: transferSku,
         sourceStoreId: transferSourceStore,
         destinationStoreId: transferDestStore,
         quantity: transferQty,
         notes: transferNotes,
+        ...(hasReturnable
+          ? {
+              returnableAsset: {
+                assetType: transferAssetType,
+                assetIds: transferAssetIds.trim() || undefined,
+                quantity: transferAssetQty,
+              },
+            }
+          : {}),
       });
 
       if (res.success) {
         onShowToast('Stock Transfer Completed', res.message);
         setTransferRecords((prev) => [res.record, ...prev]);
+        setTransferAssetIds('');
         if (onRefreshData) onRefreshData();
       }
     } catch (err: any) {
@@ -946,22 +961,22 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
   const cardClass = `rounded-xl border transition-all ${
     isLight
       ? 'bg-white border-slate-200 shadow-xs hover:border-slate-300 text-slate-900'
-      : 'bg-zinc-900 border-zinc-800 shadow-xs hover:border-zinc-700 text-zinc-100'
+      : 'bg-[#12141C] border-slate-800/80 shadow-xs hover:border-slate-700/80 text-slate-100'
   }`;
 
   const subCardClass = `rounded-xl border p-4 transition-all ${
     isLight
       ? 'bg-slate-50/80 border-slate-200 text-slate-900'
-      : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
   }`;
 
   const inputClass = `w-full px-3.5 py-2 text-xs rounded-xl font-medium transition-all ${
     isLight
       ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600'
-      : 'bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+      : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
   } focus:outline-hidden`;
 
-  const labelClass = `block text-xs font-bold mb-1.5 ${isLight ? 'text-slate-800' : 'text-zinc-100'} dark:text-zinc-100`;
+  const labelClass = `block text-xs font-bold mb-1.5 ${isLight ? 'text-slate-800' : 'text-slate-100'} dark:text-slate-100`;
 
   return (
     <div className="space-y-6">
@@ -977,14 +992,14 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <span className="inline-flex items-center whitespace-nowrap text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30 uppercase tracking-wider">
                   ERP Hub
                 </span>
-                <span className="text-xs text-slate-500 dark:text-zinc-300 font-medium">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                   Enterprise System Architecture v4.2
                 </span>
               </div>
-              <h1 className="text-lg sm:text-xl font-bold mt-1 text-slate-900 dark:text-zinc-100">
+              <h1 className="text-lg sm:text-xl font-bold mt-1 text-slate-900 dark:text-slate-100">
                 Settings &amp; Configuration Hub
               </h1>
-              <p className="text-xs mt-0.5 max-w-2xl text-slate-500 dark:text-zinc-300 leading-relaxed">
+              <p className="text-xs mt-0.5 max-w-2xl text-slate-500 dark:text-slate-400 leading-relaxed">
                 Centralized enterprise administration: configure product valuation, multi-step warehouse routes, department cost centers, quotation rules, frontline POS controls, dynamic COA mappings, and periodic physical stocktakes.
               </p>
             </div>
@@ -992,7 +1007,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
           <div className="flex items-center gap-2 shrink-0">
             <span className={`text-[11px] font-mono px-3 py-1.5 rounded-xl border flex items-center gap-1.5 ${
-              isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+              isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-[#090A0F] border-slate-800/80 text-slate-300'
             }`}>
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               Strict Warehouse Isolation Active
@@ -1001,7 +1016,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
         </div>
 
         {/* Primary Sub-Tab Navigation Bar */}
-        <div className="flex items-center gap-2 mt-6 pt-5 border-t border-slate-200 dark:border-zinc-800 overflow-x-auto pb-1">
+        <div className="flex items-center gap-2 mt-6 pt-5 border-t border-slate-200 dark:border-slate-800/80 overflow-x-auto pb-1">
           <button
             onClick={() => setActiveSubTab('enterprise')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
@@ -1009,7 +1024,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <Sparkles className="w-4 h-4 text-emerald-400" />
@@ -1036,7 +1051,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
               }`}
             >
               <MapPin className="w-4 h-4 text-emerald-500" />
@@ -1051,7 +1066,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <Scale className="w-4 h-4" />
@@ -1065,7 +1080,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <Warehouse className="w-4 h-4" />
@@ -1079,7 +1094,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <ShieldCheck className="w-4 h-4 text-blue-400" />
@@ -1093,7 +1108,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <Building2 className="w-4 h-4" />
@@ -1107,7 +1122,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <CreditCard className="w-4 h-4" />
@@ -1121,7 +1136,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <Sparkles className="w-4 h-4 text-amber-500" />
@@ -1144,7 +1159,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <Boxes className="w-4 h-4" />
@@ -1158,7 +1173,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <ArrowRightLeft className="w-4 h-4" />
@@ -1172,7 +1187,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
@@ -1186,7 +1201,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <Mail className="w-4 h-4 text-emerald-500" />
@@ -1201,7 +1216,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
               }`}
             >
               <History className="w-4 h-4 text-amber-500" />
@@ -1228,7 +1243,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           )}
           {/* Quick Filter Pill Bar */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-            <span className="text-[11px] font-bold text-gray-500 dark:text-zinc-300 uppercase tracking-wider shrink-0 mr-1">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider shrink-0 mr-1">
               Filter Sections:
             </span>
             {(
@@ -1250,7 +1265,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     ? 'bg-[#0F4C3A] text-white shadow-xs'
                     : isLight
                     ? 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                    : 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 border border-slate-800/80 text-slate-300 hover:bg-slate-800'
                 }`}
               >
                 {filter.label}
@@ -1262,16 +1277,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             {/* SECTION 1: VALUATION & LANDED COST */}
             {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'VALUATION') && (
               <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
                       <Scale className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
                         Product Valuation &amp; Landed Costs
                       </h3>
-                      <p className="text-[11px] text-gray-500 dark:text-zinc-300">
+                      <p className="text-[11px] text-gray-500 dark:text-slate-400">
                         Absorb freight, customs &amp; handling into stock assets
                       </p>
                     </div>
@@ -1288,7 +1303,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       }
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-slate-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
                   </label>
                 </div>
 
@@ -1309,10 +1324,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         }
                         className={`${inputClass} disabled:opacity-60`}
                       >
-                        <option value="BY_QUANTITY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Quantity (Per piece)</option>
-                        <option value="BY_VALUE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Value (Invoice proportion)</option>
-                        <option value="EQUAL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Equal Line Split</option>
-                        <option value="BY_WEIGHT" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Weight (Kilograms)</option>
+                        <option value="BY_QUANTITY" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">By Quantity (Per piece)</option>
+                        <option value="BY_VALUE" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">By Value (Invoice proportion)</option>
+                        <option value="EQUAL" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">Equal Line Split</option>
+                        <option value="BY_WEIGHT" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">By Weight (Kilograms)</option>
                       </select>
                     </div>
                     <div>
@@ -1330,30 +1345,30 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         }
                         className={`${inputClass} disabled:opacity-60`}
                       >
-                        <option value="MISC_OPERATIONS" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Operations &amp; Landed Costs</option>
-                        <option value="GENERAL_JOURNAL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">General Standard Journal</option>
-                        <option value="PURCHASE_JOURNAL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Vendor Procurement Journal</option>
+                        <option value="MISC_OPERATIONS" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">Operations &amp; Landed Costs</option>
+                        <option value="GENERAL_JOURNAL" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">General Standard Journal</option>
+                        <option value="PURCHASE_JOURNAL" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">Vendor Procurement Journal</option>
                       </select>
                     </div>
                   </div>
 
-                  <div className="p-3.5 rounded-xl bg-gray-50/70 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-800 text-xs space-y-2">
+                  <div className="p-3.5 rounded-xl bg-gray-50/70 dark:bg-[#090A0F] border border-gray-200 dark:border-slate-800/80 text-xs space-y-2">
                     <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-gray-500 dark:text-zinc-300">Inbound Freight Account:</span>
-                      <span className="font-mono font-bold text-gray-900 dark:text-zinc-100">
+                      <span className="text-gray-500 dark:text-slate-400">Inbound Freight Account:</span>
+                      <span className="font-mono font-bold text-gray-900 dark:text-slate-100">
                         [{enterpriseSettings.landedCosts.freightExpenseAccountCode}] {enterpriseSettings.landedCosts.freightExpenseAccountName}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-gray-500 dark:text-zinc-300">Clearing / Accrual Account:</span>
-                      <span className="font-mono font-bold text-gray-900 dark:text-zinc-100">
+                      <span className="text-gray-500 dark:text-slate-400">Clearing / Accrual Account:</span>
+                      <span className="font-mono font-bold text-gray-900 dark:text-slate-100">
                         [{enterpriseSettings.landedCosts.clearingAccountCode}] {enterpriseSettings.landedCosts.clearingAccountName}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-gray-500 dark:text-zinc-300">
+                    <span className="text-xs text-gray-500 dark:text-slate-400">
                       {landedCosts.length} historical entries applied
                     </span>
                     <button
@@ -1371,16 +1386,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             {/* SECTION 2: WAREHOUSE MULTI-STEP LOGISTICS */}
             {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'WAREHOUSE') && (
               <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400">
                       <Warehouse className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
                         Warehouse Advanced Routing &amp; Bins
                       </h3>
-                      <p className="text-[11px] text-gray-500 dark:text-zinc-300">
+                      <p className="text-[11px] text-gray-500 dark:text-slate-400">
                         Multi-step staging, catch-weight pack, and shelf bins
                       </p>
                     </div>
@@ -1400,7 +1415,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       }
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-slate-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
                   </label>
                 </div>
 
@@ -1421,14 +1436,14 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         }
                         className={`${inputClass} disabled:opacity-60`}
                       >
-                        <option value="THREE_STEP" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">3-Step (Intake &rarr; QC &rarr; Chilled Putaway)</option>
-                        <option value="TWO_STEP" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">2-Step (Pallet Scan &rarr; Shelf Putaway)</option>
-                        <option value="DIRECT" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">1-Step Direct Dock-to-Shelf</option>
+                        <option value="THREE_STEP" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">3-Step (Intake &rarr; QC &rarr; Chilled Putaway)</option>
+                        <option value="TWO_STEP" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">2-Step (Pallet Scan &rarr; Shelf Putaway)</option>
+                        <option value="DIRECT" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">1-Step Direct Dock-to-Shelf</option>
                       </select>
                     </div>
                     <div className="flex flex-col justify-end">
-                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/40">
-                        <span className="text-xs font-semibold text-gray-700 dark:text-zinc-300">Auto Putaway Bins</span>
+                      <div className="flex items-center justify-between p-2.5 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/50 dark:bg-[#090A0F]">
+                        <span className="text-xs font-semibold text-gray-700 dark:text-slate-400">Auto Putaway Bins</span>
                         <input
                           type="checkbox"
                           disabled={isReadOnlyPolicyRole}
@@ -1449,16 +1464,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
                   <div className="grid grid-cols-3 gap-2 text-center text-xs">
                     {enterpriseSettings.warehouseRouting.zones.map((z) => (
-                      <div key={z.zoneId} className="p-2.5 rounded-xl bg-gray-50/70 dark:bg-zinc-800/40 border border-gray-200 dark:border-zinc-800">
-                        <span className="text-[10px] text-gray-500 dark:text-zinc-300 block font-mono">{z.routeType}</span>
-                        <span className="font-bold text-xs text-gray-900 dark:text-zinc-100 block mt-0.5 truncate">{z.zoneName.split(' ')[0]}</span>
+                      <div key={z.zoneId} className="p-2.5 rounded-xl bg-gray-50/70 dark:bg-[#090A0F] border border-gray-200 dark:border-slate-800/80">
+                        <span className="text-[10px] text-gray-500 dark:text-slate-400 block font-mono">{z.routeType}</span>
+                        <span className="font-bold text-xs text-gray-900 dark:text-slate-100 block mt-0.5 truncate">{z.zoneName.split(' ')[0]}</span>
                         <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">{z.activeBinsCount} Bins Active</span>
                       </div>
                     ))}
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-gray-500 dark:text-zinc-300">
+                    <span className="text-xs text-gray-500 dark:text-slate-400">
                       {warehouseBins.length} Storage Bins Mapped
                     </span>
                     <button
@@ -1476,16 +1491,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             {/* SECTION 3: COST CENTERS & ANALYTIC ACCOUNTING */}
             {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'ANALYTICS') && (
               <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
                       <BarChart3 className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
                         Cost Centers &amp; Analytic Accounting
                       </h3>
-                      <p className="text-[11px] text-gray-500 dark:text-zinc-300">
+                      <p className="text-[11px] text-gray-500 dark:text-slate-400">
                         Departmental budget consumption and margin warning guards
                       </p>
                     </div>
@@ -1505,7 +1520,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       }
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-slate-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
                   </label>
                 </div>
 
@@ -1527,7 +1542,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         className={`${inputClass} disabled:opacity-60`}
                       >
                         {enterpriseSettings.analyticAccounting.departments.map((dept) => (
-                          <option key={dept.id} value={dept.id} className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">
+                          <option key={dept.id} value={dept.id} className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">
                             {dept.code} - {dept.name} ({dept.manager})
                           </option>
                         ))}
@@ -1552,24 +1567,24 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           }
                           className={`font-mono font-bold ${inputClass} disabled:opacity-60`}
                         />
-                        <span className="text-xs font-bold text-gray-500 dark:text-zinc-300">%</span>
+                        <span className="text-xs font-bold text-gray-500 dark:text-slate-400">%</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Department Budgets List */}
-                  <div className="space-y-2 border border-gray-200 dark:border-zinc-800 rounded-xl p-3 bg-gray-50/50 dark:bg-zinc-800/30 text-xs">
+                  <div className="space-y-2 border border-gray-200 dark:border-slate-800/80 rounded-xl p-3 bg-gray-50/50 dark:bg-[#090A0F] text-xs">
                     {enterpriseSettings.analyticAccounting.departments.map((dept) => {
                       const utilPct = dept.annualBudgetIDR > 0 ? Math.round((dept.actualCostIDR / dept.annualBudgetIDR) * 100) : 0;
                       return (
-                        <div key={dept.id} className="space-y-1 pb-1.5 border-b border-gray-100 dark:border-zinc-800/80 last:border-b-0 last:pb-0">
+                        <div key={dept.id} className="space-y-1 pb-1.5 border-b border-gray-100 dark:border-slate-800/80 last:border-b-0 last:pb-0">
                           <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-900 dark:text-zinc-100">{dept.name}</span>
-                            <span className="font-mono text-[11px] text-gray-500 dark:text-zinc-300">
+                            <span className="font-semibold text-gray-900 dark:text-slate-100">{dept.name}</span>
+                            <span className="font-mono text-[11px] text-gray-500 dark:text-slate-400">
                               {formatIDR(dept.actualCostIDR)} / {formatIDR(dept.annualBudgetIDR)} ({utilPct}%)
                             </span>
                           </div>
-                          <div className="w-full bg-gray-200 dark:bg-zinc-700 h-1.5 rounded-full overflow-hidden">
+                          <div className="w-full bg-gray-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all ${
                                 utilPct > 85 ? 'bg-rose-500' : 'bg-purple-600 dark:bg-purple-500'
@@ -1583,7 +1598,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </div>
 
                   {(onNavigateToAnalytic || onNavigateToMargin) && (
-                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-zinc-800">
+                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-slate-800/80">
                       {onNavigateToAnalytic && (
                         <button
                           type="button"
@@ -1613,16 +1628,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             {/* SECTION 4: QUOTATIONS & SALES POLICIES */}
             {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'QUOTATIONS') && (
               <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
                       <FileSpreadsheet className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
                         Quotations &amp; Sales Policies
                       </h3>
-                      <p className="text-[11px] text-gray-500 dark:text-zinc-300">
+                      <p className="text-[11px] text-gray-500 dark:text-slate-400">
                         Mandatory perishable packaging and payment terms
                       </p>
                     </div>
@@ -1642,7 +1657,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       }
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
+                    <div className="w-10 h-5.5 bg-gray-200 dark:bg-slate-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
                   </label>
                 </div>
 
@@ -1663,9 +1678,9 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         }
                         className={`${inputClass} disabled:opacity-60`}
                       >
-                        <option value="DEPOSIT_50" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">50% Deposit Required</option>
-                        <option value="FULL_100" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">100% Full Payment Upfront</option>
-                        <option value="PAY_ON_DELIVERY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Pay on Delivery (COD / Net 7)</option>
+                        <option value="DEPOSIT_50" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">50% Deposit Required</option>
+                        <option value="FULL_100" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">100% Full Payment Upfront</option>
+                        <option value="PAY_ON_DELIVERY" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">Pay on Delivery (COD / Net 7)</option>
                       </select>
                     </div>
                     <div>
@@ -1690,15 +1705,15 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </div>
 
                   {/* Mandatory Packaging Rules */}
-                  <div className="space-y-2 p-3.5 rounded-xl border border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/30 text-xs">
-                    <span className="font-semibold text-gray-900 dark:text-zinc-100 block text-[11px]">
+                  <div className="space-y-2 p-3.5 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/50 dark:bg-[#090A0F] text-xs">
+                    <span className="font-semibold text-gray-900 dark:text-slate-100 block text-[11px]">
                       Mandatory HACCP Packaging Add-Ons:
                     </span>
                     {enterpriseSettings.quotationsAndSales.mandatoryRules.map((rule) => (
-                      <div key={rule.id} className="flex justify-between items-start gap-2 pt-1 border-t border-gray-100 dark:border-zinc-800/80">
+                      <div key={rule.id} className="flex justify-between items-start gap-2 pt-1 border-t border-gray-100 dark:border-slate-800/80">
                         <div>
-                          <span className="font-bold text-gray-900 dark:text-zinc-100">{rule.mandatoryProductName}</span>
-                          <span className="text-[10px] text-gray-500 dark:text-zinc-300 block">{rule.reason}</span>
+                          <span className="font-bold text-gray-900 dark:text-slate-100">{rule.mandatoryProductName}</span>
+                          <span className="text-[10px] text-gray-500 dark:text-slate-400 block">{rule.reason}</span>
                         </div>
                         <span className="font-mono font-bold text-amber-700 dark:text-amber-400 shrink-0">
                           +{formatIDR(rule.mandatoryPriceIDR)}
@@ -1723,7 +1738,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         }
                         className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                       />
-                      <span className="text-gray-700 dark:text-zinc-300">Digital Signatures</span>
+                      <span className="text-gray-700 dark:text-slate-400">Digital Signatures</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -1740,12 +1755,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         }
                         className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                       />
-                      <span className="text-gray-700 dark:text-zinc-300">Auto PDF Generation</span>
+                      <span className="text-gray-700 dark:text-slate-400">Auto PDF Generation</span>
                     </label>
                   </div>
 
                   {onNavigateToQuotations && (
-                    <div className="flex items-center justify-end pt-2 border-t border-gray-100 dark:border-zinc-800">
+                    <div className="flex items-center justify-end pt-2 border-t border-gray-100 dark:border-slate-800/80">
                       <button
                         type="button"
                         onClick={onNavigateToQuotations}
@@ -1763,16 +1778,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             {/* SECTION 5: 3-WAY MATCHING CONTROLS */}
             {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'MATCHING') && (
               <div className={`${cardClass} p-5 sm:p-6 space-y-4 lg:col-span-2`}>
-                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+                <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
                       <ShieldCheck className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
                         Procurement 3-Way Matching AP Controls
                       </h3>
-                      <p className="text-[11px] text-gray-500 dark:text-zinc-300">
+                      <p className="text-[11px] text-gray-500 dark:text-slate-400">
                         Cross-validation of Purchase Orders, Dock Goods Receipts, and Invoices
                       </p>
                     </div>
@@ -1784,31 +1799,31 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                   <div className="space-y-1">
-                    <span className="text-gray-500 dark:text-zinc-300">Quantity Discrepancy Buffer:</span>
-                    <div className="font-mono font-bold text-base text-gray-900 dark:text-zinc-100">
+                    <span className="text-gray-500 dark:text-slate-400">Quantity Discrepancy Buffer:</span>
+                    <div className="font-mono font-bold text-base text-gray-900 dark:text-slate-100">
                       &plusmn;{enterpriseSettings.threeWayMatching.quantityTolerancePercent}%
                     </div>
-                    <span className="text-[10px] text-gray-500 dark:text-zinc-300">Moisture transpiration &amp; scales</span>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400">Moisture transpiration &amp; scales</span>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-gray-500 dark:text-zinc-300">Price Variance Discrepancy:</span>
-                    <div className="font-mono font-bold text-base text-gray-900 dark:text-zinc-100">
+                    <span className="text-gray-500 dark:text-slate-400">Price Variance Discrepancy:</span>
+                    <div className="font-mono font-bold text-base text-gray-900 dark:text-slate-100">
                       &plusmn;{enterpriseSettings.threeWayMatching.priceTolerancePercent}%
                     </div>
-                    <span className="text-[10px] text-gray-500 dark:text-zinc-300">Unit rate deviation limit</span>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400">Unit rate deviation limit</span>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-gray-500 dark:text-zinc-300">Payment Freezes:</span>
+                    <span className="text-gray-500 dark:text-slate-400">Payment Freezes:</span>
                     <div className="font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mt-0.5">
                       <Lock className="w-4 h-4" />
                       <span>{enterpriseSettings.threeWayMatching.blockPaymentOnMismatch ? 'Automatic Block Active' : 'Unblocked'}</span>
                     </div>
-                    <span className="text-[10px] text-gray-500 dark:text-zinc-300">Treasury wire lock on variance</span>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400">Treasury wire lock on variance</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-zinc-800">
-                  <span className="text-xs text-gray-500 dark:text-zinc-300">
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-800/80">
+                  <span className="text-xs text-gray-500 dark:text-slate-400">
                     {vendorBills.length} AP Bills evaluated
                   </span>
                   <button
@@ -1839,20 +1854,20 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
         <div className="space-y-6 animate-fadeIn">
           {/* Header & Refresh Bar */}
           <div className={`${cardClass} p-5 sm:p-6`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800/80">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-[#0F4C3A] text-white">
                     Network Control Tower
                   </span>
-                  <span className="text-xs text-slate-500 dark:text-zinc-300 font-mono">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                     {branchMonitorData?.totals.openBranches ?? storeOutlets.length} / {branchMonitorData?.totals.totalBranches ?? storeOutlets.length} Hubs Open
                   </span>
                 </div>
-                <h2 className={`text-base sm:text-lg font-bold mt-1 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                <h2 className={`text-base sm:text-lg font-bold mt-1 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
                   Cabang, Omzet &amp; Barang Datang (Multi-Branch Monitor)
                 </h2>
-                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                   Real-time branch revenue (POS + B2C + B2B), inventory asset valuation, incoming goods dock arrivals, and RBAC operator branch assignments.
                 </p>
               </div>
@@ -1864,7 +1879,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer self-start sm:self-auto ${
                   isLight
                     ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                 }`}
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMonitor ? 'animate-spin' : ''}`} />
@@ -1875,7 +1890,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             {/* 4 Network KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-4">
               <div className={subCardClass}>
-                <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 block">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">
                   Active Store &amp; Warehouse Hubs
                 </span>
                 <span className="text-lg font-bold font-mono tabular-nums mt-1 block">
@@ -1883,7 +1898,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </span>
               </div>
               <div className={subCardClass}>
-                <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 block">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">
                   Live Network Omzet (POS + B2C + B2B)
                 </span>
                 <span className="text-lg font-bold font-mono tabular-nums text-[#0F4C3A] dark:text-emerald-400 mt-1 block">
@@ -1891,7 +1906,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </span>
               </div>
               <div className={subCardClass}>
-                <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 block">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">
                   Consolidated Stock Valuation
                 </span>
                 <span className="text-lg font-bold font-mono tabular-nums mt-1 block">
@@ -1899,7 +1914,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </span>
               </div>
               <div className={subCardClass}>
-                <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 block">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">
                   Pending Barang Datang (PO + Transit)
                 </span>
                 <span className="text-lg font-bold font-mono tabular-nums text-amber-600 dark:text-amber-400 mt-1 block">
@@ -1913,24 +1928,24 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
-                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
                   <Building2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                   <span>Network Branches &amp; Live Omzet</span>
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                   Live revenue breakdown per outlet across retail POS, online B2C express, and wholesale B2B channels
                 </p>
               </div>
-              <span className="text-xs font-mono text-slate-500 dark:text-zinc-400">
+              <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
                 {branchMonitorData?.totals.totalOrders ?? 0} total settled orders
               </span>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
               <table className="w-full text-left text-xs min-w-[760px]">
                 <thead>
                   <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${
-                    isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                    isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                   }`}>
                     <th className="py-3 px-3.5">Branch Code &amp; Name</th>
                     <th className="py-3 px-3">Hub Type</th>
@@ -1941,17 +1956,17 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <th className="py-3 px-3 text-center">Incoming</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
                   {(branchMonitorData?.branches || []).map((branch) => (
-                    <tr key={branch.storeId} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'}>
+                    <tr key={branch.storeId} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
                       <td className="py-3 px-3.5">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300">
                             {branch.branchCode}
                           </span>
                           <span className="font-bold">{branch.storeName}</span>
                         </div>
-                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                        <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                           {branch.district}, {branch.city}
                         </div>
                       </td>
@@ -1980,13 +1995,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         <div className="font-bold text-[#0F4C3A] dark:text-emerald-400">
                           {formatIDR(branch.liveOmzetIDR)}
                         </div>
-                        <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                        <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                           POS {formatIDR(branch.posOmzetIDR)} · B2C {formatIDR(branch.b2cOmzetIDR)} · B2B {formatIDR(branch.b2bOmzetIDR)}
                         </div>
                       </td>
                       <td className="py-3 px-3 text-right font-mono tabular-nums">
                         <div className="font-bold">{formatIDR(branch.stockValuationIDR)}</div>
-                        <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                        <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                           {branch.totalStockUnits.toLocaleString('id-ID')} units
                         </div>
                       </td>
@@ -2015,11 +2030,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             <div className={`${cardClass} p-5 space-y-4`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                  <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
                     <PackageCheck className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                     <span>Incoming Vendor Purchase Orders (Barang Datang)</span>
                   </h3>
-                  <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                  <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                     Open or partial PO shipments awaiting dock receipt &amp; COA #1040 capitalization
                   </p>
                 </div>
@@ -2040,10 +2055,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         <span className="text-[11px] font-semibold">{po.destinationBranchName}</span>
                       </div>
                       <div className="text-xs font-semibold truncate">{po.supplierName}</div>
-                      <div className={`text-[11px] line-clamp-1 ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                      <div className={`text-[11px] line-clamp-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                         {po.itemsSummary}
                       </div>
-                      <div className="text-[10px] font-mono text-slate-500 dark:text-zinc-400">
+                      <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
                         Backorder: <strong>{po.remainingBackorderQty}</strong> / {po.expectedUnitsQty} units · Value: <strong>{formatIDR(po.incomingValueIDR)}</strong>
                       </div>
                     </div>
@@ -2058,7 +2073,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         {confirmingArrivalId === `PO:${po.poId}` ? 'Receiving...' : 'Confirm Arrival'}
                       </button>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 whitespace-nowrap shrink-0">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-900/90 text-slate-600 dark:text-slate-300 whitespace-nowrap shrink-0">
                         Read-Only
                       </span>
                     )}
@@ -2076,11 +2091,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             <div className={`${cardClass} p-5 space-y-4`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                  <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
                     <Truck className="w-4 h-4 text-sky-600 dark:text-sky-400" />
                     <span>In-Transit Inter-Branch Transfers</span>
                   </h3>
-                  <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                  <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                     Dispatched cold-chain sprinter shipments awaiting destination receiving confirmation
                   </p>
                 </div>
@@ -2095,17 +2110,17 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono font-bold text-xs text-sky-700 dark:text-sky-400">{tr.transferId}</span>
-                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-zinc-800">
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-900/90">
                           {tr.waybillNumber}
                         </span>
                       </div>
                       <div className="text-xs font-bold truncate">
                         {tr.quantity}x {tr.productName} ({tr.sku})
                       </div>
-                      <div className={`text-[11px] ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
+                      <div className={`text-[11px] ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
                         {tr.originBranchName} <ArrowRight className="w-3 h-3 inline mx-1" /> <strong>{tr.destinationBranchName}</strong>
                       </div>
-                      <div className="text-[10px] font-mono text-slate-500 dark:text-zinc-400">
+                      <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
                         Transfer Value: <strong>{formatIDR(tr.totalTransferValueIDR)}</strong>
                       </div>
                     </div>
@@ -2120,7 +2135,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         {confirmingArrivalId === `TRANSFER:${tr.transferId}` ? 'Stocking...' : 'Confirm Arrival'}
                       </button>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 whitespace-nowrap shrink-0">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-900/90 text-slate-600 dark:text-slate-300 whitespace-nowrap shrink-0">
                         Read-Only
                       </span>
                     )}
@@ -2137,13 +2152,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
           {/* 3. Operator Role & Branch Assignment Configuration */}
           <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">
               <div>
-                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
                   <Users className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                   <span>Operator Role &amp; Branch Assignment Configuration</span>
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-300'}`}>
+                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                   Only Super Admin can configure an operator&apos;s Enterprise Role, Assigned Outlet / Hub, Active Status, and Login PIN. All active sessions remain strictly locked until Lock / Sign Out.
                 </p>
               </div>
@@ -2160,11 +2175,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               )}
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
               <table className="w-full text-left text-xs min-w-[960px]">
                 <thead>
                   <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${
-                    isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                    isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                   }`}>
                     <th className="py-3 px-3.5">Operator Profile</th>
                     <th className="py-3 px-3">Assigned Role</th>
@@ -2175,7 +2190,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <th className="py-3 px-3 text-right">Last Updated</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
                   {operatorAssignments.map((op) => {
                     const scoped = op.isBranchScoped || isBranchScopedRole(op.userRole);
                     const allowedOptions = scoped
@@ -2187,7 +2202,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     const isSavingOp = savingAssignmentUserId === op.userId;
 
                     return (
-                      <tr key={op.userId} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'}>
+                      <tr key={op.userId} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
                         <td className="py-3 px-3.5">
                           <div className="font-bold">{op.userName}</div>
                           <div className="font-mono text-[10px] text-slate-400">{op.userId}</div>
@@ -2314,7 +2329,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-right font-mono text-[10px] text-slate-500 dark:text-zinc-400">
+                        <td className="py-3 px-3 text-right font-mono text-[10px] text-slate-500 dark:text-slate-400">
                           {op.updatedAt ? (
                             <>
                               <div>{new Date(op.updatedAt).toLocaleString()}</div>
@@ -2395,19 +2410,19 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
         <div className="space-y-6 animate-fadeIn">
           {/* View Mode Switcher Header */}
           <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-slate-800/80">
               <div>
-                <h2 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                <h2 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                   <Building2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
                   Chart of Accounts (COA) Management &amp; Mapping
                 </h2>
-                <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Create and manage master ledger accounts, configure standard debit/credit rules, and map automated POS &amp; Inventory accounting linkages.
                 </p>
               </div>
 
               <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-                <div className={`p-1 rounded-xl border flex items-center gap-1 ${isLight ? 'bg-gray-100 border-gray-200' : 'bg-zinc-800 border-zinc-700'}`}>
+                <div className={`p-1 rounded-xl border flex items-center gap-1 ${isLight ? 'bg-gray-100 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                   <button
                     onClick={() => setCoaViewMode('directory')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -2415,7 +2430,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'text-gray-600 hover:text-gray-900'
-                        : 'text-zinc-400 hover:text-white'
+                        : 'text-slate-400 hover:text-slate-100'
                     }`}
                   >
                     COA Directory
@@ -2427,7 +2442,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'text-gray-600 hover:text-gray-900'
-                        : 'text-zinc-400 hover:text-white'
+                        : 'text-slate-400 hover:text-slate-100'
                     }`}
                   >
                     Automated Mapping
@@ -2460,20 +2475,20 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-500 dark:text-zinc-300 uppercase tracking-wider">
+                    <span className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                       Master Chart of Accounts ({chartOfAccounts.length} Total Accounts)
                     </span>
                   </div>
-                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                     Indonesian GAAP (PSAK 101) Compliant
                   </span>
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-zinc-800">
+                <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-slate-800/80">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b text-[11px] font-bold tracking-wider uppercase ${
-                        isLight ? 'bg-gray-50/80 text-gray-500 border-gray-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                        isLight ? 'bg-gray-50/80 text-gray-500 border-gray-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                       }`}>
                         <th className="py-3 px-3.5">Code</th>
                         <th className="py-3 px-3.5">Account Name</th>
@@ -2484,18 +2499,18 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         <th className="py-3 px-3 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+                    <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
                       {chartOfAccounts.map((acc) => (
                         <tr
                           key={acc.accountCode}
                           className={`transition-colors ${
-                            isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/50'
+                            isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'
                           }`}
                         >
                           <td className="py-3 px-3.5 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                             {acc.accountCode}
                           </td>
-                          <td className={`py-3 px-3.5 font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                          <td className={`py-3 px-3.5 font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                             {acc.accountName}
                           </td>
                           <td className="py-3 px-3 text-center">
@@ -2513,13 +2528,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                               {acc.category}
                             </span>
                           </td>
-                          <td className="py-3 px-3 text-center font-mono text-[11px] text-gray-500 dark:text-zinc-300">
+                          <td className="py-3 px-3 text-center font-mono text-[11px] text-gray-500 dark:text-slate-400">
                             {acc.normalBalance}
                           </td>
                           <td className="py-3 px-3 text-right font-mono font-bold">
                             {formatIDR(acc.balance)}
                           </td>
-                          <td className={`py-3 px-3 text-[11px] truncate max-w-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                          <td className={`py-3 px-3 text-[11px] truncate max-w-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                             {acc.description}
                           </td>
                           <td className="py-3 px-3 text-right whitespace-nowrap">
@@ -2528,7 +2543,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                               className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
                                 isLight
                                   ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'
-                                  : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                                  : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                               }`}
                             >
                               <Edit3 className="w-3 h-3" />
@@ -2581,7 +2596,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       </option>
                     ))}
                 </select>
-                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Credited on every completed POS checkout for the gross merchandise value.
                 </p>
               </div>
@@ -2619,7 +2634,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       </option>
                     ))}
                 </select>
-                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Credited to relieve physical inventory value when items are sold or written off.
                 </p>
               </div>
@@ -2657,7 +2672,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       </option>
                     ))}
                 </select>
-                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Debited when merchandise is sold to recognize true FIFO batch procurement cost.
                 </p>
               </div>
@@ -2695,15 +2710,15 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       </option>
                     ))}
                 </select>
-                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Debited when stock opname reveals inventory shortages or perishable spoilage.
                 </p>
               </div>
             </div>
 
             {/* Clearing Accounts for Payment Channels */}
-            <div className="pt-4 border-t border-gray-100 dark:border-zinc-800">
-              <h3 className={`text-sm font-bold mb-3 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <div className="pt-4 border-t border-gray-100 dark:border-slate-800/80">
+              <h3 className={`text-sm font-bold mb-3 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 Frontline Tender &amp; Clearing Accounts
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2791,18 +2806,18 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             <div className={`p-4 rounded-xl border ${isLight ? 'bg-emerald-50/50 border-emerald-200' : 'bg-emerald-950/20 border-emerald-900/40'}`}>
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
-                <span className={`text-xs font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <span className={`text-xs font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   Live Double-Entry Journal Preview (Sample Rp 100.000 POS Sale)
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
-                <div className="p-3 bg-white dark:bg-zinc-900 rounded-lg border border-gray-200 dark:border-zinc-800 space-y-1">
-                  <div className="text-[11px] font-bold text-gray-500 dark:text-zinc-300 uppercase">1. Revenue Recognition:</div>
+                <div className="p-3 bg-white dark:bg-[#090A0F] rounded-lg border border-gray-200 dark:border-slate-800/80 space-y-1">
+                  <div className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase">1. Revenue Recognition:</div>
                   <div className="text-emerald-700 dark:text-emerald-400">Debit [{coaConfig.cashClearingAccountCode}] {coaConfig.cashClearingAccountName}: Rp 100.000</div>
                   <div className="text-teal-700 dark:text-teal-400 pl-4">Credit [{coaConfig.posRevenueAccountCode}] {coaConfig.posRevenueAccountName}: Rp 100.000</div>
                 </div>
-                <div className="p-3 bg-white dark:bg-zinc-900 rounded-lg border border-gray-200 dark:border-zinc-800 space-y-1">
-                  <div className="text-[11px] font-bold text-gray-500 dark:text-zinc-300 uppercase">2. Cost of Goods Sold (COGS):</div>
+                <div className="p-3 bg-white dark:bg-[#090A0F] rounded-lg border border-gray-200 dark:border-slate-800/80 space-y-1">
+                  <div className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase">2. Cost of Goods Sold (COGS):</div>
                   <div className="text-amber-700 dark:text-amber-400">Debit [{coaConfig.cogsAccountCode}] {coaConfig.cogsAccountName}: Rp 62.000</div>
                   <div className="text-blue-700 dark:text-blue-400 pl-4">Credit [{coaConfig.inventoryAssetAccountCode}] {coaConfig.inventoryAssetAccountName}: Rp 62.000</div>
                 </div>
@@ -2815,7 +2830,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {/* Manual COA Create / Edit Modal */}
       {isAddingCoa && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
           onClick={() => {
             setIsAddingCoa(false);
             setEditingCoa(null);
@@ -2825,10 +2840,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             className={`${cardClass} max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
               <div className="flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   {editingCoa ? 'Edit Chart of Accounts Entry' : 'Create New COA Account'}
                 </h3>
               </div>
@@ -2838,7 +2853,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   setIsAddingCoa(false);
                   setEditingCoa(null);
                 }}
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'}`}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-slate-800 text-slate-400'}`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2936,7 +2951,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 />
               </div>
 
-              <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+              <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
                 <button
                   type="button"
                   onClick={() => {
@@ -2944,7 +2959,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     setEditingCoa(null);
                   }}
                   className={`px-4 py-2 rounded-xl border text-xs font-semibold cursor-pointer ${
-                    isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                    isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100' : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                   }`}
                 >
                   Cancel
@@ -2981,13 +2996,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             </div>
           )}
           <div className={`${cardClass} p-5 sm:p-6 space-y-6`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-slate-800/80">
               <div>
-                <h2 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                <h2 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                   <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                   POS &amp; Frontline Cashier Configuration
                 </h2>
-                <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Control cash rounding, VAT taxation, maximum cashier discounts, near-expiry Vivo automation, and receipt printing options across all 34 outlets.
                 </p>
               </div>
@@ -3022,7 +3037,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <option value="nearest_1000">Round to Nearest Rp 1.000</option>
                   <option value="ceil_1000">Ceiling Up to Next Rp 1.000</option>
                 </select>
-                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Eliminates cashier coin shortage friction during high-volume physical checkout.
                 </p>
               </div>
@@ -3055,7 +3070,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     onChange={(e) => setPosConfig({ ...posConfig, isTaxInclusive: e.target.checked })}
                     className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                   />
-                  <label htmlFor="taxInclusiveCheck" className={`text-xs ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  <label htmlFor="taxInclusiveCheck" className={`text-xs ${isLight ? 'text-gray-700' : 'text-slate-400'}`}>
                     Prices displayed are tax-inclusive
                   </label>
                 </div>
@@ -3089,7 +3104,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     onChange={(e) => setPosConfig({ ...posConfig, requireManagerPinForVoid: e.target.checked })}
                     className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                   />
-                  <label htmlFor="managerPinCheck" className={`text-xs ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                  <label htmlFor="managerPinCheck" className={`text-xs ${isLight ? 'text-gray-700' : 'text-slate-400'}`}>
                     Require Manager PIN for item void
                   </label>
                 </div>
@@ -3110,7 +3125,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     onChange={(e) => setPosConfig({ ...posConfig, enableVivoNearExpiryDiscount: e.target.checked })}
                     className="w-4 h-4 text-[#0F4C3A] rounded disabled:opacity-50"
                   />
-                  <label htmlFor="enableVivoCheck" className={`text-xs font-semibold ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>
+                  <label htmlFor="enableVivoCheck" className={`text-xs font-semibold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
                     Enable Automatic Vivo Clearance
                   </label>
                 </div>
@@ -3144,7 +3159,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   onChange={(e) => setPosConfig({ ...posConfig, cashDrawerFloatIDR: Math.max(0, Number(e.target.value) || 0) })}
                   className={`w-full ${inputClass} disabled:opacity-60`}
                 />
-                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-[11px] mt-2 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Formatted: {formatIDR(posConfig.cashDrawerFloatIDR)} per register.
                 </p>
               </div>
@@ -3194,21 +3209,21 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
         <div className="space-y-6 animate-fadeIn">
           {/* Header Card */}
           <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-slate-800/80">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 uppercase tracking-wide">
                     <Sparkles className="w-3.5 h-3.5" />
                     Central Rule Engine
                   </span>
-                  <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                  <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                     Dynamic Cart &amp; POS Evaluation
                   </span>
                 </div>
-                <h2 className={`text-lg font-bold mt-1.5 ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                <h2 className={`text-lg font-bold mt-1.5 ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                   Promotion &amp; Member Loyalty Rule Engine
                 </h2>
-                <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
                   Manage centralized retail discounts including BOGO (Buy 2 Get 1 Free), seasonal coupons, member tier perks, and category bundles. Rules evaluate dynamically at checkout without altering master inventory prices.
                 </p>
               </div>
@@ -3234,7 +3249,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <div className="text-2xl font-black mt-1 text-amber-700 dark:text-amber-300">
                   {promotions.filter((r) => r.active).length}
                 </div>
-                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>Live across outlets</div>
+                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>Live across outlets</div>
               </div>
 
               <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-emerald-50/40 border-emerald-200/80' : 'bg-emerald-950/20 border-emerald-800/50'}`}>
@@ -3242,7 +3257,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <div className="text-2xl font-black mt-1 text-emerald-700 dark:text-emerald-300">
                   {promotions.filter((r) => r.type === 'BOGO' && r.active).length}
                 </div>
-                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>Buy X Get Y Bundles</div>
+                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>Buy X Get Y Bundles</div>
               </div>
 
               <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-blue-50/40 border-blue-200/80' : 'bg-blue-950/20 border-blue-800/50'}`}>
@@ -3250,7 +3265,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <div className="text-2xl font-black mt-1 text-blue-700 dark:text-blue-300">
                   {promotions.filter((r) => r.type === 'MEMBER_TIER' && r.active).length}
                 </div>
-                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>Silver, Gold, Platinum</div>
+                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>Silver, Gold, Platinum</div>
               </div>
 
               <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-violet-50/40 border-violet-200/80' : 'bg-violet-950/20 border-violet-800/50'}`}>
@@ -3258,7 +3273,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <div className="text-2xl font-black mt-1 text-violet-700 dark:text-violet-300">
                   {promotions.reduce((sum, r) => sum + (r.usageCount || 0), 0).toLocaleString('id-ID')}
                 </div>
-                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>Customer claims logged</div>
+                <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>Customer claims logged</div>
               </div>
             </div>
 
@@ -3275,7 +3290,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'text-gray-600 hover:bg-gray-100'
-                        : 'text-zinc-400 hover:bg-zinc-800'
+                        : 'text-slate-400 hover:bg-slate-900/90'
                     }`}
                   >
                     {t === 'ALL'
@@ -3294,7 +3309,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               </div>
 
               <div className="relative w-full sm:w-64">
-                <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${isLight ? 'text-gray-400' : 'text-zinc-300'}`} />
+                <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${isLight ? 'text-gray-400' : 'text-slate-400'}`} />
                 <input
                   type="text"
                   value={promoSearch}
@@ -3312,7 +3327,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className={`border-b text-[10px] uppercase font-bold tracking-wider ${
-                    isLight ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-zinc-800/50 border-zinc-800 text-zinc-400'
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-[#090A0F] border-slate-800/80 text-slate-400'
                   }`}>
                     <th className="py-3 px-4">Coupon Code &amp; Rule</th>
                     <th className="py-3 px-4">Rule Type</th>
@@ -3324,7 +3339,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80">
                   {promotions
                     .filter((r) => (promoTypeFilter === 'ALL' ? true : r.type === promoTypeFilter))
                     .filter((r) =>
@@ -3336,17 +3351,17 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     )
                     .map((rule) => {
                       return (
-                        <tr key={rule.id} className={`hover:bg-gray-50/50 dark:hover:bg-zinc-800/40 transition-colors ${!rule.active ? 'opacity-60' : ''}`}>
+                        <tr key={rule.id} className={`hover:bg-gray-50/50 dark:hover:bg-slate-900/60 transition-colors ${!rule.active ? 'opacity-60' : ''}`}>
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center whitespace-nowrap font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-[#0F4C3A] dark:text-emerald-400">
+                              <span className="inline-flex items-center whitespace-nowrap font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 text-[#0F4C3A] dark:text-emerald-400">
                                 {rule.code}
                               </span>
-                              <div className="font-semibold text-gray-900 dark:text-white">
+                              <div className="font-semibold text-gray-900 dark:text-slate-100">
                                 {rule.name}
                               </div>
                             </div>
-                            <div className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+                            <div className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                               {rule.description}
                             </div>
                           </td>
@@ -3366,7 +3381,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           </td>
 
                           <td className="py-3.5 px-4">
-                            <div className="font-mono text-xs text-gray-800 dark:text-zinc-200">
+                            <div className="font-mono text-xs text-gray-800 dark:text-slate-200">
                               {rule.targetType}: <strong className="text-[#0F4C3A] dark:text-emerald-400">{rule.targetValue}</strong>
                             </div>
                           </td>
@@ -3388,11 +3403,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             )}
                           </td>
 
-                          <td className="py-3.5 px-4 font-mono text-[11px] text-gray-700 dark:text-zinc-300">
+                          <td className="py-3.5 px-4 font-mono text-[11px] text-gray-700 dark:text-slate-300">
                             {rule.minOrderSubtotalIDR ? `Min ${formatIDR(rule.minOrderSubtotalIDR)}` : 'No Min Spend'}
                           </td>
 
-                          <td className="py-3.5 px-4 text-center font-bold font-mono text-xs text-gray-900 dark:text-white">
+                          <td className="py-3.5 px-4 text-center font-bold font-mono text-xs text-gray-900 dark:text-slate-100">
                             {rule.usageCount || 0}
                           </td>
 
@@ -3404,7 +3419,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                               className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                                 rule.active
                                   ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
-                                  : 'bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'
+                                  : 'bg-slate-200 dark:bg-slate-900/90 text-slate-600 dark:text-slate-300'
                               }`}
                             >
                               {rule.active ? 'ACTIVE' : 'PAUSED'}
@@ -3433,27 +3448,27 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           {/* Create Promotion Rule Modal */}
           {isCreatingPromo && typeof document !== 'undefined' && createPortal(
             <div 
-              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+              className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
               onClick={() => setIsCreatingPromo(false)}
             >
               <div 
                 className={`${cardClass} max-w-xl w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 pb-3">
+                <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800/80 pb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                       <Sparkles className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>New Promotion Rule</h3>
-                      <p className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>GroceMart Retail Discount &amp; Loyalty Engine</p>
+                      <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>New Promotion Rule</h3>
+                      <p className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>GroceMart Retail Discount &amp; Loyalty Engine</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsCreatingPromo(false)}
-                    className="p-1.5 rounded-lg text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -3462,7 +3477,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 <form onSubmit={handleSavePromo} className="space-y-4 text-xs">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">
+                      <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
                         Promotion Name *
                       </label>
                       <input
@@ -3475,7 +3490,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">
+                      <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
                         Coupon Code *
                       </label>
                       <input
@@ -3491,7 +3506,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">
+                      <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
                         Rule Type
                       </label>
                       <select
@@ -3508,7 +3523,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">
+                      <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
                         Target Type
                       </label>
                       <select
@@ -3525,7 +3540,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
                   {newPromoTargetType !== 'ALL' && (
                     <div>
-                      <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">
+                      <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
                         Target Value ({newPromoTargetType === 'CATEGORY' ? 'Category Name' : 'Product SKU'})
                       </label>
                       {newPromoTargetType === 'CATEGORY' ? (
@@ -3556,7 +3571,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   {newPromoType === 'PERCENTAGE_DISCOUNT' && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">Discount %</label>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Discount %</label>
                         <input
                           type="number"
                           min={1}
@@ -3567,7 +3582,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">Min Spend (IDR)</label>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Min Spend (IDR)</label>
                         <input
                           type="number"
                           step={10000}
@@ -3582,7 +3597,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   {newPromoType === 'BOGO' && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">Buy Quantity</label>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Buy Quantity</label>
                         <input
                           type="number"
                           min={1}
@@ -3592,7 +3607,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">Get Free Units</label>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Get Free Units</label>
                         <input
                           type="number"
                           min={1}
@@ -3607,7 +3622,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   {newPromoType === 'MEMBER_TIER' && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">Required VIP Tier</label>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Required VIP Tier</label>
                         <select
                           value={newPromoMemberTier}
                           onChange={(e) => setNewPromoMemberTier(e.target.value as MemberLoyaltyTier)}
@@ -3619,7 +3634,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">Tier Discount %</label>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Tier Discount %</label>
                         <input
                           type="number"
                           min={1}
@@ -3633,7 +3648,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   )}
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1">Description</label>
+                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Description</label>
                     <textarea
                       rows={2}
                       value={newPromoDesc}
@@ -3643,11 +3658,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     />
                   </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-zinc-800">
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-800/80">
                     <button
                       type="button"
                       onClick={() => setIsCreatingPromo(false)}
-                      className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -3674,7 +3689,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {activeSubTab === 'import_opname' && (
         <div className="space-y-6 animate-fadeIn">
           {/* Inner Tab Pill Toggle */}
-          <div className="flex items-center gap-2 border-b border-gray-200 dark:border-zinc-800 pb-3">
+          <div className="flex items-center gap-2 border-b border-gray-200 dark:border-slate-800/80 pb-3">
             <button
               onClick={() => setOpnameSubTab('stocktake')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
@@ -3682,7 +3697,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   ? 'bg-[#0F4C3A] text-white shadow-2xs'
                   : isLight
                   ? 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                  : 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'
+                  : 'bg-slate-900/90 text-slate-300 border border-slate-800/80 hover:bg-slate-800'
               }`}
             >
               <FileCheck2 className="w-4 h-4" />
@@ -3696,7 +3711,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   ? 'bg-[#0F4C3A] text-white shadow-2xs'
                   : isLight
                   ? 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                  : 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'
+                  : 'bg-slate-900/90 text-slate-300 border border-slate-800/80 hover:bg-slate-800'
               }`}
             >
               <FileSpreadsheet className="w-4 h-4" />
@@ -3709,7 +3724,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             <div className="space-y-6">
               {/* Audit Mode Switcher: Standard Reconciliation vs Blind Cycle Count (Anti-Fraud) */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className={`inline-flex items-center gap-1 p-1 rounded-xl border w-fit ${isLight ? 'bg-gray-100/80 border-gray-200' : 'bg-zinc-900 border-zinc-800'}`}>
+                <div className={`inline-flex items-center gap-1 p-1 rounded-xl border w-fit ${isLight ? 'bg-gray-100/80 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                   <button
                     type="button"
                     onClick={() => setOpnameAuditMode('standard')}
@@ -3718,7 +3733,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'text-gray-700 hover:text-gray-900'
-                        : 'text-zinc-300 hover:text-white'
+                        : 'text-slate-300 hover:text-slate-100'
                     }`}
                   >
                     <Boxes className="w-3.5 h-3.5" />
@@ -3732,7 +3747,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'text-gray-700 hover:text-gray-900'
-                        : 'text-zinc-300 hover:text-white'
+                        : 'text-slate-300 hover:text-slate-100'
                     }`}
                   >
                     <EyeOff className="w-3.5 h-3.5" />
@@ -3742,7 +3757,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
                 {opnameAuditMode === 'blind' && (
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-semibold ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                    <span className={`text-xs font-semibold ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                       Target Outlet:
                     </span>
                     <select
@@ -3773,18 +3788,18 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <div className={`${cardClass} p-5 sm:p-6 space-y-5`}>
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div>
-                    <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                    <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                       <Boxes className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                       Periodic Stock Opname &amp; Discrepancy Reconciliation
                     </h3>
-                    <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                    <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                       Audit real-world shelf inventory against system book balances. Discrepancies automatically trigger double-entry Shrinkage Expense adjustments.
                     </p>
                   </div>
 
                   {/* Store Outlet Selector */}
                   <div className="flex items-center gap-3">
-                    <span className={`text-xs font-semibold ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                    <span className={`text-xs font-semibold ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                       Select Store:
                     </span>
                     <select
@@ -3865,7 +3880,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </div>
 
                 {/* Search, Zone/Category Partition & Barcode Scanner Toolbar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-zinc-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-slate-800/80">
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
                       <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
@@ -3904,7 +3919,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       ))}
                     </select>
 
-                    <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-[11px] font-semibold cursor-pointer">
+                    <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-slate-800/80 text-[11px] font-semibold cursor-pointer">
                       <input
                         type="checkbox"
                         checked={isPartialCycleMode}
@@ -3922,7 +3937,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           ? 'bg-emerald-600 border-emerald-600 text-white'
                           : isLight
                           ? 'bg-white border-emerald-300 text-[#0F4C3A] hover:bg-emerald-50'
-                          : 'bg-zinc-800 border-emerald-700 text-emerald-300 hover:bg-zinc-700'
+                          : 'bg-slate-900/90 border-emerald-700 text-emerald-300 hover:bg-slate-800'
                       }`}
                     >
                       <Barcode className="w-3.5 h-3.5" />
@@ -3943,7 +3958,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                         isLight
                           ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                          : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
                       Match All to System
@@ -4005,11 +4020,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 )}
 
                 {/* Stocktake Itemized Table with Live Surplus/Deficit Calculations */}
-                <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-zinc-800">
+                <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-slate-800/80">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b text-[11px] font-bold tracking-wider uppercase ${
-                        isLight ? 'bg-gray-50/80 text-gray-500 border-gray-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                        isLight ? 'bg-gray-50/80 text-gray-500 border-gray-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                       }`}>
                         <th className="py-3 px-3.5">SKU &amp; Product</th>
                         <th className="py-3 px-3">Storage Zone</th>
@@ -4021,7 +4036,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         <th className="py-3 px-3">Auditor Notes</th>
                       </tr>
                     </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+                    <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
                       {filteredOpnameTiers.map((tier) => {
                         const counted = opnameItems[tier.sku] !== undefined ? opnameItems[tier.sku] : tier.physicalStock;
                         const variance = Number((counted - tier.physicalStock).toFixed(2));
@@ -4039,16 +4054,16 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                                 ? 'bg-blue-500/5'
                                 : isLight
                                 ? 'hover:bg-gray-50/60'
-                                : 'hover:bg-zinc-800/40'
+                                : 'hover:bg-slate-900/60'
                             }`}
                           >
                             <td className="py-3 px-3.5">
                               <span className="font-mono text-[10px] text-gray-400 block">{tier.sku}</span>
-                              <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                              <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                                 {tier.productName}
                               </span>
                             </td>
-                            <td className="py-3 px-3 text-slate-600 dark:text-zinc-300 font-mono text-[11px]">
+                            <td className="py-3 px-3 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
                               {tier.warehouseZoneId}
                             </td>
                             <td className="py-3 px-3 text-center font-mono font-bold">
@@ -4094,7 +4109,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                                 </span>
                               )}
                               {!isSurplus && !isShortage && (
-                                <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700 dark:bg-zinc-800 dark:text-zinc-300 border border-gray-200 dark:border-zinc-700">
+                                <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700 dark:bg-slate-900/90 dark:text-slate-300 border border-gray-200 dark:border-slate-800/80">
                                   <Check className="w-3 h-3 text-emerald-500" />
                                   SESUAI (0)
                                 </span>
@@ -4125,7 +4140,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               {/* History of Past Stock Opname Sessions */}
               {opnameSessions.length > 0 && (
                 <div className={`${cardClass} p-5 space-y-4`}>
-                  <h4 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                  <h4 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                     <FileCheck2 className="w-4 h-4 text-emerald-600" />
                     Past Physical Stocktake Audit Logs
                   </h4>
@@ -4140,7 +4155,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                               {session.status}
                             </span>
                           </div>
-                          <p className={`text-[11px] mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                          <p className={`text-[11px] mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                             Audited by {session.auditorName || 'System'} • {session.items?.length || 0} items counted • Variance: {session.totalVarianceUnits ?? 0} units ({formatIDR(session.netFinancialVarianceIDR ?? 0)})
                           </p>
                         </div>
@@ -4163,13 +4178,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           {opnameSubTab === 'bulk_import' && (
             <div className="space-y-6">
               <div className={`${cardClass} p-5 sm:p-6 space-y-5`}>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-zinc-800">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-slate-800/80">
                   <div>
-                    <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                    <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                       <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       Bulk Inventory &amp; Stock Matrix Import
                     </h3>
-                    <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                    <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                       Paste or upload comma-separated inventory records (CSV) to update store warehouse tiers simultaneously without cross-location bleed.
                     </p>
                   </div>
@@ -4180,7 +4195,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                         isLight
                           ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                          : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -4224,7 +4239,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 {parsedImportRows.length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className={`text-xs font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                      <span className={`text-xs font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                         Parsed Preview ({parsedImportRows.length} SKUs ready for import)
                       </span>
                       <button
@@ -4237,10 +4252,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       </button>
                     </div>
 
-                    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+                    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
                       <table className="w-full text-left text-xs font-mono">
                         <thead className={`border-b text-[10px] uppercase font-bold ${
-                          isLight ? 'bg-gray-50 text-gray-500' : 'bg-zinc-800 text-zinc-400'
+                          isLight ? 'bg-gray-50 text-gray-500' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                         }`}>
                           <tr>
                             <th className="py-2.5 px-3">SKU</th>
@@ -4252,12 +4267,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             <th className="py-2.5 px-3 text-center">Min Threshold</th>
                           </tr>
                         </thead>
-                        <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+                        <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
                           {parsedImportRows.map((r, i) => (
-                            <tr key={i} className={isLight ? 'hover:bg-gray-50' : 'hover:bg-zinc-800/40'}>
+                            <tr key={i} className={isLight ? 'hover:bg-gray-50' : 'hover:bg-slate-900/60'}>
                               <td className="py-2 px-3 font-bold text-[#0F4C3A] dark:text-emerald-400">{r.sku}</td>
                               <td className="py-2 px-3">{r.productName}</td>
-                              <td className="py-2 px-3 text-slate-600 dark:text-zinc-300">{r.category}</td>
+                              <td className="py-2 px-3 text-slate-600 dark:text-slate-300">{r.category}</td>
                               <td className="py-2 px-3 text-center font-bold">{r.physicalStock} {r.unit}</td>
                               <td className="py-2 px-3 text-right">{formatIDR(r.unitCost)}</td>
                               <td className="py-2 px-3 text-right">{formatIDR(r.sellingPrice)}</td>
@@ -4281,13 +4296,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {activeSubTab === 'transfer' && (
         <div className="space-y-6 animate-fadeIn">
           <div className={`${cardClass} p-5 sm:p-6 space-y-6`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-slate-800/80">
               <div>
-                <h2 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                <h2 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                   <ArrowRightLeft className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                   Official Inter-Warehouse Stock Transfer &amp; Allocation
                 </h2>
-                <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Safely relocate inventory stock between store outlets with double-sign-off audit trail. Strictly isolates quantities to eliminate multi-warehouse inventory overlap bleed.
                 </p>
               </div>
@@ -4295,7 +4310,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
             {/* Transfer Action Card */}
             <div className={subCardClass}>
-              <h3 className={`text-xs font-bold uppercase tracking-wider mb-4 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <h3 className={`text-xs font-bold uppercase tracking-wider mb-4 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Initiate New Stock Reallocation
               </h3>
 
@@ -4358,6 +4373,46 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </div>
               </div>
 
+              {/* Secondary Non-Inventory Returnable Asset & Packaging Tracking */}
+              <div className="mt-4 pt-3 border-t border-gray-200/80 dark:border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className={labelClass}>Returnable Asset Type (Non-Inventory)</label>
+                  <select
+                    value={transferAssetType}
+                    onChange={(e) => setTransferAssetType(e.target.value)}
+                    className={`w-full ${inputClass}`}
+                  >
+                    <option value="NONE">None / Standard Carton</option>
+                    <option value="KRAT_PLASTIK_BUAH">Plastic Crates (Krat Plastik)</option>
+                    <option value="PALLET_KAYU_B2B">Warehouse Pallets</option>
+                    <option value="COLD_CHAIN_THERMAL_BOX">Cold-Chain Boxes</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Asset IDs / Tag Serials</label>
+                  <input
+                    type="text"
+                    disabled={transferAssetType === 'NONE'}
+                    value={transferAssetIds}
+                    onChange={(e) => setTransferAssetIds(e.target.value)}
+                    placeholder={transferAssetType === 'NONE' ? 'Select asset type to link IDs...' : 'e.g. KRT-041, KRT-042'}
+                    className={`w-full font-mono text-xs ${inputClass} disabled:opacity-50`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Returnable Asset Qty</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    disabled={transferAssetType === 'NONE'}
+                    value={transferAssetQty}
+                    onChange={(e) => setTransferAssetQty(Math.max(1, Number(e.target.value) || 1))}
+                    className={`w-full font-mono ${inputClass} disabled:opacity-50`}
+                  />
+                </div>
+              </div>
+
               <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <input
                   type="text"
@@ -4379,14 +4434,14 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             </div>
 
             {/* Dedicated Transfer Tracking Report */}
-            <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-zinc-800">
+            <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-slate-800/80">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h4 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                  <h4 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                     <Truck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     Internal Transfer Logistics &amp; Tracking Report
                   </h4>
-                  <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                  <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                     Formal custody handoff audit trail, delivery documentation &amp; store stock reconciliation
                   </p>
                 </div>
@@ -4408,7 +4463,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className={subCardClass}>
                   <span className="text-[11px] text-gray-500 font-semibold block">Total Reallocations</span>
-                  <span className={`text-base sm:text-lg font-bold font-mono mt-1 block ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                  <span className={`text-base sm:text-lg font-bold font-mono mt-1 block ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                     {transferRecords.length} records
                   </span>
                 </div>
@@ -4425,9 +4480,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </span>
                 </div>
                 <div className={subCardClass}>
-                  <span className="text-[11px] text-gray-500 font-semibold block">Active In-Transit Shipments</span>
+                  <span className="text-[11px] text-gray-500 dark:text-slate-400 font-semibold block">Active In-Transit / Returnable Pool</span>
                   <span className="text-base sm:text-lg font-bold font-mono text-blue-600 dark:text-blue-400 mt-1 block">
                     {transferRecords.filter((t) => t.status === 'in_transit').length} In Transit
+                  </span>
+                  <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 mt-0.5 block">
+                    {transferRecords.reduce((s, t) => s + (t.returnableAssetOutstanding || 0), 0)} assets out ·{' '}
+                    {transferRecords.reduce((s, t) => s + Math.max(0, (t.returnableAssetQty || 0) - (t.returnableAssetOutstanding || 0)), 0)} returned
                   </span>
                 </div>
               </div>
@@ -4439,13 +4498,13 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   return (t.status || 'completed').toUpperCase() === transferFilterStatus;
                 });
                 return filteredTransfers.length === 0 ? (
-                <p className="text-xs text-slate-600 dark:text-zinc-300 font-medium italic p-4 text-center">No transfers match the selected status filter.</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium italic p-4 text-center">No transfers match the selected status filter.</p>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-zinc-800">
+                <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-slate-800/80">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b text-[11px] font-bold tracking-wider uppercase ${
-                        isLight ? 'bg-gray-50/80 text-gray-500 border-gray-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                        isLight ? 'bg-gray-50/80 text-gray-500 border-gray-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                       }`}>
                         <th className="py-3 px-3.5">Transfer Ref</th>
                         <th className="py-3 px-3">Date &amp; Time</th>
@@ -4457,11 +4516,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         <th className="py-3 px-3 text-center">Waybill / Status</th>
                       </tr>
                     </thead>
-                    <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+                    <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
                       {filteredTransfers.map((t) => (
                         <tr
                           key={t.id}
-                          className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'}`}
+                          className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'}`}
                         >
                           <td className="py-3 px-3.5 font-mono font-bold text-indigo-600 dark:text-indigo-400">
                             {t.id}
@@ -4471,7 +4530,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           </td>
                           <td className="py-3 px-3">
                             <span className="font-mono text-[10px] text-gray-400 block">{t.sku}</span>
-                            <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>{t.productName}</span>
+                            <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>{t.productName}</span>
                           </td>
                           <td className="py-3 px-3">
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
@@ -4492,40 +4551,81 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             {formatIDR(t.totalTransferValue)}
                           </td>
                           <td className="py-3 px-3 text-center whitespace-nowrap">
-                            {t.status === 'in_transit' ? (
-                              <div className="inline-flex items-center gap-1.5">
-                                <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/25">
-                                  IN TRANSIT
-                                </span>
-                                {canConfirmArrivals ? (
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      try {
-                                        const res = await apiClient.receiveStockTransfer(t.id);
-                                        onShowToast('Transfer Received', res.message);
-                                        fetchAllSettings();
-                                        onRefreshData?.();
-                                      } catch (err: any) {
-                                        onShowToast('Receive Failed', err?.message || 'Error confirming transfer receipt');
-                                      }
-                                    }}
-                                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-colors cursor-pointer"
-                                  >
-                                    Confirm Receipt
-                                  </button>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300">
-                                    Read-Only
+                            <div className="inline-flex flex-col items-center gap-1">
+                              {t.status === 'in_transit' ? (
+                                <div className="inline-flex items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/25">
+                                    IN TRANSIT
                                   </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                COMPLETED
-                              </span>
-                            )}
+                                  {canConfirmArrivals ? (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          const res = await apiClient.receiveStockTransfer(t.id);
+                                          onShowToast('Transfer Received', res.message);
+                                          fetchAllSettings();
+                                          onRefreshData?.();
+                                        } catch (err: any) {
+                                          onShowToast('Receive Failed', err?.message || 'Error confirming transfer receipt');
+                                        }
+                                      }}
+                                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-colors cursor-pointer"
+                                    >
+                                      Confirm Receipt
+                                    </button>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-900/90 text-slate-600 dark:text-slate-300">
+                                      Read-Only
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                  COMPLETED
+                                </span>
+                              )}
+
+                              {(t.returnableAssetQty || 0) > 0 && (
+                                <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                                      (t.returnableAssetOutstanding || 0) > 0
+                                        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25'
+                                        : 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/20'
+                                    }`}
+                                    title={t.returnableAssetIds ? `Asset IDs: ${t.returnableAssetIds}` : t.returnableAssetType}
+                                  >
+                                    {(t.returnableAssetOutstanding || 0) > 0
+                                      ? `${t.returnableAssetOutstanding}/${t.returnableAssetQty} ${t.returnableAssetType || 'Assets'} Out`
+                                      : `Assets Returned (${t.returnableAssetQty})`}
+                                  </span>
+                                  {(t.returnableAssetOutstanding || 0) > 0 && canMutateStock && (
+                                    <button
+                                      type="button"
+                                      disabled={returningAssetTransferId === t.id}
+                                      onClick={async () => {
+                                        setReturningAssetTransferId(t.id);
+                                        try {
+                                          const res = await apiClient.confirmTransferReturnableReturn(t.id);
+                                          onShowToast('Return Confirmation Logged', res.message);
+                                          fetchAllSettings();
+                                          onRefreshData?.();
+                                        } catch (err: any) {
+                                          onShowToast('Return Failed', err?.message || 'Could not confirm asset return');
+                                        } finally {
+                                          setReturningAssetTransferId(null);
+                                        }
+                                      }}
+                                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition-colors cursor-pointer"
+                                    >
+                                      {returningAssetTransferId === t.id ? 'Returning...' : 'Return Confirmation'}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}

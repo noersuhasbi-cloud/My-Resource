@@ -145,7 +145,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
         className={`p-5 sm:p-6 rounded-2xl border transition-colors ${
           isLight
             ? 'bg-gradient-to-r from-emerald-50 via-white to-slate-50 border-emerald-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-            : 'bg-zinc-900/80 border-zinc-800'
+            : 'bg-emerald-950/80 border-emerald-800/50'
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -154,14 +154,14 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0F4C3A] text-white tracking-wide uppercase">
                 Module 3 • Security &amp; Compliance
               </span>
-              <span className={`text-xs ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
+              <span className={`text-xs ${isLight ? 'text-zinc-500' : 'text-emerald-200/80'}`}>
                 Granular Shift, Zone &amp; Outlet Authorization Matrix
               </span>
             </div>
-            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
               Role-Based Access Control (RBAC) &amp; Shift Management
             </h2>
-            <p className={`text-xs sm:text-sm mt-1 max-w-3xl ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
+            <p className={`text-xs sm:text-sm mt-1 max-w-3xl ${isLight ? 'text-slate-600' : 'text-emerald-100/80'}`}>
               Enforce least-privilege administrative governance. Cashiers and Pickers are bounded by physical warehouse zones
               (Ambient, Cold Chilled, Freezer) and active shifts, while Store Managers and Company Executives hold cryptographic override
               and consolidated financial audit signing keys.
@@ -182,7 +182,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                 isLight
                   ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -199,12 +199,12 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           className={`lg:col-span-1 p-5 rounded-2xl border flex flex-col justify-between ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.02)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-zinc-300'}`}>
+              <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-slate-400'}`}>
                 Active Signed-In Operator
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
@@ -220,39 +220,39 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                     {currentSession.userName.slice(0, 2).toUpperCase()}
                   </div>
                   <div>
-                    <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                    <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                       {currentSession.userName}
                     </h3>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${roleBadgeColor(currentSession.userRole)}`}>
                         {currentSession.userRole.replace(/_/g, ' ').toUpperCase()}
                       </span>
-                      <span className="text-[11px] text-gray-400 font-mono">
+                      <span className="text-[11px] text-gray-400 dark:text-slate-400 font-mono">
                         #{currentSession.userId}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className={`p-3 rounded-xl border space-y-1.5 text-xs ${isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
+                <div className={`p-3 rounded-xl border space-y-1.5 text-xs ${isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400 flex items-center gap-1.5">
+                    <span className="text-gray-400 dark:text-slate-400 flex items-center gap-1.5">
                       <Building2 className="w-3.5 h-3.5" /> Outlet Scope:
                     </span>
-                    <span className="font-semibold text-right truncate max-w-[170px]">
+                    <span className="font-semibold text-right truncate max-w-[170px] dark:text-slate-100">
                       {currentSession.storeName}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400 flex items-center gap-1.5">
+                    <span className="text-gray-400 dark:text-slate-400 flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5" /> Active Shift:
                     </span>
-                    <span className="font-semibold font-mono">
+                    <span className="font-semibold font-mono dark:text-slate-100">
                       {currentSession.shiftName} ({currentSession.activeShiftId})
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-400 flex items-center gap-1.5">
+                    <span className="text-gray-400 dark:text-slate-400 flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5" /> Storage Zones:
                     </span>
                     <div className="flex items-center gap-1 flex-wrap justify-end">
@@ -266,11 +266,11 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="py-6 text-center text-sm text-gray-400">Loading operator session...</div>
+              <div className="py-6 text-center text-sm text-gray-400 dark:text-slate-400">Loading operator session...</div>
             )}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-zinc-800 text-[11px] text-gray-400">
+          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-800/80 text-[11px] text-gray-400 dark:text-slate-400">
             🔒 All mutations are digitally watermarked with this operator ID and timestamp.
           </div>
         </div>
@@ -280,16 +280,16 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           className={`lg:col-span-2 p-5 rounded-2xl border flex flex-col justify-between ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.02)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           <div>
             <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
               <div>
-                <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   Authorized Enterprise Personnel Roster (Read-Only)
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-400 dark:text-slate-400">
                   Role and branch governance is configured exclusively by Super Admin. Use Lock / Sign Out to switch accounts.
                 </p>
               </div>
@@ -310,18 +310,18 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                         ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 shadow-xs ring-1 ring-[#0F4C3A]'
                         : isLight
                         ? 'border-gray-200 bg-gray-50/40'
-                        : 'border-zinc-800 bg-zinc-900/50'
+                        : 'border-slate-800/80 bg-[#090A0F]'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white flex items-center gap-1.5">
+                        <div className="font-bold text-xs sm:text-sm text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
                           {profile.userName}
                           {isActive && (
                             <span className="w-2 h-2 rounded-full bg-emerald-500" />
                           )}
                         </div>
-                        <div className="text-[11px] text-gray-500 dark:text-zinc-300 mt-0.5">
+                        <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
                           {profile.storeName}
                         </div>
                       </div>
@@ -330,7 +330,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                       </span>
                     </div>
 
-                    <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between text-[10px] text-gray-400">
+                    <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-400">
                       <span>Shift: {profile.shiftName}</span>
                       <span className="font-mono">
                         {profile.isActive === false ? 'SUSPENDED' : `Zones: [${profile.assignedZones?.length ? profile.assignedZones.join(', ') : 'ALL'}]`}
@@ -342,7 +342,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
             </div>
           </div>
 
-          <div className="mt-3 text-[11px] text-gray-400">
+          <div className="mt-3 text-[11px] text-gray-400 dark:text-slate-400">
             🔒 Post-login session switching is disabled to enforce strict zero-trust privilege isolation. Click <strong>Lock / Sign Out</strong> to authenticate as another operator.
           </div>
         </div>
@@ -355,15 +355,15 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           className={`lg:col-span-2 p-5 rounded-2xl border ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.02)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className={`text-sm sm:text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+              <h3 className={`text-sm sm:text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 Granular Permissions Evaluated for Active Session
               </h3>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-400 dark:text-slate-400">
                 Rule engine evaluation based on role ({currentSession?.userRole}), active shift ({currentSession?.activeShiftId}), and outlet tag.
               </p>
             </div>
@@ -371,10 +371,10 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 
           {currentSession && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                 <div>
-                  <span className="font-semibold block">Store Point-of-Sale (POS) Terminal</span>
-                  <span className="text-[11px] text-gray-400">Process checkout &amp; QRIS settlements</span>
+                  <span className="font-semibold block dark:text-slate-100">Store Point-of-Sale (POS) Terminal</span>
+                  <span className="text-[11px] text-gray-400 dark:text-slate-400">Process checkout &amp; QRIS settlements</span>
                 </div>
                 {currentSession.permissions.canViewPos ? (
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
@@ -387,10 +387,10 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                 <div>
-                  <span className="font-semibold block">Goods Receipt (GR) &amp; Dock Inwarding</span>
-                  <span className="text-[11px] text-gray-400">Perform partial receipt &amp; lot logging</span>
+                  <span className="font-semibold block dark:text-slate-100">Goods Receipt (GR) &amp; Dock Inwarding</span>
+                  <span className="text-[11px] text-gray-400 dark:text-slate-400">Perform partial receipt &amp; lot logging</span>
                 </div>
                 {currentSession.permissions.canReceiveGoods ? (
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
@@ -403,10 +403,10 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                 <div>
-                  <span className="font-semibold block">Purchase Order (PO) Final Approval</span>
-                  <span className="text-[11px] text-gray-400">Authorize binding vendor orders &amp; AP balance</span>
+                  <span className="font-semibold block dark:text-slate-100">Purchase Order (PO) Final Approval</span>
+                  <span className="text-[11px] text-gray-400 dark:text-slate-400">Authorize binding vendor orders &amp; AP balance</span>
                 </div>
                 {currentSession.permissions.canApprovePurchaseOrder ? (
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
@@ -419,10 +419,10 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                 <div>
-                  <span className="font-semibold block">Financial P&amp;L &amp; Balance Sheet Access</span>
-                  <span className="text-[11px] text-gray-400">Inspect gross margins &amp; net profitability</span>
+                  <span className="font-semibold block dark:text-slate-100">Financial P&amp;L &amp; Balance Sheet Access</span>
+                  <span className="text-[11px] text-gray-400 dark:text-slate-400">Inspect gross margins &amp; net profitability</span>
                 </div>
                 {currentSession.permissions.canViewFinancePnL ? (
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
@@ -435,10 +435,10 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                 <div>
-                  <span className="font-semibold block">Inventory Adjustments &amp; Stocktake</span>
-                  <span className="text-[11px] text-gray-400">Modify physical stock count without GR</span>
+                  <span className="font-semibold block dark:text-slate-100">Inventory Adjustments &amp; Stocktake</span>
+                  <span className="text-[11px] text-gray-400 dark:text-slate-400">Modify physical stock count without GR</span>
                 </div>
                 {currentSession.permissions.canAdjustInventory ? (
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
@@ -451,10 +451,10 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 )}
               </div>
 
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-700'}`}>
+              <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                 <div>
-                  <span className="font-semibold block">Store Emergency Closure Override</span>
-                  <span className="text-[11px] text-gray-400">Halt online routing &amp; trigger customer broadcast</span>
+                  <span className="font-semibold block dark:text-slate-100">Store Emergency Closure Override</span>
+                  <span className="text-[11px] text-gray-400 dark:text-slate-400">Halt online routing &amp; trigger customer broadcast</span>
                 </div>
                 {currentSession.permissions.canOverrideStoreClosure ? (
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-400 font-bold text-[11px] bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
@@ -475,19 +475,19 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
           className={`p-5 rounded-2xl border flex flex-col justify-between ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.02)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600">
+              <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
                 <Thermometer className="w-4 h-4" />
               </div>
               <div>
-                <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   Zone Access Guard (IoT)
                 </h3>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-[11px] text-gray-400 dark:text-slate-400">
                   Backend check for physical warehouse security turnstiles &amp; picking bays.
                 </p>
               </div>
@@ -508,14 +508,14 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                           : 'border-rose-500 bg-rose-500/10'
                         : isLight
                         ? 'border-gray-200 hover:bg-gray-50'
-                        : 'border-zinc-800 hover:bg-zinc-800/50'
+                        : 'border-slate-800/80 bg-[#090A0F] hover:bg-slate-900/60'
                     }`}
                   >
                     <div className="text-left">
-                      <span className="font-bold capitalize block">
+                      <span className="font-bold capitalize block dark:text-slate-100">
                         {zone.replace(/_/g, ' ')} Storage Zone
                       </span>
-                      <span className="text-[10px] text-gray-400">
+                      <span className="text-[10px] text-gray-400 dark:text-slate-400">
                         {zone === 'ambient' ? '20°C - 25°C Ambient' : zone === 'cold_chilled' ? '0°C - 4°C Fresh' : '-18°C Deep Frozen'}
                       </span>
                     </div>
@@ -526,11 +526,11 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                           Assigned
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-500/20 text-slate-600 dark:text-zinc-300">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-500/20 text-slate-600 dark:text-slate-300">
                           Restricted
                         </span>
                       )}
-                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400 dark:text-slate-400" />
                     </div>
                   </button>
                 );
@@ -563,7 +563,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
             )}
           </div>
 
-          <div className="mt-3 text-[11px] text-gray-400">
+          <div className="mt-3 text-[11px] text-gray-400 dark:text-slate-400">
             Turnstile logs are recorded to the central Security Audit Trail.
           </div>
         </div>
@@ -571,26 +571,26 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 
       {/* Shift Handover Sign-Off Modal */}
       {isHandoverModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-md rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-zinc-800 mb-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800/80 mb-4">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-[#0F4C3A] text-white">
                   <BadgeCheck className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-sm">Shift Handover Sign-Off</h3>
-                  <p className="text-[11px] text-gray-400">Seal shift logs &amp; transfer custody</p>
+                  <p className="text-[11px] text-gray-400 dark:text-slate-400">Seal shift logs &amp; transfer custody</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsHandoverModalOpen(false)}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'
+                  isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-slate-800 text-slate-400'
                 }`}
                 aria-label="Close modal"
               >
@@ -600,36 +600,36 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Outgoing Shift Leader</label>
-                <div className="p-2.5 rounded-xl border bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 font-bold">
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-slate-200">Outgoing Shift Leader</label>
+                <div className="p-2.5 rounded-xl border bg-gray-50 dark:bg-[#090A0F] border-gray-200 dark:border-slate-800/80 font-bold">
                   {currentSession?.userName} ({currentSession?.shiftName} - {currentSession?.activeShiftId})
                 </div>
               </div>
 
               <div>
-                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Receiving Shift</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-slate-200">Receiving Shift</label>
                 <select
                   value={handoverNextShift}
                   onChange={(e) => setHandoverNextShift(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border ${
-                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
+                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"
                   }`}
                 >
                   <option value="Afternoon Shift">Afternoon Shift (14:00 - 22:00)</option>
                   <option value="Night Restock Shift">Night Restock Shift (22:00 - 06:00)</option>
-                  <option value="Morning Shift">Morning Opening Shift (06:00 - 14:00)</option>
+                  <option value="Morning Opening Shift">Morning Opening Shift (06:00 - 14:00)</option>
                 </select>
               </div>
 
               <div>
-                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Handover Observations &amp; Chiller Status</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-slate-200">Handover Observations &amp; Chiller Status</label>
                 <textarea
                   rows={3}
                   value={handoverNotes}
                   onChange={(e) => setHandoverNotes(e.target.value)}
                   placeholder="e.g. All cold-chain chillers within 1.5°C tolerance. 2 pending express fulfillment orders handed over to incoming team."
                   className={`w-full p-2.5 rounded-xl border ${
-                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
+                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500"
                   }`}
                 />
               </div>
@@ -642,7 +642,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsHandoverModalOpen(false)}
-                  className="px-3 py-1.5 rounded-xl border text-xs font-semibold text-gray-500 hover:text-gray-700"
+                  className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-800/80 text-xs font-semibold text-gray-500 dark:text-slate-300 hover:text-gray-700 dark:hover:text-slate-100"
                 >
                   Cancel
                 </button>

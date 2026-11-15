@@ -96,22 +96,22 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
   const cardClass = `rounded-xl border transition-all ${
     isLight
       ? 'bg-white border-slate-200 shadow-xs hover:border-slate-300 text-slate-900'
-      : 'bg-zinc-900 border-zinc-800 shadow-xs hover:border-zinc-700 text-zinc-100'
+      : 'bg-[#12141C] border-slate-800/80 shadow-xs hover:border-slate-700 text-slate-100'
   }`;
 
   const subCardClass = `rounded-xl border p-4 transition-all ${
     isLight
       ? 'bg-slate-50/80 border-slate-200 text-slate-900'
-      : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
   }`;
 
-  const inputClass = `w-full px-3.5 py-2 text-xs rounded-xl font-medium transition-all ${
+  const inputClass = `w-full px-3.5 py-2 text-xs rounded-xl border font-medium transition-all ${
     isLight
       ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600'
-      : 'bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+      : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
   } focus:outline-hidden`;
 
-  const labelClass = `block text-xs font-bold mb-1.5 ${isLight ? 'text-slate-800' : 'text-zinc-100'} dark:text-zinc-100`;
+  const labelClass = `block text-xs font-bold mb-1.5 ${isLight ? 'text-slate-800' : 'text-slate-200'} dark:text-slate-200`;
 
   const handleSaveSettings = async () => {
     setIsSavingConfig(true);
@@ -186,14 +186,14 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30 uppercase tracking-wider">
                   ERP Valuation Engine
                 </span>
-                <span className="text-xs text-gray-500 dark:text-zinc-300 font-medium">
+                <span className="text-xs text-gray-500 dark:text-slate-400 font-medium">
                   Landed Costs &amp; Traceability
                 </span>
               </div>
-              <h2 className="text-base sm:text-lg font-bold mt-1 text-gray-900 dark:text-zinc-100">
+              <h2 className="text-base sm:text-lg font-bold mt-1 text-gray-900 dark:text-slate-100">
                 Product Valuation &amp; Landed Cost Configuration
               </h2>
-              <p className="text-xs mt-0.5 max-w-2xl text-gray-500 dark:text-zinc-300 leading-relaxed">
+              <p className="text-xs mt-0.5 max-w-2xl text-gray-500 dark:text-slate-400 leading-relaxed">
                 Incorporate additional procurement costs (inbound freight, customs duties, cold-chain handling) directly into product inventory valuation and automatic General Ledger postings.
               </p>
             </div>
@@ -224,16 +224,16 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Cost Allocation Rules */}
         <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-          <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+          <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
             <div className="flex items-center gap-2.5">
               <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
                 <Truck className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
                   Landed Cost Valuation Rules
                 </h3>
-                <p className="text-[11px] text-gray-500 dark:text-zinc-300">
+                <p className="text-[11px] text-gray-500 dark:text-slate-400">
                   Automate freight absorption into FIFO/WAC asset valuation
                 </p>
               </div>
@@ -246,7 +246,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
+              <div className="w-10 h-5.5 bg-gray-200 dark:bg-slate-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
             </label>
           </div>
 
@@ -259,12 +259,12 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 onChange={(e) => setConfig({ ...config, defaultAllocationMethod: e.target.value as any })}
                 className={`${inputClass} disabled:opacity-60`}
               >
-                <option value="BY_QUANTITY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Quantity (Equal cost per unit piece / pack)</option>
-                <option value="BY_VALUE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Value (Proportional to line item invoice value)</option>
-                <option value="EQUAL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Equal Split (Equal amount per SKU line)</option>
-                <option value="BY_WEIGHT" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Weight (Based on gross kilogram weight)</option>
+                <option value="BY_QUANTITY" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">By Quantity (Equal cost per unit piece / pack)</option>
+                <option value="BY_VALUE" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">By Value (Proportional to line item invoice value)</option>
+                <option value="EQUAL" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">Equal Split (Equal amount per SKU line)</option>
+                <option value="BY_WEIGHT" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">By Weight (Based on gross kilogram weight)</option>
               </select>
-              <p className="text-[11px] mt-1.5 text-gray-500 dark:text-zinc-300">
+              <p className="text-[11px] mt-1.5 text-gray-500 dark:text-slate-400">
                 Standard method applied when distributing inbound freight across PO line items.
               </p>
             </div>
@@ -277,97 +277,92 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 onChange={(e) => setConfig({ ...config, defaultJournal: e.target.value })}
                 className={`${inputClass} disabled:opacity-60`}
               >
-                <option value="MISC_OPERATIONS" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Operations &amp; Landed Costs Journal (MISC_OPERATIONS)</option>
-                <option value="GENERAL_JOURNAL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">General Standard Journal (GENERAL_JOURNAL)</option>
-                <option value="PURCHASE_JOURNAL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Vendor Procurement Journal (PURCHASE_JOURNAL)</option>
+                <option value="MISC_OPERATIONS" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">Operations &amp; Landed Costs Journal (MISC_OPERATIONS)</option>
+                <option value="GENERAL_JOURNAL" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">General Standard Journal (GENERAL_JOURNAL)</option>
+                <option value="PURCHASE_JOURNAL" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">Vendor Procurement Journal (PURCHASE_JOURNAL)</option>
               </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-              <div>
-                <label className={labelClass}>Inbound Freight Account</label>
-                <input
-                  type="text"
-                  disabled={isReadOnly}
-                  value={config.freightExpenseAccountCode}
-                  onChange={(e) => setConfig({ ...config, freightExpenseAccountCode: e.target.value })}
-                  className={`font-mono ${inputClass} disabled:opacity-60`}
-                  placeholder="5040"
-                />
-                <span className="text-[10px] text-gray-500 dark:text-zinc-300 mt-1 block truncate">{config.freightExpenseAccountName}</span>
+            <div className={subCardClass}>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-xs font-bold text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
+                  <Boxes className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>General Ledger Expense Accounts</span>
+                </h4>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                  COA Mapping
+                </span>
               </div>
-              <div>
-                <label className={labelClass}>Customs &amp; Duty Account</label>
-                <input
-                  type="text"
-                  disabled={isReadOnly}
-                  value={config.customsDutyAccountCode}
-                  onChange={(e) => setConfig({ ...config, customsDutyAccountCode: e.target.value })}
-                  className={`font-mono ${inputClass} disabled:opacity-60`}
-                  placeholder="5050"
-                />
-                <span className="text-[10px] text-gray-500 dark:text-zinc-300 mt-1 block truncate">{config.customsDutyAccountName}</span>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white dark:bg-[#12141C] border border-gray-100 dark:border-slate-800/80">
+                  <div>
+                    <span className="font-bold block text-gray-900 dark:text-slate-100">Freight &amp; Cold Trucking</span>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400">{config.freightExpenseAccountName}</span>
+                  </div>
+                  <span className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">#{config.freightExpenseAccountCode}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white dark:bg-[#12141C] border border-gray-100 dark:border-slate-800/80">
+                  <div>
+                    <span className="font-bold block text-gray-900 dark:text-slate-100">Import Tariffs &amp; Duties</span>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400">{config.customsDutyAccountName}</span>
+                  </div>
+                  <span className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">#{config.customsDutyAccountCode}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white dark:bg-[#12141C] border border-gray-100 dark:border-slate-800/80">
+                  <div>
+                    <span className="font-bold block text-gray-900 dark:text-slate-100">Cold Gate Dock Handling</span>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400">{config.handlingAccountName}</span>
+                  </div>
+                  <span className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">#{config.handlingAccountCode}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white dark:bg-[#12141C] border border-gray-100 dark:border-slate-800/80">
+                  <div>
+                    <span className="font-bold block text-gray-900 dark:text-slate-100">Accrued Landed Clearing</span>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400">{config.clearingAccountName}</span>
+                  </div>
+                  <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">#{config.clearingAccountCode}</span>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div>
-                <label className={labelClass}>Cold Handling Account</label>
-                <input
-                  type="text"
-                  disabled={isReadOnly}
-                  value={config.handlingAccountCode}
-                  onChange={(e) => setConfig({ ...config, handlingAccountCode: e.target.value })}
-                  className={`font-mono ${inputClass} disabled:opacity-60`}
-                  placeholder="5060"
-                />
-                <span className="text-[10px] text-gray-500 dark:text-zinc-300 mt-1 block truncate">{config.handlingAccountName}</span>
-              </div>
-              <div>
-                <label className={labelClass}>Landed Accrual / Clearing</label>
-                <input
-                  type="text"
-                  disabled={isReadOnly}
-                  value={config.clearingAccountCode}
-                  onChange={(e) => setConfig({ ...config, clearingAccountCode: e.target.value })}
-                  className={`font-mono ${inputClass} disabled:opacity-60`}
-                  placeholder="2040"
-                />
-                <span className="text-[10px] text-gray-500 dark:text-zinc-300 mt-1 block truncate">{config.clearingAccountName}</span>
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+              <Sparkles className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+              <div className="text-[11px] leading-relaxed">
+                <strong>FIFO Margin Accuracy:</strong> Landed cost absorption spreads logistics surcharges per piece across inventory batches, ensuring POS gross profit calculations reflect real net purchase cost.
               </div>
             </div>
           </div>
         </div>
 
-        {/* Invoice & Document Traceability Settings */}
+        {/* Invoice & Lot Tracking Rules */}
         <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-          <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+          <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
             <div className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+              <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
                 <Tag className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100">
-                  Lots &amp; Serial Numbers on Invoices
+                <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
+                  Lot Traceability &amp; Invoice Display
                 </h3>
-                <p className="text-[11px] text-gray-500 dark:text-zinc-300">
-                  Perishable batch traceability &amp; audit enforcement
+                <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                  Control expiry dates &amp; batch lot serialization on receipts
                 </p>
               </div>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
-              Traceability
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-500/20">
+              FEFO Compliance
             </span>
           </div>
 
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             <div className={`p-4 rounded-xl border flex items-center justify-between gap-4 transition-all ${
-              isLight ? 'bg-gray-50/70 border-gray-200 hover:border-gray-300' : 'bg-zinc-800/40 border-zinc-800 hover:border-zinc-700'
+              isLight ? 'bg-gray-50/70 border-gray-200 hover:border-gray-300' : 'bg-[#090A0F] border-slate-800/80 hover:border-slate-700'
             }`}>
               <div>
-                <h4 className="text-xs font-bold text-gray-900 dark:text-zinc-100">Display Lots &amp; Batches on Invoices</h4>
-                <p className="text-[11px] mt-0.5 text-gray-500 dark:text-zinc-300">
-                  Prints harvest batch ID and lot numbers directly on Customer and B2B invoices.
+                <h4 className="text-xs font-bold text-gray-900 dark:text-slate-100">Display Batch / Lot IDs on Customer Invoices</h4>
+                <p className="text-[11px] mt-0.5 text-gray-500 dark:text-slate-400">
+                  Prints specific Lot Number and Expiry Date under each line item for B2B compliance.
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -378,17 +373,17 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                   onChange={(e) => setInvoiceTracking({ ...invoiceTracking, displayLotsOnInvoices: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
+                <div className="w-10 h-5.5 bg-gray-200 dark:bg-slate-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
 
             <div className={`p-4 rounded-xl border flex items-center justify-between gap-4 transition-all ${
-              isLight ? 'bg-gray-50/70 border-gray-200 hover:border-gray-300' : 'bg-zinc-800/40 border-zinc-800 hover:border-zinc-700'
+              isLight ? 'bg-gray-50/70 border-gray-200 hover:border-gray-300' : 'bg-[#090A0F] border-slate-800/80 hover:border-slate-700'
             }`}>
               <div>
-                <h4 className="text-xs font-bold text-gray-900 dark:text-zinc-100">Display Expiry Dates on Delivery Orders (Surat Jalan)</h4>
-                <p className="text-[11px] mt-0.5 text-gray-500 dark:text-zinc-300">
-                  Mandatory for cold-chain compliance and receiver quality checks upon dock arrival.
+                <h4 className="text-xs font-bold text-gray-900 dark:text-slate-100">Display Serial Expiry on Delivery Documents</h4>
+                <p className="text-[11px] mt-0.5 text-gray-500 dark:text-slate-400">
+                  Shows FEFO shelf-life dates on Surat Jalan &amp; store transfer picking manifests.
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -399,16 +394,16 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                   onChange={(e) => setInvoiceTracking({ ...invoiceTracking, displaySerialExpiryOnDeliveryDocs: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
+                <div className="w-10 h-5.5 bg-gray-200 dark:bg-slate-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
 
             <div className={`p-4 rounded-xl border flex items-center justify-between gap-4 transition-all ${
-              isLight ? 'bg-gray-50/70 border-gray-200 hover:border-gray-300' : 'bg-zinc-800/40 border-zinc-800 hover:border-zinc-700'
+              isLight ? 'bg-gray-50/70 border-gray-200 hover:border-gray-300' : 'bg-[#090A0F] border-slate-800/80 hover:border-slate-700'
             }`}>
               <div>
-                <h4 className="text-xs font-bold text-gray-900 dark:text-zinc-100">Require Lot Barcode Scan on Fulfillment</h4>
-                <p className="text-[11px] mt-0.5 text-gray-500 dark:text-zinc-300">
+                <h4 className="text-xs font-bold text-gray-900 dark:text-slate-100">Require Lot Barcode Scan on Fulfillment</h4>
+                <p className="text-[11px] mt-0.5 text-gray-500 dark:text-slate-400">
                   Enforces warehouse pickers to physically scan batch barcodes to verify FEFO integrity.
                 </p>
               </div>
@@ -420,7 +415,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                   onChange={(e) => setInvoiceTracking({ ...invoiceTracking, requireLotScanOnFulfillment: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-10 h-5.5 bg-gray-200 dark:bg-zinc-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
+                <div className="w-10 h-5.5 bg-gray-200 dark:bg-slate-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-xs peer-checked:bg-[#0F4C3A] dark:peer-checked:bg-emerald-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
 
@@ -436,29 +431,29 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
 
       {/* Historical Landed Costs Applied Log */}
       <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
           <div>
-            <h3 className="text-sm font-bold flex items-center gap-2 text-gray-900 dark:text-zinc-100">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-gray-900 dark:text-slate-100">
               <ReceiptText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>Historical Landed Cost Journal Entries</span>
             </h3>
-            <p className="text-xs mt-0.5 text-gray-500 dark:text-zinc-300">
+            <p className="text-xs mt-0.5 text-gray-500 dark:text-slate-400">
               Recent landed costs factored into merchandise asset accounts and General Ledger vouchers.
             </p>
           </div>
-          <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-zinc-700">
+          <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-[#090A0F] text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-800/80">
             {landedCosts.length} Entries Recorded
           </span>
         </div>
 
         {landedCosts.length === 0 ? (
-          <div className="py-12 text-center text-xs text-gray-500 dark:text-zinc-300">
+          <div className="py-12 text-center text-xs text-gray-500 dark:text-slate-400">
             No landed costs applied yet. Click &quot;Apply Landed Cost&quot; above to factor transport and customs into stock valuation.
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-zinc-800">
+          <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-slate-800/80">
             <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50/70 dark:bg-zinc-800/60 border-b border-gray-200 dark:border-zinc-800 text-gray-600 dark:text-zinc-300 uppercase text-[10px] font-bold">
+              <thead className="bg-gray-50/70 dark:bg-[#090A0F] border-b border-gray-200 dark:border-slate-800/80 text-gray-600 dark:text-slate-400 uppercase text-[10px] font-bold">
                 <tr>
                   <th className="py-3 px-3.5">Entry ID &amp; Date</th>
                   <th className="py-3 px-3.5">Description</th>
@@ -469,22 +464,22 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                   <th className="py-3 px-3.5">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-zinc-800 font-medium">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80 font-medium">
                 {landedCosts.map((lc) => (
-                  <tr key={lc.id} className="hover:bg-gray-50/60 dark:hover:bg-zinc-800/40 transition-colors">
+                  <tr key={lc.id} className="hover:bg-gray-50/60 dark:hover:bg-slate-900/60 transition-colors">
                     <td className="py-3.5 px-3.5">
                       <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{lc.id}</div>
-                      <div className="text-[10px] text-gray-500 dark:text-zinc-300 mt-0.5">{new Date(lc.timestamp).toLocaleDateString()}</div>
+                      <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">{new Date(lc.timestamp).toLocaleDateString()}</div>
                     </td>
                     <td className="py-3.5 px-3.5">
-                      <div className="font-semibold text-gray-900 dark:text-zinc-100">{lc.description}</div>
-                      <div className="text-[10px] font-mono text-gray-500 dark:text-zinc-300 mt-0.5">Ref: {lc.billNumber || lc.poId || 'Direct Allocation'}</div>
+                      <div className="font-semibold text-gray-900 dark:text-slate-100">{lc.description}</div>
+                      <div className="text-[10px] font-mono text-gray-500 dark:text-slate-400 mt-0.5">Ref: {lc.billNumber || lc.poId || 'Direct Allocation'}</div>
                     </td>
                     <td className="py-3.5 px-3.5 font-mono">
-                      <div className="text-gray-900 dark:text-zinc-200">Freight: {formatIDR(lc.freightCostIDR)}</div>
-                      <div className="text-[10px] text-gray-500 dark:text-zinc-300 mt-0.5">Handling: {formatIDR(lc.handlingCostIDR)}</div>
+                      <div className="text-gray-900 dark:text-slate-200">Freight: {formatIDR(lc.freightCostIDR)}</div>
+                      <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">Handling: {formatIDR(lc.handlingCostIDR)}</div>
                     </td>
-                    <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-zinc-100">
+                    <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-slate-100">
                       {formatIDR(lc.totalLandedCostIDR)}
                     </td>
                     <td className="py-3.5 px-3.5">
@@ -492,7 +487,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                         {lc.allocatedItems.map((it, idx) => (
                           <span
                             key={idx}
-                            className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-zinc-700"
+                            className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-gray-100 dark:bg-[#090A0F] text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800/80"
                           >
                             {it.sku}: +{formatIDR(it.allocatedCostIDR)}/u
                           </span>
@@ -519,28 +514,28 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
       {isLandedModalOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
             onClick={() => setIsLandedModalOpen(false)}
           >
             <div
               className={`w-full max-w-xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
-                isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
+                isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
                   <Calculator className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">Apply Landed Cost to Product Valuation</h3>
-                  <p className="text-xs text-gray-500 dark:text-zinc-300">Distribute transport, customs, and cold-gate intake fees</p>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-slate-100">Apply Landed Cost to Product Valuation</h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Distribute transport, customs, and cold-gate intake fees</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsLandedModalOpen(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 text-sm font-bold transition-all"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 text-sm font-bold transition-all"
               >
                 ✕
               </button>
@@ -586,7 +581,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                           }
                         }}
                         className={`w-28 px-2 text-[11px] rounded-xl border ${
-                          isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-zinc-900 border-zinc-700 text-zinc-200'
+                          isLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-[#090A0F] border-slate-800/80 text-slate-200'
                         }`}
                         title="Auto-load SKUs from Purchase Order"
                       >
@@ -613,7 +608,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
               </div>
 
               {/* Cost Inputs */}
-              <div className="grid grid-cols-2 gap-3.5 p-4 rounded-xl border border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/40">
+              <div className="grid grid-cols-2 gap-3.5 p-4 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/50 dark:bg-[#090A0F]">
                 <div>
                   <label className={labelClass}>Freight Cost (IDR) *</label>
                   <input
@@ -654,7 +649,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                     className={`font-mono font-bold ${inputClass}`}
                   />
                 </div>
-                <div className="col-span-2 pt-2 border-t border-gray-200 dark:border-zinc-700">
+                <div className="col-span-2 pt-2 border-t border-gray-200 dark:border-slate-800/80">
                   <div className="flex items-center justify-between mb-1.5">
                     <label className={labelClass}>
                       Informal Labor / Kuli Bongkar &amp; Retribusi (IDR)
@@ -671,7 +666,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                     className={`font-mono font-bold ${inputClass}`}
                     placeholder="e.g. 75000"
                   />
-                  <p className="text-[11px] text-gray-500 dark:text-zinc-300 mt-1">
+                  <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
                     Directly capitalizes informal cash labor into inventory asset valuation (COA #1040/1300) so gross profit reflects true landing cost.
                   </p>
                 </div>
@@ -689,9 +684,9 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                   onChange={(e) => setLcAllocationMethod(e.target.value as any)}
                   className={inputClass}
                 >
-                  <option value="BY_QUANTITY" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Quantity (Proportional per unit)</option>
-                  <option value="EQUAL" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">Equal Split across line items</option>
-                  <option value="BY_VALUE" className="bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100">By Value Proportion</option>
+                  <option value="BY_QUANTITY" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">By Quantity (Proportional per unit)</option>
+                  <option value="EQUAL" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">Equal Split across line items</option>
+                  <option value="BY_VALUE" className="bg-white dark:bg-[#090A0F] text-gray-900 dark:text-slate-100">By Value Proportion</option>
                 </select>
               </div>
 
@@ -704,7 +699,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                       value={skuToAdd}
                       onChange={(e) => setSkuToAdd(e.target.value)}
                       className={`py-1 px-2 text-[11px] rounded-lg border font-mono ${
-                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-zinc-900 border-zinc-700 text-zinc-100'
+                        isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                       }`}
                     >
                       <option value="">+ Add SKU...</option>
@@ -730,9 +725,9 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                     </button>
                   </div>
                 </div>
-                <div className="border border-gray-200 dark:border-zinc-700 rounded-xl overflow-hidden text-xs">
+                <div className="border border-gray-200 dark:border-slate-800/80 rounded-xl overflow-hidden text-xs">
                   <table className="w-full text-left">
-                    <thead className="bg-gray-50 dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700 uppercase text-[10px] font-bold text-gray-600 dark:text-zinc-300">
+                    <thead className="bg-gray-50 dark:bg-[#090A0F] border-b border-gray-200 dark:border-slate-800/80 uppercase text-[10px] font-bold text-gray-600 dark:text-slate-400">
                       <tr>
                         <th className="p-2.5">SKU</th>
                         <th className="p-2.5">Quantity</th>
@@ -740,12 +735,12 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                         <th className="p-2.5 w-8"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-zinc-800 font-mono">
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80 font-mono">
                       {selectedSkus.map((item, idx) => {
                         const estimatedShare = totalUnits > 0 ? Math.round((totalCalculatedLandedCost * item.quantity) / totalUnits) : 0;
                         const perUnit = item.quantity > 0 ? Math.round(estimatedShare / item.quantity) : 0;
                         return (
-                          <tr key={item.sku} className="hover:bg-gray-50/50 dark:hover:bg-zinc-800/40">
+                          <tr key={item.sku} className="hover:bg-gray-50/50 dark:hover:bg-slate-900/60">
                             <td className="p-2.5 font-bold text-[#0F4C3A] dark:text-emerald-400">{item.sku}</td>
                             <td className="p-2.5">
                               <input
@@ -759,7 +754,7 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                                   );
                                 }}
                                 className={`w-20 px-2 py-1 text-xs rounded border font-mono ${
-                                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                                 }`}
                               />
                             </td>
@@ -784,11 +779,11 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-3.5 border-t border-gray-100 dark:border-zinc-800">
+              <div className="flex justify-end gap-2.5 pt-3.5 border-t border-gray-100 dark:border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => setIsLandedModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-all"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-all"
                 >
                   Cancel
                 </button>

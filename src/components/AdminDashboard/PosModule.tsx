@@ -811,7 +811,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
       {/* 1. POS Top Bar: Store context, Cashier session, Multi-Currency, and Scanner */}
       <div
         className={`p-3.5 sm:p-4 rounded-2xl border transition-colors shadow-xs ${
-          isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800'
+          isLight ? 'bg-white border-gray-200' : 'bg-[#12141C] border-slate-800/80'
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -822,13 +822,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <span>{currentStoreInfo.storeName}</span>
             </div>
 
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700 text-xs font-medium">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#090A0F] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800/80 text-xs font-medium">
               <UserCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span className="font-bold">{activeStaffSession?.userName || 'Andi Wijaya'}</span>
-              <span className="text-[10px] uppercase font-mono px-1 py-0.2 rounded bg-slate-200 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300">
+              <span className="text-[10px] uppercase font-mono px-1 py-0.2 rounded bg-slate-200 dark:bg-slate-900/90 text-slate-600 dark:text-slate-300">
                 {activeStaffSession?.userRole || 'cashier'}
               </span>
-              <span className="text-[11px] text-zinc-400 hidden sm:inline">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:inline">
                 ({activeStaffSession?.shiftName || 'Morning Shift'})
               </span>
             </div>
@@ -861,10 +861,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 onClick={() => setIsSafeDropModalOpen(true)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   (activeShift.expectedTotalCashInDrawerIDR || 0) >= 5000000
-                    ? 'bg-amber-500 text-zinc-950 border-amber-600 animate-pulse shadow-xs'
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 animate-pulse shadow-xs'
                     : isLight
                     ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                    : 'bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 text-slate-200 border-slate-800/80 hover:bg-slate-800'
                 }`}
                 title="Mid-Shift Safe Drop (Setor Brankas) — Drawer #1011 to Safe #1010"
               >
@@ -876,16 +876,16 @@ export const PosModule: React.FC<PosModuleProps> = ({
             )}
 
             {/* Multi-Currency Dropdown */}
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-800 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-zinc-700">
-              <Globe className="w-3.5 h-3.5 text-zinc-500" />
-              <span className="text-[11px] text-slate-600 dark:text-zinc-300 font-semibold hidden sm:inline">Currency:</span>
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-[#090A0F] px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800/80">
+              <Globe className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span className="text-[11px] text-slate-600 dark:text-slate-300 font-semibold hidden sm:inline">Currency:</span>
               <select
                 value={activeCurrency}
                 onChange={(e) => setActiveCurrency(e.target.value as SupportedCurrency)}
-                className="text-xs font-bold bg-transparent border-0 focus:ring-0 cursor-pointer text-slate-800 dark:text-zinc-200"
+                className="text-xs font-bold bg-transparent border-0 focus:ring-0 cursor-pointer text-slate-800 dark:text-slate-200"
               >
                 {CURRENCY_OPTIONS.map((c) => (
-                  <option key={c.code} value={c.code} className="bg-white dark:bg-zinc-900 text-slate-900 dark:text-white">
+                  <option key={c.code} value={c.code} className="bg-white dark:bg-[#12141C] text-slate-900 dark:text-slate-100">
                     {c.code} ({c.symbol})
                   </option>
                 ))}
@@ -917,16 +917,16 @@ export const PosModule: React.FC<PosModuleProps> = ({
             {/* History Toggle */}
             <button
               onClick={() => setIsHistoryDrawerOpen(!isHistoryDrawerOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-800 text-xs font-medium text-slate-700 dark:text-zinc-300 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
             >
-              <History className="w-3.5 h-3.5 text-zinc-500" />
+              <History className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span className="hidden sm:inline">Receipts ({historyReceipts.length})</span>
             </button>
           </div>
         </div>
 
         {/* Barcode Scanner Input Form */}
-        <form onSubmit={handleBarcodeSubmit} className="mt-3 pt-3 border-t border-slate-200 dark:border-zinc-800 flex items-center gap-2">
+        <form onSubmit={handleBarcodeSubmit} className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800/80 flex items-center gap-2">
           <div className="relative flex-1">
             <Scan className="w-4 h-4 text-emerald-600 dark:text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -936,7 +936,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
               onChange={(e) => setBarcodeInput(e.target.value)}
               placeholder="Barcode Scanner Ready — Scan SKU (e.g. SKU-PRD-001) or press Enter to add..."
               className={`w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono ${
-                isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
               }`}
             />
           </div>
@@ -951,7 +951,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
         {/* Quick Scale Variable-Weight Barcode Test Buttons */}
         <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[11px]">
-          <span className="text-slate-600 dark:text-zinc-300 font-bold flex items-center gap-1">
+          <span className="text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1">
             <Scale className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             Variable Scale Barcode Tests:
           </span>
@@ -998,7 +998,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : isLight
                       ? 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-200'
-                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700'
+                      : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-800/80'
                   }`}
                 >
                   {formatCategoryLabel(cat)}
@@ -1008,14 +1008,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
             {/* Search Input */}
             <div className="relative min-w-[160px] sm:w-48">
-              <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter items..."
                 className={`w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                  isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                 }`}
               />
             </div>
@@ -1023,14 +1023,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
           {/* Product Items Grid */}
           {isLoadingProducts ? (
-            <div className="p-12 text-center text-xs text-zinc-400">
+            <div className="p-12 text-center text-xs text-slate-500 dark:text-slate-400">
               <span className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin inline-block mb-2" />
               <p>Loading POS Product Catalog...</p>
             </div>
           ) : filteredProducts.length === 0 ? (
             <div
               className={`p-10 rounded-2xl border text-center text-xs ${
-                isLight ? 'bg-white border-gray-200 text-gray-500' : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                isLight ? 'bg-white border-gray-200 text-gray-500' : 'bg-[#12141C] border-slate-800/80 text-slate-400'
               }`}
             >
               No products found matching "{searchQuery}"
@@ -1047,12 +1047,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     } ${
                       isLight
                         ? 'bg-white border-gray-200/80 hover:border-emerald-500/50'
-                        : 'bg-zinc-900 border-zinc-800 hover:border-emerald-500/50'
+                        : 'bg-[#12141C] border-slate-800/80 hover:border-emerald-500/50'
                     }`}
                   >
                     <div>
                       {/* Product Image & FEFO Tag */}
-                      <div className="relative aspect-4/3 rounded-xl overflow-hidden bg-slate-100 dark:bg-zinc-800 mb-2">
+                      <div className="relative aspect-4/3 rounded-xl overflow-hidden bg-slate-100 dark:bg-[#090A0F] mb-2">
                         <img
                           src={prod.image}
                           alt={prod.name}
@@ -1083,7 +1083,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
                       {/* Name & SKU */}
                       <div className="flex items-start justify-between gap-1">
-                        <h4 className="text-xs font-bold line-clamp-2 text-slate-900 dark:text-zinc-100 leading-tight">
+                        <h4 className="text-xs font-bold line-clamp-2 text-slate-900 dark:text-slate-100 leading-tight">
                           {prod.name}
                         </h4>
                         {prod.isConsignment && (
@@ -1092,20 +1092,20 @@ export const PosModule: React.FC<PosModuleProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-1">
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-1">
                         <span className="font-mono">{prod.sku}</span>
                         <span>Stock: {prod.availableStock}</span>
                       </div>
                     </div>
 
                     {/* Price & Action Button */}
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-1">
+                    <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1">
                       <div>
                         <span className="text-xs font-extrabold text-emerald-800 dark:text-emerald-400 block">
                           {formatCurrency(prod.sellingPrice)}
                         </span>
                         {prod.isWeighted && (
-                          <span className="text-[10px] text-zinc-400 block -mt-0.5">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block -mt-0.5">
                             {formatCurrency(prod.pricePerKg || prod.sellingPrice * 4)}/kg
                           </span>
                         )}
@@ -1144,15 +1144,15 @@ export const PosModule: React.FC<PosModuleProps> = ({
         {/* Right Column: Register Bill Ticket & Tender CTA (5 cols) */}
         <div
           className={`lg:col-span-5 rounded-2xl border p-4 flex flex-col justify-between shadow-sm sticky top-4 ${
-            isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800'
+            isLight ? 'bg-white border-gray-200' : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           {/* Header Ticket Details */}
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
               <div className="flex items-center gap-2">
                 <ReceiptText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-zinc-100">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   Register Ticket
                 </h3>
                 <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
@@ -1175,7 +1175,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   type="button"
                   onClick={clearCart}
                   disabled={cart.length === 0}
-                  className="p-1 rounded-lg border border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-red-500 transition-colors disabled:opacity-40 cursor-pointer"
+                  className="p-1 rounded-lg border border-slate-200 dark:border-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40 cursor-pointer"
                   title="Clear register"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -1192,7 +1192,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   onChange={(e) => setCustomerName(e.target.value)}
                   placeholder="Shopper / Member Name..."
                   className={`flex-1 min-w-0 text-xs px-2.5 py-1.5 rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                    isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                   }`}
                 />
                 <button
@@ -1225,7 +1225,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   className={`text-xs px-2 py-1.5 rounded-xl border font-semibold ${
                     canOverrideDiscount ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
                   } ${
-                    isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-[#090A0F] border-slate-800/80 text-slate-200'
                   }`}
                 >
                   <option value={0}>0% Disc</option>
@@ -1258,7 +1258,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                           onChange={(e) => setRedeemPointsInput(Math.max(0, Number(e.target.value)))}
                           placeholder="Redeem pts"
                           className={`w-20 px-2 py-0.5 rounded-lg border text-[11px] font-mono ${
-                            isLight ? 'bg-white border-emerald-300 text-slate-900' : 'bg-zinc-900 border-emerald-700 text-white'
+                            isLight ? 'bg-white border-emerald-300 text-slate-900' : 'bg-[#090A0F] border-emerald-700 text-slate-100'
                           }`}
                         />
                         <button
@@ -1292,7 +1292,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1.5">
                   <div className="relative flex-1 min-w-0">
-                    <Ticket className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <Ticket className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       value={promoInput}
@@ -1305,7 +1305,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       }}
                       placeholder="Promo / Voucher Code (e.g. VIPHEMAT20)..."
                       className={`w-full pl-8 pr-2.5 py-1.5 rounded-xl border text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                        isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                        isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                       }`}
                     />
                   </div>
@@ -1325,7 +1325,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                         setAppliedPromoCode('');
                         setPromoStatusError('');
                       }}
-                      className="p-1.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-zinc-400 hover:text-rose-500 cursor-pointer"
+                      className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800/80 text-slate-400 hover:text-rose-500 cursor-pointer"
                       title="Remove Voucher Code"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1358,11 +1358,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
               {isMemberLookupOpen && (
                 <div
                   className={`absolute left-0 right-0 top-10 z-30 rounded-xl border p-2.5 shadow-xl space-y-2 ${
-                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-700 text-zinc-100'
+                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   <div className="flex items-center gap-1.5">
-                    <Search className="w-3.5 h-3.5 text-zinc-400" />
+                    <Search className="w-3.5 h-3.5 text-slate-400" />
                     <input
                       type="text"
                       value={memberSearchQuery}
@@ -1374,14 +1374,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsMemberLookupOpen(false)}
-                      className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800">
+                  <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80">
                     {memberResults.length === 0 ? (
-                      <p className="py-3 text-center text-[11px] text-zinc-400">No CRM members matched.</p>
+                      <p className="py-3 text-center text-[11px] text-slate-500 dark:text-slate-400">No CRM members matched.</p>
                     ) : (
                       memberResults.map((m) => (
                         <button
@@ -1395,11 +1395,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
                             setRedeemPointsInput(0);
                             setIsMemberLookupOpen(false);
                           }}
-                          className="w-full py-2 px-1.5 text-left hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg flex items-center justify-between gap-2 cursor-pointer"
+                          className="w-full py-2 px-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-900/70 rounded-lg flex items-center justify-between gap-2 cursor-pointer"
                         >
                           <div className="min-w-0">
                             <p className="text-xs font-bold truncate">{m.companyName || m.name}</p>
-                            <p className="text-[10px] text-zinc-400 truncate">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                               {m.phone} · {m.tier}
                             </p>
                           </div>
@@ -1415,19 +1415,19 @@ export const PosModule: React.FC<PosModuleProps> = ({
             </div>
 
             {/* Itemized Cart Rows */}
-            <div className="mt-3 divide-y divide-slate-100 dark:divide-zinc-800 max-h-[280px] overflow-y-auto pr-1">
+            <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800/80 max-h-[280px] overflow-y-auto pr-1">
               {cart.length === 0 ? (
-                <div className="py-12 text-center text-xs text-zinc-400">
-                  <ShoppingCart className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mx-auto mb-2 stroke-1" />
+                <div className="py-12 text-center text-xs text-slate-500 dark:text-slate-400">
+                  <ShoppingCart className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto mb-2 stroke-1" />
                   <p>Register cart is empty.</p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">Scan items or select from catalog</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Scan items or select from catalog</p>
                 </div>
               ) : (
                 cart.map((item, idx) => (
                   <div key={`${item.id}-${idx}`} className="py-2 flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-bold text-slate-900 dark:text-zinc-100 truncate">
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                           {item.name}
                         </span>
                         {item.isWeighted && (
@@ -1441,7 +1441,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                         <span className="font-mono">{item.sku}</span>
                         {item.lotNumber && (
                           <span className="text-amber-600 dark:text-amber-400 font-mono">
@@ -1457,29 +1457,29 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.id, -1)}
-                        className="p-1 rounded-md bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 cursor-pointer"
+                        className="p-1 rounded-md bg-slate-100 dark:bg-slate-900/90 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="text-xs font-bold font-mono min-w-[24px] text-center text-slate-900 dark:text-zinc-100">
+                      <span className="text-xs font-bold font-mono min-w-[24px] text-center text-slate-900 dark:text-slate-100">
                         {item.quantity}
                       </span>
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.id, 1)}
-                        className="p-1 rounded-md bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 cursor-pointer"
+                        className="p-1 rounded-md bg-slate-100 dark:bg-slate-900/90 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
 
-                      <span className="text-xs font-bold font-mono ml-2 min-w-[70px] text-right text-slate-900 dark:text-zinc-100">
+                      <span className="text-xs font-bold font-mono ml-2 min-w-[70px] text-right text-slate-900 dark:text-slate-100">
                         {formatCurrency(item.lineTotal)}
                       </span>
 
                       <button
                         type="button"
                         onClick={() => removeFromCart(item.id)}
-                        className="p-1 text-zinc-400 hover:text-red-500 transition-colors cursor-pointer ml-1"
+                        className="p-1 text-slate-400 hover:text-red-500 transition-colors cursor-pointer ml-1"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1491,8 +1491,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
           </div>
 
           {/* Bottom Financial Totals & Tender CTA */}
-          <div className="mt-4 pt-3 border-t border-slate-200 dark:border-zinc-800 space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-600 dark:text-zinc-300 font-medium">
+          <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800/80 space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300 font-medium">
               <span>Subtotal:</span>
               <span className="font-mono">{formatCurrency(subtotal)}</span>
             </div>
@@ -1515,16 +1515,16 @@ export const PosModule: React.FC<PosModuleProps> = ({
               </div>
             )}
 
-            <div className="flex items-center justify-between text-xs text-slate-600 dark:text-zinc-300 font-medium">
+            <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300 font-medium">
               <span>Tax (PPN / PB1):</span>
               <span className="font-mono">{formatCurrency(taxAmount)}</span>
             </div>
 
-            <div className="pt-2 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-between">
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
               <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Total Due:</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Due:</span>
                 {activeCurrency !== 'IDR' && (
-                  <span className="text-[11px] text-zinc-400 font-mono block">
+                  <span className="text-[11px] text-slate-400 font-mono block">
                     ≈ {formatIDR(totalAmount)}
                   </span>
                 )}
@@ -1556,26 +1556,26 @@ export const PosModule: React.FC<PosModuleProps> = ({
       {scalingProduct &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
             onClick={() => setScalingProduct(null)}
           >
             <div
               className={`w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
-                isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
+                isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
                 <div className="flex items-center gap-2">
                   <Scale className="w-5 h-5 text-blue-500" />
-                  <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
                     Digital Scale Weighing
                   </h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setScalingProduct(null)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1586,11 +1586,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   <img
                     src={scalingProduct.image}
                     alt={scalingProduct.name}
-                    className="w-14 h-14 rounded-xl object-cover bg-slate-100 dark:bg-zinc-800 border shrink-0"
+                    className="w-14 h-14 rounded-xl object-cover bg-slate-100 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 shrink-0"
                   />
                   <div className="min-w-0">
                     <h4 className="font-bold text-sm truncate">{scalingProduct.name}</h4>
-                    <p className="text-xs text-zinc-400 font-mono">{scalingProduct.sku}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{scalingProduct.sku}</p>
                     <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
                       {formatCurrency(scalingProduct.pricePerKg || scalingProduct.sellingPrice * 4)} / kg
                     </p>
@@ -1598,14 +1598,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 </div>
 
                 {/* Digital Scale Readout Display */}
-                <div className="p-4 rounded-xl bg-zinc-950 text-emerald-400 font-mono border border-emerald-500/30 text-center shadow-inner">
-                  <span className="text-[10px] text-zinc-400 uppercase tracking-widest block">
+                <div className="p-4 rounded-xl bg-[#090A0F] text-emerald-400 font-mono border border-emerald-500/30 text-center shadow-inner">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-widest block">
                     Net Weight (Beban Bersih)
                   </span>
                   <span className="text-3xl font-extrabold tracking-wider block my-1">
                     {(Math.max(0, scaleGrossGrams - scaleTareGrams) / 1000).toFixed(3)} kg
                   </span>
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-xs text-slate-400">
                     Gross: {scaleGrossGrams}g | Tare (Bag): {scaleTareGrams}g
                   </span>
                 </div>
@@ -1613,7 +1613,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 {/* Scale Controls: Sliders and Tare */}
                 <div className="space-y-3 pt-2">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 dark:text-zinc-200 block mb-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-200 block mb-1">
                       Simulate Scale Weight (Grams):
                     </label>
                     <input
@@ -1631,7 +1631,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                           key={g}
                           type="button"
                           onClick={() => setScaleGrossGrams(g)}
-                          className="px-2 py-1 rounded bg-slate-100 dark:bg-zinc-800 text-[11px] font-mono hover:bg-slate-200 dark:hover:bg-zinc-700 cursor-pointer"
+                          className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 text-[11px] font-mono hover:bg-slate-200 dark:hover:bg-slate-800 cursor-pointer"
                         >
                           {g >= 1000 ? `${g / 1000}kg` : `${g}g`}
                         </button>
@@ -1639,22 +1639,22 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                     <span>Tare Deduction (Packaging):</span>
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
                         value={scaleTareGrams}
                         onChange={(e) => setScaleTareGrams(Number(e.target.value))}
-                        className="w-16 px-2 py-1 rounded border text-right font-mono text-xs dark:bg-zinc-800 dark:border-zinc-700"
+                        className="w-16 px-2 py-1 rounded border border-slate-300 text-right font-mono text-xs bg-white text-slate-900 dark:bg-[#090A0F] dark:border-slate-800/80 dark:text-slate-100"
                       />
                       <span>g</span>
                     </div>
                   </div>
 
                   {/* Line Price preview */}
-                  <div className="pt-2 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-400">Calculated Line Total:</span>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Calculated Line Total:</span>
                     <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
                       {formatCurrency(
                         Math.round(
@@ -1671,7 +1671,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setScalingProduct(null)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1702,38 +1702,38 @@ export const PosModule: React.FC<PosModuleProps> = ({
           >
             <div
               className={`w-full max-w-lg rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto animate-in zoom-in-95 ${
-                isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
+                isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                  <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
                     Payment Tender &amp; Register Settle
                   </h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsTenderModalOpen(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Total Due Banner */}
-              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-500/30 dark:border-emerald-800/50 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-300">Total Tender Due:</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-300">Total Tender Due:</span>
                   <span className="text-2xl font-black text-emerald-800 dark:text-emerald-300 font-mono block">
                     {formatCurrency(totalAmount)}
                   </span>
                 </div>
                 {activeCurrency !== 'IDR' && (
                   <div className="text-right">
-                    <span className="text-[11px] text-slate-600 dark:text-zinc-300 font-mono font-medium">Base Statutory IDR:</span>
-                    <span className="text-xs font-bold font-mono text-slate-700 dark:text-zinc-300 block">
+                    <span className="text-[11px] text-slate-600 dark:text-slate-300 font-mono font-medium">Base Statutory IDR:</span>
+                    <span className="text-xs font-bold font-mono text-slate-700 dark:text-slate-200 block">
                       {formatIDR(totalAmount)}
                     </span>
                   </div>
@@ -1751,7 +1751,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
                     !isSplitMode && paymentMethod === 'cash'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                      : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
+                      : 'bg-slate-100 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800/80 hover:dark:bg-slate-800'
                   }`}
                 >
                   <Banknote className="w-4 h-4" />
@@ -1767,7 +1767,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
                     !isSplitMode && paymentMethod === 'qris'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                      : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
+                      : 'bg-slate-100 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800/80 hover:dark:bg-slate-800'
                   }`}
                 >
                   <QrCode className="w-4 h-4" />
@@ -1783,7 +1783,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
                     !isSplitMode && paymentMethod.includes('card')
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                      : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
+                      : 'bg-slate-100 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800/80 hover:dark:bg-slate-800'
                   }`}
                 >
                   <CreditCard className="w-4 h-4" />
@@ -1807,7 +1807,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
                       : isLight
                       ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                      : 'bg-zinc-800/70 border-zinc-700 text-zinc-200 hover:bg-zinc-800'
+                      : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                   }`}
                 >
                   <span>Split Payment (2 Metode: Tunai + QRIS / EDC)</span>
@@ -1825,7 +1825,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       <select
                         value={splitLeg1Method}
                         onChange={(e) => setSplitLeg1Method(e.target.value as 'CASH' | 'QRIS' | 'CARD')}
-                        className="w-full px-2.5 py-2 rounded-lg border text-xs font-bold bg-white border-slate-300 text-slate-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+                        className="w-full px-2.5 py-2 rounded-lg border text-xs font-bold bg-white border-slate-300 text-slate-900 dark:bg-[#090A0F] dark:border-slate-800/80 dark:text-slate-100"
                       >
                         <option value="CASH">Tunai (Cash #1011)</option>
                         <option value="QRIS">QRIS Instant (#1020)</option>
@@ -1840,7 +1840,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                         max={Math.max(1, totalAmount - 1)}
                         value={splitLeg1Amount || ''}
                         onChange={(e) => setSplitLeg1Amount(Math.max(0, Math.round(Number(e.target.value) || 0)))}
-                        className="w-full px-2.5 py-2 rounded-lg border font-mono font-bold text-xs bg-white border-slate-300 text-slate-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+                        className="w-full px-2.5 py-2 rounded-lg border font-mono font-bold text-xs bg-white border-slate-300 text-slate-900 dark:bg-[#090A0F] dark:border-slate-800/80 dark:text-slate-100"
                       />
                     </div>
                     <div>
@@ -1848,7 +1848,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       <select
                         value={splitLeg2Method}
                         onChange={(e) => setSplitLeg2Method(e.target.value as 'CASH' | 'QRIS' | 'CARD')}
-                        className="w-full px-2.5 py-2 rounded-lg border text-xs font-bold bg-white border-slate-300 text-slate-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+                        className="w-full px-2.5 py-2 rounded-lg border text-xs font-bold bg-white border-slate-300 text-slate-900 dark:bg-[#090A0F] dark:border-slate-800/80 dark:text-slate-100"
                       >
                         <option value="CASH">Tunai (Cash #1011)</option>
                         <option value="QRIS">QRIS Instant (#1020)</option>
@@ -1857,7 +1857,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold mb-1">Nominal 2 (Sisa Otomatis)</label>
-                      <div className="px-2.5 py-2 rounded-lg border font-mono font-bold text-xs bg-slate-100 dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-emerald-700 dark:text-emerald-300">
+                      <div className="px-2.5 py-2 rounded-lg border font-mono font-bold text-xs bg-slate-100 dark:bg-[#090A0F] border-slate-200 dark:border-slate-800/80 text-emerald-700 dark:text-emerald-300">
                         {formatIDR(splitLeg2Amount)}
                       </div>
                     </div>
@@ -1874,18 +1874,18 @@ export const PosModule: React.FC<PosModuleProps> = ({
               {!isSplitMode && paymentMethod === 'cash' && (
                 <div className="space-y-3 pt-1">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 dark:text-zinc-200 block mb-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-200 block mb-1">
                       Cash Tendered (Uang Diterima):
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-400">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-slate-400">
                         Rp
                       </span>
                       <input
                         type="number"
                         value={cashTendered || ''}
                         onChange={(e) => setCashTendered(Number(e.target.value))}
-                        className="w-full pl-9 pr-3 py-2 text-base font-bold font-mono rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white border-slate-300 text-slate-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-400"
+                        className="w-full pl-9 pr-3 py-2 text-base font-bold font-mono rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white border-slate-300 text-slate-900 dark:bg-[#090A0F] dark:border-slate-800/80 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                         placeholder="0"
                       />
                     </div>
@@ -1905,7 +1905,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                         key={amt}
                         type="button"
                         onClick={() => setCashTendered(amt)}
-                        className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-xs font-mono cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-xs font-mono cursor-pointer"
                       >
                         Rp {amt.toLocaleString()}
                       </button>
@@ -1913,8 +1913,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   </div>
 
                   {/* Change calculation */}
-                  <div className="p-3 rounded-xl bg-slate-100 dark:bg-zinc-800/80 flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-700 dark:text-zinc-200">Change Due (Kembalian):</span>
+                  <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">Change Due (Kembalian):</span>
                     <span
                       className={`text-base font-black font-mono ${
                         cashTendered >= totalAmount ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'
@@ -1927,7 +1927,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
               )}
 
               {!isSplitMode && paymentMethod === 'qris' && (
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border text-center space-y-3">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-center space-y-3">
                   <div className="w-36 h-36 mx-auto bg-white p-2 rounded-xl border shadow-sm flex items-center justify-center">
                     <QRCodeSVG
                       value={`00020101021226670014ID.LINKAJA.WWW01189360091438201948250215ID10200392817440303UME520454115303360540${totalAmount}5802ID5913GroceMart SEN6007Jakarta61051211062070703A016304`}
@@ -1936,10 +1936,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     />
                   </div>
                   <div className="text-xs">
-                    <span className="font-bold text-slate-800 dark:text-zinc-200 block">
+                    <span className="font-bold text-slate-800 dark:text-slate-200 block">
                       GroceMart Senopati Dynamic QRIS
                     </span>
-                    <span className="text-[11px] text-zinc-400 font-mono">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                       NMID: ID1020039281744 · ASPI Standard 2026
                     </span>
                   </div>
@@ -1947,11 +1947,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
               )}
 
               {!isSplitMode && paymentMethod.includes('card') && (
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border text-center space-y-2">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-center space-y-2">
                   <CreditCard className="w-8 h-8 text-blue-500 mx-auto" />
                   <div className="text-xs">
                     <span className="font-bold block">BCA EDC Register Terminal #04</span>
-                    <span className="text-[11px] text-zinc-400">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
                       Insert or Tap Customer Debit / Credit Card
                     </span>
                   </div>
@@ -1959,7 +1959,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
               )}
 
               {/* Accounting Hook Notice */}
-              <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-zinc-800/40 text-[10px] text-zinc-500 flex items-center gap-1.5 font-mono">
+              <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                 <span>
                   {isSplitMode
@@ -1973,7 +1973,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsTenderModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   Back
                 </button>
@@ -2203,14 +2203,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
       {/* 6. RECENT TRANSACTIONS DRAWER */}
       {isHistoryDrawerOpen &&
         createPortal(
-          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex justify-end">
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex justify-end">
             <div
               className={`w-full max-w-md h-full p-6 shadow-2xl flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200 ${
-                isLight ? 'bg-white text-slate-900' : 'bg-zinc-900 text-white'
+                isLight ? 'bg-white text-slate-900' : 'bg-[#12141C] text-slate-100 border-l border-slate-800/80'
               }`}
             >
               <div>
-                <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-zinc-800">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800/80">
                   <div className="flex items-center gap-2">
                     <History className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                     <h3 className="font-bold text-base">Recent POS Receipts</h3>
@@ -2218,7 +2218,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsHistoryDrawerOpen(false)}
-                    className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                    className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -2226,21 +2226,21 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
                 <div className="mt-4 space-y-3">
                   {historyReceipts.length === 0 ? (
-                    <p className="text-xs text-zinc-400 text-center py-8">No POS transactions yet today.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-8">No POS transactions yet today.</p>
                   ) : (
                     historyReceipts.map((rcp) => (
                       <div
                         key={rcp.receiptNumber}
                         onClick={() => setCompletedReceipt(rcp)}
                         className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-all hover:border-emerald-500/50 ${
-                          isLight ? 'bg-gray-50 border-gray-200 hover:bg-white' : 'bg-zinc-800/60 border-zinc-700 hover:bg-zinc-800'
+                          isLight ? 'bg-gray-50 border-gray-200 hover:bg-white' : 'bg-[#090A0F] border-slate-800/80 hover:bg-slate-900/70'
                         }`}
                       >
                         <div className="flex items-center justify-between font-bold">
                           <span className="font-mono">{rcp.receiptNumber}</span>
                           <span className="text-emerald-600 dark:text-emerald-400">{formatIDR(rcp.total)}</span>
                         </div>
-                        <div className="flex items-center justify-between text-[11px] text-zinc-400 mt-1">
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                           <span>{new Date(rcp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           <span className="uppercase font-mono">{rcp.paymentMethod}</span>
                           <button
@@ -2263,7 +2263,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setIsHistoryDrawerOpen(false)}
-                className="w-full mt-4 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-semibold cursor-pointer"
+                className="w-full mt-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               >
                 Close History
               </button>

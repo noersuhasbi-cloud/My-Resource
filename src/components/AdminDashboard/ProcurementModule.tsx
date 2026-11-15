@@ -132,6 +132,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [crossDockPlate, setCrossDockPlate] = useState<string>('B 9124 KXC');
   const [crossDockAllocations, setCrossDockAllocations] = useState<Record<string, Record<string, number>>>({});
 
+  // Advanced Landed Cost & Import Allocation State (inside Stock-in / GR Modal)
+  const [grFreightCost, setGrFreightCost] = useState<number>(0);
+  const [grInsuranceCost, setGrInsuranceCost] = useState<number>(0);
+  const [grCustomsDuty, setGrCustomsDuty] = useState<number>(0);
+  const [grColdChainCost, setGrColdChainCost] = useState<number>(0);
+  const [grLandedMethod, setGrLandedMethod] = useState<'BY_QUANTITY' | 'BY_VALUE'>('BY_QUANTITY');
+
   // Direct Purchase Order Modal State
   const [isCreatingDirectPO, setIsCreatingDirectPO] = useState<boolean>(false);
   const [directPoStoreId, setDirectPoStoreId] = useState<string>('store-jkt-senopati');
@@ -639,6 +646,11 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     setDeliveryNoteInput(`SJ-VND-${Date.now().toString().slice(-5)}`);
     setReceivedByInput('Siti Rahmawati (Receiving Clerk)');
     setReceiverNotesInput('');
+    setGrFreightCost(0);
+    setGrInsuranceCost(0);
+    setGrCustomsDuty(0);
+    setGrColdChainCost(0);
+    setGrLandedMethod('BY_QUANTITY');
 
     const initialMap: typeof receivingItemsState = {};
     const initialCdMap: Record<string, Record<string, number>> = {};
@@ -734,6 +746,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         tempCheckCelsius: data.tempCheckCelsius,
       }));
 
+      const totalExtras =
+        (Number(grFreightCost) || 0) +
+        (Number(grInsuranceCost) || 0) +
+        (Number(grCustomsDuty) || 0) +
+        (Number(grColdChainCost) || 0);
+
       const res = await apiClient.receivePartialGoods({
         poId: activeReceivingPO.id,
         deliveryNoteNumber: deliveryNoteInput,
@@ -741,11 +759,26 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         receiverNotes: receiverNotesInput,
         warehouseZoneId: activeReceivingPO.warehouseZoneId || 'WH-JKT-SEN-COLD',
         items: itemsPayload,
+        ...(totalExtras > 0
+          ? {
+              landedCostAllocation: {
+                freightCostIDR: Number(grFreightCost) || 0,
+                insuranceCostIDR: Number(grInsuranceCost) || 0,
+                customsDutyIDR: Number(grCustomsDuty) || 0,
+                coldChainLogisticsIDR: Number(grColdChainCost) || 0,
+                allocationMethod: grLandedMethod,
+              },
+            }
+          : {}),
       });
+
+      const landedNote = res.landedCostSummary
+        ? ` Landed Cost ${formatIDR(res.landedCostSummary.totalLandedCostIDR)} capitalized into FEFO batch HPP.`
+        : '';
 
       onShowToast(
         res.isPartial ? 'Partial Goods Receipt Recorded' : 'PO 100% Fulfilled',
-        `GR #${res.goodsReceipt.id} processed. ${res.remainingBackorder} units backorder remaining. GL #${res.journalEntryIds[0] || 'GLE-Posted'} auto-posted.`
+        `GR #${res.goodsReceipt.id} processed. ${res.remainingBackorder} units backorder remaining. GL #${res.journalEntryIds[0] || 'GLE-Posted'} auto-posted.${landedNote}`
       );
 
       setActiveReceivingPO(null);
@@ -786,7 +819,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         className={`p-6 rounded-2xl border transition-all ${
           isLight
             ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-            : 'bg-zinc-900/90 border-zinc-800'
+            : 'bg-emerald-950/80 border-emerald-800/50'
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -795,14 +828,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0F4C3A] text-white tracking-wide">
                 Procurement &amp; Supply Chain
               </span>
-              <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+              <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-emerald-200/80'}`}>
                 Partial Shipment &amp; Restock Engine
               </span>
             </div>
-            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Purchase Requests, Orders &amp; Partial GR
             </h2>
-            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
               End-to-end procurement cycle with automatic inventory threshold triggers, vendor order conversions,
               and enterprise split-delivery Goods Receipts (GR) linked directly to the General Ledger.
             </p>
@@ -816,7 +849,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   className={`px-3.5 py-2 text-xs font-semibold rounded-xl border flex items-center gap-1.5 transition-all cursor-pointer ${
                     isLight
                       ? 'bg-white border-[#0F4C3A]/30 text-[#0F4C3A] hover:bg-emerald-50 shadow-2xs'
-                      : 'bg-zinc-800 border-emerald-500/40 text-emerald-300 hover:bg-zinc-700'
+                      : 'bg-slate-900/90 border-emerald-500/40 text-emerald-300 hover:bg-slate-800'
                   }`}
                 >
                   <Plus className="w-4 h-4" />
@@ -839,7 +872,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
                 isLight
                   ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -852,13 +885,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6">
           <div
             className={`p-3.5 rounded-xl border ${
-              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-zinc-800/60 border-zinc-700'
+              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-[#090A0F] border-slate-800/80'
             }`}
           >
-            <div className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <div className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Pending PRs
             </div>
-            <div className={`text-xl font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <div className={`text-xl font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               {pendingPRCount}
             </div>
             <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
@@ -868,29 +901,29 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
           <div
             className={`p-3.5 rounded-xl border ${
-              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-zinc-800/60 border-zinc-700'
+              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-[#090A0F] border-slate-800/80'
             }`}
           >
-            <div className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <div className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Active PO Value
             </div>
             <div className={`text-xl font-bold mt-1 text-[#0F4C3A] dark:text-emerald-400 font-mono`}>
               {formatIDR(totalPOValue)}
             </div>
-            <div className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+            <div className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
               {purchaseOrders.length} Formal Vendor Orders
             </div>
           </div>
 
           <div
             className={`p-3.5 rounded-xl border ${
-              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-zinc-800/60 border-zinc-700'
+              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-[#090A0F] border-slate-800/80'
             }`}
           >
-            <div className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <div className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Partial Deliveries
             </div>
-            <div className={`text-xl font-bold mt-1 ${partialPOCount > 0 ? 'text-blue-600 dark:text-blue-400' : isLight ? 'text-gray-900' : 'text-white'}`}>
+            <div className={`text-xl font-bold mt-1 ${partialPOCount > 0 ? 'text-blue-600 dark:text-blue-400' : isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               {partialPOCount}
             </div>
             <div className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
@@ -900,16 +933,16 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
           <div
             className={`p-3.5 rounded-xl border ${
-              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-zinc-800/60 border-zinc-700'
+              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-[#090A0F] border-slate-800/80'
             }`}
           >
-            <div className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <div className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Goods Receipts (GR)
             </div>
             <div className={`text-xl font-bold mt-1 text-emerald-600 dark:text-emerald-400`}>
               {goodsReceipts.length}
             </div>
-            <div className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+            <div className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
               Verified Surat Jalan Deliveries
             </div>
           </div>
@@ -927,7 +960,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
@@ -949,7 +982,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <TrendingUp className="w-4 h-4 text-indigo-500" />
@@ -965,7 +998,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               ? 'bg-[#0F4C3A] text-white shadow-xs'
               : isLight
               ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+              : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
           }`}
         >
           <Clock className="w-4 h-4 text-emerald-500" />
@@ -989,7 +1022,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               ? 'bg-[#0F4C3A] text-white shadow-xs'
               : isLight
               ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+              : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
           }`}
         >
           <FileCheck2 className="w-4 h-4 text-blue-500" />
@@ -1013,7 +1046,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               ? 'bg-[#0F4C3A] text-white shadow-xs'
               : isLight
               ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+              : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
           }`}
         >
           <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -1021,8 +1054,8 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           <span
             className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
               activeTab === 'gr'
-                ? 'bg-white/15 text-zinc-100 border-white/25'
-                : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-zinc-700 dark:text-zinc-300 dark:border-zinc-600'
+                ? 'bg-white/15 text-slate-100 border-white/25'
+                : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-900/90 dark:text-slate-300 dark:border-slate-800/80'
             }`}
           >
             {goodsReceipts.length}
@@ -1042,7 +1075,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <Receipt className="w-4 h-4 text-indigo-500" />
@@ -1069,7 +1102,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               ? 'bg-[#0F4C3A] text-white shadow-xs'
               : isLight
               ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+              : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
           }`}
         >
           <Award className="w-4 h-4 text-amber-500" />
@@ -1096,7 +1129,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <Receipt className="w-4 h-4 text-rose-500" />
@@ -1111,26 +1144,26 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           {/* Header */}
-          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
                     Predictive Inventory Intelligence
                   </span>
-                  <span className="text-xs text-zinc-400 font-mono">
+                  <span className="text-xs text-slate-400 font-mono">
                     Outlet: {selectedStore === 'CONSOLIDATED' ? 'All Outlets (Network)' : selectedStore}
                   </span>
                 </div>
-                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2 mt-1`}>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2 mt-1`}>
                   <Sparkles className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                   Auto-Replenishment &amp; Min-Max Stock Planning
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                   Predictive safety stock calculations, dynamic sales velocity (units/day), and automated draft Purchase Order generation
                 </p>
               </div>
@@ -1142,7 +1175,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   onClick={loadReplenishmentPlan}
                   disabled={isLoadingPlan}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                    isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100' : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                    isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                   }`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isLoadingPlan ? 'animate-spin' : ''}`} />
@@ -1153,7 +1186,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   type="button"
                   onClick={handleSelectAllReorder}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                    isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100' : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                    isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                   }`}
                 >
                   <Check className="w-3.5 h-3.5" />
@@ -1182,19 +1215,19 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
             {/* KPI Summary Cards */}
             {replenishmentPlan && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-zinc-800">
-                <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
-                  <div className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">Evaluated Catalog SKUs</div>
-                  <div className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-white'} mt-0.5`}>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-slate-800/80">
+                <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
+                  <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Evaluated Catalog SKUs</div>
+                  <div className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} mt-0.5`}>
                     {replenishmentPlan.totalSkusEvaluated} Items
                   </div>
-                  <div className="text-[10px] text-zinc-400">Inventory tiers active</div>
+                  <div className="text-[10px] text-slate-400">Inventory tiers active</div>
                 </div>
 
                 <div className={`p-3 rounded-xl border ${
                   replenishmentPlan.skusNeedingRestockCount > 0
                     ? 'bg-rose-500/10 border-rose-500/30'
-                    : isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'
+                    : isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'
                 }`}>
                   <div className="text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center justify-between">
                     <span>Reorder Triggered</span>
@@ -1209,7 +1242,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 <div className={`p-3 rounded-xl border ${
                   replenishmentPlan.criticalSkusCount > 0
                     ? 'bg-amber-500/10 border-amber-500/30'
-                    : isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'
+                    : isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'
                 }`}>
                   <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400 flex items-center justify-between">
                     <span>Critical Out of Stock</span>
@@ -1221,20 +1254,20 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   <div className="text-[10px] text-amber-500">Available stock = 0</div>
                 </div>
 
-                <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
+                <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
                   <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">Total Suggested Restock</div>
                   <div className={`text-lg font-bold text-[#0F4C3A] dark:text-emerald-400 font-mono mt-0.5`}>
                     {formatIDR(replenishmentPlan.totalSuggestedCostIDR)}
                   </div>
-                  <div className="text-[10px] text-zinc-400">{replenishmentPlan.bySupplier.length} Supplier batches</div>
+                  <div className="text-[10px] text-slate-400">{replenishmentPlan.bySupplier.length} Supplier batches</div>
                 </div>
               </div>
             )}
 
             {/* Supplier Consolidation Previews */}
             {replenishmentPlan && replenishmentPlan.bySupplier.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-gray-200/60 dark:border-zinc-800/60">
-                <span className="text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider block mb-2">
+              <div className="mt-3 pt-3 border-t border-gray-200/60 dark:border-slate-800/80">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-2">
                   Draft PO Vendor Grouping Preview ({replenishmentPlan.bySupplier.length} Vendors):
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1244,14 +1277,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       <div
                         key={sup.supplierId}
                         className={`p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
-                          isLight ? 'bg-white/80 border-gray-200' : 'bg-zinc-800/40 border-zinc-700'
+                          isLight ? 'bg-white/80 border-gray-200' : 'bg-[#12141C] border-slate-800/80'
                         }`}
                       >
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-800 dark:text-zinc-200 truncate max-w-[170px]">
+                          <div className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[170px]">
                             {sup.supplierName}
                           </div>
-                          <div className="text-[10px] text-zinc-400 font-mono">
+                          <div className="text-[10px] text-slate-400 font-mono">
                             {sup.suggestedPoId} • {sup.skuCount} SKUs ({sup.totalOrderQty} units)
                           </div>
                           {srm && (
@@ -1279,7 +1312,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             )}
 
             {/* Filter bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-3 border-t border-gray-200 dark:border-zinc-800">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-3 border-t border-gray-200 dark:border-slate-800/80">
               <div className="flex items-center gap-1.5 flex-wrap">
                 {(
                   [
@@ -1299,7 +1332,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'text-gray-600 hover:bg-gray-100'
-                        : 'text-zinc-400 hover:bg-zinc-800'
+                        : 'text-slate-400 hover:bg-slate-800'
                     }`}
                   >
                     {u.label}
@@ -1317,7 +1350,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   className={`w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none ${
                     isLight
                       ? 'bg-white border-gray-200 text-gray-900 focus:border-[#0F4C3A]'
-                      : 'bg-zinc-800 border-zinc-700 text-white focus:border-emerald-500'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500'
                   }`}
                 />
               </div>
@@ -1329,7 +1362,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             <table className="w-full min-w-[850px] text-left text-xs">
               <thead>
                 <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
                 }`}>
                   <th className="py-3 px-3 text-center w-10">Select</th>
                   <th className="py-3 px-4">SKU &amp; Product Details</th>
@@ -1342,10 +1375,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   <th className="py-3 px-3 text-center">Urgency</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
                 {filteredReplenishmentItems.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-zinc-400">
+                    <td colSpan={9} className="py-12 text-center text-slate-400">
                       {isLoadingPlan ? 'Calculating replenishment algorithm...' : 'No inventory items match the selected filter.'}
                     </td>
                   </tr>
@@ -1360,7 +1393,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             ? isLight ? 'bg-emerald-50/70' : 'bg-emerald-950/20'
                             : item.isReorderTriggered
                             ? isLight ? 'bg-rose-50/30 hover:bg-rose-50/60' : 'bg-rose-950/10 hover:bg-rose-950/20'
-                            : isLight ? 'hover:bg-gray-50' : 'hover:bg-zinc-800/40'
+                            : isLight ? 'hover:bg-gray-50' : 'hover:bg-slate-900/60'
                         }`}
                       >
                         <td className="py-3 px-3 text-center">
@@ -1372,18 +1405,18 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           />
                         </td>
                         <td className="py-3 px-4">
-                          <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                          <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                             {item.productName}
                           </div>
-                          <div className="text-[11px] text-zinc-400 font-mono">
+                          <div className="text-[11px] text-slate-400 font-mono">
                             {item.sku} • {item.supplierName}
                           </div>
                         </td>
                         <td className="py-3 px-3">
-                          <span className="capitalize font-semibold text-slate-600 dark:text-zinc-300">
+                          <span className="capitalize font-semibold text-slate-600 dark:text-slate-300">
                             {item.category.replace('_', ' ')}
                           </span>
-                          <div className="text-[10px] text-zinc-400">Zone {item.warehouseZoneId}</div>
+                          <div className="text-[10px] text-slate-400">Zone {item.warehouseZoneId}</div>
                         </td>
                         <td className="py-3 px-3 text-center">
                           <span className={`font-mono font-bold ${
@@ -1391,27 +1424,27 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           }`}>
                             {item.availableStock}
                           </span>
-                          <span className="text-zinc-400 text-[11px]"> / {item.safetyStockBuffer} min</span>
+                          <span className="text-slate-400 text-[11px]"> / {item.safetyStockBuffer} min</span>
                         </td>
                         <td className="py-3 px-3 text-center">
                           <div className="font-mono text-xs font-semibold">
-                            {item.dailySalesVelocity} <span className="text-[10px] text-zinc-400">units/day</span>
+                            {item.dailySalesVelocity} <span className="text-[10px] text-slate-400">units/day</span>
                           </div>
-                          <div className="text-[10px] text-zinc-400">Lead: {item.supplierLeadTimeDays}d</div>
+                          <div className="text-[10px] text-slate-400">Lead: {item.supplierLeadTimeDays}d</div>
                         </td>
                         <td className="py-3 px-3 text-center">
-                          <span className="font-mono font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+                          <span className="font-mono font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300">
                             {item.reorderPoint}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-center">
-                          <span className={`font-mono font-black text-sm ${item.suggestedOrderQty > 0 ? 'text-[#0F4C3A] dark:text-emerald-400' : 'text-zinc-300'}`}>
+                          <span className={`font-mono font-black text-sm ${item.suggestedOrderQty > 0 ? 'text-[#0F4C3A] dark:text-emerald-400' : 'text-slate-400'}`}>
                             {item.suggestedOrderQty > 0 ? `+${item.suggestedOrderQty}` : '0'}
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-zinc-100">
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
                           {formatIDR(item.estimatedOrderCostIDR)}
-                          <div className="text-[10px] text-zinc-400 font-normal">
+                          <div className="text-[10px] text-slate-400 font-normal">
                             @{formatIDR(item.unitCost)}/unit
                           </div>
                           {(() => {
@@ -1422,7 +1455,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             return (
                               <div
                                 className={`text-[10px] font-normal mt-0.5 ${
-                                  diffPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-400'
+                                  diffPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'
                                 }`}
                                 title={`Last bought from ${hist.vendorName || item.supplierName} (${hist.docRef})`}
                               >
@@ -1482,10 +1515,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                   <div>
-                    <h4 className={`text-xs font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                    <h4 className={`text-xs font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                       One-Click Reorder Recommendations ({urgentItems.length} SKUs at/below safety stock)
                     </h4>
-                    <p className={`text-[11px] ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                    <p className={`text-[11px] ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
                       Based on 30-day average daily sales velocity &amp; lead time — routes automatically to top-graded SRM vendor.
                     </p>
                   </div>
@@ -1515,7 +1548,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     type="button"
                     onClick={() => setShowReorderWidget((v) => !v)}
                     className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border cursor-pointer ${
-                      isLight ? 'bg-white border-amber-200 text-gray-700' : 'bg-zinc-900 border-zinc-700 text-zinc-200'
+                      isLight ? 'bg-white border-amber-200 text-gray-700' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                     }`}
                   >
                     {showReorderWidget ? 'Collapse' : 'Show'}
@@ -1529,7 +1562,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     <div
                       key={item.sku}
                       className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${
-                        isLight ? 'bg-white border-amber-200/80' : 'bg-zinc-900 border-zinc-800'
+                        isLight ? 'bg-white border-amber-200/80' : 'bg-[#12141C] border-slate-800/80'
                       }`}
                     >
                       <div className="min-w-0">
@@ -1543,12 +1576,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           >
                             {item.urgencyStatus === 'STOCKOUT_IMMINENT' ? 'Critical' : 'Reorder Soon'}
                           </span>
-                          <span className="font-mono text-[10px] text-gray-500 dark:text-zinc-400">{item.sku}</span>
+                          <span className="font-mono text-[10px] text-gray-500 dark:text-slate-400">{item.sku}</span>
                         </div>
-                        <div className={`text-xs font-bold truncate mt-0.5 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                        <div className={`text-xs font-bold truncate mt-0.5 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                           {item.productName}
                         </div>
-                        <div className={`text-[10px] font-mono ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                        <div className={`text-[10px] font-mono ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                           ATP {item.availableStock} • Avg {item.adjustedDailySales}/day • Sugg: +{item.recommendedReorderQty}
                         </div>
                       </div>
@@ -1584,17 +1617,17 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         className={`rounded-2xl border transition-all overflow-hidden ${
           isLight
             ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-            : 'bg-zinc-900/90 border-zinc-800'
+            : 'bg-[#12141C] border-slate-800/80'
         }`}
       >
-        <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+        <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                 <Clock className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                 Purchase Requests (PR) Restock Triggers
               </h3>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                 Automated threshold monitoring &amp; manual store manager replenishment requests
               </p>
             </div>
@@ -1610,7 +1643,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'text-gray-600 hover:bg-gray-100'
-                        : 'text-zinc-400 hover:bg-zinc-800'
+                        : 'text-slate-400 hover:bg-slate-900/90'
                     }`}
                   >
                     {status}
@@ -1625,7 +1658,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           <table className="w-full min-w-[700px] text-left text-xs">
             <thead>
               <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
               }`}>
                 <th className="py-3 px-4">PR Number</th>
                 <th className="py-3 px-4">Outlet Hub</th>
@@ -1636,10 +1669,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 <th className="py-3 px-4 text-right">Status / Action</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
               {filteredPRs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className={`py-8 text-center text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                  <td colSpan={7} className={`py-8 text-center text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                     No purchase requests matching current criteria.
                   </td>
                 </tr>
@@ -1648,24 +1681,24 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   <tr
                     key={pr.id}
                     className={`transition-colors ${
-                      isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'
+                      isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'
                     }`}
                   >
                     <td className="py-3.5 px-4 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                       {pr.id}
                     </td>
-                    <td className={`py-3.5 px-4 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                    <td className={`py-3.5 px-4 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                       {pr.storeName || 'Senopati Flagship'}
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                      <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                         {pr.productName}
                       </div>
-                      <div className={`font-mono text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                      <div className={`font-mono text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                         {pr.sku}
                       </div>
                     </td>
-                    <td className={`py-3.5 px-4 text-center font-mono font-bold ${isLight ? 'text-gray-900' : 'text-zinc-100'}`}>
+                    <td className={`py-3.5 px-4 text-center font-mono font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                       {pr.suggestedQuantity}
                     </td>
                     <td className="py-3.5 px-4 font-mono font-semibold text-[#0F4C3A] dark:text-emerald-400">
@@ -1676,7 +1709,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                         const estUnit = Math.round(pr.totalEstimatedCost / pr.suggestedQuantity);
                         const diffPct = hist.price > 0 ? Math.round(((estUnit - hist.price) / hist.price) * 100) : 0;
                         return (
-                          <div className={`text-[10px] font-normal mt-0.5 ${diffPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-zinc-400'}`}>
+                          <div className={`text-[10px] font-normal mt-0.5 ${diffPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-slate-400'}`}>
                             Last: {formatIDR(hist.price)} ({hist.date}) {diffPct > 0 ? `▲+${diffPct}%` : diffPct < 0 ? `▼${diffPct}%` : ''}
                           </div>
                         );
@@ -1691,11 +1724,11 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20'
                             : isLight
                             ? 'bg-gray-100 text-gray-700'
-                            : 'bg-zinc-700 text-zinc-300'
+                            : 'bg-slate-900/90 text-slate-300 border border-slate-800/80'
                         }`}>
                           {pr.priority}
                         </span>
-                        <span className={`text-[11px] capitalize ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                        <span className={`text-[11px] capitalize ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           {pr.reason.replace(/_/g, ' ')}
                         </span>
                       </div>
@@ -1735,7 +1768,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             })
                           }
                           className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                            isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-slate-800/80 text-indigo-300 hover:bg-slate-800'
                           }`}
                           title="Email Purchase Request"
                         >
@@ -1755,7 +1788,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             })
                           }
                           className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                            isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-slate-800/80 text-emerald-400 hover:bg-slate-800'
                           }`}
                           title="Send Purchase Request via WhatsApp"
                         >
@@ -1779,17 +1812,17 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         className={`rounded-2xl border transition-all overflow-hidden ${
           isLight
             ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-            : 'bg-zinc-900/90 border-zinc-800'
+            : 'bg-[#12141C] border-slate-800/80'
         }`}
       >
-        <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+        <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                 <FileCheck2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                 Purchase Orders (PO) &amp; Partial Shipment Tracking
               </h3>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                 Vendor agreements with real-time backorder tracking and split-fulfillment delivery workflows
               </p>
             </div>
@@ -1804,7 +1837,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       ? 'bg-[#0F4C3A] text-white shadow-xs'
                       : isLight
                       ? 'text-gray-600 hover:bg-gray-100'
-                      : 'text-zinc-400 hover:bg-zinc-800'
+                      : 'text-slate-400 hover:bg-slate-900/90'
                   }`}
                 >
                   {status}
@@ -1818,7 +1851,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           <table className="w-full min-w-[700px] text-left text-xs">
             <thead>
               <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
               }`}>
                 <th className="py-3 px-4">PO Number</th>
                 <th className="py-3 px-4">Vendor &amp; Destination</th>
@@ -1829,10 +1862,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
               {filteredPOs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className={`py-8 text-center text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                  <td colSpan={7} className={`py-8 text-center text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                     No purchase orders matching current criteria.
                   </td>
                 </tr>
@@ -1847,23 +1880,23 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     <tr
                       key={po.id}
                       className={`transition-colors ${
-                        isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'
+                        isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'
                       }`}
                     >
                       <td className="py-3.5 px-4">
                         <span className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                           {po.id}
                         </span>
-                        <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                        <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           Expected: {po.expectedDeliveryDate}
                         </div>
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                        <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                           {po.supplierName}
                         </div>
-                        <div className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                        <div className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           {po.storeName}
                         </div>
                       </td>
@@ -1871,10 +1904,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       <td className="py-3.5 px-4 max-w-xs">
                         {po.items.map((item, idx) => (
                           <div key={idx} className="text-[11px]">
-                            <span className={`font-medium ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>
+                            <span className={`font-medium ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
                               {item.productName}
                             </span>
-                            <span className={`ml-1 font-mono ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                            <span className={`ml-1 font-mono ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                               ({item.receivedQuantity}/{item.orderedQuantity} rcvd)
                             </span>
                           </div>
@@ -1883,7 +1916,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2">
-                          <div className={`w-24 h-2 rounded-full overflow-hidden ${isLight ? 'bg-gray-200' : 'bg-zinc-700'}`}>
+                          <div className={`w-24 h-2 rounded-full overflow-hidden ${isLight ? 'bg-gray-200' : 'bg-slate-800'}`}>
                             <div
                               className={`h-full rounded-full transition-all ${
                                 po.status === 'Completed'
@@ -1893,7 +1926,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                               style={{ width: `${percent}%` }}
                             />
                           </div>
-                          <span className={`font-mono text-xs font-semibold ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                          <span className={`font-mono text-xs font-semibold ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                             {percent}%
                           </span>
                         </div>
@@ -1921,7 +1954,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                               ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30'
                               : isLight
                               ? 'bg-gray-100 text-gray-700 border-gray-300'
-                              : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                              : 'bg-slate-900/90 text-slate-300 border-slate-800/80'
                           }`}
                         >
                           {po.status}
@@ -1963,7 +1996,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 className={`px-2 py-1 text-xs font-semibold rounded-lg border transition-all ${
                                   isLight
                                     ? 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300 shadow-2xs'
-                                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                                    : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border-slate-800/80'
                                 }`}
                                 title="Close unfulfilled backorder balance with written adjustment notes"
                               >
@@ -1985,7 +2018,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 })
                               }
                               className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                                isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                                isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-slate-800/80 text-indigo-300 hover:bg-slate-800'
                               }`}
                               title="Email Purchase Order to Supplier"
                             >
@@ -2006,7 +2039,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 })
                               }
                               className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                                isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                                isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-slate-800/80 text-emerald-400 hover:bg-slate-800'
                               }`}
                               title="Send Purchase Order via WhatsApp"
                             >
@@ -2058,7 +2091,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 })
                               }
                               className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                                isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                                isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-slate-800/80 text-indigo-300 hover:bg-slate-800'
                               }`}
                               title="Email Purchase Order"
                             >
@@ -2079,7 +2112,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 })
                               }
                               className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                                isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                                isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-slate-800/80 text-emerald-400 hover:bg-slate-800'
                               }`}
                               title="Send Purchase Order via WhatsApp"
                             >
@@ -2104,15 +2137,15 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         className={`rounded-2xl border transition-all overflow-hidden ${
           isLight
             ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-            : 'bg-zinc-900/90 border-zinc-800'
+            : 'bg-[#12141C] border-slate-800/80'
         }`}
       >
-        <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
-          <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+        <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
+          <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
             <Truck className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
             Goods Receipts (GR) Delivery Log
           </h3>
-          <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+          <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
             Surat Jalan records, cold-chain temperature verification, and automated General Ledger voucher links
           </p>
         </div>
@@ -2121,7 +2154,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           <table className="w-full min-w-[700px] text-left text-xs">
             <thead>
               <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
               }`}>
                 <th className="py-3 px-4">GR Number</th>
                 <th className="py-3 px-4">Surat Jalan Note</th>
@@ -2133,10 +2166,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 <th className="py-3 px-4 text-right">AP Actions</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
               {filteredGRs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className={`py-8 text-center text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                  <td colSpan={8} className={`py-8 text-center text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                     No goods receipts recorded yet.
                   </td>
                 </tr>
@@ -2145,23 +2178,23 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   <tr
                     key={gr.id}
                     className={`transition-colors ${
-                      isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'
+                      isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'
                     }`}
                   >
                     <td className="py-3.5 px-4 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                       {gr.id}
                     </td>
-                    <td className={`py-3.5 px-4 font-mono ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>
+                    <td className={`py-3.5 px-4 font-mono ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
                       {gr.deliveryNoteNumber}
                     </td>
                     <td className="py-3.5 px-4 font-mono text-blue-600 dark:text-blue-400">
                       {gr.poId}
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                      <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                         {gr.vendorName}
                       </div>
-                      <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                      <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                         {gr.storeName}
                       </div>
                     </td>
@@ -2177,13 +2210,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       </span>
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className={isLight ? 'text-gray-800' : 'text-zinc-200'}>{gr.receivedBy}</div>
+                      <div className={isLight ? 'text-gray-800' : 'text-slate-200'}>{gr.receivedBy}</div>
                       <div className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-1">
                         <Thermometer className="w-3 h-3" />
                         {gr.items[0]?.tempCheckCelsius ? `${gr.items[0].tempCheckCelsius}°C Verified` : 'Temp OK'}
                       </div>
                     </td>
-                    <td className={`py-3.5 px-4 font-mono text-[11px] ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                    <td className={`py-3.5 px-4 font-mono text-[11px] ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                       {gr.glEntryId || 'GLE-Posted'}
                     </td>
                     <td className="py-3.5 px-4 text-right">
@@ -2220,7 +2253,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             })
                           }
                           className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                            isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-slate-800/80 text-indigo-300 hover:bg-slate-800'
                           }`}
                           title="Email Goods Receipt"
                         >
@@ -2240,7 +2273,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             })
                           }
                           className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                            isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-slate-800/80 text-emerald-400 hover:bg-slate-800'
                           }`}
                           title="Send Goods Receipt via WhatsApp"
                         >
@@ -2303,15 +2336,15 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           className={`rounded-2xl border p-5 space-y-5 ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 dark:border-zinc-800 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 dark:border-slate-800/80 pb-4">
             <div>
-              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 Supplier Rafaksi &amp; Trading Term Debit Notes (Nota Debet)
               </h3>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Claim post-invoice price protection (Rafaksi -&gt; DR #2010 / CR #1040) or Gondola/Listing rebates (DR #2010 / CR #4080) and automatically reduce open AP balances.
               </p>
             </div>
@@ -2319,7 +2352,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               type="button"
               onClick={loadDebitNotes}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer ${
-                isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
             >
               {isLoadingDebitNotes ? 'Syncing...' : 'Refresh Nota Debet'}
@@ -2358,17 +2391,17 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   setIsSubmittingDebitNote(false);
                 }
               }}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end p-4 rounded-xl border border-gray-200 dark:border-zinc-800 bg-gray-50/70 dark:bg-zinc-800/40"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end p-4 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/70 dark:bg-[#090A0F]"
             >
               <div>
-                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Supplier
                 </label>
                 <select
                   value={dnSupplierName || supplierOptions[0] || ''}
                   onChange={(e) => setDnSupplierName(e.target.value)}
                   className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   {supplierOptions.map((s) => (
@@ -2377,14 +2410,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 </select>
               </div>
               <div>
-                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Claim Category
                 </label>
                 <select
                   value={dnCategory}
                   onChange={(e) => setDnCategory(e.target.value as SupplierDebitNoteCategory)}
                   className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   <option value="RAFAKSI_HARGA">Rafaksi Harga (CR #1040 HPP)</option>
@@ -2392,14 +2425,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 </select>
               </div>
               <div>
-                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Offset Vendor Bill (Optional)
                 </label>
                 <select
                   value={dnVendorBillId}
                   onChange={(e) => setDnVendorBillId(e.target.value)}
                   className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   <option value="">-- Open AP General --</option>
@@ -2413,7 +2446,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 </select>
               </div>
               <div>
-                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Amount (IDR)
                 </label>
                 <input
@@ -2423,12 +2456,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   value={dnAmountIDR}
                   onChange={(e) => setDnAmountIDR(Math.max(1, Number(e.target.value) || 0))}
                   className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
               <div>
-                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-[11px] font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Claim Description / Memo
                 </label>
                 <input
@@ -2437,7 +2470,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   onChange={(e) => setDnDescription(e.target.value)}
                   placeholder="e.g. Rafaksi harga promo minyak Q2"
                   className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                   }`}
                 />
               </div>
@@ -2453,7 +2486,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className={`border-b ${isLight ? 'bg-gray-50 border-gray-200 text-gray-600' : 'bg-zinc-800/50 border-zinc-800 text-zinc-300'}`}>
+              <thead className={`border-b ${isLight ? 'bg-gray-50 border-gray-200 text-gray-600' : 'bg-[#090A0F] border-slate-800/80 text-slate-400'}`}>
                 <tr>
                   <th className="py-3 px-4 font-semibold">Nota Debet #</th>
                   <th className="py-3 px-4 font-semibold">Supplier</th>
@@ -2464,16 +2497,16 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   <th className="py-3 px-4 font-semibold">Audit &amp; Memo</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
                 {debitNotesList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-xs text-gray-500 dark:text-zinc-400">
+                    <td colSpan={7} className="py-8 text-center text-xs text-gray-500 dark:text-slate-400">
                       No supplier Rafaksi or Trading Term Debit Notes posted yet.
                     </td>
                   </tr>
                 ) : (
                   debitNotesList.map((dn) => (
-                    <tr key={dn.id} className="hover:bg-zinc-500/5">
+                    <tr key={dn.id} className="hover:bg-slate-900/40">
                       <td className="py-3 px-4 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{dn.id}</td>
                       <td className="py-3 px-4 font-semibold">{dn.supplierName}</td>
                       <td className="py-3 px-4">
@@ -2499,33 +2532,33 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       {/* MODAL: INTERACTIVE PARTIAL GOODS RECEIPT */}
       {activeReceivingPO && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
             className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto my-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
               <div>
-                <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   <Truck className="w-5 h-5 text-[#0F4C3A] dark:text-emerald-400" />
                   Receive Goods: PO #{activeReceivingPO.id}
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Vendor: <strong>{activeReceivingPO.supplierName}</strong> • Destination: <strong>{activeReceivingPO.storeName}</strong>
                 </p>
               </div>
               <button
                 onClick={() => setActiveReceivingPO(null)}
-                className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors ${
-                  isLight ? 'text-gray-500' : 'text-zinc-300'
+                className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors ${
+                  isLight ? 'text-gray-500' : 'text-slate-400'
                 }`}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50/70 dark:bg-zinc-800/50">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/70 dark:bg-[#090A0F]">
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -2535,7 +2568,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       ? 'bg-[#0F4C3A] text-white shadow-xs'
                       : isLight
                       ? 'bg-white text-gray-700 border border-gray-200'
-                      : 'bg-zinc-900 text-zinc-300 border border-zinc-700'
+                      : 'bg-slate-900/90 text-slate-300 border border-slate-800/80'
                   }`}
                 >
                   Standard CDC Putaway (GR)
@@ -2548,7 +2581,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       ? 'bg-indigo-600 text-white shadow-xs'
                       : isLight
                       ? 'bg-white text-gray-700 border border-gray-200'
-                      : 'bg-zinc-900 text-zinc-300 border border-zinc-700'
+                      : 'bg-slate-900/90 text-slate-300 border border-slate-800/80'
                   }`}
                 >
                   <Zap className="w-3.5 h-3.5" />
@@ -2573,7 +2606,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     value={crossDockDriver}
                     onChange={(e) => setCrossDockDriver(e.target.value)}
                     className={`w-full px-3 py-1.5 text-xs rounded-lg border ${
-                      isLight ? 'bg-white border-indigo-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-indigo-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   />
                 </div>
@@ -2586,7 +2619,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     value={crossDockPlate}
                     onChange={(e) => setCrossDockPlate(e.target.value)}
                     className={`w-full px-3 py-1.5 text-xs rounded-lg border font-mono ${
-                      isLight ? 'bg-white border-indigo-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-indigo-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   />
                 </div>
@@ -2595,7 +2628,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Surat Jalan / Delivery Note #
                 </label>
                 <input
@@ -2606,13 +2639,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
                     isLight
                       ? 'bg-white border-gray-300 text-gray-900'
-                      : 'bg-zinc-800 border-zinc-700 text-white'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                   }`}
                 />
               </div>
 
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Receiving Officer Name
                 </label>
                 <input
@@ -2622,7 +2655,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
                     isLight
                       ? 'bg-white border-gray-300 text-gray-900'
-                      : 'bg-zinc-800 border-zinc-700 text-white'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
@@ -2631,7 +2664,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             {/* Items with partial quantity inputs */}
             <div className="space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   {receiveMode === 'cross_dock'
                     ? 'Cross-Dock Branch Allocation (Zero CDC Shelf Putaway)'
                     : 'Specify Received Items (Partial Fulfillment Supported)'}
@@ -2645,7 +2678,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                         ? 'bg-emerald-600 border-emerald-600 text-white'
                         : isLight
                         ? 'bg-white border-emerald-300 text-[#0F4C3A] hover:bg-emerald-50'
-                        : 'bg-zinc-800 border-emerald-700 text-emerald-300 hover:bg-zinc-700'
+                        : 'bg-slate-900/90 border-emerald-800/50 text-emerald-300 hover:bg-slate-800'
                     }`}
                   >
                     <Barcode className="w-3.5 h-3.5" />
@@ -2729,19 +2762,19 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     className={`border p-4 rounded-xl space-y-3 ${
                       isLight
                         ? 'bg-white border-gray-200 shadow-2xs'
-                        : 'bg-zinc-800/80 border-zinc-700'
+                        : 'bg-[#090A0F] border-slate-800/80'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                       <div>
-                        <h5 className={`font-bold text-xs ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                        <h5 className={`font-bold text-xs ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                           {item.productName}
                         </h5>
-                        <span className={`font-mono text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                        <span className={`font-mono text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           {item.sku}
                         </span>
                       </div>
-                      <div className={`text-xs font-mono ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                      <div className={`text-xs font-mono ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                         Ordered: <strong>{item.orderedQuantity}</strong>
                         {(item.bonusQty || 0) > 0 && (
                           <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold text-[10px]">
@@ -2754,7 +2787,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                       <div>
-                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>
+                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
                           Quantity Received Now
                         </label>
                         <input
@@ -2772,13 +2805,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           className={`w-full px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg border text-[#0F4C3A] dark:text-emerald-400 ${
                             isLight
                               ? 'bg-white border-slate-300 focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-                              : 'bg-zinc-900 border-zinc-600'
+                              : 'bg-[#12141C] border-slate-800/80'
                           }`}
                         />
                       </div>
 
                       <div>
-                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>
+                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
                           FOC Bonus Qty (Gratis)
                         </label>
                         <input
@@ -2795,14 +2828,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           className={`w-full px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg border text-emerald-700 dark:text-emerald-300 ${
                             isLight
                               ? 'bg-white border-slate-300 focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-                              : 'bg-zinc-900 border-zinc-600'
+                              : 'bg-[#12141C] border-slate-800/80'
                           }`}
                           title="Free bonus goods dilute WAC without creating AP liability"
                         />
                       </div>
 
                       <div>
-                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>
+                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
                           Batch / Lot #
                         </label>
                         <input
@@ -2818,13 +2851,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           className={`w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border ${
                             isLight
                               ? 'bg-white border-slate-300 text-slate-900 focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-                              : 'bg-zinc-900 border-zinc-600 text-zinc-100'
+                              : 'bg-[#12141C] border-slate-800/80 text-slate-100'
                           }`}
                         />
                       </div>
 
                       <div>
-                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>
+                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
                           Cold Temp (°C)
                         </label>
                         <input
@@ -2841,13 +2874,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           className={`w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border text-blue-600 dark:text-blue-300 ${
                             isLight
                               ? 'bg-white border-slate-300 focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-                              : 'bg-zinc-900 border-zinc-600'
+                              : 'bg-[#12141C] border-slate-800/80'
                           }`}
                         />
                       </div>
 
                       <div>
-                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'}`}>
+                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
                           Quality Status
                         </label>
                         <select
@@ -2862,7 +2895,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           className={`w-full px-2 py-1.5 text-xs rounded-lg border ${
                             isLight
                               ? 'bg-white border-slate-300 text-slate-900 focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
-                              : 'bg-zinc-900 border-zinc-600 text-zinc-100'
+                              : 'bg-[#12141C] border-slate-800/80 text-slate-100'
                           }`}
                         >
                           <option value="Cold-Chain Verified">Cold-Chain Verified</option>
@@ -2873,7 +2906,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     </div>
 
                     {receiveMode === 'cross_dock' && (
-                      <div className="pt-2 border-t border-indigo-200/70 dark:border-zinc-700 space-y-2">
+                      <div className="pt-2 border-t border-indigo-200/70 dark:border-slate-800/80 space-y-2">
                         <div className="flex items-center justify-between text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
                           <span>Direct Branch Allocations (Zero CDC Storage):</span>
                           <span className="font-mono">
@@ -2905,7 +2938,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                   }));
                                 }}
                                 className={`w-full px-2 py-1 text-xs font-mono font-bold rounded-lg border ${
-                                  isLight ? 'bg-white border-indigo-200 text-gray-900' : 'bg-zinc-900 border-zinc-600 text-white'
+                                  isLight ? 'bg-white border-indigo-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
                                 }`}
                               />
                             </div>
@@ -2915,7 +2948,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     )}
 
                     <div className="flex items-center justify-between text-[11px] pt-1">
-                      <span className={isLight ? 'text-gray-500' : 'text-zinc-300'}>
+                      <span className={isLight ? 'text-gray-500' : 'text-slate-400'}>
                         Resulting Backorder on PO:
                       </span>
                       <span className={`font-mono font-semibold ${currentBackorder > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
@@ -2927,8 +2960,162 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               })}
             </div>
 
+            {/* Advanced Landed Cost & Import Allocation (Updates FEFO Batch HPP / Cost Basis Only) */}
+            {receiveMode === 'standard' && (() => {
+              const totalLandedExtras =
+                Math.max(0, Number(grFreightCost) || 0) +
+                Math.max(0, Number(grInsuranceCost) || 0) +
+                Math.max(0, Number(grCustomsDuty) || 0) +
+                Math.max(0, Number(grColdChainCost) || 0);
+              const ownedTotalQty = activeReceivingPO.items.reduce((sum, it) => {
+                if (it.isConsignment) return sum;
+                const st = receivingItemsState[it.sku];
+                const q = (Number(st?.quantityReceived) || 0) + (Number(st?.bonusQty) || 0);
+                return sum + q;
+              }, 0);
+              const ownedTotalBaseCost = activeReceivingPO.items.reduce((sum, it) => {
+                if (it.isConsignment) return sum;
+                const st = receivingItemsState[it.sku];
+                return sum + (Number(st?.quantityReceived) || 0) * it.unitCost;
+              }, 0);
+              const avgExtraPerUnit = ownedTotalQty > 0 ? Math.round(totalLandedExtras / ownedTotalQty) : 0;
+
+              return (
+                <div
+                  className={`p-3.5 rounded-xl border space-y-3 ${
+                    isLight
+                      ? 'bg-slate-50/90 border-slate-200'
+                      : 'bg-[#090A0F] border-slate-800/80'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h5 className={`text-xs font-bold flex items-center gap-1.5 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                        <Layers className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Import &amp; Landed Cost Allocation (HPP Basis Only)</span>
+                      </h5>
+                      <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                        Optional freight, insurance, customs &amp; cold-chain costs update FEFO batch HPP without altering selling price.
+                      </p>
+                    </div>
+                    <select
+                      value={grLandedMethod}
+                      onChange={(e) => setGrLandedMethod(e.target.value as 'BY_QUANTITY' | 'BY_VALUE')}
+                      className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border ${
+                        isLight
+                          ? 'bg-white border-slate-300 text-slate-800'
+                          : 'bg-[#12141C] border-slate-800/80 text-slate-200'
+                      }`}
+                    >
+                      <option value="BY_QUANTITY">Allocate by Quantity</option>
+                      <option value="BY_VALUE">Allocate by Value</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    <div>
+                      <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Freight (IDR)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={5000}
+                        value={grFreightCost || ''}
+                        placeholder="0"
+                        onChange={(e) => setGrFreightCost(Math.max(0, Number(e.target.value) || 0))}
+                        className={`w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-900'
+                            : 'bg-[#12141C] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Insurance (IDR)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={5000}
+                        value={grInsuranceCost || ''}
+                        placeholder="0"
+                        onChange={(e) => setGrInsuranceCost(Math.max(0, Number(e.target.value) || 0))}
+                        className={`w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-900'
+                            : 'bg-[#12141C] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Import Duties (IDR)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={5000}
+                        value={grCustomsDuty || ''}
+                        placeholder="0"
+                        onChange={(e) => setGrCustomsDuty(Math.max(0, Number(e.target.value) || 0))}
+                        className={`w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-900'
+                            : 'bg-[#12141C] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Cold Chain Logistics (IDR)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={5000}
+                        value={grColdChainCost || ''}
+                        placeholder="0"
+                        onChange={(e) => setGrColdChainCost(Math.max(0, Number(e.target.value) || 0))}
+                        className={`w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-900'
+                            : 'bg-[#12141C] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {totalLandedExtras > 0 && (
+                    <div
+                      className={`pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono ${
+                        isLight ? 'border-slate-200 text-slate-700' : 'border-slate-800/80 text-slate-300'
+                      }`}
+                    >
+                      <span>
+                        Total Extras: <strong className="text-emerald-600 dark:text-emerald-400">{formatIDR(totalLandedExtras)}</strong>
+                        {' '}({ownedTotalQty} owned units)
+                      </span>
+                      <span>
+                        Avg Landed +/Unit: <strong className="text-amber-600 dark:text-amber-400">+{formatIDR(avgExtraPerUnit)}</strong>
+                      </span>
+                      <span>
+                        Actual Landed Cost Basis:{' '}
+                        <strong className="text-slate-900 dark:text-slate-100">
+                          {ownedTotalQty > 0
+                            ? `${formatIDR(Math.round((ownedTotalBaseCost + totalLandedExtras) / ownedTotalQty))}/unit`
+                            : 'Rp 0'}
+                        </strong>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div>
-              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Receiving Remarks / Cold-Chain Notes
               </label>
               <input
@@ -2939,13 +3126,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
                   isLight
                     ? 'bg-white border-gray-300 text-gray-900'
-                    : 'bg-zinc-800 border-zinc-700 text-white'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                 }`}
               />
             </div>
 
             <div className={`p-3.5 rounded-xl border text-xs space-y-1 ${
-              isLight ? 'bg-emerald-50/60 border-emerald-200 text-gray-700' : 'bg-emerald-950/20 border-emerald-800/40 text-zinc-300'
+              isLight ? 'bg-emerald-50/60 border-emerald-200 text-gray-700' : 'bg-emerald-950/30 border-emerald-800/50 text-slate-300'
             }`}>
               <p className="font-semibold flex items-center gap-1.5 text-[#0F4C3A] dark:text-emerald-400">
                 <Scale className="w-3.5 h-3.5" />
@@ -2970,13 +3157,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               )}
             </div>
 
-            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
               <button
                 onClick={() => setActiveReceivingPO(null)}
                 className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
                   isLight
                     ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 shadow-2xs'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                 }`}
               >
                 Cancel
@@ -3004,20 +3191,20 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       {/* MODAL: CREATE RESTOCK PR */}
       {isCreatingPR && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
             className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
-              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
+              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 New Purchase Request (PR)
               </h3>
               <button
                 onClick={() => setIsCreatingPR(false)}
-                className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors ${
-                  isLight ? 'text-gray-500' : 'text-zinc-300'
+                className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors ${
+                  isLight ? 'text-gray-500' : 'text-slate-400'
                 }`}
               >
                 <X className="w-5 h-5" />
@@ -3025,7 +3212,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             </div>
 
             <div>
-              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Target Store Hub
               </label>
               <select
@@ -3034,7 +3221,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
                   isLight
                     ? 'bg-white border-gray-300 text-gray-900'
-                    : 'bg-zinc-800 border-zinc-700 text-white'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               >
                 {storeOutlets.length > 0 ? (
@@ -3056,7 +3243,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             </div>
 
             <div>
-              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Select Product / SKU to Restock
               </label>
               <select
@@ -3065,7 +3252,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
                   isLight
                     ? 'bg-white border-gray-300 text-gray-900'
-                    : 'bg-zinc-800 border-zinc-700 text-white'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               >
                 <option value="">-- Choose Item from Inventory --</option>
@@ -3098,7 +3285,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Requested Qty
                 </label>
                 <input
@@ -3109,13 +3296,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] font-mono ${
                     isLight
                       ? 'bg-white border-gray-300 text-gray-900'
-                      : 'bg-zinc-800 border-zinc-700 text-white'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
 
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Priority Level
                 </label>
                 <select
@@ -3124,7 +3311,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
                     isLight
                       ? 'bg-white border-gray-300 text-gray-900'
-                      : 'bg-zinc-800 border-zinc-700 text-white'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   <option value="normal">Normal</option>
@@ -3135,7 +3322,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             </div>
 
             <div>
-              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Trigger Reason
               </label>
               <select
@@ -3144,7 +3331,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
                   isLight
                     ? 'bg-white border-gray-300 text-gray-900'
-                    : 'bg-zinc-800 border-zinc-700 text-white'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               >
                 <option value="manual_request">Manual Store Manager Request</option>
@@ -3153,13 +3340,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               </select>
             </div>
 
-            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
               <button
                 onClick={() => setIsCreatingPR(false)}
                 className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
                   isLight
                     ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 shadow-2xs'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                 }`}
               >
                 Cancel
@@ -3179,21 +3366,21 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       {/* MODAL: CREATE DIRECT PURCHASE ORDER */}
       {isCreatingDirectPO && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
             className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-lg p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
-              <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
+              <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 <FileCheck2 className="w-5 h-5 text-[#0F4C3A] dark:text-emerald-400" />
                 Create Direct Purchase Order (PO)
               </h3>
               <button
                 onClick={() => setIsCreatingDirectPO(false)}
-                className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors ${
-                  isLight ? 'text-gray-500' : 'text-zinc-300'
+                className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors ${
+                  isLight ? 'text-gray-500' : 'text-slate-400'
                 }`}
               >
                 <X className="w-5 h-5" />
@@ -3201,14 +3388,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             </div>
 
             <div>
-              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Destination Store / Hub
               </label>
               <select
                 value={directPoStoreId}
                 onChange={(e) => setDirectPoStoreId(e.target.value)}
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
-                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               >
                 {storeOutlets.length > 0 ? (
@@ -3230,14 +3417,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             </div>
 
             <div>
-              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Supplier / Vendor
               </label>
               <select
                 value={directPoSupplier}
                 onChange={(e) => setDirectPoSupplier(e.target.value)}
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
-                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               >
                 <option value="">-- Select Registered Supplier --</option>
@@ -3268,14 +3455,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             </div>
 
             <div>
-              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Product / SKU
               </label>
               <select
                 value={directPoSku}
                 onChange={(e) => setDirectPoSku(e.target.value)}
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
-                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               >
                 <option value="">-- Choose Product SKU --</option>
@@ -3323,7 +3510,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 }
                 if (!resolved) {
                   return (
-                    <p className="mt-1.5 text-[11px] text-gray-500 dark:text-zinc-400 flex items-center gap-1">
+                    <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400 flex items-center gap-1">
                       <History className="w-3 h-3" />
                       No prior GR/PO price record found for this SKU yet.
                     </p>
@@ -3340,7 +3527,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                         ? 'text-emerald-600 dark:text-emerald-400'
                         : isLight
                         ? 'text-gray-600'
-                        : 'text-zinc-300'
+                        : 'text-slate-300'
                     }`}
                   >
                     <span className="inline-flex items-center gap-1.5">
@@ -3365,7 +3552,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Order Qty (Paid)
                 </label>
                 <input
@@ -3374,12 +3561,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   value={directPoQty}
                   onChange={(e) => setDirectPoQty(Math.max(1, Number(e.target.value) || 1))}
                   className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   FOC Bonus Qty (Free)
                 </label>
                 <input
@@ -3388,13 +3575,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   value={directPoBonusQty}
                   onChange={(e) => setDirectPoBonusQty(Math.max(0, Number(e.target.value) || 0))}
                   className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                   title="Free-of-charge bonus units dilute Moving Average Cost cleanly"
                 />
               </div>
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Expected ETA
                 </label>
                 <input
@@ -3402,19 +3589,19 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   value={directPoExpectedDate}
                   onChange={(e) => setDirectPoExpectedDate(e.target.value)}
                   className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                   Payment Terms
                 </label>
                 <select
                   value={directPoPaymentTerms}
                   onChange={(e) => setDirectPoPaymentTerms(e.target.value as 'Net 30' | 'COD' | 'Advance Payment')}
                   className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   <option value="Net 30">Net 30</option>
@@ -3425,7 +3612,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
             </div>
 
             <div>
-              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Commercial Notes (Optional)
               </label>
               <input
@@ -3434,17 +3621,17 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 onChange={(e) => setDirectPoNotes(e.target.value)}
                 placeholder="e.g. Maintain cold chain ≤4°C on arrival"
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
-                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                 }`}
               />
             </div>
 
-            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
               <button
                 type="button"
                 onClick={() => setIsCreatingDirectPO(false)}
                 className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
-                  isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                  isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                 }`}
               >
                 Cancel

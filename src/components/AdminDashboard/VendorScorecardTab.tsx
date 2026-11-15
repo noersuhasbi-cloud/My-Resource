@@ -63,7 +63,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
   const renderMetricCell = (val: number | null) => {
     if (val === null || val === undefined) {
       return (
-        <span className={`font-mono tabular-nums text-xs ${isLight ? 'text-gray-400' : 'text-zinc-500'}`}>
+        <span className={`font-mono tabular-nums text-xs ${isLight ? 'text-gray-400' : 'text-slate-500'}`}>
           N/A
         </span>
       );
@@ -82,18 +82,18 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
       className={`rounded-2xl border transition-all overflow-hidden ${
         isLight
           ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-          : 'bg-zinc-900/90 border-zinc-800'
+          : 'bg-[#12141C] border-slate-800/80'
       }`}
     >
       {/* Header */}
-      <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+      <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               <Award className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
               Automated Vendor Scorecard &amp; SRM Intelligence
             </h3>
-            <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-300'}`}>
               Dynamic weighted scoring: On-Time Delivery (35%) · QC &amp; Cold-Chain Pass (40%) · 3-Way Match Accuracy ≤0.5% (25%). Missing metrics normalize automatically.
             </p>
           </div>
@@ -106,7 +106,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 isLight
                   ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -118,19 +118,19 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
         {/* Summary KPI Strip */}
         {summary && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
-              <div className={`text-[11px] font-medium ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
+              <div className={`text-[11px] font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Tracked Suppliers
               </div>
-              <div className={`text-lg font-bold font-mono tabular-nums mt-0.5 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+              <div className={`text-lg font-bold font-mono tabular-nums mt-0.5 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 {summary.totalVendors} Vendors
               </div>
-              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Network Avg Score: <strong className="font-mono">{summary.avgCompositeScore}/100</strong>
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
+            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
               <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center justify-between">
                 <span>Grade A · Preferred</span>
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -138,12 +138,12 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
               <div className="text-lg font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {summary.gradeACount}
               </div>
-              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Score ≥ 90 · Priority replenishment
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
+            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
               <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400 flex items-center justify-between">
                 <span>Grade B · Standard</span>
                 <ShieldAlert className="w-3.5 h-3.5" />
@@ -151,12 +151,12 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
               <div className="text-lg font-bold font-mono tabular-nums text-amber-600 dark:text-amber-300 mt-0.5">
                 {summary.gradeBCount}
               </div>
-              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Score 75–89 · Standard SLA
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
+            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
               <div className="text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center justify-between">
                 <span>Grade C · Probation</span>
                 <AlertTriangle className="w-3.5 h-3.5" />
@@ -164,7 +164,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
               <div className="text-lg font-bold font-mono tabular-nums text-rose-600 dark:text-rose-400 mt-0.5">
                 {summary.gradeCCount}
               </div>
-              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Score &lt; 75 · Review terms
               </div>
             </div>
@@ -172,7 +172,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
         )}
 
         {/* Filter Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-3 border-t border-gray-200 dark:border-zinc-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-3 border-t border-gray-200 dark:border-slate-800/80">
           <div className="flex items-center gap-1.5 flex-wrap">
             {(
               [
@@ -191,7 +191,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
                     ? 'bg-[#0F4C3A] text-white shadow-xs'
                     : isLight
                     ? 'text-gray-600 hover:bg-gray-100'
-                    : 'text-zinc-400 hover:bg-zinc-800'
+                    : 'text-slate-400 hover:bg-slate-900/90 hover:text-slate-200'
                 }`}
               >
                 {opt.label}
@@ -200,7 +200,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
           </div>
 
           <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-gray-400 dark:text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
               placeholder="Search supplier or warning..."
@@ -209,7 +209,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
               className={`w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none ${
                 isLight
                   ? 'bg-white border-gray-200 text-gray-900 focus:border-[#0F4C3A]'
-                  : 'bg-zinc-800 border-zinc-700 text-white focus:border-emerald-500'
+                  : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500'
               }`}
             />
           </div>
@@ -222,7 +222,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
           <thead>
             <tr
               className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
               }`}
             >
               <th className="py-3 px-4">Supplier &amp; Advisory</th>
@@ -237,16 +237,16 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
               {canCreateDirectPO && onIssueDirectPO && <th className="py-3 px-4 text-right">Action</th>}
             </tr>
           </thead>
-          <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+          <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
             {isLoading && !data ? (
               <tr>
-                <td colSpan={canCreateDirectPO && onIssueDirectPO ? 10 : 9} className="py-10 text-center text-zinc-400">
+                <td colSpan={canCreateDirectPO && onIssueDirectPO ? 10 : 9} className="py-10 text-center text-slate-400">
                   Calculating supplier scorecards from live PO, GR, QC &amp; AP ledgers...
                 </td>
               </tr>
             ) : filteredScorecards.length === 0 ? (
               <tr>
-                <td colSpan={canCreateDirectPO && onIssueDirectPO ? 10 : 9} className={`py-10 text-center ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+                <td colSpan={canCreateDirectPO && onIssueDirectPO ? 10 : 9} className={`py-10 text-center ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   No suppliers match the selected SRM filter.
                 </td>
               </tr>
@@ -254,19 +254,19 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
               filteredScorecards.map((v) => (
                 <tr
                   key={v.supplierName}
-                  className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'}`}
+                  className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'}`}
                 >
                   <td className="py-3.5 px-4 max-w-xs">
-                    <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                    <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                       {v.supplierName}
                     </div>
-                    <div className={`text-[11px] mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+                    <div className={`text-[11px] mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                       {v.advisoryNote}
                     </div>
                   </td>
 
                   <td className="py-3.5 px-3 text-center font-mono tabular-nums">
-                    <span className={isLight ? 'text-gray-800' : 'text-zinc-200'}>
+                    <span className={isLight ? 'text-gray-800' : 'text-slate-200'}>
                       {v.totalPOs} / {v.completedGRs} / {v.totalBills}
                     </span>
                   </td>
@@ -279,11 +279,11 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
                     {v.rtvCount > 0 ? (
                       <span className="font-bold text-rose-600 dark:text-rose-400">{v.rtvCount}</span>
                     ) : (
-                      <span className={isLight ? 'text-gray-400' : 'text-zinc-500'}>0</span>
+                      <span className={isLight ? 'text-gray-400' : 'text-slate-500'}>0</span>
                     )}
                   </td>
 
-                  <td className={`py-3.5 px-3 text-right font-mono tabular-nums font-semibold ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>
+                  <td className={`py-3.5 px-3 text-right font-mono tabular-nums font-semibold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
                     {formatIDR(v.totalSpendIDR)}
                   </td>
 
@@ -299,7 +299,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
                     >
                       {v.compositeScore}
                     </span>
-                    <span className={`text-[10px] font-mono ${isLight ? 'text-gray-400' : 'text-zinc-500'}`}>/100</span>
+                    <span className={`text-[10px] font-mono ${isLight ? 'text-gray-400' : 'text-slate-500'}`}>/100</span>
                   </td>
 
                   <td className="py-3.5 px-4 whitespace-nowrap">
@@ -320,7 +320,7 @@ export const VendorScorecardTab: React.FC<VendorScorecardTabProps> = ({
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
                           isLight
                             ? 'bg-white border-gray-200 text-[#0F4C3A] hover:bg-emerald-50'
-                            : 'bg-zinc-800 border-zinc-700 text-emerald-400 hover:bg-zinc-700'
+                            : 'bg-slate-900/90 border-slate-800/80 text-emerald-400 hover:bg-slate-800'
                         }`}
                       >
                         <FilePlus2 className="w-3 h-3" />

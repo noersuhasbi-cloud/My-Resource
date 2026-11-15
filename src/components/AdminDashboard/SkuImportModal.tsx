@@ -302,20 +302,20 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
     }
   };
 
-  const cardBg = isLight ? 'bg-white border-slate-200' : 'bg-zinc-900 border-zinc-800';
-  const subBg = isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-950 border-zinc-800';
-  const textTitle = isLight ? 'text-slate-900' : 'text-zinc-100';
-  const textMuted = isLight ? 'text-slate-500' : 'text-zinc-400';
+  const cardBg = isLight ? 'bg-white border-slate-200' : 'bg-[#12141C] border-slate-800/80';
+  const subBg = isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80';
+  const textTitle = isLight ? 'text-slate-900' : 'text-slate-100';
+  const textMuted = isLight ? 'text-slate-500' : 'text-slate-400';
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[130] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+      className="fixed inset-0 z-[130] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-label="Bulk SKU and Batch CSV Importer"
     >
       <div className={`${cardBg} border rounded-2xl shadow-2xl max-w-5xl w-full p-5 sm:p-6 space-y-4 my-auto`}>
-        <div className={`flex items-start justify-between gap-3 border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
+        <div className={`flex items-start justify-between gap-3 border-b pb-3 ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#0F4C3A]/10 dark:bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-400 flex items-center justify-center shrink-0">
               <FileSpreadsheet className="w-5 h-5" />
@@ -332,7 +332,7 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -347,7 +347,7 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 isLight
                   ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  : 'bg-[#090A0F] border-slate-800/80 text-slate-200 hover:bg-slate-900/90'
               }`}
             >
               <Download className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
@@ -374,7 +374,7 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
               className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border ${
                 errorCount > 0
                   ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30'
-                  : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700'
+                  : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-[#090A0F] dark:text-slate-400 dark:border-slate-800/80'
               }`}
             >
               Errors: {errorCount} rows
@@ -398,7 +398,7 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
             className={`w-full rounded-xl border p-3 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] ${
               isLight
                 ? 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'
-                : 'bg-zinc-950 border-zinc-800 text-zinc-100 placeholder:text-zinc-600'
+                : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
             }`}
           />
         </div>
@@ -408,7 +408,7 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
           <div className={`rounded-xl border overflow-hidden ${subBg}`}>
             <div className="max-h-60 overflow-auto">
               <table className="w-full text-left text-[11px] font-mono">
-                <thead className={isLight ? 'bg-slate-100 text-slate-700' : 'bg-zinc-900 text-zinc-300'}>
+                <thead className={isLight ? 'bg-slate-100 text-slate-700' : 'bg-[#090A0F] text-slate-300'}>
                   <tr>
                     <th className="py-2 px-2.5">Row</th>
                     <th className="py-2 px-2.5">Status</th>
@@ -423,7 +423,7 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
                     {canViewValuation && <th className="py-2 px-2.5 text-right">Unit Cost</th>}
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-zinc-800'}`}>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-slate-800/80'}`}>
                   {parsedPreview.map((row) => {
                     const hasErr = row.errors.length > 0;
                     return (
@@ -436,7 +436,7 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
                               : 'bg-rose-950/30 text-rose-200'
                             : isLight
                             ? 'bg-white text-slate-800'
-                            : 'bg-zinc-950 text-zinc-200'
+                            : 'bg-[#12141C] text-slate-200'
                         }
                       >
                         <td className="py-2 px-2.5 font-bold">#{row.rowNumber}</td>
@@ -506,14 +506,14 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
           </div>
         )}
 
-        <div className={`flex items-center justify-end gap-2 pt-2 border-t ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
+        <div className={`flex items-center justify-end gap-2 pt-2 border-t ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
           <button
             type="button"
             onClick={onClose}
             className={`px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
               isLight
                 ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                : 'bg-[#090A0F] border-slate-800/80 text-slate-200 hover:bg-slate-900/90'
             }`}
           >
             Cancel

@@ -219,7 +219,7 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
         className={`relative p-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center cursor-pointer ${
           isLight
             ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700 shadow-2xs'
-            : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-200'
+            : 'bg-[#12141C] hover:bg-slate-800/80 border-slate-800/80 text-slate-200'
         } ${isOpen ? (isLight ? 'ring-2 ring-[#0F4C3A]/30 border-[#0F4C3A]' : 'ring-2 ring-emerald-500/40 border-emerald-500') : ''}`}
         title="Enterprise Alerts & Action Center"
         aria-label="Open Enterprise Notifications"
@@ -227,7 +227,7 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
       >
         <Bell className={`w-4 h-4 ${unreadCount > 0 ? (isLight ? 'text-[#0F4C3A]' : 'text-emerald-400') : ''}`} />
         {unreadCount > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-zinc-950">
+          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#090A0F]">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -245,11 +245,11 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
           className={`fixed z-[60] w-96 max-w-[calc(100vw-2rem)] flex flex-col rounded-2xl border shadow-2xl overflow-hidden transition-colors ${
             isLight
               ? 'bg-white border-slate-200 text-slate-900'
-              : 'dark bg-zinc-900 border-zinc-800 text-zinc-100'
+              : 'dark bg-[#12141C] border-slate-800/80 text-slate-100'
           }`}
         >
           {/* Popover Header */}
-          <div className={`px-4 py-3 border-b flex items-center justify-between gap-2 ${isLight ? 'border-slate-200 bg-slate-50/70' : 'border-zinc-800 bg-zinc-950/60'}`}>
+          <div className={`px-4 py-3 border-b flex items-center justify-between gap-2 ${isLight ? 'border-slate-200 bg-slate-50/70' : 'border-slate-800/80 bg-[#090A0F]/80'}`}>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xs font-bold tracking-tight">
@@ -261,7 +261,7 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
                   </span>
                 )}
               </div>
-              <p className={`text-[10px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+              <p className={`text-[10px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                 Real-time FEFO, Stock, QC, Finance &amp; Logistics events
               </p>
             </div>
@@ -283,7 +283,7 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
           </div>
 
           {/* Filter Pills */}
-          <div className={`px-4 py-2 border-b flex items-center justify-between gap-2 ${isLight ? 'border-slate-100 bg-white' : 'border-zinc-800/80 bg-zinc-900'}`}>
+          <div className={`px-4 py-2 border-b flex items-center justify-between gap-2 ${isLight ? 'border-slate-100 bg-white' : 'border-slate-800/80 bg-[#12141C]'}`}>
             <div className="flex items-center gap-1.5">
               {([
                 { id: 'ALL', label: `All (${notifications.length})` },
@@ -303,7 +303,7 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
                           : 'bg-emerald-600 text-white'
                         : isLight
                         ? 'bg-slate-100 text-slate-600 hover:bg-slate-200/70'
-                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                        : 'bg-[#090A0F] text-slate-300 hover:bg-slate-800/80 border border-slate-800/80'
                     }`}
                   >
                     {pill.label}
@@ -317,7 +317,7 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
                 type="button"
                 onClick={() => onClearRead()}
                 className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors cursor-pointer ${
-                  isLight ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-800' : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                  isLight ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-800' : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
                 }`}
                 title="Clear read notifications"
               >
@@ -328,10 +328,10 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
           </div>
 
           {/* Notification Feed List */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800/70">
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80">
             {filteredNotifications.length === 0 ? (
               <div className="py-12 px-6 text-center">
-                <div className={`w-10 h-10 mx-auto mb-2.5 rounded-xl flex items-center justify-center ${isLight ? 'bg-slate-100 text-slate-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                <div className={`w-10 h-10 mx-auto mb-2.5 rounded-xl flex items-center justify-center ${isLight ? 'bg-slate-100 text-slate-400' : 'bg-[#090A0F] text-slate-500'}`}>
                   <Bell className="w-5 h-5" />
                 </div>
                 <p className="text-xs font-semibold">
@@ -341,7 +341,7 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
                     ? 'No critical alerts active'
                     : 'No operational alerts recorded'}
                 </p>
-                <p className={`text-[11px] mt-1 ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                <p className={`text-[11px] mt-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                   Live ERP exceptions will appear here automatically.
                 </p>
               </div>
@@ -360,10 +360,10 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
                       !item.isRead
                         ? isLight
                           ? 'bg-emerald-50/45 hover:bg-emerald-50/80'
-                          : 'bg-emerald-950/20 hover:bg-zinc-800/70'
+                          : 'bg-emerald-950/30 hover:bg-slate-900/90'
                         : isLight
                         ? 'bg-white hover:bg-slate-50'
-                        : 'bg-zinc-900 hover:bg-zinc-800/50'
+                        : 'bg-[#12141C] hover:bg-slate-900/80'
                     }`}
                   >
                     {/* Category / Severity Icon */}
@@ -378,12 +378,12 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide border ${sev.badge}`}>
                             {sev.label}
                           </span>
-                          <span className={`text-[10px] font-semibold truncate ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                          <span className={`text-[10px] font-semibold truncate ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                             {cat.label}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <span className={`text-[10px] tabular-nums ${isLight ? 'text-slate-400' : 'text-zinc-500'}`}>
+                          <span className={`text-[10px] tabular-nums ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
                             {formatRelativeTime(item.updatedAt || item.createdAt)}
                           </span>
                           {!item.isRead && (
@@ -392,17 +392,17 @@ export const NotificationCenterPopover: React.FC<NotificationCenterPopoverProps>
                         </div>
                       </div>
 
-                      <p className={`text-xs font-bold leading-snug ${isLight ? 'text-slate-900' : 'text-zinc-100'}`}>
+                      <p className={`text-xs font-bold leading-snug ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
                         {item.title}
                       </p>
-                      <p className={`text-[11px] mt-0.5 leading-relaxed line-clamp-2 ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
+                      <p className={`text-[11px] mt-0.5 leading-relaxed line-clamp-2 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
                         {item.message}
                       </p>
 
                       {item.metadataLabel && (
                         <div className="mt-1.5 flex items-center justify-between gap-2">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-medium truncate max-w-[235px] ${
-                            isLight ? 'bg-slate-100 text-slate-700' : 'bg-zinc-800 text-zinc-300'
+                            isLight ? 'bg-slate-100 text-slate-700' : 'bg-[#090A0F] text-slate-300 border border-slate-800/80'
                           }`}>
                             {item.metadataLabel}
                           </span>

@@ -101,12 +101,12 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
     >
       <div
         className={`w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${
-          isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+          isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
         }`}
       >
         <div
           className={`px-5 py-4 border-b flex items-center justify-between gap-3 shrink-0 ${
-            isLight ? 'bg-rose-50/70 border-stone-200' : 'bg-rose-950/20 border-zinc-800'
+            isLight ? 'bg-rose-50/70 border-stone-200' : 'bg-rose-950/25 border-slate-800/80'
           }`}
         >
           <div className="flex items-center gap-3 min-w-0">
@@ -117,7 +117,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
               <h3 className="text-sm font-bold truncate">
                 1-Click BPOM / HACCP Batch Recall Traceability
               </h3>
-              <p className={`text-xs truncate ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
+              <p className={`text-xs truncate ${isLight ? 'text-stone-500' : 'text-slate-400'}`}>
                 Live upstream PO/GR/QC lineage &amp; downstream B2B/POS/Transfer impact freeze
               </p>
             </div>
@@ -126,7 +126,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
             type="button"
             onClick={onClose}
             className={`p-2 rounded-xl border transition-colors cursor-pointer ${
-              isLight ? 'border-stone-200 hover:bg-stone-100 text-stone-600' : 'border-zinc-700 hover:bg-zinc-800 text-zinc-300'
+              isLight ? 'border-stone-200 hover:bg-stone-100 text-stone-600' : 'border-slate-800/80 hover:bg-slate-900/90 text-slate-300'
             }`}
           >
             <X className="w-4 h-4" />
@@ -136,7 +136,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
         <div className="p-5 overflow-y-auto space-y-4">
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={lotQuery}
@@ -144,7 +144,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
                 onKeyDown={(e) => e.key === 'Enter' && loadTrace(lotQuery)}
                 placeholder="Enter Lot Number or Batch ID (e.g. LOT-2603-A)..."
                 className={`w-full pl-9 pr-3 py-2 rounded-xl border text-xs font-mono ${
-                  isLight ? 'bg-stone-50 border-stone-300 text-stone-900' : 'bg-zinc-950 border-zinc-700 text-zinc-100'
+                  isLight ? 'bg-stone-50 border-stone-300 text-stone-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
                 }`}
               />
             </div>
@@ -174,7 +174,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
                     ? 'border-rose-500/40 bg-rose-500/10'
                     : isLight
                     ? 'border-stone-200 bg-stone-50'
-                    : 'border-zinc-800 bg-zinc-950/60'
+                    : 'border-slate-800/80 bg-[#090A0F]'
                 }`}
               >
                 <div>
@@ -193,7 +193,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
                   <p className="text-xs font-semibold mt-1">
                     {trace.sku || 'Unknown SKU'} — {trace.productName}
                   </p>
-                  <p className={`text-[11px] mt-0.5 ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
+                  <p className={`text-[11px] mt-0.5 ${isLight ? 'text-stone-500' : 'text-slate-400'}`}>
                     Remaining across {trace.currentHoldings.length} batch record(s):{' '}
                     <span className="font-bold">{trace.totalRemainingUnits} units</span>
                   </p>
@@ -206,7 +206,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
                     className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer ${
                       isLight
                         ? 'border-stone-300 bg-white hover:bg-stone-50 text-stone-700'
-                        : 'border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                        : 'border-slate-800/80 bg-[#12141C] hover:bg-slate-900/90 text-slate-200'
                     }`}
                   >
                     <Mail className="w-3.5 h-3.5 text-sky-500" />
@@ -243,7 +243,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     className={`w-full px-3 py-1.5 rounded-xl border text-xs ${
-                      isLight ? 'bg-white border-stone-300' : 'bg-zinc-950 border-zinc-700'
+                      isLight ? 'bg-white border-stone-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   />
                 </div>
@@ -251,7 +251,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Upstream Origin */}
-                <div className={`p-3.5 rounded-xl border space-y-2 ${isLight ? 'border-stone-200 bg-white' : 'border-zinc-800 bg-zinc-950/40'}`}>
+                <div className={`p-3.5 rounded-xl border space-y-2 ${isLight ? 'border-stone-200 bg-white' : 'border-slate-800/80 bg-[#090A0F]'}`}>
                   <h4 className="text-xs font-bold flex items-center gap-1.5">
                     <Package className="w-3.5 h-3.5 text-emerald-500" />
                     <span>Upstream Origin (PO / GR / QC)</span>
@@ -293,7 +293,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
                 </div>
 
                 {/* Current Holdings */}
-                <div className={`p-3.5 rounded-xl border space-y-2 ${isLight ? 'border-stone-200 bg-white' : 'border-zinc-800 bg-zinc-950/40'}`}>
+                <div className={`p-3.5 rounded-xl border space-y-2 ${isLight ? 'border-stone-200 bg-white' : 'border-slate-800/80 bg-[#090A0F]'}`}>
                   <h4 className="text-xs font-bold flex items-center gap-1.5">
                     <Truck className="w-3.5 h-3.5 text-sky-500" />
                     <span>Live Outlet &amp; Rack Holdings ({trace.currentHoldings.length})</span>
@@ -306,7 +306,7 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
                         <div
                           key={h.batchId}
                           className={`p-2 rounded-lg border text-[11px] flex items-center justify-between gap-2 ${
-                            isLight ? 'border-stone-200 bg-stone-50' : 'border-zinc-800 bg-zinc-900'
+                            isLight ? 'border-stone-200 bg-stone-50' : 'border-slate-800/80 bg-[#12141C]'
                           }`}
                         >
                           <div className="min-w-0">
@@ -327,22 +327,22 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
               </div>
 
               {/* Downstream Customer & Transfer Exposure */}
-              <div className={`p-3.5 rounded-xl border space-y-2 ${isLight ? 'border-stone-200 bg-white' : 'border-zinc-800 bg-zinc-950/40'}`}>
+              <div className={`p-3.5 rounded-xl border space-y-2 ${isLight ? 'border-stone-200 bg-white' : 'border-slate-800/80 bg-[#090A0F]'}`}>
                 <h4 className="text-xs font-bold">Downstream Customer &amp; Branch Exposure</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                  <div className={`p-2.5 rounded-lg border ${isLight ? 'border-stone-200 bg-stone-50' : 'border-zinc-800 bg-zinc-900'}`}>
+                  <div className={`p-2.5 rounded-lg border ${isLight ? 'border-stone-200 bg-stone-50' : 'border-slate-800/80 bg-[#12141C]'}`}>
                     <div className="opacity-70">B2B Wholesale Orders</div>
                     <div className="text-base font-black font-mono">{trace.downstreamImpact.b2bOrders.length}</div>
                   </div>
-                  <div className={`p-2.5 rounded-lg border ${isLight ? 'border-stone-200 bg-stone-50' : 'border-zinc-800 bg-zinc-900'}`}>
+                  <div className={`p-2.5 rounded-lg border ${isLight ? 'border-stone-200 bg-stone-50' : 'border-slate-800/80 bg-[#12141C]'}`}>
                     <div className="opacity-70">POS Retail Receipts</div>
                     <div className="text-base font-black font-mono">{trace.downstreamImpact.posReceipts.length}</div>
                   </div>
-                  <div className={`p-2.5 rounded-lg border ${isLight ? 'border-stone-200 bg-stone-50' : 'border-zinc-800 bg-zinc-900'}`}>
+                  <div className={`p-2.5 rounded-lg border ${isLight ? 'border-stone-200 bg-stone-50' : 'border-slate-800/80 bg-[#12141C]'}`}>
                     <div className="opacity-70">B2C Online Orders</div>
                     <div className="text-base font-black font-mono">{trace.downstreamImpact.b2cOrders.length}</div>
                   </div>
-                  <div className={`p-2.5 rounded-lg border ${isLight ? 'border-stone-200 bg-stone-50' : 'border-zinc-800 bg-zinc-900'}`}>
+                  <div className={`p-2.5 rounded-lg border ${isLight ? 'border-stone-200 bg-stone-50' : 'border-slate-800/80 bg-[#12141C]'}`}>
                     <div className="opacity-70">Branch Transfers</div>
                     <div className="text-base font-black font-mono">{trace.downstreamImpact.transfers.length}</div>
                   </div>

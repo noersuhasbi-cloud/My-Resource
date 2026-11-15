@@ -188,7 +188,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
   const cardClass = `rounded-2xl border transition-all ${
     isLight
       ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.03)]'
-      : 'bg-zinc-900/90 border-zinc-800 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
+      : 'bg-[#12141C] border-slate-800/80 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
   }`;
 
   return (
@@ -209,10 +209,10 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                   Real-Time ERP Sync
                 </span>
               </div>
-              <h1 className={`text-xl font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+              <h1 className={`text-xl font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 Perishables, Waste &amp; Fulfillment Intelligence Reports
               </h1>
-              <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+              <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
                 Deep grocery analytics tracking FEFO batch aging, natural moisture evaporation vs preparation loss, and store-level picker fulfillment SLAs.
               </p>
             </div>
@@ -223,7 +223,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
               onClick={fetchMetrics}
               disabled={isLoading}
               className={`p-2 rounded-xl border text-xs transition-all ${
-                isLight ? 'hover:bg-gray-100 border-gray-300' : 'hover:bg-zinc-800 border-zinc-700'
+                isLight ? 'hover:bg-gray-100 border-gray-300' : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800/80 text-slate-200'
               }`}
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -231,7 +231,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
 
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border bg-white dark:bg-zinc-800 border-gray-300 dark:border-zinc-700 shadow-2xs hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border bg-white dark:bg-slate-900/90 border-gray-300 dark:border-slate-800/80 dark:text-slate-100 shadow-2xs hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Print Report</span>
@@ -240,7 +240,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
         </div>
 
         {/* Tab Filters */}
-        <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-zinc-800 overflow-x-auto pb-1">
+        <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-slate-800/80 overflow-x-auto pb-1">
           <button
             onClick={() => setActiveTab('all')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
@@ -248,7 +248,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:bg-gray-100'
-                : 'text-zinc-400 hover:bg-zinc-800'
+                : 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-100'
             }`}
           >
             Consolidated Executive Summary
@@ -260,7 +260,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:bg-gray-100'
-                : 'text-zinc-400 hover:bg-zinc-800'
+                : 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-100'
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
@@ -273,7 +273,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:bg-gray-100'
-                : 'text-zinc-400 hover:bg-zinc-800'
+                : 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-100'
             }`}
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -286,7 +286,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:bg-gray-100'
-                : 'text-zinc-400 hover:bg-zinc-800'
+                : 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-100'
             }`}
           >
             <Scan className="w-3.5 h-3.5" />
@@ -302,7 +302,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                 ? 'bg-rose-700 text-white shadow-xs'
                 : isLight
                 ? 'text-rose-700 hover:bg-rose-50'
-                : 'text-rose-400 hover:bg-zinc-800'
+                : 'text-rose-400 hover:bg-slate-900/60'
             }`}
           >
             <ShieldAlert className="w-3.5 h-3.5" />
@@ -319,19 +319,19 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
           {/* SECTION 1: FIFO & BATCH EXPIRY INTELLIGENCE */}
           {(activeTab === 'all' || activeTab === 'fifo') && (
             <div className={`${cardClass} p-5 sm:p-6 space-y-5`}>
-              <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-slate-800/80">
                 <div className="flex items-center gap-2">
                   <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                   <div>
                     <h3 className="font-bold text-base">FIFO Expiry Risk &amp; Batch Aging Distribution</h3>
-                    <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                    <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                       Active perishables aging profile with VIVO (Near-Expiry Markdown) revenue recovery
                     </p>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[11px] text-gray-400 block">At-Risk Value (&lt;7 Days):</span>
+                  <span className="text-[11px] text-gray-400 dark:text-slate-400 block">At-Risk Value (&lt;7 Days):</span>
                   <span className="font-mono font-bold text-rose-600 dark:text-rose-400 text-sm">
                     {formatIDR(reportData.fifoExpiryMetrics.atRiskInventoryValueIDR)}
                   </span>
@@ -350,7 +350,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                         ? 'bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200'
                         : isLight
                         ? 'bg-gray-50/80 border-gray-200 text-gray-900'
-                        : 'bg-zinc-800/60 border-zinc-700 text-white'
+                        : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <span className="text-[10px] font-bold uppercase tracking-wider block opacity-75">
@@ -391,19 +391,19 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
           {/* SECTION 2: WASTE & SHRINKAGE DECOMPOSITION */}
           {(activeTab === 'all' || activeTab === 'waste') && (
             <div className={`${cardClass} p-5 sm:p-6 space-y-5`}>
-              <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-slate-800/80">
                 <div className="flex items-center gap-2">
                   <Trash2 className="w-5 h-5 text-rose-600 dark:text-rose-400" />
                   <div>
                     <h3 className="font-bold text-base">Grocery Shrinkage &amp; Moisture Loss Decomposition</h3>
-                    <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                    <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                       Segregating natural cellular transpiration evaporation vs handling &amp; spoilage scrap
                     </p>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[11px] text-gray-400 block">Shrink-to-Sales Ratio:</span>
+                  <span className="text-[11px] text-gray-400 dark:text-slate-400 block">Shrink-to-Sales Ratio:</span>
                   <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm">
                     {reportData.wasteShrinkageMetrics.shrinkToSalesRatioPercent}% (Target &lt; 2.5%)
                   </span>
@@ -412,28 +412,28 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
 
               {/* Cause Breakdown Bars */}
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs font-sans">
-                <div className="p-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50/50 dark:bg-zinc-800/40">
-                  <span className="text-[10px] text-gray-400 font-bold block uppercase">Natural Moisture Loss</span>
-                  <span className="font-mono font-bold text-base text-gray-900 dark:text-white">
+                <div className="p-3.5 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/50 dark:bg-[#090A0F]">
+                  <span className="text-[10px] text-gray-400 dark:text-slate-400 font-bold block uppercase">Natural Moisture Loss</span>
+                  <span className="font-mono font-bold text-base text-gray-900 dark:text-slate-100">
                     {formatIDR(reportData.wasteShrinkageMetrics.naturalMoistureLossIDR)}
                   </span>
-                  <span className="text-[10px] text-gray-500 block mt-0.5">Produce weight loss audit</span>
+                  <span className="text-[10px] text-gray-500 dark:text-slate-400 block mt-0.5">Produce weight loss audit</span>
                 </div>
 
-                <div className="p-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50/50 dark:bg-zinc-800/40">
-                  <span className="text-[10px] text-gray-400 font-bold block uppercase">Trim, Wash &amp; Prep</span>
-                  <span className="font-mono font-bold text-base text-gray-900 dark:text-white">
+                <div className="p-3.5 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/50 dark:bg-[#090A0F]">
+                  <span className="text-[10px] text-gray-400 dark:text-slate-400 font-bold block uppercase">Trim, Wash &amp; Prep</span>
+                  <span className="font-mono font-bold text-base text-gray-900 dark:text-slate-100">
                     {formatIDR(reportData.wasteShrinkageMetrics.prepAndWashLossIDR)}
                   </span>
-                  <span className="text-[10px] text-gray-500 block mt-0.5">Culinary prep &amp; outer leaves</span>
+                  <span className="text-[10px] text-gray-500 dark:text-slate-400 block mt-0.5">Culinary prep &amp; outer leaves</span>
                 </div>
 
-                <div className="p-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50/50 dark:bg-zinc-800/40">
-                  <span className="text-[10px] text-gray-400 font-bold block uppercase">In-Store Handling Damage</span>
-                  <span className="font-mono font-bold text-base text-gray-900 dark:text-white">
+                <div className="p-3.5 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/50 dark:bg-[#090A0F]">
+                  <span className="text-[10px] text-gray-400 dark:text-slate-400 font-bold block uppercase">In-Store Handling Damage</span>
+                  <span className="font-mono font-bold text-base text-gray-900 dark:text-slate-100">
                     {formatIDR(reportData.wasteShrinkageMetrics.handlingDamageLossIDR)}
                   </span>
-                  <span className="text-[10px] text-gray-500 block mt-0.5">Customer dropped / bruised</span>
+                  <span className="text-[10px] text-gray-500 dark:text-slate-400 block mt-0.5">Customer dropped / bruised</span>
                 </div>
 
                 <div className="p-3.5 rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/20">
@@ -450,12 +450,12 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                 <span className="text-xs font-bold">Shrinkage Allocation by Grocery Department:</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {reportData.wasteShrinkageMetrics.departmentBreakdown.map((dept, idx) => (
-                    <div key={idx} className="p-3 rounded-lg border border-gray-200 dark:border-zinc-700 text-xs space-y-1">
+                    <div key={idx} className="p-3 rounded-lg border border-gray-200 dark:border-slate-800/80 dark:bg-[#090A0F] text-xs space-y-1">
                       <div className="flex justify-between">
                         <span className="font-semibold">{dept.department}</span>
                         <span className="font-mono font-bold">{formatIDR(dept.lossIDR)} ({dept.percentage}%)</span>
                       </div>
-                      <div className="w-full bg-gray-200 dark:bg-zinc-700 h-2 rounded-full overflow-hidden">
+                      <div className="w-full bg-gray-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-rose-500 rounded-full"
                           style={{ width: `${dept.percentage}%` }}
@@ -471,12 +471,12 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
           {/* SECTION 3: FULFILLMENT & PICKER SLA METRICS */}
           {(activeTab === 'all' || activeTab === 'fulfillment') && (
             <div className={`${cardClass} p-5 sm:p-6 space-y-5`}>
-              <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-slate-800/80">
                 <div className="flex items-center gap-2">
                   <Scan className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                   <div>
                     <h3 className="font-bold text-base">Storefront Fulfillment &amp; Picker SLA Benchmarks</h3>
-                    <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                    <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                       Catch-weight balance accuracy, substitution acceptance, and pick speed
                     </p>
                   </div>
@@ -488,36 +488,36 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                <div className="p-4 rounded-xl border border-gray-200 dark:border-zinc-700">
-                  <span className="text-[11px] text-gray-500 block">Average Pick Time</span>
+                <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-800/80 dark:bg-[#090A0F]">
+                  <span className="text-[11px] text-gray-500 dark:text-slate-400 block">Average Pick Time</span>
                   <div className="text-2xl font-bold font-mono mt-1 text-emerald-600 dark:text-emerald-400">
                     {reportData.fulfillmentMetrics.averagePickTimeMinutes} <span className="text-xs">mins</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 mt-0.5 block">Target &lt; 6.0 mins</span>
+                  <span className="text-[10px] text-gray-400 dark:text-slate-400 mt-0.5 block">Target &lt; 6.0 mins</span>
                 </div>
 
-                <div className="p-4 rounded-xl border border-gray-200 dark:border-zinc-700">
-                  <span className="text-[11px] text-gray-500 block">Catch-Weight Accuracy</span>
+                <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-800/80 dark:bg-[#090A0F]">
+                  <span className="text-[11px] text-gray-500 dark:text-slate-400 block">Catch-Weight Accuracy</span>
                   <div className="text-2xl font-bold font-mono mt-1 text-blue-600 dark:text-blue-400">
                     {reportData.fulfillmentMetrics.catchWeightAccuracyPercent}%
                   </div>
-                  <span className="text-[10px] text-gray-400 mt-0.5 block">Within ±5% target tolerance</span>
+                  <span className="text-[10px] text-gray-400 dark:text-slate-400 mt-0.5 block">Within ±5% target tolerance</span>
                 </div>
 
-                <div className="p-4 rounded-xl border border-gray-200 dark:border-zinc-700">
-                  <span className="text-[11px] text-gray-500 block">Substitutions Accepted</span>
+                <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-800/80 dark:bg-[#090A0F]">
+                  <span className="text-[11px] text-gray-500 dark:text-slate-400 block">Substitutions Accepted</span>
                   <div className="text-2xl font-bold font-mono mt-1 text-indigo-600 dark:text-indigo-400">
                     {reportData.fulfillmentMetrics.substitutionsAcceptedPercent}%
                   </div>
-                  <span className="text-[10px] text-gray-400 mt-0.5 block">Customer WhatsApp approval</span>
+                  <span className="text-[10px] text-gray-400 dark:text-slate-400 mt-0.5 block">Customer WhatsApp approval</span>
                 </div>
 
-                <div className="p-4 rounded-xl border border-gray-200 dark:border-zinc-700">
-                  <span className="text-[11px] text-gray-500 block">Click &amp; Collect Rate</span>
+                <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-800/80 dark:bg-[#090A0F]">
+                  <span className="text-[11px] text-gray-500 dark:text-slate-400 block">Click &amp; Collect Rate</span>
                   <div className="text-2xl font-bold font-mono mt-1 text-teal-600 dark:text-teal-400">
                     {reportData.fulfillmentMetrics.clickAndCollectFulfillmentRatePercent}%
                   </div>
-                  <span className="text-[10px] text-gray-400 mt-0.5 block">Ready within 15 min window</span>
+                  <span className="text-[10px] text-gray-400 dark:text-slate-400 mt-0.5 block">Ready within 15 min window</span>
                 </div>
               </div>
             </div>
@@ -527,21 +527,21 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
           {(activeTab === 'all' || activeTab === 'recall') && (
             <div className={`${cardClass} p-5 sm:p-6 space-y-6 border-rose-500/30 dark:border-rose-500/30`}>
               {/* Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-gray-100 dark:border-zinc-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-gray-100 dark:border-slate-800/80">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
                     <ShieldAlert className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-base text-gray-900 dark:text-white">
+                      <h3 className="font-bold text-base text-gray-900 dark:text-slate-100">
                         FDA FSMA 204 &amp; EU RASFF Food Safety Recall &amp; Lot Traceability
                       </h3>
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 font-mono">
                         US • EU • AUS Compliance
                       </span>
                     </div>
-                    <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                    <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                       End-to-end tracking linking supplier purchase orders, cold-chain storage bins, POS registers, and customer online deliveries.
                     </p>
                   </div>
@@ -596,7 +596,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                       className={`w-full pl-9 pr-4 py-2 rounded-xl text-xs font-mono font-medium border ${
                         isLight
                           ? 'bg-white border-gray-200 text-gray-900 focus:border-[#0F4C3A]'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-100 focus:border-emerald-500'
+                          : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500'
                       }`}
                     />
                   </div>
@@ -612,7 +612,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                  <span className={`text-[11px] font-semibold ${isLight ? 'text-gray-400' : 'text-zinc-300'}`}>
+                  <span className={`text-[11px] font-semibold ${isLight ? 'text-gray-400' : 'text-slate-400'}`}>
                     Sample Grocery Lots:
                   </span>
                   {[
@@ -634,7 +634,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                           ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
                           : isLight
                           ? 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700'
-                          : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300'
+                          : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800/80 text-slate-300'
                       }`}
                     >
                       {chip.label}
@@ -708,39 +708,39 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                   {/* 4-Stage Traceability Pipeline */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* Stage 1: Upstream Supplier Origin */}
-                    <div className={`p-4 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-zinc-800/60 border-zinc-700'} space-y-3`}>
-                      <div className="flex items-center justify-between border-b pb-2 border-gray-100 dark:border-zinc-700">
+                    <div className={`p-4 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'} space-y-3`}>
+                      <div className="flex items-center justify-between border-b pb-2 border-gray-100 dark:border-slate-800/80">
                         <div className="flex items-center gap-2">
                           <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                           <h4 className="font-bold text-xs uppercase tracking-wider">
                             1. Upstream Supplier Origin &amp; Intake Note
                           </h4>
                         </div>
-                        <span className="text-[10px] font-mono text-gray-400">Inbound Logistics</span>
+                        <span className="text-[10px] font-mono text-gray-400 dark:text-slate-400">Inbound Logistics</span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200/60 dark:border-zinc-800">
-                          <span className="text-[10px] text-gray-400 block">Supplier Name</span>
+                        <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-[#12141C] border border-gray-200/60 dark:border-slate-800/80">
+                          <span className="text-[10px] text-gray-400 dark:text-slate-400 block">Supplier Name</span>
                           <span className="font-bold mt-0.5 block">{recallTraceResult.upstreamOrigin.supplierName}</span>
-                          <span className="text-[10px] font-mono text-gray-400">{recallTraceResult.upstreamOrigin.supplierId}</span>
+                          <span className="text-[10px] font-mono text-gray-400 dark:text-slate-400">{recallTraceResult.upstreamOrigin.supplierId}</span>
                         </div>
-                        <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200/60 dark:border-zinc-800">
-                          <span className="text-[10px] text-gray-400 block">Purchase Order &amp; Delivery Note</span>
+                        <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-[#12141C] border border-gray-200/60 dark:border-slate-800/80">
+                          <span className="text-[10px] text-gray-400 dark:text-slate-400 block">Purchase Order &amp; Delivery Note</span>
                           <span className="font-mono font-bold mt-0.5 block">{recallTraceResult.upstreamOrigin.poId}</span>
                           <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
                             Surat Jalan: {recallTraceResult.upstreamOrigin.deliveryNoteNumber}
                           </span>
                         </div>
-                        <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200/60 dark:border-zinc-800">
-                          <span className="text-[10px] text-gray-400 block">Intake Cold-Chain Temp</span>
+                        <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-[#12141C] border border-gray-200/60 dark:border-slate-800/80">
+                          <span className="text-[10px] text-gray-400 dark:text-slate-400 block">Intake Cold-Chain Temp</span>
                           <span className="font-mono font-bold mt-0.5 flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                             <Thermometer className="w-3.5 h-3.5" />
                             {recallTraceResult.upstreamOrigin.intakeTempCelsius}°C (Chilled Intact)
                           </span>
                         </div>
-                        <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200/60 dark:border-zinc-800">
-                          <span className="text-[10px] text-gray-400 block">Intake QC Inspection</span>
+                        <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-[#12141C] border border-gray-200/60 dark:border-slate-800/80">
+                          <span className="text-[10px] text-gray-400 dark:text-slate-400 block">Intake QC Inspection</span>
                           <span className="font-bold mt-0.5 block text-emerald-700 dark:text-emerald-400">
                             {recallTraceResult.upstreamOrigin.intakeQualityStatus}
                           </span>
@@ -749,15 +749,15 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                     </div>
 
                     {/* Stage 2: Warehouse Storage Zones */}
-                    <div className={`p-4 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-zinc-800/60 border-zinc-700'} space-y-3`}>
-                      <div className="flex items-center justify-between border-b pb-2 border-gray-100 dark:border-zinc-700">
+                    <div className={`p-4 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'} space-y-3`}>
+                      <div className="flex items-center justify-between border-b pb-2 border-gray-100 dark:border-slate-800/80">
                         <div className="flex items-center gap-2">
                           <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                           <h4 className="font-bold text-xs uppercase tracking-wider">
                             2. Warehouse Storage Zones &amp; Isolation
                           </h4>
                         </div>
-                        <span className="text-[10px] font-mono text-gray-400">
+                        <span className="text-[10px] font-mono text-gray-400 dark:text-slate-400">
                           {recallTraceResult.warehouseLocations.length} Hubs Allocated
                         </span>
                       </div>
@@ -766,11 +766,11 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                         {recallTraceResult.warehouseLocations.map((loc) => (
                           <div
                             key={`${loc.storeId}-${loc.warehouseZoneId}`}
-                            className="p-2.5 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200/60 dark:border-zinc-800 flex items-center justify-between text-xs"
+                            className="p-2.5 rounded-lg bg-gray-50 dark:bg-[#12141C] border border-gray-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs"
                           >
                             <div>
                               <div className="font-bold">{loc.storeName}</div>
-                              <div className="text-[10px] font-mono text-gray-400">
+                              <div className="text-[10px] font-mono text-gray-400 dark:text-slate-400">
                                 Zone: {loc.warehouseZoneId} • Storage: {loc.storageType}
                               </div>
                             </div>
@@ -794,41 +794,41 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                     </div>
 
                     {/* Stage 3: Downstream POS Transactions */}
-                    <div className={`p-4 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-zinc-800/60 border-zinc-700'} space-y-3`}>
-                      <div className="flex items-center justify-between border-b pb-2 border-gray-100 dark:border-zinc-700">
+                    <div className={`p-4 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'} space-y-3`}>
+                      <div className="flex items-center justify-between border-b pb-2 border-gray-100 dark:border-slate-800/80">
                         <div className="flex items-center gap-2">
                           <ShoppingCart className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                           <h4 className="font-bold text-xs uppercase tracking-wider">
                             3. Downstream POS Retail Register Sales
                           </h4>
                         </div>
-                        <span className="text-[10px] font-mono text-gray-400">
+                        <span className="text-[10px] font-mono text-gray-400 dark:text-slate-400">
                           {recallTraceResult.posSales.length} In-Store Transactions
                         </span>
                       </div>
 
                       <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                         {recallTraceResult.posSales.length === 0 ? (
-                          <div className="py-6 text-center text-xs text-gray-400">
+                          <div className="py-6 text-center text-xs text-gray-400 dark:text-slate-400">
                             No storefront POS transactions logged for this lot yet.
                           </div>
                         ) : (
                           recallTraceResult.posSales.map((pos) => (
                             <div
                               key={pos.transactionId}
-                              className="p-2.5 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200/60 dark:border-zinc-800 flex items-center justify-between text-xs"
+                              className="p-2.5 rounded-lg bg-gray-50 dark:bg-[#12141C] border border-gray-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs"
                             >
                               <div>
                                 <div className="font-bold font-mono text-[#0F4C3A] dark:text-emerald-400">
                                   {pos.receiptNumber}
                                 </div>
-                                <div className="text-[10px] text-gray-400">
+                                <div className="text-[10px] text-gray-400 dark:text-slate-400">
                                   {pos.storeName} • Cashier: {pos.cashierName} • {new Date(pos.timestamp).toLocaleTimeString()}
                                 </div>
                               </div>
                               <div className="text-right">
                                 <div className="font-mono font-bold">{pos.quantitySold} units</div>
-                                <div className="text-[10px] text-gray-400">{formatIDR(pos.lineTotal)}</div>
+                                <div className="text-[10px] text-gray-400 dark:text-slate-400">{formatIDR(pos.lineTotal)}</div>
                               </div>
                             </div>
                           ))
@@ -837,36 +837,36 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                     </div>
 
                     {/* Stage 4: Downstream Online Customer Orders */}
-                    <div className={`p-4 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-zinc-800/60 border-zinc-700'} space-y-3`}>
-                      <div className="flex items-center justify-between border-b pb-2 border-gray-100 dark:border-zinc-700">
+                    <div className={`p-4 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'} space-y-3`}>
+                      <div className="flex items-center justify-between border-b pb-2 border-gray-100 dark:border-slate-800/80">
                         <div className="flex items-center gap-2">
                           <Package className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                           <h4 className="font-bold text-xs uppercase tracking-wider">
                             4. Downstream Online Customer Deliveries
                           </h4>
                         </div>
-                        <span className="text-[10px] font-mono text-gray-400">
+                        <span className="text-[10px] font-mono text-gray-400 dark:text-slate-400">
                           {recallTraceResult.onlineOrders.length} Online Shipments
                         </span>
                       </div>
 
                       <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                         {recallTraceResult.onlineOrders.length === 0 ? (
-                          <div className="py-6 text-center text-xs text-gray-400">
+                          <div className="py-6 text-center text-xs text-gray-400 dark:text-slate-400">
                             No online ecommerce orders currently associated with this lot.
                           </div>
                         ) : (
                           recallTraceResult.onlineOrders.map((ord) => (
                             <div
                               key={ord.orderId}
-                              className="p-2.5 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200/60 dark:border-zinc-800 flex items-center justify-between text-xs"
+                              className="p-2.5 rounded-lg bg-gray-50 dark:bg-[#12141C] border border-gray-200/60 dark:border-slate-800/80 flex items-center justify-between text-xs"
                             >
                               <div>
                                 <div className="font-bold">{ord.customerName}</div>
                                 <div className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400">
                                   Order #{ord.orderId} • {ord.customerPhone}
                                 </div>
-                                <div className="text-[10px] text-gray-400 truncate max-w-xs">
+                                <div className="text-[10px] text-gray-400 dark:text-slate-400 truncate max-w-xs">
                                   {ord.deliveryAddress || 'Senopati Hub Delivery'}
                                 </div>
                               </div>
@@ -922,18 +922,18 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
 
       {/* Emergency Customer Advisory Broadcast Modal */}
       {isNotifyModalOpen && recallTraceResult && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className={`${cardClass} max-w-lg w-full p-6 space-y-4 shadow-2xl my-auto`}>
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 pb-3">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800/80 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
                   <Send className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">
+                  <h3 className="font-bold text-sm text-gray-900 dark:text-slate-100">
                     Broadcast Emergency Food Safety Advisory
                   </h3>
-                  <p className="text-[11px] text-gray-500 dark:text-zinc-300">
+                  <p className="text-[11px] text-gray-500 dark:text-slate-400">
                     Targeting {recallTraceResult.onlineOrders.length} confirmed online order recipients
                   </p>
                 </div>
@@ -941,7 +941,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setIsNotifyModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                className="p-1 text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -949,7 +949,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="font-bold block mb-1 text-slate-800 dark:text-zinc-200">Dispatch Communication Channel</label>
+                <label className="font-bold block mb-1 text-slate-800 dark:text-slate-200">Dispatch Communication Channel</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(['WhatsApp', 'SMS', 'Email'] as const).map((ch) => (
                     <button
@@ -961,7 +961,7 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
                           ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
                           : isLight
                           ? 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700'
-                          : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300'
+                          : 'bg-[#090A0F] hover:bg-slate-900/60 border-slate-800/80 text-slate-300'
                       }`}
                     >
                       {ch}
@@ -971,13 +971,13 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
               </div>
 
               <div>
-                <label className="font-bold block mb-1 text-slate-800 dark:text-zinc-200">Advisory Message Content</label>
+                <label className="font-bold block mb-1 text-slate-800 dark:text-slate-200">Advisory Message Content</label>
                 <textarea
                   readOnly
                   rows={4}
                   value={`[URGENT FOOD SAFETY ADVISORY] Dear Customer, our quality assurance system detected that your order contains lot #${recallTraceResult.lotNumber} (${recallTraceResult.productName}). Under FDA/EU food safety protocols, please do not consume this item. You have been issued a 100% immediate refund. For questions, contact GroceMart Safety Desk at +62 21-5098-8888.`}
                   className={`w-full p-3 rounded-xl border text-xs font-mono ${
-                    isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-[#090A0F] border-slate-800/80 text-slate-200'
                   }`}
                 />
               </div>
@@ -990,11 +990,11 @@ export const GroceryReportsModule: React.FC<GroceryReportsModuleProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-200 dark:border-zinc-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-200 dark:border-slate-800/80">
               <button
                 type="button"
                 onClick={() => setIsNotifyModalOpen(false)}
-                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800/80 text-xs font-semibold dark:text-slate-300 hover:dark:bg-slate-900/60 cursor-pointer"
               >
                 Cancel
               </button>

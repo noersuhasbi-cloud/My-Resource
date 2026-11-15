@@ -183,13 +183,13 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
   }, [margins]);
 
   const cardClass = `rounded-xl border transition-all ${
-    isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+    isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-[#12141C] border-slate-800/80'
   }`;
 
   const inputClass = `w-full px-3 py-2 text-xs rounded-xl border transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-600 ${
     isLight
       ? 'bg-white border-gray-300 text-gray-900'
-      : 'bg-zinc-950 border-zinc-700 text-white'
+      : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
   }`;
 
   if (mode === 'analytic_budgets') {
@@ -198,53 +198,53 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
         {/* KPI Strip */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className={`${cardClass} p-4`}>
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
               <span>Total Departmental Budget</span>
               <PieChart className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
             </div>
-            <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               {formatIDR(deptKpis.totalBudget)}
             </div>
-            <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+            <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
               {departments.length} Active Cost Centers
             </div>
           </div>
 
           <div className={`${cardClass} p-4`}>
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
               <span>Actual Cost Committed</span>
               <Layers className="w-4 h-4 text-amber-500" />
             </div>
-            <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               {formatIDR(deptKpis.totalActualCost)}
             </div>
-            <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1 font-mono tabular-nums">
+            <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1 font-mono tabular-nums">
               {deptKpis.utilization.toFixed(1)}% Budget Utilization
             </div>
           </div>
 
           <div className={`${cardClass} p-4`}>
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
               <span>Remaining Budget Headroom</span>
               <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div className="text-xl font-bold font-mono tabular-nums mt-2 text-emerald-700 dark:text-emerald-400">
               {formatIDR(deptKpis.totalBudget - deptKpis.totalActualCost)}
             </div>
-            <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+            <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
               Remaining OpEx &amp; CapEx cap
             </div>
           </div>
 
           <div className={`${cardClass} p-4`}>
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
               <span>Actual vs Expected Revenue</span>
               <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             </div>
-            <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               {formatIDR(deptKpis.totalActualRev)}
             </div>
-            <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1 font-mono tabular-nums">
+            <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1 font-mono tabular-nums">
               Target: {formatIDR(deptKpis.totalExpectedRev)}
             </div>
           </div>
@@ -252,12 +252,12 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
 
         {/* Department Budgets Table */}
         <div className={`${cardClass} overflow-hidden`}>
-          <div className={`p-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+          <div className={`p-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
             <div>
-              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 Analytic Accounting Cost Centers &amp; Departmental Budgets
               </h3>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                 Track costs, revenues, and variance limits across Store Operations, Fresh Procurement, Cold-Chain Logistics, and Retail Marketing.
               </p>
             </div>
@@ -266,7 +266,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                 type="button"
                 onClick={loadData}
                 className={`p-2 rounded-lg border text-xs transition-colors ${
-                  isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                 }`}
                 title="Refresh Cost Centers"
               >
@@ -287,7 +287,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
             <table className="w-full min-w-[820px] text-left text-xs">
               <thead>
                 <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
                 }`}>
                   <th className="py-3 px-4">Code &amp; Cost Center</th>
                   <th className="py-3 px-4">Budget Owner</th>
@@ -299,10 +299,10 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
                 {departments.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-10 text-center text-xs text-gray-500 dark:text-zinc-400">
+                    <td colSpan={8} className="py-10 text-center text-xs text-gray-500 dark:text-slate-400">
                       {isLoading ? 'Loading analytic cost centers...' : 'No department cost centers configured yet.'}
                     </td>
                   </tr>
@@ -311,12 +311,12 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                     const util = dept.utilizationPercent ?? (dept.annualBudgetIDR > 0 ? Number(((dept.actualCostIDR / dept.annualBudgetIDR) * 100).toFixed(1)) : 0);
                     const statusLabel = dept.status === 'OVER_BUDGET' ? 'Over Budget' : dept.status === 'WARNING' ? 'Near Limit' : 'On Track';
                     return (
-                      <tr key={dept.id} className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'}`}>
+                      <tr key={dept.id} className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'}`}>
                         <td className="py-3.5 px-4">
                           <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{dept.code}</div>
-                          <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>{dept.name}</div>
+                          <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>{dept.name}</div>
                         </td>
-                        <td className={`py-3.5 px-4 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>{dept.manager}</td>
+                        <td className={`py-3.5 px-4 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>{dept.manager}</td>
                         <td className="py-3.5 px-4 text-right font-mono tabular-nums font-semibold">
                           {formatIDR(dept.annualBudgetIDR)}
                         </td>
@@ -336,7 +336,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                               </span>
                               <span className="font-bold">{util}%</span>
                             </div>
-                            <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
+                            <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-slate-800 overflow-hidden">
                               <div
                                 className={`h-full rounded-full transition-all ${
                                   util > 100 ? 'bg-rose-500' : util > 80 ? 'bg-amber-500' : 'bg-emerald-600'
@@ -347,8 +347,8 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                           </div>
                         </td>
                         <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[11px]">
-                          <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>{formatIDR(dept.actualRevenueIDR ?? 0)}</div>
-                          <div className="text-gray-500 dark:text-zinc-400">Goal: {formatIDR(dept.expectedRevenueIDR ?? 0)}</div>
+                          <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>{formatIDR(dept.actualRevenueIDR ?? 0)}</div>
+                          <div className="text-gray-500 dark:text-slate-400">Goal: {formatIDR(dept.expectedRevenueIDR ?? 0)}</div>
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <button
@@ -357,7 +357,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                             className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${
                               isLight
                                 ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                                : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                                : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                             }`}
                           >
                             <Edit3 className="w-3 h-3" />
@@ -376,7 +376,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
         {/* Create / Edit Department Modal */}
         {(editingDept || isCreatingDept) && typeof document !== 'undefined' && createPortal(
           <div
-            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
             onClick={() => {
               setEditingDept(null);
               setIsCreatingDept(false);
@@ -385,15 +385,15 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
             <div
               onClick={(e) => e.stopPropagation()}
               className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden my-auto ${
-                isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
+                isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
             >
-              <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-zinc-800 bg-zinc-900/60'}`}>
+              <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-slate-800/80 bg-[#090A0F]'}`}>
                 <div>
                   <h3 className="text-base font-bold">
                     {isCreatingDept ? 'Register Analytic Cost Center' : `Update Budget: ${editingDept?.code}`}
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
                     Synchronizes immediately with Enterprise Analytics &amp; Budget Settings
                   </p>
                 </div>
@@ -403,7 +403,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                     setEditingDept(null);
                     setIsCreatingDept(false);
                   }}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800"
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -488,7 +488,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-zinc-800">
+                <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-slate-800/80">
                   <button
                     type="button"
                     onClick={() => {
@@ -496,7 +496,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                       setIsCreatingDept(false);
                     }}
                     className={`px-4 py-2 rounded-xl font-semibold border ${
-                      isLight ? 'border-gray-200 text-gray-700 hover:bg-gray-50' : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      isLight ? 'border-gray-200 text-gray-700 hover:bg-gray-50' : 'border-slate-800/80 bg-slate-900/90 text-slate-300 hover:bg-slate-800'
                     }`}
                   >
                     Cancel
@@ -525,53 +525,53 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
       {/* Margin KPI Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`${cardClass} p-4`}>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
             <span>Catalog Avg Gross Margin</span>
             <TrendingUp className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
           </div>
           <div className="text-xl font-bold font-mono tabular-nums mt-2 text-emerald-700 dark:text-emerald-400">
             {marginKpis.avgMargin.toFixed(1)}%
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+          <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
             Warning threshold: &lt;{warningThreshold}%
           </div>
         </div>
 
         <div className={`${cardClass} p-4`}>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
             <span>Low-Margin Alert SKUs</span>
             <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>
-          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${marginKpis.lowAlertCount > 0 ? 'text-amber-600 dark:text-amber-400' : isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${marginKpis.lowAlertCount > 0 ? 'text-amber-600 dark:text-amber-400' : isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {marginKpis.lowAlertCount}
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+          <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
             Requires repricing or supplier renegotiation
           </div>
         </div>
 
         <div className={`${cardClass} p-4`}>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
             <span>Est. Monthly Gross Profit</span>
             <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {formatIDR(marginKpis.totalMonthlyGP)}
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+          <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
             Inclusive of landed cost absorption
           </div>
         </div>
 
         <div className={`${cardClass} p-4`}>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
             <span>Landed-Cost Adjusted SKUs</span>
             <ArrowUpRight className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {marginKpis.landedSkuCount} SKUs
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+          <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
             Freight &amp; kuli bongkar factored into COGS
           </div>
         </div>
@@ -579,12 +579,12 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
 
       {/* Margin Analysis Data Grid */}
       <div className={`${cardClass} overflow-hidden`}>
-        <div className={`p-5 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+        <div className={`p-5 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
           <div>
-            <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Real-Time Product Margin Analysis (True Landed COGS)
             </h3>
-            <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+            <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
               Evaluates selling price against Base Unit Cost plus absorbed freight, customs, and cold-chain handling costs.
             </p>
           </div>
@@ -598,7 +598,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                 onChange={(e) => setMarginSearch(e.target.value)}
                 placeholder="Search SKU or product..."
                 className={`pl-8 pr-3 py-1.5 text-xs rounded-xl border w-48 focus:outline-none focus:ring-1 focus:ring-emerald-600 ${
-                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                  isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
                 }`}
               />
             </div>
@@ -607,7 +607,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
               value={marginCategory}
               onChange={(e) => setMarginCategory(e.target.value)}
               className={`px-2.5 py-1.5 text-xs rounded-xl border font-semibold ${
-                isLight ? 'bg-white border-gray-200 text-gray-800' : 'bg-zinc-800 border-zinc-700 text-white'
+                isLight ? 'bg-white border-gray-200 text-gray-800' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
               }`}
             >
               {categories.map((c) => (
@@ -623,7 +623,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                   ? 'bg-amber-600 text-white border-amber-600'
                   : isLight
                   ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
             >
               Low-Margin Alerts ({marginKpis.lowAlertCount})
@@ -633,7 +633,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
               type="button"
               onClick={loadData}
               className={`p-1.5 rounded-xl border ${
-                isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
               title="Recalculate Margins"
             >
@@ -646,7 +646,7 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
           <table className="w-full min-w-[880px] text-left text-xs">
             <thead>
               <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
               }`}>
                 <th className="py-3 px-4">SKU &amp; Product</th>
                 <th className="py-3 px-4 text-right">Base Cost</th>
@@ -658,19 +658,19 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                 <th className="py-3 px-4 text-right">Est. Monthly Profit</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
               {filteredMargins.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-xs text-gray-500 dark:text-zinc-400">
+                  <td colSpan={8} className="py-10 text-center text-xs text-gray-500 dark:text-slate-400">
                     {isLoading ? 'Computing product margins...' : 'No products match your current margin filter.'}
                   </td>
                 </tr>
               ) : (
                 filteredMargins.map((m) => (
-                  <tr key={m.sku} className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'}`}>
+                  <tr key={m.sku} className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'}`}>
                     <td className="py-3 px-4">
-                      <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>{m.name}</div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400 font-mono">
+                      <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>{m.name}</div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-slate-400 font-mono">
                         <span>{m.sku}</span>
                         <span aria-hidden="true">·</span>
                         <span className="font-sans capitalize">{m.category.replace(/_/g, ' ')}</span>
@@ -706,8 +706,8 @@ export const AnalyticMarginModule: React.FC<AnalyticMarginModuleProps> = ({
                       )}
                     </td>
                     <td className="py-3 px-4 text-right font-mono tabular-nums">
-                      <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>{formatIDR(m.totalGrossProfitMonth)}</div>
-                      <div className="text-[10px] text-gray-500 dark:text-zinc-400">{m.unitsSoldMonth} units/mo</div>
+                      <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>{formatIDR(m.totalGrossProfitMonth)}</div>
+                      <div className="text-[10px] text-gray-500 dark:text-slate-400">{m.unitsSoldMonth} units/mo</div>
                     </td>
                   </tr>
                 ))

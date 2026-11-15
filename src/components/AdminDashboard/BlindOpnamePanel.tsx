@@ -154,11 +154,11 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
   };
 
   const cardClass = `rounded-2xl border p-5 sm:p-6 space-y-5 ${
-    isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+    isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-[#12141C] border-slate-800/80'
   }`;
 
   const inputClass = `rounded-xl border px-3 py-1.5 text-xs focus:outline-none focus:border-[#0F4C3A] ${
-    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
   }`;
 
   return (
@@ -172,14 +172,14 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
                 <EyeOff className="w-3 h-3" />
                 Anti-Fraud Blind Mode
               </span>
-              <span className="text-xs font-mono text-gray-500 dark:text-zinc-400">
+              <span className="text-xs font-mono text-gray-500 dark:text-slate-400">
                 COA #5210 Variance Auto-Sync
               </span>
             </div>
-            <h3 className={`text-base font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h3 className={`text-base font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Stock Opname Fisik Buta &amp; Audit Selisih (Blind Cycle Count)
             </h3>
-            <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+            <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
               System On-Hand quantities are strictly concealed from counters until physical quantities and Lot/Batch codes are submitted for Supervisor reconciliation.
             </p>
           </div>
@@ -222,8 +222,8 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
 
         {/* Sheet Selector Chips */}
         {sheets.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100 dark:border-zinc-800">
-            <span className="text-[11px] font-bold uppercase text-gray-500 dark:text-zinc-400">
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100 dark:border-slate-800/80">
+            <span className="text-[11px] font-bold uppercase text-gray-500 dark:text-slate-400">
               Active Count Sheets:
             </span>
             {sheets.map((sh) => (
@@ -236,7 +236,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
                     ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
                     : isLight
                     ? 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-300 hover:bg-slate-900/90'
                 }`}
               >
                 <span>{sh.sheetNumber}</span>
@@ -259,15 +259,15 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
 
       {/* Active Blind Sheet Workspace */}
       {isLoading ? (
-        <div className={`${cardClass} text-center py-8 text-xs text-gray-500`}>
+        <div className={`${cardClass} text-center py-8 text-xs text-slate-400`}>
           Loading blind opname sheets...
         </div>
       ) : activeSheet ? (
         <div className={cardClass}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-slate-800/80">
             <div>
               <div className="flex items-center gap-2">
-                <h4 className={`text-sm font-bold font-mono ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h4 className={`text-sm font-bold font-mono ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   {activeSheet.sheetNumber} · {activeSheet.storeName}
                 </h4>
                 <span
@@ -284,7 +284,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
                   {activeSheet.status.replace('_', ' ')}
                 </span>
               </div>
-              <p className="text-[11px] text-gray-500 dark:text-zinc-400 mt-0.5">
+              <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
                 {activeSheet.status === 'COUNTING'
                   ? 'Counter Input Mode: System On-Hand quantities are strictly hidden. Enter actual shelf counts & batch codes.'
                   : `Supervisor Audit Mode: Approval Ref ${activeSheet.approvalRequestId || '-'} · Net Financial Variance: ${formatIDR(activeSheet.netVarianceValueIDR)}`}
@@ -351,8 +351,8 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
                 </span>
               </div>
 
-              <div className={`p-3 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
-                <span className="font-sans text-[11px] font-bold text-gray-600 dark:text-zinc-300 flex items-center gap-1">
+              <div className={`p-3 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                <span className="font-sans text-[11px] font-bold text-gray-600 dark:text-slate-300 flex items-center gap-1">
                   <FileCheck2 className="w-3.5 h-3.5" />
                   Net GL Impact (COA #5210)
                 </span>
@@ -369,12 +369,12 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
           )}
 
           {/* Table */}
-          <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-zinc-800">
+          <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-slate-800/80">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr
                   className={`border-b text-[10px] font-bold uppercase tracking-wider ${
-                    isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                    isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                   }`}
                 >
                   <th className="py-3 px-3.5">SKU &amp; Product</th>
@@ -393,12 +393,12 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
                   <th className="py-3 px-3">Counter Notes</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
                 {activeSheet.items.map((line) => {
                   const draft = countsDraft[line.sku] || { qty: '', lot: line.countedLotNumber, notes: '' };
                   const isCounting = activeSheet.status === 'COUNTING';
                   return (
-                    <tr key={line.sku} className={isLight ? 'hover:bg-gray-50/70' : 'hover:bg-zinc-800/40'}>
+                    <tr key={line.sku} className={isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/70'}>
                       <td className="py-3 px-3.5">
                         <span className="font-mono text-[10px] text-gray-400 block">{line.sku}</span>
                         <span className="font-semibold">{line.productName}</span>
@@ -446,7 +446,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
 
                       {isCounting ? (
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full bg-zinc-500/10 text-zinc-600 dark:text-zinc-300 border border-zinc-500/20 text-[10px] font-semibold">
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-600 dark:text-slate-300 border border-slate-500/20 text-[10px] font-semibold">
                             <EyeOff className="w-3 h-3" />
                             HIDDEN (BLIND)
                           </span>
@@ -463,7 +463,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
                                   ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
                                   : (line.varianceQty || 0) > 0
                                   ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                                  : 'bg-gray-500/10 text-gray-600 dark:text-zinc-400'
+                                  : 'bg-gray-500/10 text-gray-600 dark:text-slate-400'
                               }`}
                             >
                               {(line.varianceQty || 0) > 0 ? `+${line.varianceQty}` : line.varianceQty}
@@ -490,7 +490,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
                             className={`w-40 ${inputClass}`}
                           />
                         ) : (
-                          <span className="text-[11px] text-gray-500 dark:text-zinc-400">{line.notes || '-'}</span>
+                          <span className="text-[11px] text-gray-500 dark:text-slate-400">{line.notes || '-'}</span>
                         )}
                       </td>
                     </tr>

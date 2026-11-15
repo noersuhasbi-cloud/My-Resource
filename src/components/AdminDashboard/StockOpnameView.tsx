@@ -47,13 +47,13 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
   const isLight = theme === 'light';
 
   // Base card and UI styling
-  const cardClass = isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800';
+  const cardClass = isLight ? 'bg-white border-gray-200' : 'bg-[#12141C] border-slate-800/80 text-slate-100';
   const subCardClass = `p-3.5 rounded-xl border ${
-    isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-800/40 border-zinc-800'
+    isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
   }`;
   const inputClass = isLight
     ? 'bg-white border-gray-200 text-gray-900 focus:border-[#0F4C3A]'
-    : 'bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-400 focus:border-emerald-500';
+    : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500';
 
   // Selected warehouse / store for physical stock audit
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(() => {
@@ -317,19 +317,19 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                 Physical Stocktake (Stock Opname)
               </span>
             </div>
-            <h2 className={`text-lg sm:text-xl font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h2 className={`text-lg sm:text-xl font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Periodic Stock Opname &amp; Automatic Variance Calculator
             </h2>
-            <p className={`text-xs mt-1 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <p className={`text-xs mt-1 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Enter actual physical warehouse counts for specific locations. System book balances and shrinkage/surplus variances are calculated automatically in real time.
             </p>
           </div>
 
           {/* Warehouse / Store Location Picker */}
           <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50/50 dark:bg-zinc-800/50">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/50 dark:bg-[#090A0F]">
               <Building2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
-              <span className={`text-xs font-semibold ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <span className={`text-xs font-semibold ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Warehouse / Store:
               </span>
               <select
@@ -354,22 +354,22 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
           {/* 1. System Book Count */}
           <div className={subCardClass}>
-            <span className="text-[11px] text-gray-500 dark:text-zinc-300 font-semibold block">
+            <span className="text-[11px] text-gray-500 dark:text-slate-400 font-semibold block">
               System Book Balance
             </span>
             <span
               className={`text-base sm:text-lg font-bold font-mono mt-1 block ${
-                isLight ? 'text-gray-900' : 'text-white'
+                isLight ? 'text-gray-900' : 'text-slate-100'
               }`}
             >
               {opnameStats.totalSys} units
             </span>
-            <span className="text-[10px] text-gray-400">Registered across {warehouseTiers.length} SKUs</span>
+            <span className="text-[10px] text-slate-400">Registered across {warehouseTiers.length} SKUs</span>
           </div>
 
           {/* 2. Physical Counted */}
           <div className={subCardClass}>
-            <span className="text-[11px] text-gray-500 dark:text-zinc-300 font-semibold block">
+            <span className="text-[11px] text-gray-500 dark:text-slate-400 font-semibold block">
               Physical Counted
             </span>
             <span className="text-base sm:text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-1 block">
@@ -418,7 +418,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
 
           {/* 5. Net Financial Variance */}
           <div className={subCardClass}>
-            <span className="text-[11px] text-gray-500 dark:text-zinc-300 font-semibold block">
+            <span className="text-[11px] text-gray-500 dark:text-slate-400 font-semibold block">
               Net Financial Variance
             </span>
             <span
@@ -444,11 +444,11 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
         </div>
 
         {/* Filter & Action Toolbar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-zinc-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-slate-800/80">
           <div className="flex items-center gap-2 flex-wrap">
             {/* Search Input */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
                 value={searchQuery}
@@ -486,7 +486,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
               ))}
             </select>
 
-            <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-[11px] font-semibold cursor-pointer">
+            <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-slate-800/80 dark:bg-[#090A0F] text-[11px] font-semibold cursor-pointer">
               <input
                 type="checkbox"
                 checked={isPartialCycleMode}
@@ -504,7 +504,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                   ? 'bg-emerald-600 border-emerald-600 text-white'
                   : isLight
                   ? 'bg-white border-emerald-300 text-[#0F4C3A] hover:bg-emerald-50'
-                  : 'bg-zinc-800 border-emerald-700 text-emerald-300 hover:bg-zinc-700'
+                  : 'bg-[#090A0F] border-emerald-800/60 text-emerald-300 hover:bg-slate-900/90'
               }`}
             >
               <Barcode className="w-3.5 h-3.5" />
@@ -514,7 +514,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
             {/* Variance Status Filter */}
             <div
               className={`inline-flex items-center p-0.5 rounded-xl border ${
-                isLight ? 'bg-gray-100 border-gray-200' : 'bg-zinc-800 border-zinc-700'
+                isLight ? 'bg-gray-100 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
               }`}
             >
               <button
@@ -524,7 +524,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                     ? 'bg-[#0F4C3A] text-white shadow-2xs'
                     : isLight
                     ? 'text-gray-600 hover:text-gray-900'
-                    : 'text-zinc-300 hover:text-white'
+                    : 'text-slate-300 hover:text-slate-100'
                 }`}
               >
                 All ({warehouseTiers.length})
@@ -536,7 +536,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                     ? 'bg-amber-600 text-white shadow-2xs'
                     : isLight
                     ? 'text-gray-600 hover:text-gray-900'
-                    : 'text-zinc-300 hover:text-white'
+                    : 'text-slate-300 hover:text-slate-100'
                 }`}
               >
                 Discrepancies ({opnameStats.surplusCount + opnameStats.shortageCount})
@@ -548,7 +548,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                     ? 'bg-emerald-600 text-white shadow-2xs'
                     : isLight
                     ? 'text-gray-600 hover:text-gray-900'
-                    : 'text-zinc-300 hover:text-white'
+                    : 'text-slate-300 hover:text-slate-100'
                 }`}
               >
                 Surplus (+{opnameStats.surplusCount})
@@ -560,7 +560,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                     ? 'bg-rose-600 text-white shadow-2xs'
                     : isLight
                     ? 'text-gray-600 hover:text-gray-900'
-                    : 'text-zinc-300 hover:text-white'
+                    : 'text-slate-300 hover:text-slate-100'
                 }`}
               >
                 Deficit (-{opnameStats.shortageCount})
@@ -575,7 +575,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 isLight
                   ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                  : 'bg-[#090A0F] border-slate-800/80 text-slate-300 hover:bg-slate-900/90'
               }`}
               title="Pre-fill all counted inputs with system book stock"
             >
@@ -587,7 +587,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
               className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 isLight
                   ? 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700'
+                  : 'bg-[#090A0F] border-slate-800/80 text-slate-400 hover:bg-slate-900/90'
               }`}
               title="Clear all manual physical count entries"
             >
@@ -635,14 +635,14 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
         )}
 
         {/* Itemized Physical Count & Variance Table */}
-        <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-slate-800/80">
           <table className="w-full text-left text-xs">
             <thead>
               <tr
                 className={`border-b text-[11px] font-bold tracking-wider uppercase ${
                   isLight
                     ? 'bg-gray-50/80 text-gray-500 border-gray-200'
-                    : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                    : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                 }`}
               >
                 <th className="py-3 px-3.5">SKU &amp; Product Details</th>
@@ -655,7 +655,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                 <th className="py-3 px-3">Auditor Remarks</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
               {displayedTiers.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-xs text-gray-400">
@@ -683,28 +683,28 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                           ? 'bg-blue-500/5'
                           : isLight
                           ? 'hover:bg-gray-50/60'
-                          : 'hover:bg-zinc-800/40'
+                          : 'hover:bg-slate-900/70'
                       }`}
                     >
                       {/* Product Name & SKU */}
                       <td className="py-3 px-3.5">
-                        <span className="font-mono text-[10px] text-gray-400 block">{tier.sku}</span>
-                        <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                        <span className="font-mono text-[10px] text-slate-400 block">{tier.sku}</span>
+                        <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                           {tier.productName}
                         </span>
-                        <span className="text-[10px] text-gray-400 block capitalize">
+                        <span className="text-[10px] text-slate-400 block capitalize">
                           {tier.category.replace(/_/g, ' ')} • {tier.unit}
                         </span>
                       </td>
 
                       {/* Warehouse Zone */}
-                      <td className="py-3 px-3 text-zinc-500 dark:text-zinc-300 font-mono text-[11px]">
+                      <td className="py-3 px-3 text-slate-500 dark:text-slate-300 font-mono text-[11px]">
                         {tier.warehouseZoneId}
                       </td>
 
                       {/* System Book Count */}
                       <td className="py-3 px-3 text-center font-mono font-bold whitespace-nowrap">
-                        <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700">
+                        <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md bg-gray-100 dark:bg-[#090A0F] border border-gray-200 dark:border-slate-800/80">
                           {tier.physicalStock} {tier.unit}
                         </span>
                       </td>
@@ -718,7 +718,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                             className={`p-1 rounded border transition-colors cursor-pointer ${
                               isLight
                                 ? 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-700'
-                                : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300'
+                                : 'bg-[#090A0F] hover:bg-slate-900/90 border-slate-800/80 text-slate-300'
                             }`}
                             title="Decrease physical count (-1)"
                           >
@@ -741,7 +741,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                             className={`p-1 rounded border transition-colors cursor-pointer ${
                               isLight
                                 ? 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-700'
-                                : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300'
+                                : 'bg-[#090A0F] hover:bg-slate-900/90 border-slate-800/80 text-slate-300'
                             }`}
                             title="Increase physical count (+1)"
                           >
@@ -832,7 +832,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
         >
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-700 dark:text-zinc-200 block">
+              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-200 block">
                 Auditor Name &amp; ID:
               </label>
               <input
@@ -845,7 +845,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
             </div>
 
             <div className="space-y-1 flex-1">
-              <label className="text-[11px] font-bold text-slate-700 dark:text-zinc-200 block">
+              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-200 block">
                 Session Audit Notes / Justification:
               </label>
               <input
@@ -902,7 +902,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <History className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
-            <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h3 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Stock Opname Audit Trail — {currentOutlet.storeName}
             </h3>
           </div>
@@ -911,7 +911,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
             className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
               isLight
                 ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                : 'bg-[#090A0F] border-slate-800/80 text-slate-300 hover:bg-slate-900/90'
             }`}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoadingHistory ? 'animate-spin' : ''}`} />
@@ -919,14 +919,14 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-slate-800/80">
           <table className="w-full text-left text-xs">
             <thead>
               <tr
                 className={`border-b text-[11px] font-bold tracking-wider uppercase ${
                   isLight
                     ? 'bg-gray-50/80 text-gray-500 border-gray-200'
-                    : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'
+                    : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                 }`}
               >
                 <th className="py-2.5 px-3">Session ID</th>
@@ -939,20 +939,20 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                 <th className="py-2.5 px-3">Journal Entries Linked</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
               {pastSessions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-xs text-gray-400">
+                  <td colSpan={8} className="py-6 text-center text-xs text-slate-400">
                     No past stock opname sessions recorded yet for {currentOutlet.storeName}.
                   </td>
                 </tr>
               ) : (
                 pastSessions.map((sess) => (
-                  <tr key={sess.id} className={isLight ? 'hover:bg-gray-50/60' : 'hover:bg-zinc-800/40'}>
+                  <tr key={sess.id} className={isLight ? 'hover:bg-gray-50/60' : 'hover:bg-slate-900/70'}>
                     <td className="py-2.5 px-3 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                       {sess.id}
                     </td>
-                    <td className="py-2.5 px-3 text-gray-500 dark:text-zinc-300">
+                    <td className="py-2.5 px-3 text-gray-500 dark:text-slate-300">
                       {sess.date.split('T')[0]} {sess.date.split('T')[1]?.slice(0, 5)}
                     </td>
                     <td className="py-2.5 px-3 font-medium">{sess.auditorName}</td>
@@ -1000,7 +1000,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                           {sess.glEntryIds.map((g) => (
                             <span
                               key={g}
-                              className="px-1.5 py-0.2 rounded bg-gray-100 dark:bg-zinc-800 text-[10px] text-gray-700 dark:text-zinc-300 font-bold"
+                              className="px-1.5 py-0.2 rounded bg-gray-100 dark:bg-[#090A0F] dark:border dark:border-slate-800/80 text-[10px] text-gray-700 dark:text-slate-300 font-bold"
                             >
                               {g}
                             </span>

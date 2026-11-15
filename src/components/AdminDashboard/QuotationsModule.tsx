@@ -319,11 +319,11 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
   };
 
   const cardClass = `rounded-xl border transition-all ${
-    isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+    isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-[#12141C] border-slate-800/80'
   }`;
 
   const inputClass = `w-full px-3 py-2 text-xs rounded-xl border transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-600 ${
-    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
   }`;
 
   return (
@@ -332,14 +332,14 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className={`text-xl font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h2 className={`text-xl font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               B2B Quotations &amp; Pro Forma Invoices
             </h2>
-            <span className="text-[11px] font-medium text-gray-500 dark:text-zinc-400">
+            <span className="text-[11px] font-medium text-gray-500 dark:text-slate-400">
               {quoteRules?.mandatoryProductsEnabled ? 'HACCP Packaging Rules Active' : 'Standard Rules'}
             </span>
           </div>
-          <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-1`}>
+          <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-300'} mt-1`}>
             Generate formal B2B quotations and pro forma invoices with digital customer signature capture and 1-click order conversion.
           </p>
         </div>
@@ -349,7 +349,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
             type="button"
             onClick={loadQuotations}
             className={`p-2 rounded-xl border text-xs transition-colors ${
-              isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+              isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
             }`}
             title="Refresh Quotations"
           >
@@ -369,53 +369,53 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
       {/* KPI Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`${cardClass} p-4`}>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
             <span>Active Quote Pipeline</span>
             <FileSpreadsheet className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
           </div>
-          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {formatIDR(stats.pipelineIDR)}
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+          <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
             {stats.total} Total Quotations
           </div>
         </div>
 
         <div className={`${cardClass} p-4`}>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
             <span>Awaiting Signature</span>
             <Clock className="w-4 h-4 text-amber-500" />
           </div>
-          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {stats.pendingSig}
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+          <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
             {quoteRules?.onlineSignaturesRequired ? 'Online signature enforced' : 'Optional sign-off'}
           </div>
         </div>
 
         <div className={`${cardClass} p-4`}>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
             <span>Signed &amp; Confirmed</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="text-xl font-bold font-mono tabular-nums mt-2 text-emerald-700 dark:text-emerald-400">
             {stats.confirmed}
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+          <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
             Ready to convert into fulfillment order
           </div>
         </div>
 
         <div className={`${cardClass} p-4`}>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
             <span>Converted to Orders</span>
             <ArrowRightCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono tabular-nums mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {stats.converted}
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400 mt-1">
+          <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
             Validity window: {quoteRules?.defaultValidityDays ?? 14} days
           </div>
         </div>
@@ -423,7 +423,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
 
       {/* Filters */}
       <div className={`${cardClass} p-4 flex flex-col md:flex-row md:items-center justify-between gap-3`}>
-        <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-zinc-800/80 rounded-lg overflow-x-auto">
+        <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-[#090A0F] border border-transparent dark:border-slate-800/80 rounded-lg overflow-x-auto">
           {[
             { id: 'ALL', label: 'All Quotes' },
             { id: 'SENT', label: 'Sent / Pending Sign' },
@@ -438,10 +438,10 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                 statusFilter === tab.id
                   ? isLight
                     ? 'bg-white text-gray-900 shadow-xs'
-                    : 'bg-zinc-700 text-white shadow-xs'
+                    : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/50 shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:text-gray-900'
-                  : 'text-zinc-400 hover:text-white'
+                  : 'text-slate-400 hover:text-slate-100'
               }`}
             >
               {tab.label}
@@ -450,14 +450,14 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
         </div>
 
         <div className="relative w-full md:w-64">
-          <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-gray-400 dark:text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search Quote #, Customer, Company..."
             className={`w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-emerald-600 ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
             }`}
           />
         </div>
@@ -469,7 +469,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
           <table className="w-full min-w-[880px] text-left text-xs">
             <thead>
               <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
               }`}>
                 <th className="py-3 px-4">Quote / Pro Forma #</th>
                 <th className="py-3 px-4">Customer &amp; Company</th>
@@ -480,34 +480,34 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
               {filteredQuotations.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-xs text-gray-500 dark:text-zinc-400">
+                  <td colSpan={7} className="py-12 text-center text-xs text-gray-500 dark:text-slate-400">
                     {isLoading ? 'Loading quotations...' : 'No quotations found matching your filter.'}
                   </td>
                 </tr>
               ) : (
                 filteredQuotations.map((q) => (
-                  <tr key={q.id} className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'}`}>
+                  <tr key={q.id} className={`transition-colors ${isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'}`}>
                     <td className="py-3.5 px-4">
                       <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                         {q.quotationNumber}
                       </div>
-                      <div className="text-[10px] text-gray-500 dark:text-zinc-400 mt-0.5 font-mono">
+                      <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5 font-mono">
                         {q.isProForma ? 'Pro Forma Invoice' : 'Formal Quotation'} · Exp {q.validUntil}
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                      <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                         {q.customerCompany || q.customerName}
                       </div>
-                      <div className="text-[11px] text-gray-500 dark:text-zinc-400">
+                      <div className="text-[11px] text-gray-500 dark:text-slate-400">
                         {q.customerName} · {q.customerPhone}
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className={`font-medium ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>
+                      <div className={`font-medium ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
                         {q.items.length} line items
                         {q.items.some((it) => it.isMandatoryAddon) && (
                           <span className="ml-1.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
@@ -515,15 +515,15 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-gray-500 dark:text-zinc-400 font-mono tabular-nums">
+                      <div className="text-[10px] text-gray-500 dark:text-slate-400 font-mono tabular-nums">
                         Deposit: {q.requiredDepositPercent}% ({formatIDR(q.depositAmount)})
                       </div>
                     </td>
                     <td className="py-3.5 px-4 text-right font-mono tabular-nums">
-                      <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                      <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                         {formatIDR(q.total)}
                       </div>
-                      <div className="text-[10px] text-gray-500 dark:text-zinc-400">
+                      <div className="text-[10px] text-gray-500 dark:text-slate-400">
                         Sub: {formatIDR(q.subtotal)}
                       </div>
                     </td>
@@ -531,7 +531,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                       {q.signatureStatus === 'SIGNED' ? (
                         <div>
                           <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">Signed</div>
-                          <div className="text-[10px] text-gray-500 dark:text-zinc-400 truncate max-w-[120px] mx-auto">
+                          <div className="text-[10px] text-gray-500 dark:text-slate-400 truncate max-w-[120px] mx-auto">
                             {q.signedBy}
                           </div>
                         </div>
@@ -545,7 +545,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                           ? 'text-blue-600 dark:text-blue-400'
                           : q.status === 'CONFIRMED'
                           ? 'text-emerald-700 dark:text-emerald-400'
-                          : 'text-gray-600 dark:text-zinc-300'
+                          : 'text-gray-600 dark:text-slate-300'
                       }`}>
                         {q.status.replace(/_/g, ' ')}
                       </span>
@@ -568,7 +568,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                             })
                           }
                           className={`p-1.5 rounded-lg border transition-colors ${
-                            isLight ? 'border-gray-200 text-gray-700 hover:bg-gray-50' : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                            isLight ? 'border-gray-200 text-gray-700 hover:bg-gray-50' : 'border-slate-800/80 text-slate-300 hover:bg-slate-900/90'
                           }`}
                           title="Print / Save PDF Quotation"
                         >
@@ -579,7 +579,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                           type="button"
                           onClick={() => setDispatchQuote({ quote: q, channel: 'email' })}
                           className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-zinc-700 text-indigo-300 hover:bg-zinc-800'
+                            isLight ? 'border-gray-200 text-indigo-700 hover:bg-indigo-50' : 'border-slate-800/80 text-indigo-300 hover:bg-slate-900/90'
                           }`}
                           title="Email Quotation via SMTP"
                         >
@@ -590,7 +590,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                           type="button"
                           onClick={() => setDispatchQuote({ quote: q, channel: 'whatsapp' })}
                           className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-zinc-700 text-emerald-400 hover:bg-zinc-800'
+                            isLight ? 'border-gray-200 text-emerald-700 hover:bg-emerald-50' : 'border-slate-800/80 text-emerald-400 hover:bg-slate-900/90'
                           }`}
                           title="Send Quotation via WhatsApp"
                         >
@@ -637,23 +637,23 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
       {/* CREATE QUOTATION MODAL */}
       {isCreateOpen && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
           onClick={() => setIsCreateOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className={`w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden my-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-zinc-800 bg-zinc-900/60'}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-slate-800/80 bg-[#090A0F]'}`}>
               <div>
                 <h3 className="text-base font-bold">New B2B Quotation / Pro Forma Invoice</h3>
-                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
                   Enforces configured validity ({quoteRules?.defaultValidityDays ?? 14} days) and deposit confirmation policies
                 </p>
               </div>
-              <button type="button" onClick={() => setIsCreateOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800">
+              <button type="button" onClick={() => setIsCreateOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-900/90">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -679,7 +679,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
               </div>
 
               {/* Add Product Line */}
-              <div className={`p-4 rounded-xl border space-y-3 ${isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-950 border-zinc-800'}`}>
+              <div className={`p-4 rounded-xl border space-y-3 ${isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                 <label className="block font-bold text-xs">Add Products to Quote</label>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <select
@@ -713,7 +713,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                   <div className="overflow-x-auto pt-2">
                     <table className="w-full text-left text-xs">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-zinc-800 text-[10px] uppercase text-gray-500">
+                        <tr className="border-b border-gray-200 dark:border-slate-800/80 text-[10px] uppercase text-gray-500 dark:text-slate-400">
                           <th className="py-1.5">Item</th>
                           <th className="py-1.5 text-center">Qty</th>
                           <th className="py-1.5 text-right">Unit Price</th>
@@ -721,7 +721,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                           <th className="py-1.5 text-right"></th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-zinc-800">
+                      <tbody className="divide-y divide-gray-200 dark:divide-slate-800/80">
                         {draftLines.map((l) => (
                           <tr key={l.sku}>
                             <td className="py-2 font-medium">{l.productName}</td>
@@ -765,7 +765,7 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                     <div>Confirmation Threshold ({draftTotals.depositPct}%): <strong>{formatIDR(draftTotals.depositAmount)}</strong></div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] font-sans uppercase text-gray-500 dark:text-zinc-400">Grand Total</div>
+                    <div className="text-[10px] font-sans uppercase text-gray-500 dark:text-slate-400">Grand Total</div>
                     <div className="text-base font-bold">{formatIDR(draftTotals.total)}</div>
                   </div>
                 </div>
@@ -784,8 +784,8 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-zinc-800">
-                <button type="button" onClick={() => setIsCreateOpen(false)} className={`px-4 py-2 rounded-xl font-semibold border ${isLight ? 'border-gray-200 text-gray-700' : 'border-zinc-700 text-zinc-300'}`}>
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-slate-800/80">
+                <button type="button" onClick={() => setIsCreateOpen(false)} className={`px-4 py-2 rounded-xl font-semibold border ${isLight ? 'border-gray-200 text-gray-700' : 'border-slate-800/80 text-slate-300 hover:bg-slate-900/90'}`}>
                   Cancel
                 </button>
                 <button type="submit" disabled={isSubmittingCreate} className="px-5 py-2 rounded-xl font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white disabled:opacity-50">
@@ -801,26 +801,26 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
       {/* DIGITAL SIGNATURE MODAL */}
       {signingQuote && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
           onClick={() => setSigningQuote(null)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className={`w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden my-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-zinc-800 bg-zinc-900/60'}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-slate-800/80 bg-[#090A0F]'}`}>
               <div>
                 <h3 className="text-base font-bold flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                   Customer Digital Acceptance
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5 font-mono">
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 font-mono">
                   {signingQuote.quotationNumber} · {formatIDR(signingQuote.total)}
                 </p>
               </div>
-              <button type="button" onClick={() => setSigningQuote(null)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800">
+              <button type="button" onClick={() => setSigningQuote(null)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-900/90">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -855,12 +855,12 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({
                   onTouchStart={startDrawing}
                   onTouchMove={drawStroke}
                   onTouchEnd={stopDrawing}
-                  className="w-full h-28 rounded-xl border border-dashed border-gray-300 dark:border-zinc-700 bg-white cursor-crosshair touch-none"
+                  className="w-full h-28 rounded-xl border border-dashed border-gray-300 dark:border-slate-800/80 bg-white cursor-crosshair touch-none"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-zinc-800">
-                <button type="button" onClick={() => setSigningQuote(null)} className={`px-4 py-2 rounded-xl font-semibold border ${isLight ? 'border-gray-200 text-gray-700' : 'border-zinc-700 text-zinc-300'}`}>
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-slate-800/80">
+                <button type="button" onClick={() => setSigningQuote(null)} className={`px-4 py-2 rounded-xl font-semibold border ${isLight ? 'border-gray-200 text-gray-700' : 'border-slate-800/80 text-slate-300 hover:bg-slate-900/90'}`}>
                   Cancel
                 </button>
                 <button type="submit" disabled={isSigningSubmit} className="px-4 py-2 rounded-xl font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white disabled:opacity-50">

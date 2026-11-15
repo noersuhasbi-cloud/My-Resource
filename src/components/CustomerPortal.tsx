@@ -565,11 +565,11 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   };
 
   const portalModal = (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
-      <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-4xl w-full shadow-2xl border border-stone-200 dark:border-stone-800 overflow-hidden relative max-h-[92vh] my-auto flex flex-col">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+      <div className="bg-white dark:bg-[#12141C] rounded-2xl max-w-4xl w-full shadow-2xl border border-stone-200 dark:border-slate-800/80 overflow-hidden relative max-h-[92vh] my-auto flex flex-col">
         
         {/* Top Header - Context Aware Branding */}
-        <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50/80 dark:bg-stone-950/60">
+        <div className="px-6 py-4 border-b border-stone-200 dark:border-slate-800/80 flex items-center justify-between bg-stone-50/80 dark:bg-[#090A0F]">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-xs ${
               isB2B ? 'bg-indigo-900 text-amber-300' : 'bg-emerald-800 text-amber-300'
@@ -578,7 +578,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-stone-900 dark:text-stone-100 font-display">
+                <h2 className="text-base sm:text-lg font-bold text-stone-900 dark:text-slate-100 font-display">
                   {isB2B ? 'GroceMart B2B Wholesale Portal' : 'GroceMart Customer Portal'}
                 </h2>
                 {isB2B ? (
@@ -593,7 +593,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
+              <p className="text-xs text-stone-500 dark:text-slate-400">
                 {isB2B
                   ? 'Corporate Credit Facility, Bulk Procurement & Giro Ledger'
                   : 'Personalized Hub, Tier Progress & Live Order Tracking'}
@@ -602,14 +602,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded-lg hover:bg-stone-200 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+            className="p-2 text-stone-400 hover:text-stone-700 dark:hover:text-slate-200 rounded-lg hover:bg-stone-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Portal Nav Tabs - Strict Isolation (Zero Tab Mixing) */}
-        <div className="px-4 sm:px-6 pt-3 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3 overflow-x-auto bg-white dark:bg-stone-900 scrollbar-thin">
+        <div className="px-4 sm:px-6 pt-3 border-b border-stone-200 dark:border-slate-800/80 flex items-center justify-between gap-3 overflow-x-auto bg-white dark:bg-[#12141C] scrollbar-thin">
           <div className="flex items-center gap-3 sm:gap-6 shrink-0">
             {isB2B ? (
               // B2B Wholesale Portal: Strictly 3 Clean Tabs Only — Zero Overflow
@@ -619,7 +619,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                     activeTab === 'b2b_credit'
                       ? 'border-indigo-600 dark:border-indigo-400 text-indigo-700 dark:text-indigo-300 font-bold'
-                      : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                      : 'border-transparent text-stone-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-slate-100'
                   }`}
                 >
                   <CreditCard className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -634,7 +634,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                     activeTab === 'b2b_orders'
                       ? 'border-indigo-600 dark:border-indigo-400 text-indigo-700 dark:text-indigo-300 font-bold'
-                      : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                      : 'border-transparent text-stone-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-slate-100'
                   }`}
                 >
                   <Building2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -646,7 +646,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                     activeTab === 'b2b_profile'
                       ? 'border-indigo-600 dark:border-indigo-400 text-indigo-700 dark:text-indigo-300 font-bold'
-                      : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                      : 'border-transparent text-stone-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-slate-100'
                   }`}
                 >
                   <Building className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -661,7 +661,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                     activeTab === 'profile'
                       ? 'border-emerald-800 dark:border-emerald-400 text-emerald-800 dark:text-emerald-400'
-                      : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                      : 'border-transparent text-stone-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-slate-100'
                   }`}
                 >
                   <User className="w-4 h-4" />
@@ -673,7 +673,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                     activeTab === 'suggestions'
                       ? 'border-emerald-800 dark:border-emerald-400 text-emerald-800 dark:text-emerald-400'
-                      : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                      : 'border-transparent text-stone-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-slate-100'
                   }`}
                 >
                   <Sparkles className="w-4 h-4 text-amber-500" />
@@ -685,7 +685,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                     activeTab === 'orders'
                       ? 'border-emerald-800 dark:border-emerald-400 text-emerald-800 dark:text-emerald-400'
-                      : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                      : 'border-transparent text-stone-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-slate-100'
                   }`}
                 >
                   <Package className="w-4 h-4" />
@@ -697,7 +697,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   className={`pb-3 text-xs sm:text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                     activeTab === 'track'
                       ? 'border-emerald-800 dark:border-emerald-400 text-emerald-800 dark:text-emerald-400'
-                      : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                      : 'border-transparent text-stone-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-slate-100'
                   }`}
                 >
                   <Truck className="w-4 h-4" />
@@ -728,7 +728,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   <button
                     type="button"
                     onClick={requestNotificationPermission}
-                    className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-600 dark:text-stone-300 hover:text-emerald-800 dark:hover:text-emerald-400 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 px-2.5 py-1 rounded-lg border border-stone-200 dark:border-stone-700 transition-colors cursor-pointer"
+                    className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-600 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-400 bg-stone-100 dark:bg-slate-900/90 hover:bg-stone-200 dark:hover:bg-slate-800 px-2.5 py-1 rounded-lg border border-stone-200 dark:border-slate-800/80 transition-colors cursor-pointer"
                     title="Enable browser notifications for real-time pickup alerts"
                   >
                     <Bell className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
@@ -801,7 +801,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
             <div className="space-y-6">
               {customerAccount ? (
                 <>
-                  <div className="p-6 bg-gradient-to-br from-emerald-950 via-emerald-900 to-stone-900 rounded-2xl text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-6 border border-emerald-800/40">
+                  <div className="p-6 bg-gradient-to-br from-emerald-950 via-emerald-900 to-[#090A0F] rounded-2xl text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-6 border border-emerald-800/50">
                     <div>
                       <div className="flex items-center gap-2 text-xs text-amber-300 font-semibold tracking-wider uppercase mb-1">
                         <Award className="w-4 h-4 text-amber-400" />
@@ -810,7 +810,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         <span>Member Since {customerAccount.memberSince}</span>
                       </div>
                       <h3 className="text-2xl font-bold font-display">{customerAccount.name}</h3>
-                      <p className="text-xs text-stone-300 mt-1 flex items-center gap-2">
+                      <p className="text-xs text-slate-300 mt-1 flex items-center gap-2">
                         <span>{customerAccount.email}</span>
                         <span>•</span>
                         <span>{customerAccount.phone}</span>
@@ -821,52 +821,52 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       <span className="text-2xl font-extrabold text-amber-300 font-mono tabular-nums">
                         {customerAccount.grocePoints.toLocaleString()} pts
                       </span>
-                      <p className="text-[10px] text-stone-300 mt-0.5">
+                      <p className="text-[10px] text-slate-300 mt-0.5">
                         Worth {formatIDR(customerAccount.grocePoints * 100)} in grocery credits
                       </p>
                     </div>
                   </div>
 
-                  <div className="p-6 bg-stone-50 dark:bg-stone-800/60 rounded-2xl border border-stone-200 dark:border-stone-700 space-y-4">
+                  <div className="p-6 bg-stone-50 dark:bg-[#090A0F] rounded-2xl border border-stone-200 dark:border-slate-800/80 space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-2">
                           <TrendingUp className="w-4 h-4 text-emerald-800 dark:text-emerald-400" />
-                          <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wider">
+                          <h4 className="text-sm font-bold text-stone-900 dark:text-slate-100 uppercase tracking-wider">
                             Loyalty Tier Status & Next Milestone
                           </h4>
                         </div>
-                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                        <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">
                           {tierProgress.isMax
                             ? "You have reached the premier GroceMart Platinum VIP status!"
                             : `Earn ${tierProgress.pointsNeeded.toLocaleString()} more points to unlock ${tierProgress.nextTier}`}
                         </p>
                       </div>
-                      <div className="px-3 py-1.5 bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 text-xs font-mono font-bold text-emerald-950 dark:text-emerald-300 self-start sm:self-auto tabular-nums">
+                      <div className="px-3 py-1.5 bg-white dark:bg-[#12141C] rounded-lg border border-stone-200 dark:border-slate-800/80 text-xs font-mono font-bold text-emerald-950 dark:text-emerald-300 self-start sm:self-auto tabular-nums">
                         {customerAccount.grocePoints.toLocaleString()} / {tierProgress.targetPoints.toLocaleString()} pts ({tierProgress.percentage}%)
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <div className="w-full bg-stone-200 dark:bg-stone-700 h-3.5 rounded-full overflow-hidden p-0.5">
+                      <div className="w-full bg-stone-200 dark:bg-slate-800 h-3.5 rounded-full overflow-hidden p-0.5">
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-emerald-600 via-amber-400 to-amber-500 transition-all duration-700 shadow-xs"
                           style={{ width: `${tierProgress.percentage}%` }}
                         />
                       </div>
-                      <div className="flex justify-between text-[11px] text-stone-500 dark:text-stone-400 font-medium">
+                      <div className="flex justify-between text-[11px] text-stone-500 dark:text-slate-400 font-medium">
                         <span>{tierProgress.currentTier} ({tierProgress.basePoints} pts)</span>
                         <span>{tierProgress.nextTier} ({tierProgress.targetPoints} pts)</span>
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-stone-200 dark:border-stone-700">
-                      <p className="text-xs font-bold text-stone-700 dark:text-stone-300 mb-2">
+                    <div className="pt-2 border-t border-stone-200 dark:border-slate-800/80">
+                      <p className="text-xs font-bold text-stone-700 dark:text-slate-300 mb-2">
                         {tierProgress.isMax ? 'Active Platinum Perks:' : `Unlocked with ${tierProgress.nextTier}:`}
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                         {tierProgress.perks.map((perk, idx) => (
-                          <div key={idx} className="flex items-center gap-2 text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-900 p-2 rounded-lg border border-stone-200/80 dark:border-stone-700">
+                          <div key={idx} className="flex items-center gap-2 text-stone-700 dark:text-slate-200 bg-white dark:bg-[#12141C] p-2 rounded-lg border border-stone-200/80 dark:border-slate-800/80">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-800 dark:text-emerald-400 shrink-0" />
                             <span className="truncate">{perk}</span>
                           </div>
@@ -877,7 +877,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
+                      <h4 className="text-xs font-bold text-stone-700 dark:text-slate-300 uppercase tracking-wider">
                         Saved Delivery Destinations ({customerAccount.savedAddresses.length})
                       </h4>
                       <button
@@ -890,8 +890,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     </div>
 
                     {isAddingAddress && (
-                      <form onSubmit={handleSaveNewAddress} className="p-4 bg-stone-50 dark:bg-stone-800/70 rounded-xl border border-stone-200 dark:border-stone-700 space-y-3">
-                        <h5 className="text-xs font-bold text-stone-800 dark:text-stone-100">Add New Destination</h5>
+                      <form onSubmit={handleSaveNewAddress} className="p-4 bg-stone-50 dark:bg-[#090A0F] rounded-xl border border-stone-200 dark:border-slate-800/80 space-y-3">
+                        <h5 className="text-xs font-bold text-stone-800 dark:text-slate-100">Add New Destination</h5>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <input
                             type="text"
@@ -899,14 +899,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                             value={newAddrLabel}
                             onChange={(e) => setNewAddrLabel(e.target.value)}
                             required
-                            className="px-3 py-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg text-xs text-stone-900 dark:text-stone-100"
+                            className="px-3 py-2 bg-white dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 rounded-lg text-xs text-stone-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                           />
                           <input
                             type="text"
                             placeholder="Recipient Name"
                             value={newAddrRecipient}
                             onChange={(e) => setNewAddrRecipient(e.target.value)}
-                            className="px-3 py-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg text-xs text-stone-900 dark:text-stone-100"
+                            className="px-3 py-2 bg-white dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 rounded-lg text-xs text-stone-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                           />
                           <div className="sm:col-span-2">
                             <input
@@ -915,7 +915,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                               value={newAddrLine}
                               onChange={(e) => setNewAddrLine(e.target.value)}
                               required
-                              className="w-full px-3 py-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg text-xs text-stone-900 dark:text-stone-100"
+                              className="w-full px-3 py-2 bg-white dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 rounded-lg text-xs text-stone-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                             />
                           </div>
                         </div>
@@ -923,7 +923,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           <button
                             type="button"
                             onClick={() => setIsAddingAddress(false)}
-                            className="px-3 py-1.5 text-xs text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 rounded-lg"
+                            className="px-3 py-1.5 text-xs text-stone-600 dark:text-slate-300 hover:bg-stone-200 dark:hover:bg-slate-800 rounded-lg"
                           >
                             Cancel
                           </button>
@@ -939,23 +939,23 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {customerAccount.savedAddresses.map((addr, idx) => (
-                        <div key={`${addr.id}-${idx}`} className="p-4 bg-stone-50 dark:bg-stone-800/60 rounded-xl border border-stone-200 dark:border-stone-700 relative text-xs space-y-1">
+                        <div key={`${addr.id}-${idx}`} className="p-4 bg-stone-50 dark:bg-[#090A0F] rounded-xl border border-stone-200 dark:border-slate-800/80 relative text-xs space-y-1">
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-stone-900 dark:text-stone-100">{addr.label}</span>
+                            <span className="font-bold text-stone-900 dark:text-slate-100">{addr.label}</span>
                             {addr.isDefault && (
                               <span className="text-[10px] font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded">
                                 Default
                               </span>
                             )}
                           </div>
-                          <p className="text-stone-700 dark:text-stone-300">{addr.recipient} ({addr.phone})</p>
-                          <p className="text-stone-500 dark:text-stone-400">{addr.addressLine}, {addr.city}</p>
+                          <p className="text-stone-700 dark:text-slate-300">{addr.recipient} ({addr.phone})</p>
+                          <p className="text-stone-500 dark:text-slate-400">{addr.addressLine}, {addr.city}</p>
                         </div>
                       ))}
                     </div>
 
                     {/* Quick Profile Switcher for RBAC & Multi-User Live Tracking Isolation Testing */}
-                    <div className="mt-6 p-4 bg-emerald-950 text-white rounded-2xl border border-emerald-800/60 space-y-3">
+                    <div className="mt-6 p-4 bg-emerald-950/90 text-white rounded-2xl border border-emerald-800/50 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <ShieldCheck className="w-4 h-4 text-amber-300" />
@@ -967,7 +967,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           Active: {customerAccount.name}
                         </span>
                       </div>
-                      <p className="text-[11px] text-stone-300 leading-relaxed">
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
                         Switch profiles to verify that User A (Sarah Wijaya) cannot view or track User B (Budi Santoso)'s orders, courier telemetry, or delivery address:
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
@@ -977,7 +977,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           className={`p-2.5 rounded-xl text-left border text-xs transition-all cursor-pointer flex items-center justify-between ${
                             customerAccount.email === 'sarah.wijaya@example.com'
                               ? 'bg-emerald-800 border-amber-300 text-white font-bold ring-1 ring-amber-300'
-                              : 'bg-white/10 border-white/20 text-stone-300 hover:bg-white/20'
+                              : 'bg-white/10 border-white/20 text-slate-300 hover:bg-white/20'
                           }`}
                         >
                           <div>
@@ -994,7 +994,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           className={`p-2.5 rounded-xl text-left border text-xs transition-all cursor-pointer flex items-center justify-between ${
                             customerAccount.email === 'budi.santoso@example.com'
                               ? 'bg-emerald-800 border-amber-300 text-white font-bold ring-1 ring-amber-300'
-                              : 'bg-white/10 border-white/20 text-stone-300 hover:bg-white/20'
+                              : 'bg-white/10 border-white/20 text-slate-300 hover:bg-white/20'
                           }`}
                         >
                           <div>
@@ -1011,13 +1011,13 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 </>
               ) : (
                 <div className="max-w-md mx-auto space-y-6">
-                  <div className="p-5 bg-stone-50 dark:bg-stone-800/70 rounded-2xl border border-stone-200 dark:border-stone-700 text-center space-y-3">
+                  <div className="p-5 bg-stone-50 dark:bg-[#090A0F] rounded-2xl border border-stone-200 dark:border-slate-800/80 text-center space-y-3">
                     <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center mx-auto">
                       <Database className="w-5 h-5 text-emerald-800 dark:text-emerald-400" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">Sign In with Your Google Account</h4>
-                      <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                      <h4 className="text-sm font-bold text-stone-900 dark:text-slate-100">Sign In with Your Google Account</h4>
+                      <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">
                         Seamlessly syncs your orders, rewards points, and addresses in Firebase Firestore
                       </p>
                     </div>
@@ -1025,7 +1025,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       type="button"
                       onClick={handleGoogleSignin}
                       disabled={isFirebaseLoading}
-                      className="w-full py-2.5 px-4 bg-white dark:bg-stone-900 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      className="w-full py-2.5 px-4 bg-white dark:bg-slate-900/90 hover:bg-stone-100 dark:hover:bg-slate-800 border border-stone-300 dark:border-slate-800/80 text-stone-900 dark:text-slate-100 text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
                       <svg className="w-4 h-4" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -1039,10 +1039,10 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                     <div className="relative pt-2">
                       <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-stone-200 dark:border-stone-700" />
+                        <div className="w-full border-t border-stone-200 dark:border-slate-800/80" />
                       </div>
                       <div className="relative flex justify-center text-xs">
-                        <span className="bg-stone-50 dark:bg-stone-800 px-2 text-stone-400">or test customer accounts</span>
+                        <span className="bg-stone-50 dark:bg-[#090A0F] px-2 text-stone-400">or test customer accounts</span>
                       </div>
                     </div>
 
@@ -1058,7 +1058,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDemoLogin('budi')}
-                        className="py-2.5 px-3 bg-stone-800 hover:bg-stone-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
+                        className="py-2.5 px-3 bg-stone-800 dark:bg-slate-900/90 hover:bg-stone-700 dark:hover:bg-slate-800 border border-transparent dark:border-slate-800/80 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
                       >
                         <span className="font-bold">Budi Santoso (Silver)</span>
                         <span className="text-[10px] text-emerald-300">Order #GCM-2026-7731</span>
@@ -1066,38 +1066,38 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-5 bg-stone-50 dark:bg-stone-800/70 rounded-2xl border border-stone-200 dark:border-stone-700 space-y-4">
+                  <div className="p-5 bg-stone-50 dark:bg-[#090A0F] rounded-2xl border border-stone-200 dark:border-slate-800/80 space-y-4">
                     <div className="text-center">
-                      <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 font-display">
+                      <h3 className="text-base font-bold text-stone-900 dark:text-slate-100 font-display">
                         {authMode === 'signin' ? 'Email Sign In' : 'Create Customer Account'}
                       </h3>
                     </div>
                     <form onSubmit={handleAuthSubmit} className="space-y-3.5">
                       <div>
-                        <label className="text-xs font-medium text-stone-600 dark:text-stone-400 block mb-1">Email Address</label>
+                        <label className="text-xs font-medium text-stone-600 dark:text-slate-400 block mb-1">Email Address</label>
                         <input
                           type="email"
                           required
                           value={authEmail}
                           onChange={(e) => setAuthEmail(e.target.value)}
                           placeholder="you@domain.com"
-                          className="w-full px-3 py-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg text-xs text-stone-900 dark:text-stone-100"
+                          className="w-full px-3 py-2 bg-white dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 rounded-lg text-xs text-stone-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                         />
                       </div>
                       <div>
-                        <label className="text-xs font-medium text-stone-600 dark:text-stone-400 block mb-1">Password</label>
+                        <label className="text-xs font-medium text-stone-600 dark:text-slate-400 block mb-1">Password</label>
                         <input
                           type="password"
                           required
                           value={authPassword}
                           onChange={(e) => setAuthPassword(e.target.value)}
                           placeholder="••••••••"
-                          className="w-full px-3 py-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg text-xs text-stone-900 dark:text-stone-100"
+                          className="w-full px-3 py-2 bg-white dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 rounded-lg text-xs text-stone-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                         />
                       </div>
                       <button
                         type="submit"
-                        className="w-full py-2.5 px-4 bg-stone-900 dark:bg-stone-100 hover:bg-stone-800 dark:hover:bg-white text-white dark:text-stone-900 font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                        className="w-full py-2.5 px-4 bg-stone-900 dark:bg-slate-100 hover:bg-stone-800 dark:hover:bg-white text-white dark:text-slate-900 font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                       >
                         Sign in with Email
                       </button>
@@ -1111,16 +1111,16 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           {/* TAB 2: SUGGESTIONS (B2C Only) */}
           {!isB2B && activeTab === 'suggestions' && (
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-stone-200 dark:border-slate-800/80">
                 <div>
                   <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider mb-1">
                     <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                     <span>AI & Order-Informed Personalization</span>
                   </div>
-                  <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100 font-display">
+                  <h3 className="text-lg font-bold text-stone-900 dark:text-slate-100 font-display">
                     Recommended For You Based on Your Purchase History
                   </h3>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                  <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">
                     Curated fresh picks tailored from your frequently ordered aisles
                   </p>
                 </div>
@@ -1130,7 +1130,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 {suggestedProducts.map(({ product, reason }) => (
                   <div
                     key={product.id}
-                    className="p-4 bg-white dark:bg-stone-800/60 rounded-2xl border border-stone-200 dark:border-stone-700 hover:border-emerald-800/40 dark:hover:border-emerald-500/40 hover:shadow-md transition-all flex flex-col justify-between"
+                    className="p-4 bg-white dark:bg-[#090A0F] rounded-2xl border border-stone-200 dark:border-slate-800/80 hover:border-emerald-800/40 dark:hover:border-emerald-500/40 hover:shadow-md transition-all flex flex-col justify-between"
                   >
                     <div>
                       <div className="flex items-center gap-3">
@@ -1139,22 +1139,22 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           alt={product.name}
                           category={product.category}
                           className="w-full h-full object-cover"
-                          containerClassName="w-20 h-20 rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0"
+                          containerClassName="w-20 h-20 rounded-xl overflow-hidden bg-stone-100 dark:bg-[#12141C] shrink-0"
                         />
                         <div className="min-w-0">
                           <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wide block truncate">
                             {reason}
                           </span>
-                          <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 truncate mt-0.5">{product.name}</h4>
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400 truncate">{product.origin}</p>
+                          <h4 className="text-sm font-bold text-stone-900 dark:text-slate-100 truncate mt-0.5">{product.name}</h4>
+                          <p className="text-[11px] text-stone-500 dark:text-slate-400 truncate">{product.origin}</p>
                           <p className="text-sm font-mono font-bold text-emerald-950 dark:text-emerald-400 mt-1 tabular-nums">
                             {formatIDR(product.price)} <span className="text-[10px] font-normal text-stone-400">/ {product.unit}</span>
                           </p>
                         </div>
                       </div>
                     </div>
-                    <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-700 flex items-center justify-between">
-                      <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                    <div className="mt-4 pt-3 border-t border-stone-100 dark:border-slate-800/80 flex items-center justify-between">
+                      <span className="text-[11px] text-stone-500 dark:text-slate-400">
                         ★ {product.rating} ({product.reviewCount} reviews)
                       </span>
                       {onAddToCart && (
@@ -1176,23 +1176,23 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           {/* TAB 3: ORDERS (B2C Only) */}
           {!isB2B && activeTab === 'orders' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-stone-800">
+              <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-slate-800/80">
                 <div>
-                  <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100 font-display">Purchase & Order History</h3>
-                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                  <h3 className="text-lg font-bold text-stone-900 dark:text-slate-100 font-display">Purchase & Order History</h3>
+                  <p className="text-xs text-stone-500 dark:text-slate-400">
                     Track existing orders or instantly re-order your favorite grocery baskets
                   </p>
                 </div>
               </div>
 
               {!customerAccount ? (
-                <div className="p-8 bg-stone-50 dark:bg-stone-800/60 rounded-2xl border border-stone-200 dark:border-stone-700 text-center space-y-4">
+                <div className="p-8 bg-stone-50 dark:bg-[#090A0F] rounded-2xl border border-stone-200 dark:border-slate-800/80 text-center space-y-4">
                   <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 flex items-center justify-center mx-auto">
                     <User className="w-6 h-6" />
                   </div>
                   <div>
-                    <h4 className="text-base font-bold text-stone-900 dark:text-stone-100 font-display">Customer Sign-In Required</h4>
-                    <p className="text-xs text-stone-600 dark:text-stone-400 max-w-md mx-auto mt-1 leading-relaxed">
+                    <h4 className="text-base font-bold text-stone-900 dark:text-slate-100 font-display">Customer Sign-In Required</h4>
+                    <p className="text-xs text-stone-600 dark:text-slate-400 max-w-md mx-auto mt-1 leading-relaxed">
                       To protect customer privacy, order history is restricted exclusively to authenticated users. Please sign in to access your receipts, loyalty rewards, and delivery records.
                     </p>
                   </div>
@@ -1207,23 +1207,23 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleDemoLogin('budi')}
-                      className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                      className="px-4 py-2 bg-stone-800 dark:bg-slate-900/90 hover:bg-stone-700 dark:hover:bg-slate-800 border border-transparent dark:border-slate-800/80 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                     >
                       Sign In as Budi Santoso (Silver)
                     </button>
                   </div>
                 </div>
               ) : myUserOrders.length === 0 ? (
-                <div className="text-center py-12 bg-stone-50 dark:bg-stone-800/60 rounded-2xl border border-stone-200 dark:border-stone-700">
+                <div className="text-center py-12 bg-stone-50 dark:bg-[#090A0F] rounded-2xl border border-stone-200 dark:border-slate-800/80">
                   <Package className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-                  <p className="text-stone-900 dark:text-stone-100 font-semibold text-sm">No Orders Placed Yet for {customerAccount.name}</p>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                  <p className="text-stone-900 dark:text-slate-100 font-semibold text-sm">No Orders Placed Yet for {customerAccount.name}</p>
+                  <p className="text-xs text-stone-500 dark:text-slate-400 mt-1">
                     Orders you complete with QRIS payment will appear exclusively here.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/80 rounded-xl border border-emerald-200 dark:border-emerald-800/50 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <div className="flex items-center gap-1.5 font-semibold">
                       <Lock className="w-3.5 h-3.5 text-emerald-800 dark:text-emerald-400" />
                       <span>Verified Orders for {customerAccount.name} ({customerAccount.email})</span>
@@ -1240,14 +1240,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         key={`${order.id}-${orderIdx}`}
                         className={`p-5 rounded-2xl transition-all space-y-4 shadow-xs ${
                           isReady
-                            ? 'bg-gradient-to-r from-emerald-50/60 via-white to-white dark:from-emerald-950/50 dark:via-stone-900 dark:to-stone-900 border-2 border-emerald-500/80 ring-2 ring-emerald-500/20 shadow-md'
-                            : 'bg-white dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 hover:border-stone-300 dark:hover:border-stone-600'
+                            ? 'bg-gradient-to-r from-emerald-50/60 via-white to-white dark:from-emerald-950/80 dark:via-[#12141C] dark:to-[#12141C] border-2 border-emerald-500/80 ring-2 ring-emerald-500/20 shadow-md'
+                            : 'bg-white dark:bg-[#090A0F] border border-stone-200 dark:border-slate-800/80 hover:border-stone-300 dark:hover:border-slate-700'
                         }`}
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-stone-700">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-slate-800/80">
                           <div>
-                            <div className="flex items-center gap-2 text-xs font-mono text-stone-500 dark:text-stone-400 flex-wrap">
-                              <span className="font-bold text-stone-900 dark:text-stone-100">{order.id}</span>
+                            <div className="flex items-center gap-2 text-xs font-mono text-stone-500 dark:text-slate-400 flex-wrap">
+                              <span className="font-bold text-stone-900 dark:text-slate-100">{order.id}</span>
                               <span>•</span>
                               <span>{new Date(order.createdAt).toLocaleDateString()}</span>
                               <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300">
@@ -1263,8 +1263,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
-                              Recipient: <span className="font-semibold text-stone-800 dark:text-stone-200">{order.customerName}</span> ({order.deliveryMethod === 'pickup' ? 'Store Pickup' : 'Express Delivery'})
+                            <p className="text-xs text-stone-600 dark:text-slate-400 mt-0.5">
+                              Recipient: <span className="font-semibold text-stone-800 dark:text-slate-200">{order.customerName}</span> ({order.deliveryMethod === 'pickup' ? 'Store Pickup' : 'Express Delivery'})
                             </p>
                           </div>
                         </div>
@@ -1273,7 +1273,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         {order.items.map((it, idx) => (
                           <div
                             key={idx}
-                            className="flex items-center gap-2 p-1.5 bg-stone-50 dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shrink-0"
+                            className="flex items-center gap-2 p-1.5 bg-stone-50 dark:bg-[#12141C] rounded-lg border border-stone-200 dark:border-slate-800/80 shrink-0"
                           >
                             <SafeImage
                               src={it.product.image}
@@ -1283,17 +1283,17 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                               containerClassName="w-8 h-8 rounded overflow-hidden shrink-0"
                             />
                             <div className="text-[11px] pr-1">
-                              <p className="font-medium text-stone-800 dark:text-stone-200 truncate max-w-[120px]">{it.product.name}</p>
+                              <p className="font-medium text-stone-800 dark:text-slate-200 truncate max-w-[120px]">{it.product.name}</p>
                               <p className="text-stone-400 font-mono">Qty: {it.quantity}</p>
                             </div>
                           </div>
                         ))}
                       </div>
 
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-stone-100 dark:border-stone-700">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-stone-100 dark:border-slate-800/80">
                         <div>
                           <span className="text-xs text-stone-400 block">Total Settled via QRIS</span>
-                          <span className="text-base font-bold text-stone-900 dark:text-stone-100 font-mono tabular-nums">
+                          <span className="text-base font-bold text-stone-900 dark:text-slate-100 font-mono tabular-nums">
                             {formatIDR(order.total)}
                           </span>
                         </div>
@@ -1317,7 +1317,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                 order,
                               });
                             }}
-                            className="py-2 px-3 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                            className="py-2 px-3 bg-stone-100 hover:bg-stone-200 dark:bg-slate-900/90 dark:hover:bg-slate-800 border border-stone-200 dark:border-slate-800/80 text-stone-700 dark:text-slate-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                           >
                             <Printer className="w-3.5 h-3.5" />
                             <span>Receipt</span>
@@ -1336,13 +1336,13 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           {!isB2B && activeTab === 'track' && (
             <div className="space-y-6">
               {!customerAccount ? (
-                <div className="p-8 bg-stone-50 dark:bg-stone-800/60 rounded-2xl border border-stone-200 dark:border-stone-700 text-center space-y-4">
+                <div className="p-8 bg-stone-50 dark:bg-[#090A0F] rounded-2xl border border-stone-200 dark:border-slate-800/80 text-center space-y-4">
                   <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 flex items-center justify-center mx-auto">
                     <ShieldAlert className="w-6 h-6 text-emerald-800 dark:text-emerald-400" />
                   </div>
                   <div>
-                    <h4 className="text-base font-bold text-stone-900 dark:text-stone-100 font-display">Customer Authentication Required for Live Tracking</h4>
-                    <p className="text-xs text-stone-600 dark:text-stone-400 max-w-md mx-auto mt-1 leading-relaxed">
+                    <h4 className="text-base font-bold text-stone-900 dark:text-slate-100 font-display">Customer Authentication Required for Live Tracking</h4>
+                    <p className="text-xs text-stone-600 dark:text-slate-400 max-w-md mx-auto mt-1 leading-relaxed">
                       To safeguard customer privacy, live courier telemetry, real-time vehicle GPS coordinates, delivery destinations, and driver contact numbers are strictly isolated to verified order owners.
                     </p>
                   </div>
@@ -1374,7 +1374,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         handleDemoLogin('budi');
                         setTrackingSearchId('GCM-2026-7731');
                       }}
-                      className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                      className="px-4 py-2 bg-stone-800 dark:bg-slate-900/90 hover:bg-stone-700 dark:hover:bg-slate-800 border border-transparent dark:border-slate-800/80 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                     >
                       Track Budi's Order (GCM-2026-7731)
                     </button>
@@ -1390,7 +1390,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         value={trackingSearchId}
                         onChange={(e) => setTrackingSearchId(e.target.value)}
                         placeholder={`Search by your Order ID (e.g. ${myUserOrders[0]?.id || 'GCM-2026-XXXX'})...`}
-                        className="w-full pl-9 pr-4 py-2.5 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl text-xs sm:text-sm font-mono text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-1 focus:ring-emerald-800 dark:focus:ring-emerald-500"
+                        className="w-full pl-9 pr-4 py-2.5 bg-stone-50 dark:bg-[#090A0F] border border-stone-200 dark:border-slate-800/80 rounded-xl text-xs sm:text-sm font-mono text-stone-900 dark:text-slate-100 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-800 dark:focus:ring-emerald-500"
                       />
                     </div>
 
@@ -1415,7 +1415,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                   ? 'bg-emerald-800 text-white font-bold shadow-xs'
                                   : isReady
                                   ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-900 dark:text-emerald-300 font-semibold border border-emerald-300 dark:border-emerald-500/40'
-                                  : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'
+                                  : 'bg-stone-100 dark:bg-slate-900/90 text-stone-700 dark:text-slate-300 hover:bg-stone-200 dark:hover:bg-slate-800 border border-transparent dark:border-slate-800/80'
                               }`}
                             >
                               {isReady && (
@@ -1434,15 +1434,15 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                   {/* SECURITY PRIVACY RESTRICTION WARNING */}
                   {isUnauthorizedAttempt ? (
-                    <div className="p-6 rounded-2xl bg-red-50 dark:bg-red-500/10 border-2 border-red-200 dark:border-red-500/30 text-stone-800 dark:text-stone-200 space-y-3 animate-in fade-in duration-200">
+                    <div className="p-6 rounded-2xl bg-red-50 dark:bg-red-500/10 border-2 border-red-200 dark:border-red-500/30 text-stone-800 dark:text-slate-200 space-y-3 animate-in fade-in duration-200">
                       <div className="flex items-center gap-2.5 text-red-700 dark:text-red-400 font-bold text-sm">
                         <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
                         <span>Access Restricted: Unauthorized Live Tracking Request</span>
                       </div>
-                      <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
-                        <strong>Security Policy Enforcement:</strong> Order <span className="font-mono font-bold text-stone-900 dark:text-stone-100">#{trackingSearchId}</span> belongs to another customer account ({searchedOrder?.customerEmail}). Live courier telemetry, GPS coordinates, recipient phone numbers, and timeline updates are strictly isolated to protect customer privacy.
+                      <p className="text-xs text-stone-600 dark:text-slate-300 leading-relaxed">
+                        <strong>Security Policy Enforcement:</strong> Order <span className="font-mono font-bold text-stone-900 dark:text-slate-100">#{trackingSearchId}</span> belongs to another customer account ({searchedOrder?.customerEmail}). Live courier telemetry, GPS coordinates, recipient phone numbers, and timeline updates are strictly isolated to protect customer privacy.
                       </p>
-                      <div className="pt-2 border-t border-red-200 dark:border-red-500/30 flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400">
+                      <div className="pt-2 border-t border-red-200 dark:border-red-500/30 flex items-center justify-between text-[11px] text-stone-500 dark:text-slate-400">
                         <span>You may only view live tracking for your own orders ({customerAccount.email}).</span>
                         {myUserOrders.length > 0 && (
                           <button
@@ -1467,12 +1467,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         <div
                           className={`p-5 rounded-2xl transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
                             isOrderReadyForPickup
-                              ? 'border-2 border-emerald-500 bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/40 dark:from-emerald-950/60 dark:via-stone-900 dark:to-teal-950/40 ring-4 ring-emerald-500/20 shadow-md animate-pulse'
-                              : 'bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700'
+                              ? 'border-2 border-emerald-500 bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/40 dark:from-emerald-950/80 dark:via-[#12141C] dark:to-teal-950/60 ring-4 ring-emerald-500/20 shadow-md animate-pulse'
+                              : 'bg-stone-50 dark:bg-[#090A0F] border border-stone-200 dark:border-slate-800/80'
                           }`}
                         >
                           <div>
-                            <div className="flex items-center gap-2 text-xs font-mono text-stone-500 dark:text-stone-400 mb-1">
+                            <div className="flex items-center gap-2 text-xs font-mono text-stone-500 dark:text-slate-400 mb-1">
                               <span>Order {activeTrackedOrder.id}</span>
                               <span>•</span>
                               <span>{new Date(activeTrackedOrder.createdAt).toLocaleDateString()}</span>
@@ -1486,7 +1486,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                               )}
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100 font-display">
+                              <h3 className="text-lg font-bold text-stone-900 dark:text-slate-100 font-display">
                                 Live Status:
                               </h3>
                               {isOrderReadyForPickup ? (
@@ -1503,7 +1503,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
+                            <p className="text-xs text-stone-600 dark:text-slate-400 mt-1">
                               Recipient: {activeTrackedOrder.customerName} ({activeTrackedOrder.customerPhone})
                             </p>
                           </div>
@@ -1552,19 +1552,19 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <h4 className="text-sm sm:text-base font-bold text-stone-900 dark:text-stone-100 font-display">
+                                    <h4 className="text-sm sm:text-base font-bold text-stone-900 dark:text-slate-100 font-display">
                                       Fresh Groceries Ready for Pickup!
                                     </h4>
                                     <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-800 text-amber-300 uppercase tracking-wider">
                                       Click &amp; Collect Staged
                                     </span>
                                   </div>
-                                  <p className="text-xs text-stone-700 dark:text-stone-300 mt-1 leading-relaxed">
+                                  <p className="text-xs text-stone-700 dark:text-slate-300 mt-1 leading-relaxed">
                                     Your items are hand-selected, temperature-packed, and stored in our walk-in chiller at <strong>{activeTrackedOrder.pickupStore?.name || 'GroceMart Senopati Flagship'}</strong> ({activeTrackedOrder.pickupStore?.address || 'Senopati, Kebayoran Baru'}).
                                   </p>
                                   <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-300 mt-1.5 flex items-center gap-1.5 flex-wrap">
                                     <span>Show Order Reference</span>
-                                    <span className="font-mono bg-white dark:bg-stone-900 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 font-bold">{activeTrackedOrder.id}</span>
+                                    <span className="font-mono bg-white dark:bg-[#090A0F] px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 font-bold">{activeTrackedOrder.id}</span>
                                     <span>at the Click &amp; Collect counter to receive your chilled basket.</span>
                                   </p>
                                 </div>
@@ -1573,7 +1573,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => triggerPickupNotification(activeTrackedOrder)}
-                                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-stone-900 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-stone-800 text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900/90 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-slate-800 text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
                                   title="Test browser notification sound and native toast"
                                 >
                                   <BellRing className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 animate-bounce" />
@@ -1586,7 +1586,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                         {/* Courier / Vehicle info if in transit */}
                         {activeTrackedOrder.courierName && (
-                          <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/40 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 flex items-center justify-between text-xs">
+                          <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/80 rounded-xl border border-emerald-200/80 dark:border-emerald-800/50 flex items-center justify-between text-xs">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-emerald-800 text-white flex items-center justify-center">
                                 <Truck className="w-4 h-4" />
@@ -1596,15 +1596,15 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                 <p className="text-[11px] text-emerald-800 dark:text-emerald-400 font-mono">{activeTrackedOrder.vehiclePlate}</p>
                               </div>
                             </div>
-                            <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 bg-white dark:bg-stone-900 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                            <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 bg-white dark:bg-[#090A0F] px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800/50">
                               {activeTrackedOrder.estimatedArrival || 'En Route'}
                             </span>
                           </div>
                         )}
 
                         {/* Timeline Steps with Pulse Animation on Ready Step */}
-                        <div className="space-y-3 bg-white dark:bg-stone-800/60 p-5 rounded-2xl border border-stone-200 dark:border-stone-700">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-3">
+                        <div className="space-y-3 bg-white dark:bg-[#090A0F] p-5 rounded-2xl border border-stone-200 dark:border-slate-800/80">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-slate-400 mb-3">
                             Order Journey &amp; Real-Time Milestones
                           </h4>
                           <div className="space-y-4">
@@ -1621,13 +1621,13 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                         ? isStepReadyPickup
                                           ? 'bg-emerald-600 text-white ring-4 ring-emerald-400/40 animate-pulse'
                                           : 'bg-emerald-800 text-white'
-                                        : 'bg-stone-200 dark:bg-stone-700 text-stone-500 dark:text-stone-400'
+                                        : 'bg-stone-200 dark:bg-slate-800 text-stone-500 dark:text-slate-400'
                                     }`}
                                   >
                                     {step.completed ? '✓' : idx + 1}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className={`text-xs font-bold ${isStepReadyPickup && step.completed ? 'text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5' : 'text-stone-900 dark:text-stone-100'}`}>
+                                    <p className={`text-xs font-bold ${isStepReadyPickup && step.completed ? 'text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5' : 'text-stone-900 dark:text-slate-100'}`}>
                                       <span>{step.label}</span>
                                       {isStepReadyPickup && step.completed && (
                                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 uppercase font-mono">
@@ -1635,7 +1635,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                         </span>
                                       )}
                                     </p>
-                                    <p className="text-[11px] text-stone-500 dark:text-stone-400">{step.description}</p>
+                                    <p className="text-[11px] text-stone-500 dark:text-slate-400">{step.description}</p>
                                     <span className="text-[10px] font-mono text-stone-400">{step.timestamp}</span>
                                   </div>
                                 </div>
@@ -1646,10 +1646,10 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       </div>
                     );
                   })() : (
-                <div className="text-center py-12 bg-stone-50 dark:bg-stone-800/60 rounded-xl border border-stone-200 dark:border-stone-700">
+                <div className="text-center py-12 bg-stone-50 dark:bg-[#090A0F] rounded-xl border border-stone-200 dark:border-slate-800/80">
                   <Package className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-                  <p className="text-stone-900 dark:text-stone-100 font-semibold text-sm">No Personal Orders Found</p>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                  <p className="text-stone-900 dark:text-slate-100 font-semibold text-sm">No Personal Orders Found</p>
+                  <p className="text-xs text-stone-500 dark:text-slate-400 mt-1">
                     Please place an order or select your verified customer order above.
                   </p>
                 </div>
@@ -1666,15 +1666,15 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
             <div className="p-6 space-y-6">
               {/* Account Selector Strip */}
               {b2bCustomers.length > 0 && onSelectB2bCustomerId && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-stone-100 dark:bg-stone-800/70 border border-stone-200 dark:border-stone-700 text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-stone-100 dark:bg-[#090A0F] border border-stone-200 dark:border-slate-800/80 text-xs">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-indigo-700 dark:text-indigo-400 shrink-0" />
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Active Wholesale Account:</span>
+                    <span className="font-semibold text-stone-700 dark:text-slate-300">Active Wholesale Account:</span>
                   </div>
                   <select
                     value={selectedB2bCustomerId}
                     onChange={(e) => onSelectB2bCustomerId(e.target.value)}
-                    className="bg-white dark:bg-stone-900 px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 font-bold text-stone-900 dark:text-stone-100 focus:outline-none cursor-pointer"
+                    className="bg-white dark:bg-[#12141C] px-3 py-1.5 rounded-lg border border-stone-300 dark:border-slate-800/80 font-bold text-stone-900 dark:text-slate-100 focus:outline-none cursor-pointer"
                   >
                     {b2bCustomers.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -1689,9 +1689,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 <div className="space-y-6">
                   {/* Credit Status KPI Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/60 space-y-1">
-                      <span className="text-xs text-stone-500 dark:text-stone-400">Plafond Kredit Resmi</span>
-                      <div className="text-xl font-bold font-mono text-stone-900 dark:text-stone-100">
+                    <div className="p-4 rounded-xl border border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] space-y-1">
+                      <span className="text-xs text-stone-500 dark:text-slate-400">Plafond Kredit Resmi</span>
+                      <div className="text-xl font-bold font-mono text-stone-900 dark:text-slate-100">
                         {formatIDR(currentB2bCustomer.creditLimit)}
                       </div>
                       <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold block">
@@ -1699,12 +1699,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       </span>
                     </div>
 
-                    <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/60 space-y-1">
-                      <span className="text-xs text-stone-500 dark:text-stone-400">Sisa Saldo Kredit Tersedia</span>
+                    <div className="p-4 rounded-xl border border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] space-y-1">
+                      <span className="text-xs text-stone-500 dark:text-slate-400">Sisa Saldo Kredit Tersedia</span>
                       <div className="text-xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
                         {formatIDR(currentB2bCustomer.availableCredit)}
                       </div>
-                      <div className="w-full bg-stone-200 dark:bg-stone-700 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                      <div className="w-full bg-stone-200 dark:bg-slate-800 h-1.5 rounded-full mt-1.5 overflow-hidden">
                         <div
                           className="bg-emerald-600 h-full rounded-full transition-all"
                           style={{
@@ -1721,18 +1721,18 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       className={`p-4 rounded-xl border space-y-1 ${
                         currentB2bCustomer.status === 'CREDIT_LOCKED' || currentB2bCustomer.overdueDaysMax > 0
                           ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/30 text-rose-950 dark:text-rose-200'
-                          : 'bg-stone-50 dark:bg-stone-800/60 border-stone-200 dark:border-stone-700'
+                          : 'bg-stone-50 dark:bg-[#090A0F] border-stone-200 dark:border-slate-800/80'
                       }`}
                     >
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-stone-500 dark:text-stone-400">Total Piutang (AR)</span>
+                        <span className="text-stone-500 dark:text-slate-400">Total Piutang (AR)</span>
                         {currentB2bCustomer.status === 'CREDIT_LOCKED' && (
                           <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-600 text-white uppercase">
                             Locked
                           </span>
                         )}
                       </div>
-                      <div className="text-xl font-bold font-mono text-stone-900 dark:text-stone-100">
+                      <div className="text-xl font-bold font-mono text-stone-900 dark:text-slate-100">
                         {formatIDR(currentB2bCustomer.outstandingAR)}
                       </div>
                       {currentB2bCustomer.overdueDaysMax > 0 ? (
@@ -1764,22 +1764,22 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   )}
 
                   {/* Bilyet Giro Clearing Register */}
-                  <div className="rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 overflow-hidden shadow-xs">
-                    <div className="p-4 bg-stone-50 dark:bg-stone-800/70 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between">
+                  <div className="rounded-xl border border-stone-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] overflow-hidden shadow-xs">
+                    <div className="p-4 bg-stone-50 dark:bg-[#12141C] border-b border-stone-200 dark:border-slate-800/80 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <FileText className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />
-                        <h4 className="text-xs font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wider">
+                        <h4 className="text-xs font-bold text-stone-900 dark:text-slate-100 uppercase tracking-wider">
                           Register Warkat Bilyet Giro / Post-Dated Check (PDC)
                         </h4>
                       </div>
-                      <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 font-mono">
+                      <span className="text-xs font-semibold text-stone-500 dark:text-slate-400 font-mono">
                         {giroRecords.length} warkat terdaftar
                       </span>
                     </div>
 
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs">
-                        <thead className="bg-stone-100/70 dark:bg-stone-800 border-b border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-semibold uppercase text-[10px]">
+                        <thead className="bg-stone-100/70 dark:bg-[#12141C] border-b border-stone-200 dark:border-slate-800/80 text-stone-600 dark:text-slate-300 font-semibold uppercase text-[10px]">
                           <tr>
                             <th className="py-2.5 px-3">Nomor Giro &amp; Bank</th>
                             <th className="py-2.5 px-3">Tgl Jatuh Tempo</th>
@@ -1788,14 +1788,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                             <th className="py-2.5 px-3 text-right">Status &amp; Referensi Warkat</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
+                        <tbody className="divide-y divide-stone-100 dark:divide-slate-800/80">
                           {giroRecords.map((giro) => (
-                            <tr key={giro.id} className="hover:bg-stone-50/60 dark:hover:bg-stone-800/50 transition-colors">
+                            <tr key={giro.id} className="hover:bg-stone-50/60 dark:hover:bg-slate-900/60 transition-colors">
                               <td className="py-3 px-3">
-                                <div className="font-bold font-mono text-stone-900 dark:text-stone-100">{giro.giroNumber}</div>
-                                <div className="text-[11px] text-stone-500 dark:text-stone-400">{giro.issuingBank}</div>
+                                <div className="font-bold font-mono text-stone-900 dark:text-slate-100">{giro.giroNumber}</div>
+                                <div className="text-[11px] text-stone-500 dark:text-slate-400">{giro.issuingBank}</div>
                               </td>
-                              <td className="py-3 px-3 font-mono text-stone-700 dark:text-stone-300">
+                              <td className="py-3 px-3 font-mono text-stone-700 dark:text-slate-300">
                                 {giro.clearingDueDate}
                               </td>
                               <td className="py-3 px-3 font-mono font-bold text-emerald-800 dark:text-emerald-400">
@@ -1835,10 +1835,10 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => setViewingGiroSlip(giro)}
-                                      className="px-2 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-[11px] font-semibold border border-stone-200 dark:border-stone-700 flex items-center gap-1 cursor-pointer transition-colors"
+                                      className="px-2 py-1 rounded-lg bg-stone-100 dark:bg-slate-900/90 hover:bg-stone-200 dark:hover:bg-slate-800 text-stone-700 dark:text-slate-200 text-[11px] font-semibold border border-stone-200 dark:border-slate-800/80 flex items-center gap-1 cursor-pointer transition-colors"
                                       title="Lihat foto bukti fisik warkat bilyet giro"
                                     >
-                                      <Eye className="w-3 h-3 text-stone-500 dark:text-stone-400" />
+                                      <Eye className="w-3 h-3 text-stone-500 dark:text-slate-400" />
                                       <span>View Slip</span>
                                     </button>
                                   )}
@@ -1851,7 +1851,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     </div>
 
                     {/* RBAC Segregation of Duties Banner */}
-                    <div className="p-3 bg-stone-50/90 dark:bg-stone-800/80 border-t border-stone-200 dark:border-stone-700 text-[11px] text-stone-600 dark:text-stone-300 flex items-center gap-2">
+                    <div className="p-3 bg-stone-50/90 dark:bg-[#12141C] border-t border-stone-200 dark:border-slate-800/80 text-[11px] text-stone-600 dark:text-slate-300 flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                       <span>
                         <strong>Segregasi Tugas Internal (SoD):</strong> Pelanggan B2B memiliki akses <em>Read &amp; Submit Only</em> untuk register warkat giro. Otorisasi pencairan kliring bank (COA #1020) atau penerbitan tolakan warkat secara resmi dikelola oleh Divisi Financial Controller di <strong>Accounting Suite ERP Admin</strong>.
@@ -1871,7 +1871,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="py-12 text-center text-xs text-stone-500 dark:text-stone-400">
+                <div className="py-12 text-center text-xs text-stone-500 dark:text-slate-400">
                   Data akun wholesale tidak ditemukan.
                 </div>
               )}
@@ -1885,8 +1885,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
             <div className="p-6 space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">Riwayat Pesanan Grosir (B2B Bulk Orders)</h3>
-                  <p className="text-xs text-stone-500 dark:text-stone-400">Daftar faktur pemesanan multi-tier UoM dan status termin kredit</p>
+                  <h3 className="text-base font-bold text-stone-900 dark:text-slate-100">Riwayat Pesanan Grosir (B2B Bulk Orders)</h3>
+                  <p className="text-xs text-stone-500 dark:text-slate-400">Daftar faktur pemesanan multi-tier UoM dan status termin kredit</p>
                 </div>
                 <div className="relative sm:w-64">
                   <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1895,7 +1895,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     value={b2bOrderSearch}
                     onChange={(e) => setB2bOrderSearch(e.target.value)}
                     placeholder="Cari nomor faktur / B2B-ORD..."
-                    className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-xl text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                    className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-[#090A0F] border border-stone-200 dark:border-slate-800/80 rounded-xl text-xs text-stone-900 dark:text-slate-100 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                   />
                 </div>
               </div>
@@ -1906,9 +1906,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   .map((ord) => (
                     <div
                       key={ord.id}
-                      className="p-4 sm:p-5 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800/60 hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all shadow-xs space-y-3"
+                      className="p-4 sm:p-5 rounded-2xl border border-stone-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all shadow-xs space-y-3"
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-stone-700">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-slate-800/80">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs font-bold text-indigo-700 dark:text-indigo-400">
                             {ord.id}
@@ -1924,7 +1924,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           >
                             {ord.status}
                           </span>
-                          <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                          <span className="text-[11px] text-stone-500 dark:text-slate-400">
                             {new Date(ord.orderDate).toLocaleDateString('id-ID', {
                               day: 'numeric',
                               month: 'short',
@@ -1939,9 +1939,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           <button
                             type="button"
                             onClick={() => setActiveB2bReceiptOrder(ord)}
-                            className="px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg border border-stone-200 dark:border-slate-800/80 dark:bg-slate-900/90 hover:bg-stone-50 dark:hover:bg-slate-800 text-stone-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Printer className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
+                            <Printer className="w-3.5 h-3.5 text-stone-500 dark:text-slate-400" />
                             <span>Cetak Faktur</span>
                           </button>
                         </div>
@@ -1950,14 +1950,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       {/* Items Multi-Tier Breakdown */}
                       <div className="space-y-1.5 text-xs">
                         {ord.items.map((it, idx) => (
-                          <div key={idx} className="flex items-center justify-between py-1 border-b border-stone-50 dark:border-stone-700/60">
+                          <div key={idx} className="flex items-center justify-between py-1 border-b border-stone-50 dark:border-slate-800/80">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-stone-900 dark:text-stone-100">{it.product.name}</span>
-                              <span className="px-1.5 py-0.2 rounded bg-stone-100 dark:bg-stone-700 text-stone-600 dark:text-stone-300 text-[10px] font-mono">
+                              <span className="font-semibold text-stone-900 dark:text-slate-100">{it.product.name}</span>
+                              <span className="px-1.5 py-0.2 rounded bg-stone-100 dark:bg-slate-800 text-stone-600 dark:text-slate-300 text-[10px] font-mono">
                                 {it.quantity} {it.selectedUoM} ({it.baseUnitsCalculated} base units)
                               </span>
                             </div>
-                            <span className="font-mono font-bold text-stone-800 dark:text-stone-200">
+                            <span className="font-mono font-bold text-stone-800 dark:text-slate-200">
                               {formatIDR(it.lineTotal)}
                             </span>
                           </div>
@@ -1965,9 +1965,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       </div>
 
                       <div className="flex items-center justify-between pt-2 text-xs">
-                        <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400">
+                        <div className="flex items-center gap-2 text-stone-500 dark:text-slate-400">
                           <CreditCard className="w-3.5 h-3.5 text-indigo-700 dark:text-indigo-400" />
-                          <span>Metode: <strong className="text-stone-800 dark:text-stone-200 uppercase">{ord.paymentMethod.replace(/_/g, ' ')}</strong></span>
+                          <span>Metode: <strong className="text-stone-800 dark:text-slate-200 uppercase">{ord.paymentMethod.replace(/_/g, ' ')}</strong></span>
                           {ord.approvalRequestId && (
                             <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300">
                               Approval ID: {ord.approvalRequestId}
@@ -1976,7 +1976,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <span className="text-stone-500 dark:text-stone-400">Total Faktur:</span>
+                          <span className="text-stone-500 dark:text-slate-400">Total Faktur:</span>
                           <span className="text-base font-extrabold font-mono text-emerald-800 dark:text-emerald-400">
                             {formatIDR(ord.totalAmountIDR)}
                           </span>
@@ -1994,15 +1994,15 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           {isB2B && activeTab === 'b2b_profile' && currentB2bCustomer && (
             <div className="p-6 space-y-6">
               {/* Company Profile Header Card */}
-              <div className="p-5 sm:p-6 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800/60 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-100 dark:border-stone-700">
+              <div className="p-5 sm:p-6 rounded-2xl border border-stone-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-100 dark:border-slate-800/80">
                   <div className="flex items-center gap-3.5">
                     <div className="w-12 h-12 rounded-2xl bg-indigo-900 text-amber-300 font-bold text-lg flex items-center justify-center shadow-xs shrink-0">
                       {currentB2bCustomer.companyName.charAt(0)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base sm:text-lg font-bold text-stone-900 dark:text-stone-100">
+                        <h3 className="text-base sm:text-lg font-bold text-stone-900 dark:text-slate-100">
                           {currentB2bCustomer.companyName}
                         </h3>
                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 dark:bg-indigo-500/20 text-indigo-800 dark:text-indigo-300">
@@ -2018,7 +2018,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           {currentB2bCustomer.status}
                         </span>
                       </div>
-                      <p className="text-xs text-stone-500 dark:text-stone-400 font-mono mt-0.5">
+                      <p className="text-xs text-stone-500 dark:text-slate-400 font-mono mt-0.5">
                         Account ID: {currentB2bCustomer.id} · Terdaftar sejak 2023
                       </p>
                     </div>
@@ -2027,11 +2027,11 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   {/* B2B Customer Selector Dropdown */}
                   {b2bCustomers.length > 1 && onSelectB2bCustomerId && (
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-stone-500 dark:text-stone-400 hidden sm:inline">Ganti Akun:</span>
+                      <span className="text-xs text-stone-500 dark:text-slate-400 hidden sm:inline">Ganti Akun:</span>
                       <select
                         value={selectedB2bCustomerId}
                         onChange={(e) => onSelectB2bCustomerId(e.target.value)}
-                        className="text-xs font-semibold py-1.5 px-3 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900 text-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
+                        className="text-xs font-semibold py-1.5 px-3 rounded-xl border border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#12141C] text-stone-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
                       >
                         {b2bCustomers.map((c) => (
                           <option key={c.id} value={c.id}>
@@ -2045,26 +2045,26 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                 {/* Grid: Legal & Entity Details */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="p-4 rounded-xl bg-stone-50 dark:bg-stone-900/70 border border-stone-200 dark:border-stone-700 space-y-2.5">
-                    <h4 className="font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                  <div className="p-4 rounded-xl bg-stone-50 dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 space-y-2.5">
+                    <h4 className="font-bold text-stone-900 dark:text-slate-100 flex items-center gap-2">
                       <Building2 className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />
                       <span>Informasi Legalitas &amp; Pajak (Tax / e-Faktur)</span>
                     </h4>
-                    <div className="space-y-1.5 text-stone-700 dark:text-stone-300">
-                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-stone-700/60">
-                        <span className="text-stone-500 dark:text-stone-400">Nama Badan Usaha:</span>
-                        <span className="font-semibold text-stone-900 dark:text-stone-100">{currentB2bCustomer.companyName}</span>
+                    <div className="space-y-1.5 text-stone-700 dark:text-slate-300">
+                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-slate-800/80">
+                        <span className="text-stone-500 dark:text-slate-400">Nama Badan Usaha:</span>
+                        <span className="font-semibold text-stone-900 dark:text-slate-100">{currentB2bCustomer.companyName}</span>
                       </div>
-                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-stone-700/60">
-                        <span className="text-stone-500 dark:text-stone-400">NPWP Perusahaan (16 Digit):</span>
+                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-slate-800/80">
+                        <span className="text-stone-500 dark:text-slate-400">NPWP Perusahaan (16 Digit):</span>
                         <span className="font-mono font-bold text-indigo-900 dark:text-indigo-300">{currentB2bCustomer.npwp || '01.345.678.9-012.000'}</span>
                       </div>
-                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-stone-700/60">
-                        <span className="text-stone-500 dark:text-stone-400">Alamat Faktur Pajak:</span>
+                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-slate-800/80">
+                        <span className="text-stone-500 dark:text-slate-400">Alamat Faktur Pajak:</span>
                         <span className="text-right max-w-xs">{currentB2bCustomer.address}</span>
                       </div>
                       <div className="flex justify-between py-1">
-                        <span className="text-stone-500 dark:text-stone-400">Status Validasi e-Faktur DJP:</span>
+                        <span className="text-stone-500 dark:text-slate-400">Status Validasi e-Faktur DJP:</span>
                         <span className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                           <CheckCircle2 className="w-3.5 h-3.5" /> Terverifikasi DJP
                         </span>
@@ -2072,27 +2072,27 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-stone-50 dark:bg-stone-900/70 border border-stone-200 dark:border-stone-700 space-y-2.5">
-                    <h4 className="font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                  <div className="p-4 rounded-xl bg-stone-50 dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 space-y-2.5">
+                    <h4 className="font-bold text-stone-900 dark:text-slate-100 flex items-center gap-2">
                       <User className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />
                       <span>Kontak PIC &amp; Assigned Key Account Manager</span>
                     </h4>
-                    <div className="space-y-1.5 text-stone-700 dark:text-stone-300">
-                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-stone-700/60">
-                        <span className="text-stone-500 dark:text-stone-400">PIC Pembelian (Buyer):</span>
-                        <span className="font-semibold text-stone-900 dark:text-stone-100">{currentB2bCustomer.contactPerson}</span>
+                    <div className="space-y-1.5 text-stone-700 dark:text-slate-300">
+                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-slate-800/80">
+                        <span className="text-stone-500 dark:text-slate-400">PIC Pembelian (Buyer):</span>
+                        <span className="font-semibold text-stone-900 dark:text-slate-100">{currentB2bCustomer.contactPerson}</span>
                       </div>
-                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-stone-700/60">
-                        <span className="text-stone-500 dark:text-stone-400">Nomor Telepon / WhatsApp:</span>
+                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-slate-800/80">
+                        <span className="text-stone-500 dark:text-slate-400">Nomor Telepon / WhatsApp:</span>
                         <span className="font-mono">{currentB2bCustomer.phone}</span>
                       </div>
-                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-stone-700/60">
-                        <span className="text-stone-500 dark:text-stone-400">Email Faktur &amp; Tagihan:</span>
+                      <div className="flex justify-between py-1 border-b border-stone-200/60 dark:border-slate-800/80">
+                        <span className="text-stone-500 dark:text-slate-400">Email Faktur &amp; Tagihan:</span>
                         <span className="font-mono">{currentB2bCustomer.email}</span>
                       </div>
                       <div className="flex justify-between py-1">
-                        <span className="text-stone-500 dark:text-stone-400">Key Account Manager (KAM):</span>
-                        <span className="font-semibold text-stone-900 dark:text-stone-100">Hendro Kusumo (Senior Wholesale KAM)</span>
+                        <span className="text-stone-500 dark:text-slate-400">Key Account Manager (KAM):</span>
+                        <span className="font-semibold text-stone-900 dark:text-slate-100">Hendro Kusumo (Senior Wholesale KAM)</span>
                       </div>
                     </div>
                   </div>
@@ -2100,7 +2100,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                 {/* Allowed Payment Terms Badges */}
                 <div className="pt-2">
-                  <span className="text-xs font-bold text-stone-700 dark:text-stone-300 block mb-2">
+                  <span className="text-xs font-bold text-stone-700 dark:text-slate-300 block mb-2">
                     Fasilitas Metode Pembayaran yang Diizinkan (Approved Credit Terms):
                   </span>
                   <div className="flex flex-wrap gap-2">
@@ -2117,14 +2117,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               </div>
 
               {/* Interactive Request Credit Limit Increase Form */}
-              <div className="p-5 sm:p-6 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800/60 shadow-xs space-y-4">
-                <div className="flex items-center gap-2.5 pb-3 border-b border-stone-100 dark:border-stone-700">
+              <div className="p-5 sm:p-6 rounded-2xl border border-stone-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] shadow-xs space-y-4">
+                <div className="flex items-center gap-2.5 pb-3 border-b border-stone-100 dark:border-slate-800/80">
                   <TrendingUp className="w-5 h-5 text-indigo-700 dark:text-indigo-400" />
                   <div>
-                    <h4 className="text-sm sm:text-base font-bold text-stone-900 dark:text-stone-100">
+                    <h4 className="text-sm sm:text-base font-bold text-stone-900 dark:text-slate-100">
                       Pengajuan Kenaikan Plafond Kredit (Credit Limit Increase)
                     </h4>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                    <p className="text-xs text-stone-500 dark:text-slate-400">
                       Ajukan penambahan limit fasilitas belanja tempo untuk mendukung lonjakan volume usaha Anda.
                     </p>
                   </div>
@@ -2149,18 +2149,18 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   <form onSubmit={handleCreditIncreaseSubmit} className="space-y-4 text-xs">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-stone-600 dark:text-stone-400 font-semibold mb-1">
+                        <label className="block text-stone-600 dark:text-slate-400 font-semibold mb-1">
                           Plafond Kredit Saat Ini (Current Limit):
                         </label>
                         <input
                           type="text"
                           disabled
                           value={formatIDR(currentB2bCustomer.creditLimit)}
-                          className="w-full px-3 py-2 rounded-xl bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 font-mono font-bold text-stone-800 dark:text-stone-300"
+                          className="w-full px-3 py-2 rounded-xl bg-stone-100 dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 font-mono font-bold text-stone-800 dark:text-slate-300"
                         />
                       </div>
                       <div>
-                        <label className="block text-stone-600 dark:text-stone-400 font-semibold mb-1">
+                        <label className="block text-stone-600 dark:text-slate-400 font-semibold mb-1">
                           Plafond Baru yang Diajukan (Requested Limit IDR):
                         </label>
                         <input
@@ -2171,20 +2171,20 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           onChange={(e) => setRequestedLimit(Number(e.target.value))}
                           placeholder="cth. 150000000"
                           required
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 font-mono font-bold text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#12141C] border border-stone-300 dark:border-slate-800/80 font-mono font-bold text-stone-900 dark:text-slate-100 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-stone-600 dark:text-stone-400 font-semibold mb-1">
+                        <label className="block text-stone-600 dark:text-slate-400 font-semibold mb-1">
                           Alasan Pengajuan Tambahan Limit:
                         </label>
                         <select
                           value={creditIncreaseReason}
                           onChange={(e) => setCreditIncreaseReason(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#12141C] border border-stone-300 dark:border-slate-800/80 text-stone-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
                         >
                           <option value="Persiapan Stok Menjelang Peak Season (Ramadan/Idul Fitri/Tahun Baru)">
                             Persiapan Stok Menjelang Peak Season (Ramadan/Idul Fitri/Tahun Baru)
@@ -2201,10 +2201,10 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         </select>
                       </div>
                       <div>
-                        <label className="block text-stone-600 dark:text-stone-400 font-semibold mb-1">
+                        <label className="block text-stone-600 dark:text-slate-400 font-semibold mb-1">
                           Lampiran Dokumen Finansial Pendukung:
                         </label>
-                        <div className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-900 border border-dashed border-stone-300 dark:border-stone-700 text-stone-500 dark:text-stone-400 flex items-center justify-between">
+                        <div className="w-full px-3 py-2 rounded-xl bg-stone-50 dark:bg-[#12141C] border border-dashed border-stone-300 dark:border-slate-800/80 text-stone-500 dark:text-slate-400 flex items-center justify-between">
                           <span className="truncate">Rekening Koran 3 Bln / Laporan Keuangan</span>
                           <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/20 px-2 py-0.5 rounded">
                             Lampirkan
@@ -2230,61 +2230,61 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
           {/* Printable B2B Receipt Modal */}
           {activeB2bReceiptOrder && typeof document !== 'undefined' && createPortal(
-            <div className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-stone-200 dark:border-stone-800 space-y-4 max-h-[90vh] my-auto overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-3">
+            <div className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white dark:bg-[#12141C] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-stone-200 dark:border-slate-800/80 space-y-4 max-h-[90vh] my-auto overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-stone-200 dark:border-slate-800/80 pb-3">
                   <div>
-                    <h3 className="font-bold text-base text-stone-900 dark:text-stone-100">FAKTUR PENJUALAN GROSIR</h3>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 font-mono">{activeB2bReceiptOrder.id}</p>
+                    <h3 className="font-bold text-base text-stone-900 dark:text-slate-100">FAKTUR PENJUALAN GROSIR</h3>
+                    <p className="text-xs text-stone-500 dark:text-slate-400 font-mono">{activeB2bReceiptOrder.id}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setActiveB2bReceiptOrder(null)}
-                    className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400 cursor-pointer"
+                    className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800 text-stone-400 cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                <div className="text-xs space-y-1.5 p-3 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300">
+                <div className="text-xs space-y-1.5 p-3 rounded-xl bg-stone-50 dark:bg-[#090A0F] border border-stone-200 dark:border-slate-800/80 text-stone-700 dark:text-slate-300">
                   <div className="flex justify-between">
-                    <span className="text-stone-500 dark:text-stone-400">Pelanggan:</span>
-                    <span className="font-bold text-stone-900 dark:text-stone-100">{activeB2bReceiptOrder.customerName}</span>
+                    <span className="text-stone-500 dark:text-slate-400">Pelanggan:</span>
+                    <span className="font-bold text-stone-900 dark:text-slate-100">{activeB2bReceiptOrder.customerName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-stone-500 dark:text-stone-400">Metode Bayar:</span>
+                    <span className="text-stone-500 dark:text-slate-400">Metode Bayar:</span>
                     <span className="font-mono font-semibold uppercase">{activeB2bReceiptOrder.paymentMethod.replace(/_/g, ' ')}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-stone-500 dark:text-stone-400">Tgl Order:</span>
+                    <span className="text-stone-500 dark:text-slate-400">Tgl Order:</span>
                     <span className="font-mono">{new Date(activeB2bReceiptOrder.orderDate).toLocaleString()}</span>
                   </div>
                 </div>
 
-                <div className="space-y-2 border-y border-stone-200 dark:border-stone-800 py-3 text-xs">
+                <div className="space-y-2 border-y border-stone-200 dark:border-slate-800/80 py-3 text-xs">
                   {activeB2bReceiptOrder.items.map((it, i) => (
                     <div key={i} className="flex justify-between items-center">
                       <div>
-                        <div className="font-semibold text-stone-900 dark:text-stone-100">{it.product.name}</div>
-                        <div className="text-[11px] text-stone-500 dark:text-stone-400 font-mono">
+                        <div className="font-semibold text-stone-900 dark:text-slate-100">{it.product.name}</div>
+                        <div className="text-[11px] text-stone-500 dark:text-slate-400 font-mono">
                           {it.quantity} {it.selectedUoM} ({it.baseUnitsCalculated} base units)
                         </div>
                       </div>
-                      <span className="font-mono font-bold text-stone-800 dark:text-stone-200">{formatIDR(it.lineTotal)}</span>
+                      <span className="font-mono font-bold text-stone-800 dark:text-slate-200">{formatIDR(it.lineTotal)}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="space-y-1.5 text-xs text-stone-700 dark:text-stone-300">
+                <div className="space-y-1.5 text-xs text-stone-700 dark:text-slate-300">
                   <div className="flex justify-between">
-                    <span className="text-stone-500 dark:text-stone-400">Subtotal:</span>
+                    <span className="text-stone-500 dark:text-slate-400">Subtotal:</span>
                     <span className="font-mono font-semibold">{formatIDR(activeB2bReceiptOrder.subtotalIDR)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-stone-500 dark:text-stone-400">PPN (11%):</span>
+                    <span className="text-stone-500 dark:text-slate-400">PPN (11%):</span>
                     <span className="font-mono font-semibold">{formatIDR(activeB2bReceiptOrder.taxPPN11IDR)}</span>
                   </div>
-                  <div className="flex justify-between text-sm font-bold pt-2 border-t border-stone-200 dark:border-stone-800 text-emerald-800 dark:text-emerald-400">
+                  <div className="flex justify-between text-sm font-bold pt-2 border-t border-stone-200 dark:border-slate-800/80 text-emerald-800 dark:text-emerald-400">
                     <span>Total Pembayaran:</span>
                     <span className="font-mono">{formatIDR(activeB2bReceiptOrder.totalAmountIDR)}</span>
                   </div>
@@ -2320,7 +2320,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         order: activeB2bReceiptOrder,
                       })
                     }
-                    className="px-4 py-2 border border-stone-300 dark:border-stone-700 text-stone-800 dark:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 border border-stone-300 dark:border-slate-800/80 dark:bg-slate-900/90 text-stone-800 dark:text-slate-100 hover:bg-stone-100 dark:hover:bg-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" />
                     <span>Cetak Faktur</span>
@@ -2328,7 +2328,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveB2bReceiptOrder(null)}
-                    className="px-4 py-2 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-xl text-xs font-bold cursor-pointer"
+                    className="px-4 py-2 bg-stone-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-bold cursor-pointer"
                   >
                     Tutup Faktur
                   </button>
@@ -2356,48 +2356,48 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
           {/* Viewing Bilyet Giro Physical Slip Modal */}
           {viewingGiroSlip && typeof document !== 'undefined' && createPortal(
-            <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 dark:border-stone-800 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-3">
+            <div className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white dark:bg-[#12141C] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 dark:border-slate-800/80 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-stone-200 dark:border-slate-800/80 pb-3">
                   <div className="flex items-center gap-2">
                     <CreditCard className="w-5 h-5 text-indigo-700 dark:text-indigo-400" />
                     <div>
-                      <h3 className="font-bold text-sm text-stone-900 dark:text-stone-100">Bukti Fisik Warkat Bilyet Giro</h3>
-                      <p className="text-[11px] font-mono text-stone-500 dark:text-stone-400">{viewingGiroSlip.giroNumber}</p>
+                      <h3 className="font-bold text-sm text-stone-900 dark:text-slate-100">Bukti Fisik Warkat Bilyet Giro</h3>
+                      <p className="text-[11px] font-mono text-stone-500 dark:text-slate-400">{viewingGiroSlip.giroNumber}</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setViewingGiroSlip(null)}
-                    className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400 cursor-pointer"
+                    className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800 text-stone-400 cursor-pointer"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
                 <div className="space-y-2 text-xs">
-                  <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 space-y-1">
+                  <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#090A0F] border border-stone-200 dark:border-slate-800/80 space-y-1">
                     <div className="flex justify-between">
-                      <span className="text-stone-500 dark:text-stone-400">Bank Penerbit:</span>
-                      <span className="font-bold text-stone-900 dark:text-stone-100">{viewingGiroSlip.issuingBank}</span>
+                      <span className="text-stone-500 dark:text-slate-400">Bank Penerbit:</span>
+                      <span className="font-bold text-stone-900 dark:text-slate-100">{viewingGiroSlip.issuingBank}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-stone-500 dark:text-stone-400">Tgl Jatuh Tempo:</span>
-                      <span className="font-mono font-bold text-stone-900 dark:text-stone-100">{viewingGiroSlip.clearingDueDate}</span>
+                      <span className="text-stone-500 dark:text-slate-400">Tgl Jatuh Tempo:</span>
+                      <span className="font-mono font-bold text-stone-900 dark:text-slate-100">{viewingGiroSlip.clearingDueDate}</span>
                     </div>
-                    <div className="flex justify-between text-sm pt-1 border-t border-stone-200 dark:border-stone-700">
-                      <span className="text-stone-600 dark:text-stone-300 font-semibold">Nominal Warkat:</span>
+                    <div className="flex justify-between text-sm pt-1 border-t border-stone-200 dark:border-slate-800/80">
+                      <span className="text-stone-600 dark:text-slate-300 font-semibold">Nominal Warkat:</span>
                       <span className="font-mono font-extrabold text-emerald-800 dark:text-emerald-400">{formatIDR(viewingGiroSlip.amountIDR)}</span>
                     </div>
                   </div>
 
                   {viewingGiroSlip.slipPhotoUrl && (
                     <div className="space-y-1">
-                      <span className="text-[11px] text-stone-500 dark:text-stone-400 font-medium block">Foto Warkat Giro:</span>
+                      <span className="text-[11px] text-stone-500 dark:text-slate-400 font-medium block">Foto Warkat Giro:</span>
                       <img
                         src={viewingGiroSlip.slipPhotoUrl}
                         alt={viewingGiroSlip.giroNumber}
-                        className="w-full h-48 object-cover rounded-xl border border-stone-200 dark:border-stone-700 shadow-inner"
+                        className="w-full h-48 object-cover rounded-xl border border-stone-200 dark:border-slate-800/80 shadow-inner"
                       />
                     </div>
                   )}
@@ -2413,7 +2413,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         giro: viewingGiroSlip,
                       })
                     }
-                    className="flex-1 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-800 dark:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl border border-stone-300 dark:border-slate-800/80 dark:bg-slate-900/90 text-stone-800 dark:text-slate-100 hover:bg-stone-100 dark:hover:bg-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" />
                     <span>Cetak Slip</span>
@@ -2421,7 +2421,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   <button
                     type="button"
                     onClick={() => setViewingGiroSlip(null)}
-                    className="flex-1 py-2.5 rounded-xl bg-stone-900 dark:bg-stone-100 hover:bg-stone-800 dark:hover:bg-white text-white dark:text-stone-900 text-xs font-bold cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl bg-stone-900 dark:bg-slate-100 hover:bg-stone-800 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-bold cursor-pointer"
                   >
                     Tutup
                   </button>

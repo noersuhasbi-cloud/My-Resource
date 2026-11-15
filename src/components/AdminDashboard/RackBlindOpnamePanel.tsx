@@ -232,9 +232,9 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
   };
 
   const cardClass =
-    'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs transition-colors duration-200';
+    'bg-white dark:bg-[#12141C] border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-xs transition-colors duration-200';
   const inputClass =
-    'px-3 py-2 rounded-xl border text-xs bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#164E29] dark:focus:ring-emerald-400';
+    'px-3 py-2 rounded-xl border text-xs bg-white dark:bg-[#090A0F] border-slate-300 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#164E29] dark:focus:ring-emerald-400';
   const textTitle = 'text-slate-900 dark:text-slate-100';
   const textMuted = 'text-slate-500 dark:text-slate-400';
 
@@ -265,8 +265,8 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
               onClick={() => setShowBarcodeScanner((v) => !v)}
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer shrink-0 ${
                 showBarcodeScanner
-                  ? 'bg-[#164E29] border-[#164E29] text-white dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700/70'
-                  : 'bg-white dark:bg-slate-950 border-emerald-300 dark:border-emerald-700 text-[#164E29] dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800'
+                  ? 'bg-[#164E29] border-[#164E29] text-white dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800/50'
+                  : 'bg-white dark:bg-[#090A0F] border-emerald-300 dark:border-emerald-800/60 text-[#164E29] dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-900/90'
               }`}
             >
               <Barcode className="w-3.5 h-3.5" />
@@ -277,7 +277,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
               type="button"
               onClick={handlePrintBlindSheet}
               disabled={scopedBatches.length === 0}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 disabled:opacity-50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-xs shrink-0"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 disabled:opacity-50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-xs shrink-0"
             >
               <Printer className="w-3.5 h-3.5" />
               Print Blind Count Sheet (A4)
@@ -460,7 +460,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
       <div className={`${cardClass} overflow-hidden`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className={isLight ? 'bg-slate-50 text-slate-600 border-b border-slate-200' : 'bg-zinc-950 text-zinc-400 border-b border-zinc-800'}>
+            <thead className={isLight ? 'bg-slate-50 text-slate-600 border-b border-slate-200' : 'bg-[#090A0F] text-slate-400 border-b border-slate-800/80'}>
               <tr>
                 <th className="py-2.5 px-3 font-semibold">SKU &amp; Product</th>
                 <th className="py-2.5 px-3 font-semibold">Rack / Bin</th>
@@ -471,12 +471,12 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
                 <th className="py-2.5 px-3 font-semibold">Notes</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
               {scopedBatches.map((batch) => {
                 const isLocked =
                   batch.status === 'quarantined' || batch.status === 'recalled' || batch.status === 'expired';
                 return (
-                  <tr key={batch.batchId} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-zinc-800/40'}>
+                  <tr key={batch.batchId} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-900/70'}>
                     <td className="py-2.5 px-3">
                       <div className={`font-bold ${textTitle}`}>{batch.productName}</div>
                       <div className={`font-mono text-[10px] ${textMuted}`}>
@@ -497,7 +497,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
                           {batch.status.toUpperCase()} LOCKED
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-slate-100 text-slate-600 dark:bg-[#090A0F] dark:border dark:border-slate-800/80 dark:text-slate-300">
                           <EyeOff className="w-3 h-3" />
                           BLIND MASKED
                         </span>
@@ -543,7 +543,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
           </table>
         </div>
 
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#090A0F] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
             <span className={`text-xs font-semibold ${textTitle} block`}>
               {enteredLinesCount} of {scopedBatches.length} batches counted
@@ -572,7 +572,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
             type="button"
             disabled={isCommitting || enteredLinesCount === 0}
             onClick={handleCommitStocktake}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 disabled:opacity-50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 disabled:opacity-50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-xs"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             {isCommitting ? 'Reconciling...' : 'Commit Rack Blind Stock Opname'}
@@ -589,7 +589,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[11px] font-mono">
               <thead>
-                <tr className={isLight ? 'text-slate-500 border-b border-slate-200' : 'text-zinc-400 border-b border-zinc-800'}>
+                <tr className={isLight ? 'text-slate-500 border-b border-slate-200' : 'text-slate-400 border-b border-slate-800/80'}>
                   <th className="py-1.5 px-2">Sheet #</th>
                   <th className="py-1.5 px-2">Rack / Bin</th>
                   <th className="py-1.5 px-2">Submitted By</th>
@@ -598,7 +598,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
                   <th className="py-1.5 px-2 text-right">GL / Approval Ref</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
                 {submissions.slice(0, 6).map((sub) => (
                   <tr key={sub.id}>
                     <td className={`py-2 px-2 font-bold ${textTitle}`}>{sub.sheetNumber}</td>

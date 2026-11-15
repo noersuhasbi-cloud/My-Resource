@@ -110,12 +110,12 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
         className={`w-full max-w-4xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
           isLight
             ? 'bg-white border-gray-200 text-slate-900'
-            : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+            : 'bg-[#12141C] border-slate-800/80 text-slate-100'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 pb-3.5 border-b border-gray-200 dark:border-zinc-800">
+        <div className="flex items-start justify-between gap-4 pb-3.5 border-b border-gray-200 dark:border-slate-800/80">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-400">
               <Barcode className="w-5 h-5" />
@@ -132,7 +132,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 dark:text-zinc-400 cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-900/90 text-gray-500 dark:text-slate-400 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -142,7 +142,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
           {/* Left Controls (5 cols) */}
           <div className="lg:col-span-5 space-y-4 text-xs">
             <div>
-              <label className="block font-semibold mb-1 text-slate-700 dark:text-zinc-200">
+              <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-200">
                 Select Product / Bulk SKU
               </label>
               <select
@@ -151,7 +151,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                 className={`w-full px-3 py-2 rounded-xl border font-medium ${
                   isLight
                     ? 'bg-white border-gray-300 text-slate-900'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               >
                 {products.map((p) => (
@@ -164,7 +164,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold mb-1 text-slate-700 dark:text-zinc-200">
+                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-200">
                   EAN-13 Prefix
                 </label>
                 <select
@@ -173,7 +173,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                   className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
                     isLight
                       ? 'bg-white border-gray-300 text-slate-900'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   <option value="21">21 (Fresh Weight Standard)</option>
@@ -181,7 +181,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                 </select>
               </div>
               <div>
-                <label className="block font-semibold mb-1 text-slate-700 dark:text-zinc-200">
+                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-200">
                   Net Weight (Grams)
                 </label>
                 <input
@@ -193,7 +193,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                   className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
                     isLight
                       ? 'bg-white border-gray-300 text-slate-900'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
@@ -210,7 +210,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                       ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
                       : isLight
                       ? 'bg-gray-50 border-gray-200 text-slate-700 hover:bg-gray-100'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-300 hover:bg-slate-900/90'
                   }`}
                 >
                   {g >= 1000 ? `${(g / 1000).toFixed(2)}kg` : `${g}g`}
@@ -219,7 +219,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
             </div>
 
             <div>
-              <label className="block font-semibold mb-1 text-slate-700 dark:text-zinc-200">
+              <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-200">
                 Promo / Tebus Murah Validity Period
               </label>
               <input
@@ -230,7 +230,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                 className={`w-full px-3 py-2 rounded-xl border ${
                   isLight
                     ? 'bg-white border-gray-300 text-slate-900'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               />
             </div>
@@ -258,7 +258,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
             </div>
 
             <div>
-              <label className="block font-semibold mb-1 text-slate-700 dark:text-zinc-200">
+              <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-200">
                 Label Output Scope
               </label>
               <div className="grid grid-cols-3 gap-1.5">
@@ -278,7 +278,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                         ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
                         : isLight
                         ? 'bg-gray-50 border-gray-200 text-slate-700'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                        : 'bg-[#090A0F] border-slate-800/80 text-slate-300 hover:bg-slate-900/90'
                     }`}
                   >
                     {opt.label}
@@ -290,7 +290,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
             {/* Barcode Structure Breakdown */}
             <div
               className={`p-3 rounded-xl border font-mono text-[11px] space-y-1.5 ${
-                isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-800/60 border-zinc-700'
+                isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
               }`}
             >
               <div className="font-sans font-bold text-xs flex items-center gap-1.5">
@@ -318,7 +318,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
           <div className="lg:col-span-7 space-y-4">
             {/* 1. Thermal Variable-Weight Scale Sticker */}
             {(labelMode === 'BOTH' || labelMode === 'SCALE_ONLY') && (
-              <div className="rounded-xl border border-dashed border-slate-300 dark:border-zinc-700 p-4 bg-white text-slate-900 shadow-xs space-y-2.5">
+              <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 bg-white text-slate-900 shadow-xs space-y-2.5">
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                   <div>
                     <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block">
@@ -449,7 +449,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                 className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
                   isLight
                     ? 'bg-white border-gray-300 text-slate-700 hover:bg-gray-50'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-200 hover:bg-slate-900/90'
                 }`}
               >
                 <Copy className="w-3.5 h-3.5" />

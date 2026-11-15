@@ -91,7 +91,7 @@ const NEXT_STAGE_MAP: Partial<Record<CrmDealStage, CrmDealStage>> = {
 };
 
 const TIER_BADGE_MAP: Record<CrmLoyaltyTier, string> = {
-  SILVER: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700',
+  SILVER: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-900/90 dark:text-slate-300 dark:border-slate-800/80',
   GOLD: 'bg-amber-500/15 text-amber-700 border-amber-500/30 dark:text-amber-300',
   PLATINUM: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:text-emerald-300',
 };
@@ -127,15 +127,15 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
   const isLight = theme === 'light';
   const cardClass = isLight
     ? 'bg-white border border-slate-200 rounded-2xl shadow-xs'
-    : 'bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xs';
+    : 'bg-[#12141C] border border-slate-800/80 rounded-2xl shadow-xs';
   const subCardClass = isLight
     ? 'bg-slate-50 border border-slate-200 rounded-xl'
-    : 'bg-zinc-950/70 border border-zinc-800 rounded-xl';
+    : 'bg-[#090A0F] border border-slate-800/80 rounded-xl';
   const inputClass = isLight
     ? 'bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500'
-    : 'bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500';
-  const textTitle = isLight ? 'text-slate-900' : 'text-zinc-100';
-  const textMuted = isLight ? 'text-slate-500' : 'text-zinc-400';
+    : 'bg-[#090A0F] border border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500';
+  const textTitle = isLight ? 'text-slate-900' : 'text-slate-100';
+  const textMuted = isLight ? 'text-slate-500' : 'text-slate-400';
 
   const [subTab, setSubTab] = useState<CrmSubTab>('pipeline');
   const [pipelineViewMode, setPipelineViewMode] = useState<'kanban' | 'list'>('kanban');
@@ -650,7 +650,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
             className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors ${
               isLight
                 ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
             }`}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -662,7 +662,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
             className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
               isLight
                 ? 'bg-slate-100 border-slate-200 text-slate-800 hover:bg-slate-200'
-                : 'bg-zinc-800 border-zinc-700 text-zinc-100 hover:bg-zinc-700'
+                : 'bg-slate-900/90 border-slate-800/80 text-slate-100 hover:bg-slate-800'
             }`}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -785,7 +785,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                   ? 'bg-[#0F4C3A] text-white border-[#0F4C3A] shadow-sm'
                   : isLight
                   ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                  : 'bg-[#12141C] border-slate-800/80 text-slate-300 hover:bg-slate-800'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -793,7 +793,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
               {tab.badge !== undefined && (
                 <span
                   className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    active ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'
+                    active ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-900/90 text-slate-600 dark:text-slate-300'
                   }`}
                 >
                   {tab.badge}
@@ -813,13 +813,13 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
             <p className={`text-xs ${textMuted}`}>
               Track HORECA &amp; corporate prospects from Lead &rarr; Cold-Chain Sample &rarr; Quotation &rarr; Won (auto-activates B2B credit &amp; tier).
             </p>
-            <div className={`inline-flex rounded-xl p-1 border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-zinc-900 border-zinc-800'}`}>
+            <div className={`inline-flex rounded-xl p-1 border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-[#12141C] border-slate-800/80'}`}>
               <button
                 type="button"
                 onClick={() => setPipelineViewMode('kanban')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer ${
                   pipelineViewMode === 'kanban'
-                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-xs'
+                    ? 'bg-white dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 shadow-xs'
                     : textMuted
                 }`}
               >
@@ -831,7 +831,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 onClick={() => setPipelineViewMode('list')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer ${
                   pipelineViewMode === 'list'
-                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-xs'
+                    ? 'bg-white dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 shadow-xs'
                     : textMuted
                 }`}
               >
@@ -848,21 +848,21 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 const stageSum = stageDeals.reduce((s, d) => s + d.estimatedMonthlyValueIDR, 0);
                 return (
                   <div key={stageDef.key} className={`${cardClass} border-t-4 ${stageDef.accent} p-3 flex flex-col gap-2.5`}>
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-zinc-800">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/80">
                       <div>
                         <h3 className={`text-xs font-extrabold ${textTitle}`}>{stageDef.label}</h3>
                         <p className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
                           {formatIDR(stageSum)}/mo
                         </p>
                       </div>
-                      <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+                      <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300">
                         {stageDeals.length}
                       </span>
                     </div>
 
                     <div className="space-y-2.5">
                       {stageDeals.length === 0 ? (
-                        <div className="py-6 text-center text-[11px] text-zinc-400">No deals in stage</div>
+                        <div className="py-6 text-center text-[11px] text-slate-500 dark:text-slate-400">No deals in stage</div>
                       ) : (
                         stageDeals.map((deal) => {
                           const nextStage = NEXT_STAGE_MAP[deal.stage];
@@ -874,7 +874,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                                   onClick={() => openAccountProfile(deal.crmAccountId)}
                                   className="text-left cursor-pointer group"
                                 >
-                                  <span className="text-[10px] font-mono text-zinc-400 block">{deal.id}</span>
+                                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block">{deal.id}</span>
                                   <span className={`text-xs font-extrabold group-hover:text-emerald-600 dark:group-hover:text-emerald-400 ${textTitle}`}>
                                     {deal.title}
                                   </span>
@@ -885,7 +885,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                               </div>
 
                               <div className="text-[11px] space-y-0.5">
-                                <p className="font-semibold text-slate-700 dark:text-zinc-200 truncate">
+                                <p className="font-semibold text-slate-700 dark:text-slate-200 truncate">
                                   {deal.companyName}
                                 </p>
                                 <p className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
@@ -963,7 +963,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
             <div className={`${cardClass} overflow-x-auto`}>
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className={`border-b ${isLight ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-zinc-950/60 border-zinc-800 text-zinc-400'}`}>
+                  <tr className={`border-b ${isLight ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-[#090A0F] border-slate-800/80 text-slate-400'}`}>
                     <th className="py-3 px-4 font-bold">Deal &amp; Company</th>
                     <th className="py-3 px-4 font-bold">Branch</th>
                     <th className="py-3 px-4 font-bold">Stage</th>
@@ -972,11 +972,11 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                     <th className="py-3 px-4 font-bold text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
                   {(overview?.deals || []).map((deal) => {
                     const nextStage = NEXT_STAGE_MAP[deal.stage];
                     return (
-                      <tr key={deal.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-zinc-800/30'}>
+                      <tr key={deal.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-900/60'}>
                         <td className="py-3 px-4">
                           <button
                             type="button"
@@ -1052,7 +1052,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                       ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
                       : isLight
                       ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                      : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                   }`}
                 >
                   {f.label}
@@ -1061,7 +1061,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
             </div>
 
             <div className="relative w-full sm:w-72">
-              <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={directorySearch}
@@ -1075,7 +1075,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className={`border-b ${isLight ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-zinc-950/60 border-zinc-800 text-zinc-400'}`}>
+                <tr className={`border-b ${isLight ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-[#090A0F] border-slate-800/80 text-slate-400'}`}>
                   <th className="py-3 px-3 font-bold">Customer / Company</th>
                   <th className="py-3 px-3 font-bold">Type &amp; Branch</th>
                   <th className="py-3 px-3 font-bold">Tier &amp; RFM</th>
@@ -1084,11 +1084,11 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                   <th className="py-3 px-3 font-bold text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
                 {filteredAccounts.map((acc) => {
                   const rfm = RFM_BADGE_MAP[acc.rfmSegment];
                   return (
-                    <tr key={acc.id} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/30'}>
+                    <tr key={acc.id} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
                       <td className="py-3 px-3">
                         <p className={`font-bold ${textTitle}`}>{acc.companyName || acc.name}</p>
                         <p className={`text-[11px] ${textMuted}`}>
@@ -1097,7 +1097,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                         </p>
                       </td>
                       <td className="py-3 px-3">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-900/90 text-slate-700 dark:text-slate-300">
                           {acc.accountType === 'B2B_ACCOUNT' ? 'B2B Key Account' : 'B2C Member'}
                         </span>
                         <p className={`text-[10px] mt-0.5 ${textMuted}`}>{acc.storeName}</p>
@@ -1262,7 +1262,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                   {alert.topSkus.map((sku) => (
                     <div key={sku.sku} className="flex items-center justify-between text-xs">
                       <span className={textTitle}>
-                        <span className="font-mono text-[10px] text-zinc-400 mr-1.5">{sku.sku}</span>
+                        <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400 mr-1.5">{sku.sku}</span>
                         {sku.name}
                       </span>
                       <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
@@ -1384,7 +1384,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 <button
                   type="button"
                   onClick={loadKanvasLedger}
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800/80 text-xs font-bold flex items-center gap-1 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${kanvasLoading ? 'animate-spin' : ''}`} />
                   <span>Refresh</span>
@@ -1454,7 +1454,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsNewRouteOpen(false)}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-zinc-700 font-bold cursor-pointer"
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800/80 font-bold cursor-pointer"
                   >
                     Batal
                   </button>
@@ -1462,9 +1462,9 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
               </form>
             )}
 
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
               <table className="w-full text-left text-xs">
-                <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'}`}>
+                <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'}`}>
                   <tr>
                     <th className="py-2.5 px-3">ID Rute</th>
                     <th className="py-2.5 px-3">Salesman &amp; Armada</th>
@@ -1475,9 +1475,9 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                     <th className="py-2.5 px-3 text-center">Status</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
                   {(kanvasLedger?.routes || []).map((rt) => (
-                    <tr key={rt.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-zinc-800/40'}>
+                    <tr key={rt.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-900/60'}>
                       <td className="py-2.5 px-3 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{rt.id}</td>
                       <td className="py-2.5 px-3">
                         <div className={`font-bold ${textTitle}`}>{rt.salesmanName}</div>
@@ -1494,7 +1494,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                             rt.status === 'ON_ROUTE'
                               ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                              : 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300 border-slate-300 dark:border-zinc-700'
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-900/90 dark:text-slate-300 border-slate-300 dark:border-slate-800/80'
                           }`}
                         >
                           {rt.status}
@@ -1521,7 +1521,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setIsNewKasbonOpen((v) => !v)}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-zinc-700 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800/80 text-xs font-bold flex items-center gap-1 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Catat Kasbon Baru</span>
@@ -1591,7 +1591,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsNewKasbonOpen(false)}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-zinc-700 font-bold cursor-pointer"
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800/80 font-bold cursor-pointer"
                   >
                     Batal
                   </button>
@@ -1636,7 +1636,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                       setCollectTarget(null);
                       setCollectAmountIDR(0);
                     }}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-zinc-700 font-bold cursor-pointer"
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-800/80 font-bold cursor-pointer"
                   >
                     Batal
                   </button>
@@ -1644,9 +1644,9 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
               </form>
             )}
 
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
               <table className="w-full text-left text-xs">
-                <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'}`}>
+                <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'}`}>
                   <tr>
                     <th className="py-2.5 px-3">Warung / Pemilik</th>
                     <th className="py-2.5 px-3">Salesman &amp; Rute</th>
@@ -1657,18 +1657,18 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                     <th className="py-2.5 px-3 text-right">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
                   {(kanvasLedger?.kasbonAccounts || []).map((acc) => {
                     const agingBadge =
                       acc.agingStatus === 'LUNAS'
-                        ? 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                        ? 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-900/90 dark:text-slate-300 dark:border-slate-800/80'
                         : acc.agingStatus === 'MENUNGGAK_7_HARI'
                         ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
                         : acc.agingStatus === 'JATUH_TEMPO'
                         ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
                         : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
                     return (
-                      <tr key={acc.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-zinc-800/40'}>
+                      <tr key={acc.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-900/60'}>
                         <td className="py-2.5 px-3">
                           <div className={`font-bold ${textTitle}`}>{acc.warungName}</div>
                           <div className={`text-[10px] ${textMuted}`}>
@@ -1736,20 +1736,20 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {selectedProfileId &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
             onClick={() => setSelectedProfileId(null)}
           >
             <div
               className={`w-full max-w-4xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto ${
-                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
               onClick={(e) => e.stopPropagation()}
             >
               {isLoadingProfile || !profileHistory ? (
-                <div className="py-16 text-center text-xs text-zinc-400">Loading Customer 360° Timeline...</div>
+                <div className="py-16 text-center text-xs text-slate-500 dark:text-slate-400">Loading Customer 360° Timeline...</div>
               ) : (
                 <>
-                  <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-zinc-800">
+                  <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-base sm:text-lg font-extrabold">
@@ -1769,7 +1769,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                     <button
                       type="button"
                       onClick={() => setSelectedProfileId(null)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -1854,7 +1854,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                     <div className={`${subCardClass} p-3.5 space-y-2.5 max-h-72 overflow-y-auto`}>
                       <h4 className="text-xs font-extrabold">POS, B2B Orders &amp; Quotations</h4>
                       {profileHistory.b2bOrders.map((o) => (
-                        <div key={o.id} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-zinc-800 flex justify-between">
+                        <div key={o.id} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-slate-800/80 flex justify-between">
                           <div>
                             <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">B2B #{o.id}</span>
                             <span className={`block text-[10px] ${textMuted}`}>{new Date(o.orderDate).toLocaleDateString()} · {o.status}</span>
@@ -1863,7 +1863,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                         </div>
                       ))}
                       {profileHistory.posOrders.map((r) => (
-                        <div key={r.receiptNumber} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-zinc-800 flex justify-between">
+                        <div key={r.receiptNumber} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-slate-800/80 flex justify-between">
                           <div>
                             <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">POS #{r.receiptNumber}</span>
                             <span className={`block text-[10px] ${textMuted}`}>{new Date(r.timestamp).toLocaleDateString()} · {r.paymentMethod.toUpperCase()}</span>
@@ -1872,7 +1872,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                         </div>
                       ))}
                       {profileHistory.quotations.map((q) => (
-                        <div key={q.id} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-zinc-800 flex justify-between">
+                        <div key={q.id} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-slate-800/80 flex justify-between">
                           <div>
                             <span className="font-mono font-bold text-amber-600 dark:text-amber-400">Quote #{q.quotationNumber}</span>
                             <span className={`block text-[10px] ${textMuted}`}>{q.date} · {q.status}</span>
@@ -1881,7 +1881,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                         </div>
                       ))}
                       {profileHistory.b2bOrders.length + profileHistory.posOrders.length + profileHistory.quotations.length === 0 && (
-                        <p className="text-[11px] text-zinc-400">No orders or quotations recorded yet.</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">No orders or quotations recorded yet.</p>
                       )}
                     </div>
 
@@ -1889,7 +1889,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                     <div className={`${subCardClass} p-3.5 space-y-2.5 max-h-72 overflow-y-auto`}>
                       <h4 className="text-xs font-extrabold">Loyalty Points Ledger &amp; Comms</h4>
                       {profileHistory.account.pointsLedger.map((pt) => (
-                        <div key={pt.id} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-zinc-800 flex justify-between gap-2">
+                        <div key={pt.id} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-slate-800/80 flex justify-between gap-2">
                           <div>
                             <span className="font-bold">{pt.note}</span>
                             <span className={`block text-[10px] ${textMuted}`}>{pt.channel} · {pt.referenceId}</span>
@@ -1900,7 +1900,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                         </div>
                       ))}
                       {profileHistory.communications.map((c) => (
-                        <div key={c.id} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-zinc-800">
+                        <div key={c.id} className="text-xs py-1.5 border-b border-slate-200/70 dark:border-slate-800/80">
                           <span className="font-bold text-sky-600 dark:text-sky-400">[{c.channel.toUpperCase()}] {c.docNumber}</span>
                           <span className={`block text-[10px] ${textMuted}`}>{c.subjectOrPreview}</span>
                         </div>
@@ -1951,19 +1951,19 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {isNewAccountOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
             onClick={() => setIsNewAccountOpen(false)}
           >
             <form
               onSubmit={handleCreateAccount}
               onClick={(e) => e.stopPropagation()}
               className={`w-full max-w-md rounded-2xl border p-5 shadow-2xl space-y-3.5 ${
-                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
             >
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-zinc-800">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800/80">
                 <h3 className="text-sm font-extrabold">Register New CRM / Loyalty Account</h3>
-                <button type="button" onClick={() => setIsNewAccountOpen(false)} className="text-zinc-400 cursor-pointer">
+                <button type="button" onClick={() => setIsNewAccountOpen(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -1979,7 +1979,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                         ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
                         : isLight
                         ? 'bg-slate-50 border-slate-200 text-slate-700'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                        : 'bg-slate-900/90 border-slate-800/80 text-slate-300'
                     }`}
                   >
                     {t === 'B2B_ACCOUNT' ? 'B2B Key Account' : 'B2C Retail Member'}
@@ -2054,7 +2054,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsNewAccountOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-bold cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs font-bold cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
@@ -2077,19 +2077,19 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {isNewDealOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
             onClick={() => setIsNewDealOpen(false)}
           >
             <form
               onSubmit={handleCreateDeal}
               onClick={(e) => e.stopPropagation()}
               className={`w-full max-w-md rounded-2xl border p-5 shadow-2xl space-y-3.5 ${
-                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
             >
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-zinc-800">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800/80">
                 <h3 className="text-sm font-extrabold">Add B2B Sales Opportunity</h3>
-                <button type="button" onClick={() => setIsNewDealOpen(false)} className="text-zinc-400 cursor-pointer">
+                <button type="button" onClick={() => setIsNewDealOpen(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -2157,7 +2157,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsNewDealOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-bold cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs font-bold cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
@@ -2180,17 +2180,17 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {campaignModal.open &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
             onClick={() => setCampaignModal((p) => ({ ...p, open: false }))}
           >
             <form
               onSubmit={handleDispatchCampaign}
               onClick={(e) => e.stopPropagation()}
               className={`w-full max-w-lg rounded-2xl border p-5 shadow-2xl space-y-3.5 ${
-                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
             >
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-zinc-800">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800/80">
                 <div>
                   <h3 className="text-sm font-extrabold">Dispatch CRM Campaign</h3>
                   <p className={`text-[11px] ${textMuted}`}>Target: {campaignModal.recipientLabel}</p>
@@ -2198,7 +2198,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setCampaignModal((p) => ({ ...p, open: false }))}
-                  className="text-zinc-400 cursor-pointer"
+                  className="text-slate-400 hover:text-slate-200 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -2215,7 +2215,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                         ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
                         : isLight
                         ? 'bg-slate-50 border-slate-200 text-slate-700'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                        : 'bg-slate-900/90 border-slate-800/80 text-slate-300'
                     }`}
                   >
                     {ch === 'both' ? 'WA + Email' : ch}
@@ -2277,7 +2277,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setCampaignModal((p) => ({ ...p, open: false }))}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-bold cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs font-bold cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   Close
                 </button>

@@ -512,6 +512,13 @@ export const apiClient = {
       qualityCondition?: string;
       tempCheckCelsius?: number;
     }[];
+    landedCostAllocation?: {
+      freightCostIDR?: number;
+      insuranceCostIDR?: number;
+      customsDutyIDR?: number;
+      coldChainLogisticsIDR?: number;
+      allocationMethod?: 'BY_QUANTITY' | 'BY_VALUE';
+    };
   }): Promise<{
     success: boolean;
     goodsReceipt: GoodsReceiptRecord;
@@ -519,6 +526,19 @@ export const apiClient = {
     isPartial: boolean;
     remainingBackorder: number;
     journalEntryIds: string[];
+    landedCostSummary?: {
+      id: string;
+      totalLandedCostIDR: number;
+      allocatedItems: Array<{
+        sku: string;
+        productName: string;
+        quantity: number;
+        baseUnitCost: number;
+        allocatedCostIDR: number;
+        newUnitCost: number;
+        totalLineLandedCost: number;
+      }>;
+    };
   }> {
     const res = await fetchApi('/api/admin/procurement/gr/receive-partial', {
       method: 'POST',
@@ -947,12 +967,18 @@ export const apiClient = {
         actualWeighedGrams?: number;
       }>;
       actualWeights?: Record<string, number>;
+      returnableAsset?: {
+        assetType?: string;
+        assetIds?: string;
+        quantity?: number;
+      };
     }
   ): Promise<{
     success: boolean;
     alreadyCompleted?: boolean;
     order: PickerOrder;
     fulfillmentStatus?: string;
+    returnableAssetRecord?: ReturnableContainerRecord;
     totals?: {
       subtotalIDR: number;
       discountIDR: number;
@@ -1390,9 +1416,16 @@ export const apiClient = {
     destinationStoreId: string;
     quantity: number;
     notes?: string;
+    returnableAsset?: {
+      assetType?: string;
+      assetIds?: string;
+      quantity?: number;
+      recipientName?: string;
+    };
   }): Promise<{
     success: boolean;
     record: StockTransferRecord;
+    returnableAssetRecord?: ReturnableContainerRecord;
     message: string;
   }> {
     const res = await fetchApi('/api/admin/inventory/transfer', {
@@ -1427,6 +1460,27 @@ export const apiClient = {
       throw new Error(err.error || 'Failed to receive stock transfer');
     }
     return res.json();
+  },
+
+  async confirmTransferReturnableReturn(
+    id: string,
+    payload?: { qtyReturned?: number; notes?: string }
+  ): Promise<{
+    success: boolean;
+    record: StockTransferRecord;
+    containerRecord: ReturnableContainerRecord;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/inventory/transfer/${encodeURIComponent(id)}/return-assets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to confirm returnable asset return');
+    }
+    return data;
   },
 
   // -------------------------------------------------------------
@@ -2374,6 +2428,16 @@ export const apiClient = {
     success: boolean;
     appliedCount: number;
     skippedExpiredCount?: number;
+    createdDynamicSkus?: Array<{
+      dynamicSku: string;
+      originalSku: string;
+      batchId: string;
+      lotNumber: string;
+      productName: string;
+      discountPercent: number;
+      markdownPrice: number;
+      currentStock: number;
+    }>;
     message: string;
   }> {
     const res = await fetchApi('/api/admin/markdown-rules/apply-batches', {

@@ -166,15 +166,15 @@ export const FlashSaleClearanceModal: React.FC<FlashSaleClearanceModalProps> = (
   };
 
   return createPortal(
-    <div className={`${theme === 'dark' ? 'dark' : ''} fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto`}>
+    <div className={`${theme === 'dark' ? 'dark' : ''} fixed inset-0 z-[120] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto`}>
       <div
-        className="max-w-lg w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-5 sm:p-6 space-y-4 shadow-2xl my-auto transition-colors animate-in fade-in zoom-in-95 duration-200"
+        className="max-w-lg w-full rounded-2xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] text-slate-900 dark:text-slate-100 p-5 sm:p-6 space-y-4 shadow-2xl my-auto transition-colors animate-in fade-in zoom-in-95 duration-200"
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">
           <div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-[#164E29] text-white dark:bg-emerald-950 dark:text-emerald-400 dark:border dark:border-emerald-700/70">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-[#164E29] text-white dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50">
                 <Zap className="w-3 h-3" />
                 1-Click Flash Sale Generator
               </span>
@@ -239,7 +239,7 @@ export const FlashSaleClearanceModal: React.FC<FlashSaleClearanceModalProps> = (
               <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Kode Promo POS
               </div>
-              <div className="font-mono text-xs font-extrabold px-2.5 py-1 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 mt-0.5">
+              <div className="font-mono text-xs font-extrabold px-2.5 py-1 rounded bg-white dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 mt-0.5">
                 {promoCode}
               </div>
             </div>
@@ -258,7 +258,7 @@ export const FlashSaleClearanceModal: React.FC<FlashSaleClearanceModalProps> = (
 
         {/* Rotation Option */}
         {!isExpired && (
-          <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 cursor-pointer">
+          <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 dark:border-slate-800/80 bg-slate-50/80 dark:bg-[#090A0F] cursor-pointer">
             <input
               type="checkbox"
               checked={rotateToFrontRack}
@@ -278,11 +278,11 @@ export const FlashSaleClearanceModal: React.FC<FlashSaleClearanceModalProps> = (
         )}
 
         {/* Footer Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/80">
           <button
             type="button"
             onClick={handleCopyPromo}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-300 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
           >
             {copiedPromo ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copiedPromo ? 'Tersalin!' : 'Salin Teks Promo'}</span>
@@ -292,7 +292,7 @@ export const FlashSaleClearanceModal: React.FC<FlashSaleClearanceModalProps> = (
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
             >
               Batal
             </button>

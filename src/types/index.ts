@@ -532,6 +532,10 @@ export interface InventoryBatch {
   rotationStrategy?: 'FEFO' | 'FIFO';
   notes?: string;
   markdownDiscountPercent?: number;
+  markdownStatus?: 'Marked Down';
+  dynamicDiscountSku?: string;
+  markedDownAt?: string;
+  landedCostPerUnitDelta?: number;
   isConsignment?: boolean;
   consignmentSupplier?: string;
   consignmentCommissionPercent?: number;
@@ -1228,6 +1232,12 @@ export interface POSProductItem {
   bpjphExpiryDate?: string;
   bpomRegNumber?: string;
   wholesaleTiers?: WholesaleVolumeTier[];
+  isDynamicDiscountSku?: boolean;
+  sourceBatchId?: string;
+  originalSku?: string;
+  originalSellingPrice?: number;
+  discountPercent?: number;
+  markdownStatus?: 'Marked Down';
 }
 
 export interface POSCartItem {
@@ -1452,6 +1462,12 @@ export interface StockTransferRecord {
   status: 'completed' | 'in_transit';
   notes?: string;
   suratJalanNumber?: string;
+  returnableAssetId?: string;
+  returnableAssetType?: string;
+  returnableAssetIds?: string;
+  returnableAssetQty?: number;
+  returnableAssetOutstanding?: number;
+  returnableAssetStatus?: 'OPEN' | 'PARTIAL_RETURNED' | 'RETURNED';
 }
 
 // =============================================================

@@ -150,23 +150,23 @@ export const PrintPreviewModal: React.FC = () => {
       aria-modal="true"
       aria-label="Print Preview"
     >
-      <div className="w-full max-w-6xl h-[92vh] bg-stone-100 dark:bg-zinc-900 rounded-2xl border border-stone-300 dark:border-zinc-700 shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-full max-w-6xl h-[92vh] bg-stone-100 dark:bg-[#12141C] rounded-2xl border border-stone-300 dark:border-slate-800/80 shadow-2xl flex flex-col overflow-hidden">
         {/* Top Control Bar */}
-        <div className="px-4 sm:px-5 py-3 bg-white dark:bg-zinc-900 border-b border-stone-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="px-4 sm:px-5 py-3 bg-white dark:bg-[#12141C] border-b border-stone-200 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-[#0F4C3A]/10 dark:bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-400 flex items-center justify-center shrink-0">
               <FormatIcon className="w-4 h-4" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm font-bold text-stone-900 dark:text-zinc-100 truncate">
+                <h2 className="text-sm font-bold text-stone-900 dark:text-slate-100 truncate">
                   {meta.title}
                 </h2>
                 <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/25">
                   {meta.formatLabel}
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-stone-500 dark:text-zinc-400">
+              <p className="text-[11px] font-mono text-stone-500 dark:text-slate-400">
                 Print Preview • {meta.dimensionsLabel} • Pure White Output
               </p>
             </div>
@@ -174,20 +174,20 @@ export const PrintPreviewModal: React.FC = () => {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Zoom Controls */}
-            <div className="inline-flex items-center rounded-xl border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-800 p-0.5">
+            <div className="inline-flex items-center rounded-xl border border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] p-0.5">
               <button
                 type="button"
                 onClick={() =>
                   currentZoomIndex > 0 && setZoom(zoomOptions[currentZoomIndex - 1])
                 }
                 disabled={currentZoomIndex <= 0}
-                className="p-1.5 rounded-lg text-stone-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-700 disabled:opacity-40 cursor-pointer transition-colors"
+                className="p-1.5 rounded-lg text-stone-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-40 cursor-pointer transition-colors"
                 title="Zoom Out"
                 aria-label="Zoom Out"
               >
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
-              <span className="px-2 text-[11px] font-mono font-bold text-stone-700 dark:text-zinc-200 tabular-nums">
+              <span className="px-2 text-[11px] font-mono font-bold text-stone-700 dark:text-slate-200 tabular-nums">
                 {zoom}%
               </span>
               <button
@@ -197,7 +197,7 @@ export const PrintPreviewModal: React.FC = () => {
                   setZoom(zoomOptions[currentZoomIndex + 1])
                 }
                 disabled={currentZoomIndex >= zoomOptions.length - 1}
-                className="p-1.5 rounded-lg text-stone-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-700 disabled:opacity-40 cursor-pointer transition-colors"
+                className="p-1.5 rounded-lg text-stone-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-40 cursor-pointer transition-colors"
                 title="Zoom In"
                 aria-label="Zoom In"
               >
@@ -208,7 +208,7 @@ export const PrintPreviewModal: React.FC = () => {
             <button
               type="button"
               onClick={clearPrint}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-700 text-xs font-semibold text-stone-700 dark:text-zinc-200 cursor-pointer transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-300 dark:border-slate-800/80 bg-white dark:bg-slate-900/90 hover:bg-stone-50 dark:hover:bg-slate-800 text-xs font-semibold text-stone-700 dark:text-slate-200 cursor-pointer transition-all"
             >
               <X className="w-3.5 h-3.5" />
               <span>Cancel</span>
@@ -226,7 +226,7 @@ export const PrintPreviewModal: React.FC = () => {
         </div>
 
         {/* Paper Preview Stage */}
-        <div className="flex-1 overflow-auto overscroll-contain bg-stone-200/95 dark:bg-zinc-950 p-4 sm:p-8">
+        <div className="flex-1 overflow-auto overscroll-contain bg-stone-200/95 dark:bg-[#090A0F] p-4 sm:p-8">
           <div className={`w-fit mx-auto pb-10 transition-transform duration-150 ${ZOOM_CLASS_MAP[zoom]}`}>
             <div className={paperFrameClass}>
               {renderPrintDocument(activePrintPayload, {
@@ -239,7 +239,7 @@ export const PrintPreviewModal: React.FC = () => {
         </div>
 
         {/* Bottom Verification Hint */}
-        <div className="px-4 sm:px-5 py-2 bg-white dark:bg-zinc-900 border-t border-stone-200 dark:border-zinc-800 flex items-center justify-between text-[11px] text-stone-500 dark:text-zinc-400 shrink-0">
+        <div className="px-4 sm:px-5 py-2 bg-white dark:bg-[#12141C] border-t border-stone-200 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-stone-500 dark:text-slate-400 shrink-0">
           <span>
             Verify layout, page breaks, and paper format above before sending to your printer or PDF exporter.
           </span>

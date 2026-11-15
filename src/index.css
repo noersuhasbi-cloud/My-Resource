@@ -85,12 +85,18 @@ button, input, select, textarea {
   background: rgba(107, 114, 128, 0.7);
 }
 
+html.dark,
+.dark body {
+  background-color: #090a0f;
+  color: #f1f5f9;
+}
+
 .dark ::-webkit-scrollbar-thumb {
-  background: rgba(87, 83, 78, 0.6);
+  background: rgba(51, 65, 85, 0.7);
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(120, 113, 108, 0.85);
+  background: rgba(71, 85, 105, 0.9);
 }
 
 /* Hide scrollbar cleanly for narrow collapsed navigation rail */

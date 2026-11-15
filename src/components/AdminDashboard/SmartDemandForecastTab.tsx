@@ -214,11 +214,11 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
       className={`rounded-2xl border transition-all overflow-hidden ${
         isLight
           ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-          : 'bg-zinc-900/90 border-zinc-800'
+          : 'bg-[#12141C] border-slate-800/80'
       }`}
     >
       {/* Header & Simulation Controls */}
-      <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+      <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -227,15 +227,15 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                 Velocity &amp; Seasonality Forecast Engine
               </span>
               {forecast && (
-                <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+                <span className="text-[11px] font-mono text-gray-500 dark:text-slate-400">
                   Outlet: {forecast.storeName} · Multiplier {forecast.seasonalityMultiplier.toFixed(2)}x
                 </span>
               )}
             </div>
-            <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Smart Demand Forecasting &amp; Stockout Prevention
             </h3>
-            <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-300'}`}>
               Predicts SKU depletion from real POS &amp; B2B sales velocity, vendor lead times, and seasonality surges,
               routing 1-click PRs to Grade A SRM partners.
             </p>
@@ -249,7 +249,7 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 isLight
                   ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -279,7 +279,7 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
         {/* Forecast Horizon & Seasonality Profile Selectors */}
         <div className="mt-4 flex flex-col lg:flex-row lg:items-center gap-3">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`text-[11px] font-bold uppercase tracking-wider mr-1 ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+            <span className={`text-[11px] font-bold uppercase tracking-wider mr-1 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Horizon:
             </span>
             {HORIZON_OPTIONS.map((opt) => (
@@ -292,7 +292,7 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                     ? 'bg-[#0F4C3A] text-white border-[#0F4C3A] shadow-2xs'
                     : isLight
                     ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                 }`}
               >
                 {opt.label}
@@ -301,7 +301,7 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`text-[11px] font-bold uppercase tracking-wider mr-1 ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+            <span className={`text-[11px] font-bold uppercase tracking-wider mr-1 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Demand Profile:
             </span>
             {PROFILE_OPTIONS.map((opt) => (
@@ -314,7 +314,7 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
                     : isLight
                     ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                 }`}
               >
                 {opt.label}
@@ -326,7 +326,7 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
         {/* Summary KPI Strip */}
         {forecast?.summary && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
+            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
               <div className="text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center justify-between">
                 <span>Stockout Imminent (≤ 2d)</span>
                 <Flame className="w-3.5 h-3.5" />
@@ -334,12 +334,12 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
               <div className="text-lg font-bold font-mono tabular-nums text-rose-600 dark:text-rose-400 mt-0.5">
                 {forecast.summary.stockoutImminentCount} SKUs
               </div>
-              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Immediate PR recommended
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
+            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
               <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400 flex items-center justify-between">
                 <span>Reorder Soon (3–5d)</span>
                 <CalendarClock className="w-3.5 h-3.5" />
@@ -347,12 +347,12 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
               <div className="text-lg font-bold font-mono tabular-nums text-amber-600 dark:text-amber-300 mt-0.5">
                 {forecast.summary.reorderSoonCount} SKUs
               </div>
-              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Within lead time + safety buffer
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
+            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
               <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center justify-between">
                 <span>Healthy Coverage (&gt; 5d)</span>
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -360,19 +360,19 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
               <div className="text-lg font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {forecast.summary.healthyCount} SKUs
               </div>
-              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Out of {forecast.summary.totalSkus} monitored SKUs
               </div>
             </div>
 
-            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-zinc-800/50 border-zinc-700/60'}`}>
-              <div className={`text-[11px] font-medium ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+            <div className={`p-3 rounded-xl border ${isLight ? 'bg-white border-gray-200/80' : 'bg-[#12141C] border-slate-800/80'}`}>
+              <div className={`text-[11px] font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Suggested PO/PR Capital
               </div>
               <div className="text-lg font-bold font-mono tabular-nums text-[#0F4C3A] dark:text-emerald-400 mt-0.5">
                 {formatIDR(forecast.summary.totalRecommendedOrderValueIDR)}
               </div>
-              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+              <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 For {horizonDays}-day demand horizon
               </div>
             </div>
@@ -396,10 +396,10 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                 onClick={() => setUrgencyFilter(f.id)}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
                   urgencyFilter === f.id
-                    ? 'bg-slate-900 text-white border-slate-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100'
+                    ? 'bg-slate-900 text-white border-slate-900 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800/50'
                     : isLight
                     ? 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
                 }`}
               >
                 {f.label}
@@ -408,14 +408,14 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
           </div>
 
           <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search SKU, product, vendor..."
               className={`w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none focus:ring-1 focus:ring-[#0F4C3A] ${
-                isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
               }`}
             />
           </div>
@@ -428,7 +428,7 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
           <thead>
             <tr
               className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
               }`}
             >
               <th className="py-3 px-4 w-8">
@@ -450,16 +450,16 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
               <th className="py-3 px-4 text-right">Action</th>
             </tr>
           </thead>
-          <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+          <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
             {isLoading && !forecast ? (
               <tr>
-                <td colSpan={9} className={`py-10 text-center text-xs ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+                <td colSpan={9} className={`py-10 text-center text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Computing SKU sales velocity &amp; lead-time projections...
                 </td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={9} className={`py-10 text-center text-xs ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+                <td colSpan={9} className={`py-10 text-center text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   No SKUs match the active forecast filters.
                 </td>
               </tr>
@@ -473,10 +473,10 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                       isSelected
                         ? isLight
                           ? 'bg-emerald-50/70'
-                          : 'bg-emerald-950/20'
+                          : 'bg-emerald-950/25'
                         : isLight
                         ? 'hover:bg-gray-50/80'
-                        : 'hover:bg-zinc-800/40'
+                        : 'hover:bg-slate-900/60'
                     }`}
                   >
                     <td className="py-3 px-4">
@@ -489,17 +489,17 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                       />
                     </td>
                     <td className="py-3 px-3">
-                      <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-zinc-100'}`}>
+                      <div className={`font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                         {item.productName}
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
                         <span className="font-mono">{item.sku}</span>
                         <span>·</span>
                         <span className="uppercase">{item.category.replace('_', ' ')}</span>
                       </div>
                     </td>
                     <td className="py-3 px-3 text-right font-mono tabular-nums">
-                      <span className={`font-bold ${isLight ? 'text-gray-900' : 'text-zinc-100'}`}>
+                      <span className={`font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                         {item.availableStock}
                       </span>
                       {item.incomingStock > 0 && (
@@ -509,10 +509,10 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                       )}
                     </td>
                     <td className="py-3 px-3 text-right font-mono tabular-nums">
-                      <span className={`font-bold ${isLight ? 'text-gray-900' : 'text-zinc-100'}`}>
+                      <span className={`font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                         {item.adjustedDailySales.toFixed(1)}/d
                       </span>
-                      <span className="block text-[10px] text-zinc-400">
+                      <span className="block text-[10px] text-slate-400">
                         Base {item.baseDailySales.toFixed(1)}/d
                       </span>
                     </td>
@@ -528,7 +528,7 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                       >
                         {item.daysOfSupply >= 999 ? '99+ d' : `${item.daysOfSupply} d`}
                       </span>
-                      <span className="block text-[10px] text-zinc-400">
+                      <span className="block text-[10px] text-slate-400">
                         {item.projectedStockoutDate ? `Out ~${item.projectedStockoutDate}` : 'No stockout'}
                       </span>
                     </td>
@@ -538,17 +538,17 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                           <span className="font-extrabold text-[#0F4C3A] dark:text-emerald-400">
                             +{item.recommendedReorderQty} units
                           </span>
-                          <span className="block text-[10px] text-zinc-400">
+                          <span className="block text-[10px] text-slate-400">
                             {formatIDR(item.estimatedOrderValueIDR)}
                           </span>
                         </>
                       ) : (
-                        <span className="text-[11px] text-zinc-400">—</span>
+                        <span className="text-[11px] text-slate-400">—</span>
                       )}
                     </td>
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`font-semibold truncate max-w-[175px] ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>
+                        <span className={`font-semibold truncate max-w-[175px] ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
                           {item.recommendedSupplierName}
                         </span>
                         <span
@@ -564,7 +564,7 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                           Grade {item.recommendedSupplierSrmGrade} ({item.recommendedSupplierSrmScore})
                         </span>
                       </div>
-                      <span className="text-[10px] text-zinc-400 block">
+                      <span className="text-[10px] text-slate-400 block">
                         Lead {item.leadTimeDays}d + Safety {item.safetyStockDays}d
                       </span>
                     </td>
@@ -580,14 +580,14 @@ export const SmartDemandForecastTab: React.FC<SmartDemandForecastTabProps> = ({
                               ? 'bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-2xs'
                               : isLight
                               ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                              : 'bg-slate-900/90 border border-slate-800/80 hover:bg-slate-800 text-slate-200'
                           }`}
                         >
                           <PlusCircle className="w-3.5 h-3.5" />
                           <span>{submittingRowSku === item.sku ? 'Creating...' : 'Generate Smart PR'}</span>
                         </button>
                       ) : (
-                        <span className="text-[11px] text-zinc-400 font-mono">Read Only</span>
+                        <span className="text-[11px] text-slate-400 font-mono">Read Only</span>
                       )}
                     </td>
                   </tr>

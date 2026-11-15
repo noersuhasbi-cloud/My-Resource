@@ -2334,7 +2334,19 @@ function syncBatchExpiryStatus(batch: InventoryBatch, nowMs: number = Date.now()
       : 0;
     return true;
   }
-  batch.daysUntilExpiry = Math.max(1, Math.ceil((expiryMs - nowMs) / 86400000));
+  const msLeft = expiryMs - nowMs;
+  batch.daysUntilExpiry = Math.max(1, Math.ceil(msLeft / 86400000));
+  if (
+    batch.status !== 'depleted' &&
+    batch.status !== 'quarantined' &&
+    batch.status !== 'recalled'
+  ) {
+    if (msLeft <= 48 * 3600 * 1000) {
+      batch.status = 'critical';
+    } else if (batch.daysUntilExpiry <= 7 && batch.status === 'fresh') {
+      batch.status = 'near_expiry';
+    }
+  }
   return false;
 }
 
@@ -2362,9 +2374,9 @@ function syncAllBatchesExpiryStatus(nowMs: number = Date.now()): void {
       emitEnterpriseNotification({
         dedupeKey: `EXPIRY_BATCH:${b.batchId}:CRITICAL_48H`,
         category: 'PERISHABLES',
-        severity: 'WARNING',
-        title: `Near-Expiry Clearance (<48h): ${b.productName}`,
-        message: `Lot ${b.lotNumber} (${b.currentStock} units) expires in ${hoursLeft}h at ${b.storeName}. Apply FEFO markdown clearance.`,
+        severity: 'CRITICAL',
+        title: `CRITICAL <= 48h Near-Expiry Alert: ${b.productName}`,
+        message: `Lot ${b.lotNumber} (${b.currentStock} units) expires in ${hoursLeft}h at ${b.storeName}. Trigger Auto Markdown 50% for POS liquidation.`,
         metadataLabel: `${b.sku} • Lot ${b.lotNumber} • ${hoursLeft}h left`,
         targetTab: 'fefo',
         skipIfExistsAny: true,
@@ -8098,10 +8110,56 @@ async function startServer() {
     const order = pickerOrders.find((o) => o.orderId === orderId);
     if (!order) return res.status(404).json({ error: 'Picker order not found' });
 
+    const { returnableAsset } = (req.body || {}) as {
+      returnableAsset?: { assetType?: string; assetIds?: string; quantity?: number };
+    };
+
     order.pickerStatus = 'completed';
     order.updatedAt = new Date().toISOString();
 
-    res.json({ success: true, order, message: `Order #${orderId} packed and staged at Cold-Chain Dispatch Bay!` });
+    let returnableAssetRecord: ReturnableContainerRecord | undefined;
+    const retQty = Math.max(0, Math.floor(Number(returnableAsset?.quantity) || 0));
+    if (retQty > 0) {
+      const recId = `KRT-ORD-${Date.now().toString().slice(-5)}-${returnableContainersList.length + 1}`;
+      const assetType = String(returnableAsset?.assetType || 'COLD_CHAIN_THERMAL_BOX').trim();
+      const assetIdsStr = String(returnableAsset?.assetIds || '').trim();
+      const labelMap: Record<string, string> = {
+        KRAT_PLASTIK_BUAH: 'Krat Plastik Buah/Sayur',
+        PALLET_KAYU_B2B: 'Pallet Kayu B2B',
+        COLD_CHAIN_THERMAL_BOX: 'Cold-Chain Insulated Box',
+      };
+      returnableAssetRecord = {
+        id: recId,
+        timestamp: order.updatedAt,
+        updatedAt: order.updatedAt,
+        storeId: order.storeId,
+        storeName: order.storeName,
+        containerType: assetType,
+        containerLabel: labelMap[assetType] || assetType,
+        direction: 'OUT_TO_CUSTOMER',
+        counterpartyName: `${order.customerName} (${order.customerPhone || order.orderId})`,
+        referenceDoc: order.orderId,
+        qtyIssued: retQty,
+        qtyReturned: 0,
+        qtyOutstanding: retQty,
+        depositPerUnitIDR: 0,
+        depositHeldIDR: 0,
+        status: 'OPEN',
+        glEntryIds: [],
+        notes: assetIdsStr ? `Perishable fulfillment asset IDs: ${assetIdsStr}` : `Issued with fulfillment #${order.orderId}`,
+      };
+      returnableContainersList.unshift(returnableAssetRecord);
+      scheduleStateSave();
+    }
+
+    res.json({
+      success: true,
+      order,
+      returnableAssetRecord,
+      message: returnableAssetRecord
+        ? `Order #${orderId} packed with ${retQty}x ${returnableAssetRecord.containerLabel} logged to Returnable Asset ledger!`
+        : `Order #${orderId} packed and staged at Cold-Chain Dispatch Bay!`,
+    });
   });
 
   // -------------------------------------------------------------
@@ -8542,6 +8600,7 @@ async function startServer() {
     const {
       items: bodyItems,
       actualWeights,
+      returnableAsset,
     } = (req.body || {}) as {
       items?: Array<{
         itemId?: string;
@@ -8551,6 +8610,11 @@ async function startServer() {
         actualWeighedGrams?: number;
       }>;
       actualWeights?: Record<string, number>;
+      returnableAsset?: {
+        assetType?: string;
+        assetIds?: string;
+        quantity?: number;
+      };
     };
 
     const order = pickerOrders.find((o) => o.orderId === id);
@@ -9049,12 +9113,49 @@ async function startServer() {
           targetTab: isPickup ? 'picker' : 'logistics',
         });
 
+        // Auxiliary Non-Inventory Returnable Asset tracking for perishable fulfillment
+        let returnableAssetRecord: ReturnableContainerRecord | undefined;
+        const retAssetQty = Math.max(0, Math.floor(Number(returnableAsset?.quantity) || 0));
+        if (retAssetQty > 0) {
+          const assetType = String(returnableAsset?.assetType || 'COLD_CHAIN_THERMAL_BOX').trim();
+          const assetIdsStr = String(returnableAsset?.assetIds || '').trim();
+          const labelMap: Record<string, string> = {
+            KRAT_PLASTIK_BUAH: 'Krat Plastik Buah/Sayur',
+            PALLET_KAYU_B2B: 'Pallet Kayu B2B',
+            COLD_CHAIN_THERMAL_BOX: 'Cold-Chain Insulated Box',
+          };
+          returnableAssetRecord = {
+            id: `KRT-FUL-${Date.now().toString().slice(-5)}-${returnableContainersList.length + 1}`,
+            timestamp: nowIso,
+            updatedAt: nowIso,
+            storeId: order.storeId,
+            storeName: order.storeName,
+            containerType: assetType,
+            containerLabel: labelMap[assetType] || assetType,
+            direction: 'OUT_TO_CUSTOMER',
+            counterpartyName: `${order.customerName} (${order.customerPhone || order.orderId})`,
+            referenceDoc: order.orderId,
+            qtyIssued: retAssetQty,
+            qtyReturned: 0,
+            qtyOutstanding: retAssetQty,
+            depositPerUnitIDR: 0,
+            depositHeldIDR: 0,
+            status: 'OPEN',
+            glEntryIds: [],
+            notes: assetIdsStr
+              ? `Perishable order asset IDs: ${assetIdsStr}`
+              : `Assigned during fulfillment #${order.orderId}`,
+          };
+          returnableContainersList.unshift(returnableAssetRecord);
+        }
+
         scheduleStateSave();
 
         return {
           success: true,
           order,
           fulfillmentStatus: order.fulfillmentStatus,
+          returnableAssetRecord,
           totals: {
             subtotalIDR: lineSubtotalIDR,
             discountIDR,
@@ -9323,7 +9424,7 @@ async function startServer() {
     res.json(goodsReceipts);
   });
 
-  // GOODS RECEIPT WITH PARTIAL SHIPMENT FULFILLMENT
+  // GOODS RECEIPT WITH PARTIAL SHIPMENT FULFILLMENT + ADVANCED LANDED COST INJECTION
   app.post('/api/admin/procurement/gr/receive-partial', (req: Request, res: Response) => {
     const {
       poId,
@@ -9332,7 +9433,22 @@ async function startServer() {
       receiverNotes,
       warehouseZoneId = 'WH-JKT-SEN-COLD',
       items, // array of { sku, quantityReceived, batchNumber, expiryDate, qualityCondition, tempCheckCelsius }
-    } = req.body;
+      landedCostAllocation,
+    } = req.body as {
+      poId: string;
+      deliveryNoteNumber?: string;
+      receivedBy?: string;
+      receiverNotes?: string;
+      warehouseZoneId?: string;
+      items: any[];
+      landedCostAllocation?: {
+        freightCostIDR?: number;
+        insuranceCostIDR?: number;
+        customsDutyIDR?: number;
+        coldChainLogisticsIDR?: number;
+        allocationMethod?: 'BY_QUANTITY' | 'BY_VALUE';
+      };
+    };
 
     const po = purchaseOrders.find((p) => p.id === poId);
     if (!po) return res.status(404).json({ error: 'Purchase Order not found' });
@@ -9359,10 +9475,60 @@ async function startServer() {
       }
     }
 
+    // Compute optional Advanced Landed Cost & Import Allocation extras
+    const safeFreight = Math.max(0, roundIDR(Number(landedCostAllocation?.freightCostIDR) || 0));
+    const safeInsurance = Math.max(0, roundIDR(Number(landedCostAllocation?.insuranceCostIDR) || 0));
+    const safeCustoms = Math.max(0, roundIDR(Number(landedCostAllocation?.customsDutyIDR) || 0));
+    const safeColdChain = Math.max(0, roundIDR(Number(landedCostAllocation?.coldChainLogisticsIDR) || 0));
+    const totalLandedExtrasIDR = safeFreight + safeInsurance + safeCustoms + safeColdChain;
+    const lcMethod: 'BY_QUANTITY' | 'BY_VALUE' =
+      landedCostAllocation?.allocationMethod === 'BY_VALUE' ? 'BY_VALUE' : 'BY_QUANTITY';
+
+    // Pre-calculate allocation weights across received owned stock lines (skipping consignment)
+    const ownedLinesMetrics = items
+      .map((itemInput: any) => {
+        const poItem = po.items.find((i) => i.sku === itemInput.sku);
+        if (!poItem) return null;
+        const catalogItem = inventoryList.find((i) => i.sku === poItem.sku);
+        const isConsignmentItem = Boolean(
+          poItem.isConsignment || catalogItem?.isConsignment || itemInput.isConsignment
+        );
+        const receivedQty = Math.max(0, Number(itemInput.quantityReceived) || 0);
+        const bonusQty = Math.max(0, Number(itemInput.bonusQty) || 0);
+        const totalAdded = receivedQty + bonusQty;
+        if (totalAdded <= 0 || isConsignmentItem) return null;
+        return {
+          sku: poItem.sku,
+          totalAdded,
+          baseCost: receivedQty * poItem.unitCost,
+        };
+      })
+      .filter(Boolean) as Array<{ sku: string; totalAdded: number; baseCost: number }>;
+
+    const totalOwnedUnitsAdded = ownedLinesMetrics.reduce((s, m) => s + m.totalAdded, 0);
+    const totalOwnedBaseCost = ownedLinesMetrics.reduce((s, m) => s + m.baseCost, 0);
+    const landedShareBySku = new Map<string, number>();
+    if (totalLandedExtrasIDR > 0 && ownedLinesMetrics.length > 0) {
+      let runningAllocated = 0;
+      ownedLinesMetrics.forEach((m, idx) => {
+        const share =
+          idx === ownedLinesMetrics.length - 1
+            ? Math.max(0, totalLandedExtrasIDR - runningAllocated)
+            : lcMethod === 'BY_VALUE' && totalOwnedBaseCost > 0
+            ? Math.round((totalLandedExtrasIDR * m.baseCost) / totalOwnedBaseCost)
+            : totalOwnedUnitsAdded > 0
+            ? Math.round((totalLandedExtrasIDR * m.totalAdded) / totalOwnedUnitsAdded)
+            : Math.round(totalLandedExtrasIDR / ownedLinesMetrics.length);
+        runningAllocated += share;
+        landedShareBySku.set(m.sku, share);
+      });
+    }
+
     let grTotalCost = 0;
     let ownedGrTotalCost = 0;
     let consignmentItemCount = 0;
     const grItemsReceived: GoodsReceiptRecord['items'] = [];
+    const landedAllocatedItems: LandedCostRecord['allocatedItems'] = [];
 
     // Process each received item
     items.forEach((itemInput: any) => {
@@ -9383,16 +9549,33 @@ async function startServer() {
         poItem.isConsignment || catalogItem?.isConsignment || itemInput.isConsignment
       );
 
-      // FOC bonus goods carry Rp 0 additional payable; Moving Average Cost dilutes over (paid + bonus)
+      // Base merchandise cost + allocated landed extras (Freight, Insurance, Customs, Cold-Chain)
       const itemCost = receivedQty * poItem.unitCost;
+      const lineLandedShare = isConsignmentItem ? 0 : (landedShareBySku.get(poItem.sku) || 0);
+      const totalLineCostBasis = itemCost + lineLandedShare;
       grTotalCost += itemCost;
       if (isConsignmentItem) {
         consignmentItemCount += 1;
       } else {
         ownedGrTotalCost += itemCost;
       }
-      const dilutedUnitCost =
+      const baseDilutedUnitCost =
         totalStockAdded > 0 ? Math.round(itemCost / totalStockAdded) : poItem.unitCost;
+      const actualLandedUnitCost =
+        totalStockAdded > 0 ? Math.round(totalLineCostBasis / totalStockAdded) : poItem.unitCost;
+      const landedPerUnitDelta = Math.max(0, actualLandedUnitCost - baseDilutedUnitCost);
+
+      if (lineLandedShare > 0) {
+        landedAllocatedItems.push({
+          sku: poItem.sku,
+          productName: poItem.productName,
+          quantity: totalStockAdded,
+          baseUnitCost: baseDilutedUnitCost,
+          allocatedCostIDR: landedPerUnitDelta,
+          newUnitCost: actualLandedUnitCost,
+          totalLineLandedCost: lineLandedShare,
+        });
+      }
 
       grItemsReceived.push({
         sku: poItem.sku,
@@ -9407,15 +9590,15 @@ async function startServer() {
         isConsignment: isConsignmentItem,
       });
 
-      // Update catalog inventory item with Moving Average Cost (WAC) diluted across paid + FOC bonus units
+      // Update catalog inventory HPP / Moving Average Cost (WAC) — NEVER modifies sellingPrice
       if (catalogItem) {
         const oldStock = Math.max(0, Number(catalogItem.currentStock) || 0);
         const oldCost = Number(catalogItem.wacUnitCost ?? catalogItem.unitCost ?? poItem.unitCost) || 0;
         const newTotalStock = oldStock + totalStockAdded;
         const newWac =
           newTotalStock > 0
-            ? Math.round(((oldStock * oldCost) + (receivedQty * poItem.unitCost)) / newTotalStock)
-            : poItem.unitCost;
+            ? Math.round(((oldStock * oldCost) + totalLineCostBasis) / newTotalStock)
+            : actualLandedUnitCost;
 
         catalogItem.currentStock = newTotalStock;
         if (!isConsignmentItem) {
@@ -9428,7 +9611,7 @@ async function startServer() {
         catalogItem.stockBatches.push({
           batchId: itemInput.batchNumber || `BAT-${Date.now().toString().slice(-6)}`,
           quantity: totalStockAdded,
-          unitCost: dilutedUnitCost,
+          unitCost: actualLandedUnitCost,
           receivedAt: new Date().toISOString(),
         });
       }
@@ -9437,7 +9620,7 @@ async function startServer() {
         String(itemInput.qualityCondition || '').toLowerCase().includes('quarantine') ||
         String(itemInput.qualityCondition || '').toLowerCase().includes('hold');
 
-      // Update multi-tier inventory tier for specific store & warehouse zone
+      // Update multi-tier inventory tier for specific store & warehouse zone (HPP only)
       const tier = storeInventoryTiers.find((t) => t.sku === poItem.sku && t.storeId === po.storeId);
       if (tier) {
         const tierOldStock = Math.max(0, Number(tier.physicalStock) || 0);
@@ -9445,8 +9628,8 @@ async function startServer() {
         const tierNewStock = tierOldStock + totalStockAdded;
         const tierNewWac =
           tierNewStock > 0
-            ? Math.round(((tierOldStock * tierOldCost) + (receivedQty * poItem.unitCost)) / tierNewStock)
-            : poItem.unitCost;
+            ? Math.round(((tierOldStock * tierOldCost) + totalLineCostBasis) / tierNewStock)
+            : actualLandedUnitCost;
 
         if (!isConsignmentItem) {
           tier.unitCost = tierNewWac;
@@ -9462,7 +9645,7 @@ async function startServer() {
         tier.updatedAt = new Date().toISOString();
       }
 
-      // Create tracked Lot / Batch record in inventoryBatches for FEFO/FIFO traceability
+      // Create tracked Lot / Batch record in inventoryBatches using Actual Landed Cost per Unit for P&L COGS
       const lotCode = itemInput.batchNumber || `BAT-${Date.now().toString().slice(-6)}`;
       const expiryIso =
         itemInput.expiryDate ||
@@ -9483,7 +9666,8 @@ async function startServer() {
         lotNumber: lotCode,
         initialQuantity: totalStockAdded,
         currentStock: totalStockAdded,
-        unitCost: dilutedUnitCost,
+        unitCost: actualLandedUnitCost,
+        landedCostPerUnitDelta: landedPerUnitDelta > 0 ? landedPerUnitDelta : undefined,
         sellingPrice: catalogItem?.sellingPrice || Math.round(poItem.unitCost * 1.45),
         receivedDate: new Date().toISOString(),
         expiryDate: expiryIso,
@@ -9492,6 +9676,8 @@ async function startServer() {
           ? 'expired'
           : isQuarantineHold
           ? 'quarantined'
+          : daysUntilExpiry <= 2
+          ? 'critical'
           : daysUntilExpiry <= 7
           ? 'near_expiry'
           : 'fresh',
@@ -9500,8 +9686,10 @@ async function startServer() {
         sourcePoNumber: po.id,
         notes: isConsignmentItem
           ? `Consignment (Titip Jual) received via GR against ${po.id} — Zero #1040/#2010 GL on receipt`
+          : lineLandedShare > 0
+          ? `Received via GR against ${po.id} (Actual Landed HPP: Rp ${actualLandedUnitCost.toLocaleString('id-ID')}/unit, incl. +Rp ${landedPerUnitDelta.toLocaleString('id-ID')} import/freight/cold-chain allocation)`
           : bonusQty > 0
-          ? `Received ${receivedQty} paid + ${bonusQty} FOC bonus via GR against ${po.id} (WAC diluted to Rp ${dilutedUnitCost.toLocaleString('id-ID')})`
+          ? `Received ${receivedQty} paid + ${bonusQty} FOC bonus via GR against ${po.id} (WAC diluted to Rp ${actualLandedUnitCost.toLocaleString('id-ID')})`
           : `Received via GR against ${po.id}`,
         isConsignment: isConsignmentItem,
         consignmentSupplier: isConsignmentItem ? (poItem.consignmentSupplier || catalogItem?.consignmentSupplier || po.supplierName) : undefined,
@@ -9549,6 +9737,8 @@ async function startServer() {
     po.goodsReceiptIds.push(grId);
     goodsReceipts.unshift(newGR);
 
+    const createdJournalIds: string[] = [];
+
     // Auto-Post Double Entry to General Ledger ONLY for owned inventory (Titip Jual skips #1040/#2010 until sold)
     if (roundedOwnedCost > 0) {
       commitBalancedGlBatch(
@@ -9578,12 +9768,76 @@ async function startServer() {
             debit: 0,
             credit: roundedOwnedCost,
             referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
-          referenceId: grId,
-          description: `${grId}: Trade liability accrued for received items on PO #${po.id}`,
-        },
-      ],
-      true
-    );
+            referenceId: grId,
+            description: `${grId}: Trade liability accrued for received items on PO #${po.id}`,
+          },
+        ],
+        true
+      );
+      createdJournalIds.push(gleId1, gleId2);
+    }
+
+    // Capitalize optional Import / Freight / Cold-Chain Landed Cost extras into #1040 vs #2040 Clearing
+    const effectiveLandedAbsorbed = landedAllocatedItems.reduce((s, it) => s + it.totalLineLandedCost, 0);
+    let createdLandedRecord: LandedCostRecord | undefined;
+    if (effectiveLandedAbsorbed > 0 && landedAllocatedItems.length > 0) {
+      const lcId = `LC-GR-${Date.now().toString().slice(-4)}-${landedCostsList.length + 1}`;
+      const lcGlDrId = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const lcGlCrId = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      const nowLcIso = new Date().toISOString();
+      commitBalancedGlBatch(
+        [
+          {
+            id: lcGlDrId,
+            timestamp: nowLcIso,
+            storeId: po.storeId,
+            storeName: po.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: effectiveLandedAbsorbed,
+            credit: 0,
+            referenceType: 'LANDED_COST',
+            referenceId: lcId,
+            description: `Stock-In Import & Cold-Chain Landed Cost absorbed for ${grId} (PO #${po.id})`,
+          },
+          {
+            id: lcGlCrId,
+            timestamp: nowLcIso,
+            storeId: po.storeId,
+            storeName: po.storeName,
+            accountCode: '2040',
+            accountName: 'Accrued Freight, Duties & Cold-Chain Clearing',
+            category: 'Liability',
+            debit: 0,
+            credit: effectiveLandedAbsorbed,
+            referenceType: 'LANDED_COST',
+            referenceId: lcId,
+            description: `Landed cost clearing (Freight/Insurance/Duty/Cold Chain) on ${grId}`,
+          },
+        ],
+        true
+      );
+      createdJournalIds.push(lcGlDrId, lcGlCrId);
+
+      createdLandedRecord = {
+        id: lcId,
+        timestamp: nowLcIso,
+        description: `Stock-In Import & Cold-Chain Allocation (${grId})`,
+        poId: po.id,
+        receiptNumber: grId,
+        currency: 'IDR',
+        exchangeRate: 1,
+        freightCostIDR: safeFreight,
+        customsDutyIDR: safeCustoms,
+        handlingCostIDR: safeColdChain,
+        insuranceCostIDR: safeInsurance,
+        totalLandedCostIDR: effectiveLandedAbsorbed,
+        allocationMethod: lcMethod,
+        allocatedItems: landedAllocatedItems,
+        glEntryIds: [lcGlDrId, lcGlCrId],
+      };
+      landedCostsList.unshift(createdLandedRecord);
     }
 
     syncWarehouseRackOccupancy();
@@ -9614,7 +9868,14 @@ async function startServer() {
       purchaseOrder: po,
       isPartial,
       remainingBackorder: totalRemaining,
-      journalEntryIds: roundedOwnedCost > 0 ? [gleId1, gleId2] : [],
+      journalEntryIds: createdJournalIds,
+      landedCostSummary: createdLandedRecord
+        ? {
+            id: createdLandedRecord.id,
+            totalLandedCostIDR: effectiveLandedAbsorbed,
+            allocatedItems: landedAllocatedItems,
+          }
+        : undefined,
     });
   });
 
@@ -11061,6 +11322,70 @@ async function startServer() {
       });
     });
 
+    // Emit temporary Dynamic Discount SKUs created by the Automated Dynamic Markdown Engine ("Marked Down")
+    inventoryBatches.forEach((b) => {
+      if (
+        b.markdownStatus === 'Marked Down' &&
+        (b.markdownDiscountPercent || 0) > 0 &&
+        b.currentStock > 0 &&
+        b.status !== 'quarantined' &&
+        b.status !== 'recalled' &&
+        b.status !== 'expired' &&
+        b.status !== 'depleted' &&
+        new Date(b.expiryDate).getTime() > nowMs &&
+        (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati')
+      ) {
+        const inv = inventoryList.find((i) => i.sku === b.sku);
+        const prod = PRODUCTS.find(
+          (p) => p.id === inv?.productId || p.name.toLowerCase() === b.productName.toLowerCase()
+        );
+        const origPrice = b.sellingPrice || prod?.price || inv?.sellingPrice || Math.round(b.unitCost * 1.45);
+        const pct = Math.max(1, Math.min(80, Math.round(b.markdownDiscountPercent || 50)));
+        const discPrice = Math.round(origPrice * (1 - pct / 100));
+        const dynSku =
+          b.dynamicDiscountSku ||
+          `${b.sku}-MD${pct}-${b.lotNumber.replace(/[^A-Z0-9]/gi, '').slice(-4).toUpperCase()}`;
+        const batchAvail = Math.max(0, Number((b.currentStock - (b.reservedQuantity || 0)).toFixed(2)));
+        if (batchAvail <= 0) return;
+
+        posCatalog.unshift({
+          sku: dynSku,
+          productId: prod?.id || b.sku,
+          name: `${b.productName} [⚡ Marked Down -${pct}%]`,
+          category: prod?.category || inv?.category || 'produce',
+          sellingPrice: discPrice,
+          originalSellingPrice: origPrice,
+          discountPercent: pct,
+          markdownStatus: 'Marked Down',
+          isDynamicDiscountSku: true,
+          sourceBatchId: b.batchId,
+          originalSku: b.sku,
+          unitCost: b.unitCost,
+          unit: prod?.unit || inv?.unit || 'pack',
+          barcode: dynSku,
+          image:
+            prod?.image ||
+            'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80',
+          currentStock: b.currentStock,
+          availableStock: batchAvail,
+          isWeighted: false,
+          pricePerKg: discPrice,
+          nearestBatchId: b.batchId,
+          lotNumber: b.lotNumber,
+          expiryDate: b.expiryDate,
+          daysUntilExpiry: b.daysUntilExpiry,
+          batchStatus: 'critical',
+          isConsignment: Boolean(inv?.isConsignment || b.isConsignment),
+          consignmentSupplier: inv?.consignmentSupplier || b.consignmentSupplier,
+          consignmentCommissionPercent: inv?.consignmentCommissionPercent ?? b.consignmentCommissionPercent,
+          halalStatus: inv?.halalStatus,
+          bpjphCertNumber: inv?.bpjphCertNumber,
+          bpjphExpiryDate: inv?.bpjphExpiryDate,
+          bpomRegNumber: inv?.bpomRegNumber,
+        });
+      }
+    });
+
     let filtered = posCatalog;
     if (cleanCategory !== 'all') {
       filtered = filtered.filter((p) => p.category.toLowerCase() === cleanCategory);
@@ -11071,6 +11396,7 @@ async function startServer() {
           p.name.toLowerCase().includes(cleanSearch) ||
           p.sku.toLowerCase().includes(cleanSearch) ||
           p.barcode.toLowerCase().includes(cleanSearch) ||
+          (p.originalSku && p.originalSku.toLowerCase().includes(cleanSearch)) ||
           p.category.toLowerCase().includes(cleanSearch)
       );
     }
@@ -11163,16 +11489,60 @@ async function startServer() {
       }
     }
 
-    // ATOMIC PRE-CHECK: Aggregate requested qty per SKU & validate sellable non-expired ATP before any mutation
+    // ATOMIC PRE-CHECK: Resolve temporary Dynamic Discount SKUs & validate sellable non-expired ATP before mutation
     const nowMs = Date.now();
+    const resolveDynamicDiscountBatch = (item: any): InventoryBatch | undefined => {
+      const skuStr = String(item?.sku || '').trim();
+      const byBatchId = item?.sourceBatchId
+        ? inventoryBatches.find((b) => b.batchId === item.sourceBatchId)
+        : undefined;
+      if (byBatchId && byBatchId.markdownStatus === 'Marked Down') return byBatchId;
+      return inventoryBatches.find(
+        (b) =>
+          b.dynamicDiscountSku &&
+          b.dynamicDiscountSku === skuStr &&
+          b.markdownStatus === 'Marked Down'
+      );
+    };
+
     const requestedBySku = new Map<string, number>();
+    const requestedByDynBatch = new Map<string, { batch: InventoryBatch; qty: number }>();
     for (const item of items as any[]) {
       const sku = String(item.sku || '').trim();
       const qty = Number(item.quantity);
       if (!sku || !Number.isFinite(qty) || qty <= 0) {
         return res.status(400).json({ error: `Invalid SKU or quantity in POS cart (${sku || 'unknown'}).` });
       }
-      requestedBySku.set(sku, Number(((requestedBySku.get(sku) || 0) + qty).toFixed(3)));
+      const dynBatch = resolveDynamicDiscountBatch(item);
+      if (dynBatch) {
+        syncBatchExpiryStatus(dynBatch, nowMs);
+        if (
+          dynBatch.status === 'expired' ||
+          dynBatch.status === 'quarantined' ||
+          dynBatch.status === 'recalled' ||
+          new Date(dynBatch.expiryDate).getTime() <= nowMs
+        ) {
+          return res.status(400).json({
+            error: `Dynamic Discount SKU ${sku} batch (${dynBatch.lotNumber}) has expired or is locked.`,
+          });
+        }
+        const prev = requestedByDynBatch.get(dynBatch.batchId);
+        requestedByDynBatch.set(dynBatch.batchId, {
+          batch: dynBatch,
+          qty: Number((((prev?.qty || 0) + qty)).toFixed(3)),
+        });
+      } else {
+        requestedBySku.set(sku, Number(((requestedBySku.get(sku) || 0) + qty).toFixed(3)));
+      }
+    }
+
+    for (const { batch, qty } of requestedByDynBatch.values()) {
+      const availBatch = Math.max(0, Number((batch.currentStock - (batch.reservedQuantity || 0)).toFixed(2)));
+      if (qty > availBatch) {
+        return res.status(400).json({
+          error: `Insufficient marked-down batch stock for ${batch.dynamicDiscountSku || batch.sku}: requested ${qty}, available ${availBatch}.`,
+        });
+      }
     }
 
     for (const [sku, totalReqQty] of requestedBySku.entries()) {
@@ -11187,40 +11557,46 @@ async function startServer() {
     // PURE PRE-PRICING PASS (Wholesale Tiers + Markdown + Promo + Tax + Split Sum Validation BEFORE mutating inventory)
     const prePricedLines = (items as any[]).map((item: any) => {
       const qty = Math.max(0, Number(item.quantity) || 1);
-      const inv = inventoryList.find((i) => i.sku === item.sku);
+      const dynBatch = resolveDynamicDiscountBatch(item);
+      const baseLookupSku = dynBatch ? dynBatch.sku : item.sku;
+      const inv = inventoryList.find((i) => i.sku === baseLookupSku);
       const prod = PRODUCTS.find(
         (p) => p.id === (item.productId || inv?.productId) || p.name.toLowerCase() === String(item.name || inv?.productName || '').toLowerCase()
       );
-      const nearestBatch = inventoryBatches
-        .filter((b) => {
-          syncBatchExpiryStatus(b, nowMs);
-          return (
-            b.sku === item.sku &&
-            (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati') &&
-            b.currentStock > 0 &&
-            b.status !== 'quarantined' &&
-            b.status !== 'recalled' &&
-            b.status !== 'expired' &&
-            b.status !== 'depleted' &&
-            new Date(b.expiryDate).getTime() > nowMs
-          );
-        })
-        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime())[0];
+      const nearestBatch =
+        dynBatch ||
+        inventoryBatches
+          .filter((b) => {
+            syncBatchExpiryStatus(b, nowMs);
+            return (
+              b.sku === baseLookupSku &&
+              (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati') &&
+              b.currentStock > 0 &&
+              b.status !== 'quarantined' &&
+              b.status !== 'recalled' &&
+              b.status !== 'expired' &&
+              b.status !== 'depleted' &&
+              new Date(b.expiryDate).getTime() > nowMs
+            );
+          })
+          .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime())[0];
 
       const mdCandidate = nearestBatch ? evaluateBatchMarkdown(nearestBatch, dynamicMarkdownConfig) : null;
       const catalogBasePrice = nearestBatch?.sellingPrice || prod?.price || inv?.sellingPrice || 0;
-      const markdownUnitPrice = mdCandidate
+      const markdownUnitPrice = dynBatch
+        ? Math.round(catalogBasePrice * (1 - (dynBatch.markdownDiscountPercent || 50) / 100))
+        : mdCandidate
         ? mdCandidate.markdownPrice
         : nearestBatch?.markdownDiscountPercent && nearestBatch.markdownDiscountPercent > 0
         ? Math.round(catalogBasePrice * (1 - nearestBatch.markdownDiscountPercent / 100))
         : 0;
 
       const rawUnitPrice = Number(item.unitPrice ?? item.price ?? inv?.sellingPrice ?? catalogBasePrice) || 0;
-      let effectiveUnitPrice = rawUnitPrice;
+      let effectiveUnitPrice = dynBatch && markdownUnitPrice > 0 ? markdownUnitPrice : rawUnitPrice;
       let appliedWholesaleTierLabel: string | undefined;
 
       const isScaleWeightedLine = Boolean(item.netWeightGrams || (item.isWeighted && item.unit === 'kg'));
-      if (!isScaleWeightedLine && !item.isManualPriceOverride && inv?.wholesaleTiers?.length) {
+      if (!dynBatch && !isScaleWeightedLine && !item.isManualPriceOverride && inv?.wholesaleTiers?.length) {
         const tierBasePrice = Math.max(inv.sellingPrice || 0, rawUnitPrice, catalogBasePrice);
         const tierRes = resolveWholesaleTierPrice(inv.wholesaleTiers, qty, tierBasePrice);
         if (tierRes.appliedTier && tierRes.unitPriceIDR <= effectiveUnitPrice) {
@@ -11230,6 +11606,7 @@ async function startServer() {
       }
 
       if (
+        !dynBatch &&
         !isScaleWeightedLine &&
         !item.isManualPriceOverride &&
         markdownUnitPrice > 0 &&
@@ -11241,7 +11618,7 @@ async function startServer() {
       }
 
       const unitCost = roundIDR(
-        Number(item.unitCost ?? inv?.wacUnitCost ?? inv?.unitCost) || Math.round(effectiveUnitPrice * 0.62)
+        Number(dynBatch?.unitCost ?? item.unitCost ?? inv?.wacUnitCost ?? inv?.unitCost) || Math.round(effectiveUnitPrice * 0.62)
       );
       const lineTotal =
         effectiveUnitPrice !== rawUnitPrice || !item.lineTotal
@@ -11250,6 +11627,8 @@ async function startServer() {
 
       return {
         rawItem: item,
+        dynBatch,
+        baseLookupSku,
         qty,
         inv,
         prod,
@@ -11310,7 +11689,8 @@ async function startServer() {
           : 0;
       remainingCartDiscount = Math.max(0, remainingCartDiscount - discountShare);
       const netDiscountedLineTotal = Math.max(0, line.lineTotal - discountShare);
-      const rule = skuTaxRulesList.find((r) => r.sku === line.rawItem.sku);
+      const taxRuleLookupSku = line.baseLookupSku || line.rawItem.sku;
+      const rule = skuTaxRulesList.find((r) => r.sku === line.rawItem.sku) || skuTaxRulesList.find((r) => r.sku === taxRuleLookupSku);
       const taxCat: IndonesianTaxCategory =
         rule?.taxCategory || inferDefaultTaxCategory(line.category || '', line.name || '');
       const stdRate = rule?.taxRatePercent ?? posCheckoutConfig.ppnTaxPercent ?? 11;
@@ -11349,14 +11729,15 @@ async function startServer() {
     let inventoryDeductedCount = 0;
 
     const normalizedItems = prePricedLines.map((line) => {
-      const { rawItem: item, qty, inv, prod, nearestBatch, effectiveUnitPrice, unitCost, lineTotal } = line;
+      const { rawItem: item, dynBatch, baseLookupSku, qty, inv, prod, nearestBatch, effectiveUnitPrice, unitCost, lineTotal } = line;
       const isConsignmentLine = Boolean(
         item.isConsignment || inv?.isConsignment || nearestBatch?.isConsignment
       );
+      const deductionSku = baseLookupSku || item.sku;
 
       // A. Store Inventory Tiers
       const tier = storeInventoryTiers.find(
-        (t) => t.sku === item.sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
+        (t) => t.sku === deductionSku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
       );
       if (tier) {
         tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
@@ -11371,8 +11752,36 @@ async function startServer() {
         inv.currentStock = Math.max(0, Number((inv.currentStock - qty).toFixed(2)));
       }
 
-      // C. Strategy-Aware Batch Deduction (FEFO vs FIFO, skipping quarantined/expired lots)
-      const batchDeduction = deductBatchesByStrategy(item.sku, qty, storeId, unitCost);
+      // C. Specific Batch Deduction for Temporary Dynamic Discount SKU, or Strategy-Aware FEFO/FIFO Deduction
+      let batchDeduction: ReturnType<typeof deductBatchesByStrategy>;
+      if (dynBatch) {
+        const take = Math.min(dynBatch.currentStock, qty);
+        dynBatch.currentStock = Math.max(0, Number((dynBatch.currentStock - take).toFixed(2)));
+        if (dynBatch.currentStock === 0) {
+          dynBatch.status = 'depleted';
+        }
+        const subtotalCost = Math.round(take * dynBatch.unitCost);
+        batchDeduction = {
+          strategyApplied: 'FEFO',
+          allocations: [
+            {
+              batchId: dynBatch.batchId,
+              lotNumber: dynBatch.lotNumber,
+              expiryDate: dynBatch.expiryDate,
+              allocatedQty: take,
+              unitCost: dynBatch.unitCost,
+              subtotalCost,
+            },
+          ],
+          totalCogs: subtotalCost,
+          remainingShortage: Math.max(0, qty - take),
+          allocatedQty: take,
+          insufficientStock: false,
+          availableSellableQty: dynBatch.currentStock,
+        };
+      } else {
+        batchDeduction = deductBatchesByStrategy(deductionSku, qty, storeId, unitCost);
+      }
       const cogsLine =
         batchDeduction.allocatedQty > 0 ? roundIDR(batchDeduction.totalCogs) : roundIDR(unitCost * qty);
       totalCogsCost = roundIDR(totalCogsCost + cogsLine);
@@ -11396,7 +11805,7 @@ async function startServer() {
           storeName,
           channel: 'POS',
           referenceId: receiptNumber,
-          sku: item.sku,
+          sku: deductionSku,
           productName: line.name,
           supplierName:
             inv?.consignmentSupplier ||
@@ -15015,11 +15424,25 @@ async function startServer() {
   });
 
   app.get('/api/admin/inventory/transfer', (_req: Request, res: Response) => {
-    res.json(stockTransfersList);
+    const enriched = stockTransfersList.map((t) => {
+      const ret = returnableContainersList.find(
+        (r) => (t.returnableAssetId && r.id === t.returnableAssetId) || r.referenceDoc === t.id
+      );
+      if (!ret) return t;
+      return {
+        ...t,
+        returnableAssetId: ret.id,
+        returnableAssetType: t.returnableAssetType || ret.containerLabel || ret.containerType,
+        returnableAssetQty: ret.qtyIssued,
+        returnableAssetOutstanding: ret.qtyOutstanding,
+        returnableAssetStatus: ret.status,
+      };
+    });
+    res.json(enriched);
   });
 
   app.post('/api/admin/inventory/transfer', (req: Request, res: Response) => {
-    const { sku, sourceStoreId, destinationStoreId, quantity, notes, status: reqStatus } = req.body;
+    const { sku, sourceStoreId, destinationStoreId, quantity, notes, status: reqStatus, returnableAsset } = req.body;
     const qty = Math.max(0, Number(quantity) || 0);
 
     if (!sku || !sourceStoreId || !destinationStoreId || qty <= 0) {
@@ -15179,6 +15602,43 @@ async function startServer() {
       inTransitTransferLots.set(recordId, movedLots);
     }
 
+    const retQty = Math.max(0, Math.floor(Number(returnableAsset?.quantity) || 0));
+    let linkedReturnable: ReturnableContainerRecord | undefined;
+    if (retQty > 0) {
+      const assetType = String(returnableAsset?.assetType || 'KRAT_PLASTIK_BUAH').trim();
+      const assetIdsStr = String(returnableAsset?.assetIds || '').trim();
+      const labelMap: Record<string, string> = {
+        KRAT_PLASTIK_BUAH: 'Krat Plastik Buah/Sayur',
+        PALLET_KAYU_B2B: 'Pallet Kayu B2B',
+        COLD_CHAIN_THERMAL_BOX: 'Cold-Chain Insulated Box',
+      };
+      const containerLabel = labelMap[assetType] || assetType;
+      const recipientLabel = String(returnableAsset?.recipientName || '').trim() || destStoreName;
+      linkedReturnable = {
+        id: `KRT-TRF-${Date.now().toString().slice(-5)}-${returnableContainersList.length + 1}`,
+        timestamp,
+        updatedAt: timestamp,
+        storeId: sourceStoreId,
+        storeName: sourceStoreName,
+        containerType: assetType,
+        containerLabel,
+        direction: 'OUT_TO_CUSTOMER',
+        counterpartyName: recipientLabel,
+        referenceDoc: recordId,
+        qtyIssued: retQty,
+        qtyReturned: 0,
+        qtyOutstanding: retQty,
+        depositPerUnitIDR: 0,
+        depositHeldIDR: 0,
+        status: 'OPEN',
+        glEntryIds: [],
+        notes: assetIdsStr
+          ? `Assigned on transfer ${recordId} · Asset IDs: ${assetIdsStr}`
+          : `Assigned on transfer ${recordId} to ${recipientLabel}`,
+      };
+      returnableContainersList.unshift(linkedReturnable);
+    }
+
     const record: StockTransferRecord = {
       id: recordId,
       timestamp,
@@ -15195,9 +15655,20 @@ async function startServer() {
       status: normalizedStatus,
       notes,
       suratJalanNumber: req.body.suratJalanNumber,
+      ...(linkedReturnable
+        ? {
+            returnableAssetId: linkedReturnable.id,
+            returnableAssetType: linkedReturnable.containerLabel,
+            returnableAssetIds: String(returnableAsset?.assetIds || '').trim() || undefined,
+            returnableAssetQty: linkedReturnable.qtyIssued,
+            returnableAssetOutstanding: linkedReturnable.qtyOutstanding,
+            returnableAssetStatus: linkedReturnable.status,
+          }
+        : {}),
     };
 
     stockTransfersList.unshift(record);
+    scheduleStateSave();
 
     // Event 2 & Event 7 notifications
     checkAndNotifyLowStockForSkus([sku], sourceStoreId);
@@ -15216,9 +15687,12 @@ async function startServer() {
     res.json({
       success: true,
       record,
+      returnableAssetRecord: linkedReturnable,
       message:
         normalizedStatus === 'in_transit'
           ? `Transfer #${recordId} dispatched (in_transit) from ${sourceStoreName} to ${destStoreName}.`
+          : linkedReturnable
+          ? `Stock transferred with ${retQty}x ${linkedReturnable.containerLabel} logged to Returnable Asset ledger.`
           : 'Stock transferred and warehouse tiers synchronized.',
     });
   });
@@ -15296,7 +15770,69 @@ async function startServer() {
 
     record.status = 'completed';
     markEnterpriseNotificationReadByDedupeKey(`TRANSFER_IN_TRANSIT:${id}`);
+    scheduleStateSave();
     res.json({ success: true, record, message: `Transfer #${id} received at ${record.destinationStoreName}.` });
+  });
+
+  // RETURNABLE ASSET CONFIRMATION FOR WAREHOUSE TRANSFERS (Decrements asset liability & logs pool return)
+  app.post('/api/admin/inventory/transfer/:id/return-assets', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { qtyReturned, notes } = (req.body || {}) as { qtyReturned?: number; notes?: string };
+    const record = stockTransfersList.find((t) => t.id === id);
+    if (!record) return res.status(404).json({ error: `Stock transfer '${id}' not found.` });
+
+    const retRecord = returnableContainersList.find(
+      (r) => (record.returnableAssetId && r.id === record.returnableAssetId) || r.referenceDoc === id
+    );
+    if (!retRecord) {
+      return res.status(404).json({ error: `No linked Returnable Asset liability found for transfer '${id}'.` });
+    }
+    if (retRecord.qtyOutstanding <= 0) {
+      return res.json({
+        success: true,
+        record: { ...record, returnableAssetOutstanding: 0, returnableAssetStatus: 'RETURNED' },
+        containerRecord: retRecord,
+        message: `All returnable assets for transfer #${id} are already returned to the main pool.`,
+      });
+    }
+
+    const retQty =
+      qtyReturned !== undefined && Number(qtyReturned) > 0
+        ? Math.min(retRecord.qtyOutstanding, Math.floor(Number(qtyReturned)))
+        : retRecord.qtyOutstanding;
+
+    const timestamp = new Date().toISOString();
+    retRecord.qtyReturned += retQty;
+    retRecord.qtyOutstanding = Math.max(0, retRecord.qtyOutstanding - retQty);
+    retRecord.status = retRecord.qtyOutstanding === 0 ? 'RETURNED' : 'PARTIAL_RETURNED';
+    retRecord.updatedAt = timestamp;
+    const returnNote = notes
+      ? `Returned ${retQty}x to ${retRecord.storeName} pool (${notes})`
+      : `Returned ${retQty}x to ${retRecord.storeName} main pool`;
+    retRecord.notes = retRecord.notes ? `${retRecord.notes} | ${returnNote}` : returnNote;
+
+    record.returnableAssetId = retRecord.id;
+    record.returnableAssetType = record.returnableAssetType || retRecord.containerLabel;
+    record.returnableAssetQty = retRecord.qtyIssued;
+    record.returnableAssetOutstanding = retRecord.qtyOutstanding;
+    record.returnableAssetStatus = retRecord.status;
+
+    appendAuditTrailLog({
+      req,
+      branchScope: retRecord.storeId,
+      module: 'INVENTORY',
+      action: 'TRANSFER_RETURNABLE_ASSET_RETURNED',
+      referenceId: record.id,
+      summary: `Confirmed return of ${retQty}x ${retRecord.containerLabel} from ${retRecord.counterpartyName} back to ${retRecord.storeName} main warehouse pool.`,
+    });
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      record,
+      containerRecord: retRecord,
+      message: `Return confirmed: ${retQty}x ${retRecord.containerLabel} logged back to ${retRecord.storeName} main warehouse pool.`,
+    });
   });
 
   // --- 9. APPROVAL WORKFLOW & MATRIX APIS ---
@@ -18510,6 +19046,7 @@ async function startServer() {
     };
     const targetBatches = Array.isArray(batchIds) && batchIds.length > 0 ? batchIds : inventoryBatches.map((b) => b.batchId);
     const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
     const hasOverride =
       typeof discountPercentOverride === 'number' &&
       Number.isFinite(discountPercentOverride) &&
@@ -18519,12 +19056,24 @@ async function startServer() {
 
     let count = 0;
     let skippedExpiredCount = 0;
+    const createdDynamicSkus: Array<{
+      dynamicSku: string;
+      originalSku: string;
+      batchId: string;
+      lotNumber: string;
+      productName: string;
+      discountPercent: number;
+      markdownPrice: number;
+      currentStock: number;
+    }> = [];
+
     targetBatches.forEach((id) => {
       const b = inventoryBatches.find((batch) => batch.batchId === id);
       if (!b) return;
       const isExpired = syncBatchExpiryStatus(b, nowMs);
       if (isExpired) {
         b.markdownDiscountPercent = 0;
+        b.markdownStatus = undefined;
         skippedExpiredCount++;
         return;
       }
@@ -18535,15 +19084,34 @@ async function startServer() {
         b.status !== 'expired' &&
         b.status !== 'depleted'
       ) {
+        let appliedPct = 0;
         if (hasOverride) {
-          b.markdownDiscountPercent = clampedOverride;
-          count++;
+          appliedPct = clampedOverride;
         } else {
           const candidate = evaluateBatchMarkdown(b, dynamicMarkdownConfig);
           if (candidate) {
-            b.markdownDiscountPercent = candidate.discountPercent;
-            count++;
+            appliedPct = candidate.discountPercent;
           }
+        }
+        if (appliedPct > 0) {
+          b.markdownDiscountPercent = appliedPct;
+          b.markdownStatus = 'Marked Down';
+          b.markedDownAt = nowIso;
+          const lotSuffix = (b.lotNumber || b.batchId).replace(/[^A-Z0-9]/gi, '').slice(-4).toUpperCase();
+          b.dynamicDiscountSku = `${b.sku}-MD${appliedPct}-${lotSuffix}`;
+          const basePrice = b.sellingPrice || Math.round(b.unitCost * 1.45);
+          const mdPrice = Math.round(basePrice * (1 - appliedPct / 100));
+          createdDynamicSkus.push({
+            dynamicSku: b.dynamicDiscountSku,
+            originalSku: b.sku,
+            batchId: b.batchId,
+            lotNumber: b.lotNumber,
+            productName: b.productName,
+            discountPercent: appliedPct,
+            markdownPrice: mdPrice,
+            currentStock: b.currentStock,
+          });
+          count++;
         }
       }
     });
@@ -18553,10 +19121,10 @@ async function startServer() {
       branchScope: 'CONSOLIDATED',
       module: 'POS',
       action: hasOverride ? 'FLASH_SALE_MARKDOWN_50' : 'BATCH_MARKDOWN_OVERRIDE',
-      referenceId: `MD-BATCH-${count}`,
+      referenceId: createdDynamicSkus[0]?.dynamicSku || `MD-BATCH-${count}`,
       summary: hasOverride
-        ? `Activated Flash Sale ${clampedOverride}% clearance markdown across ${count} critical batch lot(s).`
-        : `Applied dynamic shelf-life markdown price overrides across ${count} batch lot(s).`,
+        ? `Activated Auto Markdown ${clampedOverride}% across ${count} critical batch(es) — created POS Dynamic Discount SKU(s): ${createdDynamicSkus.map((d) => d.dynamicSku).join(', ')}.`
+        : `Applied dynamic shelf-life markdown across ${count} batch lot(s) with POS Dynamic Discount SKUs.`,
     });
     scheduleStateSave();
 
@@ -18564,12 +19132,13 @@ async function startServer() {
       success: true,
       appliedCount: count,
       skippedExpiredCount,
+      createdDynamicSkus,
       message:
         skippedExpiredCount > 0 && count === 0
           ? `HACCP Safety Block: ${skippedExpiredCount} lot sudah kadaluarsa dan tidak dapat didiskon ke POS. Pindahkan ke Quarantine Hold Cage.`
           : hasOverride
-            ? `Flash Sale ${clampedOverride}% aktif untuk ${count} batch kritis di POS & Storefront.`
-            : `Dynamic markdowns applied to ${count} near-expiry batch lots across storefront & POS registers.`,
+            ? `Auto Markdown ${clampedOverride}% aktif (${count} batch Marked Down) · POS Dynamic SKU: ${createdDynamicSkus.map((d) => d.dynamicSku).join(', ')}`
+            : `Dynamic markdowns applied (${count} lots Marked Down) across POS registers.`,
     });
   });
 

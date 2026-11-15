@@ -259,17 +259,17 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   }, [viewMode, selectedOutletFilter]);
 
   const cardClass =
-    'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-slate-900 dark:text-slate-100 rounded-2xl transition-colors duration-200';
+    'bg-white dark:bg-[#12141C] border border-slate-200 dark:border-slate-800/80 shadow-sm text-slate-900 dark:text-slate-100 rounded-2xl transition-colors duration-200';
   const subCardClass =
-    'bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-xl transition-colors duration-200';
+    'bg-slate-50 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 rounded-xl transition-colors duration-200';
   const textTitle = 'text-slate-900 dark:text-slate-100';
   const textMuted = 'text-slate-500 dark:text-slate-400';
   const tableHeaderClass =
-    'border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-300 font-semibold uppercase text-[10px] tracking-wider';
+    'border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-[#090A0F] text-slate-600 dark:text-slate-300 font-semibold uppercase text-[10px] tracking-wider';
   const inputClass =
-    'bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-[#164E29] dark:focus:border-emerald-400 focus:ring-1 focus:ring-[#164E29] dark:focus:ring-emerald-400';
+    'bg-white dark:bg-[#090A0F] border border-slate-300 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-[#164E29] dark:focus:border-emerald-400 focus:ring-1 focus:ring-[#164E29] dark:focus:ring-emerald-400';
   const modalClass =
-    'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 shadow-2xl rounded-2xl';
+    'bg-white dark:bg-[#12141C] border border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 shadow-2xl rounded-2xl';
 
   // Aggregate summary metrics across retail tiers + B2B catalog
   const summaryMetrics = useMemo(() => {
@@ -723,7 +723,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         referrerPolicy="no-referrer"
         onError={() => setFailedImages((prev) => ({ ...prev, [key]: true }))}
         className={`${sizeClass} object-cover shrink-0 border ${
-          isLight ? 'border-slate-200 bg-slate-100' : 'border-zinc-700 bg-zinc-800'
+          isLight ? 'border-slate-200 bg-slate-100' : 'border-slate-800/80 bg-[#090A0F]'
         }`}
       />
     );
@@ -750,16 +750,16 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   const tabButtonBase =
     'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer';
   const tabButtonActive =
-    'bg-[#164E29] text-white shadow-sm dark:bg-emerald-950 dark:text-emerald-400 dark:border dark:border-emerald-700/70';
+    'bg-[#164E29] text-white shadow-sm dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50';
   const tabButtonInactive =
-    'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-[#164E29] dark:hover:text-emerald-400';
+    'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-900/90 hover:text-[#164E29] dark:hover:text-emerald-400';
 
   return (
     <div className="space-y-5 text-slate-900 dark:text-slate-100">
       {/* Odoo Inventory Operations Command Header + View Switcher (3-Row Stacked Hierarchy) */}
       <div className={`${cardClass} p-4 sm:p-5 space-y-3.5`}>
         {/* ROW 1: Full-width Deep Forest Green Header Banner (Clean single-line desktop title, zero collision) */}
-        <div className="w-full rounded-xl bg-[#164E29] dark:bg-emerald-950 border border-[#164E29] dark:border-emerald-800/70 text-white dark:text-slate-100 px-5 py-4 shadow-sm">
+        <div className="w-full rounded-xl bg-[#164E29] dark:bg-emerald-950/80 border border-[#164E29] dark:border-emerald-800/50 text-white dark:text-slate-100 px-5 py-4 shadow-sm">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-emerald-100 dark:text-emerald-300">
               <span className="font-bold uppercase tracking-wider text-white dark:text-emerald-400">
@@ -772,7 +772,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
               <span aria-hidden="true" className="opacity-60">·</span>
               <span>FEFO/FIFO Engine</span>
             </div>
-            <h2 className="text-lg sm:text-xl font-bold tracking-tight leading-snug text-white dark:text-slate-50 lg:whitespace-nowrap lg:truncate">
+            <h2 className="text-lg sm:text-xl font-bold tracking-tight leading-snug text-white dark:text-slate-100 lg:whitespace-nowrap lg:truncate">
               Warehouse Operations, Stock Quants &amp; Lot Traceability
             </h2>
           </div>
@@ -780,7 +780,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
 
         {/* ROW 2: Dedicated White/Dark Card Container for Navigation Tabs */}
         <div
-          className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs p-1.5 overflow-x-auto"
+          className="w-full rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] shadow-xs p-1.5 overflow-x-auto"
           role="tablist"
           aria-label="Inventory view switcher"
         >
@@ -883,7 +883,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
               <button
                 type="button"
                 onClick={() => setShowSkuImportModal(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
               >
                 <Upload className="w-3.5 h-3.5 text-[#164E29] dark:text-emerald-400" />
                 Import SKU (CSV)
@@ -893,7 +893,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             <button
               type="button"
               onClick={() => setShowStrategyModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
             >
               <Settings2 className="w-3.5 h-3.5 text-[#164E29] dark:text-emerald-400" />
               FEFO / FIFO Rules
@@ -902,7 +902,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             <button
               type="button"
               onClick={() => setShowBarcodeLabelModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
             >
               <Barcode className="w-3.5 h-3.5" />
               Barcode &amp; Shelf Labels
@@ -1006,8 +1006,8 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   onClick={() => setHubFilter(tab.id as HubScope)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer ${
                     hubFilter === tab.id
-                      ? 'bg-[#164E29] border-[#164E29] text-white dark:bg-emerald-950 dark:border-emerald-700/70 dark:text-emerald-400'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      ? 'bg-[#164E29] border-[#164E29] text-white dark:bg-emerald-950/80 dark:border-emerald-800/50 dark:text-emerald-300'
+                      : 'bg-white dark:bg-[#12141C] border-slate-200 dark:border-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/90'
                   }`}
                 >
                   {tab.label}
@@ -1036,7 +1036,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className={`text-sm font-bold ${textTitle}`}>{hub.title}</h3>
-                      <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300">
+                      <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-[#090A0F] dark:border dark:border-slate-800/80 text-slate-700 dark:text-slate-300">
                         {hub.code}
                       </span>
                     </div>
@@ -1102,7 +1102,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                               className={`p-2 rounded-xl border text-center ${
                                 isLight
                                   ? 'bg-slate-50/70 border-slate-200/80'
-                                  : 'bg-zinc-950/60 border-zinc-800'
+                                  : 'bg-[#090A0F] border-slate-800/80'
                               }`}
                             >
                               <div
@@ -1135,7 +1135,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                               {op.progressPercent}%
                             </span>
                           </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-zinc-800 overflow-hidden">
+                          <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-[#090A0F] overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all duration-300 ${op.barColor}`}
                               style={{ width: `${op.progressPercent}%` }}
@@ -1145,18 +1145,18 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                       </div>
 
                       {/* Primary + Secondary Action Footer */}
-                      <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                      <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800/80">
                         <button
                           type="button"
                           onClick={() => onNavigateTab(op.targetTab)}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer"
                         >
                           {op.primaryLabel}
                         </button>
                         <button
                           type="button"
                           onClick={() => onNavigateTab(op.secondaryAction.tab)}
-                          className="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer"
+                          className="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-[#090A0F] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer"
                         >
                           {op.secondaryAction.label}
                         </button>
@@ -1232,7 +1232,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
               </select>
 
               <div className="relative">
-                <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-2.5" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
                   value={inventorySearch}
@@ -1276,7 +1276,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                     <th className="py-3 px-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-zinc-800'}`}>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-slate-800/80'}`}>
                   {enrichedListRows.map(({ row, safeReserved, safeAvailable, profile, strategy, lotInfo, uomBreakdown, availableUom, totalValuation }) => {
                     const safetyThreshold = !row.isWholesaleRow && 'minimumThreshold' in row ? row.minimumThreshold : 10;
                     const isLowStock = safeAvailable > 0 && safeAvailable <= safetyThreshold;
@@ -1305,7 +1305,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                       <tr
                         key={row.id}
                         className={`transition-colors ${
-                          isLight ? 'hover:bg-slate-50/80' : 'hover:bg-zinc-800/40'
+                          isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/70'
                         }`}
                       >
                         {/* 1. SKU, Image Preview & Channel Indicator */}
@@ -1378,7 +1378,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                     {bpomReg && (
                                       <span
                                         title={bpomReg}
-                                        className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300 truncate max-w-[130px]"
+                                        className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-100 text-slate-600 dark:bg-[#090A0F] dark:border dark:border-slate-800/80 dark:text-slate-300 truncate max-w-[130px]"
                                       >
                                         {bpomReg}
                                       </span>
@@ -1399,7 +1399,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
 
                         {/* 2. Warehouse & Bin Location */}
                         <td className="py-3 px-3.5 min-w-[170px]">
-                          <div className={`font-semibold ${isLight ? 'text-slate-800' : 'text-zinc-200'} text-xs`}>
+                          <div className={`font-semibold ${isLight ? 'text-slate-800' : 'text-slate-200'} text-xs`}>
                             {row.storeName}
                           </div>
                           <div className={`text-[11px] font-mono ${textMuted} mt-0.5`}>
@@ -1412,7 +1412,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
 
                         {/* 3. Lot / Batch & Expiry with FEFO Status */}
                         <td className="py-3 px-3.5 min-w-[200px]">
-                          <div className="font-mono text-[11px] font-semibold text-slate-800 dark:text-zinc-200">
+                          <div className="font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200">
                             {lotInfo.lotNumber}
                           </div>
                           <div className={`text-[10px] font-mono ${textMuted} mt-0.5`}>
@@ -1428,7 +1428,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                                 : lotInfo.tone === 'emerald'
                                 ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300'
-                                : 'bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'
+                                : 'bg-slate-200/70 dark:bg-[#090A0F] text-slate-600 dark:text-slate-300'
                             }`}
                           >
                             {lotInfo.statusLabel}
@@ -1471,7 +1471,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                               <span className={textMuted}>Base Units:</span>
                               <span className={textTitle}>{uomBreakdown.baseSummary}</span>
                             </div>
-                            <div className="flex items-center justify-between gap-2 text-[10px] pt-0.5 border-t border-slate-100 dark:border-zinc-800">
+                            <div className="flex items-center justify-between gap-2 text-[10px] pt-0.5 border-t border-slate-100 dark:border-slate-800/80">
                               <span className={textMuted}>
                                 Res: <strong>{safeReserved}</strong> · Inc:{' '}
                                 <strong className="text-sky-600 dark:text-sky-400">+{row.incomingStock}</strong>
@@ -1525,7 +1525,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                   strategy,
                                 })
                               }
-                              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] inline-flex items-center gap-1 cursor-pointer"
+                              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] inline-flex items-center gap-1 cursor-pointer"
                               title="Inspect B2B vs B2C Media, Packaging & Multi-UoM"
                             >
                               <Eye className="w-3 h-3" />
@@ -1537,14 +1537,14 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => onAuditSku(row.sku)}
-                                  className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                                  className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                                 >
                                   Audit Count
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => onEditTier(row.sourceTier!)}
-                                  className="px-2.5 py-1 text-[11px] font-semibold bg-[#164E29]/10 text-[#164E29] dark:bg-emerald-950 dark:text-emerald-400 border border-[#164E29]/20 dark:border-emerald-700/60 hover:bg-[#164E29]/20 dark:hover:bg-emerald-900 rounded-lg transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                                  className="px-2.5 py-1 text-[11px] font-semibold bg-[#164E29]/10 text-[#164E29] dark:bg-emerald-950/80 dark:text-emerald-300 border border-[#164E29]/20 dark:border-emerald-800/50 hover:bg-[#164E29]/20 dark:hover:bg-emerald-900/80 rounded-lg transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                                 >
                                   Edit Notes
                                 </button>
@@ -1572,7 +1572,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                   onClick={() => setFlashSaleTargetBatch(urgentBatch)}
                                   className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer whitespace-nowrap ${
                                     isPromoActive
-                                      ? 'bg-emerald-100 text-[#164E29] border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700 shadow-xs'
+                                      ? 'bg-emerald-100 text-[#164E29] border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800/50 shadow-xs'
                                       : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-900/20'
                                   }`}
                                   title={`1-Click Flash Sale 50% untuk batch ${urgentBatch.lotNumber}`}
@@ -1731,7 +1731,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
               <button
                 type="button"
                 onClick={loadReturnables}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
               >
                 {isLoadingReturnables ? 'Refreshing...' : 'Refresh Ledger'}
               </button>
@@ -1846,7 +1846,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmittingReturnable}
-                  className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-50"
+                  className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-50"
                 >
                   {isSubmittingReturnable ? 'Saving...' : 'Issue Deposit'}
                 </button>
@@ -1868,7 +1868,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                     <th className="py-3 px-4 text-right">Return Units</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
                   {returnableRecords.length === 0 ? (
                     <tr>
                       <td colSpan={7} className={`py-8 text-center text-xs ${textMuted}`}>
@@ -1880,7 +1880,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                       const outstanding = Math.max(0, rec.qtyIssued - rec.qtyReturned);
                       const returnInput = retPartialReturnMap[rec.id] ?? outstanding;
                       return (
-                        <tr key={rec.id} className="hover:bg-zinc-500/5">
+                        <tr key={rec.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/70 transition-colors">
                           <td className="py-3 px-4">
                             <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{rec.id}</div>
                             <div className={`text-[11px] ${textMuted}`}>{rec.storeName}</div>
@@ -1946,7 +1946,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                       setIsSubmittingReturnable(false);
                                     }
                                   }}
-                                  className="px-2.5 py-1 rounded-md bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white text-[11px] font-semibold transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-50"
+                                  className="px-2.5 py-1 rounded-md bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 text-white text-[11px] font-semibold transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-50"
                                 >
                                   Return
                                 </button>
@@ -1971,9 +1971,9 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
       {/* ===================================================================== */}
       {showStrategyModal &&
         createPortal(
-          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
           <div className={`${modalClass} max-w-2xl w-full p-6 space-y-4 my-auto`}>
-            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
+            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
               <div>
                 <h3 className={`text-base font-bold ${textTitle}`}>
                   Odoo Removal Strategy Rules (FEFO vs. FIFO)
@@ -1986,7 +1986,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 type="button"
                 onClick={() => setShowStrategyModal(false)}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  isLight ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-zinc-800 text-zinc-300'
+                  isLight ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-slate-900 text-slate-300'
                 }`}
               >
                 <X className="w-5 h-5" />
@@ -2004,7 +2004,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   <div
                     key={catKey}
                     className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${
-                      isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-900 border-zinc-800'
+                      isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
                     }`}
                   >
                     <div className="min-w-0">
@@ -2043,11 +2043,11 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
               </div>
             )}
 
-            <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800/80">
               <button
                 type="button"
                 onClick={() => setShowStrategyModal(false)}
-                className="px-4 py-2 text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white rounded-xl transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 text-white rounded-xl transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
               >
                 Done
               </button>
@@ -2070,9 +2070,9 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         const multiUom = formatMultiUomStock(mediaInspector.physicalStock, profile.uomConversion);
 
         return createPortal(
-          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
             <div className={`${modalClass} max-w-3xl w-full p-6 space-y-5 my-auto`}>
-              <div className={`flex items-start justify-between gap-3 border-b pb-3 ${isLight ? 'border-slate-200' : 'border-zinc-800'}`}>
+              <div className={`flex items-start justify-between gap-3 border-b pb-3 ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">
@@ -2096,7 +2096,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   type="button"
                   onClick={() => setMediaInspector(null)}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                    isLight ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-zinc-800 text-zinc-300'
+                    isLight ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-slate-900 text-slate-300'
                   }`}
                 >
                   <X className="w-5 h-5" />
@@ -2128,7 +2128,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                       </span>
                       <span className={`font-medium ${textTitle}`}>{profile.retailPackagingSpec}</span>
                     </div>
-                    <div className="flex justify-between pt-1 border-t border-slate-200 dark:border-zinc-800 font-mono text-[11px]">
+                    <div className="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[11px]">
                       <span className={textMuted}>Retail Base UoM:</span>
                       <span className={`font-bold ${textTitle}`}>{multiUom.baseSummary}</span>
                     </div>
@@ -2158,7 +2158,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                       </span>
                       <span className={`font-medium ${textTitle}`}>{profile.wholesalePackagingSpec}</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200 dark:border-zinc-800 font-mono text-[10px]">
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[10px]">
                       <div>
                         <span className={textMuted}>Outer GTIN:</span>{' '}
                         <strong className={textTitle}>{profile.outerBoxBarcode}</strong>
@@ -2187,7 +2187,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   </span>
                 </div>
                 {skuLots.length > 0 ? (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
                     <table className="w-full text-left text-xs font-mono">
                       <thead>
                         <tr className={tableHeaderClass}>
@@ -2198,7 +2198,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                           <th className="py-2 px-3 text-right">Status</th>
                         </tr>
                       </thead>
-                      <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-zinc-800'}`}>
+                      <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-slate-800/80'}`}>
                         {skuLots
                           .slice()
                           .sort((a, b) =>
@@ -2219,17 +2219,17 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                     </table>
                   </div>
                 ) : (
-                  <p className={`text-xs ${textMuted} p-3 rounded-xl border border-dashed border-slate-300 dark:border-zinc-700`}>
+                  <p className={`text-xs ${textMuted} p-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-800/80`}>
                     Single-lot dry/wholesale bulk stock managed under {mediaInspector.strategy} valuation.
                   </p>
                 )}
               </div>
 
-              <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => setMediaInspector(null)}
-                  className="px-4 py-2 text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white rounded-xl transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 text-white rounded-xl transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                 >
                   Close Inspector
                 </button>

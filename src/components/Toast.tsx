@@ -21,7 +21,7 @@ export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
       {toasts.map((toast, idx) => (
         <div
           key={`${toast.id}-${idx}`}
-          className="pointer-events-auto bg-stone-900/95 text-white backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-stone-800 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-5 duration-200"
+          className="pointer-events-auto bg-[#12141C]/95 text-slate-100 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-slate-800/80 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-5 duration-200"
         >
           <div className="flex items-center gap-3 min-w-0">
             {toast.image ? (
@@ -33,23 +33,23 @@ export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                 }}
-                className="w-10 h-10 rounded-lg object-cover bg-stone-800 shrink-0"
+                className="w-10 h-10 rounded-lg object-cover bg-[#090A0F] shrink-0"
               />
             ) : (
-              <div className="w-8 h-8 rounded-lg bg-emerald-800 text-amber-300 flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-800/50 text-amber-300 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-4 h-4" />
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-xs font-bold text-stone-100 truncate">{toast.title}</p>
+              <p className="text-xs font-bold text-slate-100 truncate">{toast.title}</p>
               {toast.message && (
-                <p className="text-[11px] text-stone-400 truncate">{toast.message}</p>
+                <p className="text-[11px] text-slate-400 truncate">{toast.message}</p>
               )}
             </div>
           </div>
           <button
             onClick={() => onDismiss(toast.id)}
-            className="p-1 text-stone-400 hover:text-white rounded-md transition-colors shrink-0 cursor-pointer"
+            className="p-1 text-slate-400 hover:text-slate-100 rounded-md transition-colors shrink-0 cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>

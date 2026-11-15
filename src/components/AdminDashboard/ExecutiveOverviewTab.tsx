@@ -33,13 +33,13 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
   onNavigateToInventory,
 }) => {
   const cardClass =
-    'bg-white dark:bg-zinc-900/90 border border-gray-200/90 dark:border-zinc-800 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 dark:text-zinc-100 rounded-2xl';
+    'bg-white dark:bg-[#12141C] border border-gray-200/90 dark:border-slate-800/80 shadow-[0_4px_12px_rgba(0,0,0,0.03)] text-gray-900 dark:text-slate-100 rounded-2xl';
   const subCardClass =
-    'bg-white dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-zinc-100 rounded-xl shadow-xs';
-  const textTitle = 'text-gray-900 dark:text-white';
-  const textMuted = 'text-gray-500 dark:text-zinc-300';
+    'bg-white dark:bg-[#090A0F]/80 border border-gray-200 dark:border-slate-800/80 text-gray-900 dark:text-slate-100 rounded-xl shadow-xs';
+  const textTitle = 'text-gray-900 dark:text-slate-100';
+  const textMuted = 'text-gray-500 dark:text-slate-400';
   const tableHeaderClass =
-    'border-b border-gray-200 dark:border-zinc-800 bg-gray-50/70 dark:bg-zinc-800/50 text-gray-500 dark:text-zinc-300 font-semibold uppercase text-[10px]';
+    'border-b border-gray-200 dark:border-slate-800/80 bg-gray-50/70 dark:bg-[#090A0F] text-gray-500 dark:text-slate-400 font-semibold uppercase text-[10px]';
 
   return (
     <div className="space-y-6">
@@ -148,20 +148,20 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
                   <th className="py-2.5 px-3 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-zinc-800">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80">
                 {(omzetData?.storeBreakdown || []).map((store) => (
-                  <tr key={store.storeId} className="transition-colors hover:bg-slate-50/80 dark:hover:bg-zinc-800/40">
+                  <tr key={store.storeId} className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-900/60">
                     <td className={`py-3 px-3 font-semibold ${textTitle}`}>
                       {store.storeName}
                     </td>
-                    <td className="py-3 px-3 text-slate-600 dark:text-zinc-300">{store.city}</td>
-                    <td className="py-3 px-3 text-slate-600 dark:text-zinc-300">{store.orderCount}</td>
+                    <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{store.city}</td>
+                    <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{store.orderCount}</td>
                     <td className="py-3 px-3 font-mono font-semibold text-[#0F4C3A] dark:text-emerald-400">
                       {formatIDR(store.omzet)}
                     </td>
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-16 bg-slate-200 dark:bg-zinc-700 h-1.5 rounded-full overflow-hidden">
+                        <div className="w-16 bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
                           <div
                             className="bg-[#0F4C3A] dark:bg-emerald-500 h-full rounded-full"
                             style={{ width: `${store.sharePercent}%` }}
@@ -199,7 +199,7 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
                   <span className={`${textTitle} font-medium`}>{cat.label}</span>
                   <span className="text-[#0F4C3A] dark:text-emerald-400 font-mono font-semibold">{cat.sharePercent}%</span>
                 </div>
-                <div className="w-full bg-slate-200 dark:bg-zinc-700 h-2 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-[#0F4C3A] dark:bg-emerald-500 h-full rounded-full"
                     style={{ width: `${cat.sharePercent}%` }}
@@ -213,8 +213,8 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
             ))}
           </div>
 
-          <div className="pt-2 border-t border-slate-200 dark:border-zinc-700/60">
-            <div className="p-3 bg-emerald-50/80 dark:bg-zinc-800/80 border border-emerald-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-300 rounded-xl text-xs flex items-start gap-2.5">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80">
+            <div className="p-3 bg-emerald-50/80 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800/50 text-slate-800 dark:text-slate-200 rounded-xl text-xs flex items-start gap-2.5">
               <Sparkles className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 shrink-0 mt-0.5" />
               <div>
                 <p className={`font-semibold ${textTitle}`}>Cold-Chain Priority</p>
@@ -246,7 +246,7 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
 
           {/* Stacked Progress Bar */}
           <div className="space-y-1.5">
-            <div className="h-3 w-full bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden flex">
+            <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden flex">
               <div
                 className="bg-emerald-600 dark:bg-emerald-500 h-full transition-all"
                 style={{ width: `${omzetData?.b2bVsB2cSplit?.b2cSharePercent ?? 54.4}%` }}
@@ -272,7 +272,7 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
 
           <div className="grid grid-cols-2 gap-3 pt-2">
             <div className={`${subCardClass} p-3`}>
-              <div className="text-[10px] font-semibold text-slate-500 dark:text-zinc-300 uppercase">B2C Retail</div>
+              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">B2C Retail</div>
               <div className={`text-sm font-bold font-mono ${textTitle} mt-0.5`}>
                 {formatIDR(omzetData?.b2bVsB2cSplit?.b2cRevenue ?? 211250000)}
               </div>
@@ -379,7 +379,7 @@ export const ExecutiveOverviewTab: React.FC<ExecutiveOverviewTabProps> = ({
             </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-[11px] text-slate-600 dark:text-zinc-300">
+          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#090A0F]/80 border border-slate-200 dark:border-slate-800/80 text-[11px] text-slate-600 dark:text-slate-400">
             Mandatory internal expense voucher signed by Warehouse Supervisor &amp; Driver capitalizes un-invoiced terminal porters directly into product FIFO/Moving Avg unit cost.
           </div>
         </div>

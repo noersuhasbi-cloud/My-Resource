@@ -93,6 +93,9 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
   // =============================================================
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<'ALL' | StorageZoneType>('ALL');
   const [barrierBaggingVerifiedOrders, setBarrierBaggingVerifiedOrders] = useState<Record<string, boolean>>({});
+  const [orderAssetType, setOrderAssetType] = useState<string>('COLD_CHAIN_THERMAL_BOX');
+  const [orderAssetIds, setOrderAssetIds] = useState<string>('');
+  const [orderAssetQty, setOrderAssetQty] = useState<number>(0);
 
   const isLight = theme === 'light';
 
@@ -218,8 +221,22 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
           pickedQty: it.pickedQty > 0 ? it.pickedQty : it.orderedQty,
           actualWeightGrams: it.actualWeighedGrams,
         })),
+        ...(orderAssetQty > 0
+          ? {
+              returnableAsset: {
+                assetType: orderAssetType,
+                assetIds: orderAssetIds.trim() || undefined,
+                quantity: orderAssetQty,
+              },
+            }
+          : {}),
       });
-      onShowToast('Fulfillment Sealed & Synced', res.message);
+      const retMsg = res.returnableAssetRecord
+        ? ` Logged ${res.returnableAssetRecord.qtyIssued}x ${res.returnableAssetRecord.containerLabel} to Customer Asset Ledger.`
+        : '';
+      onShowToast('Fulfillment Sealed & Synced', `${res.message}${retMsg}`);
+      setOrderAssetIds('');
+      setOrderAssetQty(0);
       await loadPickerData();
     } catch (err: any) {
       onShowToast('Failed to Complete Order', err?.message || String(err));
@@ -261,7 +278,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
         className={`p-5 sm:p-6 rounded-2xl border transition-colors ${
           isLight
             ? 'bg-gradient-to-r from-emerald-50 via-white to-slate-50 border-emerald-900/10 shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
-            : 'bg-zinc-900/80 border-zinc-800'
+            : 'bg-emerald-950/80 border-emerald-800/50'
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -270,14 +287,14 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               <span className="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0F4C3A] text-white tracking-wide uppercase">
                 Fulfillment Terminal
               </span>
-              <span className={`text-xs ${isLight ? 'text-zinc-500' : 'text-zinc-300'}`}>
+              <span className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-300'}`}>
                 Aisle-Optimized Barcode &amp; Catch-Weight Operations
               </span>
             </div>
-            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
               In-Store Fulfillment &amp; Quick Substitution
             </h2>
-            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-slate-600' : 'text-zinc-300'}`}>
+            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
               High-velocity picking workflow with EAN-13 barcode verification, digital catch-weight scales,
               and real-time customer WhatsApp substitution prompts with FIFO batch reconciliation.
             </p>
@@ -290,7 +307,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                 isLight
                   ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -300,7 +317,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
         </div>
 
         {/* View Switcher Tabs (Module 2 Integration) */}
-        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200/80 dark:border-zinc-800 flex-wrap">
+        <div className="flex items-center gap-2 mt-5 pt-4 border-t border-gray-200/80 dark:border-emerald-800/50 flex-wrap">
           <button
             onClick={() => setActiveView('queue')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -308,7 +325,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <Scan className="w-3.5 h-3.5" />
@@ -322,7 +339,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
@@ -337,14 +354,14 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
           {/* Order Queue Column */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className={`font-bold text-sm ${isLight ? 'text-slate-900' : 'text-white'}`}>
+              <h3 className={`font-bold text-sm ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
                 Assigned Orders Queue
               </h3>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className={`px-2 py-1 rounded-lg text-xs border ${
-                  isLight ? 'bg-white border-slate-200 text-slate-700' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                  isLight ? 'bg-white border-slate-200 text-slate-700' : 'bg-[#090A0F] border-slate-800/80 text-slate-200'
                 }`}
               >
                 <option value="ALL">All Statuses</option>
@@ -357,7 +374,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
 
             <div className="space-y-2.5 max-h-[750px] overflow-y-auto pr-1">
               {orders.length === 0 ? (
-                <div className="p-8 text-center text-xs text-zinc-400 border rounded-xl">
+                <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800/80 rounded-xl">
                   No orders found in queue.
                 </div>
               ) : (
@@ -371,10 +388,10 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                       onClick={() => setSelectedOrder(order)}
                       className={`p-4 rounded-xl border cursor-pointer transition-all ${
                         isSelected
-                          ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 shadow-sm ring-1 ring-[#0F4C3A]'
+                          ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 dark:bg-emerald-950/30 shadow-sm ring-1 ring-[#0F4C3A]'
                           : isLight
                           ? 'bg-white border-slate-200/80 hover:bg-slate-50'
-                          : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800/60'
+                          : 'bg-[#12141C] border-slate-800/80 hover:bg-slate-900/70'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -385,27 +402,27 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                           className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
                             order.priority === 'express_30min'
                               ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
-                              : 'bg-zinc-500/10 text-slate-600 dark:text-zinc-300 border-zinc-500/20'
+                              : 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/20'
                           }`}
                         >
                           {order.priority.replace(/_/g, ' ')}
                         </span>
                       </div>
 
-                      <div className="mt-2 text-xs font-semibold text-slate-900 dark:text-zinc-100 truncate">
+                      <div className="mt-2 text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
                         {order.customerName}
                       </div>
-                      <div className="text-[11px] text-slate-500 dark:text-zinc-300 flex items-center gap-1 mt-0.5">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                         <MapPin className="w-3 h-3" /> {order.storeName}
                       </div>
 
                       {/* Progress Bar */}
                       <div className="mt-3">
                         <div className="flex items-center justify-between text-[11px] mb-1">
-                          <span className="text-slate-600 dark:text-zinc-300 font-semibold">{order.pickedItems}/{order.totalItems} Items Picked</span>
+                          <span className="text-slate-600 dark:text-slate-300 font-semibold">{order.pickedItems}/{order.totalItems} Items Picked</span>
                           <span className="font-bold text-[#0F4C3A] dark:text-emerald-400">{percentPicked}%</span>
                         </div>
-                        <div className="w-full bg-slate-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                        <div className="w-full bg-slate-100 dark:bg-[#090A0F] h-1.5 rounded-full overflow-hidden">
                           <div
                             className="bg-[#0F4C3A] h-full rounded-full transition-all duration-300"
                             style={{ width: `${percentPicked}%` }}
@@ -424,13 +441,13 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
             {selectedOrder ? (
               <div
                 className={`p-5 rounded-2xl border transition-all ${
-                  isLight ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-zinc-900 border-zinc-800'
+                  isLight ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-[#12141C] border-slate-800/80'
                 }`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-zinc-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800/80">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className={`text-base font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                      <h3 className={`text-base font-bold ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
                         Order #{selectedOrder.orderId}
                       </h3>
                       <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400">
@@ -447,7 +464,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-zinc-300 mt-0.5">Customer: <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{selectedOrder.customerName}</strong> ({selectedOrder.customerPhone}) &bull; Target: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{selectedOrder.targetDispatchTime}</span></p>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">Customer: <strong className="text-slate-900 dark:text-slate-100 font-semibold">{selectedOrder.customerName}</strong> ({selectedOrder.customerPhone}) &bull; Target: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{selectedOrder.targetDispatchTime}</span></p>
                   </div>
 
                   {(selectedOrder.fulfillmentStatus === 'PENDING_PICKING' ||
@@ -455,13 +472,50 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                       selectedOrder.pickerStatus !== 'completed')) &&
                   selectedOrder.fulfillmentStatus !== 'COMPLETED' &&
                   selectedOrder.fulfillmentStatus !== 'READY_FOR_PICKUP' ? (
-                    <button
-                      onClick={handleCompleteOrder}
-                      disabled={isCompletingOrder}
-                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      {isCompletingOrder ? 'Sealing & Syncing...' : 'Complete & Seal Batch'}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedOrder.items.some(
+                        (it) =>
+                          it.storageZone === 'cold_chilled' ||
+                          it.storageZone === 'freezer' ||
+                          it.isCatchWeight
+                      ) && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-[#090A0F]">
+                          <select
+                            value={orderAssetType}
+                            onChange={(e) => setOrderAssetType(e.target.value)}
+                            className="bg-transparent text-[10px] font-semibold text-slate-700 dark:text-slate-300 focus:outline-none"
+                            title="Non-inventory returnable asset"
+                          >
+                            <option value="COLD_CHAIN_THERMAL_BOX">Cold Box</option>
+                            <option value="KRAT_PLASTIK_BUAH">Krat Plastik</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={orderAssetIds}
+                            onChange={(e) => setOrderAssetIds(e.target.value)}
+                            placeholder="Asset IDs (e.g. CB-12)"
+                            className="w-24 bg-transparent text-[10px] font-mono text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none"
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            max={50}
+                            value={orderAssetQty || ''}
+                            placeholder="Qty"
+                            onChange={(e) => setOrderAssetQty(Math.max(0, Number(e.target.value) || 0))}
+                            className="w-10 bg-transparent text-[10px] font-mono font-bold text-center text-emerald-700 dark:text-emerald-400 focus:outline-none"
+                            title="Returnable asset units assigned to customer"
+                          />
+                        </div>
+                      )}
+                      <button
+                        onClick={handleCompleteOrder}
+                        disabled={isCompletingOrder}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        {isCompletingOrder ? 'Sealing & Syncing...' : 'Complete & Seal Batch'}
+                      </button>
+                    </div>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 text-white">
                       <CheckCircle2 className="w-3.5 h-3.5" />
@@ -479,7 +533,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Thermometer className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-                      <span className="text-xs font-bold text-slate-900 dark:text-zinc-100">
+                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
                         Cold-Chain Preserved Route Sequence
                       </span>
                     </div>
@@ -489,23 +543,23 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div className="p-2 rounded-lg bg-white/80 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
-                      <div className="text-[10px] text-zinc-400 uppercase font-bold flex items-center justify-center gap-1">
+                    <div className="p-2 rounded-lg bg-white/80 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold flex items-center justify-center gap-1">
                         <Sun className="w-3 h-3 text-amber-500" /> Stage 1: Ambient
                       </div>
-                      <div className="font-bold text-slate-800 dark:text-zinc-200 text-xs mt-0.5">Pantry &amp; Bakery</div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200 text-xs mt-0.5">Pantry &amp; Bakery</div>
                     </div>
-                    <div className="p-2 rounded-lg bg-white/80 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
-                      <div className="text-[10px] text-zinc-400 uppercase font-bold flex items-center justify-center gap-1">
+                    <div className="p-2 rounded-lg bg-white/80 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold flex items-center justify-center gap-1">
                         <Thermometer className="w-3 h-3 text-emerald-500" /> Stage 2: Chilled
                       </div>
-                      <div className="font-bold text-slate-800 dark:text-zinc-200 text-xs mt-0.5">Dairy &amp; Meats (2&ndash;4&deg;C)</div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200 text-xs mt-0.5">Dairy &amp; Meats (2&ndash;4&deg;C)</div>
                     </div>
-                    <div className="p-2 rounded-lg bg-white/80 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700">
-                      <div className="text-[10px] text-zinc-400 uppercase font-bold flex items-center justify-center gap-1">
+                    <div className="p-2 rounded-lg bg-white/80 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold flex items-center justify-center gap-1">
                         <Snowflake className="w-3 h-3 text-blue-500" /> Stage 3: Frozen
                       </div>
-                      <div className="font-bold text-slate-800 dark:text-zinc-200 text-xs mt-0.5">Ice Cream &amp; IQF (&minus;18&deg;C)</div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200 text-xs mt-0.5">Ice Cream &amp; IQF (&minus;18&deg;C)</div>
                     </div>
                   </div>
                 </div>
@@ -560,18 +614,18 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
 
                 {/* MULTI-TOTE BAGGING ASSIGNMENT BAR */}
                 <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-zinc-400 shrink-0">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">
                     Tote Packing Stations:
                   </span>
                   {zoneGroups.map((zg) => (
                     <div
                       key={zg.zone}
-                      className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-[11px] flex items-center gap-2 shrink-0"
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-[#090A0F] text-[11px] flex items-center gap-2 shrink-0"
                     >
-                      <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
                         {zg.tote?.toteBarcode || `TOTE-${zg.zone.toUpperCase()}`}
                       </span>
-                      <span className="text-slate-500 dark:text-zinc-400">
+                      <span className="text-slate-500 dark:text-slate-400">
                         ({zg.items.length} items &bull; {zg.tote?.zoneLabel || zg.zoneName})
                       </span>
                       {zg.tote?.gelPackVerified && (
@@ -584,8 +638,8 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 </div>
 
                 {/* ZONE FILTER TABS */}
-                <div className="mt-4 flex items-center gap-2 border-b border-slate-200 dark:border-zinc-800 pb-2 flex-wrap">
-                  <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                <div className="mt-4 flex items-center gap-2 border-b border-slate-200 dark:border-slate-800/80 pb-2 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Filter by Zone:
                   </span>
                   <button
@@ -595,7 +649,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                        : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
                     }`}
                   >
                     All Zones ({selectedOrder.items.length})
@@ -608,7 +662,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         ? 'bg-amber-600 text-white shadow-xs'
                         : isLight
                         ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                        : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
                     }`}
                   >
                     Ambient Pantry ({zoneGroups.find((g) => g.zone === 'ambient')?.items.length || 0})
@@ -621,7 +675,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         ? 'bg-emerald-600 text-white shadow-xs'
                         : isLight
                         ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                        : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
                     }`}
                   >
                     Chilled 2-4&deg;C ({zoneGroups.find((g) => g.zone === 'cold_chilled')?.items.length || 0})
@@ -634,7 +688,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         ? 'bg-blue-600 text-white shadow-xs'
                         : isLight
                         ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                        : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
                     }`}
                   >
                     Deep Freeze -18&deg;C ({zoneGroups.find((g) => g.zone === 'freezer')?.items.length || 0})
@@ -657,13 +711,13 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                             ? 'bg-purple-50/40 dark:bg-purple-950/20 border-purple-500/30'
                             : isLight
                             ? 'bg-slate-50/60 border-slate-200'
-                            : 'bg-zinc-800/40 border-zinc-700'
+                            : 'bg-[#090A0F] border-slate-800/80'
                         }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs text-slate-900 dark:text-white">
+                              <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
                                 {item.productName}
                               </span>
                               {item.isCatchWeight && (
@@ -691,7 +745,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                               )}
                             </div>
 
-                            <div className="text-[11px] text-slate-600 dark:text-zinc-300 flex items-center gap-3 font-medium">
+                            <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-3 font-medium">
                               <span>SKU: {item.sku}</span>
                               <span>&bull;</span>
                               <span>Aisle: {item.aisleLocation}</span>
@@ -741,7 +795,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                                   isLight
                                     ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                                    : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                                    : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                                 }`}
                               >
                                 Quick Substitution
@@ -761,9 +815,9 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 </div>
               </div>
             ) : (
-              <div className={`p-12 text-center rounded-2xl border ${isLight ? 'bg-white border-slate-200' : 'bg-zinc-900 border-zinc-800'}`}>
-                <ShoppingBag className="w-8 h-8 mx-auto text-zinc-400 mb-2" />
-                <h3 className="font-bold text-sm text-slate-700 dark:text-zinc-200">Select an order to start picking</h3>
+              <div className={`p-12 text-center rounded-2xl border ${isLight ? 'bg-white border-slate-200' : 'bg-[#12141C] border-slate-800/80'}`}>
+                <ShoppingBag className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                <h3 className="font-bold text-sm text-slate-700 dark:text-slate-200">Select an order to start picking</h3>
               </div>
             )}
           </div>
@@ -775,15 +829,15 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
         <div className="space-y-6">
           <div
             className={`p-5 rounded-2xl border ${
-              isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-zinc-900 border-zinc-800'
+              isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-[#12141C] border-slate-800/80'
             }`}
           >
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   Real-Time Customer Substitution Queue &amp; Approval Simulator
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   When packers encounter an out-of-stock item, the engine sends instant notifications via WhatsApp/App Push.
                   Simulate buyer acceptance or decline below to verify dynamic basket recomputation and FIFO batch tracking.
                 </p>
@@ -797,7 +851,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
             {/* Prompt Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {substitutionPrompts.length === 0 ? (
-                <div className="col-span-3 py-12 text-center text-gray-400 text-xs border border-slate-200 dark:border-zinc-800 rounded-2xl">
+                <div className="col-span-3 py-12 text-center text-slate-500 dark:text-slate-400 text-xs border border-slate-200 dark:border-slate-800/80 rounded-2xl">
                   No substitution prompts dispatched yet. Click &ldquo;Quick Substitution&rdquo; on an order item to generate one.
                 </div>
               ) : (
@@ -820,7 +874,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                       <div>
                         {/* Header & Status */}
                         <div className="flex items-center justify-between gap-2 mb-2">
-                          <span className="font-mono text-[11px] font-bold text-gray-900 dark:text-white">
+                          <span className="font-mono text-[11px] font-bold text-gray-900 dark:text-slate-100">
                             {prompt.id}
                           </span>
                           <span
@@ -837,32 +891,32 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         </div>
 
                         {/* Customer & Order */}
-                        <div className="text-xs font-bold text-gray-900 dark:text-white">
+                        <div className="text-xs font-bold text-gray-900 dark:text-slate-100">
                           Order #{prompt.orderId} &bull; {prompt.customerName}
                         </div>
-                        <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                           <MessageCircle className="w-3 h-3 text-emerald-500" />
                           {prompt.channel} ({prompt.customerPhone})
                         </div>
 
                         {/* Substitution Details */}
-                        <div className="mt-3 p-3 rounded-xl bg-white dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700 space-y-2 text-xs">
+                        <div className="mt-3 p-3 rounded-xl bg-white dark:bg-[#090A0F] border border-gray-100 dark:border-slate-800/80 space-y-2 text-xs">
                           <div>
                             <span className="text-[10px] text-rose-500 font-semibold block uppercase">Out-of-Stock:</span>
-                            <div className="font-medium text-gray-700 dark:text-zinc-300">
+                            <div className="font-medium text-gray-700 dark:text-slate-300">
                               {prompt.originalProductName} ({prompt.originalSku})
                             </div>
-                            <div className="text-[11px] text-gray-400 font-mono">
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                               Orig: {formatIDR(prompt.originalPrice)}
                             </div>
                           </div>
 
-                          <div className="border-t border-gray-100 dark:border-zinc-700 pt-1.5">
+                          <div className="border-t border-gray-100 dark:border-slate-800/80 pt-1.5">
                             <span className="text-[10px] text-emerald-600 font-semibold block uppercase">Suggested Upgrade:</span>
                             <div className="font-bold text-emerald-700 dark:text-emerald-300">
                               {prompt.replacementProductName} ({prompt.replacementSku})
                             </div>
-                            <div className="text-[11px] text-gray-400 font-mono">
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                               New: {formatIDR(prompt.replacementPrice)}{' '}
                               {prompt.absorbPriceDifference ? (
                                 <span className="text-emerald-600 font-semibold">(Store Absorbed 100%)</span>
@@ -874,23 +928,23 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                         </div>
 
                         {/* WhatsApp Message Preview Quote */}
-                        <div className="mt-2.5 p-2 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/50 text-[11px] text-emerald-900 dark:text-emerald-200 italic">
+                        <div className="mt-2.5 p-2 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/50 text-[11px] text-emerald-900 dark:text-emerald-200 italic">
                           &ldquo;{prompt.simulationMessage}&rdquo;
                         </div>
 
                         {/* FIFO Batch Traceability Info */}
                         {prompt.fifoAuditLog && (
-                          <div className="mt-2 text-[10px] text-gray-500 font-mono">
+                          <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                             📦 {prompt.fifoAuditLog}
                           </div>
                         )}
                       </div>
 
                       {/* Interactive Customer Action Buttons */}
-                      <div className="mt-4 pt-3 border-t border-gray-200 dark:border-zinc-700">
+                      <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-800/80">
                         {isPending ? (
                           <div className="space-y-1.5">
-                            <span className="text-[10px] text-gray-400 font-semibold uppercase block">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase block">
                               Simulate Buyer Decision:
                             </span>
                             <div className="grid grid-cols-2 gap-2">
@@ -914,8 +968,8 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                           </div>
                         ) : (
                           <div className="flex items-center justify-between text-[11px]">
-                            <span className="text-gray-400">Decided:</span>
-                            <span className="font-bold text-gray-700 dark:text-zinc-300">
+                            <span className="text-slate-500 dark:text-slate-400">Decided:</span>
+                            <span className="font-bold text-gray-700 dark:text-slate-300">
                               {prompt.decidedAt ? new Date(prompt.decidedAt).toLocaleTimeString('id-ID') : 'Resolved'}
                             </span>
                           </div>
@@ -932,41 +986,41 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
 
       {/* Catch-Weight Scale Modal */}
       {catchWeightItem && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-md rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto ${
-              isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
+              isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800 mb-3">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/80 mb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-amber-500 text-white">
                   <Scale className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-base">Digital Scale Weigh-In</h3>
-                  <p className="text-xs text-zinc-500">Variable-Weight Grocery Adjustment</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Variable-Weight Grocery Adjustment</p>
                 </div>
               </div>
-              <button onClick={() => setCatchWeightItem(null)} className="text-zinc-400 hover:text-slate-600">
+              <button onClick={() => setCatchWeightItem(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-xs">
                 <div className="font-semibold">{catchWeightItem.productName}</div>
-                <div className="text-[11px] text-zinc-500">Estimated: {catchWeightItem.estimatedWeightGrams || 300}g</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">Estimated: {catchWeightItem.estimatedWeightGrams || 300}g</div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold mb-1 text-slate-800 dark:text-zinc-200">Scale Reading (Grams)</label>
+                <label className="block text-xs font-bold mb-1 text-slate-800 dark:text-slate-200">Scale Reading (Grams)</label>
                 <input
                   type="number"
                   min={1}
                   value={scaleGramsInput}
                   onChange={(e) => setScaleGramsInput(Number(e.target.value))}
-                  className={`w-full px-3 py-2 rounded-xl text-sm border font-mono font-bold ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
+                  className={`w-full px-3 py-2 rounded-xl text-sm border font-mono font-bold ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"}`}
                 />
               </div>
 
@@ -987,7 +1041,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setCatchWeightItem(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1007,23 +1061,23 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
 
       {/* MODULE 2: Quick Substitution & Customer Prompt Dispatch Modal */}
       {subItem && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
           <div
             className={`w-full max-w-[95vw] sm:max-w-lg rounded-2xl border shadow-2xl p-4 sm:p-5 my-auto max-h-[90vh] overflow-y-auto ${
-              isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-zinc-900 border-zinc-800 text-white'
+              isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800 mb-3">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/80 mb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-blue-600 text-white">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-base">Module 2: Quick Substitution</h3>
-                  <p className="text-xs text-zinc-500">Real-Time Buyer WhatsApp / Push Notification</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Real-Time Buyer WhatsApp / Push Notification</p>
                 </div>
               </div>
-              <button onClick={() => setSubItem(null)} className="text-zinc-400 hover:text-slate-600">
+              <button onClick={() => setSubItem(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1033,18 +1087,18 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 <span className="font-bold text-rose-900 dark:text-rose-300">
                   Out of Stock: {subItem.productName} ({subItem.sku})
                 </span>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                   Ordered: {subItem.orderedQty} units &bull; Unit Price: {formatIDR(originalItemPrice)}
                 </p>
               </div>
 
               <div>
-                <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Select Replacement Product</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-slate-200">Select Replacement Product</label>
                 <select
                   value={replacementSku}
                   onChange={(e) => setReplacementSku(e.target.value)}
                   className={`w-full p-2.5 rounded-xl border ${
-                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
+                    isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"
                   }`}
                 >
                   {inventory
@@ -1059,12 +1113,12 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold block mb-1 text-slate-800 dark:text-zinc-200">Push Channel</label>
+                  <label className="font-semibold block mb-1 text-slate-800 dark:text-slate-200">Push Channel</label>
                   <select
                     value={promptChannel}
                     onChange={(e) => setPromptChannel(e.target.value as any)}
                     className={`w-full p-2.5 rounded-xl border ${
-                      isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"
+                      isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"
                     }`}
                   >
                     <option value="WhatsApp">WhatsApp Message</option>
@@ -1074,7 +1128,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 </div>
 
                 <div className="flex flex-col justify-end">
-                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800">
+                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50 dark:bg-[#090A0F]">
                     <input
                       type="checkbox"
                       checked={absorbPriceDifference}
@@ -1087,10 +1141,10 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               </div>
 
               {/* Price Delta Preview */}
-              <div className="p-3 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800/80 flex items-center justify-between">
+              <div className="p-3 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50 dark:bg-[#090A0F] flex items-center justify-between">
                 <div>
                   <span className="font-semibold">Price Delta Calculation:</span>
-                  <div className="text-[11px] text-gray-500 dark:text-zinc-400">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
                     Original: {formatIDR(originalItemPrice)} &rarr; Replacement: {formatIDR(replacementPrice)}
                   </div>
                 </div>
@@ -1108,7 +1162,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setSubItem(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>

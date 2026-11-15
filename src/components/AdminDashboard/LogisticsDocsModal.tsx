@@ -375,13 +375,13 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
       className={`w-full flex flex-col rounded-2xl border transition-all overflow-hidden ${
         isStandalonePage ? 'shadow-xs min-h-[750px]' : 'max-w-6xl max-h-[94vh] shadow-2xl'
       } ${
-        isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+        isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
       }`}
     >
       {/* Modal Header */}
       <div
         className={`flex items-center justify-between px-6 py-4 border-b flex-shrink-0 ${
-          isLight ? 'bg-gray-50/80 border-gray-200' : 'bg-zinc-900/80 border-zinc-800'
+          isLight ? 'bg-gray-50/80 border-gray-200' : 'bg-[#090A0F]/80 border-slate-800/80'
         }`}
       >
           <div className="flex items-center gap-3">
@@ -395,7 +395,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   Official ERP Forms
                 </span>
               </div>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Surat Jalan (Waybill / Delivery Note), Delivery Order (DO), and Fleet Quota Dispatch Tracking
               </p>
             </div>
@@ -422,7 +422,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                     isLight
                       ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-800 shadow-2xs'
-                      : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-indigo-300'
+                      : 'bg-[#090A0F] hover:bg-slate-900/90 border-slate-800/80 text-indigo-300'
                   }`}
                   title="Email Surat Jalan via SMTP"
                 >
@@ -435,7 +435,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                     isLight
                       ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800 shadow-2xs'
-                      : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-emerald-400'
+                      : 'bg-[#090A0F] hover:bg-slate-900/90 border-slate-800/80 text-emerald-400'
                   }`}
                   title="Send Surat Jalan via WhatsApp"
                 >
@@ -450,7 +450,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 isLight
                   ? 'bg-white hover:bg-gray-100 border-gray-300 text-gray-700 shadow-2xs'
-                  : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-200'
+                  : 'bg-[#090A0F] hover:bg-slate-900/90 border-slate-800/80 text-slate-200'
               }`}
               title="Print document in official A4 layout"
             >
@@ -462,7 +462,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
               <button
                 onClick={onClose}
                 className={`p-2 rounded-xl transition-colors ${
-                  isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'
+                  isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-slate-900/90 text-slate-400'
                 }`}
               >
                 <X className="w-5 h-5" />
@@ -474,7 +474,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
         {/* Navigation Tabs */}
         <div
           className={`flex items-center justify-between px-6 py-2 border-b flex-shrink-0 ${
-            isLight ? 'bg-white border-gray-100' : 'bg-zinc-900 border-zinc-800'
+            isLight ? 'bg-white border-gray-100' : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           <div className="flex items-center gap-1 sm:gap-2">
@@ -485,7 +485,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:bg-gray-100'
-                  : 'text-zinc-400 hover:bg-zinc-800'
+                  : 'text-slate-400 hover:bg-slate-900/90'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
@@ -502,7 +502,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:bg-gray-100'
-                  : 'text-zinc-400 hover:bg-zinc-800'
+                  : 'text-slate-400 hover:bg-slate-900/90'
               }`}
             >
               <PackageCheck className="w-3.5 h-3.5" />
@@ -519,7 +519,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:bg-gray-100'
-                  : 'text-zinc-400 hover:bg-zinc-800'
+                  : 'text-slate-400 hover:bg-slate-900/90'
               }`}
             >
               <Truck className="w-3.5 h-3.5" />
@@ -572,7 +572,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by SJ # or recipient..."
                     className={`w-full pl-8 pr-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
                     }`}
                   />
                 </div>
@@ -589,7 +589,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                             ? 'bg-emerald-500/10 border-emerald-500 text-[#0F4C3A] dark:text-emerald-300 shadow-xs'
                             : isLight
                             ? 'bg-white border-gray-200/90 hover:bg-gray-50'
-                            : 'bg-zinc-800/70 border-zinc-700/80 hover:bg-zinc-800'
+                            : 'bg-[#090A0F] border-slate-800/80 hover:bg-slate-900/90'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -623,11 +623,11 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   <div
                     id="printable-surat-jalan"
                     className={`p-6 sm:p-8 rounded-2xl border shadow-sm print:border-none print:shadow-none print:p-0 ${
-                      isLight ? 'bg-white border-gray-300' : 'bg-zinc-800/90 border-zinc-700 text-zinc-100'
+                      isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     {/* Official Company Header */}
-                    <div className="border-b-2 border-zinc-900 dark:border-zinc-100 pb-4 mb-4">
+                    <div className="border-b-2 border-slate-900 dark:border-slate-100 pb-4 mb-4">
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-2">
@@ -638,10 +638,10 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                               PT GROCEMART RETAIL INDONESIA
                             </span>
                           </div>
-                          <p className="text-[11px] text-gray-500 dark:text-zinc-300 mt-1">
+                          <p className="text-[11px] text-gray-500 dark:text-slate-300 mt-1">
                             HQ: Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan 12190
                           </p>
-                          <p className="text-[10px] text-gray-400 dark:text-zinc-300 font-mono">
+                          <p className="text-[10px] text-gray-400 dark:text-slate-400 font-mono">
                             NPWP: 01.345.678.9-012.000 | NIB: 9120003482114 | Izin Edar: KEMENKES-RI
                           </p>
                         </div>
@@ -651,7 +651,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                             SURAT JALAN
                           </h3>
                           <p className="text-xs font-mono font-bold mt-0.5">{selectedSj.documentNumber}</p>
-                          <p className="text-[11px] text-gray-500 dark:text-zinc-300">
+                          <p className="text-[11px] text-gray-500 dark:text-slate-300">
                             Tanggal: <strong className="font-mono">{selectedSj.issueDate}</strong>
                           </p>
                         </div>
@@ -659,13 +659,13 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     </div>
 
                     {/* Dual Info Block (Sender vs Recipient) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mb-6 p-3 rounded-xl bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mb-6 p-3 rounded-xl bg-gray-50 dark:bg-[#12141C] border border-gray-200 dark:border-slate-800/80">
                       <div>
                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                           Pengirim / Gudang Asal:
                         </div>
                         <div className="font-bold">{selectedSj.senderStoreName}</div>
-                        <div className="text-[11px] text-gray-600 dark:text-zinc-300 mt-0.5">
+                        <div className="text-[11px] text-gray-600 dark:text-slate-300 mt-0.5">
                           {selectedSj.senderAddress}
                         </div>
                         <div className="text-[11px] font-mono mt-1 text-gray-500">Telp: {selectedSj.senderPhone}</div>
@@ -676,7 +676,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                           Penerima / Tujuan:
                         </div>
                         <div className="font-bold text-[#0F4C3A] dark:text-emerald-400">{selectedSj.recipientName}</div>
-                        <div className="text-[11px] text-gray-600 dark:text-zinc-300 mt-0.5">
+                        <div className="text-[11px] text-gray-600 dark:text-slate-300 mt-0.5">
                           {selectedSj.recipientAddress}
                         </div>
                         <div className="text-[11px] font-mono mt-1 text-gray-500">Telp: {selectedSj.recipientPhone}</div>
@@ -684,7 +684,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     </div>
 
                     {/* Transport & Carrier Info */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-6 py-2 px-3 rounded-lg border border-gray-200 dark:border-zinc-700 font-mono">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-6 py-2 px-3 rounded-lg border border-gray-200 dark:border-slate-800/80 font-mono">
                       <div>
                         <span className="text-[10px] text-gray-400 font-sans block">Kurir / Armada:</span>
                         <span className="font-semibold">{selectedSj.carrierName}</span>
@@ -705,44 +705,44 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
                     {/* Item Table */}
                     <div className="overflow-x-auto mb-6">
-                      <table className="w-full text-left text-xs border border-gray-300 dark:border-zinc-700">
-                        <thead className="bg-gray-100 dark:bg-zinc-900 border-b border-gray-300 dark:border-zinc-700 font-bold uppercase text-[10px]">
+                      <table className="w-full text-left text-xs border border-gray-300 dark:border-slate-800/80">
+                        <thead className="bg-gray-100 dark:bg-[#12141C] border-b border-gray-300 dark:border-slate-800/80 font-bold uppercase text-[10px]">
                           <tr>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700 text-center w-8">No</th>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Kode SKU</th>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Nama Barang &amp; Spesifikasi</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-slate-800/80 text-center w-8">No</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-slate-800/80">Kode SKU</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-slate-800/80">Nama Barang &amp; Spesifikasi</th>
                             {showLots && (
-                              <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Batch / Lot</th>
+                              <th className="py-2 px-3 border-r border-gray-300 dark:border-slate-800/80">Batch / Lot</th>
                             )}
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700 text-center">Jumlah</th>
-                            <th className="py-2 px-3 border-r border-gray-300 dark:border-zinc-700">Kemasan</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-slate-800/80 text-center">Jumlah</th>
+                            <th className="py-2 px-3 border-r border-gray-300 dark:border-slate-800/80">Kemasan</th>
                             <th className="py-2 px-3">Kondisi / Keterangan</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-zinc-700">
+                        <tbody className="divide-y divide-gray-200 dark:divide-slate-800/80">
                           {selectedSj.items.map((item, idx) => (
                             <tr key={idx}>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 text-center font-mono">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-slate-800/80 text-center font-mono">
                                 {idx + 1}
                               </td>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-slate-800/80 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                                 {item.sku}
                               </td>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 font-semibold">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-slate-800/80 font-semibold">
                                 {item.productName}
                               </td>
                               {showLots && (
-                                <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 font-mono text-[11px]">
+                                <td className="py-2 px-3 border-r border-gray-200 dark:border-slate-800/80 font-mono text-[11px]">
                                   {item.batchNumber}
                                 </td>
                               )}
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700 text-center font-bold">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-slate-800/80 text-center font-bold">
                                 {item.quantity} {item.unit}
                               </td>
-                              <td className="py-2 px-3 border-r border-gray-200 dark:border-zinc-700">
+                              <td className="py-2 px-3 border-r border-gray-200 dark:border-slate-800/80">
                                 {item.packagingType}
                               </td>
-                              <td className="py-2 px-3 text-[11px] text-gray-600 dark:text-zinc-300">
+                              <td className="py-2 px-3 text-[11px] text-gray-600 dark:text-slate-300">
                                 <div>{item.condition} - {item.notes || 'Normal'}</div>
                                 {showDeliveryExpiry && (
                                   <div className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-semibold mt-0.5">
@@ -765,7 +765,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     </div>
 
                     {/* 3-Column Formal Sign-off Block */}
-                    <div className="grid grid-cols-3 gap-4 text-center text-xs pt-4 border-t border-gray-300 dark:border-zinc-700">
+                    <div className="grid grid-cols-3 gap-4 text-center text-xs pt-4 border-t border-gray-300 dark:border-slate-800/80">
                       <div className="space-y-12">
                         <span className="font-semibold text-gray-500">Yang Menyerahkan (Pengirim)</span>
                         <div className="border-b border-gray-400 mx-4 pb-1 font-bold">
@@ -798,7 +798,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                             Arrival Temp: {selectedSj.epod.arrivalTempCelsius}°C · Signed: {new Date(selectedSj.epod.deliveredAt).toLocaleString('id-ID')}
                           </span>
                         </div>
-                        <div className="text-[11px] text-slate-700 dark:text-zinc-300">
+                        <div className="text-[11px] text-slate-700 dark:text-slate-300">
                           Receiver: <strong>{selectedSj.epod.receiverName}</strong>
                           {selectedSj.tripId && <span> · Consolidated Trip: <strong className="font-mono">{selectedSj.tripId}</strong></span>}
                           {selectedSj.epod.creditMemoNumber && (
@@ -833,10 +833,10 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   <div
                     key={doDoc.id}
                     className={`p-5 rounded-2xl border space-y-3 ${
-                      isLight ? 'bg-white border-gray-200' : 'bg-zinc-800/80 border-zinc-700'
+                      isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
                     }`}
                   >
-                    <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-zinc-700">
+                    <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-slate-800/80">
                       <div>
                         <span className="font-mono text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">
                           {doDoc.doNumber}
@@ -848,13 +848,13 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                       </span>
                     </div>
 
-                    <div className="text-xs space-y-1 text-gray-600 dark:text-zinc-300">
+                    <div className="text-xs space-y-1 text-gray-600 dark:text-slate-300">
                       <div>Address: <strong>{doDoc.deliveryAddress}</strong></div>
                       <div>Window: <strong>{doDoc.deliveryWindow}</strong></div>
                       <div>Authorized By: <strong>{doDoc.authorizedOfficer}</strong></div>
                     </div>
 
-                    <div className="border-t pt-2 border-gray-100 dark:border-zinc-700 flex justify-between items-center text-xs">
+                    <div className="border-t pt-2 border-gray-100 dark:border-slate-800/80 flex justify-between items-center text-xs">
                       <span>Total Value:</span>
                       <span className="font-mono font-bold text-sm text-[#0F4C3A] dark:text-emerald-400">
                         {formatIDR(doDoc.totalAmountIDR)}
@@ -876,7 +876,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   <div
                     key={shp.id}
                     className={`p-5 rounded-2xl border space-y-4 ${
-                      isLight ? 'bg-white border-gray-200' : 'bg-zinc-800/80 border-zinc-700'
+                      isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -900,7 +900,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                           {shp.currentPayloadKg} / {shp.maxPayloadKg} kg ({shp.quotaUtilizationPercent}%)
                         </strong>
                       </div>
-                      <div className="w-full bg-gray-200 dark:bg-zinc-700 h-2.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-gray-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all ${
                             shp.quotaUtilizationPercent > 90
@@ -915,7 +915,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     </div>
 
                     {/* Route & Temp */}
-                    <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-gray-50 dark:bg-zinc-900 text-xs">
+                    <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-gray-50 dark:bg-[#12141C] border border-transparent dark:border-slate-800/80 text-xs">
                       <div>
                         <span className="text-[10px] text-gray-400 block">Route:</span>
                         <span className="font-semibold">{shp.departureHub} → {shp.destinationHub}</span>
@@ -928,7 +928,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex justify-between text-xs text-gray-500 dark:text-zinc-300">
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
                       <span>Driver: {shp.driverName} ({shp.driverContact})</span>
                       <span>{shp.assignedOrdersCount} Orders Loaded</span>
                     </div>
@@ -941,85 +941,85 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
         {/* Modal Create Surat Jalan Drawer */}
         {isCreatingSj && typeof document !== 'undefined' && createPortal(
-          <div className="fixed inset-0 z-[110] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
             <div className={`w-full max-w-lg p-6 rounded-2xl border shadow-xl space-y-4 my-auto ${
-              isLight ? 'bg-white border-gray-300' : 'bg-zinc-900 border-zinc-800'
+              isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}>
-              <div className="flex justify-between items-center border-b pb-3">
+              <div className="flex justify-between items-center border-b border-gray-200 dark:border-slate-800/80 pb-3">
                 <h3 className="font-bold text-base">Issue Formal Surat Jalan</h3>
-                <button onClick={() => setIsCreatingSj(false)}><X className="w-5 h-5 text-gray-400" /></button>
+                <button onClick={() => setIsCreatingSj(false)}><X className="w-5 h-5 text-slate-400" /></button>
               </div>
 
               <form onSubmit={handleCreateSubmit} className="space-y-3 text-xs">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Recipient Hub / Customer Name</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Recipient Hub / Customer Name</label>
                   <input
                     type="text"
                     value={newSjRecipient}
                     onChange={(e) => setNewSjRecipient(e.target.value)}
                     required
-                    className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"}`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Delivery Destination Address</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Delivery Destination Address</label>
                   <input
                     type="text"
                     value={newSjAddress}
                     onChange={(e) => setNewSjAddress(e.target.value)}
                     required
-                    className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"}`}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Driver Name</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Driver Name</label>
                     <input
                       type="text"
                       value={newSjDriver}
                       onChange={(e) => setNewSjDriver(e.target.value)}
                       required
-                      className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"}`}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Vehicle License Plate</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Vehicle License Plate</label>
                     <input
                       type="text"
                       value={newSjVehiclePlate}
                       onChange={(e) => setNewSjVehiclePlate(e.target.value)}
                       required
-                      className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"}`}
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Cold-Chain Temp (°C)</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Cold-Chain Temp (°C)</label>
                     <input
                       type="number"
                       step="0.1"
                       value={newSjTemp}
                       onChange={(e) => setNewSjTemp(Number(e.target.value))}
-                      className={`w-full px-3 py-2 rounded-xl border font-mono ${isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'}`}
+                      className={`w-full px-3 py-2 rounded-xl border font-mono ${isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'}`}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Handling Notes</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Handling Notes</label>
                     <input
                       type="text"
                       value={newSjNotes}
                       onChange={(e) => setNewSjNotes(e.target.value)}
-                      className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-zinc-800 border-zinc-700 text-zinc-100"}`}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs ${isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"}`}
                     />
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-3 border-t">
+                <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-slate-800/80">
                   <button
                     type="button"
                     onClick={() => setIsCreatingSj(false)}
-                    className="px-4 py-2 rounded-xl border text-xs font-semibold"
+                    className="px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-xs font-semibold"
                   >
                     Cancel
                   </button>
@@ -1054,18 +1054,18 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
       {/* Route Trip Consolidation Builder Modal */}
       {isTripBuilderOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[115] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[115] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto ${
-            isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+            isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
           }`}>
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 pb-3">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800/80 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-[#0F4C3A] text-white">
                   <Layers className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-base">Consolidate Delivery Route Trip</h3>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
                     Group multiple ready Surat Jalan waybills onto one cold-chain fleet trip
                   </p>
                 </div>
@@ -1073,7 +1073,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsTripBuilderOpen(false)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-slate-200"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1087,7 +1087,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     value={tripRouteZone}
                     onChange={(e) => setTripRouteZone(e.target.value)}
                     className={`w-full px-3 py-2 rounded-xl border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="South Jakarta / SCBD-Senopati">South Jakarta / SCBD-Senopati</option>
@@ -1104,7 +1104,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     value={tripFleetPresetId}
                     onChange={(e) => setTripFleetPresetId(e.target.value)}
                     className={`w-full px-3 py-2 rounded-xl border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     {FLEET_PRESETS.map((preset) => (
@@ -1117,7 +1117,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
               </div>
 
               {/* Payload Quota & Cold-Chain Validation Bar */}
-              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800/70 space-y-2">
+              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50 dark:bg-[#090A0F] space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold">
                     Driver: {activeFleetPreset.driverName} ({activeFleetPreset.vehiclePlate})
@@ -1130,7 +1130,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     {selectedTripWeightKg} / {activeFleetPreset.maxPayloadKg} kg ({selectedTripUtilPct}%)
                   </span>
                 </div>
-                <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden">
+                <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-slate-800 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
                       selectedTripUtilPct > 100
@@ -1173,7 +1173,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
                 <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
                   {readyToDispatchSjList.length === 0 ? (
-                    <div className="p-6 text-center rounded-xl border border-dashed border-gray-300 dark:border-zinc-700 text-gray-500">
+                    <div className="p-6 text-center rounded-xl border border-dashed border-gray-300 dark:border-slate-800/80 text-gray-500 dark:text-slate-400">
                       No READY_FOR_DISPATCH Surat Jalan documents pending consolidation. Complete a fulfillment order or issue a new Surat Jalan first.
                     </div>
                   ) : (
@@ -1187,7 +1187,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                               ? 'border-[#0F4C3A] bg-emerald-500/5'
                               : isLight
                               ? 'border-gray-200 hover:bg-gray-50'
-                              : 'border-zinc-700 hover:bg-zinc-800/70'
+                              : 'border-slate-800/80 bg-[#090A0F] hover:bg-slate-900/90'
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
@@ -1205,7 +1205,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                             />
                             <div className="min-w-0">
                               <div className="font-mono font-bold truncate">{sj.documentNumber} — {sj.recipientName}</div>
-                              <div className="text-[11px] text-gray-500 dark:text-zinc-400 truncate">
+                              <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
                                 {sj.routeZone || sj.recipientAddress} · {sj.items.length} SKU(s) · Target {sj.coldChainTempCelsius}°C
                               </div>
                             </div>
@@ -1218,7 +1218,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 p-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 cursor-pointer">
+              <label className="flex items-center gap-2 p-2.5 rounded-xl border border-gray-200 dark:border-slate-800/80 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={tripNotifyCustomers}
@@ -1228,11 +1228,11 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                 <span>Notify customers via WhatsApp &amp; Email Dispatch Gateway upon departure</span>
               </label>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-zinc-800">
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => setIsTripBuilderOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-xs font-semibold"
                 >
                   Cancel
                 </button>
@@ -1257,18 +1257,18 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
       {/* Electronic Proof of Delivery (e-POD) Modal */}
       {epodTargetSj && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[115] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[115] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto ${
-            isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+            isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
           }`}>
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 pb-3">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800/80 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-amber-500 text-white">
                   <ClipboardCheck className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-bold text-base">Electronic Proof of Delivery (e-POD)</h3>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400 font-mono">
+                  <p className="text-xs text-gray-500 dark:text-slate-400 font-mono">
                     {epodTargetSj.documentNumber} · {epodTargetSj.recipientName}
                   </p>
                 </div>
@@ -1276,7 +1276,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setEpodTargetSj(null)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-slate-200"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1292,7 +1292,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     value={epodReceiverName}
                     onChange={(e) => setEpodReceiverName(e.target.value)}
                     className={`w-full px-3 py-2 rounded-xl border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   />
                 </div>
@@ -1304,7 +1304,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     value={epodDeliveredAt}
                     onChange={(e) => setEpodDeliveredAt(e.target.value)}
                     className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   />
                 </div>
@@ -1317,7 +1317,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     value={epodArrivalTemp}
                     onChange={(e) => setEpodArrivalTemp(Number(e.target.value))}
                     className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   />
                 </div>
@@ -1332,7 +1332,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       epodOutcome === 'DELIVERED_FULL'
                         ? 'border-emerald-600 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
-                        : 'border-gray-200 dark:border-zinc-700'
+                        : 'border-gray-200 dark:border-slate-800/80 dark:bg-[#090A0F]'
                     }`}
                   >
                     <div className="font-bold">Full Delivery Signed</div>
@@ -1344,7 +1344,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       epodOutcome === 'PARTIAL_RETURN'
                         ? 'border-amber-600 bg-amber-500/10 text-amber-800 dark:text-amber-300'
-                        : 'border-gray-200 dark:border-zinc-700'
+                        : 'border-gray-200 dark:border-slate-800/80 dark:bg-[#090A0F]'
                     }`}
                   >
                     <div className="font-bold">Partial Return / On-Site Rejection</div>
@@ -1369,12 +1369,12 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                         <div
                           key={item.sku}
                           className={`p-2.5 rounded-xl border grid grid-cols-1 sm:grid-cols-12 gap-2 items-center ${
-                            isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-700'
+                            isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
                           }`}
                         >
                           <div className="sm:col-span-4">
                             <div className="font-bold truncate">{item.productName}</div>
-                            <div className="text-[11px] font-mono text-gray-500">
+                            <div className="text-[11px] font-mono text-gray-500 dark:text-slate-400">
                               {item.sku} · Sent: {item.quantity} {item.unit}
                             </div>
                           </div>
@@ -1393,7 +1393,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                                 }));
                               }}
                               className={`w-full px-2 py-1.5 rounded-lg border font-mono ${
-                                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                                isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
                               }`}
                             />
                           </div>
@@ -1411,7 +1411,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                                 }))
                               }
                               className={`w-full px-2 py-1.5 rounded-lg border ${
-                                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                                isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
                               }`}
                             >
                               <option value="GOOD_RESTOCK">Good (Restock Sellable)</option>
@@ -1431,7 +1431,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                                 }))
                               }
                               className={`w-full px-2 py-1.5 rounded-lg border ${
-                                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                                isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
                               }`}
                             />
                           </div>
@@ -1450,16 +1450,16 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                   onChange={(e) => setEpodNotes(e.target.value)}
                   placeholder="e.g. Received at loading dock #2, seal intact"
                   className={`w-full px-3 py-2 rounded-xl border ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-zinc-800">
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => setEpodTargetSj(null)}
-                  className="px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-xs font-semibold"
                 >
                   Cancel
                 </button>
@@ -1484,13 +1484,13 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
   ) : (
     typeof document !== 'undefined'
       ? createPortal(
-          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden">
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden">
             {content}
           </div>,
           document.body
         )
       : (
-          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden">
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden">
             {content}
           </div>
         )

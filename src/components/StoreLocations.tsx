@@ -38,36 +38,36 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
   }, [sourceStores, selectedCity, searchQuery]);
 
   return (
-    <section id="stores" className="py-16 sm:py-24 bg-white dark:bg-stone-950">
+    <section id="stores" className="py-16 sm:py-24 bg-white dark:bg-[#090A0F]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-stone-200 dark:border-stone-800">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-stone-200 dark:border-slate-800/80">
           <div>
             <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 tracking-wider uppercase mb-2">
               National Retail Network
             </div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-stone-900 dark:text-stone-100 font-display">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-stone-900 dark:text-slate-100 font-display">
               34 Supermarket Outlets Across Indonesia
             </h2>
-            <p className="mt-2 text-stone-600 dark:text-stone-400 text-sm sm:text-base max-w-2xl">
+            <p className="mt-2 text-stone-600 dark:text-slate-400 text-sm sm:text-base max-w-2xl">
               Locate your nearest GroceMart branch to enjoy same-day in-store shopping, drive-through Click & Collect, or ultra-fast 1-hour doorstep delivery.
             </p>
           </div>
 
           {/* Quick Search */}
           <div className="relative w-full md:w-72">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search branch or area..."
-              className="w-full pl-9 pr-4 py-2.5 bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg text-sm text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-800/20 focus:border-emerald-800 dark:focus:border-emerald-500"
+              className="w-full pl-9 pr-4 py-2.5 bg-stone-50 dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 rounded-lg text-sm text-stone-900 dark:text-slate-100 placeholder:text-stone-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-800/20 focus:border-emerald-800 dark:focus:border-emerald-500"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xs"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs"
               >
                 Clear
               </button>
@@ -90,7 +90,7 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
                 className={`px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   isSelected
                     ? 'bg-emerald-800 dark:bg-emerald-700 text-white shadow-xs'
-                    : 'bg-stone-100 dark:bg-stone-900 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100'
+                    : 'bg-stone-100 dark:bg-[#12141C] text-stone-600 dark:text-slate-300 border border-transparent dark:border-slate-800/80 hover:bg-stone-200 dark:hover:bg-slate-900/90 hover:text-stone-900 dark:hover:text-slate-100'
                 }`}
               >
                 <span>{city}</span>
@@ -110,19 +110,19 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
                 key={store.id}
                 className={`p-6 rounded-2xl border transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col justify-between ${
                   isPickupSelected
-                    ? 'border-emerald-800 dark:border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/30 ring-1 ring-emerald-800 dark:ring-emerald-500 shadow-xs'
-                    : 'border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/70 hover:bg-white dark:hover:bg-stone-900 hover:border-stone-300 dark:hover:border-stone-700'
+                    ? 'border-emerald-800 dark:border-emerald-500/70 bg-emerald-50/20 dark:bg-emerald-950/60 ring-1 ring-emerald-800 dark:ring-emerald-500/60 shadow-xs'
+                    : 'border-stone-200 dark:border-slate-800/80 bg-stone-50/50 dark:bg-[#12141C] hover:bg-white dark:hover:bg-slate-900/90 hover:border-stone-300 dark:hover:border-slate-700'
                 }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div>
-                      <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-medium mb-1">
+                      <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-slate-400 font-medium mb-1">
                         <span>{store.city}</span>
                         <span aria-hidden="true">·</span>
                         <span>Est. {store.establishedYear}</span>
                       </div>
-                      <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100 font-display">
+                      <h3 className="text-lg font-bold text-stone-900 dark:text-slate-100 font-display">
                         {store.name}
                       </h3>
                     </div>
@@ -137,37 +137,37 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
                     ) : null}
                   </div>
 
-                  <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed mt-2 flex items-start gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-stone-600 dark:text-slate-400 leading-relaxed mt-2 flex items-start gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                     <span>{store.address}, {store.district}</span>
                   </p>
 
-                  <div className="mt-3 flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-mono">
-                    <Clock className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                  <div className="mt-3 flex items-center gap-2 text-xs text-stone-500 dark:text-slate-400 font-mono">
+                    <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span>{store.hours}</span>
                   </div>
 
-                  <div className="mt-1 flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400 font-mono">
-                    <Phone className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                  <div className="mt-1 flex items-center gap-2 text-xs text-stone-500 dark:text-slate-400 font-mono">
+                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span>{store.phone}</span>
                   </div>
 
                   {/* Amenities */}
-                  <div className="mt-4 pt-4 border-t border-stone-200/60 dark:border-stone-800">
-                    <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-2">
+                  <div className="mt-4 pt-4 border-t border-stone-200/60 dark:border-slate-800/80">
+                    <p className="text-[11px] font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-2">
                       Store Facilities & Highlights
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {store.amenities.slice(0, 3).map((amenity) => (
                         <span
                           key={amenity}
-                          className="text-[11px] text-stone-700 dark:text-stone-300 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 px-2 py-0.5 rounded"
+                          className="text-[11px] text-stone-700 dark:text-slate-300 bg-white dark:bg-[#090A0F] border border-stone-200 dark:border-slate-800/80 px-2 py-0.5 rounded"
                         >
                           {amenity}
                         </span>
                       ))}
                       {store.amenities.length > 3 && (
-                        <span className="text-[11px] text-stone-500 dark:text-stone-400 px-1 py-0.5">
+                        <span className="text-[11px] text-stone-500 dark:text-slate-400 px-1 py-0.5">
                           +{store.amenities.length - 3} more
                         </span>
                       )}
@@ -176,10 +176,10 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
                 </div>
 
                 {/* Actions row */}
-                <div className="mt-6 pt-4 border-t border-stone-200 dark:border-stone-800 flex items-center gap-2">
+                <div className="mt-6 pt-4 border-t border-stone-200 dark:border-slate-800/80 flex items-center gap-2">
                   <button
                     onClick={() => setActiveModalStore(store)}
-                    className="flex-1 py-2 px-3 text-xs font-semibold text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-700 active:scale-98 border border-stone-300 dark:border-stone-700 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer min-h-[40px]"
+                    className="flex-1 py-2 px-3 text-xs font-semibold text-stone-800 dark:text-slate-200 bg-white dark:bg-[#090A0F] hover:bg-stone-100 dark:hover:bg-slate-800/80 active:scale-98 border border-stone-300 dark:border-slate-800/80 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer min-h-[40px]"
                   >
                     <Navigation className="w-3.5 h-3.5 text-emerald-800 dark:text-emerald-400" />
                     <span>Map & Details</span>
@@ -193,7 +193,7 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
                     className={`flex-1 py-2 px-3 text-xs font-semibold rounded-xl active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer min-h-[40px] ${
                       isPickupSelected
                         ? 'bg-emerald-800 dark:bg-emerald-700 text-white'
-                        : 'bg-stone-900 dark:bg-stone-100 hover:bg-stone-800 dark:hover:bg-white text-white dark:text-stone-900'
+                        : 'bg-stone-900 dark:bg-[#0F4C3A] hover:bg-stone-800 dark:hover:bg-emerald-800 text-white'
                     }`}
                   >
                     {isPickupSelected ? (
@@ -212,10 +212,10 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
         </div>
 
         {filteredStores.length === 0 && (
-          <div className="text-center py-16 bg-stone-50 dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 mt-6">
-            <MapPin className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-            <p className="text-stone-900 dark:text-stone-100 font-semibold text-sm">No Store Locations Found</p>
-            <p className="text-stone-500 dark:text-stone-400 text-xs mt-1">
+          <div className="text-center py-16 bg-stone-50 dark:bg-[#12141C] rounded-2xl border border-stone-200 dark:border-slate-800/80 mt-6">
+            <MapPin className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+            <p className="text-stone-900 dark:text-slate-100 font-semibold text-sm">No Store Locations Found</p>
+            <p className="text-stone-500 dark:text-slate-400 text-xs mt-1">
               Try adjusting your city filter or search query.
             </p>
             <button
@@ -223,7 +223,7 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
                 setSelectedCity('All');
                 setSearchQuery('');
               }}
-              className="mt-4 px-4 py-2 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-lg text-xs font-semibold"
+              className="mt-4 px-4 py-2 bg-stone-900 dark:bg-[#0F4C3A] text-white rounded-lg text-xs font-semibold"
             >
               Reset Filters
             </button>
@@ -233,68 +233,68 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
 
       {/* Store Location Modal */}
       {activeModalStore && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-lg w-full p-6 shadow-xl border border-stone-200 dark:border-stone-800 relative animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+          <div className="bg-white dark:bg-[#12141C] rounded-2xl max-w-lg w-full p-6 shadow-xl border border-stone-200 dark:border-slate-800/80 relative animate-in fade-in zoom-in-95 duration-200">
             <button
               onClick={() => setActiveModalStore(null)}
-              className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+              className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800/80 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div>
-              <div className="flex items-center gap-2 text-xs font-medium text-stone-500 dark:text-stone-400 mb-1">
+              <div className="flex items-center gap-2 text-xs font-medium text-stone-500 dark:text-slate-400 mb-1">
                 <span>{activeModalStore.city}</span>
                 <span aria-hidden="true">·</span>
                 <span>Branch #{activeModalStore.id.toUpperCase()}</span>
               </div>
-              <h3 className="text-2xl font-bold text-stone-900 dark:text-stone-100 font-display">
+              <h3 className="text-2xl font-bold text-stone-900 dark:text-slate-100 font-display">
                 {activeModalStore.name}
               </h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+              <p className="text-xs text-stone-500 dark:text-slate-400 mt-0.5">
                 Supermarket General Manager: {activeModalStore.manager}
               </p>
             </div>
 
             {/* Interactive simulated Map Preview */}
-            <div className="mt-5 rounded-xl overflow-hidden border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 relative h-48 flex items-center justify-center">
-              <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#3f3f46_1px,transparent_1px)] [background-size:16px_16px] opacity-70" />
-              <div className="relative text-center p-4 bg-white/90 dark:bg-stone-900/90 backdrop-blur-md rounded-xl border border-stone-200/80 dark:border-stone-700 shadow-xs max-w-xs">
+            <div className="mt-5 rounded-xl overflow-hidden border border-stone-200 dark:border-slate-800/80 bg-stone-100 dark:bg-[#090A0F] relative h-48 flex items-center justify-center">
+              <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-70" />
+              <div className="relative text-center p-4 bg-white/90 dark:bg-[#12141C]/95 backdrop-blur-md rounded-xl border border-stone-200/80 dark:border-slate-800/80 shadow-xs max-w-xs">
                 <MapPin className="w-6 h-6 text-emerald-800 dark:text-emerald-400 mx-auto mb-1 animate-bounce" />
-                <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">{activeModalStore.name}</p>
-                <p className="text-[11px] text-stone-500 dark:text-stone-400">{activeModalStore.address}</p>
-                <div className="mt-2 text-[10px] font-mono text-stone-400">
+                <p className="text-xs font-semibold text-stone-900 dark:text-slate-100">{activeModalStore.name}</p>
+                <p className="text-[11px] text-stone-500 dark:text-slate-400">{activeModalStore.address}</p>
+                <div className="mt-2 text-[10px] font-mono text-slate-400">
                   GPS: {activeModalStore.coordinates.lat}, {activeModalStore.coordinates.lng}
                 </div>
               </div>
             </div>
 
-            <div className="mt-5 space-y-2.5 text-xs text-stone-700 dark:text-stone-300">
-              <div className="flex items-center justify-between py-1.5 border-b border-stone-100 dark:border-stone-800">
-                <span className="text-stone-500 dark:text-stone-400">Operating Hours</span>
-                <span className="font-semibold text-stone-900 dark:text-stone-100">{activeModalStore.hours}</span>
+            <div className="mt-5 space-y-2.5 text-xs text-stone-700 dark:text-slate-300">
+              <div className="flex items-center justify-between py-1.5 border-b border-stone-100 dark:border-slate-800/80">
+                <span className="text-stone-500 dark:text-slate-400">Operating Hours</span>
+                <span className="font-semibold text-stone-900 dark:text-slate-100">{activeModalStore.hours}</span>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-stone-100 dark:border-stone-800">
-                <span className="text-stone-500 dark:text-stone-400">Customer Service Phone</span>
+              <div className="flex items-center justify-between py-1.5 border-b border-stone-100 dark:border-slate-800/80">
+                <span className="text-stone-500 dark:text-slate-400">Customer Service Phone</span>
                 <a href={`tel:${activeModalStore.phone}`} className="font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
                   {activeModalStore.phone}
                 </a>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-stone-100 dark:border-stone-800">
-                <span className="text-stone-500 dark:text-stone-400">Click & Collect Service</span>
+              <div className="flex items-center justify-between py-1.5 border-b border-stone-100 dark:border-slate-800/80">
+                <span className="text-stone-500 dark:text-slate-400">Click & Collect Service</span>
                 <span className="font-semibold text-emerald-800 dark:text-emerald-400">Ready in 30 Minutes</span>
               </div>
             </div>
 
             <div className="mt-4">
-              <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-2">
+              <p className="text-[11px] font-semibold text-stone-500 dark:text-slate-400 uppercase tracking-wider mb-2">
                 All Available Store Facilities
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {activeModalStore.amenities.map((a) => (
                   <span
                     key={a}
-                    className="text-xs text-stone-800 dark:text-stone-200 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-md"
+                    className="text-xs text-stone-800 dark:text-slate-200 bg-stone-100 dark:bg-[#090A0F] border border-transparent dark:border-slate-800/80 px-2.5 py-1 rounded-md"
                   >
                     {a}
                   </span>
@@ -315,7 +315,7 @@ export const StoreLocations: React.FC<StoreLocationsProps> = ({
               </button>
               <button
                 onClick={() => setActiveModalStore(null)}
-                className="py-2.5 px-4 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+                className="py-2.5 px-4 bg-stone-100 dark:bg-[#090A0F] hover:bg-stone-200 dark:hover:bg-slate-800/80 border border-transparent dark:border-slate-800/80 text-stone-700 dark:text-slate-200 font-semibold text-xs rounded-lg transition-colors cursor-pointer"
               >
                 Close
               </button>

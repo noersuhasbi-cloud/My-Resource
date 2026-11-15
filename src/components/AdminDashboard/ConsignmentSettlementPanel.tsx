@@ -118,7 +118,7 @@ export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProp
             <Handshake className="w-4 h-4 text-emerald-500" />
             <span>Consignment (Titip Jual UMKM) Stock &amp; Sales-Based Settlement</span>
           </h3>
-          <p className={`text-xs ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
+          <p className={`text-xs ${isLight ? 'text-stone-500' : 'text-slate-400'}`}>
             Zero balance-sheet #1040/#2010 posting on receipt; Payable (#2015) accrues only when sold at POS/B2B and clears into Vendor Bills (#2010).
           </p>
         </div>
@@ -127,7 +127,7 @@ export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProp
           onClick={loadData}
           disabled={loading}
           className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer ${
-            isLight ? 'border-stone-300 bg-white hover:bg-stone-50' : 'border-zinc-700 bg-zinc-900 hover:bg-zinc-800'
+            isLight ? 'border-stone-300 bg-white hover:bg-stone-50' : 'border-slate-800/80 bg-slate-900/90 text-slate-200 hover:bg-slate-800'
           }`}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -137,25 +137,25 @@ export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProp
 
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-white border-stone-200' : 'bg-zinc-900/70 border-zinc-800'}`}>
+        <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-white border-stone-200' : 'bg-[#12141C] border-slate-800/80'}`}>
           <div className="text-[11px] opacity-70">Unsettled Payable (#2015)</div>
           <div className="text-base font-black font-mono text-amber-500 mt-0.5">
             {formatIDR(data.summary.unsettledPayableIDR)}
           </div>
         </div>
-        <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-white border-stone-200' : 'bg-zinc-900/70 border-zinc-800'}`}>
+        <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-white border-stone-200' : 'bg-[#12141C] border-slate-800/80'}`}>
           <div className="text-[11px] opacity-70">Store Margin Earned</div>
           <div className="text-base font-black font-mono text-emerald-500 mt-0.5">
             {formatIDR(data.summary.totalStoreCommissionIDR)}
           </div>
         </div>
-        <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-white border-stone-200' : 'bg-zinc-900/70 border-zinc-800'}`}>
+        <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-white border-stone-200' : 'bg-[#12141C] border-slate-800/80'}`}>
           <div className="text-[11px] opacity-70">Settled to Vendor Bills</div>
           <div className="text-base font-black font-mono mt-0.5">
             {formatIDR(data.summary.settledTotalIDR)}
           </div>
         </div>
-        <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-white border-stone-200' : 'bg-zinc-900/70 border-zinc-800'}`}>
+        <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-white border-stone-200' : 'bg-[#12141C] border-slate-800/80'}`}>
           <div className="text-[11px] opacity-70">Unsold Consignment Stock</div>
           <div className="text-base font-black font-mono mt-0.5">
             {data.summary.totalUnsoldUnits} u ({data.summary.activeBatchesCount} lots)
@@ -191,13 +191,13 @@ export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProp
       )}
 
       {/* Active Unsold Consignment Batches */}
-      <div className={`rounded-2xl border overflow-hidden ${isLight ? 'bg-white border-stone-200' : 'bg-zinc-900/70 border-zinc-800'}`}>
-        <div className={`px-4 py-2.5 border-b text-xs font-bold ${isLight ? 'bg-stone-50 border-stone-200' : 'bg-zinc-950 border-zinc-800'}`}>
+      <div className={`rounded-2xl border overflow-hidden ${isLight ? 'bg-white border-stone-200' : 'bg-[#12141C] border-slate-800/80'}`}>
+        <div className={`px-4 py-2.5 border-b text-xs font-bold ${isLight ? 'bg-stone-50 border-stone-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
           Active Titip Jual Shelf Holdings ({data.activeStock.length})
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className={isLight ? 'bg-stone-50 text-stone-500' : 'bg-zinc-950/60 text-zinc-400'}>
+            <thead className={isLight ? 'bg-stone-50 text-stone-500' : 'bg-[#090A0F] text-slate-400'}>
               <tr>
                 <th className="px-3 py-2">SKU / Product</th>
                 <th className="px-3 py-2">UMKM Partner</th>
@@ -207,7 +207,7 @@ export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProp
                 <th className="px-3 py-2 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-200/60 dark:divide-zinc-800">
+            <tbody className="divide-y divide-stone-200/60 dark:divide-slate-800/80">
               {data.activeStock.map((b) => (
                 <tr key={b.batchId}>
                   <td className="px-3 py-2">
@@ -243,13 +243,13 @@ export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProp
       </div>
 
       {/* Consignment Sales Ledger */}
-      <div className={`rounded-2xl border overflow-hidden ${isLight ? 'bg-white border-stone-200' : 'bg-zinc-900/70 border-zinc-800'}`}>
-        <div className={`px-4 py-2.5 border-b text-xs font-bold ${isLight ? 'bg-stone-50 border-stone-200' : 'bg-zinc-950 border-zinc-800'}`}>
+      <div className={`rounded-2xl border overflow-hidden ${isLight ? 'bg-white border-stone-200' : 'bg-[#12141C] border-slate-800/80'}`}>
+        <div className={`px-4 py-2.5 border-b text-xs font-bold ${isLight ? 'bg-stone-50 border-stone-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
           Sold Consignment Ledger ({data.salesLedger.length})
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className={isLight ? 'bg-stone-50 text-stone-500' : 'bg-zinc-950/60 text-zinc-400'}>
+            <thead className={isLight ? 'bg-stone-50 text-stone-500' : 'bg-[#090A0F] text-slate-400'}>
               <tr>
                 <th className="px-3 py-2">Ref # / Channel</th>
                 <th className="px-3 py-2">Product / Partner</th>
@@ -260,7 +260,7 @@ export const ConsignmentSettlementPanel: React.FC<ConsignmentSettlementPanelProp
                 <th className="px-3 py-2 text-right">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-200/60 dark:divide-zinc-800">
+            <tbody className="divide-y divide-stone-200/60 dark:divide-slate-800/80">
               {data.salesLedger.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-6 text-center opacity-60">

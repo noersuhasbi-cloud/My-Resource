@@ -143,12 +143,12 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
         className={`w-full max-w-3xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
           isLight
             ? 'bg-white border-gray-200 text-slate-900'
-            : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+            : 'bg-[#12141C] border-slate-800/80 text-slate-100'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 pb-3 border-b border-gray-200 dark:border-zinc-800">
+        <div className="flex items-start justify-between gap-4 pb-3 border-b border-gray-200 dark:border-slate-800/80">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-400">
               <Banknote className="w-5 h-5" />
@@ -169,7 +169,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 dark:text-zinc-400 cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-900/90 text-gray-500 dark:text-slate-400 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -184,7 +184,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                   <CheckCircle2 className="w-4 h-4" />
                   <span>{finalizedZReport.zReportNumber} · Shift Closed &amp; Reconciled</span>
                 </div>
-                <p className="text-[11px] text-slate-600 dark:text-zinc-300 mt-0.5">
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
                   Cashier: {finalizedZReport.cashierName} · Register {finalizedZReport.registerId} ·{' '}
                   {finalizedZReport.transactionCount} Transactions
                 </p>
@@ -206,14 +206,14 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono tabular-nums">
-              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
-                <span className="text-[10px] font-sans font-semibold text-gray-500 dark:text-zinc-400 block">
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                <span className="text-[10px] font-sans font-semibold text-gray-500 dark:text-slate-400 block">
                   Expected Cash in Drawer
                 </span>
                 <span className="text-base font-bold block mt-1">
                   {formatIDR(finalizedZReport.expectedTotalCashInDrawerIDR)}
                 </span>
-                <span className="text-[10px] text-gray-500 dark:text-zinc-400 block">
+                <span className="text-[10px] text-gray-500 dark:text-slate-400 block">
                   Float {formatIDR(finalizedZReport.openingFloatIDR)} + Sales {formatIDR(finalizedZReport.expectedCashSalesIDR)}
                   {(finalizedZReport.safeDropsTotalIDR || 0) > 0
                     ? ` − Safe Drops ${formatIDR(finalizedZReport.safeDropsTotalIDR || 0)}`
@@ -221,14 +221,14 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                 </span>
               </div>
 
-              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
-                <span className="text-[10px] font-sans font-semibold text-gray-500 dark:text-zinc-400 block">
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                <span className="text-[10px] font-sans font-semibold text-gray-500 dark:text-slate-400 block">
                   Blind Counted Cash
                 </span>
                 <span className="text-base font-bold text-blue-600 dark:text-blue-400 block mt-1">
                   {formatIDR(finalizedZReport.countedCashIDR || 0)}
                 </span>
-                <span className="text-[10px] text-gray-500 dark:text-zinc-400">
+                <span className="text-[10px] text-gray-500 dark:text-slate-400">
                   QRIS: {formatIDR(finalizedZReport.countedQrisBatchIDR || 0)} · EDC: {formatIDR(finalizedZReport.countedEdcBatchIDR || 0)}
                 </span>
               </div>
@@ -240,7 +240,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                     : 'bg-rose-500/10 border-rose-500/30'
                 }`}
               >
-                <span className="text-[10px] font-sans font-semibold text-gray-500 dark:text-zinc-300 block">
+                <span className="text-[10px] font-sans font-semibold text-gray-500 dark:text-slate-300 block">
                   Cash Over/Short (Selisih Kasir)
                 </span>
                 <span
@@ -253,7 +253,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                   {(finalizedZReport.cashVarianceIDR || 0) > 0 ? '+' : ''}
                   {formatIDR(finalizedZReport.cashVarianceIDR || 0)}
                 </span>
-                <span className="text-[10px] text-gray-600 dark:text-zinc-300">
+                <span className="text-[10px] text-gray-600 dark:text-slate-300">
                   {(finalizedZReport.cashVarianceIDR || 0) !== 0
                     ? `Posted to COA #5220 (${finalizedZReport.varianceGlVoucherIds?.join(', ')})`
                     : 'Balanced — Zero GL variance needed'}
@@ -301,7 +301,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                   readOnly
                   value={storeName}
                   className={`w-full px-3 py-2 rounded-xl border ${
-                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800 border-zinc-700'
+                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
@@ -312,7 +312,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                   value={registerId}
                   onChange={(e) => setRegisterId(e.target.value)}
                   className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                    isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                    isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
@@ -325,7 +325,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                   value={openingFloatIDR}
                   onChange={(e) => setOpeningFloatIDR(Math.max(0, Number(e.target.value) || 0))}
                   className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
-                    isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                    isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
@@ -335,7 +335,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] font-semibold cursor-pointer"
               >
                 Cancel
               </button>
@@ -380,14 +380,14 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                   <div
                     key={denom}
                     className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
-                      isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'
+                      isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
                     }`}
                   >
                     <div>
                       <span className="font-mono font-bold block">
                         Rp {denom.toLocaleString('id-ID')}
                       </span>
-                      <span className="text-[10px] font-mono text-gray-500 dark:text-zinc-400">
+                      <span className="text-[10px] font-mono text-gray-500 dark:text-slate-400">
                         {formatIDR(denom * count)}
                       </span>
                     </div>
@@ -402,7 +402,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                         }))
                       }
                       className={`w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-900 border-zinc-700'
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
                       }`}
                     />
                   </div>
@@ -412,7 +412,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
 
             {/* EDC & QRIS Batch Totals + Counted Cash Sum */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-              <div className={`p-3 rounded-xl border ${isLight ? 'bg-emerald-50 border-emerald-200' : 'bg-emerald-950/20 border-emerald-800/40'}`}>
+              <div className={`p-3 rounded-xl border ${isLight ? 'bg-emerald-50 border-emerald-200' : 'bg-emerald-950/25 border-emerald-800/50'}`}>
                 <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 block">
                   Physical Cash Counted
                 </span>
@@ -429,7 +429,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                   value={countedQrisBatchIDR}
                   onChange={(e) => setCountedQrisBatchIDR(Math.max(0, Number(e.target.value) || 0))}
                   className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
-                    isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                    isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
@@ -442,7 +442,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                   value={countedEdcBatchIDR}
                   onChange={(e) => setCountedEdcBatchIDR(Math.max(0, Number(e.target.value) || 0))}
                   className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
-                    isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                    isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
@@ -456,7 +456,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                 onChange={(e) => setClosingNotes(e.target.value)}
                 placeholder="e.g. Verified physical cash drawer + EDC BCA batch slip #04"
                 className={`w-full px-3 py-2 rounded-xl border ${
-                  isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                  isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               />
             </div>
@@ -465,7 +465,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] font-semibold cursor-pointer"
               >
                 Keep Shift Open
               </button>
@@ -483,8 +483,8 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
 
         {/* Recent Closed Shifts History */}
         {shiftHistory.filter((s) => s.status === 'CLOSED').length > 0 && (
-          <div className="pt-3 border-t border-gray-200 dark:border-zinc-800 space-y-2">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 flex items-center gap-1.5">
+          <div className="pt-3 border-t border-gray-200 dark:border-slate-800/80 space-y-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-slate-400 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />
               <span>Recent Z-Report Archive</span>
             </div>
@@ -496,12 +496,12 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                   <div
                     key={shf.id}
                     className={`px-3 py-2 rounded-lg border flex items-center justify-between text-[11px] font-mono ${
-                      isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/40 border-zinc-800'
+                      isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
                     }`}
                   >
                     <div>
                       <span className="font-bold">{shf.zReportNumber || shf.id}</span>
-                      <span className="font-sans text-gray-500 dark:text-zinc-400 ml-2">
+                      <span className="font-sans text-gray-500 dark:text-slate-400 ml-2">
                         {shf.cashierName} · {shf.transactionCount} txns
                       </span>
                     </div>
@@ -618,16 +618,16 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
         className={`w-full max-w-xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
           isLight
             ? 'bg-white border-gray-200 text-slate-900'
-            : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+            : 'bg-[#12141C] border-slate-800/80 text-slate-100'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-zinc-800">
+        <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800/80">
           <div className="flex items-center gap-2.5">
             <RotateCcw className="w-5 h-5 text-amber-600 dark:text-amber-400" />
             <div>
               <h3 className="text-base font-bold">Process Return / RMA &amp; Nota Retur</h3>
-              <p className="text-[11px] font-mono text-gray-500 dark:text-zinc-400">
+              <p className="text-[11px] font-mono text-gray-500 dark:text-slate-400">
                 Receipt #{receipt.receiptNumber} · DJP PPN Keluaran Auto-Adjustment
               </p>
             </div>
@@ -635,7 +635,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-900/90 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -650,7 +650,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
                 <div
                   key={item.sku}
                   className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'
+                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
                   }`}
                 >
                   <label className="flex items-center gap-2.5 cursor-pointer">
@@ -662,7 +662,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
                     />
                     <div>
                       <span className="font-bold block">{item.name}</span>
-                      <span className="font-mono text-[10px] text-gray-500 dark:text-zinc-400">
+                      <span className="font-mono text-[10px] text-gray-500 dark:text-slate-400">
                         {item.quantity} {item.unit} · {formatIDR(item.lineTotal)}
                       </span>
                     </div>
@@ -677,7 +677,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
                       }))
                     }
                     className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold ${
-                      isLight ? 'bg-white border-gray-300' : 'bg-zinc-900 border-zinc-700'
+                      isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="RESTOCK_ATP">Good Condition (Restock ATP)</option>
@@ -695,7 +695,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
                 value={refundMethod}
                 onChange={(e) => setRefundMethod(e.target.value as RmaRefundMethod)}
                 className={`w-full px-3 py-2 rounded-xl border font-semibold ${
-                  isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                  isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               >
                 <option value="CASH">Cash Drawer Refund (#1010)</option>
@@ -710,7 +710,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
                 onChange={(e) => setCustomerNpwpOrNik(e.target.value)}
                 placeholder="16-digit NIK/NPWP for DJP Nota Retur"
                 className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                  isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                  isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               />
             </div>
@@ -723,7 +723,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className={`w-full px-3 py-2 rounded-xl border ${
-                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
               }`}
             />
           </div>
@@ -732,7 +732,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 font-semibold cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] font-semibold cursor-pointer"
             >
               Cancel
             </button>
@@ -847,11 +847,11 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
         className={`w-full max-w-lg rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
           isLight
             ? 'bg-white border-gray-200 text-slate-900'
-            : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+            : 'bg-[#12141C] border-slate-800/80 text-slate-100'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3 pb-3 border-b border-gray-200 dark:border-zinc-800">
+        <div className="flex items-start justify-between gap-3 pb-3 border-b border-gray-200 dark:border-slate-800/80">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300">
               <Lock className="w-5 h-5" />
@@ -866,7 +866,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-900/90 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -878,7 +878,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
               ? 'bg-amber-500/10 border-amber-500/30'
               : isLight
               ? 'bg-gray-50 border-gray-200'
-              : 'bg-zinc-800/60 border-zinc-700'
+              : 'bg-[#090A0F] border-slate-800/80'
           }`}
         >
           <div>
@@ -906,7 +906,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
               value={amountIDR}
               onChange={(e) => setAmountIDR(Math.max(0, Number(e.target.value) || 0))}
               className={`w-full px-3 py-2 rounded-xl border font-mono text-sm font-bold ${
-                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
               }`}
             />
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -917,7 +917,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
                   disabled={preset > drawerBalance}
                   onClick={() => setAmountIDR(preset)}
                   className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono font-bold cursor-pointer disabled:opacity-40 ${
-                    isLight ? 'bg-gray-50 border-gray-200 hover:bg-gray-100' : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700'
+                    isLight ? 'bg-gray-50 border-gray-200 hover:bg-gray-100' : 'bg-[#090A0F] border-slate-800/80 hover:bg-slate-900/90'
                   }`}
                 >
                   {formatIDR(preset)}
@@ -934,7 +934,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
                 value={supervisorName}
                 onChange={(e) => setSupervisorName(e.target.value)}
                 className={`w-full px-3 py-2 rounded-xl border ${
-                  isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                  isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               />
             </div>
@@ -945,7 +945,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
                 value={sealBagNumber}
                 onChange={(e) => setSealBagNumber(e.target.value)}
                 className={`w-full px-3 py-2 rounded-xl border font-mono ${
-                  isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                  isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               />
             </div>
@@ -958,7 +958,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className={`w-full px-3 py-2 rounded-xl border ${
-                isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
               }`}
             />
           </div>
@@ -967,7 +967,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 font-semibold cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] font-semibold cursor-pointer"
             >
               Cancel
             </button>
@@ -983,7 +983,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
         </form>
 
         {recentDrops.length > 0 && (
-          <div className="pt-3 border-t border-gray-200 dark:border-zinc-800 space-y-1.5">
+          <div className="pt-3 border-t border-gray-200 dark:border-slate-800/80 space-y-1.5">
             <div className="text-[10px] font-bold uppercase tracking-wider opacity-70">
               Shift Safe Drop Audit History ({storeName})
             </div>
@@ -992,7 +992,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
                 <div
                   key={sd.id}
                   className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between text-[11px] font-mono ${
-                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/40 border-zinc-800'
+                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
                   }`}
                 >
                   <span>

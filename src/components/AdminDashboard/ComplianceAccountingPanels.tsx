@@ -278,11 +278,11 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
   };
 
   const cardClass = `rounded-2xl border p-5 sm:p-6 space-y-4 ${
-    isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+    isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-[#12141C] border-slate-800/80'
   }`;
 
   const inputClass = `w-full px-3 py-2 text-xs rounded-xl border ${
-    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
   }`;
 
   if (mode === 'rma_rtv') {
@@ -291,13 +291,13 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Customer RMA / Nota Retur Penjualan Form */}
           <form onSubmit={handleSubmitRma} className={cardClass}>
-            <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100 dark:border-zinc-800">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100 dark:border-slate-800/80">
               <RotateCcw className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               <div>
                 <h3 className="text-sm font-bold">
                   Customer Sales Return (RMA &amp; Nota Retur Penjualan)
                 </h3>
-                <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                <p className="text-[11px] text-gray-500 dark:text-slate-400">
                   Restock ATP vs Scrap Quarantine · Reverses Revenue (#4010/#4020), AR (#1200), &amp; PPN Keluaran (#2025)
                 </p>
               </div>
@@ -401,13 +401,13 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
 
           {/* Return-to-Vendor / RTV Debit Note Form */}
           <form onSubmit={handleSubmitRtv} className={cardClass}>
-            <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100 dark:border-zinc-800">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100 dark:border-slate-800/80">
               <Truck className="w-5 h-5 text-rose-600 dark:text-rose-400" />
               <div>
                 <h3 className="text-sm font-bold">
                   Return-to-Vendor (RTV &amp; Nota Retur Pembelian)
                 </h3>
-                <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                <p className="text-[11px] text-gray-500 dark:text-slate-400">
                   Deducts Inventory (#1040), reduces Vendor AP (#2010), &amp; reverses PPN Masukan (#2026)
                 </p>
               </div>
@@ -483,9 +483,9 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
         {/* Ledgers: Customer Credit Notes & Vendor Debit Notes */}
         <div className={cardClass}>
           <h4 className="text-sm font-bold">Customer Credit Notes (Nota Retur Penjualan) — {rmaList.length}</h4>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
             <table className="w-full text-left text-xs">
-              <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'}`}>
+              <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'}`}>
                 <tr>
                   <th className="py-2.5 px-3">Nota Retur #</th>
                   <th className="py-2.5 px-3">Channel / Source</th>
@@ -496,7 +496,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                   <th className="py-2.5 px-3 text-right">Print</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
                 {rmaList.map((rma) => (
                   <tr key={rma.id}>
                     <td className="py-2.5 px-3 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
@@ -536,7 +536,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                         className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer ${
                           isLight
                             ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                            : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                         }`}
                         title="Print Nota Retur Penjualan (DJP A4)"
                       >
@@ -551,9 +551,9 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
           </div>
 
           <h4 className="text-sm font-bold pt-2">Vendor Debit Notes (Nota Retur Pembelian / RTV) — {rtvList.length}</h4>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
             <table className="w-full text-left text-xs">
-              <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'}`}>
+              <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'}`}>
                 <tr>
                   <th className="py-2.5 px-3">Debit Note #</th>
                   <th className="py-2.5 px-3">Supplier</th>
@@ -564,7 +564,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                   <th className="py-2.5 px-3 text-right">Print</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
                 {rtvList.map((rtv) => (
                   <tr key={rtv.id}>
                     <td className="py-2.5 px-3 font-mono font-bold text-rose-600 dark:text-rose-400">
@@ -596,7 +596,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                         className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer ${
                           isLight
                             ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                            : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                         }`}
                         title="Print Nota Retur Pembelian (DJP A4)"
                       >
@@ -618,13 +618,13 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
   return (
     <div className="space-y-6">
       <div className={cardClass}>
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-zinc-800">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-slate-800/80">
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded-md bg-[#0F4C3A] text-white text-[10px] font-bold uppercase">
                 DJP Coretax / e-Faktur 4.0
               </span>
-              <span className="text-xs text-gray-500 dark:text-zinc-400">
+              <span className="text-xs text-gray-500 dark:text-slate-400">
                 B2B Faktur Pajak · B2C Digunggung · Nota Retur Compliance
               </span>
             </div>
@@ -637,7 +637,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
             <button
               type="button"
               onClick={loadCoretax}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-300 dark:border-zinc-700 text-xs font-semibold cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 dark:bg-slate-900/90 dark:text-slate-200 text-xs font-semibold cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCoretax ? 'animate-spin' : ''}`} />
               <span>Recompile</span>
@@ -680,30 +680,30 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
         {/* Summary KPIs */}
         {coretaxData && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono tabular-nums">
-            <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-800'}`}>
-              <span className="font-sans text-[11px] text-gray-500 dark:text-zinc-400 block">
+            <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+              <span className="font-sans text-[11px] text-gray-500 dark:text-slate-400 block">
                 Compiled Tax Documents
               </span>
               <span className="text-lg font-extrabold block mt-1">{coretaxData.summary.totalRows}</span>
             </div>
-            <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-800'}`}>
-              <span className="font-sans text-[11px] text-gray-500 dark:text-zinc-400 block">
+            <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+              <span className="font-sans text-[11px] text-gray-500 dark:text-slate-400 block">
                 Net PPN Keluaran (VAT Out)
               </span>
               <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 block mt-1">
                 {formatIDR(coretaxData.summary.totalPpnKeluaranIDR)}
               </span>
             </div>
-            <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-800'}`}>
-              <span className="font-sans text-[11px] text-gray-500 dark:text-zinc-400 block">
+            <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+              <span className="font-sans text-[11px] text-gray-500 dark:text-slate-400 block">
                 Nota Retur PPN Deducted
               </span>
               <span className="text-lg font-extrabold text-amber-600 dark:text-amber-400 block mt-1">
                 -{formatIDR(coretaxData.summary.totalNotaReturPpnIDR)}
               </span>
             </div>
-            <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/50 border-zinc-800'}`}>
-              <span className="font-sans text-[11px] text-gray-500 dark:text-zinc-400 block">
+            <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+              <span className="font-sans text-[11px] text-gray-500 dark:text-slate-400 block">
                 B2B Missing NPWP/NIK
               </span>
               <span className="text-lg font-extrabold text-rose-600 dark:text-rose-400 block mt-1">
@@ -731,7 +731,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
         {/* Inline 16-Digit NPWP / NIK Validator Bar */}
         <div
           className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
-            isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/40 border-zinc-800'
+            isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
           }`}
         >
           <div className="flex items-center gap-2 flex-1">
@@ -772,9 +772,9 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
         </div>
 
         {/* Compiled e-Faktur / Coretax Preview Table */}
-        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
           <table className="w-full text-left text-xs">
-            <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'}`}>
+            <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'}`}>
               <tr>
                 <th className="py-2.5 px-3">Type &amp; Kode</th>
                 <th className="py-2.5 px-3">Faktur / Nota #</th>
@@ -784,19 +784,19 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                 <th className="py-2.5 px-3 text-right">Total (IDR)</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
               {(coretaxData?.rows || []).map((row) => (
-                <tr key={row.rowId} className={isLight ? 'hover:bg-gray-50/70' : 'hover:bg-zinc-800/40'}>
+                <tr key={row.rowId} className={isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/60'}>
                   <td className="py-2.5 px-3">
                     <span className="font-mono font-bold block text-[11px]">{row.documentType}</span>
-                    <span className="text-[10px] text-gray-500 dark:text-zinc-400">
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400">
                       Kode {row.kodeTransaksi} · {row.taxClassification}
                     </span>
                   </td>
                   <td className="py-2.5 px-3 font-mono text-[11px]">{row.documentNumber}</td>
                   <td className="py-2.5 px-3">
                     <div className="font-semibold">{row.counterpartyName}</div>
-                    <div className="font-mono text-[10px] text-gray-500 dark:text-zinc-400">
+                    <div className="font-mono text-[10px] text-gray-500 dark:text-slate-400">
                       TIN: {row.npwpOrNik}{' '}
                       {row.isNpwpValid ? (
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold">· VALID</span>
@@ -817,12 +817,12 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
 
       {/* PPh Pasal 22 (1.5%) & PPh Pasal 23 (2%) Withholding Tax Ledger */}
       <div className={cardClass}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-zinc-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-slate-800/80">
           <div>
             <h4 className="text-sm font-bold">
               PPh Pasal 22 (1.5%) &amp; PPh Pasal 23 (2%) Withholding Tax Ledger (COA #1160 / #1200)
             </h4>
-            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+            <p className="text-[11px] text-gray-500 dark:text-slate-400">
               Catat bukti potong PPh 22 (bendaharawan pemerintah/BUMN) &amp; PPh 23 (jasa logistik/sewa) dengan jurnal otomatis DR #1160 / CR #1200.
             </p>
           </div>
@@ -898,9 +898,9 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
           </button>
         </form>
 
-        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
           <table className="w-full text-left text-xs">
-            <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'}`}>
+            <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'}`}>
               <tr>
                 <th className="py-2.5 px-3">ID &amp; Tanggal</th>
                 <th className="py-2.5 px-3">Jenis &amp; Tarif</th>
@@ -911,19 +911,19 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                 <th className="py-2.5 px-3 text-right">GL Entry</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
               {pphRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-gray-500 dark:text-zinc-400">
+                  <td colSpan={7} className="py-6 text-center text-gray-500 dark:text-slate-400">
                     Belum ada transaksi pemotongan PPh 22 / PPh 23 tercatat.
                   </td>
                 </tr>
               ) : (
                 pphRecords.map((rec) => (
-                  <tr key={rec.id} className={isLight ? 'hover:bg-gray-50/70' : 'hover:bg-zinc-800/40'}>
+                  <tr key={rec.id} className={isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/60'}>
                     <td className="py-2.5 px-3">
                       <span className="font-mono font-bold block text-[11px]">{rec.id}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-zinc-400">
+                      <span className="text-[10px] text-gray-500 dark:text-slate-400">
                         {new Date(rec.timestamp).toLocaleDateString('id-ID')}
                       </span>
                     </td>
@@ -940,7 +940,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                     </td>
                     <td className="py-2.5 px-3">
                       <div className="font-semibold">{rec.counterpartyName}</div>
-                      <div className="font-mono text-[10px] text-gray-500 dark:text-zinc-400">
+                      <div className="font-mono text-[10px] text-gray-500 dark:text-slate-400">
                         NPWP: {rec.counterpartyNpwp || '-'}
                       </div>
                     </td>
@@ -949,7 +949,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                     <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-amber-600 dark:text-amber-400">
                       {formatIDR(rec.withheldAmountIDR)}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-[10px] text-gray-500 dark:text-zinc-400">
+                    <td className="py-2.5 px-3 text-right font-mono text-[10px] text-gray-500 dark:text-slate-400">
                       {rec.glEntryIds.join(', ')}
                     </td>
                   </tr>

@@ -121,7 +121,7 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
   };
 
   const inputCls =
-    'w-full px-3 py-2 rounded-xl border text-xs bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100';
+    'w-full px-3 py-2 rounded-xl border text-xs bg-white dark:bg-[#090A0F] border-slate-300 dark:border-slate-800/80 text-slate-900 dark:text-slate-100';
 
   return (
     <div className="space-y-4">
@@ -136,14 +136,14 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
           </p>
         </div>
 
-        <div className="inline-flex rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 p-1">
+        <div className="inline-flex rounded-xl border border-slate-200 dark:border-slate-800/80 bg-slate-100 dark:bg-[#090A0F] p-1">
           <button
             type="button"
             onClick={() => setMode('REPACK')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] ${
               mode === 'REPACK'
-                ? 'bg-[#164E29] text-white dark:bg-emerald-950 dark:text-emerald-400 dark:border dark:border-emerald-700/70'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900'
+                ? 'bg-[#164E29] text-white dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900/90'
             }`}
           >
             <Scissors className="w-3.5 h-3.5" />
@@ -154,8 +154,8 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
             onClick={() => setMode('BUNDLE')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] ${
               mode === 'BUNDLE'
-                ? 'bg-[#164E29] text-white dark:bg-emerald-950 dark:text-emerald-400 dark:border dark:border-emerald-700/70'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900'
+                ? 'bg-[#164E29] text-white dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900/90'
             }`}
           >
             <PackagePlus className="w-3.5 h-3.5" />
@@ -179,7 +179,7 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
 
       <form
         onSubmit={handleSubmit}
-        className="p-4 rounded-2xl border space-y-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xs"
+        className="p-4 rounded-2xl border space-y-4 bg-white dark:bg-[#12141C] border-slate-200 dark:border-slate-800/80 shadow-xs"
       >
         {mode === 'REPACK' ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -428,7 +428,7 @@ export const RepackBundlePanel: React.FC<RepackBundlePanelProps> = ({
           <button
             type="submit"
             disabled={submitting}
-            className="px-5 py-2.5 rounded-xl bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+            className="px-5 py-2.5 rounded-xl bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
           >
             {submitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             <span>{mode === 'REPACK' ? 'Execute Break-Bulk Repack' : 'Assemble Bundle & Mint Batch'}</span>

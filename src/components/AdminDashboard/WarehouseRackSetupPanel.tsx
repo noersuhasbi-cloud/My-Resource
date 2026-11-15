@@ -187,11 +187,11 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
   };
 
   const cardClass =
-    'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs transition-colors duration-200';
+    'bg-white dark:bg-[#12141C] border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-xs transition-colors duration-200';
   const subCardClass =
-    'bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-xl transition-colors duration-200';
+    'bg-slate-50 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 rounded-xl transition-colors duration-200';
   const inputClass =
-    'w-full px-3 py-2 rounded-xl border text-xs bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#164E29] dark:focus:ring-emerald-400';
+    'w-full px-3 py-2 rounded-xl border text-xs bg-white dark:bg-[#090A0F] border-slate-300 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#164E29] dark:focus:ring-emerald-400';
   const textTitle = 'text-slate-900 dark:text-slate-100';
   const textMuted = 'text-slate-500 dark:text-slate-400';
 
@@ -221,7 +221,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
               value={outletId}
               disabled={Boolean(lockedBranchId)}
               onChange={(e) => setOutletId(e.target.value)}
-              className="px-3 py-2 rounded-xl border text-xs font-semibold bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 disabled:opacity-75"
+              className="px-3 py-2 rounded-xl border text-xs font-semibold bg-white dark:bg-[#090A0F] border-slate-300 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 disabled:opacity-75"
             >
               {storeOutlets.map((s) => (
                 <option key={s.storeId} value={s.storeId}>
@@ -232,7 +232,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
             <button
               type="button"
               onClick={() => void loadRacks(outletId)}
-              className="p-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+              className="p-2 rounded-xl border border-slate-300 dark:border-slate-800/80 dark:bg-[#090A0F] hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
               title="Refresh racks"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[#164E29] dark:text-emerald-400 ${isLoading ? 'animate-spin' : ''}`} />
@@ -445,8 +445,8 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
                     onClick={() => setAssignStrategy(mode)}
                     className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer ${
                       assignStrategy === mode
-                        ? 'bg-[#164E29] text-white border-[#164E29] dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700/70'
-                        : 'bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        ? 'bg-[#164E29] text-white border-[#164E29] dark:bg-emerald-950/80 dark:text-emerald-400 dark:border-emerald-800/50'
+                        : 'bg-white dark:bg-[#090A0F] border-slate-300 dark:border-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/90'
                     }`}
                   >
                     {mode}
@@ -460,7 +460,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
             <button
               type="submit"
               disabled={isAssigning || racks.length === 0}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-700/70 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border dark:border-emerald-800/50 text-white transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-50"
             >
               <Layers className="w-3.5 h-3.5" />
               {isAssigning ? 'Assigning...' : 'Assign SKU & Apply Strategy'}
@@ -473,7 +473,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
       <div className={`${cardClass} overflow-hidden`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className={isLight ? 'bg-slate-50 text-slate-600 border-b border-slate-200' : 'bg-zinc-950 text-zinc-400 border-b border-zinc-800'}>
+            <thead className={isLight ? 'bg-slate-50 text-slate-600 border-b border-slate-200' : 'bg-[#090A0F] text-slate-400 border-b border-slate-800/80'}>
               <tr>
                 <th className="py-2.5 px-3 font-semibold">Rack / Bin Code</th>
                 <th className="py-2.5 px-3 font-semibold">Storage Zone</th>
@@ -483,14 +483,14 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
                 <th className="py-2.5 px-3 font-semibold text-right">Action</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
               {racks.map((rack) => {
                 const pct =
                   rack.maxCapacity > 0
                     ? Math.min(100, Math.round((rack.currentOccupancy / rack.maxCapacity) * 100))
                     : 0;
                 return (
-                  <tr key={rack.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-zinc-800/40'}>
+                  <tr key={rack.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-900/70'}>
                     <td className="py-2.5 px-3 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                       {rack.rackBinCode}
                     </td>
@@ -515,7 +515,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
                               ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30'
                               : rack.rackHalalZone === 'HALAL_DEDICATED'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30'
-                              : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                              : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-[#090A0F] dark:text-slate-300 dark:border-slate-800/80'
                           }`}
                         >
                           {rack.rackHalalZone}
@@ -540,7 +540,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
                         </span>
                         <span className={pct >= 90 ? 'text-rose-600 font-bold' : textMuted}>{pct}%</span>
                       </div>
-                      <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-zinc-800 overflow-hidden">
+                      <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-[#090A0F] overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
                             pct >= 90 ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-500' : 'bg-[#0F4C3A] dark:bg-emerald-500'
@@ -564,7 +564,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
                           setMaxCapacity(rack.maxCapacity);
                           setRackNotes(rack.notes || '');
                         }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-300 dark:border-slate-800/80 dark:bg-[#090A0F] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                       >
                         <Edit3 className="w-3 h-3" />
                         Edit

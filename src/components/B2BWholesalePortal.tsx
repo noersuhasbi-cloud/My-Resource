@@ -448,23 +448,23 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-zinc-950 text-stone-900 dark:text-zinc-100 flex flex-col font-sans transition-colors">
+    <div className="min-h-screen bg-stone-50 dark:bg-[#090A0F] text-stone-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {/* Compact B2B Context Strip: Single Sleek Status Bar above Catalog */}
-      <section className="bg-white dark:bg-zinc-900 border-b border-stone-200 dark:border-zinc-800 shadow-2xs">
+      <section className="bg-white dark:bg-[#12141C] border-b border-stone-200 dark:border-slate-800/80 shadow-2xs">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
             {/* Wholesale Account Selector & Status Chips */}
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <div className="flex items-center gap-2 bg-stone-100 dark:bg-zinc-800 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-zinc-700 text-xs">
+              <div className="flex items-center gap-2 bg-stone-100 dark:bg-[#090A0F] px-3 py-1.5 rounded-xl border border-stone-200 dark:border-slate-800/80 text-xs">
                 <Building2 className="w-4 h-4 text-emerald-800 dark:text-emerald-400 shrink-0" />
-                <span className="font-semibold text-stone-600 dark:text-zinc-300 hidden sm:inline">Wholesale Account:</span>
+                <span className="font-semibold text-stone-600 dark:text-slate-300 hidden sm:inline">Wholesale Account:</span>
                 <select
                   value={selectedCustomerId}
                   onChange={(e) => setSelectedCustomerId(e.target.value)}
-                  className="bg-transparent font-bold text-stone-900 dark:text-zinc-100 focus:outline-none cursor-pointer text-xs"
+                  className="bg-transparent font-bold text-stone-900 dark:text-slate-100 focus:outline-none cursor-pointer text-xs"
                 >
                   {customers.map((c) => (
-                    <option key={c.id} value={c.id} className="bg-white dark:bg-zinc-900 text-stone-900 dark:text-zinc-100">
+                    <option key={c.id} value={c.id} className="bg-white dark:bg-[#12141C] text-stone-900 dark:text-slate-100">
                       {c.companyName} ({c.tierLabel}) {c.status === 'CREDIT_LOCKED' ? '⚠️ [LOCKED]' : ''}
                     </option>
                   ))}
@@ -474,7 +474,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
               {currentCustomer && (
                 <div className="flex items-center gap-2 text-xs flex-wrap">
                   {/* Credit Facility Pill */}
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-300 font-medium">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800/50 text-emerald-900 dark:text-emerald-300 font-medium">
                     <CreditCard className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
                     <span>Credit:</span>
                     <strong className="font-mono text-emerald-800 dark:text-emerald-300">
@@ -490,7 +490,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-medium ${
                       currentCustomer.status === 'CREDIT_LOCKED' || currentCustomer.overdueDaysMax > 0
                         ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-300'
-                        : 'bg-stone-50 dark:bg-zinc-800/60 border-stone-200 dark:border-zinc-700 text-stone-700 dark:text-zinc-300'
+                        : 'bg-stone-50 dark:bg-slate-900/90 border-stone-200 dark:border-slate-800/80 text-stone-700 dark:text-slate-300'
                     }`}
                   >
                     <span>AR:</span>
@@ -514,7 +514,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenCustomerPortal?.('b2b_credit')}
-                className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-zinc-800 hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-800 dark:text-zinc-200 font-semibold border border-stone-200 dark:border-zinc-700 transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+                className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-900/90 hover:bg-stone-200 dark:hover:bg-slate-800 text-stone-800 dark:text-slate-200 font-semibold border border-stone-200 dark:border-slate-800/80 transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
                 title="View full credit terms, outstanding AR aging, and Bilyet Giro clearing ledger"
               >
                 <CreditCard className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -523,7 +523,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenCustomerPortal?.('b2b_orders')}
-                className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-zinc-800 hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-800 dark:text-zinc-200 font-semibold border border-stone-200 dark:border-zinc-700 transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+                className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-900/90 hover:bg-stone-200 dark:hover:bg-slate-800 text-stone-800 dark:text-slate-200 font-semibold border border-stone-200 dark:border-slate-800/80 transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
                 title="View bulk orders history and reprint invoices"
               >
                 <FileText className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -532,7 +532,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenCustomerPortal?.('b2b_profile')}
-                className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-zinc-800 hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-800 dark:text-zinc-200 font-semibold border border-stone-200 dark:border-zinc-700 transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+                className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-slate-900/90 hover:bg-stone-200 dark:hover:bg-slate-800 text-stone-800 dark:text-slate-200 font-semibold border border-stone-200 dark:border-slate-800/80 transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
                 title="View entity registration, NPWP, KAM rep, and request credit limit increase"
               >
                 <Building2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -560,7 +560,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
         <div className="space-y-6">
             {/* Conditional "Tebus Murah" (PWP) Live Tracker Banner */}
             {primaryPwpRule && (
-              <div className="rounded-2xl border border-emerald-300 dark:border-emerald-800 bg-linear-to-r from-emerald-50 via-amber-50/50 to-emerald-50 dark:from-emerald-950/40 dark:via-zinc-900 dark:to-emerald-950/40 p-4 sm:p-5 shadow-xs">
+              <div className="rounded-2xl border border-emerald-300 dark:border-emerald-800/50 bg-linear-to-r from-emerald-50 via-amber-50/50 to-emerald-50 dark:from-emerald-950/80 dark:via-[#12141C] dark:to-emerald-950/80 p-4 sm:p-5 shadow-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-start gap-3.5">
                     <div className="p-3 rounded-xl bg-emerald-800 text-amber-300 shadow-xs shrink-0">
@@ -575,10 +575,10 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                           Max 1 unit per faktur (Non-kelipatan)
                         </span>
                       </div>
-                      <h3 className="text-base font-bold text-stone-900 dark:text-zinc-100 mt-0.5">
+                      <h3 className="text-base font-bold text-stone-900 dark:text-slate-100 mt-0.5">
                         {primaryPwpRule.title}
                       </h3>
-                      <p className="text-xs text-stone-600 dark:text-zinc-300 mt-1 max-w-2xl leading-relaxed">
+                      <p className="text-xs text-stone-600 dark:text-slate-300 mt-1 max-w-2xl leading-relaxed">
                         {primaryPwpRule.description}
                       </p>
                     </div>
@@ -602,14 +602,14 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                       </button>
                     ) : (
                       <div className="space-y-1.5">
-                        <div className="text-xs font-bold text-stone-700 dark:text-zinc-300">
+                        <div className="text-xs font-bold text-stone-700 dark:text-slate-300">
                           Kurang{' '}
                           <span className="font-mono text-emerald-700 dark:text-emerald-400">
                             {formatIDR(primaryPwpRule.minSpendIDR - eligiblePwpSpend)}
                           </span>{' '}
                           lagi
                         </div>
-                        <div className="w-48 bg-stone-200 dark:bg-zinc-700 h-2 rounded-full overflow-hidden">
+                        <div className="w-48 bg-stone-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                           <div
                             className="bg-emerald-600 h-full rounded-full transition-all duration-300"
                             style={{
@@ -620,7 +620,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                             }}
                           />
                         </div>
-                        <span className="text-[10px] text-stone-500 dark:text-zinc-400 block">
+                        <span className="text-[10px] text-stone-500 dark:text-slate-400 block">
                           Eligible spend: {formatIDR(eligiblePwpSpend)} / {formatIDR(primaryPwpRule.minSpendIDR)}
                         </span>
                       </div>
@@ -639,7 +639,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cari SKU grosir, beras, minyak goreng, mi, kopi..."
-                  className="w-full pl-9 pr-4 py-2.5 text-xs rounded-xl border border-stone-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-stone-900 dark:text-zinc-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  className="w-full pl-9 pr-4 py-2.5 text-xs rounded-xl border border-stone-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-stone-900 dark:text-slate-100 placeholder:text-stone-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-600"
                 />
               </div>
 
@@ -662,7 +662,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                     className={`px-3 py-1.5 rounded-xl whitespace-nowrap font-medium transition-all cursor-pointer ${
                       selectedCategory === cat.id
                         ? 'bg-emerald-800 text-white font-bold shadow-xs'
-                        : 'bg-stone-100 dark:bg-zinc-800 text-stone-700 dark:text-zinc-300 hover:bg-stone-200'
+                        : 'bg-stone-100 dark:bg-slate-900/90 text-stone-700 dark:text-slate-300 hover:bg-stone-200 dark:hover:bg-slate-800 border border-stone-200/70 dark:border-slate-800/80'
                     }`}
                   >
                     {cat.label}
@@ -692,11 +692,11 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                 return (
                   <div
                     key={prod.id}
-                    className="rounded-2xl border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs hover:border-emerald-500/50 transition-all flex flex-col justify-between overflow-hidden group"
+                    className="rounded-2xl border border-stone-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] shadow-xs hover:border-emerald-500/50 transition-all flex flex-col justify-between overflow-hidden group"
                   >
                     <div>
                       {/* Product Header & B2B Wholesale Packaging Image */}
-                      <div className="relative h-44 w-full overflow-hidden bg-stone-100 dark:bg-zinc-800">
+                      <div className="relative h-44 w-full overflow-hidden bg-stone-100 dark:bg-[#090A0F]">
                         {imgFailed ? (
                           <div className={`w-full h-full bg-gradient-to-br ${prod.fallbackGradient} flex flex-col items-center justify-center p-4 text-center`}>
                             <Package className="w-8 h-8 text-emerald-900/60 mb-1" />
@@ -735,21 +735,21 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                           <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                             {prod.categoryLabel}
                           </div>
-                          <h4 className="text-sm font-bold text-stone-900 dark:text-zinc-100 line-clamp-2 mt-0.5">
+                          <h4 className="text-sm font-bold text-stone-900 dark:text-slate-100 line-clamp-2 mt-0.5">
                             {prod.name}
                           </h4>
-                          <p className="text-[11px] text-stone-500 dark:text-zinc-400 line-clamp-2 mt-1">
+                          <p className="text-[11px] text-stone-500 dark:text-slate-400 line-clamp-2 mt-1">
                             {prod.description}
                           </p>
-                          <div className="mt-2 pt-2 border-t border-stone-100 dark:border-zinc-800/80 flex items-center justify-between gap-2 text-[10px] font-mono text-stone-600 dark:text-zinc-400">
+                          <div className="mt-2 pt-2 border-t border-stone-100 dark:border-slate-800/80 flex items-center justify-between gap-2 text-[10px] font-mono text-stone-600 dark:text-slate-400">
                             <span className="truncate">{prod.wholesalePackagingSpec || odooProfile.wholesalePackagingSpec}</span>
                             <span className="shrink-0 font-bold">GTIN {prod.outerBoxBarcode || odooProfile.outerBoxBarcode}</span>
                           </div>
                         </div>
 
                         {/* Multi-Tier UoM Selector Tabs (Pallet -> Carton -> Slop -> Pack -> Renceng -> Pcs) */}
-                        <div className="space-y-1.5 pt-1 border-t border-stone-100 dark:border-zinc-800">
-                          <span className="text-[11px] font-bold text-stone-700 dark:text-zinc-300 block">
+                        <div className="space-y-1.5 pt-1 border-t border-stone-100 dark:border-slate-800/80">
+                          <span className="text-[11px] font-bold text-stone-700 dark:text-slate-300 block">
                             Pilih Satuan Order (UoM Hierarchy):
                           </span>
                           <div className="grid grid-cols-3 gap-1">
@@ -763,7 +763,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                                 className={`p-1.5 rounded-lg border text-center transition-all cursor-pointer ${
                                   currentSel.uom === tier.uom
                                     ? 'bg-emerald-50 dark:bg-emerald-950 border-emerald-600 text-emerald-900 dark:text-emerald-200 font-bold shadow-xs'
-                                    : 'bg-stone-50 dark:bg-zinc-800/80 border-stone-200 dark:border-zinc-700 text-stone-700 dark:text-zinc-300 hover:bg-stone-100'
+                                    : 'bg-stone-50 dark:bg-slate-900/90 border-stone-200 dark:border-slate-800/80 text-stone-700 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800'
                                 }`}
                               >
                                 <span className="block text-[11px] capitalize truncate">
@@ -778,9 +778,9 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                         </div>
 
                         {/* Fractional Quantity Input & Conversion Preview */}
-                        <div className="p-3 rounded-xl bg-stone-50 dark:bg-zinc-800/50 border border-stone-200 dark:border-zinc-700/80 space-y-2">
+                        <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#090A0F] border border-stone-200 dark:border-slate-800/80 space-y-2">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="font-semibold text-stone-700 dark:text-zinc-300">
+                            <span className="font-semibold text-stone-700 dark:text-slate-300">
                               Kuantitas Order ({activeTier.label}):
                             </span>
                             {activeTier.tierDiscountPercent && (
@@ -791,7 +791,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <div className="flex items-center border border-stone-300 dark:border-zinc-600 rounded-xl overflow-hidden bg-white dark:bg-zinc-900">
+                            <div className="flex items-center border border-stone-300 dark:border-slate-800/80 rounded-xl overflow-hidden bg-white dark:bg-[#12141C]">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -801,7 +801,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                                     Math.max(0.5, currentSel.quantity - (prod.allowFractional ? 0.5 : 1))
                                   )
                                 }
-                                className="px-2.5 py-1.5 text-stone-600 dark:text-zinc-300 hover:bg-stone-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                className="px-2.5 py-1.5 text-stone-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800 cursor-pointer"
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
@@ -828,7 +828,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                                     currentSel.quantity + (prod.allowFractional ? 0.5 : 1)
                                   )
                                 }
-                                className="px-2.5 py-1.5 text-stone-600 dark:text-zinc-300 hover:bg-stone-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                className="px-2.5 py-1.5 text-stone-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800 cursor-pointer"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                               </button>
@@ -849,10 +849,10 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                     </div>
 
                     {/* Card Footer: Calculated Line Total & Add Button */}
-                    <div className="p-4 bg-stone-50 dark:bg-zinc-800/80 border-t border-stone-200 dark:border-zinc-800 flex items-center justify-between gap-3">
+                    <div className="p-4 bg-stone-50 dark:bg-[#090A0F] border-t border-stone-200 dark:border-slate-800/80 flex items-center justify-between gap-3">
                       <div>
-                        <span className="text-[10px] text-stone-500 dark:text-zinc-400 block">Subtotal Baris:</span>
-                        <span className="text-sm font-extrabold font-mono text-stone-900 dark:text-zinc-100">
+                        <span className="text-[10px] text-stone-500 dark:text-slate-400 block">Subtotal Baris:</span>
+                        <span className="text-sm font-extrabold font-mono text-stone-900 dark:text-slate-100">
                           {formatIDR(calculatedTotal)}
                         </span>
                         {resolvedCardPrice.appliedTier && (
@@ -880,22 +880,22 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
       {/* Slide-Over B2B Wholesale Cart Drawer */}
       {isCartDrawerOpen && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex justify-end"
+          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex justify-end"
           onClick={() => setIsCartDrawerOpen(false)}
         >
           <div
-            className="w-full max-w-lg h-full bg-white dark:bg-zinc-900 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200"
+            className="w-full max-w-lg h-full bg-white dark:bg-[#12141C] dark:border-l dark:border-slate-800/80 shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drawer Header */}
-            <div className="p-5 border-b border-stone-200 dark:border-zinc-800 flex items-center justify-between">
+            <div className="p-5 border-b border-stone-200 dark:border-slate-800/80 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <ShoppingBag className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
                 <div>
-                  <h3 className="font-bold text-base text-stone-900 dark:text-zinc-100">
+                  <h3 className="font-bold text-base text-stone-900 dark:text-slate-100">
                     Keranjang Grosir (Wholesale Basket)
                   </h3>
-                  <span className="text-xs text-stone-500 dark:text-zinc-400">
+                  <span className="text-xs text-stone-500 dark:text-slate-400">
                     {cartItems.length} SKU · {totalBaseUnitsInCart} Base Units
                   </span>
                 </div>
@@ -903,7 +903,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCartDrawerOpen(false)}
-                className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-400 cursor-pointer"
+                className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800 text-stone-400 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -913,7 +913,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
             <div className="p-5 flex-1 overflow-y-auto space-y-4">
               {cartItems.length === 0 ? (
                 <div className="py-20 text-center text-xs text-stone-400 space-y-3">
-                  <ShoppingBag className="w-10 h-10 mx-auto text-stone-300 dark:text-zinc-600" />
+                  <ShoppingBag className="w-10 h-10 mx-auto text-stone-300 dark:text-slate-600" />
                   <p>Keranjang grosir masih kosong.</p>
                 </div>
               ) : (
@@ -923,7 +923,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                     className={`p-3.5 rounded-xl border ${
                       it.isPwpRedemption
                         ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700/60'
-                        : 'bg-stone-50 dark:bg-zinc-800/60 border-stone-200 dark:border-zinc-700/80'
+                        : 'bg-stone-50 dark:bg-[#090A0F] border-stone-200 dark:border-slate-800/80'
                     } space-y-2.5`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -933,7 +933,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                             Tebus Murah PWP (Promo)
                           </span>
                         )}
-                        <h4 className="text-xs font-bold text-stone-900 dark:text-zinc-100">
+                        <h4 className="text-xs font-bold text-stone-900 dark:text-slate-100">
                           {it.product.name}
                         </h4>
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -956,22 +956,22 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-200/60 dark:border-zinc-700/60">
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-200/60 dark:border-slate-800/80">
                       {/* Quantity Modifier */}
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-stone-500 font-semibold uppercase">
+                        <span className="text-[11px] text-stone-500 dark:text-slate-400 font-semibold uppercase">
                           {it.selectedUoM}:
                         </span>
                         {it.isPwpRedemption ? (
-                          <span className="font-mono font-bold px-2 py-0.5 rounded bg-white dark:bg-zinc-900 border text-xs">
+                          <span className="font-mono font-bold px-2 py-0.5 rounded bg-white dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 text-xs">
                             1 Unit (Max Capped)
                           </span>
                         ) : (
-                          <div className="flex items-center border border-stone-300 dark:border-zinc-600 rounded-lg overflow-hidden bg-white dark:bg-zinc-900">
+                          <div className="flex items-center border border-stone-300 dark:border-slate-800/80 rounded-lg overflow-hidden bg-white dark:bg-[#12141C]">
                             <button
                               type="button"
                               onClick={() => handleUpdateCartQuantity(it.id, it.quantity - 0.5)}
-                              className="px-2 py-1 text-stone-600 dark:text-zinc-300 hover:bg-stone-100 dark:hover:bg-zinc-800"
+                              className="px-2 py-1 text-stone-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800"
                             >
                               -
                             </button>
@@ -981,7 +981,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                             <button
                               type="button"
                               onClick={() => handleUpdateCartQuantity(it.id, it.quantity + 0.5)}
-                              className="px-2 py-1 text-stone-600 dark:text-zinc-300 hover:bg-stone-100 dark:hover:bg-zinc-800"
+                              className="px-2 py-1 text-stone-600 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800"
                             >
                               +
                             </button>
@@ -994,7 +994,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                         <span className="text-[10px] text-stone-400 font-mono block">
                           ={it.baseUnitsCalculated} base
                         </span>
-                        <span className="font-mono font-bold text-stone-900 dark:text-zinc-100">
+                        <span className="font-mono font-bold text-stone-900 dark:text-slate-100">
                           {formatIDR(it.lineTotal)}
                         </span>
                       </div>
@@ -1005,17 +1005,17 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
             </div>
 
             {/* Drawer Footer & Checkout Action */}
-            <div className="p-5 border-t border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-900 space-y-3">
+            <div className="p-5 border-t border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] space-y-3">
               <div className="space-y-1 text-xs">
-                <div className="flex justify-between text-stone-600 dark:text-zinc-400">
+                <div className="flex justify-between text-stone-600 dark:text-slate-400">
                   <span>Subtotal Grosir:</span>
                   <span className="font-mono font-bold">{formatIDR(cartSubtotal)}</span>
                 </div>
-                <div className="flex justify-between text-stone-600 dark:text-zinc-400">
+                <div className="flex justify-between text-stone-600 dark:text-slate-400">
                   <span>PPN 11% (Faktur Pajak):</span>
                   <span className="font-mono font-bold">{formatIDR(cartTaxPPN11)}</span>
                 </div>
-                <div className="flex justify-between text-sm font-black pt-2 border-t border-stone-200 dark:border-zinc-800 text-stone-900 dark:text-zinc-100">
+                <div className="flex justify-between text-sm font-black pt-2 border-t border-stone-200 dark:border-slate-800/80 text-stone-900 dark:text-slate-100">
                   <span>Total Tagihan:</span>
                   <span className="font-mono text-emerald-800 dark:text-emerald-300">
                     {formatIDR(cartTotalDue)}
@@ -1049,36 +1049,36 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
             onClick={() => setIsCheckoutModalOpen(false)}
           >
             <div
-              className="w-full max-w-xl rounded-2xl border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-stone-900 dark:text-zinc-100 p-6 shadow-2xl space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto animate-in zoom-in-95"
+              className="w-full max-w-xl rounded-2xl border border-stone-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] text-stone-900 dark:text-slate-100 p-6 shadow-2xl space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto animate-in zoom-in-95"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-zinc-800">
+              <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-slate-800/80">
                 <div className="flex items-center gap-2.5">
                   <CreditCard className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
-                  <h3 className="text-base font-bold text-stone-900 dark:text-zinc-100">
+                  <h3 className="text-base font-bold text-stone-900 dark:text-slate-100">
                     B2B Wholesale Checkout &amp; Settlement
                   </h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsCheckoutModalOpen(false)}
-                  className="p-1 rounded-lg text-stone-400 hover:bg-stone-100 dark:hover:bg-zinc-800 cursor-pointer"
+                  className="p-1 rounded-lg text-stone-400 hover:bg-stone-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Order Due Summary Banner */}
-              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/50 flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800/50 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-stone-500 dark:text-zinc-400 block">Total Faktur Due:</span>
+                  <span className="text-xs text-stone-500 dark:text-slate-400 block">Total Faktur Due:</span>
                   <span className="text-2xl font-black font-mono text-emerald-800 dark:text-emerald-300">
                     {formatIDR(cartTotalDue)}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-semibold text-stone-700 dark:text-zinc-300 block">
+                  <span className="text-xs font-semibold text-stone-700 dark:text-slate-300 block">
                     {currentCustomer.companyName}
                   </span>
                   <span className="text-[11px] text-stone-400 font-mono">
@@ -1089,7 +1089,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
 
               {/* Payment Methods Selector (Gap #2: Terms, Giro PDC, Transfer Proof) */}
               <div className="space-y-3">
-                <label className="text-xs font-bold text-stone-800 dark:text-zinc-200 block">
+                <label className="text-xs font-bold text-stone-800 dark:text-slate-200 block">
                   Pilih Metode Pembayaran Grosir:
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -1100,19 +1100,19 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                     disabled={cannotUseTerm}
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       selectedPaymentMethod.startsWith('term_')
-                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 shadow-xs'
-                        : 'border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-800/40 hover:border-stone-300'
+                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 shadow-xs'
+                        : 'border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] hover:border-stone-300 dark:hover:border-slate-700'
                     } ${cannotUseTerm ? 'opacity-40 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-stone-900 dark:text-zinc-100">
+                      <span className="font-bold text-xs text-stone-900 dark:text-slate-100">
                         Termin Dagang
                       </span>
                       {selectedPaymentMethod.startsWith('term_') && (
                         <Check className="w-3.5 h-3.5 text-emerald-600" />
                       )}
                     </div>
-                    <span className="text-[11px] text-stone-500 dark:text-zinc-400 block mt-1">
+                    <span className="text-[11px] text-stone-500 dark:text-slate-400 block mt-1">
                       Net-7, Net-14, Net-30 (Potong Limit)
                     </span>
                   </button>
@@ -1124,19 +1124,19 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                     disabled={cannotUseTerm}
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       selectedPaymentMethod === 'bilyet_giro'
-                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 shadow-xs'
-                        : 'border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-800/40 hover:border-stone-300'
+                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 shadow-xs'
+                        : 'border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] hover:border-stone-300 dark:hover:border-slate-700'
                     } ${cannotUseTerm ? 'opacity-40 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-stone-900 dark:text-zinc-100">
+                      <span className="font-bold text-xs text-stone-900 dark:text-slate-100">
                         Bilyet Giro (PDC)
                       </span>
                       {selectedPaymentMethod === 'bilyet_giro' && (
                         <Check className="w-3.5 h-3.5 text-emerald-600" />
                       )}
                     </div>
-                    <span className="text-[11px] text-stone-500 dark:text-zinc-400 block mt-1">
+                    <span className="text-[11px] text-stone-500 dark:text-slate-400 block mt-1">
                       Post-Dated Check (Jatuh Tempo Kliring)
                     </span>
                   </button>
@@ -1147,19 +1147,19 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                     onClick={() => setSelectedPaymentMethod('transfer_verification')}
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       selectedPaymentMethod === 'transfer_verification'
-                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 shadow-xs'
-                        : 'border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-800/40 hover:border-stone-300'
+                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 shadow-xs'
+                        : 'border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] hover:border-stone-300 dark:hover:border-slate-700'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-stone-900 dark:text-zinc-100">
+                      <span className="font-bold text-xs text-stone-900 dark:text-slate-100">
                         Transfer Bank
                       </span>
                       {selectedPaymentMethod === 'transfer_verification' && (
                         <Check className="w-3.5 h-3.5 text-emerald-600" />
                       )}
                     </div>
-                    <span className="text-[11px] text-stone-500 dark:text-zinc-400 block mt-1">
+                    <span className="text-[11px] text-stone-500 dark:text-slate-400 block mt-1">
                       Upload Bukti Transfer (Finance Verification)
                     </span>
                   </button>
@@ -1168,9 +1168,9 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
 
               {/* Sub-Panel: Net Terms configuration */}
               {selectedPaymentMethod.startsWith('term_') && (
-                <div className="p-4 rounded-xl border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-800/50 space-y-3">
+                <div className="p-4 rounded-xl border border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-stone-800 dark:text-zinc-200">
+                    <span className="text-xs font-bold text-stone-800 dark:text-slate-200">
                       Pilihan Jangka Waktu Termin:
                     </span>
                     <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
@@ -1186,7 +1186,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                         className={`flex-1 py-2 rounded-lg border text-xs font-bold capitalize transition-all cursor-pointer ${
                           selectedPaymentMethod === t
                             ? 'bg-emerald-700 text-white border-emerald-700'
-                            : 'bg-white dark:bg-zinc-900 border-stone-300 dark:border-zinc-700 text-stone-700 dark:text-zinc-300'
+                            : 'bg-white dark:bg-slate-900/90 border-stone-300 dark:border-slate-800/80 text-stone-700 dark:text-slate-300 hover:bg-stone-100 dark:hover:bg-slate-800'
                         }`}
                       >
                         {t.replace('term_', '').toUpperCase()}
@@ -1198,32 +1198,32 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
 
               {/* Sub-Panel: Bilyet Giro / PDC Form (Gap #2) */}
               {selectedPaymentMethod === 'bilyet_giro' && (
-                <div className="p-4 rounded-xl border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-800/50 space-y-3">
-                  <div className="text-xs font-bold text-stone-800 dark:text-zinc-200 flex items-center gap-1.5">
+                <div className="p-4 rounded-xl border border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] space-y-3">
+                  <div className="text-xs font-bold text-stone-800 dark:text-slate-200 flex items-center gap-1.5">
                     <Building2 className="w-4 h-4 text-emerald-600" />
                     <span>Data Warkat Bilyet Giro (PDC):</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[11px] font-semibold text-stone-600 dark:text-zinc-300 block mb-1">
+                      <label className="text-[11px] font-semibold text-stone-600 dark:text-slate-300 block mb-1">
                         Nomor Seri Bilyet Giro *
                       </label>
                       <input
                         type="text"
                         value={giroNumber}
                         onChange={(e) => setGiroNumber(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                        className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-stone-300 dark:border-slate-800/80 bg-white dark:bg-[#12141C] text-stone-900 dark:text-slate-100"
                         placeholder="BG-BCA-8891024"
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-stone-600 dark:text-zinc-300 block mb-1">
+                      <label className="text-[11px] font-semibold text-stone-600 dark:text-slate-300 block mb-1">
                         Bank Penerbit Giro *
                       </label>
                       <select
                         value={giroBank}
                         onChange={(e) => setGiroBank(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                        className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-stone-300 dark:border-slate-800/80 bg-white dark:bg-[#12141C] text-stone-900 dark:text-slate-100"
                       >
                         <option>Bank Central Asia (BCA)</option>
                         <option>Bank Mandiri (Persero) Tbk</option>
@@ -1233,32 +1233,32 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-stone-600 dark:text-zinc-300 block mb-1">
+                      <label className="text-[11px] font-semibold text-stone-600 dark:text-slate-300 block mb-1">
                         Tanggal Jatuh Tempo Kliring *
                       </label>
                       <input
                         type="date"
                         value={giroDueDate}
                         onChange={(e) => setGiroDueDate(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                        className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-stone-300 dark:border-slate-800/80 bg-white dark:bg-[#12141C] text-stone-900 dark:text-slate-100"
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-stone-600 dark:text-zinc-300 block mb-1">
+                      <label className="text-[11px] font-semibold text-stone-600 dark:text-slate-300 block mb-1">
                         Foto Slip Bilyet Giro
                       </label>
                       <div className="flex items-center gap-2">
                         <img
                           src={giroSlipPhoto}
                           alt="Slip Giro"
-                          className="w-9 h-9 rounded-lg object-cover border"
+                          className="w-9 h-9 rounded-lg object-cover border border-stone-200 dark:border-slate-800/80"
                         />
                         <button
                           type="button"
                           onClick={() =>
                             onShowToast('Simulated Photo', 'Foto slip warkat giro telah dilampirkan.')
                           }
-                          className="px-2.5 py-1.5 rounded-lg border text-[11px] font-medium bg-white dark:bg-zinc-900 hover:bg-stone-100"
+                          className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-slate-800/80 text-[11px] font-medium bg-white dark:bg-slate-900/90 hover:bg-stone-100 dark:hover:bg-slate-800 text-stone-700 dark:text-slate-200"
                         >
                           Change Slip Photo
                         </button>
@@ -1270,35 +1270,35 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
 
               {/* Sub-Panel: Manual Bank Transfer Verification (Gap #2) */}
               {selectedPaymentMethod === 'transfer_verification' && (
-                <div className="p-4 rounded-xl border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-800/50 space-y-3">
-                  <div className="text-xs font-bold text-stone-800 dark:text-zinc-200">
+                <div className="p-4 rounded-xl border border-stone-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#090A0F] space-y-3">
+                  <div className="text-xs font-bold text-stone-800 dark:text-slate-200">
                     Rekening Virtual Account Escrow B2B:
                   </div>
-                  <div className="p-3 rounded-lg bg-white dark:bg-zinc-900 border text-xs font-mono space-y-1">
-                    <div className="text-stone-500">Bank Central Asia (BCA) Wholesale Escrow</div>
+                  <div className="p-3 rounded-lg bg-white dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 text-xs font-mono space-y-1">
+                    <div className="text-stone-500 dark:text-slate-400">Bank Central Asia (BCA) Wholesale Escrow</div>
                     <div className="text-sm font-black text-emerald-800 dark:text-emerald-400">
                       8201-9988-7711
                     </div>
-                    <div className="text-[11px] text-stone-600 dark:text-zinc-300">
+                    <div className="text-[11px] text-stone-600 dark:text-slate-300">
                       a.n. PT BUMI RETAIL SEJAHTERA
                     </div>
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-stone-600 dark:text-zinc-300 block mb-1">
+                    <label className="text-[11px] font-semibold text-stone-600 dark:text-slate-300 block mb-1">
                       Unggah Bukti Transfer Bank (Struk / Tangkapan Layar):
                     </label>
                     <div className="flex items-center gap-3">
                       <img
                         src={transferProofPhoto}
                         alt="Bukti Transfer"
-                        className="w-12 h-12 rounded-lg object-cover border"
+                        className="w-12 h-12 rounded-lg object-cover border border-stone-200 dark:border-slate-800/80"
                       />
                       <button
                         type="button"
                         onClick={() =>
                           onShowToast('Transfer Proof Uploaded', 'Bukti transfer BCA telah diverifikasi.')
                         }
-                        className="px-3 py-2 rounded-xl border text-xs font-bold bg-white dark:bg-zinc-900 hover:bg-stone-100 cursor-pointer flex items-center gap-1.5"
+                        className="px-3 py-2 rounded-xl border border-stone-200 dark:border-slate-800/80 text-xs font-bold bg-white dark:bg-slate-900/90 hover:bg-stone-100 dark:hover:bg-slate-800 text-stone-800 dark:text-slate-200 cursor-pointer flex items-center gap-1.5"
                       >
                         <Upload className="w-3.5 h-3.5" />
                         <span>Upload Bukti Bayar</span>
@@ -1309,7 +1309,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
               )}
 
               {/* Accounting & Auto-GL Notice */}
-              <div className="p-3 rounded-xl bg-stone-100 dark:bg-zinc-800/60 text-[10px] text-stone-500 dark:text-zinc-400 flex items-center gap-2 font-mono">
+              <div className="p-3 rounded-xl bg-stone-100 dark:bg-[#090A0F] border border-stone-200/70 dark:border-slate-800/80 text-[10px] text-stone-500 dark:text-slate-400 flex items-center gap-2 font-mono">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>
                   Auto-GL Posting: Debit AR #1200 / Giro #1210 · Credit B2B Revenue #4020 · Debit COGS #5010 · Credit Inventory #1040 (FEFO allocation)
@@ -1321,7 +1321,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsCheckoutModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-zinc-700 text-xs font-semibold hover:bg-stone-100 dark:hover:bg-zinc-800 cursor-pointer"
+                  className="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-slate-800/80 dark:bg-slate-900/90 text-xs font-semibold hover:bg-stone-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   Kembali
                 </button>
@@ -1358,10 +1358,10 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
             onClick={() => setActiveReceiptOrder(null)}
           >
             <div
-              className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto animate-in zoom-in-95 text-stone-900 dark:text-zinc-100"
+              className="w-full max-w-md rounded-2xl bg-white dark:bg-[#12141C] border border-stone-200 dark:border-slate-800/80 p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto animate-in zoom-in-95 text-stone-900 dark:text-slate-100"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="text-center space-y-1 pb-3 border-b border-stone-200 dark:border-zinc-800">
+              <div className="text-center space-y-1 pb-3 border-b border-stone-200 dark:border-slate-800/80">
                 <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 mx-auto flex items-center justify-center">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
@@ -1384,7 +1384,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                   <span>Total Base Units:</span>
                   <span className="font-bold">{activeReceiptOrder.totalBaseUnits} units</span>
                 </div>
-                <div className="flex justify-between text-sm font-black pt-2 border-t border-stone-200 dark:border-zinc-800">
+                <div className="flex justify-between text-sm font-black pt-2 border-t border-stone-200 dark:border-slate-800/80">
                   <span>Total Faktur:</span>
                   <span className="text-emerald-800 dark:text-emerald-300">
                     {formatIDR(activeReceiptOrder.totalAmountIDR)}
@@ -1415,7 +1415,7 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                         order: activeReceiptOrder,
                       })
                     }
-                    className="flex-1 py-2.5 rounded-xl border border-stone-300 dark:border-zinc-700 text-xs font-bold hover:bg-stone-100 dark:hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl border border-stone-300 dark:border-slate-800/80 dark:bg-slate-900/90 text-xs font-bold hover:bg-stone-100 dark:hover:bg-slate-800 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" />
                     <span>Cetak Faktur</span>

@@ -131,22 +131,22 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
   const cardClass = `rounded-xl border transition-all ${
     isLight
       ? 'bg-white border-slate-200 shadow-xs text-slate-900'
-      : 'bg-zinc-900 border-zinc-800 shadow-xs text-zinc-100'
+      : 'bg-[#12141C] border-slate-800/80 shadow-xs text-slate-100'
   }`;
 
   const subCardClass = `rounded-xl border p-4 transition-all ${
     isLight
       ? 'bg-slate-50/80 border-slate-200 text-slate-900'
-      : 'bg-zinc-800/40 border-zinc-800 text-zinc-100'
+      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
   }`;
 
   const inputClass = `w-full px-3.5 py-2 text-xs rounded-xl border font-medium transition-all disabled:opacity-60 ${
     isLight
       ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600'
-      : 'bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+      : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
   } focus:outline-hidden`;
 
-  const labelClass = `block text-xs font-bold mb-1.5 ${isLight ? 'text-slate-800' : 'text-zinc-100'}`;
+  const labelClass = `block text-xs font-bold mb-1.5 ${isLight ? 'text-slate-800' : 'text-slate-200'}`;
 
   const handlePresetChange = (preset: SmtpProviderPreset) => {
     if (!config) return;
@@ -219,7 +219,7 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
 
   if (isLoading || !config) {
     return (
-      <div className={`${cardClass} p-8 text-center text-xs text-slate-500 dark:text-zinc-400`}>
+      <div className={`${cardClass} p-8 text-center text-xs text-slate-500 dark:text-slate-400`}>
         Loading Email (SMTP) &amp; WhatsApp Business API gateway configuration...
       </div>
     );
@@ -244,7 +244,7 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
                 : 'Sandbox Relay Mode'}
             </span>
           </div>
-          <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+          <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
             Configure outbound corporate SMTP relay and WhatsApp Business API / Indonesian gateways for automated document dispatch across Procurement, POS, QC, and B2B modules.
           </p>
         </div>
@@ -273,14 +273,14 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* LEFT: SMTP EMAIL GATEWAY */}
         <div className={`${cardClass} p-5 space-y-4`}>
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 flex items-center justify-center">
                 <Mail className="w-4 h-4" />
               </div>
               <div>
                 <h3 className="text-sm font-bold">SMTP Email Gateway</h3>
-                <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                   Formal HTML document &amp; invoice delivery
                 </p>
               </div>
@@ -456,7 +456,7 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
           <div className={`${subCardClass} space-y-2.5`}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold">SMTP Handshake Verification</span>
-              <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-400">
+              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
                 Mode: {config.smtp.enableLiveSmtp ? 'LIVE SMTP' : 'SANDBOX RELAY'}
               </span>
             </div>
@@ -473,7 +473,7 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
                 type="button"
                 disabled={!effectiveCanEdit || isTestingEmail}
                 onClick={handleTestSmtp}
-                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white text-xs font-bold whitespace-nowrap cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 dark:bg-slate-900/90 dark:hover:bg-slate-800 dark:border dark:border-slate-800/80 text-white text-xs font-bold whitespace-nowrap cursor-pointer disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>{isTestingEmail ? 'Testing...' : 'Test SMTP Connection'}</span>
@@ -484,14 +484,14 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
 
         {/* RIGHT: WHATSAPP BUSINESS API GATEWAY */}
         <div className={`${cardClass} p-5 space-y-4`}>
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
                 <MessageCircle className="w-4 h-4" />
               </div>
               <div>
                 <h3 className="text-sm font-bold">WhatsApp Business API Gateway</h3>
-                <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+                <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                   Meta Cloud API or Indonesian gateways (+62 auto-normalized)
                 </p>
               </div>
@@ -678,14 +678,14 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
             {/* Templates */}
             <div className="space-y-2.5 pt-1">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Placeholders:
                 </span>
                 {TEMPLATE_PLACEHOLDERS.map((ph) => (
                   <code
                     key={ph}
                     className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
-                      isLight ? 'bg-slate-100 text-slate-700' : 'bg-zinc-800 text-emerald-300'
+                      isLight ? 'bg-slate-100 text-slate-700' : 'bg-[#090A0F] border border-slate-800/80 text-emerald-300'
                     }`}
                   >
                     {ph}
@@ -771,12 +771,12 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
 
       {/* OUTBOUND DISPATCH AUDIT LOG */}
       <div className={`${cardClass} overflow-hidden`}>
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
             <div>
               <h3 className="text-sm font-bold">Outbound Dispatch Audit Log</h3>
-              <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-zinc-400'}`}>
+              <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                 Immutable record of Email (SMTP) &amp; WhatsApp dispatches across ERP modules
               </p>
             </div>
@@ -785,7 +785,7 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
             type="button"
             onClick={loadGatewayData}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer ${
-              isLight ? 'border-slate-300 hover:bg-slate-50' : 'border-zinc-700 hover:bg-zinc-800'
+              isLight ? 'border-slate-300 hover:bg-slate-50' : 'bg-slate-900/90 border-slate-800/80 hover:bg-slate-800 text-slate-200'
             }`}
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -797,7 +797,7 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
           <table className="w-full text-left text-xs">
             <thead
               className={`border-b text-[10px] uppercase font-bold tracking-wider ${
-                isLight ? 'border-slate-200 bg-slate-50 text-slate-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                isLight ? 'border-slate-200 bg-slate-50 text-slate-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
               }`}
             >
               <tr>
@@ -809,10 +809,10 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
                 <th className="py-3 px-4 text-center">Status</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
               {logs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center text-xs text-slate-500 dark:text-zinc-400">
+                  <td colSpan={6} className="py-10 text-center text-xs text-slate-500 dark:text-slate-400">
                     No outbound Email or WhatsApp dispatches logged yet. Send any ERP document or run a gateway test above.
                   </td>
                 </tr>
@@ -820,7 +820,7 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
                 logs.map((log) => (
                   <tr
                     key={log.id}
-                    className={`transition-colors ${isLight ? 'hover:bg-slate-50/70' : 'hover:bg-zinc-800/30'}`}
+                    className={`transition-colors ${isLight ? 'hover:bg-slate-50/70' : 'hover:bg-slate-900/60'}`}
                   >
                     <td className="py-3 px-4 font-mono tabular-nums text-[11px] whitespace-nowrap">
                       {new Date(log.timestamp).toLocaleString()}
@@ -837,11 +837,11 @@ export const CommunicationGatewaySettingsTab: React.FC<CommunicationGatewaySetti
                     </td>
                     <td className="py-3 px-4 font-mono tabular-nums">
                       <span className="font-bold">{log.docType}</span>
-                      <span className="text-slate-500 dark:text-zinc-400 ml-1.5">#{log.docNumber}</span>
+                      <span className="text-slate-500 dark:text-slate-400 ml-1.5">#{log.docNumber}</span>
                     </td>
                     <td className="py-3 px-4">
                       <div className="font-semibold">{log.recipientName}</div>
-                      <div className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">
+                      <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
                         {log.recipientAddress}
                       </div>
                     </td>

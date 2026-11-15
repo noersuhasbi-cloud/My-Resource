@@ -96,7 +96,7 @@ export const ExecutiveStockTicker: React.FC<ExecutiveStockTickerProps> = ({
 
   return (
     <div
-      className="w-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 border-b border-emerald-200/80 dark:border-emerald-800/60 transition-colors"
+      className="w-full bg-emerald-50 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border-b border-emerald-200/80 dark:border-emerald-800/50 transition-colors"
       aria-label="Executive Stock Ticker"
     >
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 text-xs">

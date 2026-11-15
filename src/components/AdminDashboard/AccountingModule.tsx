@@ -356,7 +356,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
         className={`p-4 sm:p-6 rounded-2xl border transition-all ${
           isLight
             ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-            : 'bg-zinc-900/90 border-zinc-800'
+            : 'bg-[#12141C] border-slate-800/80'
         }`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -365,14 +365,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0F4C3A] text-white tracking-wide">
                 Double-Entry Accounting
               </span>
-              <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+              <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Indonesian Retail Multi-Store COA Standards
               </span>
             </div>
-            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Financial Statements &amp; Store-Tagged General Ledger
             </h2>
-            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
               Segregated Chart of Accounts (COA) per physical store hub with automated real-time postings for
               QRIS checkouts, PO/GR supplier liabilities, and waste shrinkage expenses.
             </p>
@@ -381,7 +381,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           <div className="flex items-center gap-3 flex-wrap">
             {/* Store Hub Filter */}
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-semibold ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+              <span className={`text-xs font-semibold ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                 Entity:
               </span>
               <select
@@ -394,7 +394,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 className={`px-3 py-2 text-xs font-semibold rounded-xl border focus:outline-none focus:border-[#0F4C3A] transition-all disabled:opacity-65 disabled:cursor-not-allowed ${
                   isLight
                     ? 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50'
-                    : 'bg-zinc-800 border-zinc-700 text-white'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                 }`}
               >
                 {!isBranchLocked && (
@@ -434,7 +434,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
                   isLight
                     ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                 }`}
                 title="Print Financial Statement (A4)"
               >
@@ -448,7 +448,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                 isLight
                   ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -458,7 +458,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
         </div>
 
         {/* Navigation Sub-Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none mt-6 pt-4 border-t border-gray-200 dark:border-zinc-800">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none mt-6 pt-4 border-t border-gray-200 dark:border-slate-800/80">
           {[
             { id: 'pnl', label: 'Profit & Loss (P&L)', icon: TrendingUp },
             { id: 'balance_sheet', label: 'Balance Sheet', icon: Scale },
@@ -482,7 +482,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     ? 'bg-[#0F4C3A] text-white shadow-xs'
                     : isLight
                     ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -498,7 +498,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -512,7 +512,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <FileCode2 className="w-3.5 h-3.5" />
@@ -526,7 +526,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <CreditCard className="w-3.5 h-3.5" />
@@ -540,7 +540,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 ? 'bg-[#0F4C3A] text-white shadow-xs'
                 : isLight
                 ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
             <Activity className="w-3.5 h-3.5" />
@@ -555,23 +555,23 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
-          <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+          <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h3 className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   Income Statement (Profit &amp; Loss)
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                   Reporting Scope: <strong className="text-[#0F4C3A] dark:text-emerald-400">{pnlReport.storeName || 'Consolidated'}</strong> • Period: {pnlReport.period}
                 </p>
               </div>
 
               <div className="flex items-center gap-3 flex-wrap">
                 {/* Multi-Currency Selector (Module 4) */}
-                <div className={`flex items-center gap-1 p-1 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-zinc-800 border-zinc-700'}`}>
+                <div className={`flex items-center gap-1 p-1 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
                   <Globe2 className="w-3.5 h-3.5 text-emerald-600 ml-1.5" />
                   {(['IDR', 'USD', 'EUR', 'AUD'] as SupportedCurrency[]).map((curr) => (
                     <button
@@ -585,7 +585,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           ? 'bg-[#0F4C3A] text-white shadow-xs'
                           : isLight
                           ? 'text-gray-600 hover:text-gray-900'
-                          : 'text-zinc-300 hover:text-white'
+                          : 'text-slate-400 hover:text-slate-100'
                       }`}
                     >
                       {curr}
@@ -593,14 +593,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   ))}
                 </div>
 
-                <div className={`p-2.5 rounded-xl border ${isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-zinc-800 border-zinc-700'}`}>
-                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>Gross Margin:</span>
+                <div className={`p-2.5 rounded-xl border ${isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>Gross Margin:</span>
                   <span className="ml-1.5 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400 text-xs">
                     {pnlReport.grossMarginPercent}%
                   </span>
                 </div>
-                <div className={`p-2.5 rounded-xl border ${isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-zinc-800 border-zinc-700'}`}>
-                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>Net Margin:</span>
+                <div className={`p-2.5 rounded-xl border ${isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>Net Margin:</span>
                   <span className="ml-1.5 font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
                     {pnlReport.netMarginPercent}%
                   </span>
@@ -613,14 +613,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             {/* 1. Operating Sales Revenue */}
             <div className="space-y-2">
               <div className={`flex justify-between font-bold uppercase text-[11px] pb-1.5 border-b ${
-                isLight ? 'border-gray-200 text-gray-800' : 'border-zinc-700 text-zinc-200'
+                isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
               }`}>
                 <span>1. Operating Sales Revenue</span>
                 <span>Amount ({selectedCurrency})</span>
               </div>
-              <div className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+              <div className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                 <span>Gross Customer QRIS Checkout Revenue</span>
-                <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-zinc-100'}`}>
+                <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   {formatCurrency(pnlReport.grossSalesRevenue)}
                 </span>
               </div>
@@ -629,7 +629,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 <span>-{formatCurrency(pnlReport.discountsGiven)}</span>
               </div>
               <div className={`flex justify-between font-bold pl-4 pt-1.5 border-t ${
-                isLight ? 'border-gray-200 text-gray-900' : 'border-zinc-800 text-white'
+                isLight ? 'border-gray-200 text-gray-900' : 'border-slate-800/80 text-slate-100'
               }`}>
                 <span>Net Sales Revenue</span>
                 <span className="text-[#0F4C3A] dark:text-emerald-400">{formatCurrency(pnlReport.netSalesRevenue)}</span>
@@ -639,7 +639,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             {/* 2. Cost of Goods Sold */}
             <div className="space-y-2 pt-2">
               <div className={`flex justify-between font-bold uppercase text-[11px] pb-1.5 border-b ${
-                isLight ? 'border-gray-200 text-gray-800' : 'border-zinc-700 text-zinc-200'
+                isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
               }`}>
                 <span>2. Cost of Goods Sold (COGS - Weighted Average Valuation)</span>
                 <span>Amount ({selectedCurrency})</span>
@@ -649,7 +649,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 <span>-{formatCurrency(pnlReport.costOfGoodsSold)}</span>
               </div>
               <div className={`flex justify-between font-bold pl-4 pt-1.5 border-t text-sm ${
-                isLight ? 'border-gray-200 text-[#0F4C3A]' : 'border-zinc-800 text-emerald-400'
+                isLight ? 'border-gray-200 text-[#0F4C3A]' : 'border-slate-800/80 text-emerald-400'
               }`}>
                 <span>Gross Profit ({pnlReport.grossMarginPercent}% gross margin)</span>
                 <span>{formatCurrency(pnlReport.grossProfit)}</span>
@@ -659,13 +659,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             {/* 3. Operating & Cold-Chain Expenses (OPEX) */}
             <div className="space-y-2 pt-2">
               <div className={`flex justify-between font-bold uppercase text-[11px] pb-1.5 border-b ${
-                isLight ? 'border-gray-200 text-gray-800' : 'border-zinc-700 text-zinc-200'
+                isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
               }`}>
                 <span>3. Operating &amp; Cold-Chain Expenses (OPEX)</span>
                 <span>Amount ({selectedCurrency})</span>
               </div>
               {pnlReport.operatingExpenses.map((exp, idx) => (
-                <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                   <span>{exp.category}</span>
                   <span className={isLight ? 'text-rose-600' : 'text-red-400'}>
                     -{formatCurrency(exp.amount)}
@@ -673,7 +673,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 </div>
               ))}
               <div className={`flex justify-between font-bold pl-4 pt-1.5 border-t ${
-                isLight ? 'border-gray-200 text-gray-900' : 'border-zinc-800 text-zinc-200'
+                isLight ? 'border-gray-200 text-gray-900' : 'border-slate-800/80 text-slate-200'
               }`}>
                 <span>Total Operating Expenses</span>
                 <span className={isLight ? 'text-rose-600' : 'text-red-400'}>
@@ -687,7 +687,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               className={`p-4 rounded-xl border flex justify-between items-center font-sans ${
                 isLight
                   ? 'bg-emerald-50/70 border-emerald-200 text-gray-900'
-                  : 'bg-emerald-950/20 border-emerald-800/40 text-white'
+                  : 'bg-emerald-950/30 border-emerald-800/50 text-slate-100'
               }`}
             >
               <div>
@@ -710,16 +710,16 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
-          <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+          <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h3 className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   Automated Balance Sheet (Statement of Financial Position)
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                   Period: {balanceSheet.period} • Enterprise Multi-Store Consolidated Matrix
                 </p>
               </div>
@@ -742,9 +742,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs">
             {/* ASSETS */}
             <div className={`p-5 rounded-xl border space-y-4 ${
-              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-zinc-800/40 border-zinc-700'
+              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-[#090A0F] border-slate-800/80'
             }`}>
-              <div className="flex justify-between items-center border-b pb-2 border-gray-200 dark:border-zinc-700">
+              <div className="flex justify-between items-center border-b pb-2 border-gray-200 dark:border-slate-800/80">
                 <h4 className="font-bold uppercase tracking-wider text-xs text-[#0F4C3A] dark:text-emerald-400">
                   Total Assets
                 </h4>
@@ -754,19 +754,19 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>Current Assets</span>
+                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>Current Assets</span>
                 {balanceSheet.assets.currentAssets.map((item, idx) => (
-                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                     <span>{item.category}</span>
                     <span>{formatIDR(item.amount)}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-zinc-700/60">
-                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>Non-Current Fixed Assets</span>
+              <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-slate-800/80">
+                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>Non-Current Fixed Assets</span>
                 {balanceSheet.assets.nonCurrentAssets.map((item, idx) => (
-                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                     <span>{item.category}</span>
                     <span>{formatIDR(item.amount)}</span>
                   </div>
@@ -776,9 +776,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
             {/* LIABILITIES & EQUITY */}
             <div className={`p-5 rounded-xl border space-y-4 ${
-              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-zinc-800/40 border-zinc-700'
+              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-[#090A0F] border-slate-800/80'
             }`}>
-              <div className="flex justify-between items-center border-b pb-2 border-gray-200 dark:border-zinc-700">
+              <div className="flex justify-between items-center border-b pb-2 border-gray-200 dark:border-slate-800/80">
                 <h4 className="font-bold uppercase tracking-wider text-xs text-blue-600 dark:text-blue-400">
                   Liabilities &amp; Equity
                 </h4>
@@ -788,19 +788,19 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>Current Liabilities</span>
+                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>Current Liabilities</span>
                 {balanceSheet.liabilities.currentLiabilities.map((item, idx) => (
-                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                     <span>{item.category}</span>
                     <span>{formatIDR(item.amount)}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-zinc-700/60">
-                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-zinc-200'}`}>Shareholders' Equity</span>
+              <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-slate-800/80">
+                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>Shareholders' Equity</span>
                 {balanceSheet.equity.equityItems.map((item, idx) => (
-                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                     <span>{item.category}</span>
                     <span>{formatIDR(item.amount)}</span>
                   </div>
@@ -817,14 +817,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
-          <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
-            <h3 className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
+            <h3 className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Cash Flow Statement
             </h3>
-            <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+            <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
               Operating, Investing, and Financing Cash Movements • {cashFlow.period}
             </p>
           </div>
@@ -832,13 +832,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           <div className="p-6 space-y-5 font-mono text-xs">
             <div className="space-y-1.5">
               <div className={`flex justify-between font-bold uppercase pb-1.5 border-b ${
-                isLight ? 'border-gray-200 text-gray-800' : 'border-zinc-700 text-zinc-200'
+                isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
               }`}>
                 <span>Cash Flows from Operating Activities</span>
                 <span className="text-[#0F4C3A] dark:text-emerald-400">{formatIDR(cashFlow.netOperatingCash)}</span>
               </div>
               {cashFlow.operatingActivities.map((act, idx) => (
-                <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                   <span>{act.category}</span>
                   <span className={act.amount < 0 ? (isLight ? 'text-rose-600' : 'text-red-400') : (isLight ? 'text-emerald-600' : 'text-emerald-400')}>
                     {act.amount < 0 ? `-${formatIDR(Math.abs(act.amount))}` : formatIDR(act.amount)}
@@ -849,13 +849,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
             <div className="space-y-1.5 pt-2">
               <div className={`flex justify-between font-bold uppercase pb-1.5 border-b ${
-                isLight ? 'border-gray-200 text-gray-800' : 'border-zinc-700 text-zinc-200'
+                isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
               }`}>
                 <span>Cash Flows from Investing Activities</span>
                 <span className="text-blue-600 dark:text-blue-400">{formatIDR(cashFlow.netInvestingCash)}</span>
               </div>
               {cashFlow.investingActivities.map((act, idx) => (
-                <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                   <span>{act.category}</span>
                   <span className={act.amount < 0 ? (isLight ? 'text-rose-600' : 'text-red-400') : (isLight ? 'text-emerald-600' : 'text-emerald-400')}>
                     {act.amount < 0 ? `-${formatIDR(Math.abs(act.amount))}` : formatIDR(act.amount)}
@@ -868,7 +868,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               className={`p-4 rounded-xl border flex justify-between items-center font-sans ${
                 isLight
                   ? 'bg-white border-gray-200 shadow-xs text-gray-900'
-                  : 'bg-zinc-900 border-zinc-700 text-white'
+                  : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
               }`}
             >
               <span className="font-bold text-sm">Ending Liquid Cash Balance</span>
@@ -886,14 +886,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
-          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                  <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                     <ReceiptText className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                     General Ledger (GL) Immutable Journal Vouchers
                   </h3>
@@ -901,14 +901,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     GAAP/IFRS Immutability Enforced
                   </span>
                 </div>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                   Double-entry accounting records with audit-grade immutability. Hard deletes are strictly disabled; corrections are made via counter-entries.
                 </p>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+                  <Search className="w-3.5 h-3.5 text-gray-400 dark:text-slate-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
                     value={glSearch}
@@ -917,7 +917,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     className={`pl-8 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] w-56 ${
                       isLight
                         ? 'bg-white border-gray-300 text-gray-900'
-                        : 'bg-zinc-800 border-zinc-700 text-white'
+                        : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
                     }`}
                   />
                 </div>
@@ -928,7 +928,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   className={`px-2.5 py-1.5 text-xs rounded-xl border font-semibold ${
                     isLight
                       ? 'bg-white border-gray-200 text-gray-800 focus:border-[#0F4C3A]'
-                      : 'bg-zinc-800 border-zinc-700 text-white'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   <option value="ALL">All Ref Types</option>
@@ -959,7 +959,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             <table className="w-full text-left text-xs font-mono">
               <thead>
                 <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
                 }`}>
                   <th className="py-3 px-4">Entry ID</th>
                   <th className="py-3 px-4">Date / Outlet</th>
@@ -971,10 +971,10 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   <th className="py-3 px-4 text-right">Audit Action</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
                 {filteredLedger.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className={`py-8 text-center text-xs font-sans ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                    <td colSpan={8} className={`py-8 text-center text-xs font-sans ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                       No general ledger entries matching current filters.
                     </td>
                   </tr>
@@ -990,10 +990,10 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           : entry.isReversed
                           ? isLight
                             ? 'bg-gray-100/50 opacity-75'
-                            : 'bg-zinc-900/50 opacity-75'
+                            : 'bg-slate-900/50 opacity-75'
                           : isLight
                           ? 'hover:bg-gray-50/80'
-                          : 'hover:bg-zinc-800/40'
+                          : 'hover:bg-slate-900/60'
                       }`}
                     >
                       <td className="py-3 px-4 font-bold">
@@ -1006,17 +1006,17 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           </div>
                         )}
                       </td>
-                      <td className={`py-3 px-4 text-[11px] font-sans ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                      <td className={`py-3 px-4 text-[11px] font-sans ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                         <div>{entry.timestamp.split('T')[0]}</div>
-                        <span className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                        <span className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           {entry.storeName || 'Senopati'}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-sans">
-                        <span className={`font-mono font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                        <span className={`font-mono font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                           {entry.accountCode}
                         </span>
-                        <div className={`text-[11px] ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                        <div className={`text-[11px] ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
                           {entry.accountName}
                         </div>
                       </td>
@@ -1032,12 +1032,12 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                             ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
                             : isLight
                             ? 'bg-gray-100 text-gray-700 border-gray-200'
-                            : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                            : 'bg-slate-900/90 text-slate-300 border-slate-800/80'
                         }`}>
                           {entry.referenceType}
                         </span>
                       </td>
-                      <td className={`py-3 px-4 text-[11px] font-sans max-w-xs truncate ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                      <td className={`py-3 px-4 text-[11px] font-sans max-w-xs truncate ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                         {entry.description}
                       </td>
                       <td className="py-3 px-4 text-right font-sans">
@@ -1058,14 +1058,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                             className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
                               isLight
                                 ? 'bg-white hover:bg-gray-100 border-gray-300 text-gray-700 shadow-2xs'
-                                : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300'
+                                : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800/80 text-slate-200'
                             }`}
                             title="Generate an audit-certified reversing counter-entry to correct this voucher"
                           >
                             Reverse Entry
                           </button>
                         ) : (
-                          <span className="text-[10px] text-gray-400 font-mono">Posted</span>
+                          <span className="text-[10px] text-gray-400 dark:text-slate-500 font-mono">Posted</span>
                         )}
                       </td>
                     </tr>
@@ -1083,17 +1083,17 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
               ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-              : 'bg-zinc-900/90 border-zinc-800'
+              : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
-          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                   <Building2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                   Chart of Accounts (COA) Structure
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                   Multi-Store segregated account hierarchy compliant with standard Indonesian retail bookkeeping
                 </p>
               </div>
@@ -1108,7 +1108,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                         ? 'bg-[#0F4C3A] text-white shadow-xs'
                         : isLight
                         ? 'text-gray-600 hover:bg-gray-100'
-                        : 'text-zinc-400 hover:bg-zinc-800'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
                     }`}
                   >
                     {cat}
@@ -1122,7 +1122,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             <table className="w-full text-left text-xs font-mono">
               <thead>
                 <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
                 }`}>
                   <th className="py-3 px-4">Code</th>
                   <th className="py-3 px-4 font-sans">Account Title</th>
@@ -1132,18 +1132,18 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   <th className="py-3 px-4 text-right">Current Balance</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
                 {filteredCOA.map((acc) => (
                   <tr
                     key={`${acc.storeId}-${acc.accountCode}`}
                     className={`transition-colors ${
-                      isLight ? 'hover:bg-gray-50/80' : 'hover:bg-zinc-800/40'
+                      isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'
                     }`}
                   >
                     <td className="py-3.5 px-4 font-bold text-[#0F4C3A] dark:text-emerald-400">
                       {acc.accountCode}
                     </td>
-                    <td className={`py-3.5 px-4 font-sans font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                    <td className={`py-3.5 px-4 font-sans font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                       {acc.accountName}
                     </td>
                     <td className="py-3.5 px-4 font-sans">
@@ -1161,13 +1161,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                         {acc.category}
                       </span>
                     </td>
-                    <td className={`py-3.5 px-4 ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                    <td className={`py-3.5 px-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                       {acc.normalBalance}
                     </td>
-                    <td className={`py-3.5 px-4 font-sans ${isLight ? 'text-gray-600' : 'text-zinc-300'}`}>
+                    <td className={`py-3.5 px-4 font-sans ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                       {acc.storeId}
                     </td>
-                    <td className={`py-3.5 px-4 text-right font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                    <td className={`py-3.5 px-4 text-right font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                       {formatIDR(acc.balance)}
                     </td>
                   </tr>
@@ -1197,21 +1197,21 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
         <div className="space-y-6">
           {/* Summary KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
-              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'}`}>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
                 <span>Total Wholesale AR (COA #1200)</span>
                 <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
                   <CreditCard className="w-4 h-4" />
                 </span>
               </div>
-              <div className="mt-2 text-xl font-bold font-mono text-gray-900 dark:text-zinc-100">
+              <div className="mt-2 text-xl font-bold font-mono text-gray-900 dark:text-slate-100">
                 {formatIDR(b2bCustomers.reduce((sum, c) => sum + (c.outstandingAR || 0), 0))}
               </div>
-              <span className="text-[10px] text-gray-400 mt-1 block">Trade credit receivables from B2B buyers</span>
+              <span className="text-[10px] text-gray-400 dark:text-slate-400 mt-1 block">Trade credit receivables from B2B buyers</span>
             </div>
 
-            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
-              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'}`}>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
                 <span>Warkat Giro Belum Cair (#1210)</span>
                 <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                   <Building2 className="w-4 h-4" />
@@ -1229,8 +1229,8 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </span>
             </div>
 
-            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
-              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'}`}>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
                 <span>Overdue AR (&gt;7 Days Alert)</span>
                 <span className="p-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400">
                   <AlertTriangle className="w-4 h-4" />
@@ -1248,8 +1248,8 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </span>
             </div>
 
-            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
-              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <div className={`p-5 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'}`}>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
                 <span>Denda Tolakan Kliring (#4090)</span>
                 <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
                   <ShieldAlert className="w-4 h-4" />
@@ -1258,32 +1258,32 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               <div className="mt-2 text-xl font-bold font-mono text-purple-700 dark:text-purple-400">
                 {formatIDR(450000)}
               </div>
-              <span className="text-[10px] text-gray-400 mt-1 block">
+              <span className="text-[10px] text-gray-400 dark:text-slate-400 mt-1 block">
                 Rp 150.000 / bounced check penalty fee
               </span>
             </div>
           </div>
 
           {/* Table 1: Accounts Receivable Aging & Customer Limits */}
-          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'} space-y-4`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-zinc-800">
+          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'} space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-slate-800/80">
               <div>
-                <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span>Wholesale Accounts Receivable Aging Matrix &amp; Plafond</span>
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                <p className="text-xs text-gray-500 dark:text-slate-400">
                   B2B customer credit limit monitoring, AR aging buckets, and auto-freeze enforcement
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300">
+              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-slate-900/90 text-gray-700 dark:text-slate-300 border border-transparent dark:border-slate-800/80">
                 {b2bCustomers.length} Wholesale Accounts
               </span>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
               <table className="w-full text-left text-xs">
-                <thead className="bg-gray-50 dark:bg-zinc-800/60 uppercase text-[10px] font-bold text-gray-500 dark:text-zinc-400 border-b border-gray-200 dark:border-zinc-800">
+                <thead className="bg-gray-50 dark:bg-[#090A0F] uppercase text-[10px] font-bold text-gray-500 dark:text-slate-400 border-b border-gray-200 dark:border-slate-800/80">
                   <tr>
                     <th className="py-3 px-3.5">Customer &amp; Tier</th>
                     <th className="py-3 px-3.5">Credit Plafond</th>
@@ -1295,19 +1295,19 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     <th className="py-3 px-3.5 text-right">Controller Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800 font-medium">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80 font-medium">
                   {b2bCustomers.map((cust) => {
                     const isLocked = cust.status === 'CREDIT_LOCKED';
                     return (
-                      <tr key={cust.id} className="hover:bg-gray-50/60 dark:hover:bg-zinc-800/40 transition-colors">
+                      <tr key={cust.id} className="hover:bg-gray-50/60 dark:hover:bg-slate-900/60 transition-colors">
                         <td className="py-3.5 px-3.5">
-                          <div className="font-bold text-gray-900 dark:text-zinc-100">{cust.companyName}</div>
-                          <div className="text-[11px] text-gray-500 dark:text-zinc-400">{cust.name} ({cust.tierLabel})</div>
+                          <div className="font-bold text-gray-900 dark:text-slate-100">{cust.companyName}</div>
+                          <div className="text-[11px] text-gray-500 dark:text-slate-400">{cust.name} ({cust.tierLabel})</div>
                         </td>
-                        <td className="py-3.5 px-3.5 font-mono text-gray-700 dark:text-zinc-300">
+                        <td className="py-3.5 px-3.5 font-mono text-gray-700 dark:text-slate-300">
                           {formatIDR(cust.creditLimit)}
                         </td>
-                        <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-zinc-100">
+                        <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-slate-100">
                           {formatIDR(cust.outstandingAR)}
                         </td>
                         <td className="py-3.5 px-3.5 font-mono text-emerald-600 dark:text-emerald-400">
@@ -1358,25 +1358,25 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           </div>
 
           {/* Table 2: Bilyet Giro (PDC) Clearing & Bounce Management */}
-          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'} space-y-4`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-zinc-800">
+          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'} space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-slate-800/80">
               <div>
-                <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span>Bilyet Giro (PDC) Clearing &amp; Dishonor / Bounce Management</span>
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                <p className="text-xs text-gray-500 dark:text-slate-400">
                   Warkat giro masuk, eksekusi kliring bank (COA #1020), atau proses tolak kliring dengan denda administratif
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300">
+              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-slate-900/90 text-gray-700 dark:text-slate-300 border border-transparent dark:border-slate-800/80">
                 {giroRecords.length} Giro Registers
               </span>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
               <table className="w-full text-left text-xs">
-                <thead className="bg-gray-50 dark:bg-zinc-800/60 uppercase text-[10px] font-bold text-gray-500 dark:text-zinc-400 border-b border-gray-200 dark:border-zinc-800">
+                <thead className="bg-gray-50 dark:bg-[#090A0F] uppercase text-[10px] font-bold text-gray-500 dark:text-slate-400 border-b border-gray-200 dark:border-slate-800/80">
                   <tr>
                     <th className="py-3 px-3.5">Giro No &amp; Bank</th>
                     <th className="py-3 px-3.5">Customer / Drawer</th>
@@ -1387,24 +1387,24 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     <th className="py-3 px-3.5 text-right">Controller Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800 font-medium">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80 font-medium">
                   {giroRecords.map((giro) => (
-                    <tr key={giro.id} className="hover:bg-gray-50/60 dark:hover:bg-zinc-800/40 transition-colors">
+                    <tr key={giro.id} className="hover:bg-gray-50/60 dark:hover:bg-slate-900/60 transition-colors">
                       <td className="py-3.5 px-3.5">
                         <div className="font-bold font-mono text-emerald-800 dark:text-emerald-400">{giro.giroNumber}</div>
-                        <div className="text-[11px] text-gray-500 dark:text-zinc-400">{giro.issuingBank}</div>
+                        <div className="text-[11px] text-gray-500 dark:text-slate-400">{giro.issuingBank}</div>
                       </td>
-                      <td className="py-3.5 px-3.5 font-semibold text-gray-900 dark:text-zinc-100">
+                      <td className="py-3.5 px-3.5 font-semibold text-gray-900 dark:text-slate-100">
                         {giro.customerName}
                       </td>
-                      <td className="py-3.5 px-3.5 font-mono text-[11px] text-gray-500">
+                      <td className="py-3.5 px-3.5 font-mono text-[11px] text-gray-500 dark:text-slate-400">
                         {giro.orderId}
                       </td>
                       <td className="py-3.5 px-3.5">
                         <div className="font-mono">{new Date(giro.clearingDueDate).toLocaleDateString()}</div>
-                        <span className="text-[10px] text-gray-400">Jatuh Tempo Kliring</span>
+                        <span className="text-[10px] text-gray-400 dark:text-slate-400">Jatuh Tempo Kliring</span>
                       </td>
-                      <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-zinc-100">
+                      <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-slate-100">
                         {formatIDR(giro.amountIDR)}
                       </td>
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
@@ -1466,20 +1466,20 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           </div>
 
           {/* Card 3: Bank Mutation CSV Import & Auto-Matching (BCA / Mandiri) */}
-          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'} space-y-4`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-zinc-800">
+          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'} space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-slate-800/80">
               <div>
-                <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
                   <FileSpreadsheet className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                   <span>Bank Mutation CSV Import &amp; B2B Auto-Matching (BCA / Mandiri)</span>
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                <p className="text-xs text-gray-500 dark:text-slate-400">
                   Upload or paste CSV bank statements to auto-match incoming CR transfers against unpaid B2B wholesale invoices (DR #1020 / CR #1200).
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer ${
-                  isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700'
+                  isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                 }`}>
                   <Upload className="w-3.5 h-3.5" />
                   <span>Upload CSV</span>
@@ -1515,7 +1515,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     setBankMatchResult(null);
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer ${
-                    isLight ? 'bg-emerald-50 border-emerald-200 text-[#0F4C3A] hover:bg-emerald-100' : 'bg-emerald-950/30 border-emerald-800 text-emerald-300'
+                    isLight ? 'bg-emerald-50 border-emerald-200 text-[#0F4C3A] hover:bg-emerald-100' : 'bg-emerald-950/80 border-emerald-800/50 text-emerald-300 hover:bg-emerald-950'
                   }`}
                 >
                   Load Sample CSV
@@ -1534,20 +1534,20 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   }}
                   placeholder={`Paste BCA or Mandiri CSV rows here, e.g.:\nTanggal,Keterangan,Jumlah,Tipe\n2026-11-15,TRANSFER MASUK B2B-1001 PT KULINER,8500000,CR`}
                   className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:border-[#0F4C3A] ${
-                    isLight ? 'bg-slate-50 border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-zinc-100'
+                    isLight ? 'bg-slate-50 border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
                   }`}
                 />
               </div>
               <div className="flex flex-col justify-between gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-semibold mb-1 text-gray-600 dark:text-zinc-300">
+                  <label className="block text-[11px] font-semibold mb-1 text-gray-600 dark:text-slate-300">
                     Bank Settlement Account
                   </label>
                   <select
                     value={bankAccountCode}
                     onChange={(e) => setBankAccountCode(e.target.value as '1020' | '1015' | '1010')}
                     className={`w-full px-3 py-2 rounded-xl text-xs border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="1020">Bank BCA / Mandiri Operasional (#1020)</option>
@@ -1576,7 +1576,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                       }
                     }}
                     className={`flex-1 px-3 py-2 rounded-xl text-xs font-bold border transition-all disabled:opacity-50 cursor-pointer ${
-                      isLight ? 'bg-white border-gray-300 text-gray-800 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-100 hover:bg-zinc-700'
+                      isLight ? 'bg-white border-gray-300 text-gray-800 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-100 hover:bg-slate-800'
                     }`}
                   >
                     Preview Matches
@@ -1621,14 +1621,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold">
                     Unmatched CR: {bankMatchResult.unmatchedCount}
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-slate-200/70 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300">
+                  <span className="px-2 py-0.5 rounded bg-slate-200/70 dark:bg-slate-900/90 text-gray-600 dark:text-slate-300 border border-transparent dark:border-slate-800/80">
                     Skipped Debits: {bankMatchResult.matches.filter((m) => m.status === 'IGNORED_DEBIT').length}
                   </span>
                 </div>
                 {bankMatchResult.matches.length > 0 && (
-                  <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
                     <table className="w-full text-left text-xs">
-                      <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-zinc-800/50 text-zinc-300'}>
+                      <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-[#090A0F] text-slate-400'}>
                         <tr>
                           <th className="py-2 px-3">Date</th>
                           <th className="py-2 px-3">Mutation Description</th>
@@ -1637,7 +1637,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           <th className="py-2 px-3">Matched Order / Buyer</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80">
                         {bankMatchResult.matches.map((m, idx) => (
                           <tr key={idx}>
                             <td className="py-2 px-3 font-mono">{m.mutationDate}</td>
@@ -1652,7 +1652,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                                     ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
                                     : m.status === 'UNMATCHED'
                                     ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                                    : 'bg-gray-100 dark:bg-zinc-800 text-gray-500'
+                                    : 'bg-gray-100 dark:bg-slate-900/90 text-gray-500 dark:text-slate-400'
                                 }`}
                               >
                                 {m.status}
@@ -1711,14 +1711,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       {complianceSubView === 'executive_health' && (
         <div className="space-y-5">
           <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-            isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+            isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-[#12141C] border-slate-800/80'
           }`}>
             <div>
-              <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+              <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 <Activity className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                 Executive Summary — Real-Time Financial Health Dashboard
               </h3>
-              <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+              <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 1-click liquidity overview across Cash &amp; Bank balances, Aging Wholesale Receivables, and Upcoming Supplier Payables.
               </p>
             </div>
@@ -1727,7 +1727,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               onClick={() => void loadExecSummary()}
               disabled={isLoadingExecSummary}
               className={`px-3.5 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
-                isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
               }`}
             >
               {isLoadingExecSummary ? 'Refreshing...' : 'Refresh Financial Health'}
@@ -1737,19 +1737,19 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           {execSummary ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               {/* 1. Cash & Bank Balance Card */}
-              <div className={`p-5 rounded-2xl border space-y-3 ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+              <div className={`p-5 rounded-2xl border space-y-3 ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#0F4C3A] dark:text-emerald-400">
                     1. Cash &amp; Bank Balance
                   </span>
                   <DollarSign className="w-4 h-4 text-emerald-600" />
                 </div>
-                <div className={`text-2xl font-bold font-mono ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <div className={`text-2xl font-bold font-mono ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   {formatIDR(execSummary.cashAndBank.totalLiquidCashIDR)}
                 </div>
-                <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-zinc-800 text-xs font-mono">
+                <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-slate-800/80 text-xs font-mono">
                   <div className="flex justify-between">
-                    <span className="font-sans text-gray-500">Cash &amp; Store Vault (#1010/#1015):</span>
+                    <span className="font-sans text-gray-500 dark:text-slate-400">Cash &amp; Store Vault (#1010/#1015):</span>
                     <span>
                       {formatIDR(
                         execSummary.cashAndBank.vaultAndRegistersIDR +
@@ -1759,72 +1759,72 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-sans text-gray-500">Bank BCA / Operational (#1020):</span>
+                    <span className="font-sans text-gray-500 dark:text-slate-400">Bank BCA / Operational (#1020):</span>
                     <span>{formatIDR(execSummary.cashAndBank.bankBcaClearingIDR)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-sans text-gray-500">QRIS / In-Transit Clearing (#1030):</span>
+                    <span className="font-sans text-gray-500 dark:text-slate-400">QRIS / In-Transit Clearing (#1030):</span>
                     <span>{formatIDR(execSummary.cashAndBank.qrisReceivablePendingIDR)}</span>
                   </div>
                 </div>
               </div>
 
               {/* 2. Total Aging Receivables Card */}
-              <div className={`p-5 rounded-2xl border space-y-3 ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+              <div className={`p-5 rounded-2xl border space-y-3 ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                     2. Total Aging Receivables (AR)
                   </span>
                   <CreditCard className="w-4 h-4 text-blue-600" />
                 </div>
-                <div className={`text-2xl font-bold font-mono ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <div className={`text-2xl font-bold font-mono ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   {formatIDR(execSummary.receivablesAging.totalOutstandingArIDR)}
                 </div>
-                <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-zinc-800 text-xs font-mono">
+                <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-slate-800/80 text-xs font-mono">
                   <div className="flex justify-between">
-                    <span className="font-sans text-gray-500">Current (0 - 30 Days):</span>
+                    <span className="font-sans text-gray-500 dark:text-slate-400">Current (0 - 30 Days):</span>
                     <span className="text-emerald-600 dark:text-emerald-400">{formatIDR(execSummary.receivablesAging.current0To30IDR)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-sans text-gray-500">31 - 60 Days:</span>
+                    <span className="font-sans text-gray-500 dark:text-slate-400">31 - 60 Days:</span>
                     <span className="text-amber-600 dark:text-amber-400">{formatIDR(execSummary.receivablesAging.days31To60IDR)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-sans text-gray-500">&gt; 60 Days ({execSummary.receivablesAging.lockedCustomersCount} locked / {execSummary.receivablesAging.unpaidB2bOrdersCount} unpaid):</span>
+                    <span className="font-sans text-gray-500 dark:text-slate-400">&gt; 60 Days ({execSummary.receivablesAging.lockedCustomersCount} locked / {execSummary.receivablesAging.unpaidB2bOrdersCount} unpaid):</span>
                     <span className="text-rose-600 dark:text-rose-400 font-bold">{formatIDR(execSummary.receivablesAging.over60DaysIDR)}</span>
                   </div>
                 </div>
               </div>
 
               {/* 3. Upcoming Supplier Payables Card */}
-              <div className={`p-5 rounded-2xl border space-y-3 ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-zinc-900 border-zinc-800'}`}>
+              <div className={`p-5 rounded-2xl border space-y-3 ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                     3. Upcoming Supplier Payables (AP)
                   </span>
                   <FileCheck className="w-4 h-4 text-amber-600" />
                 </div>
-                <div className={`text-2xl font-bold font-mono ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <div className={`text-2xl font-bold font-mono ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   {formatIDR(execSummary.upcomingPayables.totalOpenApIDR)}
                 </div>
-                <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-zinc-800 text-xs font-mono">
+                <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-slate-800/80 text-xs font-mono">
                   <div className="flex justify-between">
-                    <span className="font-sans text-gray-500">Overdue Unpaid Bills:</span>
+                    <span className="font-sans text-gray-500 dark:text-slate-400">Overdue Unpaid Bills:</span>
                     <span className="text-rose-600 dark:text-rose-400 font-bold">{formatIDR(execSummary.upcomingPayables.overduePayablesIDR)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-sans text-gray-500">Due within 7 Days:</span>
+                    <span className="font-sans text-gray-500 dark:text-slate-400">Due within 7 Days:</span>
                     <span className="text-amber-600 dark:text-amber-400">{formatIDR(execSummary.upcomingPayables.dueWithin7DaysIDR)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-sans text-gray-500">Due 8 - 30 Days ({execSummary.upcomingPayables.openVendorBillsCount} bills):</span>
+                    <span className="font-sans text-gray-500 dark:text-slate-400">Due 8 - 30 Days ({execSummary.upcomingPayables.openVendorBillsCount} bills):</span>
                     <span>{formatIDR(execSummary.upcomingPayables.dueWithin30DaysIDR)}</span>
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className={`p-8 rounded-2xl border text-center text-xs text-gray-500 ${isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800'}`}>
+            <div className={`p-8 rounded-2xl border text-center text-xs text-gray-500 dark:text-slate-400 ${isLight ? 'bg-white border-gray-200' : 'bg-[#12141C] border-slate-800/80'}`}>
               {isLoadingExecSummary ? 'Computing executive financial summary...' : 'Click Refresh Financial Health to load real-time balances.'}
             </div>
           )}
@@ -1837,15 +1837,15 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           {/* Card 1: QRIS / EDC Batch Settlement & MDR Auto-Reconciliation */}
           <div
             className={`p-5 rounded-2xl border space-y-4 ${
-              isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+              isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-[#12141C] border-slate-800/80'
             }`}
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 dark:border-zinc-800 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 dark:border-slate-800/80 pb-3">
               <div>
-                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   QRIS / EDC Batch Settlement &amp; MDR Fee Auto-Reconciliation
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Settle clearing balances cleanly: DR #{settlementDestCode} (Net Settled) + DR #6040 (MDR Fee Expense) / CR #{settlementChannel === 'QRIS' ? '1030' : '1020'} (Gross).
                 </p>
               </div>
@@ -1853,7 +1853,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 type="button"
                 onClick={loadSettlementData}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer ${
-                  isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                  isLight ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                 }`}
               >
                 {isLoadingSettlement ? 'Refreshing...' : 'Refresh Queue'}
@@ -1861,20 +1861,20 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
-                <div className="text-[11px] font-medium text-gray-500 dark:text-zinc-400">QRIS Unsettled Balance (#1030)</div>
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                <div className="text-[11px] font-medium text-gray-500 dark:text-slate-400">QRIS Unsettled Balance (#1030)</div>
                 <div className="text-lg font-bold font-mono text-[#0F4C3A] dark:text-emerald-400 mt-1">
                   {formatIDR(settlementData?.qrisReceivableCoaBalanceIDR ?? 0)}
                 </div>
               </div>
-              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
-                <div className="text-[11px] font-medium text-gray-500 dark:text-zinc-400">EDC Bank Clearing (#1020)</div>
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                <div className="text-[11px] font-medium text-gray-500 dark:text-slate-400">EDC Bank Clearing (#1020)</div>
                 <div className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400 mt-1">
                   {formatIDR(settlementData?.edcClearingPendingIDR ?? 0)}
                 </div>
               </div>
-              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-800/60 border-zinc-700'}`}>
-                <div className="text-[11px] font-medium text-gray-500 dark:text-zinc-400">Pending Tender Receipts</div>
+              <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                <div className="text-[11px] font-medium text-gray-500 dark:text-slate-400">Pending Tender Receipts</div>
                 <div className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400 mt-1">
                   {(settlementData?.unsettledQrisItems?.length ?? 0) + (settlementData?.unsettledEdcItems?.length ?? 0)} receipts
                 </div>
@@ -1897,9 +1897,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               return (
                 <div className="space-y-3">
                   {matchingTenders.length > 0 && (
-                    <div className="overflow-x-auto max-h-48 border rounded-xl border-gray-200 dark:border-zinc-800">
+                    <div className="overflow-x-auto max-h-48 border rounded-xl border-gray-200 dark:border-slate-800/80">
                       <table className="w-full text-left text-xs">
-                        <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-zinc-800/60 text-zinc-300'}>
+                        <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-[#090A0F] text-slate-400'}>
                           <tr>
                             <th className="py-2 px-3 w-8">Pick</th>
                             <th className="py-2 px-3">Receipt #</th>
@@ -1908,7 +1908,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                             <th className="py-2 px-3">Date</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80">
                           {matchingTenders.map((t) => (
                             <tr key={t.id}>
                               <td className="py-2 px-3">
@@ -1947,7 +1947,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           setSettlementMdrPercent(ch === 'QRIS' ? 0.7 : 1.0);
                         }}
                         className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
-                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                         }`}
                       >
                         <option value="QRIS">QRIS (Default 0.7% MDR)</option>
@@ -1965,7 +1965,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                         value={activeGross}
                         onChange={(e) => setSettlementGrossOverride(Math.max(1, Number(e.target.value) || 0))}
                         className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border disabled:opacity-70 ${
-                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                         }`}
                       />
                     </div>
@@ -1979,7 +1979,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                         value={settlementMdrPercent}
                         onChange={(e) => setSettlementMdrPercent(Math.max(0, Number(e.target.value) || 0))}
                         className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
-                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                         }`}
                       />
                     </div>
@@ -1989,7 +1989,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                         value={settlementDestCode}
                         onChange={(e) => setSettlementDestCode(e.target.value as '1020' | '1010')}
                         className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
-                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                          isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                         }`}
                       >
                         <option value="1020">1020 Bank BCA</option>
@@ -2037,7 +2037,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             {(settlementData?.batches?.length ?? 0) > 0 && (
               <div className="overflow-x-auto pt-2">
                 <table className="w-full text-left text-xs">
-                  <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-zinc-800/50 text-zinc-300'}>
+                  <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-[#090A0F] text-slate-400'}>
                     <tr>
                       <th className="py-2.5 px-3">Batch ID</th>
                       <th className="py-2.5 px-3">Channel</th>
@@ -2047,7 +2047,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                       <th className="py-2.5 px-3">GL Refs</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80">
                     {settlementData!.batches.map((b) => (
                       <tr key={b.id}>
                         <td className="py-2.5 px-3 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{b.id}</td>
@@ -2067,14 +2067,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           {/* Card 2: Post-Dated Bilyet Giro Clearing Ledger (COA #1030 & #2030) */}
           <div
             className={`p-5 rounded-2xl border space-y-4 ${
-              isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-zinc-900/90 border-zinc-800'
+              isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-[#12141C] border-slate-800/80'
             }`}
           >
-            <div className="border-b border-gray-200 dark:border-zinc-800 pb-3">
-              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <div className="border-b border-gray-200 dark:border-slate-800/80 pb-3">
+              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 Post-Dated Bilyet Giro Clearing Ledger (COA #1030 Incoming &amp; #2030 Outgoing)
               </h3>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Register incoming customer Bilyet Giro (DR #1030 / CR #1200) or outgoing vendor post-dated Giro (DR #2010 / CR #2030) and execute SKNBI Clear / Bounce actions.
               </p>
             </div>
@@ -2110,7 +2110,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     setIsCreatingGiro(false);
                   }
                 }}
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end p-4 rounded-xl border border-gray-200 dark:border-zinc-800 bg-gray-50/70 dark:bg-zinc-800/40"
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end p-4 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/70 dark:bg-[#090A0F]"
               >
                 <div>
                   <label className="block text-[11px] font-semibold mb-1">Giro Direction</label>
@@ -2118,7 +2118,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     value={giroDirection}
                     onChange={(e) => setGiroDirection(e.target.value as 'INCOMING' | 'OUTGOING')}
                     className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="INCOMING">Incoming Customer Giro (#1030)</option>
@@ -2133,7 +2133,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     onChange={(e) => setGiroCounterparty(e.target.value)}
                     placeholder="e.g. PT Sinar Jaya"
                     className={`w-full px-2.5 py-2 rounded-lg text-xs border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
                     }`}
                   />
                 </div>
@@ -2145,7 +2145,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     onChange={(e) => setGiroNumber(e.target.value)}
                     placeholder="BG-BCA-889012"
                     className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
                     }`}
                   />
                 </div>
@@ -2158,7 +2158,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     value={giroAmount}
                     onChange={(e) => setGiroAmount(Math.max(1, Number(e.target.value) || 0))}
                     className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   />
                 </div>
@@ -2169,7 +2169,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     value={giroDueDate}
                     onChange={(e) => setGiroDueDate(e.target.value)}
                     className={`w-full px-2.5 py-2 rounded-lg text-xs font-mono border ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   />
                 </div>
@@ -2185,7 +2185,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-zinc-800/50 text-zinc-300'}>
+                <thead className={isLight ? 'bg-gray-50 text-gray-600' : 'bg-[#090A0F] text-slate-400'}>
                   <tr>
                     <th className="py-3 px-3.5">Giro # / Bank</th>
                     <th className="py-3 px-3.5">Direction &amp; COA</th>
@@ -2196,12 +2196,12 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     <th className="py-3 px-3.5 text-right">SKNBI Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80">
                   {giroRecords.map((giro) => (
                     <tr key={giro.id}>
                       <td className="py-3 px-3.5">
                         <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{giro.giroNumber}</div>
-                        <div className="text-[11px] text-gray-500">{giro.issuingBank}</div>
+                        <div className="text-[11px] text-gray-500 dark:text-slate-400">{giro.issuingBank}</div>
                       </td>
                       <td className="py-3 px-3.5 font-mono text-[11px]">
                         {giro.direction === 'OUTGOING' ? 'OUTGOING (#2030)' : `INCOMING (#${giro.settlementCoaCode || '1210'})`}
@@ -2243,7 +2243,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                             </button>
                           </div>
                         ) : (
-                          <span className="text-[11px] text-gray-400 font-mono">{giro.status === 'PENDING_CLEARING' ? 'Treasury Only' : 'Completed'}</span>
+                          <span className="text-[11px] text-gray-400 dark:text-slate-500 font-mono">{giro.status === 'PENDING_CLEARING' ? 'Treasury Only' : 'Completed'}</span>
                         )}
                       </td>
                     </tr>
@@ -2257,25 +2257,25 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
       {/* MODAL: POST REVERSING JOURNAL ENTRY */}
       {reversingEntry && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
             className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
-              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-700 text-white'
+              isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+            <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
               <div>
-                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   Post Reversing Journal Voucher
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Immutable GAAP Counter-Entry for #{reversingEntry.id}
                 </p>
               </div>
               <button
                 onClick={() => setReversingEntry(null)}
-                className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors ${
-                  isLight ? 'text-gray-500' : 'text-zinc-300'
+                className={`p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors ${
+                  isLight ? 'text-gray-500' : 'text-slate-300'
                 }`}
               >
                 <X className="w-5 h-5" />
@@ -2295,24 +2295,24 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             </div>
 
             <div className={`p-3 rounded-xl border text-xs space-y-1.5 font-mono ${
-              isLight ? 'bg-white border-gray-200 text-gray-800 shadow-2xs' : 'bg-zinc-800 border-zinc-700 text-zinc-200'
+              isLight ? 'bg-white border-gray-200 text-gray-800 shadow-2xs' : 'bg-[#090A0F] border-slate-800/80 text-slate-200'
             }`}>
               <div className="flex justify-between">
-                <span className="font-sans text-gray-500">Account:</span>
+                <span className="font-sans text-gray-500 dark:text-slate-400">Account:</span>
                 <span className="font-bold">{reversingEntry.accountCode} - {reversingEntry.accountName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-sans text-gray-500">Original Debit / Credit:</span>
+                <span className="font-sans text-gray-500 dark:text-slate-400">Original Debit / Credit:</span>
                 <span>Debit {formatIDR(reversingEntry.debit)} • Credit {formatIDR(reversingEntry.credit)}</span>
               </div>
-              <div className="flex justify-between text-purple-600 dark:text-purple-400 font-bold border-t pt-1 border-gray-200 dark:border-zinc-700">
+              <div className="flex justify-between text-purple-600 dark:text-purple-400 font-bold border-t pt-1 border-gray-200 dark:border-slate-800/80">
                 <span className="font-sans">Counter-Entry Will Post:</span>
                 <span>Debit {formatIDR(reversingEntry.credit)} • Credit {formatIDR(reversingEntry.debit)}</span>
               </div>
             </div>
 
             <div>
-              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+              <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                 Mandatory Audit Trail Correction Note (Min. 5 characters)
               </label>
               <input
@@ -2323,7 +2323,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] ${
                   isLight
                     ? 'bg-white border-gray-300 text-gray-900'
-                    : 'bg-zinc-800 border-zinc-700 text-white'
+                    : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
                 }`}
               />
               <p className={`text-[10px] mt-1 ${reversalReason.trim().length >= 5 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
@@ -2333,13 +2333,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </p>
             </div>
 
-            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+            <div className={`flex justify-end gap-2 pt-3 border-t ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
               <button
                 onClick={() => setReversingEntry(null)}
                 className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-colors ${
                   isLight
                     ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 shadow-2xs'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                    : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                 }`}
               >
                 Abort

@@ -443,20 +443,20 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className={`text-xl font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            <h2 className={`text-xl font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Vendor Bills &amp; Accounts Payable
             </h2>
             <span
               className={`px-2 py-0.5 text-[11px] font-semibold rounded-md border ${
                 isLight
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                  : 'bg-emerald-950/80 text-emerald-300 border-emerald-800/50'
               }`}
             >
               3-Way Match Verified
             </span>
           </div>
-          <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-1`}>
+          <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-1`}>
             Reconcile supplier invoices with Purchase Orders &amp; Goods Receipts (GR), automate Indonesian PPN (11%) &amp; multi-currency accounting.
           </p>
         </div>
@@ -468,7 +468,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
             className={`p-2 rounded-lg border text-xs flex items-center gap-1.5 transition-colors ${
               isLight
                 ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
+                : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
             }`}
             title="Refresh Vendor Bills"
           >
@@ -492,19 +492,19 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           className={`p-4 rounded-xl border transition-all ${
-            isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-zinc-900/90 border-zinc-800'
+            isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <span className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Total Accounts Payable
             </span>
             <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div className={`text-xl font-bold font-mono mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {formatIDR(stats.totalApIDR)}
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-1">
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1">
             <span>{stats.unpaidCount} bills due for settlement</span>
             <span aria-hidden="true">·</span>
             <span>COA #2010</span>
@@ -513,21 +513,21 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
         <div
           className={`p-4 rounded-xl border transition-all ${
-            isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-zinc-900/90 border-zinc-800'
+            isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <span className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               3-Way Match Compliance
             </span>
             <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div className={`text-xl font-bold font-mono mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {stats.activeBillCount > 0
               ? `${Math.max(0, Math.round(((stats.activeBillCount - stats.varianceCount) / stats.activeBillCount) * 100))}%`
               : '100%'}
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-1">
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1">
             <span>PO + GR + Bill alignment</span>
             <span aria-hidden="true">·</span>
             <span>Zero variance</span>
@@ -536,19 +536,19 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
         <div
           className={`p-4 rounded-xl border transition-all ${
-            isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-zinc-900/90 border-zinc-800'
+            isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <span className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Variance Flagged
             </span>
             <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>
-          <div className={`text-xl font-bold font-mono mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {stats.varianceCount}
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-1">
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1">
             <span>Price or quantity discrepancies</span>
             <span aria-hidden="true">·</span>
             <span>Requires sign-off</span>
@@ -557,19 +557,19 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
         <div
           className={`p-4 rounded-xl border transition-all ${
-            isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-zinc-900/90 border-zinc-800'
+            isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+            <span className={`text-xs font-medium ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
               Disbursed (Settled)
             </span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div className={`text-xl font-bold font-mono mt-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+          <div className={`text-xl font-bold font-mono mt-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
             {formatIDR(stats.paidTotalIDR)}
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-1">
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1">
             <span>BCA Clearing &amp; Cash float</span>
             <span aria-hidden="true">·</span>
             <span>COA #1020</span>
@@ -580,10 +580,10 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
       {/* 3. Filter Controls & Search */}
       <div
         className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-3 ${
-          isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-zinc-900/90 border-zinc-800'
+          isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-[#12141C] border-slate-800/80'
         }`}
       >
-        <div className="flex items-center gap-1.5 overflow-x-auto p-1 bg-slate-100 dark:bg-zinc-800/80 rounded-lg">
+        <div className="flex items-center gap-1.5 overflow-x-auto p-1 bg-slate-100 dark:bg-[#090A0F] rounded-lg">
           {[
             { id: 'ALL', label: 'All Bills' },
             { id: 'UNPAID', label: 'Due / Unpaid' },
@@ -599,10 +599,10 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 statusFilter === tab.id
                   ? isLight
                     ? 'bg-white text-gray-900 shadow-sm'
-                    : 'bg-zinc-700 text-white shadow-sm'
+                    : 'bg-slate-900/90 text-slate-100 shadow-sm'
                   : isLight
                   ? 'text-gray-600 hover:text-gray-900'
-                  : 'text-zinc-400 hover:text-white'
+                  : 'text-slate-400 hover:text-slate-100'
               }`}
             >
               {tab.label}
@@ -613,12 +613,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
         <div className="flex items-center gap-2">
           {/* Currency Switcher */}
           <div className="flex items-center gap-1 text-xs">
-            <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>Currency:</span>
+            <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>Currency:</span>
             <select
               value={displayCurrency}
               onChange={(e) => setDisplayCurrency(e.target.value as any)}
               className={`py-1.5 px-2.5 rounded-lg border text-xs font-mono font-semibold transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
-                isLight ? 'bg-white border-gray-200 text-gray-800' : 'bg-zinc-950 border-zinc-700 text-zinc-200'
+                isLight ? 'bg-white border-gray-200 text-gray-800' : 'bg-[#090A0F] border-slate-800/80 text-slate-200'
               }`}
             >
               <option value="ALL">All Currencies</option>
@@ -631,7 +631,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
           {/* Search Box */}
           <div className="relative w-full sm:w-64">
-            <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${isLight ? 'text-gray-400' : 'text-zinc-300'}`} />
+            <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${isLight ? 'text-gray-400' : 'text-slate-400'}`} />
             <input
               type="text"
               value={searchQuery}
@@ -640,7 +640,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               className={`w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
                 isLight
                   ? 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
-                  : 'bg-zinc-950 border-zinc-700 text-white placeholder-zinc-500'
+                  : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
               }`}
             />
           </div>
@@ -650,7 +650,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
       {/* 4. Modern Vendor Bills Table */}
       <div
         className={`rounded-xl border overflow-hidden ${
-          isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-zinc-900/90 border-zinc-800'
+          isLight ? 'bg-white border-gray-200/90 shadow-sm' : 'bg-[#12141C] border-slate-800/80'
         }`}
       >
         <div className="overflow-x-auto">
@@ -658,7 +658,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
             <thead>
               <tr
                 className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-zinc-800 bg-zinc-800/50 text-zinc-400'
+                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
                 }`}
               >
                 <th className="py-3 px-4">Bill &amp; Invoice #</th>
@@ -671,10 +671,10 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-zinc-800'}`}>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
               {filteredBills.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className={`py-12 text-center text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                  <td colSpan={8} className={`py-12 text-center text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                     <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     No vendor bills match the current filters.
                   </td>
@@ -691,10 +691,10 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                       key={bill.id}
                       className={`transition-colors ${
                         bill.status === 'VOID'
-                          ? 'opacity-60 bg-gray-50/40 dark:bg-zinc-900/40'
+                          ? 'opacity-60 bg-gray-50/40 dark:bg-[#090A0F]/60'
                           : isLight
                           ? 'hover:bg-gray-50/80'
-                          : 'hover:bg-zinc-800/40'
+                          : 'hover:bg-slate-900/60'
                       }`}
                     >
                       {/* Bill ID & Official Invoice Number */}
@@ -702,20 +702,20 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                         <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
                           {bill.id}
                         </div>
-                        <div className={`text-[11px] font-mono ${isLight ? 'text-gray-700' : 'text-zinc-300'}`}>
+                        <div className={`text-[11px] font-mono ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                           {bill.billNumber}
                         </div>
-                        <div className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-zinc-300'}`}>
+                        <div className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-slate-400'}`}>
                           Issued: {bill.billDate}
                         </div>
                       </td>
 
                       {/* Vendor & Store */}
                       <td className="py-3.5 px-4">
-                        <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                        <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                           {bill.supplierName}
                         </div>
-                        <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                        <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           {bill.storeName}
                         </div>
                       </td>
@@ -724,11 +724,11 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                       <td className="py-3.5 px-4 font-mono text-[11px]">
                         <div className="flex items-center gap-1.5">
                           <span className="text-blue-600 dark:text-blue-400 font-semibold">{bill.poId}</span>
-                          <span className="text-zinc-400">→</span>
+                          <span className="text-slate-400">→</span>
                           <span className="text-emerald-600 dark:text-emerald-400">{bill.goodsReceiptId}</span>
                         </div>
                         {bill.deliveryNoteNumber && (
-                          <div className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-zinc-300'} mt-0.5`}>
+                          <div className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-slate-400'} mt-0.5`}>
                             SJ: {bill.deliveryNoteNumber}
                           </div>
                         )}
@@ -739,7 +739,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                         <div className="flex items-center gap-1.5">
                           <span
                             className={`font-mono text-xs font-medium ${
-                              isOverdue ? 'text-rose-600 font-bold dark:text-rose-400' : isLight ? 'text-gray-900' : 'text-white'
+                              isOverdue ? 'text-rose-600 font-bold dark:text-rose-400' : isLight ? 'text-gray-900' : 'text-slate-100'
                             }`}
                           >
                             {bill.dueDate}
@@ -750,22 +750,22 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                             </span>
                           )}
                         </div>
-                        <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                        <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           Terms: {bill.paymentTerms}
                         </div>
                       </td>
 
                       {/* Invoice Amount (Multi-currency & Statutory IDR) */}
                       <td className="py-3.5 px-4 text-right">
-                        <div className={`font-mono font-bold text-xs ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                        <div className={`font-mono font-bold text-xs ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                           {formatAmount(bill.grandTotal, bill.currency)}
                         </div>
                         {bill.currency !== 'IDR' && (
-                          <div className="text-[10px] font-mono text-zinc-400">
+                          <div className="text-[10px] font-mono text-slate-400">
                             ≈ {formatIDR(bill.grandTotalIDR)}
                           </div>
                         )}
-                        <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-zinc-300'}`}>
+                        <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           {bill.taxPercent > 0 ? `Incl. ${bill.taxPercent}% PPN` : 'Tax Exempt (0%)'}
                         </div>
                       </td>
@@ -793,7 +793,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                             <span>Price Variance</span>
                           </div>
                         ) : (
-                          <div className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
+                          <div className="inline-flex items-center gap-1 text-[11px] text-slate-400">
                             <span>Draft</span>
                           </div>
                         )}
@@ -802,7 +802,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                       {/* Payment Status */}
                       <td className="py-3.5 px-4 text-center">
                         {bill.status === 'VOID' ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/30">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30">
                             Cancelled
                           </span>
                         ) : (
@@ -827,7 +827,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                           </span>
                         )}
                         {bill.status !== 'VOID' && bill.paymentStatus === 'PARTIALLY_PAID' && (
-                          <div className="text-[10px] font-mono text-zinc-400 mt-0.5">
+                          <div className="text-[10px] font-mono text-slate-400 mt-0.5">
                             Due: {formatAmount(bill.remainingDue, bill.currency)}
                           </div>
                         )}
@@ -886,7 +886,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                             type="button"
                             onClick={() => setSelectedBillForDetail(bill)}
                             className={`p-1.5 rounded transition-colors ${
-                              isLight ? 'hover:bg-gray-100 text-gray-600' : 'hover:bg-zinc-800 text-zinc-300'
+                              isLight ? 'hover:bg-gray-100 text-gray-600' : 'hover:bg-slate-800 text-slate-300'
                             }`}
                             title="View Full Bill & GL Audit"
                           >
@@ -909,28 +909,28 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsCreateModalOpen(false);
           }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
         >
           <div
             className={`w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden my-auto ${
-              isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
+              isLight ? 'bg-white border-gray-200' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
             {/* Modal Header */}
-            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-zinc-800 bg-zinc-900/60'}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-slate-800/80 bg-[#090A0F]'}`}>
               <div>
-                <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   <FileCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   New Vendor Bill (3-Way Matching Engine)
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                   Reconcile purchase order terms with physical goods receipt records and automate Accounts Payable liabilities
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className={`p-1.5 rounded-lg ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'}`}
+                className={`p-1.5 rounded-lg ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-slate-800 text-slate-400'}`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -941,13 +941,13 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               {/* Step 1: Select Upstream PO & Goods Receipt */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">1. Purchase Order Reference *</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">1. Purchase Order Reference *</label>
                   <select
                     value={selectedPoId}
                     onChange={(e) => handleSelectPO(e.target.value)}
                     required
                     className={`w-full p-2 rounded-lg border text-xs font-mono font-semibold focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="">-- Choose Purchase Order --</option>
@@ -960,13 +960,13 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">2. Linked Goods Receipt (Dock Inward) *</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">2. Linked Goods Receipt (Dock Inward) *</label>
                   <select
                     value={selectedGrId}
                     onChange={(e) => setSelectedGrId(e.target.value)}
                     required
                     className={`w-full p-2 rounded-lg border text-xs font-mono font-semibold focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="">-- Choose Goods Receipt Record --</option>
@@ -982,7 +982,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               {/* Step 2: Invoice Details & Multi-Currency */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Supplier Invoice Number *</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Supplier Invoice Number *</label>
                   <input
                     type="text"
                     required
@@ -990,31 +990,31 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                     onChange={(e) => setInvoiceNumberInput(e.target.value)}
                     placeholder="e.g. INV-KSB-2026-088"
                     className={`w-full p-2 rounded-lg border font-mono text-xs focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                     }`}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Invoice Date *</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Invoice Date *</label>
                   <input
                     type="date"
                     required
                     value={billDateInput}
                     onChange={(e) => setBillDateInput(e.target.value)}
                     className={`w-full p-2 rounded-lg border font-mono text-xs focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Payment Terms</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Payment Terms</label>
                   <select
                     value={paymentTermsInput}
                     onChange={(e) => setPaymentTermsInput(e.target.value as any)}
                     className={`w-full p-2 rounded-lg border text-xs focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="COD">COD (Immediate Cash)</option>
@@ -1026,12 +1026,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Currency</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Currency</label>
                   <select
                     value={currencyInput}
                     onChange={(e) => setCurrencyInput(e.target.value as any)}
                     className={`w-full p-2 rounded-lg border text-xs font-mono font-semibold focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="IDR">IDR (Rp) • Local Base</option>
@@ -1045,12 +1045,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               {/* Tax & PPN Configuration */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Indonesian VAT / PPN Calculation</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Indonesian VAT / PPN Calculation</label>
                   <select
                     value={taxPercentInput}
                     onChange={(e) => setTaxPercentInput(Number(e.target.value))}
                     className={`w-full p-2 rounded-lg border text-xs focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value={11}>Standard PPN 11% (Commercial Processed)</option>
@@ -1059,14 +1059,14 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Auditor / Accounting Notes</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Auditor / Accounting Notes</label>
                   <input
                     type="text"
                     value={billNotesInput}
                     onChange={(e) => setBillNotesInput(e.target.value)}
                     placeholder="e.g. Verified cold-chain receipt dock 2"
                     className={`w-full p-2 rounded-lg border text-xs focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                     }`}
                   />
                 </div>
@@ -1076,14 +1076,14 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               {activeSelectedPO && (
                 <div
                   className={`p-4 rounded-xl border space-y-3 ${
-                    isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-950 border-zinc-800'
+                    isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs uppercase tracking-wider text-zinc-400">
+                    <span className="font-bold text-xs uppercase tracking-wider text-slate-400">
                       3-Way Line Item Match Breakdown
                     </span>
-                    <span className="text-[11px] text-zinc-400">
+                    <span className="text-[11px] text-slate-400">
                       PO: <strong className="text-blue-500">{activeSelectedPO.id}</strong> • GR: <strong className="text-emerald-500">{activeSelectedGR?.id || 'None'}</strong>
                     </span>
                   </div>
@@ -1091,7 +1091,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead>
-                        <tr className="border-b text-[10px] uppercase font-semibold text-zinc-400">
+                        <tr className="border-b border-slate-200 dark:border-slate-800/80 text-[10px] uppercase font-semibold text-slate-400">
                           <th className="py-2">Item Description</th>
                           <th className="py-2 text-center">PO Qty</th>
                           <th className="py-2 text-center">GR Inward Qty</th>
@@ -1100,7 +1100,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                           <th className="py-2 text-right">Line Total</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-zinc-800">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80">
                         {activeSelectedPO.items.map((it) => {
                           const grItem = activeSelectedGR?.items.find((g) => g.sku === it.sku);
                           const grQty = grItem ? grItem.quantityReceived : 0;
@@ -1116,7 +1116,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                             <tr key={it.sku} className="py-2">
                               <td className="py-2.5">
                                 <div className="font-semibold">{it.productName}</div>
-                                <div className="font-mono text-[10px] text-zinc-400">{it.sku}</div>
+                                <div className="font-mono text-[10px] text-slate-400">{it.sku}</div>
                               </td>
                               <td className="py-2.5 text-center font-mono">{it.orderedQuantity}</td>
                               <td className="py-2.5 text-center font-mono text-emerald-600 dark:text-emerald-400 font-bold">
@@ -1178,18 +1178,18 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               {activeSelectedPO && (
                 <div
                   className={`p-3.5 rounded-xl border text-xs font-mono space-y-1.5 ${
-                    isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-zinc-950 border-zinc-800 text-zinc-200'
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-800' : 'bg-[#090A0F] border-slate-800/80 text-slate-200'
                   }`}
                 >
                   <div className="flex justify-between">
-                    <span className="font-sans text-zinc-500">Subtotal ({currencyInput}):</span>
+                    <span className="font-sans text-slate-500 dark:text-slate-400">Subtotal ({currencyInput}):</span>
                     <span className="font-semibold">{formatAmount(draftTotals.subtotal, currencyInput)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="font-sans text-zinc-500">PPN Input Tax ({taxPercentInput}%):</span>
+                    <span className="font-sans text-slate-500 dark:text-slate-400">PPN Input Tax ({taxPercentInput}%):</span>
                     <span className="font-semibold">{formatAmount(draftTotals.taxAmount, currencyInput)}</span>
                   </div>
-                  <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-zinc-800 text-sm font-bold text-[#0F4C3A] dark:text-emerald-400">
+                  <div className="flex justify-between pt-1.5 border-t border-gray-200 dark:border-slate-800/80 text-sm font-bold text-[#0F4C3A] dark:text-emerald-400">
                     <span className="font-sans">Grand Total AP Liability:</span>
                     <span>
                       {formatAmount(draftTotals.grandTotal, currencyInput)}
@@ -1251,12 +1251,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               )}
 
               {/* Modal Actions */}
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-zinc-800">
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
                   className={`px-4 py-2 rounded-lg font-medium ${
-                    isLight ? 'hover:bg-gray-100 text-gray-700' : 'hover:bg-zinc-800 text-zinc-300'
+                    isLight ? 'hover:bg-gray-100 text-gray-700' : 'hover:bg-slate-800 text-slate-300'
                   }`}
                 >
                   Cancel
@@ -1281,27 +1281,27 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
           onClick={(e) => {
             if (e.target === e.currentTarget) setBillToPay(null);
           }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
         >
           <div
             className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden my-auto max-h-[90vh] overflow-y-auto ${
-              isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
+              isLight ? 'bg-white border-gray-200' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-zinc-800 bg-zinc-900/60'}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-slate-800/80 bg-[#090A0F]'}`}>
               <div>
-                <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   Record Vendor Payment (Disbursement)
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                   Settling {billToPay.billNumber} • {billToPay.supplierName}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setBillToPay(null)}
-                className={`p-1.5 rounded-lg ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'}`}
+                className={`p-1.5 rounded-lg ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-slate-800 text-slate-400'}`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1310,17 +1310,17 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
             <form onSubmit={handleSubmitPayment} className="p-6 space-y-4 text-xs">
               <div
                 className={`p-3 rounded-lg border flex items-center justify-between ${
-                  isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-950 border-zinc-800'
+                  isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
                 }`}
               >
                 <div>
-                  <div className="text-[10px] text-zinc-400 uppercase">Total Bill Balance</div>
+                  <div className="text-[10px] text-slate-400 uppercase">Total Bill Balance</div>
                   <div className="text-base font-bold font-mono">
                     {formatAmount(billToPay.grandTotal, billToPay.currency)}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] text-zinc-400 uppercase">Remaining Due</div>
+                  <div className="text-[10px] text-slate-400 uppercase">Remaining Due</div>
                   <div className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
                     {formatAmount(billToPay.remainingDue, billToPay.currency)}
                   </div>
@@ -1343,20 +1343,20 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                         <RotateCcw className="w-3.5 h-3.5" />
                         Available Return-to-Vendor (RTV) Credit Notes ({availableRtv.length})
                       </span>
-                      <span className="text-[10px] text-zinc-400">Offset against AP invoice</span>
+                      <span className="text-[10px] text-slate-400">Offset against AP invoice</span>
                     </div>
 
                     <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                       {availableRtv.map((cn) => (
                         <div
                           key={cn.creditNoteId}
-                          className="flex items-center justify-between p-2 rounded-lg bg-white/80 dark:bg-zinc-900 border border-amber-200 dark:border-amber-900/50"
+                          className="flex items-center justify-between p-2 rounded-lg bg-white/80 dark:bg-[#090A0F] border border-amber-200 dark:border-amber-800/50"
                         >
                           <div>
-                            <div className="font-bold text-slate-800 dark:text-zinc-200 font-mono">
+                            <div className="font-bold text-slate-800 dark:text-slate-200 font-mono">
                               {cn.creditNoteId} &bull; {cn.productName}
                             </div>
-                            <div className="text-[10px] text-zinc-400">
+                            <div className="text-[10px] text-slate-400">
                               RMA: {cn.rmaNumber} &bull; Credit: {formatIDR(cn.totalCreditIDR)}
                             </div>
                           </div>
@@ -1376,7 +1376,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               })()}
 
               <div>
-                <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Settlement Payment Amount ({billToPay.currency}) *</label>
+                <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Settlement Payment Amount ({billToPay.currency}) *</label>
                 <input
                   type="number"
                   step="any"
@@ -1386,19 +1386,19 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                   value={payAmountInput}
                   onChange={(e) => setPayAmountInput(Number(e.target.value))}
                   className={`w-full p-2.5 rounded-lg border font-mono text-sm font-bold focus:ring-1 focus:ring-emerald-500 ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Disbursement Channel</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Disbursement Channel</label>
                   <select
                     value={payMethodInput}
                     onChange={(e) => setPayMethodInput(e.target.value as any)}
                     className={`w-full p-2 rounded-lg border text-xs focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="BANK_TRANSFER">Bank BCA Operational Clearing (1020)</option>
@@ -1408,7 +1408,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Payment Reference / Trx ID *</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Payment Reference / Trx ID *</label>
                   <input
                     type="text"
                     required
@@ -1416,21 +1416,21 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                     onChange={(e) => setPayRefInput(e.target.value)}
                     placeholder="e.g. TRF-BCA-98124"
                     className={`w-full p-2 rounded-lg border font-mono text-xs focus:ring-1 focus:ring-emerald-500 ${
-                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                     }`}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">Settlement Notes</label>
+                <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Settlement Notes</label>
                 <input
                   type="text"
                   value={payNotesInput}
                   onChange={(e) => setPayNotesInput(e.target.value)}
                   placeholder="e.g. Cleared via corporate online treasury"
                   className={`w-full p-2 rounded-lg border text-xs focus:ring-1 focus:ring-emerald-500 ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
                   }`}
                 />
               </div>
@@ -1445,12 +1445,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 <div>• <strong>Credit {payMethodInput === 'CASH' ? '1010 (Cash on Hand)' : '1020 (Bank BCA Clearing)'}</strong>: -Cash asset disbursed</div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-zinc-800">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => setBillToPay(null)}
                   className={`px-4 py-2 rounded-lg font-medium ${
-                    isLight ? 'hover:bg-gray-100 text-gray-700' : 'hover:bg-zinc-800 text-zinc-300'
+                    isLight ? 'hover:bg-gray-100 text-gray-700' : 'hover:bg-slate-800 text-slate-300'
                   }`}
                 >
                   Cancel
@@ -1475,20 +1475,20 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedBillForDetail(null);
           }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
         >
           <div
             className={`w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden my-auto ${
-              isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
+              isLight ? 'bg-white border-gray-200' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-zinc-800 bg-zinc-900/60'}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-gray-50/70' : 'border-slate-800/80 bg-[#090A0F]'}`}>
               <div>
-                <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+                <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   <Receipt className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   Official Vendor Bill Audit Voucher
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5 font-mono`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5 font-mono`}>
                   {selectedBillForDetail.id} • {selectedBillForDetail.billNumber}
                 </p>
               </div>
@@ -1503,7 +1503,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                     })
                   }
                   className={`p-1.5 rounded-lg border text-xs flex items-center gap-1 ${
-                    isLight ? 'bg-white border-gray-300 hover:bg-gray-100' : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700'
+                    isLight ? 'bg-white border-gray-300 hover:bg-gray-100' : 'bg-slate-900/90 border-slate-800/80 hover:bg-slate-800'
                   }`}
                 >
                   <Printer className="w-3.5 h-3.5" />
@@ -1512,7 +1512,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setSelectedBillForDetail(null)}
-                  className={`p-1.5 rounded-lg ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'}`}
+                  className={`p-1.5 rounded-lg ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-slate-800 text-slate-400'}`}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1521,47 +1521,47 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
             <div className="p-6 overflow-y-auto space-y-5 text-xs">
               {/* Header Info */}
-              <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-200 dark:border-zinc-800">
+              <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-200 dark:border-slate-800/80">
                 <div>
-                  <div className="text-[10px] text-zinc-400 uppercase font-semibold">Vendor Supplier</div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Vendor Supplier</div>
                   <div className="text-sm font-bold mt-0.5">{selectedBillForDetail.supplierName}</div>
-                  <div className="text-[11px] text-zinc-400">{selectedBillForDetail.supplierContact}</div>
+                  <div className="text-[11px] text-slate-400">{selectedBillForDetail.supplierContact}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] text-zinc-400 uppercase font-semibold">Receiving Store Outlet</div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Receiving Store Outlet</div>
                   <div className="text-sm font-bold mt-0.5">{selectedBillForDetail.storeName}</div>
-                  <div className="text-[11px] text-zinc-400">PO #{selectedBillForDetail.poId} • GR #{selectedBillForDetail.goodsReceiptId}</div>
+                  <div className="text-[11px] text-slate-400">PO #{selectedBillForDetail.poId} • GR #{selectedBillForDetail.goodsReceiptId}</div>
                 </div>
               </div>
 
               {/* 3-Way Match Verification Card */}
               <div
                 className={`p-3.5 rounded-xl border flex items-center justify-between ${
-                  isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-950 border-zinc-800'
+                  isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
                 }`}
               >
                 <div>
-                  <div className="text-[10px] text-zinc-400 uppercase font-semibold">3-Way Match Status</div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">3-Way Match Status</div>
                   <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                     {selectedBillForDetail.status}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-zinc-400 uppercase font-semibold">Payment Terms</div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Payment Terms</div>
                   <div className="text-sm font-bold mt-0.5">{selectedBillForDetail.paymentTerms}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] text-zinc-400 uppercase font-semibold">Due Date</div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Due Date</div>
                   <div className="text-sm font-mono font-bold mt-0.5">{selectedBillForDetail.dueDate}</div>
                 </div>
               </div>
 
               {/* Items Table */}
               <div>
-                <div className="text-[10px] uppercase font-bold text-zinc-400 mb-2">Reconciled Line Items</div>
-                <table className="w-full text-left text-xs border border-slate-200 dark:border-zinc-800 rounded-lg overflow-hidden">
-                  <thead className={isLight ? 'bg-slate-100 text-slate-600' : 'bg-zinc-800/80 text-zinc-300'}>
-                    <tr className="border-b border-slate-200 dark:border-zinc-800 text-[10px] uppercase">
+                <div className="text-[10px] uppercase font-bold text-slate-400 mb-2">Reconciled Line Items</div>
+                <table className="w-full text-left text-xs border border-slate-200 dark:border-slate-800/80 rounded-lg overflow-hidden">
+                  <thead className={isLight ? 'bg-slate-100 text-slate-600' : 'bg-[#090A0F] text-slate-300'}>
+                    <tr className="border-b border-slate-200 dark:border-slate-800/80 text-[10px] uppercase">
                       <th className="py-2 px-3">Item / SKU</th>
                       <th className="py-2 px-3 text-center">PO Qty</th>
                       <th className="py-2 px-3 text-center">GR Qty</th>
@@ -1570,12 +1570,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                       <th className="py-2 px-3 text-right">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80">
                     {selectedBillForDetail.items.map((it) => (
                       <tr key={it.sku}>
                         <td className="py-2 px-3">
                           <div className="font-semibold">{it.productName}</div>
-                          <div className="font-mono text-[10px] text-zinc-400">{it.sku}</div>
+                          <div className="font-mono text-[10px] text-slate-400">{it.sku}</div>
                         </td>
                         <td className="py-2 px-3 text-center font-mono">{it.poQuantity}</td>
                         <td className="py-2 px-3 text-center font-mono font-bold text-emerald-600">{it.grQuantity}</td>
@@ -1593,25 +1593,25 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               </div>
 
               {/* Financial Totals */}
-              <div className="border-t border-slate-200 dark:border-zinc-800 pt-3 space-y-1.5 text-right font-mono">
-                <div className="flex justify-between text-zinc-400">
+              <div className="border-t border-slate-200 dark:border-slate-800/80 pt-3 space-y-1.5 text-right font-mono">
+                <div className="flex justify-between text-slate-400">
                   <span>Subtotal:</span>
                   <span>{formatAmount(selectedBillForDetail.subtotal, selectedBillForDetail.currency)}</span>
                 </div>
-                <div className="flex justify-between text-zinc-400">
+                <div className="flex justify-between text-slate-400">
                   <span>PPN ({selectedBillForDetail.taxPercent}%):</span>
                   <span>{formatAmount(selectedBillForDetail.taxAmount, selectedBillForDetail.currency)}</span>
                 </div>
-                <div className="flex justify-between text-sm font-bold text-emerald-600 dark:text-emerald-400 pt-1 border-t border-slate-200 dark:border-zinc-800">
+                <div className="flex justify-between text-sm font-bold text-emerald-600 dark:text-emerald-400 pt-1 border-t border-slate-200 dark:border-slate-800/80">
                   <span>Grand Total:</span>
                   <span>{formatAmount(selectedBillForDetail.grandTotal, selectedBillForDetail.currency)}</span>
                 </div>
                 {selectedBillForDetail.currency !== 'IDR' && (
-                  <div className="text-[11px] text-zinc-400">
+                  <div className="text-[11px] text-slate-400">
                     Base Conversion (Statutory IDR): {formatIDR(selectedBillForDetail.grandTotalIDR)}
                   </div>
                 )}
-                <div className="flex justify-between text-zinc-400 pt-1">
+                <div className="flex justify-between text-slate-400 pt-1">
                   <span>Amount Settled / Paid:</span>
                   <span className="text-emerald-500 font-bold">
                     {formatAmount(selectedBillForDetail.amountPaid, selectedBillForDetail.currency)}
@@ -1619,7 +1619,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 </div>
                 <div className="flex justify-between font-bold">
                   <span>Outstanding Balance Due:</span>
-                  <span className={selectedBillForDetail.remainingDue > 0 ? 'text-amber-500' : 'text-zinc-300'}>
+                  <span className={selectedBillForDetail.remainingDue > 0 ? 'text-amber-500' : 'text-slate-300'}>
                     {formatAmount(selectedBillForDetail.remainingDue, selectedBillForDetail.currency)}
                   </span>
                 </div>
@@ -1629,10 +1629,10 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
               {selectedBillForDetail.glEntryIds && selectedBillForDetail.glEntryIds.length > 0 && (
                 <div
                   className={`p-3 rounded-lg border font-mono text-[11px] space-y-1 ${
-                    isLight ? 'bg-slate-50 border-slate-200' : 'bg-zinc-950 border-zinc-800'
+                    isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
                   }`}
                 >
-                  <div className="font-bold text-zinc-400 uppercase text-[10px]">General Ledger Audit Links</div>
+                  <div className="font-bold text-slate-400 uppercase text-[10px]">General Ledger Audit Links</div>
                   <div className="text-blue-600 dark:text-blue-400">
                     Vouchers: {selectedBillForDetail.glEntryIds?.length ? selectedBillForDetail.glEntryIds.join(', ') : 'N/A'}
                   </div>
@@ -1650,27 +1650,27 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
           onClick={(e) => {
             if (e.target === e.currentTarget) setBillToVoid(null);
           }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
         >
           <div
             className={`w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden my-auto ${
-              isLight ? 'bg-white border-gray-200' : 'bg-zinc-900 border-zinc-800 text-white'
+              isLight ? 'bg-white border-gray-200' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
-            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-rose-50/60' : 'border-zinc-800 bg-rose-950/20'}`}>
+            <div className={`p-5 border-b flex items-center justify-between ${isLight ? 'border-gray-200 bg-rose-50/60' : 'border-slate-800/80 bg-rose-950/20'}`}>
               <div>
                 <h3 className="text-base font-bold flex items-center gap-2 text-rose-700 dark:text-rose-400">
                   <Ban className="w-4 h-4" />
                   Void Vendor Bill &amp; Reverse GL
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-600' : 'text-zinc-300'} mt-0.5 font-mono`}>
+                <p className={`text-xs ${isLight ? 'text-gray-600' : 'text-slate-400'} mt-0.5 font-mono`}>
                   {billToVoid.id} • {billToVoid.billNumber}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setBillToVoid(null)}
-                className={`p-1.5 rounded-lg ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'}`}
+                className={`p-1.5 rounded-lg ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-slate-800 text-slate-400'}`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1682,7 +1682,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 Voiding <strong>{billToVoid.billNumber}</strong> ({formatAmount(billToVoid.grandTotal, billToVoid.currency)}) will post immutable reversing counter-entries to the General Ledger and clear pending Accounts Payable (#2010).
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-zinc-200">
+                <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">
                   Void / Cancellation Reason *
                 </label>
                 <input
@@ -1691,16 +1691,16 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                   value={voidReasonInput}
                   onChange={(e) => setVoidReasonInput(e.target.value)}
                   className={`w-full p-2 rounded-lg border text-xs focus:ring-1 focus:ring-rose-500 ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-950 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
               </div>
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-zinc-800">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => setBillToVoid(null)}
                   className={`px-4 py-2 rounded-lg font-medium ${
-                    isLight ? 'hover:bg-gray-100 text-gray-700' : 'hover:bg-zinc-800 text-zinc-300'
+                    isLight ? 'hover:bg-gray-100 text-gray-700' : 'hover:bg-slate-800 text-slate-300'
                   }`}
                 >
                   Keep Active

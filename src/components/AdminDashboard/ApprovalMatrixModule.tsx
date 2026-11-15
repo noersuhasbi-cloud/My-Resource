@@ -176,7 +176,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
   const cardClass = `rounded-2xl border transition-all ${
     isLight
       ? 'bg-white border-gray-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.03)]'
-      : 'bg-zinc-900/90 border-zinc-800 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
+      : 'bg-[#12141C] border-slate-800/80 shadow-[0_4px_16px_rgba(0,0,0,0.4)]'
   }`;
 
   return (
@@ -197,10 +197,10 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                   Multi-Tier Authorization Matrix
                 </span>
               </div>
-              <h1 className={`text-xl font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+              <h1 className={`text-xl font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 Approval Workflow &amp; Threshold Matrix
               </h1>
-              <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? "text-slate-600" : "text-zinc-300"}`}>
+              <p className={`text-xs mt-0.5 max-w-2xl ${isLight ? "text-slate-600" : "text-slate-400"}`}>
                 Configure authorization levels for Procurement Requests, Purchase Orders, Physical Stocktake Adjustments, and Waste Write-Offs with strict audit sign-offs.
               </p>
             </div>
@@ -214,7 +214,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:bg-gray-100'
-                  : 'text-zinc-400 hover:bg-zinc-800'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
@@ -228,7 +228,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                   ? 'bg-[#0F4C3A] text-white shadow-xs'
                   : isLight
                   ? 'text-gray-600 hover:bg-gray-100'
-                  : 'text-zinc-400 hover:bg-zinc-800'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
@@ -252,14 +252,14 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
       {/* ========================================================================= */}
       {subTab === 'queue' && (
         <div className={cardClass}>
-          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-zinc-800 bg-zinc-900/50'}`}>
+          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'} flex items-center gap-2`}>
+                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                   <CheckCircle2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                   <span>Pending Document Approvals</span>
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                   Documents routed to your managerial tier for review and clearance
                 </p>
               </div>
@@ -269,7 +269,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                   value={selectedModule}
                   onChange={(e) => setSelectedModule(e.target.value as any)}
                   className={`px-3 py-1.5 text-xs rounded-xl border font-semibold ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-white'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   <option value="ALL">All Modules</option>
@@ -293,7 +293,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                           ? 'bg-[#0F4C3A] text-white shadow-xs'
                           : isLight
                           ? 'text-gray-600 hover:bg-gray-100'
-                          : 'text-zinc-400 hover:bg-zinc-800'
+                          : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
                       }`}
                     >
                       {st}
@@ -304,9 +304,9 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
             </div>
           </div>
 
-          <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+          <div className="divide-y divide-gray-100 dark:divide-slate-800/80">
             {filteredQueue.length === 0 ? (
-              <div className="py-12 text-center text-xs text-gray-500 dark:text-zinc-300">
+              <div className="py-12 text-center text-xs text-gray-500 dark:text-slate-400">
                 No approval requests matching current criteria.
               </div>
             ) : (
@@ -314,7 +314,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                 <div
                   key={req.id}
                   className={`p-5 transition-colors ${
-                    isLight ? 'hover:bg-gray-50/60' : 'hover:bg-zinc-800/40'
+                    isLight ? 'hover:bg-gray-50/60' : 'hover:bg-slate-900/60'
                   }`}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -340,43 +340,43 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                       </div>
 
                       <h4 className="text-sm font-bold">{req.documentTitle}</h4>
-                      <p className={`text-xs ${isLight ? "text-slate-600" : "text-zinc-300"}`}>
-                        Requested by <strong className="text-gray-900 dark:text-white">{req.requestedBy}</strong> at {req.storeName} ({new Date(req.requestedAt).toLocaleDateString()})
+                      <p className={`text-xs ${isLight ? "text-slate-600" : "text-slate-400"}`}>
+                        Requested by <strong className="text-gray-900 dark:text-slate-100">{req.requestedBy}</strong> at {req.storeName} ({new Date(req.requestedAt).toLocaleDateString()})
                       </p>
 
                       {/* Tier Step Progress Indicator */}
                       <div className="flex items-center gap-2 pt-2 text-xs">
-                        <span className="font-semibold text-slate-700 dark:text-zinc-300">Authorization Step:</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Authorization Step:</span>
                         <div className="flex items-center gap-1.5 font-mono">
                           <span
                             className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
                               req.currentTierLevel >= 1
                                 ? 'bg-emerald-500 text-white'
-                                : 'bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300'
+                                : 'bg-gray-200 dark:bg-slate-900/90 text-gray-700 dark:text-slate-300'
                             }`}
                           >
                             Tier 1 (Supervisor)
                           </span>
-                          <ArrowRight className="w-3 h-3 text-gray-400" />
+                          <ArrowRight className="w-3 h-3 text-gray-400 dark:text-slate-500" />
                           <span
                             className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
                               req.currentTierLevel >= 2
                                 ? 'bg-emerald-500 text-white'
                                 : req.requiredTierLevel >= 2
-                                ? 'bg-amber-500 text-zinc-950 font-black animate-pulse'
-                                : 'bg-gray-200 dark:bg-zinc-700 text-gray-500 opacity-60'
+                                ? 'bg-amber-500 text-slate-950 font-black animate-pulse'
+                                : 'bg-gray-200 dark:bg-slate-900/90 text-gray-500 dark:text-slate-400 opacity-60'
                             }`}
                           >
                             Tier 2 (Branch GM)
                           </span>
                           {req.requiredTierLevel >= 3 && (
                             <>
-                              <ArrowRight className="w-3 h-3 text-gray-400" />
+                              <ArrowRight className="w-3 h-3 text-gray-400 dark:text-slate-500" />
                               <span
                                 className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
                                   req.currentTierLevel >= 3
                                     ? 'bg-emerald-500 text-white'
-                                    : 'bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300'
+                                    : 'bg-gray-200 dark:bg-slate-900/90 text-gray-700 dark:text-slate-300'
                                 }`}
                               >
                                 Tier 3 (CFO / Director)
@@ -390,7 +390,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                       {req.history.length > 0 && (
                         <div className="pt-2 pl-3 border-l-2 border-emerald-500 text-xs space-y-1">
                           {req.history.map((h, idx) => (
-                            <div key={idx} className="text-[11px] text-gray-600 dark:text-zinc-300">
+                            <div key={idx} className="text-[11px] text-gray-600 dark:text-slate-300">
                               <strong className="text-emerald-700 dark:text-emerald-400">{h.action}</strong> by {h.approverName} ({h.approverRole}): &quot;{h.comments}&quot;
                             </div>
                           ))}
@@ -427,7 +427,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                         </div>
                       )}
                       {req.status === 'PENDING' && !canDecideAndEditRules && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 dark:bg-slate-900/90 text-gray-500 dark:text-slate-400 border border-transparent dark:border-slate-800/80">
                           <Lock className="w-3 h-3" /> Read-Only Queue
                         </span>
                       )}
@@ -445,12 +445,12 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
       {/* ========================================================================= */}
       {subTab === 'rules' && (
         <div className={`${cardClass} p-5 sm:p-6 space-y-6`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4 border-gray-100 dark:border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4 border-gray-100 dark:border-slate-800/80">
             <div>
-              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-white'}`}>
+              <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 Authorization Threshold Matrix
               </h3>
-              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-zinc-300'} mt-0.5`}>
+              <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                 Set multi-tier financial thresholds and managerial role clearances per operational domain
               </p>
             </div>
@@ -470,7 +470,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
               <div
                 key={rule.id}
                 className={`p-4 rounded-xl border space-y-3 ${
-                  isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-zinc-800/60 border-zinc-700'
+                  isLight ? 'bg-gray-50/70 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
                 }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -479,7 +479,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                       Tier {rule.tierLevel}
                     </span>
                     <span className="font-bold text-xs">{rule.tierName}</span>
-                    <span className="text-[11px] text-gray-500">({rule.module.replace(/_/g, ' ')})</span>
+                    <span className="text-[11px] text-gray-500 dark:text-slate-400">({rule.module.replace(/_/g, ' ')})</span>
                   </div>
 
                   <span className="text-xs font-mono font-semibold text-emerald-700 dark:text-emerald-400">
@@ -489,7 +489,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-200 mb-1">Required Approver Role</label>
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Required Approver Role</label>
                     <select
                       value={rule.requiredRole}
                       disabled={!canDecideAndEditRules}
@@ -499,7 +499,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                         setRulesState(copy);
                       }}
                       className={`w-full px-2.5 py-1.5 rounded-lg border text-xs disabled:opacity-60 ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-600'
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                       }`}
                     >
                       <option value="store_manager">Store Manager / Supervisor</option>
@@ -510,7 +510,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-200 mb-1">Min Threshold (IDR)</label>
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Min Threshold (IDR)</label>
                     <input
                       type="number"
                       disabled={!canDecideAndEditRules}
@@ -521,13 +521,13 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                         setRulesState(copy);
                       }}
                       className={`w-full px-2.5 py-1.5 rounded-lg border font-mono text-xs disabled:opacity-60 ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-600'
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                       }`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-200 mb-1">Manager PIN Clearance</label>
+                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Manager PIN Clearance</label>
                     <div className="flex items-center gap-2 pt-1.5">
                       <input
                         type="checkbox"
@@ -559,11 +559,11 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
           >
             <div
               className={`w-full max-w-md p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
-                isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-white'
+                isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center gap-2 border-b pb-3 border-gray-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2 border-b pb-3 border-gray-100 dark:border-slate-800/80">
                 {actionType === 'APPROVED' ? (
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                 ) : (
@@ -574,7 +574,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                 </h3>
               </div>
 
-              <p className="text-xs text-gray-600 dark:text-zinc-300">
+              <p className="text-xs text-gray-600 dark:text-slate-300">
                 You are about to execute <strong>{actionType}</strong> on{' '}
                 <strong className="font-mono text-[#0F4C3A] dark:text-emerald-400">
                   {activeActionRequest.documentId}
@@ -583,7 +583,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
               </p>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-200 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Approval Review Commentary
                 </label>
                 <textarea
@@ -591,17 +591,17 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
                   value={actionComment}
                   onChange={(e) => setActionComment(e.target.value)}
                   className={`w-full px-3 py-2 text-xs rounded-xl border ${
-                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-zinc-800 border-zinc-700 text-zinc-100'
+                    isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
                   }`}
                   placeholder="Enter approval review commentary or rationale..."
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 dark:border-zinc-800">
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => setActiveActionRequest(null)}
-                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 text-xs font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800/80 text-xs font-semibold text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>

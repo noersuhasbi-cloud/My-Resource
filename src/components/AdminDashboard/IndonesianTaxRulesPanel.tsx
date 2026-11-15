@@ -79,19 +79,19 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
       className={`rounded-2xl border p-5 sm:p-6 space-y-4 lg:col-span-2 ${
         isLight
           ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-          : 'bg-zinc-900/90 border-zinc-800'
+          : 'bg-[#12141C] border-slate-800/80'
       }`}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-gray-100 dark:border-zinc-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
             <FileSpreadsheet className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
               Indonesian VAT / PPN Tax Engine &amp; 16-Digit NPWP/NIK Validator
             </h3>
-            <p className="text-[11px] text-gray-500 dark:text-zinc-300">
+            <p className="text-[11px] text-gray-500 dark:text-slate-400">
               Configure SKU tax status: BKP Standar (PPN 11%/12%), BKP Dibebaskan PPN (Sembako), and Non-BKP PB1 10%
             </p>
           </div>
@@ -107,7 +107,7 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
             className={`pl-8 pr-3 py-1.5 text-xs rounded-xl border ${
               isLight
                 ? 'bg-white border-gray-300 text-gray-900'
-                : 'bg-zinc-800 border-zinc-700 text-white'
+                : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
             }`}
           />
         </div>
@@ -116,7 +116,7 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
       {/* Quick 16-Digit NPWP / NIK Validator */}
       <div
         className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
-          isLight ? 'bg-gray-50 border-gray-200' : 'bg-zinc-800/40 border-zinc-800'
+          isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
         }`}
       >
         <div className="flex-1 space-y-1">
@@ -128,7 +128,7 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
               onChange={(e) => setNpwpTestInput(e.target.value)}
               placeholder="Enter 16-digit NIK/NPWP or 15-digit legacy NPWP"
               className={`flex-1 max-w-sm px-3 py-1.5 rounded-lg border font-mono ${
-                isLight ? 'bg-white border-gray-300' : 'bg-zinc-900 border-zinc-700'
+                isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
               }`}
             />
             <button
@@ -165,11 +165,11 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
       </div>
 
       {/* Per-SKU Classification Table */}
-      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800 max-h-72 overflow-y-auto">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80 max-h-72 overflow-y-auto">
         <table className="w-full text-left text-xs">
           <thead
             className={`sticky top-0 z-10 border-b text-[10px] font-bold uppercase tracking-wider ${
-              isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+              isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
             }`}
           >
             <tr>
@@ -180,9 +180,9 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
               <th className="py-2.5 px-3 text-center">B2B Pricing Mode</th>
             </tr>
           </thead>
-          <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+          <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
             {filtered.slice(0, 20).map((rule) => (
-              <tr key={rule.sku} className={isLight ? 'hover:bg-gray-50/70' : 'hover:bg-zinc-800/40'}>
+              <tr key={rule.sku} className={isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/60'}>
                 <td className="py-2.5 px-3">
                   <span className="font-mono text-[10px] text-gray-400 block">{rule.sku}</span>
                   <span className="font-semibold">{rule.productName}</span>
@@ -195,7 +195,7 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
                       handleUpdateTax(rule, e.target.value as IndonesianTaxCategory)
                     }
                     className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold disabled:opacity-60 disabled:cursor-not-allowed ${
-                      isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                      isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
                     <option value="BKP_STANDARD">BKP Standar (PPN 11% / 12%)</option>
@@ -212,7 +212,7 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
                         handleUpdateTax(rule, rule.taxCategory, Number(e.target.value))
                       }
                       className={`px-2 py-1 rounded-lg border font-mono disabled:opacity-60 disabled:cursor-not-allowed ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-zinc-800 border-zinc-700'
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                       }`}
                     >
                       <option value={11}>11%</option>
@@ -239,7 +239,7 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
                   </button>
                 </td>
                 <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                  <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/10 text-slate-600 dark:text-zinc-300 border border-slate-500/20">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/10 text-slate-600 dark:text-slate-300 border border-slate-500/20">
                     <ShieldCheck className="w-3 h-3" />
                     Tax-Exclusive (Faktur)
                   </span>

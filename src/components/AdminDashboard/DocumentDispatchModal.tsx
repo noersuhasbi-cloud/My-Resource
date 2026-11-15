@@ -164,24 +164,24 @@ export const DocumentDispatchModal: React.FC<DocumentDispatchModalProps> = ({
   const inputClass = `w-full px-3.5 py-2 text-xs rounded-xl border font-medium transition-all ${
     isLight
       ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600'
-      : 'bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+      : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
   } focus:outline-hidden`;
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[120] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print:hidden"
+      className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print:hidden"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden my-auto ${
-          isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-zinc-900 border-zinc-800 text-zinc-100'
+          isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
         }`}
       >
         {/* Header */}
         <div
           className={`px-5 py-4 border-b flex items-center justify-between ${
-            isLight ? 'bg-gray-50/80 border-gray-200' : 'bg-zinc-900/90 border-zinc-800'
+            isLight ? 'bg-gray-50/80 border-gray-200' : 'bg-[#090A0F]/80 border-slate-800/80'
           }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
@@ -196,7 +196,7 @@ export const DocumentDispatchModal: React.FC<DocumentDispatchModalProps> = ({
               <h3 className="text-sm font-bold truncate">
                 Dispatch {DOC_TYPE_LABELS[docType]}
               </h3>
-              <p className={`text-[11px] font-mono truncate ${isLight ? 'text-gray-500' : 'text-zinc-400'}`}>
+              <p className={`text-[11px] font-mono truncate ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 Ref: {docNumber}
               </p>
             </div>
@@ -205,7 +205,7 @@ export const DocumentDispatchModal: React.FC<DocumentDispatchModalProps> = ({
             type="button"
             onClick={onClose}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-zinc-800 text-zinc-400'
+              isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-slate-900/90 text-slate-400'
             }`}
           >
             <X className="w-4 h-4" />
@@ -216,7 +216,7 @@ export const DocumentDispatchModal: React.FC<DocumentDispatchModalProps> = ({
           {/* Channel Selector */}
           <div>
             <label className="block text-xs font-bold mb-1.5">Delivery Channel</label>
-            <div className={`grid grid-cols-3 gap-1.5 p-1 rounded-xl border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-zinc-800/80 border-zinc-700'}`}>
+            <div className={`grid grid-cols-3 gap-1.5 p-1 rounded-xl border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
               <button
                 type="button"
                 onClick={() => setChannel('email')}
@@ -225,7 +225,7 @@ export const DocumentDispatchModal: React.FC<DocumentDispatchModalProps> = ({
                     ? 'bg-[#0F4C3A] text-white shadow-xs'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900'
-                    : 'text-zinc-300 hover:text-white'
+                    : 'text-slate-300 hover:text-white'
                 }`}
               >
                 <Mail className="w-3.5 h-3.5" />
@@ -239,7 +239,7 @@ export const DocumentDispatchModal: React.FC<DocumentDispatchModalProps> = ({
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900'
-                    : 'text-zinc-300 hover:text-white'
+                    : 'text-slate-300 hover:text-white'
                 }`}
               >
                 <MessageCircle className="w-3.5 h-3.5" />
@@ -253,7 +253,7 @@ export const DocumentDispatchModal: React.FC<DocumentDispatchModalProps> = ({
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : isLight
                     ? 'text-slate-600 hover:text-slate-900'
-                    : 'text-zinc-300 hover:text-white'
+                    : 'text-slate-300 hover:text-white'
                 }`}
               >
                 <Send className="w-3.5 h-3.5" />
@@ -326,7 +326,7 @@ export const DocumentDispatchModal: React.FC<DocumentDispatchModalProps> = ({
           {/* Message Preview */}
           <div
             className={`p-3 rounded-xl border text-xs space-y-1.5 ${
-              isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-zinc-800/60 border-zinc-700 text-zinc-300'
+              isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-[#090A0F] border-slate-800/80 text-slate-300'
             }`}
           >
             <div className="flex items-center gap-1.5 font-bold text-[11px] uppercase tracking-wider text-[#0F4C3A] dark:text-emerald-400">
@@ -371,12 +371,12 @@ export const DocumentDispatchModal: React.FC<DocumentDispatchModalProps> = ({
           )}
 
           {/* Footer Buttons */}
-          <div className={`flex items-center justify-end gap-2 pt-2 border-t ${isLight ? 'border-gray-200' : 'border-zinc-800'}`}>
+          <div className={`flex items-center justify-end gap-2 pt-2 border-t ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
             <button
               type="button"
               onClick={onClose}
               className={`px-4 py-2 rounded-xl border text-xs font-semibold cursor-pointer ${
-                isLight ? 'border-gray-300 text-gray-700 hover:bg-gray-100' : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                isLight ? 'border-gray-300 text-gray-700 hover:bg-gray-100' : 'border-slate-800/80 bg-[#090A0F] text-slate-300 hover:bg-slate-900/90'
               }`}
             >
               Close
