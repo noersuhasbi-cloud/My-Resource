@@ -5359,10 +5359,14 @@ function computeDemandForecast(params?: {
     // Combine real POS & B2B observed throughput with catalog velocity baseline (30d window)
     const posSold = posUnitsBySku.get(inv.sku) || 0;
     const b2bSold = b2bUnitsBySku.get(inv.sku) || 0;
-    const catalogBaseline30d = Math.max(36, Number(inv.outgoingStock || 60));
+    const rawOutgoing = Number(inv.outgoingStock ?? 0);
+    const hasObservedSales = posSold > 0 || b2bSold > 0 || rawOutgoing > 0;
+    const catalogBaseline30d = hasObservedSales ? Math.max(36, rawOutgoing || 60) : 0;
     const observedDaily = (posSold + b2bSold * 0.25) / 14;
     const catalogDaily = catalogBaseline30d / 30;
-    const baseDailySales = Number(Math.max(1.2, catalogDaily + observedDaily * 0.35).toFixed(1));
+    const baseDailySales = hasObservedSales
+      ? Number(Math.max(1.2, catalogDaily + observedDaily * 0.35).toFixed(1))
+      : 0;
     const adjustedDailySales = Number((baseDailySales * seasonalityMultiplier).toFixed(2));
     const horizonDemandUnits = Math.ceil(adjustedDailySales * horizonDays);
 
@@ -5371,7 +5375,9 @@ function computeDemandForecast(params?: {
     const safetyStockDays = 2;
 
     const daysOfSupply =
-      adjustedDailySales > 0 ? Math.floor(availableStock / adjustedDailySales) : 999;
+      adjustedDailySales > 0 && Number.isFinite(availableStock)
+        ? Math.floor(Math.max(0, availableStock) / adjustedDailySales)
+        : 999;
 
     const projectedStockoutDate =
       adjustedDailySales > 0 && daysOfSupply < 365

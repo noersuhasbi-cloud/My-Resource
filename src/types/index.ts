@@ -380,6 +380,8 @@ export interface PurchaseOrderItem {
   isConsignment?: boolean;
   consignmentSupplier?: string;
   consignmentCommissionPercent?: number;
+  bonusQty?: number;
+  bonusReceivedQty?: number;
 }
 
 export interface PurchaseOrder {
@@ -423,6 +425,8 @@ export interface GoodsReceiptItem {
   qualityCondition: 'Passed - Grade A' | 'Minor Discrepancy' | 'Cold-Chain Verified';
   tempCheckCelsius?: number; // e.g. 3.8°C for cold produce
   isConsignment?: boolean;
+  bonusQty?: number;
+  paidQuantityReceived?: number;
 }
 
 export interface GoodsReceiptRecord {
@@ -495,6 +499,7 @@ export interface VendorBill {
   createdAt: string;
   approvedBy?: string;
   approvedAt?: string;
+  isNonCreditableVat?: boolean;
 }
 
 // -------------------------------------------------------------
@@ -603,7 +608,8 @@ export type WasteReason =
   | 'pest_spoilage'
   | 'trimming_loss'
   | 'customer_return_opened'
-  | 'supplier_defect';
+  | 'supplier_defect'
+  | 'NATURAL_MOISTURE_SHRINKAGE';
 
 export type WasteAction =
   | 'bio_compost'
@@ -1406,6 +1412,7 @@ export interface StockOpnameItem {
   unitCost: number;
   financialVarianceIDR: number; // varianceQty * unitCost
   notes?: string;
+  reason?: string;
   status: 'matched' | 'shortage' | 'surplus';
 }
 
@@ -1417,13 +1424,14 @@ export interface StockOpnameSession {
   warehouseZoneId: string;
   auditorId: string;
   auditorName: string;
-  status: 'draft' | 'completed' | 'reconciled';
+  status: 'draft' | 'completed' | 'reconciled' | 'PENDING_APPROVAL';
   items: StockOpnameItem[];
   totalSystemUnits: number;
   totalCountedUnits: number;
   totalVarianceUnits: number;
   netFinancialVarianceIDR: number;
   glEntryIds: string[];
+  reason?: string;
   notes?: string;
   completedAt?: string;
 }
@@ -2345,6 +2353,9 @@ export interface GiroPaymentRecord {
   bounceReason?: string;
   penaltyFeeIDR?: number;
   journalEntryIds?: string[];
+  direction?: 'INCOMING' | 'OUTGOING';
+  vendorBillId?: string;
+  settlementCoaCode?: string;
 }
 
 export interface B2BWholesaleOrder {
@@ -3503,5 +3514,99 @@ export interface PphWithholdingRecord {
   notes?: string;
   recordedBy: string;
 }
+
+// =============================================================
+// INDONESIAN GROCERY INVENTORY, PURCHASING & ACCOUNTING PRECISION PACK
+// =============================================================
+export type ReturnableContainerType =
+  | 'KRAT_PLASTIK_BUAH'
+  | 'GALON_AIR_19L'
+  | 'TABUNG_GAS_LPG_12KG'
+  | 'PALLET_KAYU_B2B';
+
+export type ReturnableDirection = 'OUT_TO_CUSTOMER' | 'IN_FROM_SUPPLIER';
+export type ReturnableStatus = 'OPEN' | 'PARTIAL_RETURNED' | 'RETURNED';
+
+export interface ReturnableContainerRecord {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  storeId: string;
+  storeName: string;
+  containerType: ReturnableContainerType | string;
+  containerLabel: string;
+  direction: ReturnableDirection;
+  counterpartyName: string;
+  referenceDoc?: string;
+  settlementAccountCode?: '1010' | '1020' | '1200';
+  qtyIssued: number;
+  qtyReturned: number;
+  qtyOutstanding: number;
+  depositPerUnitIDR: number;
+  totalDepositIDR: number;
+  depositHeldIDR: number;
+  status: ReturnableStatus;
+  glEntryIds: string[];
+  notes?: string;
+}
+
+export type SupplierDebitNoteCategory = 'RAFAKSI_HARGA' | 'GONDOLA_REBATE';
+
+export interface SupplierDebitNote {
+  id: string;
+  createdAt: string;
+  storeId: string;
+  storeName: string;
+  supplierName: string;
+  category: SupplierDebitNoteCategory;
+  sku?: string;
+  productName?: string;
+  vendorBillId?: string;
+  amountIDR: number;
+  description: string;
+  issuedBy: string;
+  glEntryIds: string[];
+}
+
+export interface SettlementBatchRecord {
+  id: string;
+  timestamp: string;
+  storeId: string;
+  storeName: string;
+  channel: 'QRIS' | 'EDC';
+  grossAmountIDR: number;
+  mdrPercent: number;
+  mdrFeeIDR: number;
+  netSettledIDR: number;
+  sourceAccountCode: string;
+  destinationAccountCode: string;
+  receiptCount: number;
+  receiptIds: string[];
+  reconciledBy: string;
+  glEntryIds: string[];
+  notes?: string;
+}
+
+export interface UnsettledTenderItem {
+  id: string;
+  timestamp: string;
+  storeId: string;
+  storeName: string;
+  channel: 'QRIS' | 'EDC';
+  paymentMethod: string;
+  amountIDR: number;
+  customerOrRef: string;
+}
+
+export interface SettlementReconcileResponse {
+  qrisReceivableCoaBalanceIDR: number;
+  edcClearingPendingIDR: number;
+  defaultQrisMdrPercent: number;
+  defaultEdcMdrPercent: number;
+  unsettledQrisItems: UnsettledTenderItem[];
+  unsettledEdcItems: UnsettledTenderItem[];
+  batches: SettlementBatchRecord[];
+}
+
 
 

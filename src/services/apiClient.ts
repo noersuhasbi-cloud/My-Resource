@@ -133,6 +133,12 @@ import type {
   WarungKasbonAccount,
   PphWithholdingRecord,
   PphWithholdingType,
+  ReturnableContainerRecord,
+  ReturnableDirection,
+  SupplierDebitNote,
+  SupplierDebitNoteCategory,
+  SettlementBatchRecord,
+  SettlementReconcileResponse,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
@@ -496,6 +502,7 @@ export const apiClient = {
     items: {
       sku: string;
       quantityReceived: number;
+      bonusQty?: number;
       batchNumber?: string;
       expiryDate?: string;
       qualityCondition?: string;
@@ -557,6 +564,7 @@ export const apiClient = {
       notes?: string;
     }[];
     taxPercent?: number;
+    isNonCreditableVat?: boolean;
     notes?: string;
     autoApprove?: boolean;
   }): Promise<{
@@ -3507,6 +3515,7 @@ export const apiClient = {
     supplierName: string;
     sku: string;
     quantity: number;
+    bonusQty?: number;
     expectedDeliveryDate?: string;
     paymentTerms?: 'Net 30' | 'COD' | 'Advance Payment';
     notes?: string;
@@ -3700,5 +3709,157 @@ export const apiClient = {
     if (!res.ok) throw new Error(data.error || 'Failed to record PPh 22/23 withholding tax');
     return data;
   },
+
+  // -------------------------------------------------------------
+  // PRECISION PACK: RETURNABLE CONTAINERS, DEBIT NOTES & SETTLEMENT RECONCILE
+  // -------------------------------------------------------------
+  async getReturnableContainers(params?: {
+    storeId?: string;
+    direction?: ReturnableDirection | 'ALL';
+  }): Promise<{
+    records: ReturnableContainerRecord[];
+    summary: {
+      totalIssuedUnits: number;
+      totalReturnedUnits: number;
+      totalOutstandingUnits: number;
+      customerDepositLiabilityIDR: number;
+      supplierDepositAssetIDR: number;
+    };
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.storeId && params.storeId !== 'ALL' && params.storeId !== 'CONSOLIDATED') {
+      qs.set('storeId', params.storeId);
+    }
+    if (params?.direction && params.direction !== 'ALL') {
+      qs.set('direction', params.direction);
+    }
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    const res = await fetchApi(`/api/admin/inventory/returnable-containers${suffix}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load returnable containers ledger');
+    return data;
+  },
+
+  async postReturnableContainer(payload: {
+    action?: 'ISSUE' | 'RETURN';
+    id?: string;
+    storeId?: string;
+    containerType?: string;
+    containerLabel?: string;
+    direction?: ReturnableDirection;
+    counterpartyName?: string;
+    referenceDoc?: string;
+    settlementAccountCode?: '1010' | '1020' | '1200';
+    qtyIssued?: number;
+    qtyReturned?: number;
+    depositPerUnitIDR?: number;
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    record: ReturnableContainerRecord;
+    glEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/inventory/returnable-containers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Returnable container transaction failed');
+    return data;
+  },
+
+  async getSupplierDebitNotes(storeId?: string): Promise<SupplierDebitNote[]> {
+    const qs =
+      storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED'
+        ? `?storeId=${encodeURIComponent(storeId)}`
+        : '';
+    const res = await fetchApi(`/api/admin/procurement/debit-notes${qs}`);
+    const data = await res.json().catch(() => ([]));
+    if (!res.ok) throw new Error((data as any)?.error || 'Failed to load supplier debit notes');
+    return Array.isArray(data) ? data : [];
+  },
+
+  async createSupplierDebitNote(payload: {
+    storeId?: string;
+    supplierName: string;
+    category: SupplierDebitNoteCategory;
+    sku?: string;
+    vendorBillId?: string;
+    amountIDR: number;
+    description: string;
+  }): Promise<{
+    success: boolean;
+    debitNote: SupplierDebitNote;
+    glEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/procurement/debit-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to issue supplier debit note');
+    return data;
+  },
+
+  async getSettlementReconcile(): Promise<SettlementReconcileResponse> {
+    const res = await fetchApi('/api/admin/accounting/settlement-reconcile');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load QRIS / EDC clearing queue');
+    return data;
+  },
+
+  async postSettlementReconcile(payload: {
+    channel: 'QRIS' | 'EDC';
+    grossAmountIDR?: number;
+    mdrPercent?: number;
+    destinationAccountCode?: '1020' | '1010';
+    sourceAccountCode?: '1030' | '1020';
+    receiptIds?: string[];
+    storeId?: string;
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    batch: SettlementBatchRecord;
+    glEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/accounting/settlement-reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to reconcile QRIS/EDC settlement batch');
+    return data;
+  },
+
+  async createStandaloneGiro(payload: {
+    direction: 'INCOMING' | 'OUTGOING';
+    counterpartyName: string;
+    giroNumber: string;
+    issuingBank: string;
+    amountIDR: number;
+    clearingDueDate: string;
+    orderOrBillRef?: string;
+  }): Promise<{
+    success: boolean;
+    giro: GiroPaymentRecord;
+    glEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/b2b/giro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to register Bilyet Giro');
+    return data;
+  },
 };
+
 
