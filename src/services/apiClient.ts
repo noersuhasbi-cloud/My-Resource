@@ -3645,6 +3645,7 @@ export const apiClient = {
     success: boolean;
     route?: KanvasRouteRecord;
     account?: WarungKasbonAccount;
+    effectivePaidIDR?: number;
     glEntryIds?: string[];
     ledger: KanvasLedgerResponse;
     message?: string;

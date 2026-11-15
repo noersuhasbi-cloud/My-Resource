@@ -6949,12 +6949,12 @@ async function startServer() {
         };
         auditTrail.unshift(auditRecord);
 
-        // Also update any matching customer order status to paid / in_transit
+        // Also update any matching customer order status to paid / packing (or in_transit for direct checkout)
         const custOrder = customerOrders.find((o) => o.id === orderId);
         if (custOrder) {
           custOrder.paymentStatus = 'paid';
           custOrder.qrisPaidAt = tx.paidAt;
-          custOrder.status = 'in_transit';
+          custOrder.status = preReservedFulfillment ? 'packing' : 'in_transit';
         }
 
         // Event 2 & Event 6: Low-stock check & incoming fulfillment picking notification
@@ -8493,7 +8493,7 @@ async function startServer() {
               0,
               Number((tier.physicalStock - tier.reservedStock).toFixed(2))
             );
-            tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+            tier.totalValuation = invItem?.isConsignment ? 0 : Math.round(tier.physicalStock * tier.unitCost);
             tier.updatedAt = nowIso;
           }
           if (invItem && finalDeductQty > 0) {
@@ -10951,7 +10951,7 @@ async function startServer() {
       if (!isScaleWeightedLine && !item.isManualPriceOverride && inv?.wholesaleTiers?.length) {
         const tierBasePrice = Math.max(inv.sellingPrice || 0, rawUnitPrice, catalogBasePrice);
         const tierRes = resolveWholesaleTierPrice(inv.wholesaleTiers, qty, tierBasePrice);
-        if (tierRes.appliedTier && tierRes.unitPriceIDR < effectiveUnitPrice) {
+        if (tierRes.appliedTier && tierRes.unitPriceIDR <= effectiveUnitPrice) {
           effectiveUnitPrice = tierRes.unitPriceIDR;
           appliedWholesaleTierLabel = tierRes.appliedTier.label;
         }
@@ -11468,6 +11468,8 @@ async function startServer() {
       subtotal: resolvedSubtotal,
       discount: discountAmount,
       tax: resolvedTax,
+      ppnIDR: resolvedPpn,
+      pb1TaxIDR: resolvedPb1,
       total: resolvedTotal,
       currency,
       currencyTotal: resolvedCurrencyTotal,
@@ -13005,6 +13007,8 @@ async function startServer() {
       subtotalIDR,
       pwpDiscountIDR,
       taxPPN11IDR,
+      ppnIDR: totalPpnIDR,
+      pb1TaxIDR: totalPb1IDR,
       totalAmountIDR,
       paymentMethod,
       paymentStatus,
@@ -15903,7 +15907,7 @@ async function startServer() {
                   0,
                   Number((tier.physicalStock - (tier.reservedStock || 0)).toFixed(2))
                 );
-                tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+                tier.totalValuation = invItem?.isConsignment ? 0 : Math.round(tier.physicalStock * tier.unitCost);
                 tier.updatedAt = deliveredAt;
               }
               if (invItem) {
@@ -19283,23 +19287,21 @@ async function startServer() {
       const rawTin = cust?.npwp || cust?.nik || '';
       const tinCheck = validateNpwpOrNik(rawTin);
       const dppIDR = Math.max(0, order.subtotalIDR - (order.pwpDiscountIDR || 0));
-      let taxClassification: IndonesianTaxCategory = 'BKP_STANDARD';
-      let pb1IDR = 0;
-      if (order.taxPPN11IDR === 0) {
-        const hasPb1Item = order.items.some((it) => {
-          const rule = skuTaxRulesList.find((r) => r.sku === it.product?.sku);
-          const cat =
-            rule?.taxCategory ||
-            inferDefaultTaxCategory(it.product?.category || '', it.product?.name || '');
-          return cat === 'NON_BKP_PB1';
-        });
-        if (hasPb1Item && order.totalAmountIDR > dppIDR) {
-          taxClassification = 'NON_BKP_PB1';
-          pb1IDR = order.totalAmountIDR - dppIDR;
-        } else {
-          taxClassification = 'BKP_DIBEBASKAN';
-        }
+      let ppnIDR =
+        order.ppnIDR !== undefined ? Math.max(0, roundIDR(order.ppnIDR)) : Math.max(0, roundIDR(order.taxPPN11IDR || 0));
+      let pb1IDR = order.pb1TaxIDR !== undefined ? Math.max(0, roundIDR(order.pb1TaxIDR)) : 0;
+      const hasPb1Item = order.items.some((it) => {
+        const rule = skuTaxRulesList.find((r) => r.sku === it.product?.sku);
+        const cat =
+          rule?.taxCategory ||
+          inferDefaultTaxCategory(it.product?.category || '', it.product?.name || '');
+        return cat === 'NON_BKP_PB1';
+      });
+      if (order.ppnIDR === undefined && order.pb1TaxIDR === undefined && order.taxPPN11IDR === 0 && hasPb1Item && order.totalAmountIDR > dppIDR) {
+        pb1IDR = order.totalAmountIDR - dppIDR;
       }
+      const taxClassification: IndonesianTaxCategory =
+        ppnIDR > 0 ? 'BKP_STANDARD' : pb1IDR > 0 || hasPb1Item ? 'NON_BKP_PB1' : 'BKP_DIBEBASKAN';
       rows.push({
         rowId: `CT-B2B-${idx + 1}`,
         documentType: 'FAKTUR_KELUARAN_B2B',
@@ -19311,7 +19313,7 @@ async function startServer() {
         isNpwpValid: tinCheck.valid,
         taxClassification,
         dppIDR,
-        ppnIDR: order.taxPPN11IDR,
+        ppnIDR,
         pb1IDR,
         totalIDR: order.totalAmountIDR,
         referenceId: order.id,
@@ -19320,20 +19322,32 @@ async function startServer() {
 
     // 2. B2C POS Digunggung Retail Invoices
     posTransactionsHistory.forEach((rcp, idx) => {
-      const pb1Amount = Math.max(0, Number((rcp as any).pb1TaxIDR || 0));
-      const dpp = Math.max(0, rcp.total - rcp.tax - pb1Amount);
-      const hasPb1Item =
-        pb1Amount > 0 ||
-        (rcp.items || []).some((it) => {
-          const rule = skuTaxRulesList.find((r) => r.sku === it.sku);
-          const cat =
-            rule?.taxCategory || inferDefaultTaxCategory(it.category || '', it.name || '');
-          return cat === 'NON_BKP_PB1';
-        });
+      const hasExplicitSplit = rcp.ppnIDR !== undefined || rcp.pb1TaxIDR !== undefined;
+      const itemCats = (rcp.items || []).map((it) => {
+        const rule = skuTaxRulesList.find((r) => r.sku === it.sku);
+        return rule?.taxCategory || inferDefaultTaxCategory(it.category || '', it.name || '');
+      });
+      const hasPb1Only = itemCats.length > 0 && itemCats.every((c) => c === 'NON_BKP_PB1');
+      const hasPb1Item = itemCats.includes('NON_BKP_PB1');
+
+      let ppnAmount = 0;
+      let pb1Amount = 0;
+      if (hasExplicitSplit) {
+        ppnAmount = Math.max(0, roundIDR(rcp.ppnIDR || 0));
+        pb1Amount = Math.max(0, roundIDR(rcp.pb1TaxIDR || 0));
+      } else if (hasPb1Only && rcp.tax > 0) {
+        pb1Amount = Math.max(0, roundIDR(rcp.tax));
+        ppnAmount = 0;
+      } else {
+        pb1Amount = 0;
+        ppnAmount = Math.max(0, roundIDR(rcp.tax));
+      }
+
+      const dpp = Math.max(0, roundIDR(rcp.total) - ppnAmount - pb1Amount);
       const taxClassification: IndonesianTaxCategory =
-        rcp.tax === 0 && pb1Amount === 0
+        ppnAmount === 0 && pb1Amount === 0
           ? 'BKP_DIBEBASKAN'
-          : rcp.tax === 0 && hasPb1Item
+          : ppnAmount === 0 && (pb1Amount > 0 || hasPb1Item)
           ? 'NON_BKP_PB1'
           : 'BKP_STANDARD';
       rows.push({
@@ -19347,7 +19361,7 @@ async function startServer() {
         isNpwpValid: false,
         taxClassification,
         dppIDR: dpp,
-        ppnIDR: rcp.tax,
+        ppnIDR: ppnAmount,
         pb1IDR: pb1Amount,
         totalIDR: rcp.total,
         referenceId: rcp.receiptNumber,
@@ -24691,9 +24705,13 @@ async function startServer() {
       if (amountIDR <= 0) {
         return res.status(400).json({ error: 'Payment amountIDR must be positive.' });
       }
-      const effectivePaid = Math.min(amountIDR, Math.max(amountIDR, acc.outstandingBalanceIDR));
-      const appliedReduction = Math.min(amountIDR, acc.outstandingBalanceIDR);
-      acc.outstandingBalanceIDR = Math.max(0, acc.outstandingBalanceIDR - appliedReduction);
+      if (acc.outstandingBalanceIDR <= 0) {
+        return res.status(400).json({
+          error: `Akun Kasbon ${acc.warungName} sudah berstatus LUNAS (saldo Rp 0).`,
+        });
+      }
+      const effectivePaid = Math.min(amountIDR, acc.outstandingBalanceIDR);
+      acc.outstandingBalanceIDR = Math.max(0, acc.outstandingBalanceIDR - effectivePaid);
       acc.lastPaymentAt = nowIso;
       acc.agingStatus = computeWarungKasbonAging(acc);
 
@@ -24705,7 +24723,7 @@ async function startServer() {
         route.updatedAt = nowIso;
       }
 
-      const glAmt = appliedReduction > 0 ? appliedReduction : effectivePaid;
+      const glAmt = effectivePaid;
       const gle1 = `GLE-KSB-${Date.now().toString().slice(-6)}-1`;
       const gle2 = `GLE-KSB-${Date.now().toString().slice(-6)}-2`;
       commitBalancedGlBatch(
@@ -24755,6 +24773,7 @@ async function startServer() {
       return res.json({
         success: true,
         account: acc,
+        effectivePaidIDR: effectivePaid,
         glEntryIds: [gle1, gle2],
         ledger: buildKanvasLedgerPayload(),
         message: `Pembayaran Kasbon Rp ${glAmt.toLocaleString('id-ID')} untuk ${acc.warungName} berhasil dicatat & dibukukan ke GL.`,

@@ -1303,6 +1303,8 @@ export interface POSTransactionReceipt {
   subtotal: number;
   discount: number;
   tax: number;
+  ppnIDR?: number;
+  pb1TaxIDR?: number;
   total: number;
   currency: SupportedCurrency;
   currencyTotal: number;
@@ -2355,6 +2357,8 @@ export interface B2BWholesaleOrder {
   subtotalIDR: number;
   pwpDiscountIDR: number;
   taxPPN11IDR: number;
+  ppnIDR?: number;
+  pb1TaxIDR?: number;
   totalAmountIDR: number;
   paymentMethod: 'term_net7' | 'term_net14' | 'term_net30' | 'bilyet_giro' | 'transfer_verification' | 'instant_va';
   paymentStatus: 'AWAITING_APPROVAL' | 'PENDING_VERIFICATION' | 'APPROVED_CREDIT' | 'GIRO_PENDING' | 'SETTLED' | 'BOUNCED';

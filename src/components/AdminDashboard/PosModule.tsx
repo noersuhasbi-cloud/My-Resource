@@ -113,6 +113,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
   // 1. Catalog & Filter State
   const [products, setProducts] = useState<POSProductItem[]>([]);
   const [skuTaxRules, setSkuTaxRules] = useState<SkuTaxRule[]>([]);
+  const [posPpnTaxPercent, setPosPpnTaxPercent] = useState<number>(11);
   const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -277,6 +278,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
     loadHistory();
     loadShiftState();
     apiClient.getSkuTaxRules().then(setSkuTaxRules).catch(() => {});
+    apiClient
+      .getPosConfig()
+      .then((cfg) => {
+        if (cfg && typeof cfg.ppnTaxPercent === 'number') {
+          setPosPpnTaxPercent(cfg.ppnTaxPercent);
+        }
+      })
+      .catch(() => {});
   }, [effectiveStoreId]);
 
   useEffect(() => {
@@ -425,7 +434,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
       const netLine = Math.max(0, item.lineTotal - share);
       const rule = skuTaxRules.find((r) => r.sku === item.sku);
       const taxCat = rule?.taxCategory || inferDefaultTaxCategory(item.category || '', item.name || '');
-      const stdRate = rule?.taxRatePercent ?? 11;
+      const stdRate = rule?.taxRatePercent ?? posPpnTaxPercent ?? 11;
       const calc = computeIndonesianTax(netLine, taxCat, false, stdRate);
       totalTax += Math.round(calc.ppnIDR + calc.pb1IDR);
     });
@@ -435,7 +444,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
       taxAmount: resolvedTax,
       totalAmount: netRevenue + resolvedTax,
     };
-  }, [cart, subtotal, discountAmount, skuTaxRules]);
+  }, [cart, subtotal, discountAmount, skuTaxRules, posPpnTaxPercent]);
 
   const totalInActiveCurrency = useMemo(() => {
     if (activeCurrency === 'IDR') return totalAmount;
@@ -659,6 +668,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
     setParkedTickets((prev) => prev.filter((p) => p.id !== parkedId));
     onShowToast('Ticket Resumed', `Ticket #${target.id} restored to register`);
   };
+
+  useEffect(() => {
+    if (isSplitMode && totalAmount > 1 && splitLeg1Amount >= totalAmount) {
+      setSplitLeg1Amount(Math.floor(totalAmount / 2));
+    }
+  }, [isSplitMode, totalAmount, splitLeg1Amount]);
 
   const splitLeg2Amount = Math.max(0, totalAmount - Math.round(splitLeg1Amount || 0));
   const isSplitValid =

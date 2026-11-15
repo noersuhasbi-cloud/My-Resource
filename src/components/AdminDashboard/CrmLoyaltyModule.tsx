@@ -322,13 +322,14 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
     }
     setBusyActionId('kanvas-create-kasbon');
     try {
+      const fallbackRoute = kanvasLedger?.routes[0];
       await apiClient.postKanvasLedgerAction({
         action: 'CREATE_KASBON',
         warungName: newKasbonForm.warungName.trim(),
         ownerName: newKasbonForm.ownerName.trim(),
         phone: newKasbonForm.phone.trim() || '+628120000000',
-        salesmanName: newKasbonForm.salesmanName.trim() || 'Sales Kanvas',
-        routeArea: newKasbonForm.routeArea.trim() || 'Area Jabodetabek',
+        salesmanName: newKasbonForm.salesmanName.trim() || fallbackRoute?.salesmanName || 'Hendra Kurniawan',
+        routeArea: newKasbonForm.routeArea.trim() || fallbackRoute?.routeArea || 'Pasar Minggu – Kemang – Cipete',
         creditLimitIDR: Number(newKasbonForm.creditLimitIDR) || 5000000,
         outstandingBalanceIDR: Number(newKasbonForm.outstandingBalanceIDR) || 0,
         dueDate: newKasbonForm.dueDate,
@@ -363,9 +364,10 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
         accountId: collectTarget.id,
         amountIDR: Math.round(collectAmountIDR),
       });
+      const recordedAmt = Number(res.effectivePaidIDR ?? Math.min(Math.round(collectAmountIDR), collectTarget.outstandingBalanceIDR));
       onShowToast(
         'Pelunasan Kasbon Tercatat',
-        `${collectTarget.warungName}: ${formatIDR(collectAmountIDR)} dibukukan ke Kas (#1010) & Piutang (#1200).`
+        `${collectTarget.warungName}: ${formatIDR(recordedAmt)} dibukukan ke Kas (#1010) & Piutang (#1200).`
       );
       if (res.ledger) {
         setKanvasLedger(res.ledger);

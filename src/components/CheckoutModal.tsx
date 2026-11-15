@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { CartItem, CustomerAccount, Order, StoreLocation, OrderTimelineStep, StoreOperationalStatus } from '../types/index.ts';
 import { formatIDR, generateOrderId, generateQrisReference } from '../utils/formatters';
 import { QRCodeSVG } from 'qrcode.react';
@@ -55,6 +55,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [isReservingOrder, setIsReservingOrder] = useState<boolean>(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [blockedNotice, setBlockedNotice] = useState<string>('');
+  const reservedOrderRef = useRef<{ orderId: string; signature: string } | null>(null);
 
   // Sync customer account updates
   useEffect(() => {
@@ -75,6 +76,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setBlockedNotice('');
       setCompletedOrder(null);
       setIsSimulatingPayment(false);
+    } else {
+      reservedOrderRef.current = null;
     }
   }, [isOpen]);
 
@@ -120,7 +123,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setBlockedNotice('');
     setIsReservingOrder(true);
 
-    const newOrderId = generateOrderId();
+    const orderSignature = JSON.stringify({
+      storeId: selectedPickupStore?.id || 'store-jkt-senopati',
+      deliveryMethod,
+      items: items.map((i) => ({ sku: i.product.sku, qty: i.quantity })),
+    });
+    const newOrderId =
+      reservedOrderRef.current && reservedOrderRef.current.signature === orderSignature
+        ? reservedOrderRef.current.orderId
+        : generateOrderId();
     setCurrentOrderId(newOrderId);
 
     try {
@@ -142,6 +153,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         notes: deliveryNotes,
         items,
       });
+      reservedOrderRef.current = { orderId: newOrderId, signature: orderSignature };
     } catch (err: any) {
       setIsReservingOrder(false);
       setBlockedNotice(err?.message || 'Unable to reserve inventory for your order. Please adjust quantities.');
