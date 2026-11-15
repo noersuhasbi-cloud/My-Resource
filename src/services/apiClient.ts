@@ -1123,11 +1123,7 @@ export const apiClient = {
     availableProfiles: StaffShiftSession[];
   }> {
     const res = await fetchApi('/api/admin/rbac/current-session');
-    const data = await res.json();
-    if (data?.currentSession) {
-      setApiOperatorContext(data.currentSession);
-    }
-    return data;
+    return res.json();
   },
 
   async switchRbacSession(userId: string): Promise<{
@@ -2927,7 +2923,9 @@ export const apiClient = {
       setApiOperatorContext(data.currentSession);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('grocemart_admin_session', JSON.stringify(data.currentSession));
+          if (localStorage.getItem('grocemart_admin_session')) {
+            localStorage.setItem('grocemart_admin_session', JSON.stringify(data.currentSession));
+          }
         } catch {}
       }
     }

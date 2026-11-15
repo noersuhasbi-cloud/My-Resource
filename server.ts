@@ -6023,10 +6023,13 @@ async function startServer() {
       if (assignedAssignment?.isActive === false || assignedProfile?.isActive === false) {
         return denyAccess(['super_admin'], `Access Denied (403): Operator account '${rawHeaderOpId}' is currently suspended by Super Admin.`);
       }
-      if (assignedProfile && rawHeaderRole && strictHeaderRole !== normalizeServerRole(assignedProfile.userRole)) {
-        const assignedCanon = normalizeServerRole(assignedProfile.userRole);
-        if (strictHeaderRole === 'super_admin' && assignedCanon !== 'super_admin') {
-          return denyAccess([assignedCanon], `Privilege Escalation Blocked (403): Operator '${rawHeaderOpId}' is locked to role '${assignedCanon}' and cannot elevate to 'super_admin'.`);
+      if (assignedProfile && rawHeaderRole) {
+        const assignedCanon = normalizeServerRole(assignedAssignment?.userRole || assignedProfile.userRole);
+        if (strictHeaderRole && strictHeaderRole !== assignedCanon) {
+          return denyAccess(
+            [assignedCanon],
+            `Privilege Escalation Blocked (403): Operator '${rawHeaderOpId}' is locked to role '${assignedCanon}' and cannot impersonate '${strictHeaderRole}'.`
+          );
         }
       }
 
@@ -6148,7 +6151,11 @@ async function startServer() {
           urlPath.startsWith('/admin/accounting/')) &&
         method !== 'GET'
       ) {
-        const allowed: CanonicalServerRole[] = ['admin', 'coo', 'super_admin'];
+        const isBankCsvPreviewOnly =
+          urlPath === '/admin/accounting/bank-mutation-reconcile' && req.body?.previewOnly === true;
+        const allowed: CanonicalServerRole[] = isBankCsvPreviewOnly
+          ? ['store_manager', 'admin', 'coo', 'super_admin']
+          : ['admin', 'coo', 'super_admin'];
         if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
       }
 
@@ -10687,17 +10694,19 @@ async function startServer() {
     });
   });
 
-  app.post('/api/admin/auth/logout', (_req: Request, res: Response) => {
+  app.post('/api/admin/auth/logout', (req: Request, res: Response) => {
+    const callerId = getEffectiveOperatorId(req);
+    const callerProfile = AVAILABLE_STAFF_USERS.find((u) => u.userId === callerId) || currentActiveStaffSession;
     securityAuditTrail.unshift({
       id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
       timestamp: new Date().toISOString(),
       actionType: 'USER_LOGOUT',
-      resourceId: `LOGOUT-${currentActiveStaffSession.userId}`,
-      userId: currentActiveStaffSession.userId,
-      userName: currentActiveStaffSession.userName,
-      userRole: currentActiveStaffSession.userRole,
-      storeId: currentActiveStaffSession.storeId,
-      shiftId: currentActiveStaffSession.activeShiftId,
+      resourceId: `LOGOUT-${callerProfile.userId}`,
+      userId: callerProfile.userId,
+      userName: callerProfile.userName,
+      userRole: callerProfile.userRole,
+      storeId: callerProfile.storeId,
+      shiftId: callerProfile.activeShiftId,
       status: 'AUTHORIZED_EXECUTED',
       metadata: { reason: 'User initiated ERP session lock / sign out' },
     });
@@ -10765,8 +10774,11 @@ async function startServer() {
 
   // RBAC Zone Access Guard Endpoint (Enforces physical warehouse zone picking authorization)
   app.post('/api/admin/rbac/check-zone-access', (req: Request, res: Response) => {
+    syncAssignmentsOntoProfiles();
     const { zoneType } = req.body; // 'ambient' | 'cold_chilled' | 'freezer'
-    const allowed = currentActiveStaffSession.permissions.canPickZone(zoneType);
+    const callerId = getEffectiveOperatorId(req);
+    const callerProfile = AVAILABLE_STAFF_USERS.find((u) => u.userId === callerId) || currentActiveStaffSession;
+    const allowed = callerProfile.permissions.canPickZone(zoneType);
 
     if (!allowed) {
       securityAuditTrail.unshift({
@@ -10774,19 +10786,19 @@ async function startServer() {
         timestamp: new Date().toISOString(),
         actionType: 'ZONE_CONFIG_UPDATE',
         resourceId: zoneType,
-        userId: currentActiveStaffSession.userId,
-        userName: currentActiveStaffSession.userName,
-        userRole: currentActiveStaffSession.userRole,
-        storeId: currentActiveStaffSession.storeId,
-        shiftId: currentActiveStaffSession.activeShiftId,
+        userId: callerProfile.userId,
+        userName: callerProfile.userName,
+        userRole: callerProfile.userRole,
+        storeId: callerProfile.storeId,
+        shiftId: callerProfile.activeShiftId,
         status: 'PERMISSION_DENIED',
-        metadata: { attemptedZone: zoneType, assignedZones: currentActiveStaffSession.assignedZones },
+        metadata: { attemptedZone: zoneType, assignedZones: callerProfile.assignedZones },
       });
 
       return res.status(403).json({
         success: false,
         authorized: false,
-        error: `Access Denied: Staff role '${currentActiveStaffSession.userRole}' with active shift '${currentActiveStaffSession.activeShiftId}' is restricted from accessing physical zone '${zoneType}'. Assigned zones: [${currentActiveStaffSession.assignedZones.join(', ')}].`,
+        error: `Access Denied: Staff role '${callerProfile.userRole}' with active shift '${callerProfile.activeShiftId}' is restricted from accessing physical zone '${zoneType}'. Assigned zones: [${callerProfile.assignedZones.join(', ')}].`,
       });
     }
 
@@ -10794,17 +10806,19 @@ async function startServer() {
   });
 
   app.post('/api/admin/rbac/handover', (req: Request, res: Response) => {
+    const callerId = getEffectiveOperatorId(req);
+    const callerProfile = AVAILABLE_STAFF_USERS.find((u) => u.userId === callerId) || currentActiveStaffSession;
     const { nextShift = 'Afternoon Shift', notes = '', outgoingUserId, outgoingUserName } = req.body || {};
     const record: SecurityAuditTrailRecord = {
       id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
       timestamp: new Date().toISOString(),
       actionType: 'SHIFT_HANDOVER' as any,
-      resourceId: currentActiveStaffSession.activeShiftId,
-      userId: outgoingUserId || currentActiveStaffSession.userId,
-      userName: outgoingUserName || currentActiveStaffSession.userName,
-      userRole: currentActiveStaffSession.userRole,
-      storeId: currentActiveStaffSession.storeId,
-      shiftId: currentActiveStaffSession.activeShiftId,
+      resourceId: callerProfile.activeShiftId,
+      userId: outgoingUserId || callerProfile.userId,
+      userName: outgoingUserName || callerProfile.userName,
+      userRole: callerProfile.userRole,
+      storeId: callerProfile.storeId,
+      shiftId: callerProfile.activeShiftId,
       status: 'AUTHORIZED_EXECUTED',
       metadata: {
         nextShift,
@@ -26525,7 +26539,7 @@ async function startServer() {
           const dIdx = findCol(['tanggal', 'posting date', 'date', 'tgl']);
           const descIdx = findCol(['keterangan', 'description', 'remark', 'uraian']);
           const amtIdx = findCol(['jumlah', 'amount', 'nominal']);
-          const typeIdx = findCol(['mutasi', 'type', 'db/cr', 'd/c']);
+          const typeIdx = findCol(['mutasi', 'tipe', 'type', 'db/cr', 'd/c']);
           const crIdx = findCol(['credit', 'kredit', 'cr']);
           const dbIdx = findCol(['debit', 'debet', 'db']);
           const isBca = joined.includes('keterangan') || joined.includes('cabang');
@@ -26815,7 +26829,25 @@ async function startServer() {
   // -------------------------------------------------------------
   app.get('/api/admin/accounting/executive-summary', (req: Request, res: Response) => {
     ensureRegulatoryCoaAccounts();
-    const rawStoreId = typeof req.query?.storeId === 'string' ? req.query.storeId.trim() : 'CONSOLIDATED';
+    const effectiveRole = getEffectiveRequestRole(req);
+    const effectiveBranch = getEffectiveOperatorBranch(req);
+    let rawStoreId = typeof req.query?.storeId === 'string' ? req.query.storeId.trim() : 'CONSOLIDATED';
+    if (
+      isBranchScopedServerRole(effectiveRole) &&
+      effectiveBranch !== 'ALL' &&
+      effectiveBranch !== 'CONSOLIDATED' &&
+      effectiveBranch !== 'WH-CDC-01'
+    ) {
+      if (!rawStoreId || rawStoreId === 'CONSOLIDATED' || rawStoreId === 'ALL') {
+        rawStoreId = effectiveBranch;
+      } else if (rawStoreId !== effectiveBranch) {
+        return res.status(403).json({
+          success: false,
+          code: 'RBAC_FORBIDDEN',
+          error: `Branch Isolation Violation (403): Operator (${effectiveRole}) assigned to '${effectiveBranch}' cannot view executive summary for '${rawStoreId}'.`,
+        });
+      }
+    }
     const isSingleStore = Boolean(rawStoreId && rawStoreId !== 'CONSOLIDATED' && rawStoreId !== 'ALL');
     const outlet = isSingleStore ? resolveOutletFromCodeOrId(rawStoreId) : null;
     const storeId = outlet?.storeId || (isSingleStore ? rawStoreId : 'CONSOLIDATED');

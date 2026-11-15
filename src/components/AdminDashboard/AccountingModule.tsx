@@ -1501,10 +1501,15 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 </label>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
+                    const orders = await apiClient.getB2BOrders().catch(() => []);
+                    const openOrder = orders.find((o) => o.paymentStatus !== 'SETTLED');
+                    const sampleOrderId = openOrder?.id || 'B2B-2026-0038';
+                    const sampleCompany = (openOrder?.companyName || 'Toko Berkah Mandiri').toUpperCase();
+                    const sampleAmount = Math.round(openOrder?.totalAmountIDR || 1953600);
                     setBankCsvText(
                       `Tanggal,Keterangan,Cabang,Jumlah,Saldo\n` +
-                      `2026-11-15,TRSF E-BANKING CR B2B-1002 HOTEL KEMANG,0095,12500000,145000000\n` +
+                      `2026-11-15,TRSF E-BANKING CR ${sampleOrderId} ${sampleCompany},0095,${sampleAmount},145000000\n` +
                       `2026-11-15,BIAYA ADM BULANAN BANK,0095,25000 DB,144975000`
                     );
                     setBankMatchResult(null);

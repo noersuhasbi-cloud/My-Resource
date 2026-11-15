@@ -136,8 +136,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const isLight = theme === 'light';
 
+  const initialLockedBranch =
+    initialStaffSession && isBranchScopedRole(initialStaffSession.userRole)
+      ? initialStaffSession.assignedBranchId ||
+        (initialStaffSession.storeId && initialStaffSession.storeId !== 'ALL'
+          ? initialStaffSession.storeId
+          : 'store-jkt-senopati')
+      : null;
+
   // Global Store Outlet Filter Selector
-  const [selectedGlobalStore, setSelectedGlobalStore] = useState<string>('CONSOLIDATED');
+  const [selectedGlobalStore, setSelectedGlobalStore] = useState<string>(
+    initialLockedBranch || 'CONSOLIDATED'
+  );
 
   // Sidebar Layout State (Responsive Desktop Collapse & Mobile Drawer)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -242,7 +252,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [warehouseZones, setWarehouseZones] = useState<WarehouseZone[]>([]);
   const [inventoryTiers, setInventoryTiers] = useState<StoreInventoryStock[]>([]);
-  const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('ALL');
+  const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>(initialLockedBranch || 'ALL');
   const [selectedStorageZoneFilter, setSelectedStorageZoneFilter] = useState<string>('ALL');
   const [inventorySearch, setInventorySearch] = useState<string>('');
   const [editingTier, setEditingTier] = useState<StoreInventoryStock | null>(null);
@@ -295,7 +305,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isSubmittingGR, setIsSubmittingGR] = useState<boolean>(false);
 
   // Financial Accounting & Multi-Store COA
-  const [selectedFinanceStore, setSelectedFinanceStore] = useState<string>('CONSOLIDATED');
+  const [selectedFinanceStore, setSelectedFinanceStore] = useState<string>(initialLockedBranch || 'CONSOLIDATED');
   const [financeSubTab, setFinanceSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa'>('pnl');
   const [chartOfAccounts, setChartOfAccounts] = useState<ChartOfAccount[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<GeneralLedgerEntry[]>([]);
@@ -386,8 +396,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ]);
 
       if (rbacRes) {
-        if (!initialStaffSession && !overrideSession && !activeStaffSession) {
+        const currentTarget = effectiveSession || rbacRes.currentSession;
+        const matchedProfile = currentTarget?.userId
+          ? rbacRes.availableProfiles?.find((p) => p.userId === currentTarget.userId)
+          : undefined;
+
+        if (matchedProfile) {
+          if (matchedProfile.isActive === false) {
+            try {
+              localStorage.removeItem('grocemart_admin_session');
+            } catch {}
+            apiClient.setOperatorContext(null);
+            onShowToast(
+              'Account Suspended',
+              `${matchedProfile.userName}'s operator access was suspended by Super Admin.`
+            );
+            onLogout?.();
+            return;
+          }
+
+          const hasAssignmentChanged =
+            !activeStaffSession ||
+            matchedProfile.userRole !== currentTarget.userRole ||
+            matchedProfile.storeId !== currentTarget.storeId ||
+            matchedProfile.assignedBranchId !== currentTarget.assignedBranchId ||
+            matchedProfile.storeName !== currentTarget.storeName;
+
+          if (hasAssignmentChanged) {
+            const syncedSession: StaffShiftSession = {
+              ...matchedProfile,
+              shiftName: currentTarget.shiftName || matchedProfile.shiftName,
+              loginTimestamp: currentTarget.loginTimestamp || matchedProfile.loginTimestamp,
+            };
+            setActiveStaffSession(syncedSession);
+            apiClient.setOperatorContext(syncedSession);
+            try {
+              if (localStorage.getItem('grocemart_admin_session')) {
+                localStorage.setItem('grocemart_admin_session', JSON.stringify(syncedSession));
+              }
+            } catch {}
+          }
+        } else if (!initialStaffSession && !overrideSession && !activeStaffSession && rbacRes.currentSession) {
           setActiveStaffSession(rbacRes.currentSession);
+          apiClient.setOperatorContext(rbacRes.currentSession);
         }
       }
       setClimateConfigs(climateRes || []);
@@ -1028,10 +1079,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       ? 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700 shadow-2xs'
                       : 'bg-red-950/40 hover:bg-red-900/50 border-red-800/40 text-red-300'
                   }`}
-                  title="Lock ERP Workstation & Sign Out"
+                  title="Lock / Sign Out ERP Workstation"
                 >
                   <LogOut className="w-3.5 h-3.5 text-red-500" />
-                  <span className="hidden md:inline">Lock ERP</span>
+                  <span className="hidden md:inline">Lock / Sign Out</span>
                 </button>
               )}
             </div>
@@ -2297,6 +2348,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onOperatorAssignmentsUpdated={(res) => {
               setActiveStaffSession(res.currentSession);
               apiClient.setOperatorContext(res.currentSession);
+              try {
+                if (localStorage.getItem('grocemart_admin_session')) {
+                  localStorage.setItem('grocemart_admin_session', JSON.stringify(res.currentSession));
+                }
+              } catch {}
               refreshAllData(res.currentSession);
             }}
             onShowToast={onShowToast}
