@@ -12,6 +12,7 @@ import {
 import type {
   InventoryBatch,
   InventoryItem,
+  RackHalalZone,
   RackRotationPolicy,
   RemovalStrategyType,
   StaffShiftSession,
@@ -84,6 +85,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
   const [rackBinCode, setRackBinCode] = useState<string>('');
   const [storageZone, setStorageZone] = useState<WarehouseRackStorageZone>('Chilled Walk-In (2°C–4°C)');
   const [rotationPolicy, setRotationPolicy] = useState<RackRotationPolicy>('STRICT_FEFO');
+  const [rackHalalZone, setRackHalalZone] = useState<RackHalalZone>('HALAL_DEDICATED');
   const [maxCapacity, setMaxCapacity] = useState<number>(250);
   const [rackNotes, setRackNotes] = useState<string>('');
 
@@ -146,11 +148,13 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
         storageZone,
         rotationPolicy,
         maxCapacity,
+        rackHalalZone,
         notes: rackNotes,
       });
       setRacks(res.racks || []);
       setEditingRackId(undefined);
       setRackBinCode('');
+      setRackHalalZone('HALAL_DEDICATED');
       setRackNotes('');
       onShowToast('Rack Configuration Saved', res.message);
       await onRefreshAll();
@@ -346,15 +350,29 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
             </div>
           </div>
 
-          <div>
-            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Handling / Zone Notes</label>
-            <input
-              type="text"
-              value={rackNotes}
-              onChange={(e) => setRackNotes(e.target.value)}
-              placeholder="e.g. HACCP cold-chain aisle 2, shelf height 1.8m"
-              className={inputClass}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Halal Segregation Zone (UU JPH)</label>
+              <select
+                value={rackHalalZone}
+                onChange={(e) => setRackHalalZone(e.target.value as RackHalalZone)}
+                className={inputClass}
+              >
+                <option value="HALAL_DEDICATED">HALAL_DEDICATED (Halal / Fresh Only)</option>
+                <option value="NON_HALAL_SEGREGATED">NON_HALAL_SEGREGATED (Dedicated Non-Halal)</option>
+                <option value="GENERAL_AMBIENT">GENERAL_AMBIENT (Sealed General Dry)</option>
+              </select>
+            </div>
+            <div>
+              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Handling / Zone Notes</label>
+              <input
+                type="text"
+                value={rackNotes}
+                onChange={(e) => setRackNotes(e.target.value)}
+                placeholder="e.g. HACCP cold-chain aisle 2, shelf height 1.8m"
+                className={inputClass}
+              />
+            </div>
           </div>
 
           <div className="flex justify-end">
@@ -422,7 +440,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
               >
                 {racks.map((r) => (
                   <option key={r.id} value={r.rackBinCode}>
-                    {r.rackBinCode} ({r.storageZone})
+                    {r.rackBinCode} ({r.storageZone}{r.rackHalalZone ? ` · ${r.rackHalalZone}` : ''})
                   </option>
                 ))}
               </select>
@@ -503,6 +521,19 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
                       >
                         {rack.storageZone}
                       </span>
+                      {rack.rackHalalZone && (
+                        <span
+                          className={`mt-1 inline-block px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${
+                            rack.rackHalalZone === 'NON_HALAL_SEGREGATED'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30'
+                              : rack.rackHalalZone === 'HALAL_DEDICATED'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30'
+                              : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                          }`}
+                        >
+                          {rack.rackHalalZone}
+                        </span>
+                      )}
                     </td>
                     <td className="py-2.5 px-3 font-mono">
                       <span
@@ -542,6 +573,7 @@ export const WarehouseRackSetupPanel: React.FC<WarehouseRackSetupPanelProps> = (
                           setRackBinCode(rack.rackBinCode);
                           setStorageZone(rack.storageZone);
                           setRotationPolicy(rack.rotationPolicy);
+                          setRackHalalZone(rack.rackHalalZone || 'HALAL_DEDICATED');
                           setMaxCapacity(rack.maxCapacity);
                           setRackNotes(rack.notes || '');
                         }}

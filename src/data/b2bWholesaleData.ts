@@ -107,6 +107,13 @@ export const WHOLESALE_PRODUCTS: WholesaleProduct[] = [
     currentStockBaseUnits: 480, // sak
     allowFractional: true,
     isRestrictedForPwp: false,
+    halalStatus: 'HALAL_CERTIFIED',
+    bpjphCertNumber: 'ID32110000811200224',
+    bpomRegNumber: 'KEMTAN RI PD 32.03-A.I.000-01-00912-01/25',
+    wholesaleTiers: [
+      { minQty: 5, unitPriceIDR: 69500, label: 'Semi-Grosir (5+ Sak)' },
+      { minQty: 10, unitPriceIDR: 66000, label: 'Agen Grosir (10+ Sak)' },
+    ],
     uomTiers: [
       { uom: 'pcs', label: '1 Sak (5kg)', multiplierToBase: 1, unitPrice: 72000 },
       { uom: 'carton', label: 'Dus (4 Sak / 20kg)', multiplierToBase: 4, unitPrice: 275000, minBulkQty: 1, tierDiscountPercent: 4.5 },
@@ -127,6 +134,13 @@ export const WHOLESALE_PRODUCTS: WholesaleProduct[] = [
     currentStockBaseUnits: 720, // pouch
     allowFractional: true,
     isRestrictedForPwp: false,
+    halalStatus: 'HALAL_CERTIFIED',
+    bpjphCertNumber: 'ID00410000012940323',
+    bpomRegNumber: 'BPOM RI MD 208109021011',
+    wholesaleTiers: [
+      { minQty: 6, unitPriceIDR: 36000, label: 'Semi-Grosir (6+ Pouch)' },
+      { minQty: 12, unitPriceIDR: 34500, label: 'Agen Grosir (12+ Pouch)' },
+    ],
     uomTiers: [
       { uom: 'pcs', label: '1 Pcs (2L)', multiplierToBase: 1, unitPrice: 38000 },
       { uom: 'carton', label: 'Dus (6 Pcs / 12L)', multiplierToBase: 6, unitPrice: 216000, minBulkQty: 1, tierDiscountPercent: 5.2 },
@@ -147,6 +161,13 @@ export const WHOLESALE_PRODUCTS: WholesaleProduct[] = [
     currentStockBaseUnits: 2400, // bungkus
     allowFractional: true,
     isRestrictedForPwp: false,
+    halalStatus: 'HALAL_CERTIFIED',
+    bpjphCertNumber: 'ID00410000001220422',
+    bpomRegNumber: 'BPOM RI MD 231509032002',
+    wholesaleTiers: [
+      { minQty: 20, unitPriceIDR: 2950, label: 'Semi-Grosir (20+ Bks)' },
+      { minQty: 40, unitPriceIDR: 2850, label: '1 Dus Grosir (40+ Bks)' },
+    ],
     uomTiers: [
       { uom: 'pcs', label: '1 Bungkus', multiplierToBase: 1, unitPrice: 3100 },
       { uom: 'carton', label: 'Dus (40 Bungkus)', multiplierToBase: 40, unitPrice: 118000, minBulkQty: 1, tierDiscountPercent: 4.8 },
@@ -188,6 +209,13 @@ export const WHOLESALE_PRODUCTS: WholesaleProduct[] = [
     currentStockBaseUnits: 960,
     allowFractional: true,
     isRestrictedForPwp: false,
+    halalStatus: 'HALAL_CERTIFIED',
+    bpjphCertNumber: 'ID00410000182900523',
+    bpomRegNumber: 'BPOM RI MD 251408001031',
+    wholesaleTiers: [
+      { minQty: 6, unitPriceIDR: 16800, label: 'Semi-Grosir (6+ Kg)' },
+      { minQty: 12, unitPriceIDR: 16200, label: 'Agen Grosir (12+ Kg)' },
+    ],
     uomTiers: [
       { uom: 'pcs', label: '1 Pcs (1kg)', multiplierToBase: 1, unitPrice: 17500 },
       { uom: 'carton', label: 'Dus (24 Pcs / 24kg)', multiplierToBase: 24, unitPrice: 395000, minBulkQty: 1, tierDiscountPercent: 5.9 },
@@ -208,6 +236,13 @@ export const WHOLESALE_PRODUCTS: WholesaleProduct[] = [
     currentStockBaseUnits: 600,
     allowFractional: true,
     isRestrictedForPwp: false,
+    halalStatus: 'HALAL_CERTIFIED',
+    bpjphCertNumber: 'ID00410000023110823',
+    bpomRegNumber: 'BPOM RI MD 400810025129',
+    wholesaleTiers: [
+      { minQty: 6, unitPriceIDR: 19000, label: 'Cafe Pack (6+ Kotak)' },
+      { minQty: 12, unitPriceIDR: 18400, label: '1 Dus Grosir (12+ Kotak)' },
+    ],
     uomTiers: [
       { uom: 'pcs', label: '1 Kotak (1L)', multiplierToBase: 1, unitPrice: 19800 },
       { uom: 'carton', label: 'Dus (12 Kotak)', multiplierToBase: 12, unitPrice: 224000, minBulkQty: 1, tierDiscountPercent: 5.7 },

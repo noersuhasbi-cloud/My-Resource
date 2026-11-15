@@ -268,6 +268,11 @@ export interface StoreInventoryStock {
   consignmentSupplier?: string;
   consignmentCommissionPercent?: number;
   consignmentCostIDR?: number;
+  halalStatus?: HalalStatus;
+  bpjphCertNumber?: string;
+  bpjphExpiryDate?: string;
+  bpomRegNumber?: string;
+  wholesaleTiers?: WholesaleVolumeTier[];
 }
 
 export interface InventoryItem {
@@ -323,6 +328,20 @@ export interface InventoryItem {
   consignmentSupplier?: string;
   consignmentCommissionPercent?: number;
   consignmentCostIDR?: number;
+  halalStatus?: HalalStatus;
+  bpjphCertNumber?: string;
+  bpjphExpiryDate?: string;
+  bpomRegNumber?: string;
+  wholesaleTiers?: WholesaleVolumeTier[];
+}
+
+export type HalalStatus = 'HALAL_CERTIFIED' | 'FRESH_UNPROCESSED' | 'NON_HALAL';
+export type RackHalalZone = 'HALAL_DEDICATED' | 'NON_HALAL_SEGREGATED' | 'GENERAL_AMBIENT';
+
+export interface WholesaleVolumeTier {
+  minQty: number;
+  unitPriceIDR: number;
+  label: string;
 }
 
 // -------------------------------------------------------------
@@ -798,7 +817,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK' | 'KASBON_COLLECTION' | 'PPH_WITHHOLDING';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -1198,6 +1217,11 @@ export interface POSProductItem {
   isConsignment?: boolean;
   consignmentSupplier?: string;
   consignmentCommissionPercent?: number;
+  halalStatus?: HalalStatus;
+  bpjphCertNumber?: string;
+  bpjphExpiryDate?: string;
+  bpomRegNumber?: string;
+  wholesaleTiers?: WholesaleVolumeTier[];
 }
 
 export interface POSCartItem {
@@ -1207,6 +1231,7 @@ export interface POSCartItem {
   name: string;
   category: string;
   unitPrice: number; // in IDR
+  baseUnitPrice?: number;
   unitCost: number; // in IDR
   quantity: number; // or kg for weighted items
   unit: string;
@@ -1222,9 +1247,17 @@ export interface POSCartItem {
   image?: string;
   isConsignment?: boolean;
   consignmentSupplier?: string;
+  appliedWholesaleTierLabel?: string;
+  isManualPriceOverride?: boolean;
 }
 
-export type POSPaymentMethod = 'cash' | 'qris' | 'debit_card' | 'credit_card';
+export type POSPaymentMethod = 'cash' | 'qris' | 'debit_card' | 'credit_card' | 'split';
+
+export interface POSSplitPaymentLeg {
+  method: 'CASH' | 'QRIS' | 'CARD';
+  amountIDR: number;
+  referenceNo?: string;
+}
 
 export interface POSTransactionRequest {
   storeId: string;
@@ -1241,6 +1274,7 @@ export interface POSTransactionRequest {
   currencyRateToIDR: number;
   currencyTotal: number;
   paymentMethod: POSPaymentMethod;
+  splitPayments?: POSSplitPaymentLeg[];
   cashTendered?: number;
   cashChange?: number;
   customerName?: string;
@@ -1274,6 +1308,7 @@ export interface POSTransactionReceipt {
   currencyTotal: number;
   currencyRateToIDR: number;
   paymentMethod: POSPaymentMethod;
+  splitPayments?: POSSplitPaymentLeg[];
   cashTendered?: number;
   cashChange?: number;
   qrisRef?: string;
@@ -2258,6 +2293,11 @@ export interface WholesaleProduct {
   palletDimensions?: string;
   removalStrategy?: 'FEFO' | 'FIFO';
   binLocation?: string;
+  halalStatus?: HalalStatus;
+  bpjphCertNumber?: string;
+  bpjphExpiryDate?: string;
+  bpomRegNumber?: string;
+  wholesaleTiers?: WholesaleVolumeTier[];
 }
 
 export interface B2BCartItem {
@@ -2269,6 +2309,7 @@ export interface B2BCartItem {
   baseUnitsCalculated: number; // quantity * multiplierToBase
   lineTotal: number;
   isPwpRedemption?: boolean;
+  appliedWholesaleTierLabel?: string;
 }
 
 export interface PWPRule {
@@ -2658,7 +2699,8 @@ export type CommunicationDocType =
   | 'B2B_INVOICE'
   | 'SURAT_JALAN'
   | 'RECALL_ALERT'
-  | 'CRM_CAMPAIGN';
+  | 'CRM_CAMPAIGN'
+  | 'KASBON_BILLING';
 
 export type SmtpProviderPreset =
   | 'custom'
@@ -2756,6 +2798,7 @@ export interface WarehouseRackConfig {
   maxCapacity: number;
   currentOccupancy: number;
   assignedSkus: string[];
+  rackHalalZone?: RackHalalZone;
   notes?: string;
   updatedAt: string;
   updatedBy?: string;
@@ -2874,6 +2917,7 @@ export interface PutawayCandidateRack {
   reason: string;
   hasSameSkuDifferentLot: boolean;
   hasSameLot: boolean;
+  rackHalalZone?: RackHalalZone;
 }
 
 export interface PutawaySuggestionResponse {
@@ -2884,6 +2928,13 @@ export interface PutawaySuggestionResponse {
   recommendedRack: PutawayCandidateRack | null;
   alternatives: PutawayCandidateRack[];
   reason: string;
+  skuHalalStatus?: HalalStatus;
+  bpjphCertNumber?: string;
+  bpjphExpiryDate?: string;
+  bpomRegNumber?: string;
+  bpjphExpiringSoon?: boolean;
+  bpjphDaysUntilExpiry?: number;
+  segregationAlert?: string;
 }
 
 export interface CrossDockAllocationInput {
@@ -3387,3 +3438,66 @@ export interface PosValidatePromoResponse {
   lineDiscounts: Record<string, number>;
   happyHourActive: boolean;
 }
+
+// =============================================================
+// INDONESIA ENTERPRISE PACK: KANVAS VAN-SELLING, KASBON & PPH 22/23
+// =============================================================
+export interface KanvasRouteRecord {
+  id: string;
+  salesmanName: string;
+  vehiclePlate: string;
+  routeArea: string;
+  outletCount: number;
+  dailyTargetIDR: number;
+  collectedKasbonIDR: number;
+  status: 'ON_ROUTE' | 'COMPLETED' | 'SETTLED';
+  updatedAt: string;
+}
+
+export type KasbonAgingStatus = 'LANCAR' | 'JATUH_TEMPO' | 'MENUNGGAK_7_HARI' | 'LUNAS';
+
+export interface WarungKasbonAccount {
+  id: string;
+  warungName: string;
+  ownerName: string;
+  phone: string;
+  salesmanName: string;
+  routeArea: string;
+  creditLimitIDR: number;
+  outstandingBalanceIDR: number;
+  dueDate: string;
+  agingStatus: KasbonAgingStatus;
+  lastPaymentAt?: string;
+  lastReminderSentAt?: string;
+}
+
+export interface KanvasLedgerResponse {
+  routes: KanvasRouteRecord[];
+  kasbonAccounts: WarungKasbonAccount[];
+  summary: {
+    totalRoutes: number;
+    activeRoutes: number;
+    totalOutstandingKasbonIDR: number;
+    overdueKasbonCount: number;
+    totalCollectedTodayIDR: number;
+  };
+}
+
+export type PphWithholdingType = 'PPH_22' | 'PPH_23';
+
+export interface PphWithholdingRecord {
+  id: string;
+  timestamp: string;
+  pphType: PphWithholdingType;
+  ratePercent: 1.5 | 2;
+  counterpartyName: string;
+  counterpartyNpwp: string;
+  invoiceRef: string;
+  grossDppIDR: number;
+  withheldAmountIDR: number;
+  glEntryIds: string[];
+  notes?: string;
+  recordedBy: string;
+}
+
+

@@ -12,7 +12,11 @@ import type {
   IndonesianTaxCategory,
 } from '../types/index.ts';
 import { formatIDR } from '../utils/formatters';
-import { computeIndonesianTax, inferDefaultTaxCategory } from '../utils/indonesianCompliance';
+import {
+  computeIndonesianTax,
+  inferDefaultTaxCategory,
+  resolveWholesaleTierPrice,
+} from '../utils/indonesianCompliance';
 import { getOdooSkuProfile } from '../utils/inventoryOdooHelper';
 import { apiClient } from '../services/apiClient';
 import { usePrint } from '../context/PrintContext';
@@ -234,8 +238,6 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
   const handleAddToCart = (product: WholesaleProduct) => {
     const selection = getSkuSelection(product);
     const tier = product.uomTiers.find((t) => t.uom === selection.uom) || product.uomTiers[0];
-    const baseUnitsCalculated = Math.round(selection.quantity * tier.multiplierToBase * 10) / 10;
-    const lineTotal = Math.round(selection.quantity * tier.unitPrice);
 
     setCartItems((prev) => {
       const existingIdx = prev.findIndex(
@@ -245,14 +247,26 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
         const next = [...prev];
         const existing = next[existingIdx];
         const newQty = Math.round((existing.quantity + selection.quantity) * 10) / 10;
+        const resolved =
+          selection.uom === 'pcs'
+            ? resolveWholesaleTierPrice(product.wholesaleTiers, newQty, tier.unitPrice)
+            : { unitPriceIDR: tier.unitPrice, appliedTier: undefined };
         next[existingIdx] = {
           ...existing,
           quantity: newQty,
+          unitPrice: resolved.unitPriceIDR,
           baseUnitsCalculated: Math.round(newQty * tier.multiplierToBase * 10) / 10,
-          lineTotal: Math.round(newQty * tier.unitPrice),
+          lineTotal: Math.round(newQty * resolved.unitPriceIDR),
+          appliedWholesaleTierLabel: resolved.appliedTier?.label,
         };
         return next;
       }
+      const resolved =
+        selection.uom === 'pcs'
+          ? resolveWholesaleTierPrice(product.wholesaleTiers, selection.quantity, tier.unitPrice)
+          : { unitPriceIDR: tier.unitPrice, appliedTier: undefined };
+      const baseUnitsCalculated = Math.round(selection.quantity * tier.multiplierToBase * 10) / 10;
+      const lineTotal = Math.round(selection.quantity * resolved.unitPriceIDR);
       return [
         ...prev,
         {
@@ -260,16 +274,18 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
           product,
           selectedUoM: selection.uom,
           quantity: selection.quantity,
-          unitPrice: tier.unitPrice,
+          unitPrice: resolved.unitPriceIDR,
           baseUnitsCalculated,
           lineTotal,
+          appliedWholesaleTierLabel: resolved.appliedTier?.label,
         },
       ];
     });
 
+    const baseUnitsAdded = Math.round(selection.quantity * tier.multiplierToBase * 10) / 10;
     onShowToast(
       'Added to Wholesale Basket',
-      `${selection.quantity} ${tier.label} of ${product.name} (${baseUnitsCalculated} base units)`
+      `${selection.quantity} ${tier.label} of ${product.name} (${baseUnitsAdded} base units)`
     );
   };
 
@@ -285,12 +301,19 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
             onShowToast('Tebus Murah Limit', 'Maksimal 1 unit promo Tebus Murah per faktur (Tidak berlaku kelipatan).');
             return it;
           }
+          const roundedQty = Math.round(newQty * 10) / 10;
           const tier = it.product.uomTiers.find((t) => t.uom === it.selectedUoM) || it.product.uomTiers[0];
+          const resolved =
+            it.selectedUoM === 'pcs' && !it.isPwpRedemption
+              ? resolveWholesaleTierPrice(it.product.wholesaleTiers, roundedQty, tier.unitPrice)
+              : { unitPriceIDR: tier.unitPrice, appliedTier: undefined };
           return {
             ...it,
-            quantity: Math.round(newQty * 10) / 10,
-            baseUnitsCalculated: Math.round(newQty * tier.multiplierToBase * 10) / 10,
-            lineTotal: Math.round(newQty * tier.unitPrice),
+            quantity: roundedQty,
+            unitPrice: resolved.unitPriceIDR,
+            baseUnitsCalculated: Math.round(roundedQty * tier.multiplierToBase * 10) / 10,
+            lineTotal: Math.round(roundedQty * resolved.unitPriceIDR),
+            appliedWholesaleTierLabel: resolved.appliedTier?.label,
           };
         }
         return it;
@@ -654,9 +677,13 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                 const currentSel = getSkuSelection(prod);
                 const activeTier =
                   prod.uomTiers.find((t) => t.uom === currentSel.uom) || prod.uomTiers[0];
+                const resolvedCardPrice =
+                  currentSel.uom === 'pcs'
+                    ? resolveWholesaleTierPrice(prod.wholesaleTiers, currentSel.quantity, activeTier.unitPrice)
+                    : { unitPriceIDR: activeTier.unitPrice, appliedTier: undefined };
                 const calculatedBaseUnits =
                   Math.round(currentSel.quantity * activeTier.multiplierToBase * 10) / 10;
-                const calculatedTotal = Math.round(currentSel.quantity * activeTier.unitPrice);
+                const calculatedTotal = Math.round(currentSel.quantity * resolvedCardPrice.unitPriceIDR);
 
                 const odooProfile = getOdooSkuProfile(prod.sku, prod.category, prod.baseUnit, prod.image);
                 const wholesaleImg = prod.b2bImageUrl || odooProfile.b2bImageUrl || prod.image;
@@ -828,6 +855,11 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                         <span className="text-sm font-extrabold font-mono text-stone-900 dark:text-zinc-100">
                           {formatIDR(calculatedTotal)}
                         </span>
+                        {resolvedCardPrice.appliedTier && (
+                          <span className="ml-1.5 inline-block px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
+                            Harga Grosir Aktif
+                          </span>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -904,9 +936,16 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                         <h4 className="text-xs font-bold text-stone-900 dark:text-zinc-100">
                           {it.product.name}
                         </h4>
-                        <span className="text-[10px] text-stone-400 font-mono block">
-                          SKU: {it.product.sku} · Base: {it.product.baseUnit}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-stone-400 font-mono">
+                            SKU: {it.product.sku} · Base: {it.product.baseUnit}
+                          </span>
+                          {it.appliedWholesaleTierLabel && (
+                            <span className="px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
+                              Harga Grosir Aktif ({it.appliedWholesaleTierLabel})
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <button
                         type="button"

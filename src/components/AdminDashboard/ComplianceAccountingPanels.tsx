@@ -15,6 +15,8 @@ import {
 import type {
   CoretaxExportRow,
   CustomerRmaRecord,
+  PphWithholdingRecord,
+  PphWithholdingType,
   RmaDisposition,
   RmaRefundMethod,
   RmaSourceChannel,
@@ -77,7 +79,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
   const [rtvReason, setRtvReason] = useState<string>('QC Rejected on Receiving Dock (Cold Chain Breach)');
   const [isCreatingRtv, setIsCreatingRtv] = useState<boolean>(false);
 
-  // Module 5: Coretax state
+  // Module 5: Coretax & PPh 22/23 state
   const [coretaxData, setCoretaxData] = useState<{
     generatedAt: string;
     summary: {
@@ -85,6 +87,9 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
       totalPpnKeluaranIDR: number;
       totalNotaReturPpnIDR: number;
       b2bMissingNpwpCount: number;
+      sembakoExemptCount?: number;
+      standardPpnCount?: number;
+      pphTotalWithheldIDR?: number;
     };
     rows: CoretaxExportRow[];
     csvContent: string;
@@ -93,6 +98,20 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
   const [isLoadingCoretax, setIsLoadingCoretax] = useState<boolean>(false);
   const [npwpVerifyInput, setNpwpVerifyInput] = useState<string>('013084492007000');
   const [npwpCheckRes, setNpwpCheckRes] = useState<any>(null);
+
+  const [pphRecords, setPphRecords] = useState<PphWithholdingRecord[]>([]);
+  const [pphSummary, setPphSummary] = useState<{
+    totalPph22IDR: number;
+    totalPph23IDR: number;
+    totalWithheldIDR: number;
+  }>({ totalPph22IDR: 0, totalPph23IDR: 0, totalWithheldIDR: 0 });
+  const [pphType, setPphType] = useState<PphWithholdingType>('PPH_22');
+  const [pphCounterpartyName, setPphCounterpartyName] = useState<string>('');
+  const [pphCounterpartyNpwp, setPphCounterpartyNpwp] = useState<string>('013084492007000');
+  const [pphInvoiceRef, setPphInvoiceRef] = useState<string>('');
+  const [pphGrossDppIDR, setPphGrossDppIDR] = useState<number>(10000000);
+  const [pphNotes, setPphNotes] = useState<string>('Pemotongan PPh Instansi Pemerintah / Jasa Logistik');
+  const [isSubmittingPph, setIsSubmittingPph] = useState<boolean>(false);
 
   const loadRmaRtvData = async () => {
     try {
@@ -120,12 +139,48 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
   const loadCoretax = async () => {
     setIsLoadingCoretax(true);
     try {
-      const data = await apiClient.getCoretaxExport();
+      const [data, pphRes] = await Promise.all([
+        apiClient.getCoretaxExport(),
+        apiClient.getPphWithholdings(),
+      ]);
       setCoretaxData(data);
+      setPphRecords(pphRes.records || []);
+      setPphSummary(pphRes.summary || { totalPph22IDR: 0, totalPph23IDR: 0, totalWithheldIDR: 0 });
     } catch (err) {
       console.error('Failed to load Coretax export:', err);
     } finally {
       setIsLoadingCoretax(false);
+    }
+  };
+
+  const handleSubmitPph = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pphCounterpartyName.trim() || !pphInvoiceRef.trim() || pphGrossDppIDR <= 0) {
+      onShowToast('Form Incomplete', 'Nama rekanan, nomor invoice/PO, dan DPP wajib diisi.');
+      return;
+    }
+    setIsSubmittingPph(true);
+    try {
+      const res = await apiClient.postPphWithholding({
+        pphType,
+        counterpartyName: pphCounterpartyName.trim(),
+        counterpartyNpwp: pphCounterpartyNpwp.trim(),
+        invoiceRef: pphInvoiceRef.trim(),
+        grossDppIDR: Math.round(pphGrossDppIDR),
+        notes: pphNotes.trim(),
+      });
+      onShowToast(
+        'Bukti Potong PPh Tercatat',
+        `${res.record.pphType.replace('_', ' ')} (${res.record.ratePercent}%) sebesar ${formatIDR(res.record.withheldAmountIDR)} dibukukan ke GL #1160 / #1200.`
+      );
+      setPphCounterpartyName('');
+      setPphInvoiceRef('');
+      await loadCoretax();
+      onRefreshData();
+    } catch (err: any) {
+      onShowToast('PPh Withholding Error', err?.message || 'Gagal mencatat pemotongan PPh.');
+    } finally {
+      setIsSubmittingPph(false);
     }
   };
 
@@ -601,7 +656,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Generate Coretax CSV</span>
+              <span>Download Coretax e-Faktur (.CSV)</span>
             </button>
             <button
               type="button"
@@ -655,6 +710,21 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                 {coretaxData.summary.b2bMissingNpwpCount}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* PP 49/2022 Sembako Exempt & PPh Withholding Strip */}
+        {coretaxData && (
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+            <span className={`px-2.5 py-1 rounded-lg border ${isLight ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'}`}>
+              BKP PPN (Kode 01/04): <strong>{coretaxData.summary.standardPpnCount ?? 0}</strong>
+            </span>
+            <span className={`px-2.5 py-1 rounded-lg border ${isLight ? 'bg-sky-50 border-sky-200 text-sky-800' : 'bg-sky-500/10 border-sky-500/30 text-sky-300'}`}>
+              Sembako Dibebaskan PP 49/2022 (Kode 08): <strong>{coretaxData.summary.sembakoExemptCount ?? 0}</strong>
+            </span>
+            <span className={`px-2.5 py-1 rounded-lg border ${isLight ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-amber-500/10 border-amber-500/30 text-amber-300'}`}>
+              Total PPh 22/23 Dipotong (#1160): <strong>{formatIDR(pphSummary.totalWithheldIDR)}</strong>
+            </span>
           </div>
         )}
 
@@ -740,6 +810,151 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                   <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold">{formatIDR(row.totalIDR)}</td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* PPh Pasal 22 (1.5%) & PPh Pasal 23 (2%) Withholding Tax Ledger */}
+      <div className={cardClass}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-zinc-800">
+          <div>
+            <h4 className="text-sm font-bold">
+              PPh Pasal 22 (1.5%) &amp; PPh Pasal 23 (2%) Withholding Tax Ledger (COA #1160 / #1200)
+            </h4>
+            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+              Catat bukti potong PPh 22 (bendaharawan pemerintah/BUMN) &amp; PPh 23 (jasa logistik/sewa) dengan jurnal otomatis DR #1160 / CR #1200.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-xs font-mono">
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+              PPh 22: {formatIDR(pphSummary.totalPph22IDR)}
+            </span>
+            <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+              PPh 23: {formatIDR(pphSummary.totalPph23IDR)}
+            </span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmitPph} className="grid grid-cols-1 sm:grid-cols-6 gap-2.5 items-end text-xs">
+          <div>
+            <label className="block font-semibold mb-1">Jenis PPh</label>
+            <select
+              value={pphType}
+              onChange={(e) => setPphType(e.target.value as PphWithholdingType)}
+              className={inputClass}
+            >
+              <option value="PPH_22">PPh Pasal 22 (1.5%)</option>
+              <option value="PPH_23">PPh Pasal 23 (2.0%)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block font-semibold mb-1">Nama Rekanan / Pemotong</label>
+            <input
+              type="text"
+              value={pphCounterpartyName}
+              onChange={(e) => setPphCounterpartyName(e.target.value)}
+              placeholder="PT Pertamina / Bendahara Dinas"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block font-semibold mb-1">NPWP Rekanan</label>
+            <input
+              type="text"
+              value={pphCounterpartyNpwp}
+              onChange={(e) => setPphCounterpartyNpwp(e.target.value)}
+              className={`font-mono ${inputClass}`}
+            />
+          </div>
+          <div>
+            <label className="block font-semibold mb-1">No. Invoice / PO</label>
+            <input
+              type="text"
+              value={pphInvoiceRef}
+              onChange={(e) => setPphInvoiceRef(e.target.value)}
+              placeholder="B2B-2026-001"
+              className={`font-mono ${inputClass}`}
+            />
+          </div>
+          <div>
+            <label className="block font-semibold mb-1">Nilai DPP (IDR)</label>
+            <input
+              type="number"
+              min={1000}
+              step={100000}
+              value={pphGrossDppIDR}
+              onChange={(e) => setPphGrossDppIDR(Math.max(0, Number(e.target.value) || 0))}
+              className={`font-mono font-bold ${inputClass}`}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isSubmittingPph}
+            className="py-2 px-3 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-50 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>{isSubmittingPph ? 'Menyimpan...' : 'Catat Bukti Potong'}</span>
+          </button>
+        </form>
+
+        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-zinc-800">
+          <table className="w-full text-left text-xs">
+            <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'}`}>
+              <tr>
+                <th className="py-2.5 px-3">ID &amp; Tanggal</th>
+                <th className="py-2.5 px-3">Jenis &amp; Tarif</th>
+                <th className="py-2.5 px-3">Rekanan / NPWP</th>
+                <th className="py-2.5 px-3">Ref Invoice</th>
+                <th className="py-2.5 px-3 text-right">DPP (IDR)</th>
+                <th className="py-2.5 px-3 text-right">PPh Dipotong</th>
+                <th className="py-2.5 px-3 text-right">GL Entry</th>
+              </tr>
+            </thead>
+            <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-zinc-800'}`}>
+              {pphRecords.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-gray-500 dark:text-zinc-400">
+                    Belum ada transaksi pemotongan PPh 22 / PPh 23 tercatat.
+                  </td>
+                </tr>
+              ) : (
+                pphRecords.map((rec) => (
+                  <tr key={rec.id} className={isLight ? 'hover:bg-gray-50/70' : 'hover:bg-zinc-800/40'}>
+                    <td className="py-2.5 px-3">
+                      <span className="font-mono font-bold block text-[11px]">{rec.id}</span>
+                      <span className="text-[10px] text-gray-500 dark:text-zinc-400">
+                        {new Date(rec.timestamp).toLocaleDateString('id-ID')}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          rec.pphType === 'PPH_22'
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
+                        }`}
+                      >
+                        {rec.pphType.replace('_', ' ')} ({rec.ratePercent}%)
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <div className="font-semibold">{rec.counterpartyName}</div>
+                      <div className="font-mono text-[10px] text-gray-500 dark:text-zinc-400">
+                        NPWP: {rec.counterpartyNpwp || '-'}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-[11px]">{rec.invoiceRef}</td>
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums">{formatIDR(rec.grossDppIDR)}</td>
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums font-bold text-amber-600 dark:text-amber-400">
+                      {formatIDR(rec.withheldAmountIDR)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-[10px] text-gray-500 dark:text-zinc-400">
+                      {rec.glEntryIds.join(', ')}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

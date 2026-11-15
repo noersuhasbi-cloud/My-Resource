@@ -437,7 +437,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             }`}
           >
             <FileCode2 className="w-3.5 h-3.5" />
-            e-Faktur &amp; Coretax DJP
+            Coretax e-Faktur &amp; PPh
           </button>
         </div>
       </div>

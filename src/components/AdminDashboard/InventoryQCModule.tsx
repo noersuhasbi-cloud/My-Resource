@@ -10,6 +10,7 @@ import type {
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { normalizeEnterpriseRole } from '../../utils/rbac';
+import { getBpjphExpiryInfo } from '../../utils/indonesianCompliance';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -255,6 +256,24 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   const rejectedCount = activeQcRecords.filter((r) => r.disposition === 'REJECTED').length;
   const passRate = activeQcRecords.length > 0 ? Math.round((passedCount / activeQcRecords.length) * 100) : 100;
 
+  const bpjphExpiringAlerts = React.useMemo(() => {
+    return inventory
+      .map((item) => {
+        if (item.halalStatus !== 'HALAL_CERTIFIED' || !item.bpjphExpiryDate) return null;
+        const info = getBpjphExpiryInfo(item.bpjphExpiryDate);
+        if (!info.isExpiringSoon && !info.isExpired) return null;
+        return {
+          sku: item.sku,
+          name: item.productName || item.name || item.sku,
+          certNumber: item.bpjphCertNumber || '-',
+          expiryDate: item.bpjphExpiryDate,
+          daysUntilExpiry: info.daysUntilExpiry,
+          isExpired: info.isExpired,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  }, [inventory]);
+
   // Card classes
   const cardClass = `rounded-2xl border transition-all ${
     isLight
@@ -368,6 +387,34 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
             </div>
           </div>
         </div>
+
+        {bpjphExpiringAlerts.length > 0 && (
+          <div
+            className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+              isLight
+                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                : 'bg-amber-950/30 border-amber-800/60 text-amber-200'
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="font-bold">
+                Peringatan Sertifikat Halal BPJPH (Masa Berlaku &le; 30 Hari): {bpjphExpiringAlerts.length} SKU
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {bpjphExpiringAlerts.map((al) => (
+                  <span
+                    key={al.sku}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-white/80 dark:bg-zinc-900/80 border border-amber-300/70 dark:border-amber-700/60"
+                  >
+                    {al.sku} ({al.name}) · {al.certNumber} ·{' '}
+                    {al.isExpired ? 'EXPIRED' : `${al.daysUntilExpiry}d left`}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* QC Logs Table */}
@@ -840,6 +887,45 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
                       </span>
                     )}
                   </div>
+                  {putawaySuggestion && (putawaySuggestion.skuHalalStatus || putawaySuggestion.bpomRegNumber || putawaySuggestion.bpjphCertNumber) && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+                      {putawaySuggestion.skuHalalStatus && (
+                        <span
+                          className={`px-2 py-0.5 rounded font-bold border ${
+                            putawaySuggestion.skuHalalStatus === 'NON_HALAL'
+                              ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                              : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30'
+                          }`}
+                        >
+                          {putawaySuggestion.skuHalalStatus}
+                        </span>
+                      )}
+                      {putawaySuggestion.bpomRegNumber && (
+                        <span className="px-2 py-0.5 rounded bg-white/70 dark:bg-zinc-900/70 border border-slate-300/60 dark:border-zinc-700">
+                          {putawaySuggestion.bpomRegNumber}
+                        </span>
+                      )}
+                      {putawaySuggestion.bpjphCertNumber && (
+                        <span
+                          className={`px-2 py-0.5 rounded border ${
+                            putawaySuggestion.bpjphExpiringSoon
+                              ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 font-bold'
+                              : 'bg-white/70 dark:bg-zinc-900/70 border-slate-300/60 dark:border-zinc-700'
+                          }`}
+                        >
+                          BPJPH: {putawaySuggestion.bpjphCertNumber}
+                          {putawaySuggestion.bpjphExpiringSoon && putawaySuggestion.bpjphDaysUntilExpiry !== undefined
+                            ? ` (Exp ${putawaySuggestion.bpjphDaysUntilExpiry}d!)`
+                            : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {putawaySuggestion?.segregationAlert && (
+                    <div className="p-2 rounded-lg bg-rose-500/15 border border-rose-500/30 text-[11px] font-semibold text-rose-700 dark:text-rose-300">
+                      {putawaySuggestion.segregationAlert}
+                    </div>
+                  )}
                   {putawayLoading ? (
                     <div className="text-[11px] opacity-75">Computing optimal cold-chain / lot-segregated rack...</div>
                   ) : putawaySuggestion?.recommendedRack ? (

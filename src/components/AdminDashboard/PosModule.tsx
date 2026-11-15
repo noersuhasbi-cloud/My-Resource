@@ -19,11 +19,16 @@ import type {
   CrmAccountType,
   CrmLoyaltyTier,
   PosValidatePromoResponse,
+  POSSplitPaymentLeg,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import { normalizeEnterpriseRole } from '../../utils/rbac';
-import { computeIndonesianTax, inferDefaultTaxCategory } from '../../utils/indonesianCompliance';
+import {
+  computeIndonesianTax,
+  inferDefaultTaxCategory,
+  resolveWholesaleTierPrice,
+} from '../../utils/indonesianCompliance';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   parseVariableWeightBarcode,
@@ -187,6 +192,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [isTenderModalOpen, setIsTenderModalOpen] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<POSPaymentMethod>('cash');
   const [cashTendered, setCashTendered] = useState<number>(0);
+  const [isSplitMode, setIsSplitMode] = useState<boolean>(false);
+  const [splitLeg1Method, setSplitLeg1Method] = useState<'CASH' | 'QRIS' | 'CARD'>('CASH');
+  const [splitLeg2Method, setSplitLeg2Method] = useState<'CASH' | 'QRIS' | 'CARD'>('QRIS');
+  const [splitLeg1Amount, setSplitLeg1Amount] = useState<number>(0);
   const [isProcessingCheckout, setIsProcessingCheckout] = useState<boolean>(false);
 
   // 7. Electronic Receipt Modal (Struk)
@@ -462,10 +471,17 @@ export const PosModule: React.FC<PosModuleProps> = ({
       if (!isWeighted && existingIdx >= 0) {
         const next = [...prev];
         const newQty = next[existingIdx].quantity + quantity;
+        const tierResolved = resolveWholesaleTierPrice(
+          product.wholesaleTiers,
+          newQty,
+          product.sellingPrice
+        );
         next[existingIdx] = {
           ...next[existingIdx],
           quantity: newQty,
-          lineTotal: newQty * next[existingIdx].unitPrice,
+          unitPrice: tierResolved.unitPriceIDR,
+          lineTotal: Math.round(newQty * tierResolved.unitPriceIDR),
+          appliedWholesaleTierLabel: tierResolved.appliedTier?.label,
         };
         return next;
       }
@@ -473,7 +489,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
       // Add as new line
       const effectiveQty = requestedAdd;
       const fallbackPricePerKg = product.unit.includes('kg') ? product.sellingPrice : product.sellingPrice * 4;
-      const unitPrice = isWeighted ? product.pricePerKg || fallbackPricePerKg : product.sellingPrice;
+      const tierResolved = !isWeighted
+        ? resolveWholesaleTierPrice(product.wholesaleTiers, effectiveQty, product.sellingPrice)
+        : { unitPriceIDR: product.pricePerKg || fallbackPricePerKg, appliedTier: undefined };
+      const unitPrice = isWeighted ? product.pricePerKg || fallbackPricePerKg : tierResolved.unitPriceIDR;
       const lineTotal = Math.round(unitPrice * effectiveQty);
 
       const newLine: POSCartItem = {
@@ -496,6 +515,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
         daysUntilExpiry: product.daysUntilExpiry,
         lineTotal,
         image: product.image,
+        appliedWholesaleTierLabel: tierResolved.appliedTier?.label,
       };
 
       return [newLine, ...prev];
@@ -522,6 +542,23 @@ export const PosModule: React.FC<PosModuleProps> = ({
           const newQty = item.isWeighted
             ? Number(Math.max(0.1, item.quantity + delta * 0.25).toFixed(3))
             : Math.max(1, item.quantity + delta);
+          if (!item.isWeighted) {
+            const prod = products.find((p) => p.sku === item.sku);
+            if (prod) {
+              const tierResolved = resolveWholesaleTierPrice(
+                prod.wholesaleTiers,
+                newQty,
+                prod.sellingPrice
+              );
+              return {
+                ...item,
+                quantity: newQty,
+                unitPrice: tierResolved.unitPriceIDR,
+                lineTotal: Math.round(newQty * tierResolved.unitPriceIDR),
+                appliedWholesaleTierLabel: tierResolved.appliedTier?.label,
+              };
+            }
+          }
           return {
             ...item,
             quantity: newQty,
@@ -623,15 +660,43 @@ export const PosModule: React.FC<PosModuleProps> = ({
     onShowToast('Ticket Resumed', `Ticket #${target.id} restored to register`);
   };
 
+  const splitLeg2Amount = Math.max(0, totalAmount - Math.round(splitLeg1Amount || 0));
+  const isSplitValid =
+    splitLeg1Method !== splitLeg2Method &&
+    Math.round(splitLeg1Amount || 0) > 0 &&
+    splitLeg2Amount > 0 &&
+    Math.round(splitLeg1Amount || 0) + splitLeg2Amount === totalAmount;
+
   // Checkout execution
   const handleExecuteCheckout = async () => {
     if (cart.length === 0) return;
-    if (paymentMethod === 'cash' && cashTendered < totalAmount) {
+    if (isSplitMode) {
+      if (!isSplitValid) {
+        onShowToast('Invalid Split Tender', 'Split payment requires two distinct methods summing exactly to Total Due.');
+        return;
+      }
+    } else if (paymentMethod === 'cash' && cashTendered < totalAmount) {
       onShowToast('Insufficient Cash', 'Amount tendered must cover total bill.');
       return;
     }
 
     setIsProcessingCheckout(true);
+
+    const splitPayments: POSSplitPaymentLeg[] | undefined = isSplitMode
+      ? [
+          { method: splitLeg1Method, amountIDR: Math.round(splitLeg1Amount) },
+          { method: splitLeg2Method, amountIDR: splitLeg2Amount },
+        ]
+      : undefined;
+
+    const cashLeg = splitPayments?.find((l) => l.method === 'CASH');
+    const resolvedMethod: POSPaymentMethod = isSplitMode
+      ? cashLeg
+        ? 'cash'
+        : splitLeg1Method === 'QRIS'
+        ? 'qris'
+        : 'debit_card'
+      : paymentMethod;
 
     try {
       const payload: POSTransactionRequest = {
@@ -648,9 +713,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
         currency: activeCurrency,
         currencyTotal: totalInActiveCurrency,
         currencyRateToIDR: currentFx.rateToIDR,
-        paymentMethod,
-        cashTendered: paymentMethod === 'cash' ? cashTendered : totalAmount,
-        cashChange: paymentMethod === 'cash' ? cashChange : 0,
+        paymentMethod: resolvedMethod,
+        splitPayments,
+        cashTendered: isSplitMode
+          ? cashLeg?.amountIDR || totalAmount
+          : paymentMethod === 'cash'
+          ? cashTendered
+          : totalAmount,
+        cashChange: isSplitMode ? 0 : paymentMethod === 'cash' ? cashChange : 0,
         customerName,
         customerPhone,
         customerMemberId,
@@ -1341,13 +1411,18 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 cart.map((item, idx) => (
                   <div key={`${item.id}-${idx}`} className="py-2 flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs font-bold text-slate-900 dark:text-zinc-100 truncate">
                           {item.name}
                         </span>
                         {item.isWeighted && (
                           <span className="text-[9px] px-1 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-mono">
                             {item.quantity} kg
+                          </span>
+                        )}
+                        {item.appliedWholesaleTierLabel && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold whitespace-nowrap">
+                            Harga Grosir Aktif ({item.appliedWholesaleTierLabel})
                           </span>
                         )}
                       </div>
@@ -1449,6 +1524,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
               disabled={cart.length === 0}
               onClick={() => {
                 setCashTendered(totalAmount);
+                setIsSplitMode(false);
+                setSplitLeg1Amount(Math.floor(totalAmount / 2));
                 setIsTenderModalOpen(true);
               }}
               className="w-full mt-3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
@@ -1652,9 +1729,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('cash')}
+                  onClick={() => {
+                    setIsSplitMode(false);
+                    setPaymentMethod('cash');
+                  }}
                   className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
-                    paymentMethod === 'cash'
+                    !isSplitMode && paymentMethod === 'cash'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                       : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
                   }`}
@@ -1665,9 +1745,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('qris')}
+                  onClick={() => {
+                    setIsSplitMode(false);
+                    setPaymentMethod('qris');
+                  }}
                   className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
-                    paymentMethod === 'qris'
+                    !isSplitMode && paymentMethod === 'qris'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                       : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
                   }`}
@@ -1678,9 +1761,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('debit_card')}
+                  onClick={() => {
+                    setIsSplitMode(false);
+                    setPaymentMethod('debit_card');
+                  }}
                   className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
-                    paymentMethod.includes('card')
+                    !isSplitMode && paymentMethod.includes('card')
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                       : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
                   }`}
@@ -1690,8 +1776,87 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 </button>
               </div>
 
+              {/* Additive Split Payment Toggle (2 Metode: Tunai + QRIS + EDC) */}
+              <div className="flex items-center justify-between pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isSplitMode;
+                    setIsSplitMode(next);
+                    if (next && splitLeg1Amount <= 0) {
+                      setSplitLeg1Amount(Math.floor(totalAmount / 2));
+                    }
+                  }}
+                  className={`w-full py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                    isSplitMode
+                      ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
+                      : isLight
+                      ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      : 'bg-zinc-800/70 border-zinc-700 text-zinc-200 hover:bg-zinc-800'
+                  }`}
+                >
+                  <span>Split Payment (2 Metode: Tunai + QRIS / EDC)</span>
+                  <span className="font-mono text-[10px] uppercase">
+                    {isSplitMode ? 'AKTIF' : 'Aktifkan'}
+                  </span>
+                </button>
+              </div>
+
+              {isSplitMode && (
+                <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/25 space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">Metode 1</label>
+                      <select
+                        value={splitLeg1Method}
+                        onChange={(e) => setSplitLeg1Method(e.target.value as 'CASH' | 'QRIS' | 'CARD')}
+                        className="w-full px-2.5 py-2 rounded-lg border text-xs font-bold bg-white border-slate-300 text-slate-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+                      >
+                        <option value="CASH">Tunai (Cash #1011)</option>
+                        <option value="QRIS">QRIS Instant (#1020)</option>
+                        <option value="CARD">EDC / Kartu (#1020)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">Nominal 1 (IDR)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={Math.max(1, totalAmount - 1)}
+                        value={splitLeg1Amount || ''}
+                        onChange={(e) => setSplitLeg1Amount(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+                        className="w-full px-2.5 py-2 rounded-lg border font-mono font-bold text-xs bg-white border-slate-300 text-slate-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">Metode 2</label>
+                      <select
+                        value={splitLeg2Method}
+                        onChange={(e) => setSplitLeg2Method(e.target.value as 'CASH' | 'QRIS' | 'CARD')}
+                        className="w-full px-2.5 py-2 rounded-lg border text-xs font-bold bg-white border-slate-300 text-slate-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+                      >
+                        <option value="CASH">Tunai (Cash #1011)</option>
+                        <option value="QRIS">QRIS Instant (#1020)</option>
+                        <option value="CARD">EDC / Kartu (#1020)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1">Nominal 2 (Sisa Otomatis)</label>
+                      <div className="px-2.5 py-2 rounded-lg border font-mono font-bold text-xs bg-slate-100 dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-emerald-700 dark:text-emerald-300">
+                        {formatIDR(splitLeg2Amount)}
+                      </div>
+                    </div>
+                  </div>
+                  {!isSplitValid && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                      Pilih 2 metode berbeda dengan nominal masing-masing &gt; Rp 0 dan total sama persis {formatIDR(totalAmount)}.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Method Specific Panels */}
-              {paymentMethod === 'cash' && (
+              {!isSplitMode && paymentMethod === 'cash' && (
                 <div className="space-y-3 pt-1">
                   <div>
                     <label className="text-xs font-semibold text-slate-700 dark:text-zinc-200 block mb-1">
@@ -1746,7 +1911,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 </div>
               )}
 
-              {paymentMethod === 'qris' && (
+              {!isSplitMode && paymentMethod === 'qris' && (
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border text-center space-y-3">
                   <div className="w-36 h-36 mx-auto bg-white p-2 rounded-xl border shadow-sm flex items-center justify-center">
                     <QRCodeSVG
@@ -1766,7 +1931,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 </div>
               )}
 
-              {paymentMethod.includes('card') && (
+              {!isSplitMode && paymentMethod.includes('card') && (
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border text-center space-y-2">
                   <CreditCard className="w-8 h-8 text-blue-500 mx-auto" />
                   <div className="text-xs">
@@ -1782,7 +1947,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-zinc-800/40 text-[10px] text-zinc-500 flex items-center gap-1.5 font-mono">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                 <span>
-                  Auto GL Posting: Debit Asset #{paymentMethod === 'cash' ? '1010' : paymentMethod === 'qris' ? '1030' : '1020'} · Credit Sales #4010 · COGS #5010
+                  {isSplitMode
+                    ? `Split GL Posting: Debit #1011/#1020 (${splitLeg1Method} + ${splitLeg2Method}) · Credit Sales #4010 · COGS #5010`
+                    : `Auto GL Posting: Debit Asset #${paymentMethod === 'cash' ? '1011' : '1020'} · Credit Sales #4010 · COGS #5010`}
                 </span>
               </div>
 
@@ -1797,7 +1964,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 </button>
                 <button
                   type="button"
-                  disabled={isProcessingCheckout || (paymentMethod === 'cash' && cashTendered < totalAmount)}
+                  disabled={
+                    isProcessingCheckout ||
+                    (isSplitMode ? !isSplitValid : paymentMethod === 'cash' && cashTendered < totalAmount)
+                  }
                   onClick={handleExecuteCheckout}
                   className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                 >
@@ -1913,10 +2083,22 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between text-[10px] pt-1 text-slate-600">
-                  <span>Tender: {completedReceipt.paymentMethod.toUpperCase()}</span>
-                  <span>{formatIDR(completedReceipt.cashTendered || completedReceipt.total)}</span>
-                </div>
+                {completedReceipt.splitPayments && completedReceipt.splitPayments.length > 0 ? (
+                  <div className="pt-1 space-y-0.5 text-[10px] text-slate-600">
+                    <div className="font-bold">Split Tender:</div>
+                    {completedReceipt.splitPayments.map((leg, i) => (
+                      <div key={i} className="flex justify-between pl-2">
+                        <span>• {leg.method}</span>
+                        <span>{formatIDR(leg.amountIDR)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-[10px] pt-1 text-slate-600">
+                    <span>Tender: {completedReceipt.paymentMethod.toUpperCase()}</span>
+                    <span>{formatIDR(completedReceipt.cashTendered || completedReceipt.total)}</span>
+                  </div>
+                )}
                 {completedReceipt.cashChange !== undefined && completedReceipt.cashChange > 0 && (
                   <div className="flex justify-between text-[10px] text-slate-600 font-bold">
                     <span>Change (Kembalian):</span>

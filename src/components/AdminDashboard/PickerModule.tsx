@@ -450,8 +450,9 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                     <p className="text-xs text-slate-600 dark:text-zinc-300 mt-0.5">Customer: <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{selectedOrder.customerName}</strong> ({selectedOrder.customerPhone}) &bull; Target: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{selectedOrder.targetDispatchTime}</span></p>
                   </div>
 
-                  {selectedOrder.pickerStatus !== 'ready_for_packing' &&
-                  selectedOrder.pickerStatus !== 'completed' &&
+                  {(selectedOrder.fulfillmentStatus === 'PENDING_PICKING' ||
+                    (selectedOrder.pickerStatus !== 'ready_for_packing' &&
+                      selectedOrder.pickerStatus !== 'completed')) &&
                   selectedOrder.fulfillmentStatus !== 'COMPLETED' &&
                   selectedOrder.fulfillmentStatus !== 'READY_FOR_PICKUP' ? (
                     <button
@@ -972,7 +973,13 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               <div className="p-3 rounded-xl border text-xs flex items-center justify-between bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/25">
                 <span>Recalculated Price:</span>
                 <span className="font-mono font-bold text-base">
-                  {formatIDR(Math.round((scaleGramsInput / 100) * (catchWeightItem.pricePer100g || 40000)))}
+                  {formatIDR(
+                    Math.round(
+                      (scaleGramsInput / 100) *
+                        (catchWeightItem.pricePer100g || 40000) *
+                        Math.max(1, catchWeightItem.pickedQty || catchWeightItem.orderedQty || 1)
+                    )
+                  )}
                 </span>
               </div>
 

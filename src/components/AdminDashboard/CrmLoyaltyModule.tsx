@@ -13,14 +13,17 @@ import type {
   CrmPredictiveRestockAlert,
   CrmRfmSegment,
   EnterpriseQuotation,
+  KanvasLedgerResponse,
   POSTransactionReceipt,
   StaffShiftSession,
   StoreOutletSchedule,
+  WarungKasbonAccount,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import {
   Award,
+  Banknote,
   Building2,
   Calendar,
   CheckCircle2,
@@ -43,6 +46,7 @@ import {
   Store,
   Ticket,
   TrendingUp,
+  Truck,
   UserCheck,
   Users,
   X,
@@ -59,7 +63,13 @@ interface CrmLoyaltyModuleProps {
   onRefreshData?: () => void;
 }
 
-type CrmSubTab = 'pipeline' | 'directory' | 'rfm_campaigns' | 'predictive_restock' | 'promo_rules';
+type CrmSubTab =
+  | 'pipeline'
+  | 'directory'
+  | 'rfm_campaigns'
+  | 'predictive_restock'
+  | 'promo_rules'
+  | 'kanvas_kasbon';
 
 const PIPELINE_STAGES: Array<{
   key: CrmDealStage;
@@ -217,6 +227,43 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
   });
   const [lastWaMeUrl, setLastWaMeUrl] = useState<string | null>(null);
 
+  // Sales Kanvas & Warung Kasbon State
+  const [kanvasLedger, setKanvasLedger] = useState<KanvasLedgerResponse | null>(null);
+  const [kanvasLoading, setKanvasLoading] = useState<boolean>(false);
+  const [collectTarget, setCollectTarget] = useState<WarungKasbonAccount | null>(null);
+  const [collectAmountIDR, setCollectAmountIDR] = useState<number>(0);
+  const [isNewRouteOpen, setIsNewRouteOpen] = useState<boolean>(false);
+  const [newRouteForm, setNewRouteForm] = useState({
+    salesmanName: '',
+    vehiclePlate: '',
+    routeArea: '',
+    outletCount: 10,
+    dailyTargetIDR: 12000000,
+  });
+  const [isNewKasbonOpen, setIsNewKasbonOpen] = useState<boolean>(false);
+  const [newKasbonForm, setNewKasbonForm] = useState({
+    warungName: '',
+    ownerName: '',
+    phone: '',
+    salesmanName: '',
+    routeArea: '',
+    creditLimitIDR: 5000000,
+    outstandingBalanceIDR: 1500000,
+    dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+  });
+
+  const loadKanvasLedger = async () => {
+    setKanvasLoading(true);
+    try {
+      const data = await apiClient.getKanvasLedger();
+      setKanvasLedger(data);
+    } catch (err: any) {
+      onShowToast('Kanvas Load Error', err?.message || 'Unable to load Sales Kanvas & Warung Kasbon ledger.');
+    } finally {
+      setKanvasLoading(false);
+    }
+  };
+
   const loadOverview = async () => {
     setIsLoading(true);
     try {
@@ -231,7 +278,136 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
 
   useEffect(() => {
     loadOverview();
+    loadKanvasLedger();
   }, [selectedStore]);
+
+  useEffect(() => {
+    if (subTab === 'kanvas_kasbon') {
+      loadKanvasLedger();
+    }
+  }, [subTab]);
+
+  const handleCreateKanvasRoute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRouteForm.salesmanName.trim() || !newRouteForm.vehiclePlate.trim() || !newRouteForm.routeArea.trim()) {
+      onShowToast('Form Incomplete', 'Salesman name, vehicle plate, and route area are required.');
+      return;
+    }
+    setBusyActionId('kanvas-create-route');
+    try {
+      await apiClient.postKanvasLedgerAction({
+        action: 'CREATE_ROUTE',
+        salesmanName: newRouteForm.salesmanName.trim(),
+        vehiclePlate: newRouteForm.vehiclePlate.trim().toUpperCase(),
+        routeArea: newRouteForm.routeArea.trim(),
+        outletCount: Number(newRouteForm.outletCount) || 1,
+        dailyTargetIDR: Number(newRouteForm.dailyTargetIDR) || 0,
+      });
+      onShowToast('Rute Kanvas Ditambahkan', `Rute ${newRouteForm.routeArea} (${newRouteForm.salesmanName}) aktif.`);
+      setIsNewRouteOpen(false);
+      setNewRouteForm({ salesmanName: '', vehiclePlate: '', routeArea: '', outletCount: 10, dailyTargetIDR: 12000000 });
+      await loadKanvasLedger();
+    } catch (err: any) {
+      onShowToast('Kanvas Route Error', err?.message || 'Failed to add route.');
+    } finally {
+      setBusyActionId(null);
+    }
+  };
+
+  const handleCreateKasbon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newKasbonForm.warungName.trim() || !newKasbonForm.ownerName.trim()) {
+      onShowToast('Form Incomplete', 'Nama warung dan pemilik wajib diisi.');
+      return;
+    }
+    setBusyActionId('kanvas-create-kasbon');
+    try {
+      await apiClient.postKanvasLedgerAction({
+        action: 'CREATE_KASBON',
+        warungName: newKasbonForm.warungName.trim(),
+        ownerName: newKasbonForm.ownerName.trim(),
+        phone: newKasbonForm.phone.trim() || '+628120000000',
+        salesmanName: newKasbonForm.salesmanName.trim() || 'Sales Kanvas',
+        routeArea: newKasbonForm.routeArea.trim() || 'Area Jabodetabek',
+        creditLimitIDR: Number(newKasbonForm.creditLimitIDR) || 5000000,
+        outstandingBalanceIDR: Number(newKasbonForm.outstandingBalanceIDR) || 0,
+        dueDate: newKasbonForm.dueDate,
+      });
+      onShowToast('Kasbon Warung Tercatat', `Akun kasbon ${newKasbonForm.warungName} berhasil disimpan.`);
+      setIsNewKasbonOpen(false);
+      setNewKasbonForm({
+        warungName: '',
+        ownerName: '',
+        phone: '',
+        salesmanName: '',
+        routeArea: '',
+        creditLimitIDR: 5000000,
+        outstandingBalanceIDR: 1500000,
+        dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      });
+      await loadKanvasLedger();
+    } catch (err: any) {
+      onShowToast('Kasbon Error', err?.message || 'Failed to create warung kasbon.');
+    } finally {
+      setBusyActionId(null);
+    }
+  };
+
+  const handleCollectKasbonPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!collectTarget || collectAmountIDR <= 0) return;
+    setBusyActionId(`collect-${collectTarget.id}`);
+    try {
+      const res = await apiClient.postKanvasLedgerAction({
+        action: 'COLLECT_PAYMENT',
+        accountId: collectTarget.id,
+        amountIDR: Math.round(collectAmountIDR),
+      });
+      onShowToast(
+        'Pelunasan Kasbon Tercatat',
+        `${collectTarget.warungName}: ${formatIDR(collectAmountIDR)} dibukukan ke Kas (#1010) & Piutang (#1200).`
+      );
+      if (res.ledger) {
+        setKanvasLedger(res.ledger);
+      } else {
+        await loadKanvasLedger();
+      }
+      setCollectTarget(null);
+      setCollectAmountIDR(0);
+      onRefreshData?.();
+    } catch (err: any) {
+      onShowToast('Collect Payment Error', err?.message || 'Gagal mencatat pelunasan kasbon.');
+    } finally {
+      setBusyActionId(null);
+    }
+  };
+
+  const handleSendKasbonWaReminder = async (acc: WarungKasbonAccount) => {
+    setBusyActionId(`wa-kasbon-${acc.id}`);
+    try {
+      const res = await apiClient.sendDocumentCommunication({
+        channel: 'whatsapp',
+        docType: 'KASBON_BILLING',
+        docId: acc.id,
+        recipientName: acc.ownerName,
+        recipientPhone: acc.phone,
+        customNote: `Tagihan Kasbon ${acc.warungName} (${acc.id}) sebesar ${formatIDR(acc.outstandingBalanceIDR)}, jatuh tempo ${acc.dueDate}. Salesman: ${acc.salesmanName} (${acc.routeArea}).`,
+      });
+      await apiClient.postKanvasLedgerAction({
+        action: 'MARK_REMINDER_SENT',
+        accountId: acc.id,
+      });
+      await loadKanvasLedger();
+      onShowToast(
+        'Tagihan WA Terkirim',
+        `Reminder kasbon untuk ${acc.warungName} (${acc.phone}) tercatat di Audit Log.${res.waMeUrl ? ' Link WhatsApp siap.' : ''}`
+      );
+    } catch (err: any) {
+      onShowToast('WhatsApp Dispatch Error', err?.message || 'Gagal mengirim tagihan kasbon via WhatsApp.');
+    } finally {
+      setBusyActionId(null);
+    }
+  };
 
   const openAccountProfile = async (accId: string) => {
     setSelectedProfileId(accId);
@@ -586,6 +762,12 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
               id: 'promo_rules',
               label: 'Promo & Voucher Rules',
               icon: Ticket,
+            },
+            {
+              id: 'kanvas_kasbon',
+              label: 'Sales Kanvas & Kasbon',
+              icon: Truck,
+              badge: kanvasLedger?.summary.overdueKasbonCount || undefined,
             },
           ] as Array<{ id: CrmSubTab; label: string; icon: any; badge?: number }>
         ).map((tab) => {
@@ -1123,6 +1305,427 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
           activeStaffSession={activeStaffSession}
           onShowToast={onShowToast}
         />
+      )}
+
+      {/* ============================================================ */}
+      {/* SUB-TAB 6: SALESMAN KANVAS (VAN-SELLING) & WARUNG KASBON     */}
+      {/* ============================================================ */}
+      {subTab === 'kanvas_kasbon' && (
+        <div className="space-y-4">
+          {/* Compact KPI Strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className={`${cardClass} p-4`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold uppercase tracking-wider ${textMuted}`}>
+                  Active Van Routes
+                </span>
+                <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <p className={`text-2xl font-extrabold font-mono mt-1.5 ${textTitle}`}>
+                {kanvasLedger?.summary.activeRoutes ?? 0} / {kanvasLedger?.summary.totalRoutes ?? 0}
+              </p>
+              <p className={`text-[11px] mt-1 ${textMuted}`}>Armada kanvas keliling aktif</p>
+            </div>
+
+            <div className={`${cardClass} p-4`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold uppercase tracking-wider ${textMuted}`}>
+                  Collected Today
+                </span>
+                <Banknote className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <p className="text-2xl font-extrabold font-mono mt-1.5 text-emerald-600 dark:text-emerald-400">
+                {formatIDR(kanvasLedger?.summary.totalCollectedTodayIDR ?? 0)}
+              </p>
+              <p className={`text-[11px] mt-1 ${textMuted}`}>Setoran tunai kanvas (COA #1010)</p>
+            </div>
+
+            <div className={`${cardClass} p-4`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold uppercase tracking-wider ${textMuted}`}>
+                  Outstanding Kasbon
+                </span>
+                <FileText className="w-4 h-4 text-amber-500" />
+              </div>
+              <p className="text-2xl font-extrabold font-mono mt-1.5 text-amber-600 dark:text-amber-400">
+                {formatIDR(kanvasLedger?.summary.totalOutstandingKasbonIDR ?? 0)}
+              </p>
+              <p className={`text-[11px] mt-1 ${textMuted}`}>Piutang warung berjalan (COA #1200)</p>
+            </div>
+
+            <div className={`${cardClass} p-4`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold uppercase tracking-wider ${textMuted}`}>
+                  Overdue / Jatuh Tempo
+                </span>
+                <Clock className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+              </div>
+              <p className="text-2xl font-extrabold font-mono mt-1.5 text-rose-600 dark:text-rose-400">
+                {kanvasLedger?.summary.overdueKasbonCount ?? 0} Warung
+              </p>
+              <p className={`text-[11px] mt-1 ${textMuted}`}>Siap ditagih via WhatsApp Billing</p>
+            </div>
+          </div>
+
+          {/* Section A: Rute Salesman Kanvas */}
+          <div className={`${cardClass} p-4 sm:p-5 space-y-3`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className={`text-sm font-extrabold ${textTitle}`}>
+                  Rute Salesman Kanvas (Van-Selling &amp; Kunjungan Warung)
+                </h3>
+                <p className={`text-[11px] ${textMuted}`}>
+                  Monitoring armada kanvas harian, target drop barang, dan realisasi setoran.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={loadKanvasLedger}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${kanvasLoading ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsNewRouteOpen((v) => !v)}
+                  className="px-3 py-1.5 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Rute Kanvas</span>
+                </button>
+              </div>
+            </div>
+
+            {isNewRouteOpen && (
+              <form onSubmit={handleCreateKanvasRoute} className={`${subCardClass} p-3 grid grid-cols-1 sm:grid-cols-6 gap-2 items-end text-xs`}>
+                <div>
+                  <label className="block font-bold mb-1">Nama Salesman</label>
+                  <input
+                    type="text"
+                    value={newRouteForm.salesmanName}
+                    onChange={(e) => setNewRouteForm((p) => ({ ...p, salesmanName: e.target.value }))}
+                    placeholder="Dedi Kurniawan"
+                    className={`w-full px-2.5 py-1.5 rounded-lg ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Plat Kendaraan</label>
+                  <input
+                    type="text"
+                    value={newRouteForm.vehiclePlate}
+                    onChange={(e) => setNewRouteForm((p) => ({ ...p, vehiclePlate: e.target.value }))}
+                    placeholder="B 9123 KNV"
+                    className={`w-full px-2.5 py-1.5 rounded-lg font-mono ${inputClass}`}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block font-bold mb-1">Area Rute</label>
+                  <input
+                    type="text"
+                    value={newRouteForm.routeArea}
+                    onChange={(e) => setNewRouteForm((p) => ({ ...p, routeArea: e.target.value }))}
+                    placeholder="Bekasi Timur - Tambun"
+                    className={`w-full px-2.5 py-1.5 rounded-lg ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Target Harian (IDR)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={500000}
+                    value={newRouteForm.dailyTargetIDR}
+                    onChange={(e) => setNewRouteForm((p) => ({ ...p, dailyTargetIDR: Number(e.target.value) || 0 }))}
+                    className={`w-full px-2.5 py-1.5 rounded-lg font-mono ${inputClass}`}
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    type="submit"
+                    disabled={busyActionId === 'kanvas-create-route'}
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-[#0F4C3A] text-white font-bold cursor-pointer"
+                  >
+                    Simpan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewRouteOpen(false)}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-zinc-700 font-bold cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+              <table className="w-full text-left text-xs">
+                <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'}`}>
+                  <tr>
+                    <th className="py-2.5 px-3">ID Rute</th>
+                    <th className="py-2.5 px-3">Salesman &amp; Armada</th>
+                    <th className="py-2.5 px-3">Area Kunjungan</th>
+                    <th className="py-2.5 px-3 text-center">Outlet</th>
+                    <th className="py-2.5 px-3 text-right">Target Harian</th>
+                    <th className="py-2.5 px-3 text-right">Tertagih Hari Ini</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                  {(kanvasLedger?.routes || []).map((rt) => (
+                    <tr key={rt.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-zinc-800/40'}>
+                      <td className="py-2.5 px-3 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{rt.id}</td>
+                      <td className="py-2.5 px-3">
+                        <div className={`font-bold ${textTitle}`}>{rt.salesmanName}</div>
+                        <div className={`font-mono text-[10px] ${textMuted}`}>{rt.vehiclePlate}</div>
+                      </td>
+                      <td className="py-2.5 px-3">{rt.routeArea}</td>
+                      <td className="py-2.5 px-3 text-center font-mono">{rt.outletCount}</td>
+                      <td className="py-2.5 px-3 text-right font-mono tabular-nums">{formatIDR(rt.dailyTargetIDR)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                        {formatIDR(rt.collectedKasbonIDR)}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            rt.status === 'ON_ROUTE'
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                              : 'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300 border-slate-300 dark:border-zinc-700'
+                          }`}
+                        >
+                          {rt.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Section B: Buku Kasbon Warung / Toko Kelontong */}
+          <div className={`${cardClass} p-4 sm:p-5 space-y-3`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className={`text-sm font-extrabold ${textTitle}`}>
+                  Buku Kasbon Warung &amp; Toko Kelontong (Aging &amp; Tagih WhatsApp)
+                </h3>
+                <p className={`text-[11px] ${textMuted}`}>
+                  Catat pelunasan cicilan ke GL Kas (#1010) &amp; Piutang (#1200) atau kirim surat tagih WhatsApp 1-klik.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewKasbonOpen((v) => !v)}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-zinc-700 text-xs font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Catat Kasbon Baru</span>
+              </button>
+            </div>
+
+            {isNewKasbonOpen && (
+              <form onSubmit={handleCreateKasbon} className={`${subCardClass} p-3 grid grid-cols-1 sm:grid-cols-6 gap-2 items-end text-xs`}>
+                <div>
+                  <label className="block font-bold mb-1">Nama Warung</label>
+                  <input
+                    type="text"
+                    value={newKasbonForm.warungName}
+                    onChange={(e) => setNewKasbonForm((p) => ({ ...p, warungName: e.target.value }))}
+                    placeholder="Warung Berkah Jaya"
+                    className={`w-full px-2.5 py-1.5 rounded-lg ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Pemilik</label>
+                  <input
+                    type="text"
+                    value={newKasbonForm.ownerName}
+                    onChange={(e) => setNewKasbonForm((p) => ({ ...p, ownerName: e.target.value }))}
+                    placeholder="Ibu Siti"
+                    className={`w-full px-2.5 py-1.5 rounded-lg ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">WhatsApp</label>
+                  <input
+                    type="text"
+                    value={newKasbonForm.phone}
+                    onChange={(e) => setNewKasbonForm((p) => ({ ...p, phone: e.target.value }))}
+                    placeholder="+62812..."
+                    className={`w-full px-2.5 py-1.5 rounded-lg font-mono ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Saldo Kasbon (IDR)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={50000}
+                    value={newKasbonForm.outstandingBalanceIDR}
+                    onChange={(e) => setNewKasbonForm((p) => ({ ...p, outstandingBalanceIDR: Number(e.target.value) || 0 }))}
+                    className={`w-full px-2.5 py-1.5 rounded-lg font-mono ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Jatuh Tempo</label>
+                  <input
+                    type="date"
+                    value={newKasbonForm.dueDate}
+                    onChange={(e) => setNewKasbonForm((p) => ({ ...p, dueDate: e.target.value }))}
+                    className={`w-full px-2.5 py-1.5 rounded-lg ${inputClass}`}
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    type="submit"
+                    disabled={busyActionId === 'kanvas-create-kasbon'}
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-[#0F4C3A] text-white font-bold cursor-pointer"
+                  >
+                    Simpan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewKasbonOpen(false)}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-zinc-700 font-bold cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Inline Pelunasan Bar */}
+            {collectTarget && (
+              <form
+                onSubmit={handleCollectKasbonPayment}
+                className="p-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 flex flex-wrap items-center justify-between gap-3 text-xs"
+              >
+                <div>
+                  <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                    Catat Pelunasan Kasbon: {collectTarget.warungName} ({collectTarget.ownerName})
+                  </span>
+                  <span className={`block text-[11px] ${textMuted}`}>
+                    Sisa Piutang: {formatIDR(collectTarget.outstandingBalanceIDR)} · GL otomatis DR #1010 Kas / CR #1200 Piutang
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1000}
+                    max={collectTarget.outstandingBalanceIDR}
+                    step={10000}
+                    value={collectAmountIDR}
+                    onChange={(e) => setCollectAmountIDR(Number(e.target.value) || 0)}
+                    className={`w-40 px-2.5 py-1.5 rounded-lg font-mono font-bold ${inputClass}`}
+                  />
+                  <button
+                    type="submit"
+                    disabled={busyActionId === `collect-${collectTarget.id}` || collectAmountIDR <= 0}
+                    className="px-3.5 py-1.5 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-bold cursor-pointer disabled:opacity-50"
+                  >
+                    {busyActionId === `collect-${collectTarget.id}` ? 'Menyimpan...' : 'Konfirmasi Bayar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCollectTarget(null);
+                      setCollectAmountIDR(0);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-zinc-700 font-bold cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
+              <table className="w-full text-left text-xs">
+                <thead className={`border-b text-[10px] font-bold uppercase ${isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-zinc-800/60 text-zinc-400 border-zinc-800'}`}>
+                  <tr>
+                    <th className="py-2.5 px-3">Warung / Pemilik</th>
+                    <th className="py-2.5 px-3">Salesman &amp; Rute</th>
+                    <th className="py-2.5 px-3 text-right">Plafon Kredit</th>
+                    <th className="py-2.5 px-3 text-right">Saldo Kasbon</th>
+                    <th className="py-2.5 px-3">Jatuh Tempo</th>
+                    <th className="py-2.5 px-3 text-center">Aging</th>
+                    <th className="py-2.5 px-3 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-zinc-800'}`}>
+                  {(kanvasLedger?.kasbonAccounts || []).map((acc) => {
+                    const agingBadge =
+                      acc.agingStatus === 'LUNAS'
+                        ? 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                        : acc.agingStatus === 'MENUNGGAK_7_HARI'
+                        ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                        : acc.agingStatus === 'JATUH_TEMPO'
+                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                        : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30';
+                    return (
+                      <tr key={acc.id} className={isLight ? 'hover:bg-slate-50/70' : 'hover:bg-zinc-800/40'}>
+                        <td className="py-2.5 px-3">
+                          <div className={`font-bold ${textTitle}`}>{acc.warungName}</div>
+                          <div className={`text-[10px] ${textMuted}`}>
+                            {acc.ownerName} · <span className="font-mono">{acc.phone}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold">{acc.salesmanName}</div>
+                          <div className={`text-[10px] ${textMuted}`}>{acc.routeArea}</div>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono tabular-nums">{formatIDR(acc.creditLimitIDR)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold tabular-nums text-rose-600 dark:text-rose-400">
+                          {formatIDR(acc.outstandingBalanceIDR)}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[11px]">
+                          {acc.dueDate}
+                          {acc.lastReminderSentAt && (
+                            <span className="block text-[9px] text-emerald-600 dark:text-emerald-400">
+                              WA sent {new Date(acc.lastReminderSentAt).toLocaleDateString('id-ID')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${agingBadge}`}>
+                            {acc.agingStatus.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={acc.outstandingBalanceIDR <= 0}
+                              onClick={() => {
+                                setCollectTarget(acc);
+                                setCollectAmountIDR(acc.outstandingBalanceIDR);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-40 text-white text-[11px] font-bold cursor-pointer whitespace-nowrap"
+                            >
+                              Catat Bayar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busyActionId === `wa-kasbon-${acc.id}` || acc.outstandingBalanceIDR <= 0}
+                              onClick={() => handleSendKasbonWaReminder(acc)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                            >
+                              <MessageCircle className="w-3 h-3" />
+                              <span>{busyActionId === `wa-kasbon-${acc.id}` ? 'Kirim...' : 'Tagih WA'}</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ============================================================ */}

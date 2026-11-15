@@ -43,6 +43,7 @@ const DOC_TYPE_LABELS: Record<CommunicationDocType, string> = {
   SURAT_JALAN: 'Surat Jalan (Delivery Waybill)',
   RECALL_ALERT: 'BPOM / HACCP Batch Recall Alert',
   CRM_CAMPAIGN: 'CRM Promo & Restock Campaign',
+  KASBON_BILLING: 'Tagihan Kasbon Warung (WA Billing)',
 };
 
 function normalizeIndoPhonePreview(raw: string): string {

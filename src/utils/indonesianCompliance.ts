@@ -1,6 +1,7 @@
 import type {
   CoretaxExportRow,
   IndonesianTaxCategory,
+  WholesaleVolumeTier,
 } from '../types/index.ts';
 
 // ============================================================================
@@ -256,39 +257,119 @@ function escapeXml(val: string | number): string {
 }
 
 export function buildCoretaxCsv(rows: CoretaxExportRow[]): string {
-  const headers = [
-    'FK_TYPE',
+  const fkHeader = [
+    'FK',
     'KD_JENIS_TRANSAKSI',
-    'NOMOR_DOKUMEN',
-    'TANGGAL_DOKUMEN',
-    'NPWP_NIK_LAWAN_TRANSAKSI',
-    'VALID_NPWP_16',
-    'NAMA_LAWAN_TRANSAKSI',
-    'KATEGORI_PAJAK',
-    'JUMLAH_DPP_IDR',
-    'JUMLAH_PPN_IDR',
-    'JUMLAH_PB1_IDR',
-    'TOTAL_TRANSAKSI_IDR',
-    'REFERENSI_ERP',
-  ];
+    'FG_PENGGANTI',
+    'NOMOR_FAKTUR',
+    'MASA_PAJAK',
+    'TAHUN_PAJAK',
+    'TANGGAL_FAKTUR',
+    'NPWP',
+    'NAMA',
+    'ALAMAT_LENGKAP',
+    'JUMLAH_DPP',
+    'JUMLAH_PPN',
+    'JUMLAH_PPNBM',
+    'ID_KETERANGAN_TAMBAHAN',
+    'FG_UANG_MUKA',
+    'UANG_MUKA_DPP',
+    'UANG_MUKA_PPN',
+    'UANG_MUKA_PPNBM',
+    'REFERENSI',
+    'KODE_DOKUMEN_PENDUKUNG',
+  ].join(',');
 
-  const lines = [headers.join(',')];
+  const ltHeader = [
+    'LT',
+    'NPWP',
+    'NAMA',
+    'JALAN',
+    'BLOK',
+    'NOMOR',
+    'RT',
+    'RW',
+    'KECAMATAN',
+    'KELURAHAN',
+    'KABUPATEN',
+    'PROPINSI',
+    'KODE_POS',
+    'NOMOR_TELEPON',
+  ].join(',');
+
+  const ofHeader = [
+    'OF',
+    'KODE_OBJEK',
+    'NAMA',
+    'HARGA_SATUAN',
+    'JUMLAH_BARANG',
+    'HARGA_TOTAL',
+    'DISKON',
+    'DPP',
+    'PPN',
+    'TARIF_PPNBM',
+    'PPNBM',
+  ].join(',');
+
+  const lines: string[] = [fkHeader, ltHeader, ofHeader];
+
   for (const r of rows) {
+    const isoDate = (r.documentDate || new Date().toISOString()).split('T')[0];
+    const [yearStr = '2026', monthStr = '01', dayStr = '01'] = isoDate.split('-');
+    const formattedDate = `${dayStr}/${monthStr}/${yearStr}`;
+    const masaPajak = Number(monthStr) || 1;
+    const tahunPajak = Number(yearStr) || 2026;
+    const kodeTransaksi =
+      r.taxClassification === 'BKP_DIBEBASKAN'
+        ? '08'
+        : r.kodeTransaksi || '04';
+    const ketTambahan = r.taxClassification === 'BKP_DIBEBASKAN' ? '1' : '0';
+
     lines.push(
       [
-        escapeCsvCell(r.documentType),
-        escapeCsvCell(r.kodeTransaksi),
+        'FK',
+        escapeCsvCell(kodeTransaksi),
+        '0',
         escapeCsvCell(r.documentNumber),
-        escapeCsvCell(r.documentDate.split('T')[0]),
+        masaPajak,
+        tahunPajak,
+        escapeCsvCell(formattedDate),
         escapeCsvCell(r.npwpOrNik),
-        escapeCsvCell(r.isNpwpValid ? 'VALID' : 'UNREGISTERED_DIGUNGGUNG'),
         escapeCsvCell(r.counterpartyName),
-        escapeCsvCell(r.taxClassification),
+        escapeCsvCell(r.isNpwpValid ? 'Indonesia (Registered TIN)' : 'Digunggung / Retail Cash'),
         r.dppIDR,
         r.ppnIDR,
-        r.pb1IDR,
-        r.totalIDR,
+        0,
+        ketTambahan,
+        0,
+        0,
+        0,
+        0,
+        escapeCsvCell(`${r.referenceId} [${r.taxClassification}]`),
+        escapeCsvCell(r.documentType),
+      ].join(',')
+    );
+
+    const objectLabel =
+      r.taxClassification === 'BKP_DIBEBASKAN'
+        ? 'Sembako & Barang Strategis Dibebaskan PPN (PP 49/2022)'
+        : r.taxClassification === 'NON_BKP_PB1'
+          ? `Prepared Deli / Restoran PB1 10% (PB1 Rp ${r.pb1IDR})`
+          : 'Barang Kena Pajak Ritel / Grosir (PPN)';
+
+    lines.push(
+      [
+        'OF',
         escapeCsvCell(r.referenceId),
+        escapeCsvCell(objectLabel),
+        r.dppIDR,
+        1,
+        r.dppIDR,
+        0,
+        r.dppIDR,
+        r.ppnIDR,
+        0,
+        0,
       ].join(',')
     );
   }
@@ -330,3 +411,48 @@ ${taxInvoicesXml}
   </ListOfTaxInvoice>
 </TaxInvoiceBulk>`;
 }
+
+// ============================================================================
+// 4. WHOLESALE MULTI-TIER PRICING & BPJPH HALAL EXPIRY HELPERS
+// ============================================================================
+
+export function resolveWholesaleTierPrice(
+  tiers: WholesaleVolumeTier[] | undefined,
+  qty: number,
+  baseUnitPrice: number
+): { unitPriceIDR: number; appliedTier?: WholesaleVolumeTier } {
+  if (!tiers || tiers.length === 0 || qty <= 0) {
+    return { unitPriceIDR: Math.round(baseUnitPrice) };
+  }
+  const eligible = [...tiers]
+    .filter((t) => qty >= t.minQty && t.unitPriceIDR > 0)
+    .sort((a, b) => b.minQty - a.minQty);
+  if (eligible.length === 0) {
+    return { unitPriceIDR: Math.round(baseUnitPrice) };
+  }
+  const best = eligible[0];
+  if (best.unitPriceIDR < baseUnitPrice) {
+    return { unitPriceIDR: Math.round(best.unitPriceIDR), appliedTier: best };
+  }
+  return { unitPriceIDR: Math.round(baseUnitPrice) };
+}
+
+export function getBpjphExpiryInfo(
+  bpjphExpiryDate?: string,
+  nowMs: number = Date.now()
+): { daysUntilExpiry: number | null; isExpiringSoon: boolean; isExpired: boolean } {
+  if (!bpjphExpiryDate) {
+    return { daysUntilExpiry: null, isExpiringSoon: false, isExpired: false };
+  }
+  const expMs = new Date(bpjphExpiryDate).getTime();
+  if (!Number.isFinite(expMs)) {
+    return { daysUntilExpiry: null, isExpiringSoon: false, isExpired: false };
+  }
+  const daysUntilExpiry = Math.ceil((expMs - nowMs) / (24 * 60 * 60 * 1000));
+  return {
+    daysUntilExpiry,
+    isExpired: daysUntilExpiry < 0,
+    isExpiringSoon: daysUntilExpiry >= 0 && daysUntilExpiry <= 30,
+  };
+}
+

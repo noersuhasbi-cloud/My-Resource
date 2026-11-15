@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import path from 'path';
+import http from 'http';
 import https from 'https';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
@@ -179,6 +180,15 @@ import type {
   AppliedPromotionSummary,
   EpodRecord,
   EpodReturnLine,
+  HalalStatus,
+  RackHalalZone,
+  WholesaleVolumeTier,
+  POSSplitPaymentLeg,
+  KanvasRouteRecord,
+  WarungKasbonAccount,
+  KanvasLedgerResponse,
+  PphWithholdingType,
+  PphWithholdingRecord,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -192,6 +202,8 @@ import {
   validateNpwpOrNik,
   buildCoretaxCsv,
   buildCoretaxXml,
+  resolveWholesaleTierPrice,
+  getBpjphExpiryInfo,
 } from './src/utils/indonesianCompliance.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -351,6 +363,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       storeId: 'store-jkt-senopati',
       storeName: 'GroceMart Senopati Flagship',
       storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rackHalalZone: 'HALAL_DEDICATED',
       rotationPolicy: 'STRICT_FEFO',
       maxCapacity: 300,
       currentOccupancy: 0,
@@ -365,6 +378,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       storeId: 'store-jkt-senopati',
       storeName: 'GroceMart Senopati Flagship',
       storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rackHalalZone: 'HALAL_DEDICATED',
       rotationPolicy: 'STRICT_FEFO',
       maxCapacity: 250,
       currentOccupancy: 0,
@@ -374,11 +388,27 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       updatedBy: 'ERP Baseline Seed',
     },
     {
+      id: 'RACK-SEN-NH-01',
+      rackBinCode: 'SEN-NHL-R01-B01',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rackHalalZone: 'NON_HALAL_SEGREGATED',
+      rotationPolicy: 'STRICT_FEFO',
+      maxCapacity: 80,
+      currentOccupancy: 0,
+      assignedSkus: ['SKU-DEL-NH01'],
+      notes: 'Dedicated Segregated Non-Halal Chiller Cabinet (UU JPH Compliance)',
+      updatedAt: nowIso,
+      updatedBy: 'ERP Baseline Seed',
+    },
+    {
       id: 'RACK-SEN-AMB-01',
       rackBinCode: 'SEN-AMB-R02-B01',
       storeId: 'store-jkt-senopati',
       storeName: 'GroceMart Senopati Flagship',
       storageZone: 'Ambient Dry',
+      rackHalalZone: 'HALAL_DEDICATED',
       rotationPolicy: 'STRICT_FIFO',
       maxCapacity: 400,
       currentOccupancy: 0,
@@ -393,6 +423,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       storeId: 'store-jkt-senopati',
       storeName: 'GroceMart Senopati Flagship',
       storageZone: 'Deep Freeze (-20°C)',
+      rackHalalZone: 'HALAL_DEDICATED',
       rotationPolicy: 'STRICT_FEFO',
       maxCapacity: 200,
       currentOccupancy: 0,
@@ -407,6 +438,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       storeId: 'store-jkt-senopati',
       storeName: 'GroceMart Senopati Flagship',
       storageZone: 'Quarantine Hold Cage',
+      rackHalalZone: 'GENERAL_AMBIENT',
       rotationPolicy: 'STRICT_FEFO',
       maxCapacity: 120,
       currentOccupancy: 0,
@@ -421,6 +453,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       storeId: 'store-jkt-pik',
       storeName: 'GroceMart PIK 2 The Avenue',
       storageZone: 'Deep Freeze (-20°C)',
+      rackHalalZone: 'HALAL_DEDICATED',
       rotationPolicy: 'STRICT_FEFO',
       maxCapacity: 240,
       currentOccupancy: 0,
@@ -435,6 +468,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       storeId: 'store-jkt-pik',
       storeName: 'GroceMart PIK 2 The Avenue',
       storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rackHalalZone: 'HALAL_DEDICATED',
       rotationPolicy: 'STRICT_FEFO',
       maxCapacity: 300,
       currentOccupancy: 0,
@@ -449,6 +483,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       storeId: 'store-jkt-senopati',
       storeName: 'GroceMart Senopati Flagship',
       storageZone: 'Ambient Dry',
+      rackHalalZone: 'GENERAL_AMBIENT',
       rotationPolicy: 'STRICT_FIFO',
       maxCapacity: 600,
       currentOccupancy: 0,
@@ -463,6 +498,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       storeId: 'store-bdg-dago',
       storeName: 'GroceMart Bandung Dago Heritage',
       storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rackHalalZone: 'HALAL_DEDICATED',
       rotationPolicy: 'STRICT_FEFO',
       maxCapacity: 220,
       currentOccupancy: 0,
@@ -477,6 +513,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
       storeId: 'store-jkt-menteng',
       storeName: 'GroceMart Menteng Pavilion',
       storageZone: 'Chilled Walk-In (2°C–4°C)',
+      rackHalalZone: 'HALAL_DEDICATED',
       rotationPolicy: 'STRICT_FEFO',
       maxCapacity: 220,
       currentOccupancy: 0,
@@ -502,6 +539,101 @@ let recallEventsList: Array<{
   affectedUnits: number;
   reason?: string;
 }> = [];
+
+function createInitialKanvasRoutes(): KanvasRouteRecord[] {
+  return [
+    {
+      id: 'KNV-RT-01',
+      salesmanName: 'Hendra Kurniawan',
+      vehiclePlate: 'B 9412 KVS',
+      routeArea: 'Pasar Minggu – Kemang – Cipete',
+      outletCount: 18,
+      dailyTargetIDR: 18500000,
+      collectedKasbonIDR: 6450000,
+      status: 'ON_ROUTE',
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'KNV-RT-02',
+      salesmanName: 'Dedi Saputra',
+      vehiclePlate: 'B 9821 TGR',
+      routeArea: 'PIK – Kapuk – Cengkareng',
+      outletCount: 14,
+      dailyTargetIDR: 15000000,
+      collectedKasbonIDR: 4200000,
+      status: 'ON_ROUTE',
+      updatedAt: new Date().toISOString(),
+    },
+  ];
+}
+
+function createInitialWarungKasbon(): WarungKasbonAccount[] {
+  const dayMs = 86400000;
+  return [
+    {
+      id: 'KSB-001',
+      warungName: 'Toko Berkah Mandiri',
+      ownerName: 'H. Sudirman Santoso',
+      phone: '+62 812-8822-9011',
+      salesmanName: 'Hendra Kurniawan',
+      routeArea: 'Pasar Minggu – Kemang – Cipete',
+      creditLimitIDR: 30000000,
+      outstandingBalanceIDR: 8500000,
+      dueDate: new Date(Date.now() + 2 * dayMs).toISOString().split('T')[0],
+      agingStatus: 'JATUH_TEMPO',
+      lastPaymentAt: new Date(Date.now() - 5 * dayMs).toISOString(),
+    },
+    {
+      id: 'KSB-002',
+      warungName: 'Warung Sembako Ibu Yanti',
+      ownerName: 'Ibu Yanti Rahayu',
+      phone: '+62 813-7744-2219',
+      salesmanName: 'Hendra Kurniawan',
+      routeArea: 'Pasar Minggu – Kemang – Cipete',
+      creditLimitIDR: 15000000,
+      outstandingBalanceIDR: 4250000,
+      dueDate: new Date(Date.now() + 9 * dayMs).toISOString().split('T')[0],
+      agingStatus: 'LANCAR',
+      lastPaymentAt: new Date(Date.now() - 2 * dayMs).toISOString(),
+    },
+    {
+      id: 'KSB-003',
+      warungName: 'Kios Maju Jaya Pak Amat',
+      ownerName: 'Pak Amat Fauzi',
+      phone: '+62 815-9910-4488',
+      salesmanName: 'Dedi Saputra',
+      routeArea: 'PIK – Kapuk – Cengkareng',
+      creditLimitIDR: 20000000,
+      outstandingBalanceIDR: 6800000,
+      dueDate: new Date(Date.now() - 7 * dayMs).toISOString().split('T')[0],
+      agingStatus: 'MENUNGGAK_7_HARI',
+      lastPaymentAt: new Date(Date.now() - 18 * dayMs).toISOString(),
+    },
+  ];
+}
+
+function createInitialPphWithholdings(): PphWithholdingRecord[] {
+  return [
+    {
+      id: 'PPH-2026-0001',
+      timestamp: new Date(Date.now() - 2 * 86400000).toISOString(),
+      pphType: 'PPH_23',
+      ratePercent: 2,
+      counterpartyName: 'Grand Grandeur Hotel & Bistro Jakarta',
+      counterpartyNpwp: '0177788890150000',
+      invoiceRef: 'B2B-2026-0038',
+      grossDppIDR: 15000000,
+      withheldAmountIDR: 300000,
+      glEntryIds: ['GLE-2026-0103', 'GLE-2026-0104'],
+      notes: 'Bukti Potong PPh Pasal 23 (2%) jasa katering & penyediaan bahan baku HoReCa',
+      recordedBy: 'Finance Tax Controller',
+    },
+  ];
+}
+
+let kanvasRoutes: KanvasRouteRecord[] = createInitialKanvasRoutes();
+let warungKasbonAccounts: WarungKasbonAccount[] = createInitialWarungKasbon();
+let pphWithholdingList: PphWithholdingRecord[] = createInitialPphWithholdings();
 
 // =============================================================
 // STANDALONE CRM, LOYALTY & B2B CUSTOMER 360 DATA STORE
@@ -1524,6 +1656,15 @@ function ensureRegulatoryCoaAccounts() {
       balance: 0,
       description: 'Accrued consignment vendor payables recognized only upon POS or B2B sale of Titip Jual stock',
     },
+    {
+      accountCode: '1160',
+      accountName: 'Prepaid Tax PPh Pasal 22/23 (PPh Dipungut/Dipotong)',
+      category: 'Asset',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Creditable Indonesian withholding tax (PPh 22 1.5% / PPh 23 2%) deducted by institutional/HoReCa buyers',
+    },
   ];
   requiredAccounts.forEach((acc) => {
     if (!chartOfAccounts.some((c) => c.accountCode === acc.accountCode)) {
@@ -1532,6 +1673,109 @@ function ensureRegulatoryCoaAccounts() {
   });
 }
 ensureRegulatoryCoaAccounts();
+
+function resolveSkuHalalStatus(sku: string): HalalStatus {
+  const inv = inventoryList.find((i) => i.sku === sku);
+  if (inv?.halalStatus) return inv.halalStatus;
+  const tier = storeInventoryTiers.find((t) => t.sku === sku);
+  if (tier?.halalStatus) return tier.halalStatus;
+  const wp = wholesaleProductsList.find((w) => w.sku === sku);
+  if (wp?.halalStatus) return wp.halalStatus;
+  return 'FRESH_UNPROCESSED';
+}
+
+function validateHalalPutawayRule(
+  sku: string,
+  rack: WarehouseRackConfig
+): { ok: true } | { ok: false; error: string } {
+  if (rack.storageZone === 'Quarantine Hold Cage') {
+    return { ok: true };
+  }
+  const halalStatus = resolveSkuHalalStatus(sku);
+  const zone: RackHalalZone =
+    rack.rackHalalZone ||
+    (rack.storageZone === 'Chilled Walk-In (2°C–4°C)' || rack.storageZone === 'Deep Freeze (-20°C)'
+      ? 'HALAL_DEDICATED'
+      : 'GENERAL_AMBIENT');
+  if (halalStatus === 'NON_HALAL' && zone === 'HALAL_DEDICATED') {
+    return {
+      ok: false,
+      error: `Pelanggaran Segregasi Halal BPJPH (UU JPH): SKU Non-Halal (${sku}) dilarang ditempatkan pada rak HALAL_DEDICATED (${rack.rackBinCode}). Gunakan rak zona NON_HALAL_SEGREGATED.`,
+    };
+  }
+  if (halalStatus === 'HALAL_CERTIFIED' && zone === 'NON_HALAL_SEGREGATED') {
+    return {
+      ok: false,
+      error: `Pelanggaran Segregasi Halal BPJPH (UU JPH): SKU Halal Bersertifikat (${sku}) dilarang ditempatkan pada rak NON_HALAL_SEGREGATED (${rack.rackBinCode}).`,
+    };
+  }
+  return { ok: true };
+}
+
+function ensureHalalComplianceMetadata() {
+  const seedBySku = new Map(INITIAL_INVENTORY.map((i) => [i.sku, i]));
+  INITIAL_INVENTORY.forEach((seed) => {
+    const existing = inventoryList.find((i) => i.sku === seed.sku);
+    if (!existing) {
+      inventoryList.push(JSON.parse(JSON.stringify(seed)));
+    } else {
+      if (!existing.halalStatus && seed.halalStatus) existing.halalStatus = seed.halalStatus;
+      if (!existing.bpjphCertNumber && seed.bpjphCertNumber) existing.bpjphCertNumber = seed.bpjphCertNumber;
+      if (!existing.bpjphExpiryDate && seed.bpjphExpiryDate) existing.bpjphExpiryDate = seed.bpjphExpiryDate;
+      if (!existing.bpomRegNumber && seed.bpomRegNumber) existing.bpomRegNumber = seed.bpomRegNumber;
+      if (!existing.wholesaleTiers && seed.wholesaleTiers) {
+        existing.wholesaleTiers = JSON.parse(JSON.stringify(seed.wholesaleTiers));
+      }
+    }
+  });
+  INITIAL_STORE_INVENTORY_TIERS.forEach((seedTier) => {
+    const existingTier = storeInventoryTiers.find(
+      (t) => t.sku === seedTier.sku && t.storeId === seedTier.storeId
+    );
+    if (!existingTier) {
+      storeInventoryTiers.push(JSON.parse(JSON.stringify(seedTier)));
+    } else {
+      const seedInv = seedBySku.get(seedTier.sku);
+      if (!existingTier.halalStatus && (seedTier.halalStatus || seedInv?.halalStatus)) {
+        existingTier.halalStatus = seedTier.halalStatus || seedInv?.halalStatus;
+      }
+      if (!existingTier.bpomRegNumber && (seedTier.bpomRegNumber || seedInv?.bpomRegNumber)) {
+        existingTier.bpomRegNumber = seedTier.bpomRegNumber || seedInv?.bpomRegNumber;
+      }
+    }
+  });
+  WHOLESALE_PRODUCTS.forEach((seedWp) => {
+    const wp = wholesaleProductsList.find((w) => w.sku === seedWp.sku);
+    if (wp) {
+      if (!wp.halalStatus && seedWp.halalStatus) wp.halalStatus = seedWp.halalStatus;
+      if (!wp.bpjphCertNumber && seedWp.bpjphCertNumber) wp.bpjphCertNumber = seedWp.bpjphCertNumber;
+      if (!wp.bpomRegNumber && seedWp.bpomRegNumber) wp.bpomRegNumber = seedWp.bpomRegNumber;
+      if (!wp.wholesaleTiers && seedWp.wholesaleTiers) {
+        wp.wholesaleTiers = JSON.parse(JSON.stringify(seedWp.wholesaleTiers));
+      }
+    }
+  });
+  const seedRacks = createInitialWarehouseRacks();
+  seedRacks.forEach((sr) => {
+    const existingRack = warehouseRacks.find(
+      (r) => r.rackBinCode === sr.rackBinCode && r.storeId === sr.storeId
+    );
+    if (!existingRack) {
+      warehouseRacks.push(sr);
+    } else if (!existingRack.rackHalalZone) {
+      existingRack.rackHalalZone = sr.rackHalalZone;
+    }
+  });
+  warehouseRacks.forEach((r) => {
+    if (!r.rackHalalZone) {
+      r.rackHalalZone =
+        r.storageZone === 'Chilled Walk-In (2°C–4°C)' || r.storageZone === 'Deep Freeze (-20°C)'
+          ? 'HALAL_DEDICATED'
+          : 'GENERAL_AMBIENT';
+    }
+  });
+}
+ensureHalalComplianceMetadata();
 
 const INITIAL_SEED_GL_IDS = new Set(INITIAL_GENERAL_LEDGER.map((g) => g.id));
 const BASELINE_COA_BY_CODE: Record<string, { category: ChartOfAccount['category']; accountName: string; balance: number }> = Object.fromEntries(
@@ -2377,7 +2621,7 @@ function deductBatchesByStrategy(
   const eligibleBatches = matchingAll
     .filter(
       (b) =>
-        b.currentStock > 0 &&
+        Math.max(0, b.currentStock - (b.reservedQuantity || 0)) > 0 &&
         b.status !== 'quarantined' &&
         b.status !== 'recalled' &&
         b.status !== 'expired' &&
@@ -2396,7 +2640,9 @@ function deductBatchesByStrategy(
     });
 
   const totalAvailableSellableQty = Number(
-    eligibleBatches.reduce((sum, b) => sum + b.currentStock, 0).toFixed(2)
+    eligibleBatches
+      .reduce((sum, b) => sum + Math.max(0, b.currentStock - (b.reservedQuantity || 0)), 0)
+      .toFixed(2)
   );
   const hasBatchRecords = matchingAll.length > 0;
 
@@ -2438,7 +2684,9 @@ function deductBatchesByStrategy(
 
   for (const batch of eligibleBatches) {
     if (remaining <= 0) break;
-    const take = Math.min(batch.currentStock, remaining);
+    const unreservedBatchStock = Math.max(0, batch.currentStock - (batch.reservedQuantity || 0));
+    const take = Math.min(unreservedBatchStock, remaining);
+    if (take <= 0) continue;
     batch.currentStock = Math.max(0, Number((batch.currentStock - take).toFixed(2)));
     remaining = Math.max(0, Number((remaining - take).toFixed(2)));
 
@@ -5282,6 +5530,9 @@ function captureServerState() {
     consignmentLedger,
     safeDropsList,
     recallEventsList,
+    kanvasRoutes,
+    warungKasbonAccounts,
+    pphWithholdingList,
     crmAccounts,
     crmDeals,
     crmActivities,
@@ -5380,6 +5631,18 @@ function applyServerState(snap: any) {
   consignmentLedger = Array.isArray(snap.consignmentLedger) ? snap.consignmentLedger : [];
   safeDropsList = Array.isArray(snap.safeDropsList) ? snap.safeDropsList : [];
   recallEventsList = Array.isArray(snap.recallEventsList) ? snap.recallEventsList : [];
+  kanvasRoutes =
+    Array.isArray(snap.kanvasRoutes) && snap.kanvasRoutes.length > 0
+      ? snap.kanvasRoutes
+      : createInitialKanvasRoutes();
+  warungKasbonAccounts =
+    Array.isArray(snap.warungKasbonAccounts) && snap.warungKasbonAccounts.length > 0
+      ? snap.warungKasbonAccounts
+      : createInitialWarungKasbon();
+  pphWithholdingList =
+    Array.isArray(snap.pphWithholdingList) && snap.pphWithholdingList.length > 0
+      ? snap.pphWithholdingList
+      : createInitialPphWithholdings();
   crmAccounts = Array.isArray(snap.crmAccounts) && snap.crmAccounts.length > 0 ? snap.crmAccounts : createInitialCrmAccounts();
   crmDeals = Array.isArray(snap.crmDeals) && snap.crmDeals.length > 0 ? snap.crmDeals : createInitialCrmDeals();
   crmActivities = Array.isArray(snap.crmActivities) && snap.crmActivities.length > 0 ? snap.crmActivities : createInitialCrmActivities();
@@ -5456,6 +5719,7 @@ function hydrateStateFromSnapshot() {
         const parsed = JSON.parse(raw);
         applyServerState(parsed);
         ensureRegulatoryCoaAccounts();
+        ensureHalalComplianceMetadata();
         ensureConsignmentSeedItems();
         syncAllBatchesExpiryStatus(Date.now());
         syncWarehouseRackOccupancy();
@@ -5468,6 +5732,7 @@ function hydrateStateFromSnapshot() {
   }
   inventoryBatches = createInitialBatches();
   ensureRegulatoryCoaAccounts();
+  ensureHalalComplianceMetadata();
   ensureConsignmentSeedItems();
   syncWarehouseRackOccupancy();
   seedBaselineEnterpriseNotifications();
@@ -5489,12 +5754,16 @@ async function resetDemoStateToBaseline() {
     consignmentLedger = [];
     safeDropsList = [];
     recallEventsList = [];
+    kanvasRoutes = createInitialKanvasRoutes();
+    warungKasbonAccounts = createInitialWarungKasbon();
+    pphWithholdingList = createInitialPphWithholdings();
     crmAccounts = createInitialCrmAccounts();
     crmDeals = createInitialCrmDeals();
     crmActivities = createInitialCrmActivities();
     auditTrailLogs = createInitialAuditTrailLogs();
     promotionRulesList = createInitialPromotionRules();
     ensureRegulatoryCoaAccounts();
+    ensureHalalComplianceMetadata();
     ensureConsignmentSeedItems();
     syncAllBatchesExpiryStatus(Date.now());
     syncWarehouseRackOccupancy();
@@ -5515,7 +5784,19 @@ hydrateStateFromSnapshot();
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+  const portArgIdx = process.argv.findIndex((arg) => arg === '--port' || arg === '-p');
+  const portArgEq = process.argv.find((arg) => arg.startsWith('--port='));
+  const cliPort = portArgEq
+    ? parseInt(portArgEq.split('=')[1], 10)
+    : portArgIdx !== -1 && process.argv[portArgIdx + 1]
+    ? parseInt(process.argv[portArgIdx + 1], 10)
+    : NaN;
+  const prodEnvPort =
+    process.env.NODE_ENV === 'production' && process.env.PORT
+      ? parseInt(process.env.PORT, 10)
+      : NaN;
+  const PORT = Number.isFinite(cliPort) ? cliPort : Number.isFinite(prodEnvPort) ? prodEnvPort : 3000;
+  const httpServer = http.createServer(app);
 
   // Same-origin Firestore WebChannel & RPC streaming proxy (prevents browser/proxy/extension WebChannel blocks)
   app.all('/google.firestore.v1.Firestore/*', (req: Request, res: Response) => {
@@ -7024,6 +7305,23 @@ async function startServer() {
       }
     });
 
+    const bpjphExpiringAlerts = inventoryList
+      .map((item) => {
+        const info = getBpjphExpiryInfo(item.bpjphExpiryDate);
+        if (item.halalStatus === 'HALAL_CERTIFIED' && (info.isExpiringSoon || info.isExpired)) {
+          return {
+            sku: item.sku,
+            productName: item.productName || item.name || item.sku,
+            bpjphCertNumber: item.bpjphCertNumber || '-',
+            bpjphExpiryDate: item.bpjphExpiryDate || '',
+            daysUntilExpiry: info.daysUntilExpiry,
+            isExpired: info.isExpired,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
     res.json({
       items: inventoryList,
       metrics: {
@@ -7032,6 +7330,7 @@ async function startServer() {
         lowStockCount,
         totalSkus: inventoryList.length,
       },
+      bpjphExpiringAlerts,
     });
   });
 
@@ -8110,7 +8409,7 @@ async function startServer() {
           if (item.isCatchWeight && weighedGrams > 0) {
             const p100 = item.pricePer100g || Math.round((item.pricePerUnit / ((item.estimatedWeightGrams || 250) / 100)));
             const est = item.estimatedWeightGrams || weighedGrams;
-            const qtyMult = Math.max(1, item.pickedQty || 1);
+            const qtyMult = Math.max(0, item.pickedQty);
             item.actualWeighedGrams = weighedGrams;
             item.weightVariancePercent = Number((((weighedGrams - est) / est) * 100).toFixed(1));
             item.finalPrice = Math.round((weighedGrams / 100) * p100 * qtyMult);
@@ -8159,15 +8458,26 @@ async function startServer() {
             item.isReserved = false;
           }
 
-          const finalDeductQty = item.pickedQty > 0 ? item.pickedQty : item.orderedQty;
+          const finalDeductQty = Math.max(0, Number(item.pickedQty) || 0);
           const fallbackCost = tier?.unitCost || invItem?.unitCost || 15000;
 
-          const batchResult = deductBatchesByStrategy(
-            item.sku,
-            finalDeductQty,
-            order.storeId,
-            fallbackCost
-          );
+          const batchResult =
+            finalDeductQty > 0
+              ? deductBatchesByStrategy(
+                  item.sku,
+                  finalDeductQty,
+                  order.storeId,
+                  fallbackCost
+                )
+              : {
+                  strategyApplied: 'FEFO',
+                  allocations: [],
+                  totalCogs: 0,
+                  remainingShortage: 0,
+                  allocatedQty: 0,
+                  insufficientStock: false,
+                  availableSellableQty: 0,
+                };
           if (batchResult.insufficientStock) {
             const err: any = new Error(
               `Insufficient non-expired physical stock for SKU ${item.sku} during fulfillment completion.`
@@ -8186,7 +8496,7 @@ async function startServer() {
             tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
             tier.updatedAt = nowIso;
           }
-          if (invItem) {
+          if (invItem && finalDeductQty > 0) {
             invItem.currentStock = Math.max(0, Number((invItem.currentStock - finalDeductQty).toFixed(2)));
             invItem.outgoingStock = (invItem.outgoingStock || 0) + finalDeductQty;
           }
@@ -8245,48 +8555,96 @@ async function startServer() {
         const glJournalIds: string[] = [];
         const seq = (generalLedger.length + 1).toString().padStart(4, '0');
         const isB2bOrAccount = Boolean(order.crmAccountId && order.paymentStatus !== 'paid');
-        const debitAccountCode =
-          order.paymentStatus === 'paid' ? '2020' : isB2bOrAccount ? '1200' : '1030';
-        const debitAccountName =
+        const priorQrisTx = order.paymentStatus === 'paid' ? qrisTransactions.get(order.orderId) : undefined;
+        const paidDepositIDR =
           order.paymentStatus === 'paid'
-            ? 'Customer Omnichannel Deposit Liability'
-            : isB2bOrAccount
-            ? 'Accounts Receivable - B2B Wholesale'
-            : 'QRIS Settlement Receivable (ASPI Clearing)';
-        const debitAccountCategory = order.paymentStatus === 'paid' ? 'Liability' : 'Asset';
+            ? Math.max(0, roundIDR(priorQrisTx?.amount ?? grandTotalIDR))
+            : 0;
+        const revBatch: GeneralLedgerEntry[] = [];
 
-        const revBatch: GeneralLedgerEntry[] = [
-          {
+        if (order.paymentStatus === 'paid' && paidDepositIDR > 0) {
+          revBatch.push({
             id: `GLE-FUL-${seq}-DR`,
             timestamp: nowIso,
             storeId: order.storeId,
             storeName: order.storeName,
-            accountCode: debitAccountCode,
-            accountName: debitAccountName,
-            category: debitAccountCategory as ChartOfAccount['category'],
+            accountCode: '2020',
+            accountName: 'Customer Omnichannel Deposit Liability',
+            category: 'Liability',
+            debit: paidDepositIDR,
+            credit: 0,
+            referenceType: 'QRIS_SALE',
+            referenceId: order.orderId,
+            description: `Omnichannel Deposit Liability cleared for #${order.orderId} (${order.customerName})`,
+          });
+          if (grandTotalIDR > paidDepositIDR) {
+            revBatch.push({
+              id: `GLE-FUL-${seq}-DR-VAR`,
+              timestamp: nowIso,
+              storeId: order.storeId,
+              storeName: order.storeName,
+              accountCode: order.crmAccountId ? '1200' : '1030',
+              accountName: order.crmAccountId
+                ? 'Accounts Receivable - B2B Wholesale'
+                : 'QRIS Settlement Receivable (ASPI Clearing)',
+              category: 'Asset',
+              debit: grandTotalIDR - paidDepositIDR,
+              credit: 0,
+              referenceType: 'QRIS_SALE',
+              referenceId: order.orderId,
+              description: `Positive catch-weight settlement delta due for #${order.orderId}`,
+            });
+          } else if (paidDepositIDR > grandTotalIDR) {
+            revBatch.push({
+              id: `GLE-FUL-${seq}-CR-VAR`,
+              timestamp: nowIso,
+              storeId: order.storeId,
+              storeName: order.storeName,
+              accountCode: '1030',
+              accountName: 'QRIS Settlement Receivable (ASPI Clearing)',
+              category: 'Asset',
+              debit: 0,
+              credit: paidDepositIDR - grandTotalIDR,
+              referenceType: 'QRIS_SALE',
+              referenceId: order.orderId,
+              description: `Downward catch-weight variance credit/refund clearing for #${order.orderId}`,
+            });
+          }
+        } else {
+          revBatch.push({
+            id: `GLE-FUL-${seq}-DR`,
+            timestamp: nowIso,
+            storeId: order.storeId,
+            storeName: order.storeName,
+            accountCode: isB2bOrAccount ? '1200' : '1030',
+            accountName: isB2bOrAccount
+              ? 'Accounts Receivable - B2B Wholesale'
+              : 'QRIS Settlement Receivable (ASPI Clearing)',
+            category: 'Asset',
             debit: grandTotalIDR,
             credit: 0,
             referenceType: 'QRIS_SALE',
             referenceId: order.orderId,
             description: `Omnichannel Fulfillment Settlement #${order.orderId} (${order.customerName})`,
-          },
-          {
-            id: `GLE-FUL-${seq}-REV`,
-            timestamp: nowIso,
-            storeId: order.storeId,
-            storeName: order.storeName,
-            accountCode: isB2bOrAccount ? '4020' : '4010',
-            accountName: isB2bOrAccount
-              ? 'B2B Wholesale Grocery Revenue'
-              : 'Grocery Sales Revenue - Retail Storefront',
-            category: 'Revenue',
-            debit: 0,
-            credit: netSalesRevenueIDR,
-            referenceType: 'QRIS_SALE',
-            referenceId: order.orderId,
-            description: `Net omnichannel sales revenue recognized after catch-weight calibration (#${order.orderId})`,
-          },
-        ];
+          });
+        }
+
+        revBatch.push({
+          id: `GLE-FUL-${seq}-REV`,
+          timestamp: nowIso,
+          storeId: order.storeId,
+          storeName: order.storeName,
+          accountCode: isB2bOrAccount ? '4020' : '4010',
+          accountName: isB2bOrAccount
+            ? 'B2B Wholesale Grocery Revenue'
+            : 'Grocery Sales Revenue - Retail Storefront',
+          category: 'Revenue',
+          debit: 0,
+          credit: netSalesRevenueIDR,
+          referenceType: 'QRIS_SALE',
+          referenceId: order.orderId,
+          description: `Net omnichannel sales revenue recognized after catch-weight calibration (#${order.orderId})`,
+        });
 
         if (totalPpnIDR > 0) {
           revBatch.push({
@@ -8371,9 +8729,24 @@ async function startServer() {
         if (crmAcc) {
           loyaltyPointsAwarded = Math.floor(grandTotalIDR / 1000);
           crmAcc.pointsBalance = Math.max(0, (crmAcc.pointsBalance || 0) + loyaltyPointsAwarded);
+          if (loyaltyPointsAwarded > 0) {
+            crmAcc.pointsLedger.unshift({
+              id: `PTS-ERN-FUL-${Date.now().toString().slice(-6)}`,
+              timestamp: nowIso,
+              type: 'EARN',
+              pointsDelta: loyaltyPointsAwarded,
+              balanceAfter: crmAcc.pointsBalance,
+              referenceId: order.orderId,
+              channel: 'POS',
+              note: `Earned ${loyaltyPointsAwarded} pts from omnichannel fulfillment #${order.orderId} (${formatIDRServer(grandTotalIDR)})`,
+            });
+          }
           crmAcc.orderCount = (crmAcc.orderCount || 0) + 1;
-          crmAcc.lifetimeSpendIDR = (crmAcc.lifetimeSpendIDR || 0) + grandTotalIDR;
+          crmAcc.lifetimeSpendIDR = roundIDR((crmAcc.lifetimeSpendIDR || 0) + grandTotalIDR);
           crmAcc.lastOrderAt = nowIso;
+          crmAcc.tier = resolveCrmLoyaltyTier(crmAcc.lifetimeSpendIDR);
+          crmAcc.rfmSegment = computeCrmRfmSegment(crmAcc);
+          crmAcc.updatedAt = nowIso;
         }
 
         // 6. Auto-generate Surat Jalan for DELIVERY or mark READY_FOR_PICKUP for PICKUP_IN_STORE
@@ -8542,7 +8915,8 @@ async function startServer() {
     }
 
     const pricePer100g = item.pricePer100g || 40000;
-    const newPrice = Math.round((grams / 100) * pricePer100g);
+    const qtyMult = Math.max(1, item.pickedQty || item.orderedQty || 1);
+    const newPrice = Math.round((grams / 100) * pricePer100g * qtyMult);
     const originalEstimatedGrams = item.estimatedWeightGrams || grams;
     const weightVariance = Number((((grams - originalEstimatedGrams) / originalEstimatedGrams) * 100).toFixed(1));
 
@@ -8551,7 +8925,7 @@ async function startServer() {
     const previousFinalPrice = item.finalPrice;
     item.finalPrice = newPrice;
     item.status = 'picked';
-    item.pickedQty = 1;
+    item.pickedQty = qtyMult;
 
     order.pickedItems = order.items.filter((i) => i.status === 'picked' || i.status === 'substituted').length;
     if (order.pickedItems === order.totalItems) {
@@ -10366,7 +10740,53 @@ async function startServer() {
         consignmentSupplier: inv?.consignmentSupplier || nearestBatch?.consignmentSupplier,
         consignmentCommissionPercent:
           inv?.consignmentCommissionPercent ?? nearestBatch?.consignmentCommissionPercent,
+        halalStatus: inv?.halalStatus,
+        bpjphCertNumber: inv?.bpjphCertNumber,
+        bpjphExpiryDate: inv?.bpjphExpiryDate,
+        bpomRegNumber: inv?.bpomRegNumber,
+        wholesaleTiers: inv?.wholesaleTiers,
       };
+    });
+
+    // Include additional catalog SKUs from inventoryList (e.g. segregated Non-Halal Deli SKU-DEL-NH01)
+    const mappedSkus = new Set(posCatalog.map((p) => p.sku));
+    inventoryList.forEach((inv) => {
+      if (mappedSkus.has(inv.sku)) return;
+      const tier = storeInventoryTiers.find(
+        (t) => t.sku === inv.sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
+      );
+      const currentStock = tier ? tier.physicalStock : inv.currentStock;
+      const atpInfo = getSellableNonExpiredAtpStock(inv.sku, String(storeId));
+      const availableStock = atpInfo.hasBatchTracking
+        ? atpInfo.effectiveAtp
+        : tier
+        ? tier.availableStock
+        : currentStock;
+      posCatalog.push({
+        sku: inv.sku,
+        productId: inv.productId || inv.sku,
+        name: inv.productName || inv.name || inv.sku,
+        category: inv.category,
+        sellingPrice: inv.sellingPrice,
+        unitCost: inv.unitCost,
+        unit: inv.unit,
+        barcode: inv.sku,
+        image:
+          'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80',
+        currentStock,
+        availableStock,
+        isWeighted: false,
+        pricePerKg: inv.sellingPrice,
+        batchStatus: 'fresh',
+        isConsignment: Boolean(inv.isConsignment),
+        consignmentSupplier: inv.consignmentSupplier,
+        consignmentCommissionPercent: inv.consignmentCommissionPercent,
+        halalStatus: inv.halalStatus,
+        bpjphCertNumber: inv.bpjphCertNumber,
+        bpjphExpiryDate: inv.bpjphExpiryDate,
+        bpomRegNumber: inv.bpomRegNumber,
+        wholesaleTiers: inv.wholesaleTiers,
+      });
     });
 
     let filtered = posCatalog;
@@ -10402,6 +10822,7 @@ async function startServer() {
       currency = 'IDR',
       currencyRateToIDR = 1,
       paymentMethod = 'cash',
+      splitPayments,
       cashTendered,
       cashChange,
       customerName = 'Walk-in Retail Shopper',
@@ -10450,6 +10871,26 @@ async function startServer() {
       }
     }
 
+    // Validate optional Multi-Tender Split Payment shape before any stock mutation
+    const hasSplitPayments = Array.isArray(splitPayments) && splitPayments.length > 0;
+    const normalizedSplitLegs: POSSplitPaymentLeg[] = [];
+    if (hasSplitPayments) {
+      for (const leg of splitPayments!) {
+        const legMethod = String(leg?.method || '').toUpperCase();
+        const legAmount = Math.round(Number(leg?.amountIDR) || 0);
+        if (!['CASH', 'QRIS', 'CARD'].includes(legMethod) || legAmount <= 0) {
+          return res.status(400).json({
+            error: 'Split Payment legs must use method CASH, QRIS, or CARD with positive integer amountIDR.',
+          });
+        }
+        normalizedSplitLegs.push({
+          method: legMethod as POSSplitPaymentLeg['method'],
+          amountIDR: legAmount,
+          referenceNo: leg?.referenceNo ? String(leg.referenceNo) : undefined,
+        });
+      }
+    }
+
     // ATOMIC PRE-CHECK: Aggregate requested qty per SKU & validate sellable non-expired ATP before any mutation
     const nowMs = Date.now();
     const requestedBySku = new Map<string, number>();
@@ -10471,29 +10912,13 @@ async function startServer() {
       }
     }
 
-    const timestamp = new Date().toISOString();
-    const shortCode = Math.random().toString(36).substring(2, 7).toUpperCase();
-    const cleanStoreCode = storeId.replace('store-', '').substring(0, 3).toUpperCase();
-    const receiptNumber = `RCP-${cleanStoreCode}-${Date.now().toString().slice(-6)}`;
-    const transactionId = `TXN-POS-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`;
-    const orderId = `GCM-POS-${Date.now().toString().slice(-6)}`;
-
-    // 1. Real-time Inventory, FEFO Batch Deduction, and Post-Markdown Net Pricing
-    let totalCogsCost = 0;
-    let totalOwnedCogsCost = 0;
-    let totalConsignmentPayableIDR = 0;
-    const pendingConsignmentEntries: ConsignmentLedgerEntry[] = [];
-    let inventoryDeductedCount = 0;
-    let computedSubtotal = 0;
-
-    const normalizedItems = (items as any[]).map((item: any) => {
+    // PURE PRE-PRICING PASS (Wholesale Tiers + Markdown + Promo + Tax + Split Sum Validation BEFORE mutating inventory)
+    const prePricedLines = (items as any[]).map((item: any) => {
       const qty = Math.max(0, Number(item.quantity) || 1);
       const inv = inventoryList.find((i) => i.sku === item.sku);
       const prod = PRODUCTS.find(
         (p) => p.id === (item.productId || inv?.productId) || p.name.toLowerCase() === String(item.name || inv?.productName || '').toLowerCase()
       );
-
-      // Evaluate nearest active non-expired sellable batch for dynamic markdown pricing
       const nearestBatch = inventoryBatches
         .filter((b) => {
           syncBatchExpiryStatus(b, nowMs);
@@ -10520,13 +10945,27 @@ async function startServer() {
 
       const rawUnitPrice = Number(item.unitPrice ?? item.price ?? inv?.sellingPrice ?? catalogBasePrice) || 0;
       let effectiveUnitPrice = rawUnitPrice;
+      let appliedWholesaleTierLabel: string | undefined;
+
+      const isScaleWeightedLine = Boolean(item.netWeightGrams || (item.isWeighted && item.unit === 'kg'));
+      if (!isScaleWeightedLine && !item.isManualPriceOverride && inv?.wholesaleTiers?.length) {
+        const tierBasePrice = Math.max(inv.sellingPrice || 0, rawUnitPrice, catalogBasePrice);
+        const tierRes = resolveWholesaleTierPrice(inv.wholesaleTiers, qty, tierBasePrice);
+        if (tierRes.appliedTier && tierRes.unitPriceIDR < effectiveUnitPrice) {
+          effectiveUnitPrice = tierRes.unitPriceIDR;
+          appliedWholesaleTierLabel = tierRes.appliedTier.label;
+        }
+      }
+
       if (
-        !item.isWeighted &&
+        !isScaleWeightedLine &&
+        !item.isManualPriceOverride &&
         markdownUnitPrice > 0 &&
-        markdownUnitPrice < catalogBasePrice &&
+        markdownUnitPrice < effectiveUnitPrice &&
         rawUnitPrice >= catalogBasePrice - 1
       ) {
         effectiveUnitPrice = markdownUnitPrice;
+        appliedWholesaleTierLabel = undefined;
       }
 
       const unitCost = roundIDR(
@@ -10536,8 +10975,109 @@ async function startServer() {
         effectiveUnitPrice !== rawUnitPrice || !item.lineTotal
           ? Math.round(effectiveUnitPrice * qty)
           : Math.round(Number(item.lineTotal));
-      computedSubtotal += lineTotal;
 
+      return {
+        rawItem: item,
+        qty,
+        inv,
+        prod,
+        nearestBatch,
+        effectiveUnitPrice: roundIDR(effectiveUnitPrice),
+        appliedWholesaleTierLabel,
+        unitCost,
+        lineTotal,
+        category: item.category || inv?.category || prod?.category || 'produce',
+        name: item.name || inv?.productName || prod?.name || item.sku,
+      };
+    });
+
+    const preSubtotal = roundIDR(prePricedLines.reduce((s, l) => s + l.lineTotal, 0));
+    const baseDiscountAmount = Math.min(preSubtotal, Math.max(0, roundIDR(Number(discount) || 0)));
+
+    const promoEval = evaluatePromosServer(
+      prePricedLines.map((l) => ({
+        ...l.rawItem,
+        sku: l.rawItem.sku,
+        category: l.category,
+        name: l.name,
+        quantity: l.qty,
+        unitPrice: l.effectiveUnitPrice,
+        lineTotal: l.lineTotal,
+      })),
+      {
+        promoCode,
+        memberTier: matchedCrmAccount?.tier,
+        memberId: customerMemberId || crmAccountId,
+        simulateHappyHourActive,
+      }
+    );
+    if (promoCode && String(promoCode).trim() && !promoEval.valid) {
+      return res.status(400).json({
+        error: promoEval.message || `Promo voucher "${promoCode}" is invalid for this cart.`,
+      });
+    }
+    const promoDiscountIDR = Math.min(
+      Math.max(0, preSubtotal - baseDiscountAmount),
+      roundIDR(promoEval.totalPromoDiscountIDR)
+    );
+    const maxRedeemablePts = Math.floor(Math.max(0, preSubtotal - baseDiscountAmount - promoDiscountIDR) / 100);
+    const effectivePosRedeemPoints = matchedCrmAccount ? Math.min(requestedRedeemPoints, maxRedeemablePts) : 0;
+    const loyaltyPointsDiscountIDR = effectivePosRedeemPoints * 100;
+    const discountAmount = Math.min(preSubtotal, baseDiscountAmount + promoDiscountIDR + loyaltyPointsDiscountIDR);
+    const netRevenueIDR = Math.max(0, preSubtotal - discountAmount);
+
+    let remainingCartDiscount = discountAmount;
+    let resolvedPpn = 0;
+    let resolvedPb1 = 0;
+    prePricedLines.forEach((line, idx) => {
+      const discountShare =
+        idx === prePricedLines.length - 1
+          ? remainingCartDiscount
+          : preSubtotal > 0
+          ? Math.min(remainingCartDiscount, Math.round((line.lineTotal / preSubtotal) * discountAmount))
+          : 0;
+      remainingCartDiscount = Math.max(0, remainingCartDiscount - discountShare);
+      const netDiscountedLineTotal = Math.max(0, line.lineTotal - discountShare);
+      const rule = skuTaxRulesList.find((r) => r.sku === line.rawItem.sku);
+      const taxCat: IndonesianTaxCategory =
+        rule?.taxCategory || inferDefaultTaxCategory(line.category || '', line.name || '');
+      const stdRate = rule?.taxRatePercent ?? posCheckoutConfig.ppnTaxPercent ?? 11;
+      const taxCalc = computeIndonesianTax(netDiscountedLineTotal, taxCat, false, stdRate);
+      resolvedPpn += roundIDR(taxCalc.ppnIDR);
+      resolvedPb1 += roundIDR(taxCalc.pb1IDR);
+    });
+
+    resolvedPpn = roundIDR(resolvedPpn);
+    resolvedPb1 = roundIDR(resolvedPb1);
+    const resolvedTax = resolvedPpn + resolvedPb1;
+    const resolvedTotal = netRevenueIDR + resolvedTax;
+
+    if (hasSplitPayments) {
+      const splitSum = normalizedSplitLegs.reduce((s, l) => s + l.amountIDR, 0);
+      if (splitSum !== resolvedTotal) {
+        return res.status(400).json({
+          error: `Split Payment total mismatch: sum of legs (Rp ${splitSum.toLocaleString('id-ID')}) must equal exact invoice total (Rp ${resolvedTotal.toLocaleString('id-ID')}).`,
+        });
+      }
+    }
+
+    const effectivePaymentMethod = hasSplitPayments ? 'split' : paymentMethod;
+    const timestamp = new Date().toISOString();
+    const shortCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const cleanStoreCode = storeId.replace('store-', '').substring(0, 3).toUpperCase();
+    const receiptNumber = `RCP-${cleanStoreCode}-${Date.now().toString().slice(-6)}`;
+    const transactionId = `TXN-POS-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`;
+    const orderId = `GCM-POS-${Date.now().toString().slice(-6)}`;
+
+    // 1. Real-time Inventory & FEFO Batch Deduction
+    let totalCogsCost = 0;
+    let totalOwnedCogsCost = 0;
+    let totalConsignmentPayableIDR = 0;
+    const pendingConsignmentEntries: ConsignmentLedgerEntry[] = [];
+    let inventoryDeductedCount = 0;
+
+    const normalizedItems = prePricedLines.map((line) => {
+      const { rawItem: item, qty, inv, prod, nearestBatch, effectiveUnitPrice, unitCost, lineTotal } = line;
       const isConsignmentLine = Boolean(
         item.isConsignment || inv?.isConsignment || nearestBatch?.isConsignment
       );
@@ -10585,7 +11125,7 @@ async function startServer() {
           channel: 'POS',
           referenceId: receiptNumber,
           sku: item.sku,
-          productName: item.name || inv?.productName || prod?.name || item.sku,
+          productName: line.name,
           supplierName:
             inv?.consignmentSupplier ||
             nearestBatch?.consignmentSupplier ||
@@ -10593,7 +11133,7 @@ async function startServer() {
             'Consignment UMKM Partner',
           lotNumber: primaryLot,
           quantitySold: qty,
-          sellingPriceIDR: roundIDR(effectiveUnitPrice),
+          sellingPriceIDR: effectiveUnitPrice,
           grossSalesIDR: lineTotal,
           commissionPercent: commPct,
           storeMarginIDR,
@@ -10609,12 +11149,13 @@ async function startServer() {
 
       return {
         ...item,
-        category: item.category || inv?.category || prod?.category || 'produce',
-        name: item.name || inv?.productName || prod?.name || item.sku,
+        category: line.category,
+        name: line.name,
         quantity: qty,
-        unitPrice: roundIDR(effectiveUnitPrice),
+        unitPrice: effectiveUnitPrice,
         unitCost,
         lineTotal,
+        appliedWholesaleTierLabel: line.appliedWholesaleTierLabel,
         batchId: primaryBatchId,
         lotNumber: primaryLot,
         lotAllocations: batchDeduction.allocations,
@@ -10622,25 +11163,7 @@ async function startServer() {
       };
     });
 
-    // 2. Post-Markdown & Post-Promo Net VAT (PPN) Calculation Accuracy (strict integer IDR)
-    const resolvedSubtotal = roundIDR(computedSubtotal);
-    const baseDiscountAmount = Math.min(resolvedSubtotal, Math.max(0, roundIDR(Number(discount) || 0)));
-
-    const promoEval = evaluatePromosServer(normalizedItems, {
-      promoCode,
-      memberTier: matchedCrmAccount?.tier,
-      memberId: customerMemberId || crmAccountId,
-      simulateHappyHourActive,
-    });
-    if (promoCode && String(promoCode).trim() && !promoEval.valid) {
-      return res.status(400).json({
-        error: promoEval.message || `Promo voucher "${promoCode}" is invalid for this cart.`,
-      });
-    }
-    const promoDiscountIDR = Math.min(
-      Math.max(0, resolvedSubtotal - baseDiscountAmount),
-      roundIDR(promoEval.totalPromoDiscountIDR)
-    );
+    const resolvedSubtotal = preSubtotal;
     const appliedPromos = promoEval.appliedPromos;
     if (appliedPromos.length > 0) {
       appliedPromos.forEach((ap) => {
@@ -10649,39 +11172,6 @@ async function startServer() {
       });
     }
 
-    const maxRedeemablePts = Math.floor(Math.max(0, resolvedSubtotal - baseDiscountAmount - promoDiscountIDR) / 100);
-    const effectivePosRedeemPoints = matchedCrmAccount ? Math.min(requestedRedeemPoints, maxRedeemablePts) : 0;
-    const loyaltyPointsDiscountIDR = effectivePosRedeemPoints * 100;
-    const discountAmount = Math.min(resolvedSubtotal, baseDiscountAmount + promoDiscountIDR + loyaltyPointsDiscountIDR);
-    const netRevenueIDR = Math.max(0, resolvedSubtotal - discountAmount);
-
-    let remainingCartDiscount = discountAmount;
-    let resolvedPpn = 0;
-    let resolvedPb1 = 0;
-
-    normalizedItems.forEach((normItem, idx) => {
-      const discountShare =
-        idx === normalizedItems.length - 1
-          ? remainingCartDiscount
-          : resolvedSubtotal > 0
-          ? Math.min(remainingCartDiscount, Math.round((normItem.lineTotal / resolvedSubtotal) * discountAmount))
-          : 0;
-      remainingCartDiscount = Math.max(0, remainingCartDiscount - discountShare);
-      const netDiscountedLineTotal = Math.max(0, normItem.lineTotal - discountShare);
-
-      const rule = skuTaxRulesList.find((r) => r.sku === normItem.sku);
-      const taxCat: IndonesianTaxCategory =
-        rule?.taxCategory || inferDefaultTaxCategory(normItem.category || '', normItem.name || '');
-      const stdRate = rule?.taxRatePercent ?? posCheckoutConfig.ppnTaxPercent ?? 11;
-      const taxCalc = computeIndonesianTax(netDiscountedLineTotal, taxCat, false, stdRate);
-      resolvedPpn += roundIDR(taxCalc.ppnIDR);
-      resolvedPb1 += roundIDR(taxCalc.pb1IDR);
-    });
-
-    resolvedPpn = roundIDR(resolvedPpn);
-    resolvedPb1 = roundIDR(resolvedPb1);
-    const resolvedTax = resolvedPpn + resolvedPb1;
-    const resolvedTotal = netRevenueIDR + resolvedTax;
     totalCogsCost = Math.max(0, roundIDR(totalCogsCost));
     const resolvedCurrencyTotal =
       currency !== 'IDR' && currencyRateToIDR > 0
@@ -10689,24 +11179,53 @@ async function startServer() {
         : resolvedTotal;
 
     // 3. Automatic Accounting & General Ledger Double-Entry (Exact DR === CR Parity)
-    let assetAccountCode: AccountCode = '1010';
-    let assetAccountName = 'Cash on Hand & Store Registers';
-    if (paymentMethod === 'qris') {
-      assetAccountCode = '1030';
-      assetAccountName = 'QRIS Settlement Receivable (ASPI Clearing)';
-    } else if (paymentMethod === 'debit_card' || paymentMethod === 'credit_card') {
-      assetAccountCode = '1020';
-      assetAccountName = 'Bank BCA Operational Clearing';
-    }
-
+    ensureRegulatoryCoaAccounts();
     const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
     const gleId3 = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}`;
     const gleId4 = `GLE-2026-${(generalLedger.length + 4).toString().padStart(4, '0')}`;
-    const journalEntryIds = [gleId1, gleId2];
+    const journalEntryIds: string[] = [];
 
-    const posRevenueGlBatch: GeneralLedgerEntry[] = [
-      {
+    const posRevenueGlBatch: GeneralLedgerEntry[] = [];
+
+    if (hasSplitPayments) {
+      normalizedSplitLegs.forEach((leg, legIdx) => {
+        const legGleId = `${gleId1}-S${legIdx + 1}`;
+        journalEntryIds.push(legGleId);
+        const isCashLeg = leg.method === 'CASH';
+        const legAccCode: AccountCode = isCashLeg ? '1011' : '1020';
+        const legAccName = isCashLeg
+          ? 'POS Cash Drawer (Laci Kasir Register)'
+          : leg.method === 'QRIS'
+          ? 'Digital/QRIS & Bank BCA Clearing'
+          : 'Bank BCA Operational Clearing';
+        posRevenueGlBatch.push({
+          id: legGleId,
+          timestamp,
+          storeId,
+          storeName,
+          accountCode: legAccCode,
+          accountName: legAccName,
+          category: 'Asset',
+          debit: leg.amountIDR,
+          credit: 0,
+          referenceType: 'POS_SALE',
+          referenceId: receiptNumber,
+          description: `POS Split Checkout #${receiptNumber} - Leg ${leg.method}${leg.referenceNo ? ` (${leg.referenceNo})` : ''}`,
+        });
+      });
+    } else {
+      let assetAccountCode: AccountCode = '1010';
+      let assetAccountName = 'Cash on Hand & Store Registers';
+      if (paymentMethod === 'qris') {
+        assetAccountCode = '1030';
+        assetAccountName = 'QRIS Settlement Receivable (ASPI Clearing)';
+      } else if (paymentMethod === 'debit_card' || paymentMethod === 'credit_card') {
+        assetAccountCode = '1020';
+        assetAccountName = 'Bank BCA Operational Clearing';
+      }
+      journalEntryIds.push(gleId1);
+      posRevenueGlBatch.push({
         id: gleId1,
         timestamp,
         storeId,
@@ -10719,22 +11238,24 @@ async function startServer() {
         referenceType: 'POS_SALE',
         referenceId: receiptNumber,
         description: `POS Checkout #${receiptNumber} - Tender: ${paymentMethod.toUpperCase()}${currency !== 'IDR' ? ` (${currency} ${resolvedCurrencyTotal})` : ''}`,
-      },
-      {
-        id: gleId2,
-        timestamp,
-        storeId,
-        storeName,
-        accountCode: '4010',
-        accountName: 'Grocery Sales Revenue',
-        category: 'Revenue',
-        debit: 0,
-        credit: netRevenueIDR,
-        referenceType: 'POS_SALE',
-        referenceId: receiptNumber,
-        description: `Net Sales Revenue (post-markdown) from POS Register #${receiptNumber} (Cashier: ${cashierName})`,
-      },
-    ];
+      });
+    }
+
+    journalEntryIds.push(gleId2);
+    posRevenueGlBatch.push({
+      id: gleId2,
+      timestamp,
+      storeId,
+      storeName,
+      accountCode: '4010',
+      accountName: 'Grocery Sales Revenue',
+      category: 'Revenue',
+      debit: 0,
+      credit: netRevenueIDR,
+      referenceType: 'POS_SALE',
+      referenceId: receiptNumber,
+      description: `Net Sales Revenue (post-markdown) from POS Register #${receiptNumber} (Cashier: ${cashierName})`,
+    });
 
     if (resolvedPpn > 0) {
       const gleTaxPpn = `GLE-2026-${(generalLedger.length + 3).toString().padStart(4, '0')}-VAT`;
@@ -10858,13 +11379,18 @@ async function startServer() {
     // 4. Audit Trail Records
     auditTrail.unshift({
       id: `AUD-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`,
-      qrisReference: paymentMethod === 'qris' ? `QRIS-POS-${shortCode}` : undefined,
+      qrisReference:
+        effectivePaymentMethod === 'qris' || normalizedSplitLegs.some((l) => l.method === 'QRIS')
+          ? `QRIS-POS-${shortCode}`
+          : undefined,
       orderId: receiptNumber,
       customerName,
       customerEmail: customerPhone || 'cashier.counter@grocemart.co.id',
       amount: resolvedTotal,
       paymentTimestamp: timestamp,
-      settlementChannel: `POS Register (${paymentMethod.toUpperCase()})`,
+      settlementChannel: hasSplitPayments
+        ? `POS Split (${normalizedSplitLegs.map((l) => `${l.method} Rp ${l.amountIDR.toLocaleString('id-ID')}`).join(' + ')})`
+        : `POS Register (${paymentMethod.toUpperCase()})`,
       journalEntryIds,
       inventoryDeducted: normalizedItems.map((i) => ({
         sku: i.sku,
@@ -10893,18 +11419,24 @@ async function startServer() {
         pb1IDR: resolvedPb1,
         currency,
         currencyTotal: resolvedCurrencyTotal,
-        paymentMethod,
+        paymentMethod: effectivePaymentMethod,
+        splitPayments: hasSplitPayments ? normalizedSplitLegs : undefined,
         itemCount: normalizedItems.length,
       },
     });
 
+    const cashPortionForTender = hasSplitPayments
+      ? normalizedSplitLegs.filter((l) => l.method === 'CASH').reduce((s, l) => s + l.amountIDR, 0)
+      : resolvedTotal;
     const resolvedCashTendered =
-      cashTendered !== undefined ? Math.max(0, roundIDR(Number(cashTendered) || 0)) : resolvedTotal;
+      cashTendered !== undefined ? Math.max(0, roundIDR(Number(cashTendered) || 0)) : cashPortionForTender;
     const resolvedCashChange =
-      paymentMethod === 'cash'
+      paymentMethod === 'cash' && !hasSplitPayments
         ? cashTendered !== undefined
           ? Math.max(0, resolvedCashTendered - resolvedTotal)
           : Math.max(0, roundIDR(Number(cashChange) || 0))
+        : hasSplitPayments && cashPortionForTender > 0 && cashTendered !== undefined
+        ? Math.max(0, resolvedCashTendered - cashPortionForTender)
         : 0;
 
     // 5. Construct Complete Receipt & Apply CRM Loyalty Points Hook
@@ -10940,11 +11472,18 @@ async function startServer() {
       currency,
       currencyTotal: resolvedCurrencyTotal,
       currencyRateToIDR,
-      paymentMethod,
+      paymentMethod: effectivePaymentMethod,
+      splitPayments: hasSplitPayments ? normalizedSplitLegs : undefined,
       cashTendered: resolvedCashTendered,
       cashChange: resolvedCashChange,
-      qrisRef: paymentMethod === 'qris' ? `QRIS-POS-${shortCode}` : undefined,
-      cardLast4: paymentMethod.includes('card') ? '8842' : undefined,
+      qrisRef:
+        effectivePaymentMethod === 'qris' || normalizedSplitLegs.some((l) => l.method === 'QRIS')
+          ? `QRIS-POS-${shortCode}`
+          : undefined,
+      cardLast4:
+        effectivePaymentMethod.includes('card') || normalizedSplitLegs.some((l) => l.method === 'CARD')
+          ? '8842'
+          : undefined,
       journalEntryIds,
       inventoryDeductedCount,
       totalCogsCost,
@@ -10964,7 +11503,17 @@ async function startServer() {
     const activeShift = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
     if (activeShift) {
       activeShift.transactionCount += 1;
-      if (paymentMethod === 'cash') {
+      if (hasSplitPayments) {
+        normalizedSplitLegs.forEach((leg) => {
+          if (leg.method === 'CASH') {
+            activeShift.expectedCashSalesIDR += leg.amountIDR;
+          } else if (leg.method === 'QRIS') {
+            activeShift.expectedQrisSalesIDR += leg.amountIDR;
+          } else {
+            activeShift.expectedEdcSalesIDR += leg.amountIDR;
+          }
+        });
+      } else if (paymentMethod === 'cash') {
         activeShift.expectedCashSalesIDR += resolvedTotal;
       } else if (paymentMethod === 'qris') {
         activeShift.expectedQrisSalesIDR += resolvedTotal;
@@ -12029,14 +12578,32 @@ async function startServer() {
         (p) => p.id === (item.product?.id || item.productId) || p.sku === (item.product?.sku || item.sku)
       );
       const targetSku = prod?.sku || item.product?.sku || item.sku || '';
+      const qty = Number(item.quantity) || 1;
+      let resolvedUnitPrice = Number(item.unitPrice ?? item.price ?? prod?.baseUnitPrice ?? 0) || 0;
+      if (
+        (item.selectedUoM === 'pcs' || !item.selectedUoM) &&
+        !item.isPwpRedemption &&
+        prod?.wholesaleTiers?.length
+      ) {
+        const tierRes = resolveWholesaleTierPrice(
+          prod.wholesaleTiers,
+          qty,
+          Number(prod.baseUnitPrice || resolvedUnitPrice)
+        );
+        if (tierRes.appliedTier && tierRes.unitPriceIDR < resolvedUnitPrice) {
+          resolvedUnitPrice = tierRes.unitPriceIDR;
+          item.unitPrice = tierRes.unitPriceIDR;
+          item.appliedWholesaleTierLabel = tierRes.appliedTier.label;
+        }
+      }
       const rawLineTotal =
-        item.lineTotal !== undefined
+        item.lineTotal !== undefined && !item.appliedWholesaleTierLabel
           ? Number(item.lineTotal)
-          : (Number(item.unitPrice ?? item.price ?? prod?.baseUnitPrice ?? 0) || 0) *
-            (Number(item.quantity) || 1);
+          : resolvedUnitPrice * qty;
       const lineNet = Math.max(0, roundIDR(rawLineTotal));
+      item.lineTotal = lineNet;
       rawSubtotalIDR += lineNet;
-      totalBaseUnits += Number(item.baseUnitsCalculated) || Number(item.quantity) || 0;
+      totalBaseUnits += Number(item.baseUnitsCalculated) || qty || 0;
       if (item.isPwpRedemption) {
         const normalPrice = primaryPwp?.normalPriceIDR || 38000;
         pwpDiscountIDR += Math.max(0, roundIDR(normalPrice - (Number(item.unitPrice) || primaryPwp?.promoPriceIDR || 10000)));
@@ -15229,11 +15796,23 @@ async function startServer() {
         let totalCreditAmountIDR = 0;
         let totalNetReturnIDR = 0;
         let totalPpnReturnIDR = 0;
+        let totalPb1ReturnIDR = 0;
         let totalRestockCogsIDR = 0;
         let totalDamagedLossIDR = 0;
         const normalizedReturnedLines: EpodReturnLine[] = [];
 
+        const linkedPickerOrder = sj.orderId
+          ? pickerOrders.find((po) => po.orderId === sj.orderId)
+          : undefined;
+        const linkedB2bOrder = sj.b2bOrderRef
+          ? b2bOrdersList.find((bo) => bo.id === sj.b2bOrderRef)
+          : undefined;
+        const linkedDo = sj.deliveryOrderRef
+          ? deliveryOrdersList.find((d) => d.doNumber === sj.deliveryOrderRef)
+          : undefined;
+
         if (outcome === 'PARTIAL_RETURN') {
+          const skuReturnTotals = new Map<string, number>();
           for (const ret of returnedItems) {
             const sjItem = sj.items.find((it) => it.sku === ret.sku);
             if (!sjItem) {
@@ -15242,34 +15821,80 @@ async function startServer() {
               throw err;
             }
             const retQty = Math.max(0, Number(ret.returnedQty) || 0);
-            if (retQty <= 0 || retQty > sjItem.quantity) {
+            const aggQty = Number(((skuReturnTotals.get(ret.sku) || 0) + retQty).toFixed(2));
+            if (retQty <= 0 || aggQty > sjItem.quantity) {
               const err: any = new Error(
-                `Invalid return quantity (${retQty}) for SKU ${ret.sku}. Must be > 0 and <= dispatched quantity (${sjItem.quantity}).`
+                `Invalid return quantity (${aggQty}) for SKU ${ret.sku}. Must be > 0 and <= dispatched quantity (${sjItem.quantity}).`
               );
               err.statusCode = 400;
               throw err;
             }
+            skuReturnTotals.set(ret.sku, aggQty);
+          }
 
+          for (const ret of returnedItems) {
+            const sjItem = sj.items.find((it) => it.sku === ret.sku)!;
+            const retQty = Math.max(0, Number(ret.returnedQty) || 0);
             const condition: 'GOOD_RESTOCK' | 'DAMAGED_QUARANTINE' =
               ret.condition === 'DAMAGED_QUARANTINE' ? 'DAMAGED_QUARANTINE' : 'GOOD_RESTOCK';
 
-            const tier = storeInventoryTiers.find(
-              (t) => t.sku === ret.sku && t.storeId === sj.senderStoreId
-            );
+            const tier =
+              storeInventoryTiers.find(
+                (t) => t.sku === ret.sku && t.storeId === sj.senderStoreId
+              ) || storeInventoryTiers.find((t) => t.sku === ret.sku);
             const invItem = inventoryList.find((i) => i.sku === ret.sku);
-            const unitPriceIDR = roundIDR(tier?.sellingPrice || invItem?.sellingPrice || 25000);
+
+            const linkedPickerItem = linkedPickerOrder?.items.find((pi) => pi.sku === ret.sku);
+            const linkedB2bItem = linkedB2bOrder?.items?.find(
+              (bi: any) => (bi.product?.sku || bi.sku) === ret.sku
+            );
+            const linkedDoItem = linkedDo?.items?.find((di) => di.sku === ret.sku);
+
+            const invoicedPickerUnitPrice =
+              linkedPickerItem && linkedPickerItem.finalPrice > 0
+                ? Math.round(
+                    linkedPickerItem.finalPrice /
+                      Math.max(1, linkedPickerItem.pickedQty || linkedPickerItem.orderedQty || 1)
+                  )
+                : 0;
+            const invoicedB2bUnitPrice = linkedB2bItem
+              ? Math.round(
+                  Number((linkedB2bItem as any).lineTotal || 0) /
+                    Math.max(1, Number((linkedB2bItem as any).quantity) || 1) ||
+                    Number((linkedB2bItem as any).unitPrice || 0)
+                )
+              : 0;
+
+            const unitPriceIDR = roundIDR(
+              invoicedPickerUnitPrice ||
+                invoicedB2bUnitPrice ||
+                linkedDoItem?.unitPriceIDR ||
+                tier?.sellingPrice ||
+                invItem?.sellingPrice ||
+                25000
+            );
             const unitCostIDR = roundIDR(tier?.unitCost || invItem?.unitCost || 15000);
             const lineGrossIDR = roundIDR(retQty * unitPriceIDR);
 
             const rule = skuTaxRulesList.find((r) => r.sku === ret.sku);
             const taxCat: IndonesianTaxCategory =
-              rule?.taxCategory || inferDefaultTaxCategory(invItem?.category || 'produce', sjItem.productName);
-            const stdRate = rule?.taxRatePercent ?? posCheckoutConfig.ppnTaxPercent ?? 11;
-            const taxCalc = computeIndonesianTax(lineGrossIDR, taxCat, true, stdRate);
+              linkedPickerItem?.taxCategory ||
+              rule?.taxCategory ||
+              inferDefaultTaxCategory(invItem?.category || 'produce', sjItem.productName);
+            const stdRate =
+              linkedPickerItem?.taxRatePercent ??
+              rule?.taxRatePercent ??
+              posCheckoutConfig.ppnTaxPercent ??
+              11;
+            const taxCalc = computeIndonesianTax(lineGrossIDR, taxCat, !linkedB2bOrder, stdRate);
+            const lineCreditTotalIDR = linkedB2bOrder
+              ? roundIDR(taxCalc.totalIDR)
+              : lineGrossIDR;
 
-            totalCreditAmountIDR += lineGrossIDR;
+            totalCreditAmountIDR += lineCreditTotalIDR;
             totalNetReturnIDR += roundIDR(taxCalc.dppIDR);
             totalPpnReturnIDR += roundIDR(taxCalc.ppnIDR);
+            totalPb1ReturnIDR += roundIDR(taxCalc.pb1IDR);
 
             if (condition === 'GOOD_RESTOCK') {
               if (tier) {
@@ -15297,7 +15922,7 @@ async function startServer() {
                 syncBatchExpiryStatus(targetBatch, Date.now());
               } else {
                 inventoryBatches.unshift({
-                  batchId: `BAT-EPOD-${Date.now().toString().slice(-5)}`,
+                  batchId: `BAT-EPOD-${Date.now().toString().slice(-5)}-${normalizedReturnedLines.length + 1}`,
                   sku: ret.sku,
                   productName: sjItem.productName,
                   storeId: sj.senderStoreId,
@@ -15320,7 +15945,7 @@ async function startServer() {
               totalRestockCogsIDR += roundIDR(retQty * unitCostIDR);
             } else {
               // DAMAGED_QUARANTINE -> locked quarantined batch + Waste & Shrinkage record
-              const qrnBatchId = `BAT-QRN-${Date.now().toString().slice(-5)}`;
+              const qrnBatchId = `BAT-QRN-${Date.now().toString().slice(-5)}-${normalizedReturnedLines.length + 1}`;
               const qrnLot = sjItem.batchNumber || `QRN-${sj.id.slice(-4)}`;
               inventoryBatches.unshift({
                 batchId: qrnBatchId,
@@ -15384,8 +16009,20 @@ async function startServer() {
           // Reconcile Sales Return Credit Memo GL Batch (DR === CR)
           creditMemoNumber = `CM-${sj.documentNumber.replace(/\//g, '-')}`;
           const glSeq = (generalLedger.length + 1).toString().padStart(4, '0');
-          const adjustedNetSalesReturnIDR = Math.max(0, totalCreditAmountIDR - totalPpnReturnIDR);
-          const arCode = sj.b2bOrderRef || sj.crmAccountId ? '1200' : '1030';
+          const adjustedNetSalesReturnIDR = Math.max(
+            0,
+            totalCreditAmountIDR - totalPpnReturnIDR - totalPb1ReturnIDR
+          );
+          const isB2bDispatch = Boolean(
+            sj.b2bOrderRef ||
+              (Boolean(sj.crmAccountId || linkedPickerOrder?.crmAccountId) &&
+                linkedPickerOrder?.paymentStatus !== 'paid')
+          );
+          const revCode = isB2bDispatch ? '4020' : '4010';
+          const revName = isB2bDispatch
+            ? 'B2B Wholesale Grocery Revenue'
+            : 'Grocery Sales Revenue - Retail Storefront';
+          const arCode = isB2bDispatch ? '1200' : '1030';
           const arName =
             arCode === '1200'
               ? 'Accounts Receivable - B2B Wholesale'
@@ -15397,8 +16034,8 @@ async function startServer() {
               timestamp: deliveredAt,
               storeId: sj.senderStoreId,
               storeName: sj.senderStoreName,
-              accountCode: '4020',
-              accountName: 'B2B Wholesale Grocery Revenue',
+              accountCode: revCode,
+              accountName: revName,
               category: 'Revenue',
               debit: adjustedNetSalesReturnIDR,
               credit: 0,
@@ -15421,6 +16058,22 @@ async function startServer() {
               referenceType: 'TAX_ADJUSTMENT',
               referenceId: creditMemoNumber,
               description: `Output VAT reversal for e-POD partial return ${creditMemoNumber}`,
+            });
+          }
+          if (totalPb1ReturnIDR > 0) {
+            creditMemoGlBatch.push({
+              id: `GLE-EPOD-${glSeq}-PB1`,
+              timestamp: deliveredAt,
+              storeId: sj.senderStoreId,
+              storeName: sj.senderStoreName,
+              accountCode: '2027',
+              accountName: 'Pajak Daerah PB1 (10% Ready-to-Eat Deli)',
+              category: 'Liability',
+              debit: totalPb1ReturnIDR,
+              credit: 0,
+              referenceType: 'TAX_ADJUSTMENT',
+              referenceId: creditMemoNumber,
+              description: `PB1 10% tax reversal for e-POD partial return ${creditMemoNumber}`,
             });
           }
           creditMemoGlBatch.push({
@@ -15536,6 +16189,21 @@ async function startServer() {
           if (custOrder) {
             custOrder.status = 'delivered';
             custOrder.total = Math.max(0, custOrder.total - totalCreditAmountIDR);
+          }
+          if (linkedPickerOrder && totalCreditAmountIDR > 0) {
+            linkedPickerOrder.totalFinalIDR = Math.max(
+              0,
+              (linkedPickerOrder.totalFinalIDR || 0) - totalCreditAmountIDR
+            );
+            linkedPickerOrder.updatedAt = deliveredAt;
+          }
+        }
+        if (linkedB2bOrder && totalCreditAmountIDR > 0) {
+          linkedB2bOrder.totalAmountIDR = Math.max(0, linkedB2bOrder.totalAmountIDR - totalCreditAmountIDR);
+          const b2bCust = b2bCustomersList.find((c) => c.id === linkedB2bOrder.customerId);
+          if (b2bCust) {
+            b2bCust.outstandingAR = Math.max(0, b2bCust.outstandingAR - totalCreditAmountIDR);
+            b2bCust.availableCredit = Math.max(0, b2bCust.creditLimit - b2bCust.outstandingAR);
           }
         }
         if (sj.deliveryOrderRef) {
@@ -15661,6 +16329,23 @@ async function startServer() {
       actionTaken: 'RELEASE_TO_SHELF',
       ...req.body,
     };
+
+    if (newQc.disposition === 'PASSED' && req.body?.putawayRackBinCode) {
+      const requestedRackCode = String(req.body.putawayRackBinCode).trim().toUpperCase();
+      const targetRack = warehouseRacks.find(
+        (r) => r.rackBinCode.toUpperCase() === requestedRackCode && r.storeId === newQc.storeId
+      );
+      if (targetRack) {
+        const halalCheck = validateHalalPutawayRule(newQc.sku, targetRack);
+        if (!halalCheck.ok) {
+          return res.status(400).json({
+            error: halalCheck.error,
+            code: 'HALAL_SEGREGATION_VIOLATION',
+          });
+        }
+      }
+    }
+
     qcInspectionsList.unshift(newQc);
 
     // Sync QC disposition with Lot/Batch status, Available ATP stock, and Scrap GL
@@ -18589,7 +19274,7 @@ async function startServer() {
     res.json(result);
   });
 
-  app.get('/api/admin/compliance/coretax-export', (_req: Request, res: Response) => {
+  function handleCoretaxExport(_req: Request, res: Response) {
     const rows: CoretaxExportRow[] = [];
 
     // 1. B2B Faktur Pajak Keluaran
@@ -18618,7 +19303,7 @@ async function startServer() {
       rows.push({
         rowId: `CT-B2B-${idx + 1}`,
         documentType: 'FAKTUR_KELUARAN_B2B',
-        kodeTransaksi: '04',
+        kodeTransaksi: taxClassification === 'BKP_DIBEBASKAN' ? '08' : '04',
         documentNumber: `FP-040.000-26.${String(idx + 1001).padStart(8, '0')}`,
         documentDate: order.orderDate,
         counterpartyName: order.companyName,
@@ -18654,7 +19339,7 @@ async function startServer() {
       rows.push({
         rowId: `CT-POS-${idx + 1}`,
         documentType: 'DIGUNGGUNG_B2C_POS',
-        kodeTransaksi: '01',
+        kodeTransaksi: taxClassification === 'BKP_DIBEBASKAN' ? '08' : '01',
         documentNumber: rcp.receiptNumber,
         documentDate: rcp.timestamp,
         counterpartyName: 'Konsumen Akhir (POS Retail Digunggung)',
@@ -18672,16 +19357,17 @@ async function startServer() {
     // 3. Nota Retur Penjualan (Customer RMA)
     customerRmaList.forEach((rma, idx) => {
       const tinCheck = validateNpwpOrNik(rma.customerNpwpOrNik || '');
+      const rmaTaxCat = rma.items[0]?.taxCategory || 'BKP_STANDARD';
       rows.push({
         rowId: `CT-NR-${idx + 1}`,
         documentType: 'NOTA_RETUR_PENJUALAN',
-        kodeTransaksi: '04',
+        kodeTransaksi: rmaTaxCat === 'BKP_DIBEBASKAN' ? '08' : '04',
         documentNumber: rma.notaReturNumber,
         documentDate: rma.createdAt,
         counterpartyName: rma.customerName,
         npwpOrNik: tinCheck.cleanDigits || '0000000000000000',
         isNpwpValid: tinCheck.valid,
-        taxClassification: rma.items[0]?.taxCategory || 'BKP_STANDARD',
+        taxClassification: rmaTaxCat,
         dppIDR: -rma.subtotalReversedIDR,
         ppnIDR: -rma.ppnReversedIDR,
         pb1IDR: 0,
@@ -18693,16 +19379,18 @@ async function startServer() {
     // 4. Nota Retur Pembelian (Vendor RTV Debit Notes)
     vendorRtvList.forEach((rtv, idx) => {
       const tinCheck = validateNpwpOrNik(rtv.supplierNpwp || '');
+      const rtvTaxCat: IndonesianTaxCategory =
+        rtv.ppnMasukanReversedIDR > 0 ? 'BKP_STANDARD' : 'BKP_DIBEBASKAN';
       rows.push({
         rowId: `CT-NRP-${idx + 1}`,
         documentType: 'NOTA_RETUR_PEMBELIAN',
-        kodeTransaksi: '04',
+        kodeTransaksi: rtvTaxCat === 'BKP_DIBEBASKAN' ? '08' : '04',
         documentNumber: rtv.debitNoteNumber,
         documentDate: rtv.createdAt,
         counterpartyName: rtv.supplierName,
         npwpOrNik: tinCheck.cleanDigits || '0000000000000000',
         isNpwpValid: tinCheck.valid,
-        taxClassification: rtv.ppnMasukanReversedIDR > 0 ? 'BKP_STANDARD' : 'BKP_DIBEBASKAN',
+        taxClassification: rtvTaxCat,
         dppIDR: -rtv.subtotalReturnedIDR,
         ppnIDR: -rtv.ppnMasukanReversedIDR,
         pb1IDR: 0,
@@ -18727,12 +19415,18 @@ async function startServer() {
         b2bMissingNpwpCount: rows.filter(
           (r) => r.documentType === 'FAKTUR_KELUARAN_B2B' && !r.isNpwpValid
         ).length,
+        sembakoExemptCount: rows.filter((r) => r.taxClassification === 'BKP_DIBEBASKAN').length,
+        standardPpnCount: rows.filter((r) => r.taxClassification === 'BKP_STANDARD').length,
+        pphTotalWithheldIDR: pphWithholdingList.reduce((s, r) => s + r.withheldAmountIDR, 0),
       },
       rows,
       csvContent,
       xmlContent,
     });
-  });
+  }
+
+  app.get('/api/admin/compliance/coretax-export', handleCoretaxExport);
+  app.get('/api/admin/accounting/coretax-export', handleCoretaxExport);
 
   // -------------------------------------------------------------
   // ADDITIVE COMMUNICATION DISPATCH ENGINE (SMTP & WHATSAPP)
@@ -19171,6 +19865,27 @@ async function startServer() {
         `Lot: ${trace.lotNumber} | Produk: ${trace.sku} - ${trace.productName}`,
         `Status: ${trace.isQuarantined ? 'QUARANTINED & SALES LOCKED' : 'UNDER INVESTIGATION'}`,
         `Sisa Stok Terdampak: ${trace.totalRemainingUnits} unit | Order B2B: ${trace.downstreamImpact.b2bOrders.length} | Struk POS: ${trace.downstreamImpact.posReceipts.length}`,
+      ];
+    } else if (docType === 'KASBON_BILLING') {
+      isCustomerFacing = true;
+      const kasbon = warungKasbonAccounts.find((k) => k.id === docId);
+      if (!kasbon) throw new Error(`Warung Kasbon account '${docId}' not found.`);
+      docLabel = 'Tagihan Piutang Kasbon Warung';
+      docNumber = kasbon.id;
+      outletName = 'PT GroceMart Retail Indonesia (Sales Kanvas Desk)';
+      totalDisplay = formatCurrencyRp(kasbon.outstandingBalanceIDR);
+      detailRowsHtml = `
+        <tr><td><strong>Warung / Toko</strong></td><td>${escapeHtmlText(kasbon.warungName)} (${escapeHtmlText(kasbon.ownerName)})</td></tr>
+        <tr><td><strong>Salesman Kanvas / Rute</strong></td><td>${escapeHtmlText(kasbon.salesmanName)} — ${escapeHtmlText(kasbon.routeArea)}</td></tr>
+        <tr><td><strong>Jatuh Tempo / Status</strong></td><td>${escapeHtmlText(kasbon.dueDate)} (${escapeHtmlText(kasbon.agingStatus)})</td></tr>
+        <tr><td><strong>Plafon Kredit / Saldo Kasbon</strong></td><td>${formatCurrencyRp(kasbon.creditLimitIDR)} / ${formatCurrencyRp(kasbon.outstandingBalanceIDR)}</td></tr>`;
+      lineItemsHtml = `
+        <tr><td>${escapeHtmlText(kasbon.id)}</td><td>Saldo Tagihan Kasbon ${escapeHtmlText(kasbon.warungName)}</td><td style="text-align:right;">1</td><td style="text-align:right;">${formatCurrencyRp(kasbon.outstandingBalanceIDR)}</td><td style="text-align:right;">${formatCurrencyRp(kasbon.outstandingBalanceIDR)}</td></tr>`;
+      waDetailsLines = [
+        `Warung/Toko: ${kasbon.warungName} (${kasbon.ownerName})`,
+        `Sales Kanvas: ${kasbon.salesmanName} (${kasbon.routeArea})`,
+        `Total Tagihan Kasbon: ${formatCurrencyRp(kasbon.outstandingBalanceIDR)} | Jatuh Tempo: ${kasbon.dueDate}`,
+        `Mohon siapkan pembayaran tunai / transfer BCA saat kunjungan salesman kanvas kami.`,
       ];
     } else {
       throw new Error(`Unsupported document type '${String(docType)}'.`);
@@ -20035,6 +20750,7 @@ async function startServer() {
       rackBinCode,
       storeId,
       storageZone,
+      rackHalalZone,
       rotationPolicy,
       maxCapacity,
       notes,
@@ -20043,6 +20759,7 @@ async function startServer() {
       rackBinCode?: string;
       storeId?: string;
       storageZone?: WarehouseRackStorageZone;
+      rackHalalZone?: RackHalalZone;
       rotationPolicy?: RackRotationPolicy;
       maxCapacity?: number;
       notes?: string;
@@ -20076,6 +20793,13 @@ async function startServer() {
       )
         ? storageZone
         : 'Ambient Dry';
+    const resolvedHalalZone: RackHalalZone =
+      rackHalalZone &&
+      ['HALAL_DEDICATED', 'NON_HALAL_SEGREGATED', 'GENERAL_AMBIENT'].includes(rackHalalZone)
+        ? rackHalalZone
+        : resolvedZone === 'Chilled Walk-In (2°C–4°C)' || resolvedZone === 'Deep Freeze (-20°C)'
+        ? 'HALAL_DEDICATED'
+        : 'GENERAL_AMBIENT';
     const resolvedPolicy: RackRotationPolicy =
       rotationPolicy === 'STRICT_FIFO' ? 'STRICT_FIFO' : 'STRICT_FEFO';
     const actorName = getEffectiveOperatorName(req);
@@ -20091,6 +20815,7 @@ async function startServer() {
       target.storeId = outlet.storeId;
       target.storeName = outlet.storeName;
       target.storageZone = resolvedZone;
+      target.rackHalalZone = resolvedHalalZone;
       target.rotationPolicy = resolvedPolicy;
       target.maxCapacity = cap;
       target.notes = notes !== undefined ? notes : target.notes;
@@ -20103,6 +20828,7 @@ async function startServer() {
         storeId: outlet.storeId,
         storeName: outlet.storeName,
         storageZone: resolvedZone,
+        rackHalalZone: resolvedHalalZone,
         rotationPolicy: resolvedPolicy,
         maxCapacity: cap,
         currentOccupancy: 0,
@@ -20159,6 +20885,14 @@ async function startServer() {
     );
     if (!rack) {
       return res.status(404).json({ error: `Rack/Bin '${cleanCode}' not found at ${outlet.storeName}.` });
+    }
+
+    const halalRuleCheck = validateHalalPutawayRule(cleanSku, rack);
+    if (!halalRuleCheck.ok) {
+      return res.status(400).json({
+        error: halalRuleCheck.error,
+        code: 'HALAL_SEGREGATION_VIOLATION',
+      });
     }
 
     const strategy: RemovalStrategyType =
@@ -20908,6 +21642,9 @@ async function startServer() {
     ).toLowerCase();
     const cat = String(params.category || inv?.category || tier?.category || '').toLowerCase();
 
+    const skuHalalStatus = resolveSkuHalalStatus(params.sku);
+    const bpjphExpiryInfo = getBpjphExpiryInfo(inv?.bpjphExpiryDate);
+
     let requiredStorageZone: WarehouseRackStorageZone = 'Ambient Dry';
     if (rawZone.includes('freez') || cat.includes('meat') || cat.includes('seafood') || cat.includes('frozen')) {
       requiredStorageZone = 'Deep Freeze (-20°C)';
@@ -20917,17 +21654,20 @@ async function startServer() {
       cat.includes('produce') ||
       cat.includes('dairy') ||
       cat.includes('egg') ||
-      cat.includes('beverage')
+      cat.includes('beverage') ||
+      cat.includes('deli')
     ) {
       requiredStorageZone = 'Chilled Walk-In (2°C–4°C)';
     }
 
     const reqQty = Math.max(1, Number(params.qty) || 1);
-    const storeRacks = warehouseRacks.filter(
-      (r) =>
-        r.storeId === params.storeId &&
-        r.storageZone !== 'Quarantine Hold Cage'
-    );
+    const storeRacks = warehouseRacks.filter((r) => {
+      if (r.storeId !== params.storeId || r.storageZone === 'Quarantine Hold Cage') {
+        return false;
+      }
+      const rackCheck = validateHalalPutawayRule(params.sku, r);
+      return rackCheck.ok;
+    });
 
     const candidates: PutawayCandidateRack[] = storeRacks.map((r) => {
       const remainingCapacity = Math.max(0, Number((r.maxCapacity - r.currentOccupancy).toFixed(2)));
@@ -20956,6 +21696,14 @@ async function startServer() {
       } else {
         score -= 120;
         reasons.push(`Zone mismatch (${r.storageZone})`);
+      }
+
+      if (skuHalalStatus === 'NON_HALAL' && r.rackHalalZone === 'NON_HALAL_SEGREGATED') {
+        score += 35;
+        reasons.push('Segregated Non-Halal Chiller');
+      } else if (skuHalalStatus === 'HALAL_CERTIFIED' && r.rackHalalZone === 'HALAL_DEDICATED') {
+        score += 20;
+        reasons.push('Halal Dedicated Zone');
       }
 
       if (remainingCapacity >= reqQty) {
@@ -20989,6 +21737,7 @@ async function startServer() {
         rackBinCode: r.rackBinCode,
         storeId: r.storeId,
         storageZone: r.storageZone,
+        rackHalalZone: r.rackHalalZone,
         rotationPolicy: r.rotationPolicy,
         maxCapacity: r.maxCapacity,
         currentOccupancy: r.currentOccupancy,
@@ -21004,6 +21753,13 @@ async function startServer() {
     const recommendedRack = candidates[0] || null;
     const alternatives = candidates.slice(1, 5);
 
+    const segregationAlert =
+      skuHalalStatus === 'NON_HALAL'
+        ? 'Wajib Segregasi Non-Halal (UU JPH): Rak HALAL_DEDICATED otomatis diblokir.'
+        : skuHalalStatus === 'HALAL_CERTIFIED' && bpjphExpiryInfo.isExpiringSoon
+        ? `Perhatian BPJPH: Sertifikat Halal ${inv?.bpjphCertNumber || ''} kedaluwarsa dalam ${bpjphExpiryInfo.daysUntilExpiry} hari (${inv?.bpjphExpiryDate}).`
+        : undefined;
+
     return {
       sku: params.sku,
       storeId: params.storeId,
@@ -21013,7 +21769,14 @@ async function startServer() {
       alternatives,
       reason: recommendedRack
         ? `${recommendedRack.rackBinCode} (${recommendedRack.reason})`
-        : `No configured non-quarantine racks found for ${params.storeId}`,
+        : `No Halal-compliant non-quarantine racks found for ${params.storeId}`,
+      skuHalalStatus,
+      bpjphCertNumber: inv?.bpjphCertNumber,
+      bpjphExpiryDate: inv?.bpjphExpiryDate,
+      bpomRegNumber: inv?.bpomRegNumber || tier?.bpomRegNumber,
+      bpjphExpiringSoon: bpjphExpiryInfo.isExpiringSoon || bpjphExpiryInfo.isExpired,
+      bpjphDaysUntilExpiry: bpjphExpiryInfo.daysUntilExpiry ?? undefined,
+      segregationAlert,
     };
   }
 
@@ -23802,6 +24565,359 @@ async function startServer() {
   });
 
   // -------------------------------------------------------------
+  // SALESMAN KANVAS (VAN-SELLING) & WARUNG KASBON LEDGER
+  // -------------------------------------------------------------
+  function computeWarungKasbonAging(acc: WarungKasbonAccount): WarungKasbonAccount['agingStatus'] {
+    if (acc.outstandingBalanceIDR <= 0) return 'LUNAS';
+    const dueMs = new Date(acc.dueDate).getTime();
+    if (!Number.isFinite(dueMs)) return 'LANCAR';
+    const daysOverdue = Math.floor((Date.now() - dueMs) / 86400000);
+    if (daysOverdue >= 7) return 'MENUNGGAK_7_HARI';
+    if (daysOverdue >= -2) return 'JATUH_TEMPO';
+    return 'LANCAR';
+  }
+
+  function buildKanvasLedgerPayload(): KanvasLedgerResponse {
+    const normalizedAccounts = warungKasbonAccounts.map((acc) => ({
+      ...acc,
+      agingStatus: computeWarungKasbonAging(acc),
+    }));
+    const totalOutstandingKasbonIDR = normalizedAccounts.reduce(
+      (s, a) => s + Math.max(0, a.outstandingBalanceIDR),
+      0
+    );
+    const overdueKasbonCount = normalizedAccounts.filter(
+      (a) => a.outstandingBalanceIDR > 0 && (a.agingStatus === 'JATUH_TEMPO' || a.agingStatus === 'MENUNGGAK_7_HARI')
+    ).length;
+    const totalCollectedTodayIDR = kanvasRoutes.reduce(
+      (s, r) => s + Math.max(0, r.collectedKasbonIDR),
+      0
+    );
+    return {
+      routes: kanvasRoutes,
+      kasbonAccounts: normalizedAccounts,
+      summary: {
+        totalRoutes: kanvasRoutes.length,
+        activeRoutes: kanvasRoutes.filter((r) => r.status === 'ON_ROUTE').length,
+        totalOutstandingKasbonIDR,
+        overdueKasbonCount,
+        totalCollectedTodayIDR,
+      },
+    };
+  }
+
+  app.get('/api/admin/crm/kanvas-ledger', (_req: Request, res: Response) => {
+    res.json(buildKanvasLedgerPayload());
+  });
+
+  app.post('/api/admin/crm/kanvas-ledger', (req: Request, res: Response) => {
+    const body = (req.body || {}) as Record<string, any>;
+    const action = String(body.action || '').toUpperCase();
+    const nowIso = new Date().toISOString();
+    const actorName = getEffectiveOperatorName(req);
+
+    if (action === 'CREATE_ROUTE') {
+      const salesmanName = String(body.salesmanName || '').trim();
+      const vehiclePlate = String(body.vehiclePlate || '').trim().toUpperCase();
+      const routeArea = String(body.routeArea || '').trim();
+      if (!salesmanName || !vehiclePlate || !routeArea) {
+        return res.status(400).json({ error: 'salesmanName, vehiclePlate, and routeArea are required.' });
+      }
+      const newRoute: KanvasRouteRecord = {
+        id: `KNV-RT-${(kanvasRoutes.length + 1).toString().padStart(2, '0')}`,
+        salesmanName,
+        vehiclePlate,
+        routeArea,
+        outletCount: Math.max(1, Math.round(Number(body.outletCount) || 10)),
+        dailyTargetIDR: Math.max(0, roundIDR(Number(body.dailyTargetIDR) || 10000000)),
+        collectedKasbonIDR: 0,
+        status: 'ON_ROUTE',
+        updatedAt: nowIso,
+      };
+      kanvasRoutes.unshift(newRoute);
+      scheduleStateSave();
+      return res.json({
+        success: true,
+        route: newRoute,
+        ledger: buildKanvasLedgerPayload(),
+        message: `Rute Kanvas ${newRoute.salesmanName} (${newRoute.vehiclePlate}) ditambahkan.`,
+      });
+    }
+
+    if (action === 'CREATE_KASBON') {
+      const warungName = String(body.warungName || '').trim();
+      const ownerName = String(body.ownerName || '').trim();
+      const phone = String(body.phone || '').trim();
+      const salesmanName = String(body.salesmanName || kanvasRoutes[0]?.salesmanName || 'Hendra Kurniawan').trim();
+      const creditLimitIDR = Math.max(1000000, roundIDR(Number(body.creditLimitIDR) || 15000000));
+      const outstandingBalanceIDR = Math.max(0, roundIDR(Number(body.outstandingBalanceIDR) || 0));
+      const dueDate =
+        String(body.dueDate || '').trim() ||
+        new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+
+      if (!warungName || !ownerName) {
+        return res.status(400).json({ error: 'warungName and ownerName are required.' });
+      }
+      const newKasbon: WarungKasbonAccount = {
+        id: `KSB-${(warungKasbonAccounts.length + 1).toString().padStart(3, '0')}`,
+        warungName,
+        ownerName,
+        phone: phone || '+62 812-0000-0000',
+        salesmanName,
+        routeArea: String(body.routeArea || 'Jabodetabek Kanvas'),
+        creditLimitIDR,
+        outstandingBalanceIDR,
+        dueDate,
+        agingStatus: outstandingBalanceIDR <= 0 ? 'LUNAS' : 'LANCAR',
+      };
+      newKasbon.agingStatus = computeWarungKasbonAging(newKasbon);
+      warungKasbonAccounts.unshift(newKasbon);
+      scheduleStateSave();
+      return res.json({
+        success: true,
+        account: newKasbon,
+        ledger: buildKanvasLedgerPayload(),
+        message: `Akun Kasbon ${newKasbon.warungName} tercatat.`,
+      });
+    }
+
+    if (action === 'COLLECT_PAYMENT') {
+      const accountId = String(body.accountId || '').trim();
+      const amountIDR = Math.max(0, roundIDR(Number(body.amountIDR) || 0));
+      const acc = warungKasbonAccounts.find((k) => k.id === accountId);
+      if (!acc) {
+        return res.status(404).json({ error: `Warung Kasbon account '${accountId}' not found.` });
+      }
+      if (amountIDR <= 0) {
+        return res.status(400).json({ error: 'Payment amountIDR must be positive.' });
+      }
+      const effectivePaid = Math.min(amountIDR, Math.max(amountIDR, acc.outstandingBalanceIDR));
+      const appliedReduction = Math.min(amountIDR, acc.outstandingBalanceIDR);
+      acc.outstandingBalanceIDR = Math.max(0, acc.outstandingBalanceIDR - appliedReduction);
+      acc.lastPaymentAt = nowIso;
+      acc.agingStatus = computeWarungKasbonAging(acc);
+
+      const route = kanvasRoutes.find(
+        (r) => r.salesmanName.toLowerCase() === acc.salesmanName.toLowerCase()
+      );
+      if (route) {
+        route.collectedKasbonIDR += effectivePaid;
+        route.updatedAt = nowIso;
+      }
+
+      const glAmt = appliedReduction > 0 ? appliedReduction : effectivePaid;
+      const gle1 = `GLE-KSB-${Date.now().toString().slice(-6)}-1`;
+      const gle2 = `GLE-KSB-${Date.now().toString().slice(-6)}-2`;
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp: nowIso,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '1010',
+            accountName: 'Cash on Hand & Store Registers',
+            category: 'Asset',
+            debit: glAmt,
+            credit: 0,
+            referenceType: 'KASBON_COLLECTION',
+            referenceId: acc.id,
+            description: `Pelunasan Kasbon Kanvas [${acc.id}] dari ${acc.warungName} (Sales: ${acc.salesmanName})`,
+          },
+          {
+            id: gle2,
+            timestamp: nowIso,
+            storeId: 'CONSOLIDATED',
+            storeName: 'Consolidated Company-Wide',
+            accountCode: '1200',
+            accountName: 'Accounts Receivable - B2B Wholesale',
+            category: 'Asset',
+            debit: 0,
+            credit: glAmt,
+            referenceType: 'KASBON_COLLECTION',
+            referenceId: acc.id,
+            description: `Penurunan Piutang Kasbon Warung [${acc.id}] ${acc.warungName}`,
+          },
+        ],
+        true
+      );
+
+      appendAuditTrailLog({
+        req,
+        actorName,
+        branchScope: 'CONSOLIDATED',
+        module: 'FINANCE',
+        action: 'KASBON_PAYMENT_COLLECTED',
+        referenceId: acc.id,
+        summary: `Setoran Kasbon ${acc.warungName} sebesar Rp ${glAmt.toLocaleString('id-ID')} dicatat oleh ${acc.salesmanName}.`,
+      });
+      scheduleStateSave();
+      return res.json({
+        success: true,
+        account: acc,
+        glEntryIds: [gle1, gle2],
+        ledger: buildKanvasLedgerPayload(),
+        message: `Pembayaran Kasbon Rp ${glAmt.toLocaleString('id-ID')} untuk ${acc.warungName} berhasil dicatat & dibukukan ke GL.`,
+      });
+    }
+
+    if (action === 'MARK_REMINDER_SENT') {
+      const accountId = String(body.accountId || '').trim();
+      const acc = warungKasbonAccounts.find((k) => k.id === accountId);
+      if (!acc) {
+        return res.status(404).json({ error: `Warung Kasbon account '${accountId}' not found.` });
+      }
+      acc.lastReminderSentAt = nowIso;
+      scheduleStateSave();
+      return res.json({
+        success: true,
+        account: acc,
+        ledger: buildKanvasLedgerPayload(),
+      });
+    }
+
+    return res.status(400).json({ error: `Unsupported action '${action}' for kanvas-ledger.` });
+  });
+
+  // -------------------------------------------------------------
+  // PPH PASAL 22 (1.5%) & PPH PASAL 23 (2%) WITHHOLDING TAX LEDGER
+  // -------------------------------------------------------------
+  app.get('/api/admin/accounting/pph-withholding', (_req: Request, res: Response) => {
+    const totalPph22IDR = pphWithholdingList
+      .filter((r) => r.pphType === 'PPH_22')
+      .reduce((s, r) => s + r.withheldAmountIDR, 0);
+    const totalPph23IDR = pphWithholdingList
+      .filter((r) => r.pphType === 'PPH_23')
+      .reduce((s, r) => s + r.withheldAmountIDR, 0);
+    res.json({
+      records: pphWithholdingList,
+      summary: {
+        totalPph22IDR,
+        totalPph23IDR,
+        totalWithheldIDR: totalPph22IDR + totalPph23IDR,
+      },
+    });
+  });
+
+  app.post('/api/admin/accounting/pph-withholding', (req: Request, res: Response) => {
+    const {
+      pphType = 'PPH_23',
+      counterpartyName,
+      counterpartyNpwp = '',
+      invoiceRef,
+      grossDppIDR,
+      notes,
+    } = (req.body || {}) as {
+      pphType?: PphWithholdingType;
+      counterpartyName?: string;
+      counterpartyNpwp?: string;
+      invoiceRef?: string;
+      grossDppIDR?: number;
+      notes?: string;
+    };
+
+    const cleanName = String(counterpartyName || '').trim();
+    const cleanInv = String(invoiceRef || '').trim();
+    const dpp = Math.round(Number(grossDppIDR) || 0);
+    if (!cleanName || !cleanInv || dpp <= 0) {
+      return res.status(400).json({
+        error: 'counterpartyName, invoiceRef, and positive integer grossDppIDR are required.',
+      });
+    }
+    if (pphType !== 'PPH_22' && pphType !== 'PPH_23') {
+      return res.status(400).json({ error: 'pphType must be PPH_22 or PPH_23.' });
+    }
+
+    const ratePercent: 1.5 | 2 = pphType === 'PPH_22' ? 1.5 : 2;
+    const withheldAmountIDR = Math.max(1, Math.round((dpp * ratePercent) / 100));
+    const nowIso = new Date().toISOString();
+    const actorName = getEffectiveOperatorName(req);
+    const recId = `PPH-2026-${(pphWithholdingList.length + 1).toString().padStart(4, '0')}`;
+    const gle1 = `GLE-PPH-${Date.now().toString().slice(-6)}-1`;
+    const gle2 = `GLE-PPH-${Date.now().toString().slice(-6)}-2`;
+
+    ensureRegulatoryCoaAccounts();
+    commitBalancedGlBatch(
+      [
+        {
+          id: gle1,
+          timestamp: nowIso,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '1160',
+          accountName: 'Prepaid Tax PPh Pasal 22/23 (PPh Dipungut/Dipotong)',
+          category: 'Asset',
+          debit: withheldAmountIDR,
+          credit: 0,
+          referenceType: 'PPH_WITHHOLDING',
+          referenceId: cleanInv,
+          description: `Kredit Pajak ${pphType === 'PPH_22' ? 'PPh Pasal 22 (1.5%)' : 'PPh Pasal 23 (2%)'} atas ${cleanInv} (${cleanName})`,
+        },
+        {
+          id: gle2,
+          timestamp: nowIso,
+          storeId: 'CONSOLIDATED',
+          storeName: 'Consolidated Company-Wide',
+          accountCode: '1200',
+          accountName: 'Accounts Receivable - B2B Wholesale',
+          category: 'Asset',
+          debit: 0,
+          credit: withheldAmountIDR,
+          referenceType: 'PPH_WITHHOLDING',
+          referenceId: cleanInv,
+          description: `Pengurang Piutang B2B atas pemotongan ${pphType} oleh ${cleanName} (${cleanInv})`,
+        },
+      ],
+      true
+    );
+
+    const newRec: PphWithholdingRecord = {
+      id: recId,
+      timestamp: nowIso,
+      pphType,
+      ratePercent,
+      counterpartyName: cleanName,
+      counterpartyNpwp: String(counterpartyNpwp || '').replace(/\D/g, '') || '0000000000000000',
+      invoiceRef: cleanInv,
+      grossDppIDR: dpp,
+      withheldAmountIDR,
+      glEntryIds: [gle1, gle2],
+      notes: notes ? String(notes).trim() : undefined,
+      recordedBy: actorName,
+    };
+    pphWithholdingList.unshift(newRec);
+
+    appendAuditTrailLog({
+      req,
+      actorName,
+      branchScope: 'CONSOLIDATED',
+      module: 'FINANCE',
+      action: 'PPH_WITHHOLDING_POSTED',
+      referenceId: recId,
+      summary: `Bukti Potong ${pphType} (${ratePercent}%) senilai Rp ${withheldAmountIDR.toLocaleString('id-ID')} untuk ${cleanInv} diposting ke COA #1160 / #1200.`,
+    });
+    scheduleStateSave();
+
+    const totalPph22IDR = pphWithholdingList
+      .filter((r) => r.pphType === 'PPH_22')
+      .reduce((s, r) => s + r.withheldAmountIDR, 0);
+    const totalPph23IDR = pphWithholdingList
+      .filter((r) => r.pphType === 'PPH_23')
+      .reduce((s, r) => s + r.withheldAmountIDR, 0);
+
+    res.json({
+      success: true,
+      record: newRec,
+      summary: {
+        totalPph22IDR,
+        totalPph23IDR,
+        totalWithheldIDR: totalPph22IDR + totalPph23IDR,
+      },
+      message: `Bukti Potong ${pphType} (${ratePercent}%) Rp ${withheldAmountIDR.toLocaleString('id-ID')} berhasil diposting (DR 1160 / CR 1200).`,
+    });
+  });
+
+  // -------------------------------------------------------------
   // API 404 & ERROR JSON GUARDS (Prevent SPA HTML fallback on /api/*)
   // -------------------------------------------------------------
   app.use('/api', (req: Request, res: Response) => {
@@ -23829,16 +24945,28 @@ async function startServer() {
     });
   } else {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === 'true' ? false : { server: httpServer },
+        allowedHosts: true,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.on('error', (err) => {
+    console.error('[GroceMart Backend] HTTP server error:', err);
+    process.exit(1);
+  });
+
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[GroceMart Backend] Server running on http://0.0.0.0:${PORT}`);
     console.log(`[GroceMart Backend] QRIS OpenAPI available at http://0.0.0.0:${PORT}/api/qris/openapi.json`);
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('[GroceMart Backend] Failed to start server:', err);
+  process.exit(1);
+});

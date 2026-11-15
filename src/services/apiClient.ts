@@ -127,6 +127,12 @@ import type {
   PosValidatePromoResponse,
   EpodRecord,
   EpodReturnLine,
+  RackHalalZone,
+  KanvasLedgerResponse,
+  KanvasRouteRecord,
+  WarungKasbonAccount,
+  PphWithholdingRecord,
+  PphWithholdingType,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
@@ -2757,12 +2763,15 @@ export const apiClient = {
       totalPpnKeluaranIDR: number;
       totalNotaReturPpnIDR: number;
       b2bMissingNpwpCount: number;
+      sembakoExemptCount?: number;
+      standardPpnCount?: number;
+      pphTotalWithheldIDR?: number;
     };
     rows: CoretaxExportRow[];
     csvContent: string;
     xmlContent: string;
   }> {
-    const res = await fetchApi('/api/admin/compliance/coretax-export');
+    const res = await fetchApi('/api/admin/accounting/coretax-export');
     if (!res.ok) {
       throw new Error('Failed to compile Coretax / e-Faktur DJP export');
     }
@@ -3023,6 +3032,7 @@ export const apiClient = {
     storageZone: WarehouseRackStorageZone;
     rotationPolicy: RackRotationPolicy;
     maxCapacity: number;
+    rackHalalZone?: RackHalalZone;
     notes?: string;
   }): Promise<{
     success: boolean;
@@ -3605,4 +3615,89 @@ export const apiClient = {
     if (!res.ok) throw new Error(data.error || 'Failed to validate promo / voucher');
     return data;
   },
+
+  // -------------------------------------------------------------
+  // INDONESIA ENTERPRISE PACK: KANVAS VAN-SELLING, KASBON & PPH 22/23
+  // -------------------------------------------------------------
+  async getKanvasLedger(): Promise<KanvasLedgerResponse> {
+    const res = await fetchApi('/api/admin/crm/kanvas-ledger');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load Salesman Kanvas & Warung Kasbon ledger');
+    return data;
+  },
+
+  async postKanvasLedgerAction(payload: {
+    action: 'CREATE_ROUTE' | 'CREATE_KASBON' | 'COLLECT_PAYMENT' | 'MARK_REMINDER_SENT';
+    salesmanName?: string;
+    vehiclePlate?: string;
+    routeArea?: string;
+    outletCount?: number;
+    dailyTargetIDR?: number;
+    warungName?: string;
+    ownerName?: string;
+    phone?: string;
+    creditLimitIDR?: number;
+    outstandingBalanceIDR?: number;
+    dueDate?: string;
+    accountId?: string;
+    amountIDR?: number;
+  }): Promise<{
+    success: boolean;
+    route?: KanvasRouteRecord;
+    account?: WarungKasbonAccount;
+    glEntryIds?: string[];
+    ledger: KanvasLedgerResponse;
+    message?: string;
+  }> {
+    const res = await fetchApi('/api/admin/crm/kanvas-ledger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Kanvas/Kasbon operation failed');
+    return data;
+  },
+
+  async getPphWithholdings(): Promise<{
+    records: PphWithholdingRecord[];
+    summary: {
+      totalPph22IDR: number;
+      totalPph23IDR: number;
+      totalWithheldIDR: number;
+    };
+  }> {
+    const res = await fetchApi('/api/admin/accounting/pph-withholding');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load PPh 22/23 withholding ledger');
+    return data;
+  },
+
+  async postPphWithholding(payload: {
+    pphType: PphWithholdingType;
+    counterpartyName: string;
+    counterpartyNpwp?: string;
+    invoiceRef: string;
+    grossDppIDR: number;
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    record: PphWithholdingRecord;
+    summary: {
+      totalPph22IDR: number;
+      totalPph23IDR: number;
+      totalWithheldIDR: number;
+    };
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/accounting/pph-withholding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to record PPh 22/23 withholding tax');
+    return data;
+  },
 };
+

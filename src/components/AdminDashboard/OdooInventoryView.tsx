@@ -21,6 +21,7 @@ import type {
 import type { AdminDashboardTab } from './AdminSidebar';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { getBpjphExpiryInfo } from '../../utils/indonesianCompliance';
 import { canSessionViewValuation, normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   formatMultiUomStock,
@@ -1197,6 +1198,51 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                   ? profile.wholesalePackagingSpec
                                   : profile.retailPackagingSpec}
                               </div>
+                              {(() => {
+                                const invMeta = inventory.find((it) => it.sku === row.sku);
+                                const halalStatus = invMeta?.halalStatus;
+                                const bpomReg = invMeta?.bpomRegNumber;
+                                const bpjphCert = invMeta?.bpjphCertNumber;
+                                const bpjphInfo = getBpjphExpiryInfo(invMeta?.bpjphExpiryDate);
+                                if (!halalStatus && !bpomReg && !bpjphCert) return null;
+                                return (
+                                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                                    {halalStatus === 'HALAL_CERTIFIED' && (
+                                      <span
+                                        title={bpjphCert ? `BPJPH: ${bpjphCert}` : 'Halal Certified'}
+                                        className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                      >
+                                        HALAL BPJPH
+                                      </span>
+                                    )}
+                                    {halalStatus === 'NON_HALAL' && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300">
+                                        NON-HALAL SEGREGASI
+                                      </span>
+                                    )}
+                                    {halalStatus === 'FRESH_UNPROCESSED' && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-500/15 text-teal-700 dark:text-teal-300">
+                                        SEGAR
+                                      </span>
+                                    )}
+                                    {bpomReg && (
+                                      <span
+                                        title={bpomReg}
+                                        className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300 truncate max-w-[130px]"
+                                      >
+                                        {bpomReg}
+                                      </span>
+                                    )}
+                                    {(bpjphInfo.isExpiringSoon || bpjphInfo.isExpired) && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300">
+                                        {bpjphInfo.isExpired
+                                          ? 'BPJPH EXPIRED'
+                                          : `BPJPH ${bpjphInfo.daysUntilExpiry}h`}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </td>
