@@ -25955,7 +25955,7 @@ async function startServer() {
           .filter((l) => l.method === 'QRIS')
           .reduce((s, l) => s + roundIDR(l.amountIDR || 0), 0);
         const edcSum = splitLegs
-          .filter((l) => l.method === 'DEBIT_CARD' || l.method === 'CREDIT_CARD')
+          .filter((l) => l.method === 'CARD' || l.method === 'DEBIT_CARD' || l.method === 'CREDIT_CARD')
           .reduce((s, l) => s + roundIDR(l.amountIDR || 0), 0);
         if (qrisSum > 0) {
           unsettledQrisItems.push({
