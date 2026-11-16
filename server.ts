@@ -2430,7 +2430,7 @@ function getSellableNonExpiredAtpStock(sku: string, storeId: string = 'ALL'): {
   const inv = inventoryList.find((i) => i.sku === sku);
   const wholesaleProd = wholesaleProductsList.find((p) => p.sku === sku);
 
-  const hasBatchTracking = matchingAll.length > 0;
+  const hasBatchTracking = matchingAll.some((b) => !b.batchId.startsWith('BAT-QRN-'));
   let stockCap = Infinity;
   if (storeId !== 'ALL' && storeId !== 'CONSOLIDATED' && tier) {
     stockCap = Math.max(0, Number(tier.availableStock) || 0);
@@ -8130,7 +8130,7 @@ async function startServer() {
       };
       returnableAssetRecord = {
         id: recId,
-        timestamp: order.updatedAt,
+        createdAt: order.updatedAt,
         updatedAt: order.updatedAt,
         storeId: order.storeId,
         storeName: order.storeName,
@@ -8143,6 +8143,7 @@ async function startServer() {
         qtyReturned: 0,
         qtyOutstanding: retQty,
         depositPerUnitIDR: 0,
+        totalDepositIDR: 0,
         depositHeldIDR: 0,
         status: 'OPEN',
         glEntryIds: [],
@@ -9126,7 +9127,7 @@ async function startServer() {
           };
           returnableAssetRecord = {
             id: `KRT-FUL-${Date.now().toString().slice(-5)}-${returnableContainersList.length + 1}`,
-            timestamp: nowIso,
+            createdAt: nowIso,
             updatedAt: nowIso,
             storeId: order.storeId,
             storeName: order.storeName,
@@ -9139,6 +9140,7 @@ async function startServer() {
             qtyReturned: 0,
             qtyOutstanding: retAssetQty,
             depositPerUnitIDR: 0,
+            totalDepositIDR: 0,
             depositHeldIDR: 0,
             status: 'OPEN',
             glEntryIds: [],
@@ -9836,6 +9838,8 @@ async function startServer() {
         allocationMethod: lcMethod,
         allocatedItems: landedAllocatedItems,
         glEntryIds: [lcGlDrId, lcGlCrId],
+        status: 'POSTED',
+        createdBy: getEffectiveOperatorName(req),
       };
       landedCostsList.unshift(createdLandedRecord);
     }
@@ -15616,7 +15620,7 @@ async function startServer() {
       const recipientLabel = String(returnableAsset?.recipientName || '').trim() || destStoreName;
       linkedReturnable = {
         id: `KRT-TRF-${Date.now().toString().slice(-5)}-${returnableContainersList.length + 1}`,
-        timestamp,
+        createdAt: timestamp,
         updatedAt: timestamp,
         storeId: sourceStoreId,
         storeName: sourceStoreName,
@@ -15629,6 +15633,7 @@ async function startServer() {
         qtyReturned: 0,
         qtyOutstanding: retQty,
         depositPerUnitIDR: 0,
+        totalDepositIDR: 0,
         depositHeldIDR: 0,
         status: 'OPEN',
         glEntryIds: [],
@@ -16987,6 +16992,12 @@ async function startServer() {
               if (invItem) {
                 invItem.currentStock = Number(((invItem.currentStock || 0) + retQty).toFixed(2));
               }
+              const skuHasStoreBatches = inventoryBatches.some(
+                (b) =>
+                  b.sku === ret.sku &&
+                  b.storeId === sj.senderStoreId &&
+                  !b.batchId.startsWith('BAT-QRN-')
+              );
               const targetBatch = inventoryBatches.find(
                 (b) =>
                   b.sku === ret.sku &&
@@ -16998,7 +17009,7 @@ async function startServer() {
               if (targetBatch) {
                 targetBatch.currentStock = Number((targetBatch.currentStock + retQty).toFixed(2));
                 syncBatchExpiryStatus(targetBatch, Date.now());
-              } else {
+              } else if (skuHasStoreBatches) {
                 inventoryBatches.unshift({
                   batchId: `BAT-EPOD-${Date.now().toString().slice(-5)}-${normalizedReturnedLines.length + 1}`,
                   sku: ret.sku,
