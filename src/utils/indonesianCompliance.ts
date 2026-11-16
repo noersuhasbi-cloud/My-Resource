@@ -439,7 +439,8 @@ export function resolveWholesaleTierPrice(
 
 export function getBpjphExpiryInfo(
   bpjphExpiryDate?: string,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  warningDays: number = 30
 ): { daysUntilExpiry: number | null; isExpiringSoon: boolean; isExpired: boolean } {
   if (!bpjphExpiryDate) {
     return { daysUntilExpiry: null, isExpiringSoon: false, isExpired: false };
@@ -448,11 +449,12 @@ export function getBpjphExpiryInfo(
   if (!Number.isFinite(expMs)) {
     return { daysUntilExpiry: null, isExpiringSoon: false, isExpired: false };
   }
+  const safeWarningDays = Math.max(1, Math.round(Number(warningDays) || 30));
   const daysUntilExpiry = Math.ceil((expMs - nowMs) / (24 * 60 * 60 * 1000));
   return {
     daysUntilExpiry,
     isExpired: daysUntilExpiry < 0,
-    isExpiringSoon: daysUntilExpiry >= 0 && daysUntilExpiry <= 30,
+    isExpiringSoon: daysUntilExpiry >= 0 && daysUntilExpiry <= safeWarningDays,
   };
 }
 

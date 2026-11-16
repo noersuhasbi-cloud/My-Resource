@@ -578,6 +578,12 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
     }
     setIsSubmitting(true);
     try {
+      const receiptSubtotal = Number(receipt.subtotal || 0);
+      const receiptDiscount = Number(receipt.discount || 0);
+      const netDiscountRatio =
+        receiptSubtotal > 0 && receiptDiscount > 0
+          ? Math.max(0, (receiptSubtotal - Math.min(receiptSubtotal, receiptDiscount)) / receiptSubtotal)
+          : 1;
       const res = await apiClient.createComplianceRma({
         sourceChannel: 'POS',
         sourceReferenceId: receipt.receiptNumber,
@@ -591,7 +597,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
           productName: it.name,
           category: it.category,
           quantity: it.quantity,
-          unitPriceIDR: it.unitPrice,
+          unitPriceIDR: Math.round(it.unitPrice * netDiscountRatio),
           unitCostIDR: it.unitCost,
           disposition: dispositions[it.sku] || 'RESTOCK_ATP',
           lotNumber: it.lotNumber,
@@ -761,6 +767,7 @@ interface PosSafeDropModalProps {
   storeId: string;
   storeName: string;
   activeShift: PosRegisterShiftSession | null;
+  safeDropThresholdIDR?: number;
   onSafeDropCompleted: (updatedShift: PosRegisterShiftSession, safeDrop: SafeDropRecord) => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -772,6 +779,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
   storeId,
   storeName,
   activeShift,
+  safeDropThresholdIDR = 5000000,
   onSafeDropCompleted,
   onShowToast,
 }) => {
@@ -874,7 +882,7 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
 
         <div
           className={`p-3.5 rounded-xl border grid grid-cols-2 gap-3 text-xs font-mono ${
-            drawerBalance >= 5000000
+            drawerBalance >= safeDropThresholdIDR
               ? 'bg-amber-500/10 border-amber-500/30'
               : isLight
               ? 'bg-gray-50 border-gray-200'

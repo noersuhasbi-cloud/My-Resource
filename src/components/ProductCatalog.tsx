@@ -1,10 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { PRODUCTS } from '../data/mockData';
-import type { Product, ProductCategory, CartItem, StoreLocation } from '../types/index.ts';
+import type {
+  Product,
+  ProductCategory,
+  CartItem,
+  StoreLocation,
+  StorefrontProductTrustMeta,
+} from '../types/index.ts';
 import { formatIDR } from '../utils/formatters';
-import { Plus, Minus, Check, Star, Search, Filter, Info, Eye, X, ShoppingBag } from 'lucide-react';
+import { Plus, Minus, Check, Star, Search, Filter, Info, Eye, X, ShoppingBag, ShieldCheck, Sparkles, Tag } from 'lucide-react';
 import { SafeImage } from './SafeImage';
+import { apiClient } from '../services/apiClient';
 
 interface ProductCatalogProps {
   cartItems: CartItem[];
@@ -27,6 +34,22 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'rating'>('featured');
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [trustMap, setTrustMap] = useState<Record<string, StorefrontProductTrustMeta>>({});
+
+  useEffect(() => {
+    let active = true;
+    apiClient
+      .getStorefrontCatalogTrust(selectedStore?.id)
+      .then((res) => {
+        if (active && res?.byProductId) {
+          setTrustMap(res.byProductId);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [selectedStore?.id]);
 
   const categories: { id: string; label: string }[] = [
     { id: 'all', label: 'All Aisles' },
@@ -175,6 +198,9 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
         <div className="mt-8 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
           {filteredProducts.map((product) => {
             const quantityInCart = getCartQuantity(product.id);
+            const trust = trustMap[product.id];
+            const hasMarkdown = !!(trust && trust.activeMarkdownPercent > 0 && trust.discountedPriceIDR);
+            const effectivePrice = hasMarkdown && trust?.discountedPriceIDR ? trust.discountedPriceIDR : product.price;
 
             return (
               <div
@@ -207,6 +233,14 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                         Organic
                       </div>
                     )}
+
+                    {/* Clearance Markdown Tag (when near-expiry discount active) */}
+                    {hasMarkdown && (
+                      <div className="absolute top-2 left-2 sm:top-3 sm:left-3 px-1.5 sm:px-2 py-0.5 rounded bg-rose-600/95 backdrop-blur-xs text-white text-[9px] sm:text-[10px] font-bold tracking-wide z-10 flex items-center gap-1 shadow-xs">
+                        <Tag className="w-2.5 h-2.5" />
+                        <span>Hemat Dekat Expired (-{trust.activeMarkdownPercent}%)</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Product Metadata */}
@@ -220,6 +254,27 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                     <h3 className="text-xs sm:text-base font-bold text-stone-900 dark:text-slate-100 group-hover:text-emerald-800 dark:group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">
                       {product.name}
                     </h3>
+
+                    {/* Compact Customer Trust Signals: Halal BPJPH & Freshness Guarantee */}
+                    {trust && (
+                      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                        {trust.halalStatus === 'HALAL_CERTIFIED' && (
+                          <span
+                            title={trust.bpjphCertNumber ? `BPJPH: ${trust.bpjphCertNumber}` : 'Halal BPJPH Certified'}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/25 text-[9px] sm:text-[10px] font-semibold"
+                          >
+                            <ShieldCheck className="w-2.5 h-2.5 shrink-0" />
+                            <span>Halal BPJPH</span>
+                          </span>
+                        )}
+                        {trust.hasFreshnessGuarantee && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 text-[9px] sm:text-[10px] font-semibold">
+                            <Sparkles className="w-2.5 h-2.5 shrink-0" />
+                            <span>Freshness Guaranteed</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     <div className="mt-2 flex items-center justify-between text-[10px] sm:text-xs">
                       <div className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
@@ -236,9 +291,20 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                   <div className="pt-2 sm:pt-3 border-t border-stone-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
                     <div>
                       <span className="text-[10px] text-slate-400 block font-normal sm:hidden">Price</span>
-                      <span className="text-xs sm:text-base font-bold text-stone-900 dark:text-slate-100 font-mono tabular-nums">
-                        {formatIDR(product.price)}
-                      </span>
+                      {hasMarkdown ? (
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                          <span className="text-xs sm:text-base font-bold text-rose-600 dark:text-rose-400 font-mono tabular-nums">
+                            {formatIDR(effectivePrice)}
+                          </span>
+                          <span className="text-[10px] text-stone-400 line-through font-mono tabular-nums">
+                            {formatIDR(product.price)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs sm:text-base font-bold text-stone-900 dark:text-slate-100 font-mono tabular-nums">
+                          {formatIDR(product.price)}
+                        </span>
+                      )}
                     </div>
 
                     {quantityInCart === 0 ? (
@@ -331,8 +397,29 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                 </h3>
 
                 <p className="mt-2 text-lg font-bold text-emerald-900 dark:text-emerald-400 font-mono tabular-nums">
-                  {formatIDR(quickViewProduct.price)} <span className="text-xs font-normal text-stone-500 dark:text-slate-400">/ {quickViewProduct.unit}</span>
+                  {formatIDR(
+                    trustMap[quickViewProduct.id]?.activeMarkdownPercent &&
+                      trustMap[quickViewProduct.id]?.discountedPriceIDR
+                      ? trustMap[quickViewProduct.id].discountedPriceIDR!
+                      : quickViewProduct.price
+                  )}{' '}
+                  <span className="text-xs font-normal text-stone-500 dark:text-slate-400">/ {quickViewProduct.unit}</span>
                 </p>
+
+                {trustMap[quickViewProduct.id] && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
+                    {trustMap[quickViewProduct.id].halalStatus === 'HALAL_CERTIFIED' && (
+                      <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/25 font-semibold">
+                        Halal BPJPH {trustMap[quickViewProduct.id].bpjphCertNumber || ''}
+                      </span>
+                    )}
+                    {trustMap[quickViewProduct.id].nearestBatchDaysUntilExpiry !== null && (
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 font-semibold">
+                        Shelf Life: {trustMap[quickViewProduct.id].nearestBatchDaysUntilExpiry} hari lagi
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <p className="mt-3 text-xs text-stone-600 dark:text-slate-300 leading-relaxed">
                   {quickViewProduct.description}

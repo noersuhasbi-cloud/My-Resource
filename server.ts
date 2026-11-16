@@ -27,6 +27,7 @@ import {
   INITIAL_PICKER_ORDERS,
   INITIAL_VENDOR_BILLS,
   INITIAL_ENTERPRISE_SETTINGS,
+  INITIAL_ERP_SETTINGS,
   INITIAL_LANDED_COSTS,
   INITIAL_WAREHOUSE_BINS,
   INITIAL_WAREHOUSE_ROUTES,
@@ -195,6 +196,14 @@ import type {
   SupplierDebitNoteCategory,
   SettlementBatchRecord,
   UnsettledTenderItem,
+  StandingOrderRecord,
+  StandingOrderType,
+  StandingOrderStatus,
+  StandingOrderItem,
+  CustomerClaimRecord,
+  CustomerClaimIssueCategory,
+  StorefrontProductTrustMeta,
+  ErpConfigurationSettings,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -287,6 +296,46 @@ let wasteRecords: WasteRecord[] = [
 let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDERS));
 let customerOrders: Order[] = JSON.parse(JSON.stringify(INITIAL_ORDERS));
 let enterpriseSettings: EnterpriseSettingsConfig = JSON.parse(JSON.stringify(INITIAL_ENTERPRISE_SETTINGS));
+
+function mergeErpSettings(raw?: Partial<ErpConfigurationSettings> | null): ErpConfigurationSettings {
+  const base = INITIAL_ERP_SETTINGS;
+  const src = raw || {};
+  return {
+    ...base,
+    ...src,
+    ojolChannelRates: {
+      grabMart: { ...base.ojolChannelRates.grabMart, ...(src.ojolChannelRates?.grabMart || {}) },
+      goMart: { ...base.ojolChannelRates.goMart, ...(src.ojolChannelRates?.goMart || {}) },
+      shopeeFood: { ...base.ojolChannelRates.shopeeFood, ...(src.ojolChannelRates?.shopeeFood || {}) },
+    },
+  };
+}
+
+function getErpSettings(): ErpConfigurationSettings {
+  return mergeErpSettings(enterpriseSettings?.erpSettings);
+}
+
+function checkAccountingPeriodLock(dateInput?: string): {
+  locked: boolean;
+  lockDate: string;
+  checkedDate: string;
+  message?: string;
+} {
+  const erp = getErpSettings();
+  const lockDate = String(erp.accountingLockBeforeDate || '').trim().slice(0, 10);
+  const checkedDate = String(dateInput || new Date().toISOString()).trim().slice(0, 10);
+  if (lockDate && /^\d{4}-\d{2}-\d{2}$/.test(lockDate) && /^\d{4}-\d{2}-\d{2}$/.test(checkedDate)) {
+    if (checkedDate <= lockDate) {
+      return {
+        locked: true,
+        lockDate,
+        checkedDate,
+        message: `Accounting Period Locked: GL posting/modification for date ${checkedDate} is blocked on or before ${lockDate}.`,
+      };
+    }
+  }
+  return { locked: false, lockDate, checkedDate };
+}
 let landedCostsList: LandedCostRecord[] = JSON.parse(JSON.stringify(INITIAL_LANDED_COSTS));
 let warehouseBins: WarehouseBinLocation[] = JSON.parse(JSON.stringify(INITIAL_WAREHOUSE_BINS));
 let warehouseRoutes: WarehouseMultiStepRoute[] = JSON.parse(JSON.stringify(INITIAL_WAREHOUSE_ROUTES));
@@ -644,12 +693,78 @@ let kanvasRoutes: KanvasRouteRecord[] = createInitialKanvasRoutes();
 let warungKasbonAccounts: WarungKasbonAccount[] = createInitialWarungKasbon();
 let pphWithholdingList: PphWithholdingRecord[] = createInitialPphWithholdings();
 
+function createInitialStandingOrders(): StandingOrderRecord[] {
+  const nowIso = new Date().toISOString();
+  return [
+    {
+      id: 'STO-2026-0001',
+      createdAt: new Date(Date.now() - 14 * 86400000).toISOString(),
+      updatedAt: nowIso,
+      type: 'WEEKLY_SUBSCRIPTION',
+      title: 'Langganan Mingguan Sayur & Susu Organik (Senin & Kamis)',
+      crmAccountId: 'CRM-ACC-004',
+      customerName: 'Ibu Clarissa Tan',
+      customerPhone: '+62 811-9001-2233',
+      customerEmail: 'clarissa.tan@example.com',
+      deliveryAddress: 'Jl. Wijaya IX No. 18, Kebayoran Baru, Jakarta Selatan',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      scheduleDays: ['Monday', 'Thursday'],
+      items: [
+        { sku: 'SKU-PRD-001', productName: 'Organic Hydroponic Butterhead Lettuce', quantity: 2, unitPriceIDR: 18500 },
+        { sku: 'SKU-DAI-001', productName: 'Pasture-Raised Omega-3 Farm Eggs', quantity: 2, unitPriceIDR: 34500 },
+      ],
+      estimatedTotalIDR: 106000,
+      downPaymentIDR: 0,
+      dpPaid: false,
+      dpGlEntryIds: [],
+      status: 'DUE',
+      triggerCount: 2,
+      notes: 'Langganan rutin keluarga — kirim sebelum 09:00 WIB dengan thermal tote.',
+    },
+    {
+      id: 'STO-2026-0002',
+      createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+      updatedAt: nowIso,
+      type: 'SEASONAL_PREORDER',
+      title: 'Pre-Order Hampers Daging & Produk Segar Premium (DP 50%)',
+      crmAccountId: 'CRM-ACC-001',
+      customerName: 'Ibu Ratna / Chef Alessandro Rossi',
+      customerPhone: '+62 813-1122-3344',
+      customerEmail: 'purchasing@grandgrandeurhotel.com',
+      deliveryAddress: 'Grand Grandeur Hotel & Bistro, Jl. Jend. Sudirman Kav. 52',
+      storeId: 'store-jkt-senopati',
+      storeName: 'GroceMart Senopati Flagship',
+      scheduleDays: [],
+      targetFulfillmentDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
+      items: [
+        { sku: 'SKU-PRD-002', productName: 'Heirloom Vine-Ripened Sweet Tomatoes', quantity: 5, unitPriceIDR: 24000 },
+        { sku: 'SKU-MEA-001', productName: 'Grass-Fed Angus Ribeye Steak', quantity: 4, unitPriceIDR: 125000 },
+      ],
+      estimatedTotalIDR: 620000,
+      downPaymentIDR: 310000,
+      dpPaid: true,
+      dpMethod: 'BANK_QRIS',
+      dpGlEntryIds: [],
+      status: 'ACTIVE',
+      triggerCount: 0,
+      notes: 'Seasonal VIP hotel hampers batch — pelunasan sisa saat barang siap kirim.',
+    },
+  ];
+}
+
+let standingOrdersList: StandingOrderRecord[] = createInitialStandingOrders();
+let customerClaimsList: CustomerClaimRecord[] = [];
+
 // =============================================================
 // STANDALONE CRM, LOYALTY & B2B CUSTOMER 360 DATA STORE
 // =============================================================
 function resolveCrmLoyaltyTier(lifetimeSpendIDR: number): CrmLoyaltyTier {
-  if (lifetimeSpendIDR >= 20000000) return 'PLATINUM';
-  if (lifetimeSpendIDR >= 5000000) return 'GOLD';
+  const erp = getErpSettings();
+  const platinumThreshold = Math.max(1, Number(erp.platinumTierThresholdIDR) || 20000000);
+  const goldThreshold = Math.max(1, Number(erp.goldTierThresholdIDR) || 5000000);
+  if (lifetimeSpendIDR >= platinumThreshold) return 'PLATINUM';
+  if (lifetimeSpendIDR >= goldThreshold) return 'GOLD';
   return 'SILVER';
 }
 
@@ -1199,8 +1314,11 @@ function applyCrmLoyaltySettlement(params: {
   tierAfter: CrmLoyaltyTier;
 } {
   const { crmAcc, channel, referenceId, netPaidIDR, redeemPoints, timestamp } = params;
+  const erp = getErpSettings();
+  const pointRedeemValue = Math.max(1, roundIDR(erp.loyaltyPointRedeemValueIDR || 100));
+  const spendPerPoint = Math.max(1, roundIDR(erp.loyaltySpendPerPointIDR || 10000));
   const safeRedeem = Math.max(0, Math.min(crmAcc.pointsBalance, Math.floor(redeemPoints || 0)));
-  const pointsDiscountIDR = safeRedeem * 100;
+  const pointsDiscountIDR = safeRedeem * pointRedeemValue;
   if (safeRedeem > 0) {
     crmAcc.pointsBalance = Math.max(0, crmAcc.pointsBalance - safeRedeem);
     crmAcc.pointsLedger.unshift({
@@ -1214,7 +1332,7 @@ function applyCrmLoyaltySettlement(params: {
       note: `Redeemed ${safeRedeem} pts (Rp ${pointsDiscountIDR.toLocaleString('id-ID')} discount) on ${referenceId}`,
     });
   }
-  const pointsEarned = Math.max(0, Math.floor(Math.max(0, netPaidIDR) / 10000));
+  const pointsEarned = Math.max(0, Math.floor(Math.max(0, netPaidIDR) / spendPerPoint));
   if (pointsEarned > 0) {
     crmAcc.pointsBalance += pointsEarned;
     crmAcc.pointsLedger.unshift({
@@ -1727,6 +1845,15 @@ function ensureRegulatoryCoaAccounts() {
       storeId: 'CONSOLIDATED',
       balance: 0,
       description: 'QRIS (0.7%) and EDC card acquiring Merchant Discount Rate (MDR) settlement fees',
+    },
+    {
+      accountCode: '2130',
+      accountName: 'Customer Advance Deposits (Uang Muka / Pre-Order DP)',
+      category: 'Liability',
+      normalBalance: 'Credit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Refundable customer advance deposits for Weekly Standing Orders & Seasonal Pre-Orders',
     },
   ];
   requiredAccounts.forEach((acc) => {
@@ -2544,16 +2671,31 @@ function commitBalancedGlBatch(entries: GeneralLedgerEntry[], updateCoa: boolean
   const drift = totalDebit - totalCredit;
   if (drift !== 0) {
     const revCredit = entries.find(
-      (e) => (e.accountCode === '4010' || e.accountCode === '4020') && e.credit > 0
+      (e) => (e.accountCode === '4010' || e.accountCode === '4020') && e.credit > 0 && e.credit + drift >= 0
     );
-    if (revCredit && revCredit.credit + drift >= 0) {
+    const revDebit = entries.find(
+      (e) => (e.accountCode === '4010' || e.accountCode === '4020') && e.debit > 0 && e.debit - drift >= 0
+    );
+    if (revCredit) {
       revCredit.credit += drift;
+    } else if (revDebit) {
+      revDebit.debit -= drift;
     } else if (drift > 0) {
-      const creditEntry = entries.find((e) => e.credit > 0);
-      if (creditEntry) creditEntry.credit += drift;
+      const creditEntry = [...entries].sort((a, b) => b.credit - a.credit).find((e) => e.credit > 0);
+      if (creditEntry) {
+        creditEntry.credit += drift;
+      } else {
+        const debitEntry = [...entries].sort((a, b) => b.debit - a.debit).find((e) => e.debit >= drift);
+        if (debitEntry) debitEntry.debit -= drift;
+      }
     } else {
-      const debitEntry = entries.find((e) => e.debit > 0);
-      if (debitEntry) debitEntry.debit += Math.abs(drift);
+      const debitEntry = [...entries].sort((a, b) => b.debit - a.debit).find((e) => e.debit > 0);
+      if (debitEntry) {
+        debitEntry.debit += Math.abs(drift);
+      } else {
+        const creditEntry = [...entries].sort((a, b) => b.credit - a.credit).find((e) => e.credit >= Math.abs(drift));
+        if (creditEntry) creditEntry.credit -= Math.abs(drift);
+      }
     }
   }
   for (const entry of entries) {
@@ -5621,6 +5763,8 @@ function captureServerState() {
     crmDeals,
     crmActivities,
     auditTrailLogs,
+    standingOrdersList,
+    customerClaimsList,
     qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
     idempotencyStoreEntries: Array.from(idempotencyStore.entries()),
     inTransitTransferLotsEntries: Array.from(inTransitTransferLots.entries()),
@@ -5644,7 +5788,19 @@ function applyServerState(snap: any) {
   if (Array.isArray(snap.wasteRecords)) wasteRecords = snap.wasteRecords;
   if (Array.isArray(snap.pickerOrders)) pickerOrders = snap.pickerOrders;
   if (Array.isArray(snap.customerOrders)) customerOrders = snap.customerOrders;
-  if (snap.enterpriseSettings) enterpriseSettings = snap.enterpriseSettings;
+  if (snap.enterpriseSettings) {
+    enterpriseSettings = {
+      ...INITIAL_ENTERPRISE_SETTINGS,
+      ...snap.enterpriseSettings,
+      landedCosts: { ...INITIAL_ENTERPRISE_SETTINGS.landedCosts, ...(snap.enterpriseSettings.landedCosts || {}) },
+      invoiceTracking: { ...INITIAL_ENTERPRISE_SETTINGS.invoiceTracking, ...(snap.enterpriseSettings.invoiceTracking || {}) },
+      warehouseRouting: { ...INITIAL_ENTERPRISE_SETTINGS.warehouseRouting, ...(snap.enterpriseSettings.warehouseRouting || {}) },
+      threeWayMatching: { ...INITIAL_ENTERPRISE_SETTINGS.threeWayMatching, ...(snap.enterpriseSettings.threeWayMatching || {}) },
+      analyticAccounting: { ...INITIAL_ENTERPRISE_SETTINGS.analyticAccounting, ...(snap.enterpriseSettings.analyticAccounting || {}) },
+      quotationsAndSales: { ...INITIAL_ENTERPRISE_SETTINGS.quotationsAndSales, ...(snap.enterpriseSettings.quotationsAndSales || {}) },
+      erpSettings: mergeErpSettings(snap.enterpriseSettings.erpSettings),
+    };
+  }
   if (Array.isArray(snap.landedCostsList)) landedCostsList = snap.landedCostsList;
   if (Array.isArray(snap.warehouseBins)) warehouseBins = snap.warehouseBins;
   if (Array.isArray(snap.warehouseRoutes)) warehouseRoutes = snap.warehouseRoutes;
@@ -5737,6 +5893,11 @@ function applyServerState(snap: any) {
     Array.isArray(snap.auditTrailLogs) && snap.auditTrailLogs.length > 0
       ? snap.auditTrailLogs
       : createInitialAuditTrailLogs();
+  standingOrdersList =
+    Array.isArray(snap.standingOrdersList) && snap.standingOrdersList.length > 0
+      ? snap.standingOrdersList
+      : createInitialStandingOrders();
+  customerClaimsList = Array.isArray(snap.customerClaimsList) ? snap.customerClaimsList : [];
   qrisTransactions.clear();
   if (Array.isArray(snap.qrisTransactionsEntries)) {
     snap.qrisTransactionsEntries.forEach(([k, v]: [string, any]) => qrisTransactions.set(k, v));
@@ -5852,6 +6013,8 @@ async function resetDemoStateToBaseline() {
     crmActivities = createInitialCrmActivities();
     auditTrailLogs = createInitialAuditTrailLogs();
     promotionRulesList = createInitialPromotionRules();
+    standingOrdersList = createInitialStandingOrders();
+    customerClaimsList = [];
     ensureRegulatoryCoaAccounts();
     ensureHalalComplianceMetadata();
     ensureConsignmentSeedItems();
@@ -7415,9 +7578,10 @@ async function startServer() {
       }
     });
 
+    const halalWarningDays = getErpSettings().halalCertExpiryWarningDays;
     const bpjphExpiringAlerts = inventoryList
       .map((item) => {
-        const info = getBpjphExpiryInfo(item.bpjphExpiryDate);
+        const info = getBpjphExpiryInfo(item.bpjphExpiryDate, Date.now(), halalWarningDays);
         if (item.halalStatus === 'HALAL_CERTIFIED' && (info.isExpiringSoon || info.isExpired)) {
           return {
             sku: item.sku,
@@ -7744,7 +7908,8 @@ async function startServer() {
         );
 
     const isNaturalMoistureReason = reason === 'NATURAL_MOISTURE_SHRINKAGE';
-    const capPercent = Math.min(15, Math.max(0.1, Number(toleranceCapPercent) || 2.5));
+    const defaultShrinkCap = getErpSettings().naturalMoistureShrinkageTolerancePct;
+    const capPercent = Math.min(15, Math.max(0.1, Number(toleranceCapPercent) || defaultShrinkCap));
     const storeBasisQty = Math.max(
       Number(targetBatch?.initialQuantity || 0),
       Number(targetBatch?.currentStock || 0),
@@ -8105,6 +8270,373 @@ async function startServer() {
     res.status(result.statusCode).json(result.payload);
   });
 
+  app.get('/api/admin/fulfillment/:id/substitute-suggestions', (req: Request, res: Response) => {
+    const order = pickerOrders.find((o) => o.orderId === req.params.id);
+    if (!order) return res.status(404).json({ error: 'Fulfillment order not found.' });
+    const skuParam = String(req.query.sku || '').trim();
+    const origInv = inventoryList.find((i) => i.sku === skuParam);
+    const targetCat = origInv?.category;
+    const targetItem = order.items.find((it) => it.sku === skuParam) || order.items[0];
+    const reqQty = Math.max(1, Number(targetItem?.orderedQty || 1));
+
+    const candidates = inventoryList
+      .filter((inv) => inv.sku !== skuParam)
+      .map((inv) => {
+        const atp = getSellableNonExpiredAtpStock(inv.sku, order.storeId);
+        return {
+          sku: inv.sku,
+          productName: inv.productName,
+          category: inv.category,
+          sellingPrice: inv.sellingPrice,
+          availableAtp: atp.effectiveAtp,
+          sameCategory: targetCat ? inv.category === targetCat : false,
+          priceDelta: roundIDR((inv.sellingPrice - (targetItem?.pricePerUnit || inv.sellingPrice)) * reqQty),
+        };
+      })
+      .filter((c) => c.availableAtp >= reqQty)
+      .sort((a, b) => {
+        if (a.sameCategory !== b.sameCategory) return a.sameCategory ? -1 : 1;
+        return b.availableAtp - a.availableAtp;
+      });
+
+    res.json({ orderId: order.orderId, storeId: order.storeId, suggestions: candidates.slice(0, 8) });
+  });
+
+  app.post('/api/admin/fulfillment/:id/substitute', async (req: Request, res: Response) => {
+    try {
+      const orderId = String(req.params.id || req.body?.orderId || '').trim();
+      const order = pickerOrders.find((o) => o.orderId === orderId);
+      if (!order) return res.status(404).json({ error: `Fulfillment order '${orderId}' not found.` });
+
+      const branchViolation = checkBranchIsolationViolation(req, order.storeId);
+      if (branchViolation) return res.status(403).json({ error: branchViolation });
+
+      const {
+        itemId,
+        originalSku,
+        replacementSku: rawReplacementSku,
+        reason = 'Stok habis saat picking / kesegaran kurang optimal',
+        absorbPriceDelta = false,
+        channel = 'whatsapp',
+        customerPhone,
+        customerEmail,
+      } = (req.body || {}) as {
+        itemId?: string;
+        originalSku?: string;
+        replacementSku?: string;
+        reason?: string;
+        absorbPriceDelta?: boolean;
+        channel?: 'whatsapp' | 'email';
+        customerPhone?: string;
+        customerEmail?: string;
+      };
+
+      const item =
+        (itemId && order.items.find((i) => i.id === itemId)) ||
+        (originalSku && order.items.find((i) => i.sku === originalSku)) ||
+        order.items.find((i) => i.status !== 'picked' && i.status !== 'substituted') ||
+        order.items[0];
+      if (!item) return res.status(404).json({ error: 'Order line item not found.' });
+
+      const origSku = item.sku;
+      const origInv = inventoryList.find((i) => i.sku === origSku);
+
+      // Build smart same-category in-stock alternatives
+      const suggestions = inventoryList
+        .filter((inv) => inv.sku !== origSku)
+        .map((inv) => {
+          const atp = getSellableNonExpiredAtpStock(inv.sku, order.storeId);
+          return {
+            inv,
+            availableAtp: atp.effectiveAtp,
+            sameCategory: origInv ? inv.category === origInv.category : false,
+          };
+        })
+        .filter((c) => c.availableAtp >= item.orderedQty)
+        .sort((a, b) => {
+          if (a.sameCategory !== b.sameCategory) return a.sameCategory ? -1 : 1;
+          return b.availableAtp - a.availableAtp;
+        });
+
+      const resolvedReplacementSku =
+        !rawReplacementSku || String(rawReplacementSku).toUpperCase() === 'AUTO'
+          ? suggestions[0]?.inv.sku
+          : String(rawReplacementSku).trim();
+
+      if (!resolvedReplacementSku) {
+        return res.status(400).json({
+          error: `No in-stock replacement SKU available at ${order.storeName} for quantity ${item.orderedQty}.`,
+        });
+      }
+
+      const replacement = inventoryList.find((i) => i.sku === resolvedReplacementSku);
+      if (!replacement) {
+        return res.status(404).json({ error: `Replacement SKU '${resolvedReplacementSku}' not found.` });
+      }
+      if (replacement.sku === origSku) {
+        return res.status(400).json({ error: 'Replacement SKU must differ from original SKU.' });
+      }
+
+      const actorName = getEffectiveOperatorName(req);
+      const nowIso = new Date().toISOString();
+
+      const swapOutcome = await inventoryConcurrencyManager.runWithLock(
+        [`lock_sku_${origSku}`, `lock_sku_${replacement.sku}`],
+        async () => {
+          const atpCheck = getSellableNonExpiredAtpStock(replacement.sku, order.storeId);
+          if (item.orderedQty > atpCheck.effectiveAtp) {
+            const err: any = new Error(
+              `Insufficient non-expired ATP stock for substitute SKU ${replacement.sku} (${atpCheck.effectiveAtp} available, ${item.orderedQty} required).`
+            );
+            err.statusCode = 400;
+            throw err;
+          }
+
+          // 1. Release reservation on original SKU (if reserved)
+          const oldTier = storeInventoryTiers.find(
+            (t) => t.sku === origSku && t.storeId === order.storeId
+          );
+          if (order.stockReserved || item.isReserved) {
+            if (Array.isArray(item.reservedAllocations)) {
+              for (const alloc of item.reservedAllocations) {
+                const b = inventoryBatches.find((bat) => bat.batchId === alloc.batchId);
+                if (b) {
+                  b.reservedQuantity = Math.max(
+                    0,
+                    Number(((b.reservedQuantity || 0) - alloc.allocatedQty).toFixed(2))
+                  );
+                }
+              }
+            }
+            if (oldTier) {
+              oldTier.reservedStock = Math.max(
+                0,
+                Number(((oldTier.reservedStock || 0) - item.orderedQty).toFixed(2))
+              );
+              oldTier.availableStock = Math.max(
+                0,
+                Number((oldTier.physicalStock - oldTier.reservedStock).toFixed(2))
+              );
+              oldTier.updatedAt = nowIso;
+            }
+          }
+
+          // 2. Reserve replacement SKU batches & tier (ATP-safe, non-expired FEFO/FIFO)
+          const nowMs = Date.now();
+          const strategy = getEffectiveRemovalStrategy(replacement.sku, undefined, order.storeId);
+          const candidateBatches = inventoryBatches
+            .filter((b) => {
+              syncBatchExpiryStatus(b, nowMs);
+              return (
+                b.sku === replacement.sku &&
+                b.storeId === order.storeId &&
+                Math.max(0, b.currentStock - (b.reservedQuantity || 0)) > 0 &&
+                b.status !== 'quarantined' &&
+                b.status !== 'recalled' &&
+                b.status !== 'expired' &&
+                b.status !== 'depleted' &&
+                new Date(b.expiryDate).getTime() > nowMs
+              );
+            })
+            .sort((a, b) =>
+              strategy === 'FIFO'
+                ? new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime()
+                : new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()
+            );
+
+          let remToReserve = item.orderedQty;
+          const newAllocations: FEFOAllocationTrace[] = [];
+          for (const batch of candidateBatches) {
+            if (remToReserve <= 0) break;
+            const unreserved = Math.max(0, batch.currentStock - (batch.reservedQuantity || 0));
+            const take = Math.min(unreserved, remToReserve);
+            if (take <= 0) continue;
+            batch.reservedQuantity = Number(((batch.reservedQuantity || 0) + take).toFixed(2));
+            remToReserve = Math.max(0, Number((remToReserve - take).toFixed(2)));
+            newAllocations.push({
+              batchId: batch.batchId,
+              lotNumber: batch.lotNumber,
+              expiryDate: batch.expiryDate,
+              allocatedQty: take,
+              unitCost: batch.unitCost,
+              subtotalCost: Math.round(take * batch.unitCost),
+            });
+          }
+
+          const replacementTier = storeInventoryTiers.find(
+            (t) => t.sku === replacement.sku && t.storeId === order.storeId
+          );
+          if (replacementTier) {
+            replacementTier.reservedStock = Number(
+              ((replacementTier.reservedStock || 0) + item.orderedQty).toFixed(2)
+            );
+            replacementTier.availableStock = Math.max(
+              0,
+              Number((replacementTier.physicalStock - replacementTier.reservedStock).toFixed(2))
+            );
+            replacementTier.updatedAt = nowIso;
+          }
+
+          // 3. Recalculate item & order pricing cleanly
+          const oldProductName = item.productName;
+          const originalLineTotal = roundIDR(item.finalPrice);
+          const replacementLineFull = roundIDR(replacement.sellingPrice * item.orderedQty);
+          const rawPriceDelta = replacementLineFull - originalLineTotal;
+          const effectiveLineTotal = absorbPriceDelta ? originalLineTotal : replacementLineFull;
+
+          item.status = 'substituted';
+          item.sku = replacement.sku;
+          item.productId = replacement.productId;
+          item.pickedQty = item.orderedQty;
+          item.isReserved = true;
+          item.reservedAllocations = newAllocations;
+          item.pricePerUnit = absorbPriceDelta
+            ? item.pricePerUnit
+            : roundIDR(replacement.sellingPrice);
+          item.finalPrice = effectiveLineTotal;
+          item.productName = `${replacement.productName} (Substituted for ${oldProductName})`;
+          item.substitution = {
+            replacementProductId: replacement.productId,
+            replacementSku: replacement.sku,
+            replacementName: replacement.productName,
+            replacementBarcode: `899${Date.now().toString().slice(-10)}`,
+            originalPrice: originalLineTotal,
+            replacementPrice: replacementLineFull,
+            priceDelta: absorbPriceDelta ? 0 : rawPriceDelta,
+            reason,
+            customerApprovalStatus: 'pending',
+            suggestedAt: nowIso,
+          };
+
+          order.pickedItems = order.items.filter(
+            (i) => i.status === 'picked' || i.status === 'substituted'
+          ).length;
+          if (order.pickedItems === order.totalItems) {
+            order.pickerStatus = 'ready_for_packing';
+          } else if (order.pickerStatus === 'assigned') {
+            order.pickerStatus = 'in_progress';
+          }
+          const itemsSum = order.items.reduce((s, it) => s + roundIDR(it.finalPrice), 0);
+          order.totalFinalIDR = Math.max(
+            0,
+            itemsSum - roundIDR(order.discountIDR || 0) + roundIDR(order.deliveryFeeIDR || 0)
+          );
+          order.updatedAt = nowIso;
+
+          return {
+            oldProductName,
+            originalLineTotal,
+            replacementLineFull,
+            rawPriceDelta,
+            effectivePriceDelta: absorbPriceDelta ? 0 : rawPriceDelta,
+            oldTierAvailableAfter: oldTier?.availableStock ?? null,
+            newTierAvailableAfter: replacementTier?.availableStock ?? null,
+          };
+        }
+      );
+
+      // 4. Dispatch Customer Substitution Notice via Communication Gateway (WhatsApp / Email)
+      const targetPhone = String(customerPhone || order.customerPhone || '').trim();
+      const targetEmail = String(customerEmail || order.customerEmail || '').trim();
+      let commLog: CommunicationDispatchLog | undefined;
+      let waMeUrl: string | undefined;
+
+      const deltaText =
+        swapOutcome.effectivePriceDelta === 0
+          ? 'Tanpa biaya tambahan (Free Upgrade / Harga Sama)'
+          : swapOutcome.effectivePriceDelta > 0
+          ? `Selisih +${formatCurrencyRp(swapOutcome.effectivePriceDelta)}`
+          : `Lebih hemat ${formatCurrencyRp(Math.abs(swapOutcome.effectivePriceDelta))}`;
+
+      const waMsg = [
+        `*[GroceMart Notifikasi Penggantian Produk]*`,
+        `Halo ${order.customerName}, untuk pesanan *#${order.orderId}* di *${order.storeName}*:`,
+        `• Produk awal (${origSku}): ${swapOutcome.oldProductName} — *${reason}*`,
+        `• Usulan Pengganti (${replacement.sku}): *${replacement.productName}* x${item.orderedQty}`,
+        `• Harga Pengganti: ${formatCurrencyRp(item.finalPrice)} (${deltaText})`,
+        `Balas *SETUJU* untuk melanjutkan pengemasan, atau *BATAL* untuk refund item ini.`,
+      ].join('\n');
+
+      if (channel === 'email' && targetEmail) {
+        try {
+          const rendered = buildFormattedDocumentContent(
+            'SUBSTITUTION_NOTICE',
+            order.orderId,
+            order.customerName,
+            `${origSku} → ${replacement.sku} (${replacement.productName}) • ${deltaText}`
+          );
+          commLog = await dispatchEmailMessage({
+            toEmail: targetEmail,
+            subject: rendered.subject,
+            htmlBody: rendered.htmlBody,
+            docType: 'SUBSTITUTION_NOTICE',
+            docId: order.orderId,
+            docNumber: order.orderId,
+            recipientName: order.customerName,
+            sentBy: actorName,
+          });
+        } catch {
+          // Non-fatal if SMTP/email invalid in demo mode
+        }
+      } else if (targetPhone) {
+        try {
+          commLog = await dispatchWhatsappMessage({
+            toPhone: targetPhone,
+            messageText: waMsg,
+            docType: 'SUBSTITUTION_NOTICE',
+            docId: order.orderId,
+            docNumber: order.orderId,
+            recipientName: order.customerName,
+            sentBy: actorName,
+          });
+          waMeUrl = commLog.waMeUrl;
+        } catch {
+          // Non-fatal if phone malformed
+        }
+      }
+
+      emitEnterpriseNotification({
+        dedupeKey: `FULFILLMENT_SUB:${orderId}:${item.id}:${replacement.sku}`,
+        category: 'FULFILLMENT',
+        severity: 'ACTION_REQUIRED',
+        title: `Smart Substitution Proposed (#${orderId})`,
+        message: `${origSku} → ${replacement.productName} (${replacement.sku}) • ${deltaText}`,
+        metadataLabel: `${orderId} • ${replacement.sku}`,
+        targetTab: 'picker',
+      });
+
+      appendAuditTrailLog({
+        req,
+        actorName,
+        branchScope: order.storeId,
+        module: 'INVENTORY',
+        action: 'FULFILLMENT_OOS_SUBSTITUTION',
+        referenceId: order.orderId,
+        summary: `Swapped reservation ${origSku} → ${replacement.sku} (${item.orderedQty}u) on #${order.orderId}; delta ${formatCurrencyRp(swapOutcome.effectivePriceDelta)}.`,
+      });
+      scheduleStateSave();
+
+      res.json({
+        success: true,
+        order,
+        item,
+        reservationSwap: swapOutcome,
+        suggestedAlternatives: suggestions.slice(0, 5).map((s) => ({
+          sku: s.inv.sku,
+          productName: s.inv.productName,
+          category: s.inv.category,
+          sellingPrice: s.inv.sellingPrice,
+          availableAtp: s.availableAtp,
+        })),
+        communicationLog: commLog,
+        waMeUrl,
+        message: `Substituted ${origSku} with ${replacement.productName} (${replacement.sku}). Reservation swapped & customer notified.`,
+      });
+    } catch (err: any) {
+      res.status(err?.statusCode || 500).json({ error: err?.message || 'Substitution failed.' });
+    }
+  });
+
   app.post('/api/admin/picker/orders/:orderId/complete', (req: Request, res: Response) => {
     const { orderId } = req.params;
     const order = pickerOrders.find((o) => o.orderId === orderId);
@@ -8178,6 +8710,103 @@ async function startServer() {
       );
     }
     res.json(list);
+  });
+
+  app.get('/api/storefront/catalog-trust', (req: Request, res: Response) => {
+    const rawStore = String(req.query.storeId || 'store-jkt-senopati').trim();
+    const targetStoreId = storeSchedules.some((s) => s.storeId === rawStore)
+      ? rawStore
+      : 'store-jkt-senopati';
+    const nowMs = Date.now();
+    syncAllBatchesExpiryStatus(nowMs);
+
+    const items: StorefrontProductTrustMeta[] = [];
+    const byProductId: Record<string, StorefrontProductTrustMeta> = {};
+    const bySku: Record<string, StorefrontProductTrustMeta> = {};
+
+    PRODUCTS.forEach((prod) => {
+      const inv = inventoryList.find(
+        (i) => i.productId === prod.id || (prod.sku && i.sku === prod.sku)
+      );
+      const sku = inv?.sku || prod.sku || prod.id;
+      const tier = storeInventoryTiers.find(
+        (t) => t.storeId === targetStoreId && (t.sku === sku || t.productId === prod.id)
+      );
+
+      const storeBatches = inventoryBatches.filter(
+        (b) =>
+          b.sku === sku &&
+          b.storeId === targetStoreId &&
+          b.currentStock > 0 &&
+          b.status !== 'quarantined' &&
+          b.status !== 'recalled' &&
+          b.status !== 'expired' &&
+          b.status !== 'depleted' &&
+          new Date(b.expiryDate).getTime() > nowMs
+      );
+      const activeBatches =
+        storeBatches.length > 0
+          ? storeBatches
+          : inventoryBatches.filter(
+              (b) =>
+                b.sku === sku &&
+                b.currentStock > 0 &&
+                b.status !== 'quarantined' &&
+                b.status !== 'recalled' &&
+                b.status !== 'expired' &&
+                b.status !== 'depleted' &&
+                new Date(b.expiryDate).getTime() > nowMs
+            );
+
+      const sortedByExpiry = [...activeBatches].sort(
+        (a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()
+      );
+      const nearestBatch = sortedByExpiry[0];
+      const nearestDays = nearestBatch
+        ? Math.max(1, Math.ceil((new Date(nearestBatch.expiryDate).getTime() - nowMs) / 86400000))
+        : null;
+
+      let activeMarkdownPercent = 0;
+      let discountedPriceIDR: number | undefined;
+      for (const batch of sortedByExpiry) {
+        const md = evaluateBatchMarkdown(batch, dynamicMarkdownConfig);
+        if (md && md.isMarkdownActive && md.discountPercent > activeMarkdownPercent) {
+          activeMarkdownPercent = md.discountPercent;
+          discountedPriceIDR = md.markdownPrice;
+        }
+      }
+
+      const halalStatus = resolveSkuHalalStatus(sku);
+      const bpjphCertNumber =
+        inv?.bpjphCertNumber ||
+        tier?.bpjphCertNumber ||
+        (halalStatus === 'HALAL_CERTIFIED' ? 'ID31110000184920226' : undefined);
+      const hasFreshnessGuarantee =
+        activeMarkdownPercent === 0 && (nearestDays === null || nearestDays > 30);
+
+      const meta: StorefrontProductTrustMeta = {
+        sku,
+        productId: prod.id,
+        halalStatus,
+        bpjphCertNumber,
+        nearestBatchDaysUntilExpiry: nearestDays,
+        hasFreshnessGuarantee,
+        activeMarkdownPercent,
+        basePriceIDR: prod.price,
+        discountedPriceIDR,
+      };
+      items.push(meta);
+      byProductId[prod.id] = meta;
+      bySku[sku] = meta;
+    });
+
+    res.json({
+      storeId: targetStoreId,
+      generatedAt: new Date().toISOString(),
+      items,
+      byProductId,
+      bySku,
+    });
   });
 
   app.post('/api/storefront/orders', async (req: Request, res: Response) => {
@@ -8595,6 +9224,169 @@ async function startServer() {
       });
     }
   });
+
+  const handleStorefrontOrFulfillmentCancel = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { reason = 'Customer cancellation / void before dispatch' } = (req.body || {}) as {
+      reason?: string;
+    };
+    const pickerOrder = pickerOrders.find((o) => o.orderId === id);
+    const custOrder = customerOrders.find((o) => o.id === id);
+    if (!pickerOrder && !custOrder) {
+      return res.status(404).json({ success: false, error: `Order '${id}' not found.` });
+    }
+    if (pickerOrder) {
+      const branchViolation = checkBranchIsolationViolation(req, pickerOrder.storeId);
+      if (branchViolation) {
+        return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: branchViolation });
+      }
+      if (String(pickerOrder.fulfillmentStatus || '') === 'CANCELLED' || (pickerOrder as any).isCancelled) {
+        return res.json({
+          success: true,
+          alreadyCancelled: true,
+          orderId: id,
+          fulfillmentOrder: pickerOrder,
+          customerOrder: custOrder,
+          reservationsReleased: [],
+          message: `Order #${id} is already cancelled and reservations were already released.`,
+        });
+      }
+      if (
+        pickerOrder.fulfillmentStatus === 'COMPLETED' ||
+        pickerOrder.fulfillmentStatus === 'READY_FOR_DISPATCH' ||
+        pickerOrder.fulfillmentStatus === 'READY_FOR_PICKUP'
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot cancel order #${id} because fulfillment is already ${pickerOrder.fulfillmentStatus}. Use RMA/e-POD return instead.`,
+        });
+      }
+    } else if (custOrder && (String(custOrder.status) === 'cancelled' || (custOrder as any).isCancelled)) {
+      return res.json({
+        success: true,
+        alreadyCancelled: true,
+        orderId: id,
+        customerOrder: custOrder,
+        reservationsReleased: [],
+        message: `Order #${id} is already cancelled.`,
+      });
+    }
+
+    const lockKeys = pickerOrder?.items?.length
+      ? pickerOrder.items.map((it) => `lock_sku_${it.sku}`)
+      : [`lock_order_${id}`];
+
+    try {
+      const result = await inventoryConcurrencyManager.runWithLock(lockKeys, async () => {
+        const nowIso = new Date().toISOString();
+        const released: Array<{
+          sku: string;
+          releasedQty: number;
+          newReservedStock: number;
+          newAvailableStock: number;
+        }> = [];
+
+        if (pickerOrder && pickerOrder.stockReserved !== false) {
+          const storeId = pickerOrder.storeId;
+          for (const it of pickerOrder.items) {
+            const qtyToRelease = Math.max(0, Number(it.orderedQty) || 0);
+            if (qtyToRelease <= 0) continue;
+
+            if (Array.isArray(it.reservedAllocations) && it.reservedAllocations.length > 0) {
+              for (const alloc of it.reservedAllocations) {
+                const batch = inventoryBatches.find((b) => b.batchId === alloc.batchId);
+                if (batch) {
+                  batch.reservedQuantity = Math.max(
+                    0,
+                    Number(((batch.reservedQuantity || 0) - Number(alloc.allocatedQty || 0)).toFixed(2))
+                  );
+                }
+              }
+            } else {
+              let rem = qtyToRelease;
+              for (const batch of inventoryBatches) {
+                if (rem <= 0) break;
+                if (batch.sku === it.sku && batch.storeId === storeId && (batch.reservedQuantity || 0) > 0) {
+                  const take = Math.min(batch.reservedQuantity || 0, rem);
+                  batch.reservedQuantity = Math.max(0, Number(((batch.reservedQuantity || 0) - take).toFixed(2)));
+                  rem = Math.max(0, Number((rem - take).toFixed(2)));
+                }
+              }
+            }
+
+            const tier = storeInventoryTiers.find((t) => t.sku === it.sku && t.storeId === storeId);
+            if (tier) {
+              tier.reservedStock = Math.max(0, Number(((tier.reservedStock || 0) - qtyToRelease).toFixed(2)));
+              tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+              tier.updatedAt = nowIso;
+            }
+
+            it.isReserved = false;
+            (it as any).status = 'cancelled';
+            released.push({
+              sku: it.sku,
+              releasedQty: qtyToRelease,
+              newReservedStock: tier?.reservedStock ?? 0,
+              newAvailableStock: tier?.availableStock ?? 0,
+            });
+          }
+          (pickerOrder as any).fulfillmentStatus = 'CANCELLED';
+          (pickerOrder as any).pickerStatus = 'cancelled';
+          (pickerOrder as any).isCancelled = true;
+          pickerOrder.stockReserved = false;
+          pickerOrder.updatedAt = nowIso;
+          pickerOrder.notes = `${pickerOrder.notes ? `${pickerOrder.notes} | ` : ''}CANCELLED: ${reason}`;
+        }
+
+        if (custOrder) {
+          (custOrder as any).status = 'cancelled';
+          (custOrder as any).isCancelled = true;
+          if (custOrder.paymentStatus === 'paid') {
+            (custOrder as any).paymentStatus = 'refunded';
+          }
+          custOrder.timeline = [
+            ...(custOrder.timeline || []),
+            {
+              status: 'cancelled' as any,
+              label: 'Order Cancelled & Stock Released',
+              description: `${reason}. Reserved store stock returned to Available-to-Promise.`,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              completed: true,
+            },
+          ];
+        }
+
+        appendAuditTrailLog({
+          req,
+          branchScope: pickerOrder?.storeId || custOrder?.pickupStore?.id || 'store-jkt-senopati',
+          module: 'INVENTORY',
+          action: 'STOREFRONT_ORDER_CANCELLED_STOCK_RELEASED',
+          referenceId: id,
+          summary: `Cancelled omnichannel order #${id} (${reason}) and released ${released.length} SKU reservation(s) back to Available ATP.`,
+        });
+        scheduleStateSave();
+
+        return {
+          success: true,
+          orderId: id,
+          status: 'CANCELLED',
+          fulfillmentOrder: pickerOrder,
+          customerOrder: custOrder,
+          reservationsReleased: released,
+          message: `Order #${id} cancelled cleanly. ${released.length} SKU reservation(s) released back to Available ATP.`,
+        };
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(err?.statusCode || 500).json({
+        success: false,
+        error: err?.message || 'Failed to cancel storefront order.',
+      });
+    }
+  };
+
+  app.post('/api/storefront/orders/:id/cancel', handleStorefrontOrFulfillmentCancel);
+  app.post('/api/admin/fulfillment/:id/cancel', handleStorefrontOrFulfillmentCancel);
 
   app.post('/api/admin/fulfillment/:id/complete', async (req: Request, res: Response) => {
     const { id } = req.params;
@@ -9917,6 +10709,15 @@ async function startServer() {
       return res.status(404).json({ error: 'General Ledger entry not found' });
     }
 
+    const reqLock = checkAccountingPeriodLock(req.body?.transactionDate || original.timestamp);
+    if (reqLock.locked) {
+      return res.status(400).json({
+        error: 'ACCOUNTING_PERIOD_LOCKED',
+        lockDate: reqLock.lockDate,
+        message: reqLock.message,
+      });
+    }
+
     if (original.isReversed) {
       return res.status(409).json({
         error: `Journal Voucher #${id} is already reversed by voucher #${original.reversedByVoucherId}. Multiple reversals of the same entry are prohibited.`,
@@ -10418,13 +11219,23 @@ async function startServer() {
       return res.status(400).json({ error: 'Audit weight exceeds original weight. Mass reduction required for shrinkage calculation.' });
     }
 
+    const periodLock = checkAccountingPeriodLock(req.body?.transactionDate);
+    if (periodLock.locked) {
+      return res.status(400).json({
+        error: 'ACCOUNTING_PERIOD_LOCKED',
+        lockDate: periodLock.lockDate,
+        message: periodLock.message,
+      });
+    }
+
     const item = inventoryList.find((i) => i.sku === sku);
     if (!item) return res.status(404).json({ error: 'Inventory item not found' });
 
+    const defaultMoistureTol = getErpSettings().naturalMoistureShrinkageTolerancePct;
     const toleranceConfig = weightToleranceConfigs.find((c) => c.category === item.category) || {
       category: item.category,
       categoryLabel: item.category,
-      maxEvaporationTolerancePercent: 3.0,
+      maxEvaporationTolerancePercent: defaultMoistureTol,
       auditIntervalHours: 24,
       description: 'Default tolerance baseline',
     };
@@ -10566,6 +11377,8 @@ async function startServer() {
         totalLossCost,
       },
     });
+
+    scheduleStateSave();
 
     res.json({
       success: true,
@@ -11675,9 +12488,13 @@ async function startServer() {
       Math.max(0, preSubtotal - baseDiscountAmount),
       roundIDR(promoEval.totalPromoDiscountIDR)
     );
-    const maxRedeemablePts = Math.floor(Math.max(0, preSubtotal - baseDiscountAmount - promoDiscountIDR) / 100);
+    const erpCfg = getErpSettings();
+    const redeemPointValueIDR = Math.max(1, roundIDR(erpCfg.loyaltyPointRedeemValueIDR || 100));
+    const maxRedeemablePts = Math.floor(
+      Math.max(0, preSubtotal - baseDiscountAmount - promoDiscountIDR) / redeemPointValueIDR
+    );
     const effectivePosRedeemPoints = matchedCrmAccount ? Math.min(requestedRedeemPoints, maxRedeemablePts) : 0;
-    const loyaltyPointsDiscountIDR = effectivePosRedeemPoints * 100;
+    const loyaltyPointsDiscountIDR = effectivePosRedeemPoints * redeemPointValueIDR;
     const discountAmount = Math.min(preSubtotal, baseDiscountAmount + promoDiscountIDR + loyaltyPointsDiscountIDR);
     const netRevenueIDR = Math.max(0, preSubtotal - discountAmount);
 
@@ -11697,7 +12514,7 @@ async function startServer() {
       const rule = skuTaxRulesList.find((r) => r.sku === line.rawItem.sku) || skuTaxRulesList.find((r) => r.sku === taxRuleLookupSku);
       const taxCat: IndonesianTaxCategory =
         rule?.taxCategory || inferDefaultTaxCategory(line.category || '', line.name || '');
-      const stdRate = rule?.taxRatePercent ?? posCheckoutConfig.ppnTaxPercent ?? 11;
+      const stdRate = rule?.taxRatePercent ?? erpCfg.activeVatRatePct ?? posCheckoutConfig.ppnTaxPercent ?? 11;
       const taxCalc = computeIndonesianTax(netDiscountedLineTotal, taxCat, false, stdRate);
       resolvedPpn += roundIDR(taxCalc.ppnIDR);
       resolvedPb1 += roundIDR(taxCalc.pb1IDR);
@@ -11853,7 +12670,12 @@ async function startServer() {
     if (appliedPromos.length > 0) {
       appliedPromos.forEach((ap) => {
         const r = promotionRulesList.find((rule) => rule.id === ap.ruleId);
-        if (r) r.usageCount = (r.usageCount || 0) + 1;
+        if (r) {
+          r.usageCount = (r.usageCount || 0) + 1;
+          if (r.code.toUpperCase().startsWith('CLAIM-')) {
+            r.active = false;
+          }
+        }
       });
     }
 
@@ -12258,6 +13080,109 @@ async function startServer() {
     res.json(posTransactionsHistory);
   });
 
+  app.post('/api/pos/receipts/:id/send-wa', async (req: Request, res: Response) => {
+    try {
+      const receiptId = String(req.params.id || '').trim();
+      const receipt = posTransactionsHistory.find(
+        (r) => r.receiptNumber === receiptId || r.transactionId === receiptId || r.orderId === receiptId
+      );
+      if (!receipt) {
+        return res.status(404).json({ error: `POS Receipt '${receiptId}' not found.` });
+      }
+
+      const rawPhone = String(req.body?.toPhone || req.body?.phone || '').trim();
+      const matchedCrm = crmAccounts.find(
+        (a) =>
+          (receipt.crmAccountId && a.id === receipt.crmAccountId) ||
+          (rawPhone && normalizeIndonesianPhone(a.phone) === normalizeIndonesianPhone(rawPhone))
+      );
+      const targetPhone = rawPhone || matchedCrm?.phone || '';
+      if (!targetPhone) {
+        return res.status(400).json({ error: 'Customer WhatsApp phone number (toPhone) is required.' });
+      }
+
+      const recipientName = String(
+        req.body?.recipientName || matchedCrm?.name || 'Pelanggan GroceMart'
+      ).trim();
+
+      const itemLines = receipt.items
+        .map(
+          (it) =>
+            `• ${it.name} (${it.quantity} ${it.unit || 'u'}) = ${formatCurrencyRp(it.lineTotal)}`
+        )
+        .join('\n');
+
+      const totalSavings = roundIDR(receipt.discount || receipt.promoDiscountIDR || 0);
+      const ppnVal = roundIDR(receipt.ppnIDR ?? receipt.tax ?? 0);
+      const pb1Val = roundIDR(receipt.pb1TaxIDR || 0);
+      const liveTier = matchedCrm?.tier || receipt.crmMemberTier || 'SILVER';
+      const livePoints = matchedCrm ? matchedCrm.pointsBalance : receipt.loyaltyPointsEarned || 0;
+
+      const messageText = [
+        `*STRUK DIGITAL GROCEMART™*`,
+        `Outlet: ${receipt.storeName}`,
+        `No. Struk: *${receipt.receiptNumber}* | Kasir: ${receipt.cashierName}`,
+        `Tanggal: ${new Date(receipt.timestamp).toLocaleString('id-ID')}`,
+        `--------------------------------`,
+        itemLines,
+        `--------------------------------`,
+        `Subtotal: ${formatCurrencyRp(receipt.subtotal)}`,
+        totalSavings > 0
+          ? `Hemat Promo/Member${receipt.promoCode ? ` (${receipt.promoCode})` : ''}: -${formatCurrencyRp(totalSavings)}`
+          : '',
+        `PPN (${getErpSettings().activeVatRatePct}%): ${formatCurrencyRp(ppnVal)}${pb1Val > 0 ? ` | PB1: ${formatCurrencyRp(pb1Val)}` : ''}`,
+        `*TOTAL BAYAR: ${formatCurrencyRp(receipt.total)}*`,
+        `Metode: ${String(receipt.paymentMethod || 'CASH').toUpperCase()}${
+          receipt.cashChange && receipt.cashChange > 0 ? ` (Kembalian: ${formatCurrencyRp(receipt.cashChange)})` : ''
+        }`,
+        `--------------------------------`,
+        `*LOYALTY STATEMENT (${liveTier})*`,
+        `Poin Transaksi Ini: +${receipt.loyaltyPointsEarned || 0} pts${
+          receipt.loyaltyPointsRedeemed ? ` | Ditukar: -${receipt.loyaltyPointsRedeemed} pts` : ''
+        }`,
+        `Saldo Poin Aktif Anda: *${livePoints.toLocaleString('id-ID')} pts* (Senilai ${formatCurrencyRp(livePoints * Math.max(1, getErpSettings().loyaltyPointRedeemValueIDR))})`,
+        `Terima kasih telah berbelanja di GroceMart Indonesia!`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      const log = await dispatchWhatsappMessage({
+        toPhone: targetPhone,
+        messageText,
+        docType: 'POS_RECEIPT',
+        docId: receipt.receiptNumber,
+        docNumber: receipt.receiptNumber,
+        recipientName,
+        sentBy: getEffectiveOperatorName(req),
+      });
+
+      appendAuditTrailLog({
+        req,
+        actorName: getEffectiveOperatorName(req),
+        branchScope: receipt.storeId,
+        module: 'POS',
+        action: 'POS_DIGITAL_RECEIPT_WA_SENT',
+        referenceId: receipt.receiptNumber,
+        summary: `Digital WA receipt + loyalty statement dispatched to ${log.recipientAddress} for #${receipt.receiptNumber}.`,
+      });
+      scheduleStateSave();
+
+      res.json({
+        success: true,
+        log,
+        waMeUrl: log.waMeUrl,
+        loyaltyStatement: {
+          tier: liveTier,
+          pointsEarned: receipt.loyaltyPointsEarned || 0,
+          liveBalancePoints: livePoints,
+        },
+        message: `Struk Digital WA & Saldo Poin (${livePoints} pts) terkirim ke ${log.recipientAddress}!`,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || 'Failed to send WhatsApp POS receipt.' });
+    }
+  });
+
   // =============================================================
   // MODULE 12: ENTERPRISE SETTINGS & BUSINESS LOGIC SUITE
   // Valuation Landed Costs, Warehouse Multi-Step Routes & Bins,
@@ -12266,8 +13191,99 @@ async function startServer() {
 
   // --- 1. ENTERPRISE SETTINGS MASTER CONFIG ---
   app.get('/api/admin/settings/enterprise', (_req: Request, res: Response) => {
-    res.json(enterpriseSettings);
+    res.json({
+      ...enterpriseSettings,
+      erpSettings: getErpSettings(),
+    });
   });
+
+  app.get('/api/admin/settings/config', (_req: Request, res: Response) => {
+    const erp = getErpSettings();
+    res.json({
+      success: true,
+      config: erp,
+      erpSettings: erp,
+      settings: {
+        ...enterpriseSettings,
+        erpSettings: erp,
+      },
+    });
+  });
+
+  const handleUpdateErpSettingsConfig = (req: Request, res: Response) => {
+    const patch = (req.body?.erpSettings || req.body || {}) as Partial<ErpConfigurationSettings>;
+    const currentErp = getErpSettings();
+    const mergedErp: ErpConfigurationSettings = {
+      ...currentErp,
+      ...patch,
+      ojolChannelRates: {
+        grabMart: {
+          ...currentErp.ojolChannelRates.grabMart,
+          ...(patch.ojolChannelRates?.grabMart || {}),
+        },
+        goMart: {
+          ...currentErp.ojolChannelRates.goMart,
+          ...(patch.ojolChannelRates?.goMart || {}),
+        },
+        shopeeFood: {
+          ...currentErp.ojolChannelRates.shopeeFood,
+          ...(patch.ojolChannelRates?.shopeeFood || {}),
+        },
+      },
+    };
+
+    if (
+      !Number.isFinite(mergedErp.activeVatRatePct) ||
+      mergedErp.activeVatRatePct < 0 ||
+      mergedErp.activeVatRatePct > 25
+    ) {
+      return res.status(400).json({ error: 'activeVatRatePct must be between 0% and 25%.' });
+    }
+    if (
+      !Number.isFinite(mergedErp.threeWayMatchTolerancePct) ||
+      mergedErp.threeWayMatchTolerancePct < 0 ||
+      mergedErp.threeWayMatchTolerancePct > 25
+    ) {
+      return res.status(400).json({ error: 'threeWayMatchTolerancePct must be between 0% and 25%.' });
+    }
+
+    enterpriseSettings = {
+      ...enterpriseSettings,
+      threeWayMatching: {
+        ...enterpriseSettings.threeWayMatching,
+        quantityTolerancePercent: mergedErp.threeWayMatchTolerancePct,
+        priceTolerancePercent: mergedErp.threeWayMatchTolerancePct,
+      },
+      erpSettings: mergedErp,
+    };
+    posCheckoutConfig = {
+      ...posCheckoutConfig,
+      ppnTaxPercent: mergedErp.activeVatRatePct,
+      updatedAt: new Date().toISOString(),
+      updatedBy: getEffectiveOperatorName(req),
+    };
+
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'SECURITY',
+      action: 'ERP_CONFIG_PARAMETERS_UPDATED',
+      referenceId: 'ERP_SETTINGS_CONFIG',
+      summary: `Updated ERP Policy Config (PPN ${mergedErp.activeVatRatePct}%, PPh22 ${mergedErp.pph22RatePct}%, PPh23 ${mergedErp.pph23RatePct}%, QRIS MDR ${mergedErp.qrisMdrPct}%, Lock: ${mergedErp.accountingLockBeforeDate || 'None'}).`,
+    });
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      config: mergedErp,
+      erpSettings: mergedErp,
+      settings: enterpriseSettings,
+      message: 'Enterprise ERP configuration parameters updated and persisted.',
+    });
+  };
+
+  app.patch('/api/admin/settings/config', handleUpdateErpSettingsConfig);
+  app.put('/api/admin/settings/config', handleUpdateErpSettingsConfig);
 
   app.get('/api/settings/invoice-tracking', (_req: Request, res: Response) => {
     res.json(enterpriseSettings.invoiceTracking);
@@ -12284,6 +13300,7 @@ async function startServer() {
       threeWayMatching: { ...enterpriseSettings.threeWayMatching, ...(updates.threeWayMatching || {}) },
       analyticAccounting: { ...enterpriseSettings.analyticAccounting, ...(updates.analyticAccounting || {}) },
       quotationsAndSales: { ...enterpriseSettings.quotationsAndSales, ...(updates.quotationsAndSales || {}) },
+      erpSettings: updates.erpSettings ? mergeErpSettings(updates.erpSettings) : getErpSettings(),
     };
 
     securityAuditTrail.unshift({
@@ -12308,6 +13325,7 @@ async function startServer() {
       referenceId: 'ENTERPRISE_SETTINGS',
       summary: `Updated Enterprise SaaS Settings (${Object.keys(updates || {}).join(', ') || 'policy rules'}).`,
     });
+    scheduleStateSave();
 
     res.json({
       success: true,
@@ -12920,6 +13938,7 @@ async function startServer() {
       referenceId: 'POS_CHECKOUT_RULES',
       summary: `Updated POS checkout policy (PPN ${posCheckoutConfig.ppnTaxPercent}%, Max Cashier Discount ${posCheckoutConfig.maxCashierDiscountPercent}%).`,
     });
+    scheduleStateSave();
     res.json({ success: true, config: posCheckoutConfig, message: 'POS configuration updated successfully.' });
   });
 
@@ -14053,10 +15072,21 @@ async function startServer() {
   // Giro Bounced / Tolak Kliring Action
   app.post('/api/b2b/giro/:id/bounce', (req: Request, res: Response) => {
     const { id } = req.params;
-    const { reason = 'Insufficient funds in drawer / Saldo giro nasabah tidak mencukupi (SKNBI Tolakan)' } = req.body;
+    const { reason = 'Insufficient funds in drawer / Saldo giro nasabah tidak mencukupi (SKNBI Tolakan)' } = req.body || {};
     const giro = giroRecordsList.find((g) => g.id === id);
     if (!giro) return res.status(404).json({ error: 'Giro record not found' });
-    if (giro.status === 'BOUNCED') return res.status(400).json({ error: 'Giro has already been marked as bounced' });
+    if (giro.status === 'BOUNCED') {
+      const existingCustomer = b2bCustomersList.find((c) => c.id === giro.customerId);
+      return res.json({
+        success: true,
+        alreadyBounced: true,
+        giro,
+        customer: existingCustomer,
+        penaltyFee: giro.penaltyFeeIDR || 0,
+        journalEntryIds: giro.journalEntryIds || [],
+        message: `Giro #${giro.giroNumber} is already BOUNCED — duplicate GL posting and penalty prevented (idempotent).`,
+      });
+    }
     if (giro.status === 'CLEARED') {
       return res.status(400).json({ error: 'Cannot bounce a Bilyet Giro that has already CLEARED into Bank BCA.' });
     }
@@ -14112,6 +15142,18 @@ async function startServer() {
         ],
         true
       );
+      if (giro.vendorBillId) {
+        const linkedBill = vendorBillsList.find((vb) => vb.id === giro.vendorBillId);
+        if (linkedBill) {
+          const exRate = Math.max(1, Number(linkedBill.exchangeRate) || 1);
+          const billPaidDelta = roundIDR(giro.amountIDR / exRate);
+          linkedBill.amountPaid = Math.max(0, roundIDR((linkedBill.amountPaid || 0) - billPaidDelta));
+          linkedBill.remainingDue = Math.max(0, roundIDR(linkedBill.grandTotal - linkedBill.amountPaid));
+          linkedBill.remainingBalanceIDR = Math.max(0, roundIDR(linkedBill.grandTotalIDR - roundIDR(linkedBill.amountPaid * exRate)));
+          linkedBill.paymentStatus = linkedBill.amountPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID';
+          linkedBill.status = linkedBill.amountPaid > 0 ? 'PARTIALLY_PAID' : 'APPROVED';
+        }
+      }
     } else {
       customer = b2bCustomersList.find((c) => c.id === giro.customerId);
       if (customer) {
@@ -14132,9 +15174,12 @@ async function startServer() {
         targetSubTab: 'b2b_ar',
       });
 
-      const linkedOrder = b2bOrdersList.find((o) => o.id === giro.orderId);
+      const linkedOrder =
+        b2bOrdersList.find((o) => o.id === giro.orderId) ||
+        b2bOrdersList.find((o) => o.giroDetails?.giroNumber === giro.giroNumber);
       if (linkedOrder) {
         linkedOrder.paymentStatus = 'BOUNCED';
+        (linkedOrder as any).invoiceStatus = 'UNPAID';
       }
 
       const clearingCoa = giro.settlementCoaCode || '1210';
@@ -14212,6 +15257,8 @@ async function startServer() {
         true
       );
     }
+
+    giro.journalEntryIds = [...(giro.journalEntryIds || []), ...journalEntryIds];
 
     appendAuditTrailLog({
       req,
@@ -16933,18 +17980,51 @@ async function startServer() {
             );
             const linkedDoItem = linkedDo?.items?.find((di) => di.sku === ret.sku);
 
+            const pickerGrossSubtotal = linkedPickerOrder
+              ? linkedPickerOrder.items.reduce(
+                  (s, pi) =>
+                    s +
+                    (pi.finalPrice > 0
+                      ? pi.finalPrice
+                      : roundIDR((pi.pricePerUnit || 0) * Math.max(1, pi.pickedQty || pi.orderedQty || 1))),
+                  0
+                )
+              : 0;
+            const pickerDiscountIDR = Math.max(0, roundIDR(linkedPickerOrder?.discountIDR || 0));
+            const pickerNetRatio =
+              pickerGrossSubtotal > 0 && pickerDiscountIDR > 0
+                ? Math.max(0, pickerGrossSubtotal - pickerDiscountIDR) / pickerGrossSubtotal
+                : 1;
+
+            const b2bGrossSubtotal = linkedB2bOrder
+              ? roundIDR(
+                  Number(linkedB2bOrder.subtotalIDR || 0) ||
+                    linkedB2bOrder.items.reduce(
+                      (s: number, bi: any) => s + Number(bi.lineTotal || (bi.unitPrice || 0) * (bi.quantity || 1) || 0),
+                      0
+                    )
+                )
+              : 0;
+            const b2bDiscountIDR = Math.max(0, roundIDR(Number(linkedB2bOrder?.pwpDiscountIDR || 0)));
+            const b2bNetRatio =
+              b2bGrossSubtotal > 0 && b2bDiscountIDR > 0
+                ? Math.max(0, b2bGrossSubtotal - b2bDiscountIDR) / b2bGrossSubtotal
+                : 1;
+
             const invoicedPickerUnitPrice =
               linkedPickerItem && linkedPickerItem.finalPrice > 0
                 ? Math.round(
-                    linkedPickerItem.finalPrice /
-                      Math.max(1, linkedPickerItem.pickedQty || linkedPickerItem.orderedQty || 1)
+                    (linkedPickerItem.finalPrice /
+                      Math.max(1, linkedPickerItem.pickedQty || linkedPickerItem.orderedQty || 1)) *
+                      pickerNetRatio
                   )
                 : 0;
             const invoicedB2bUnitPrice = linkedB2bItem
               ? Math.round(
-                  Number((linkedB2bItem as any).lineTotal || 0) /
+                  (Number((linkedB2bItem as any).lineTotal || 0) /
                     Math.max(1, Number((linkedB2bItem as any).quantity) || 1) ||
-                    Number((linkedB2bItem as any).unitPrice || 0)
+                    Number((linkedB2bItem as any).unitPrice || 0)) *
+                    b2bNetRatio
                 )
               : 0;
 
@@ -16967,6 +18047,7 @@ async function startServer() {
             const stdRate =
               linkedPickerItem?.taxRatePercent ??
               rule?.taxRatePercent ??
+              getErpSettings().activeVatRatePct ??
               posCheckoutConfig.ppnTaxPercent ??
               11;
             const taxCalc = computeIndonesianTax(lineGrossIDR, taxCat, !linkedB2bOrder, stdRate);
@@ -18181,13 +19262,32 @@ async function startServer() {
 
     const storeInfo = storeSchedules.find((s) => s.storeId === storeId);
     const resolvedStoreName = storeInfo?.storeName || 'GroceMart Senopati Flagship';
+    const matchedPosReceipt = originalReceiptNumber
+      ? posTransactionsHistory.find((r) => r.receiptNumber === originalReceiptNumber)
+      : undefined;
+    const posReceiptNetRatio =
+      matchedPosReceipt && matchedPosReceipt.subtotal > 0 && matchedPosReceipt.discount > 0
+        ? Math.max(0, matchedPosReceipt.subtotal - matchedPosReceipt.discount) / matchedPosReceipt.subtotal
+        : 1;
+
     const normalizedItems: POSReturnItemLine[] = items.map((it: any) => {
       const inv = inventoryList.find((p) => p.sku === it.sku);
       const returnQty = Math.max(0.01, Number(it.returnQuantity ?? it.quantity ?? 1));
       const origQty = Math.max(returnQty, Number(it.originalQuantity ?? returnQty));
-      const uPrice = Number(it.unitPrice ?? inv?.sellingPrice ?? 0);
+      const rawUnitPrice = Number(it.unitPrice ?? inv?.sellingPrice ?? 0);
+      const matchedReceiptLine = matchedPosReceipt?.items?.find((ri: any) => ri.sku === it.sku);
+      const uPrice =
+        matchedReceiptLine && posReceiptNetRatio < 1
+          ? Math.min(rawUnitPrice || Infinity, Math.round((matchedReceiptLine.unitPrice || rawUnitPrice) * posReceiptNetRatio))
+          : posReceiptNetRatio < 1 && !it.netDiscountApplied
+          ? Math.round(rawUnitPrice * posReceiptNetRatio)
+          : rawUnitPrice;
       const uCost = Number(it.unitCost ?? inv?.unitCost ?? Math.round(uPrice * 0.65));
-      const refundAmt = Number(it.refundAmount ?? Math.round(returnQty * uPrice));
+      const computedNetRefund = Math.round(returnQty * uPrice);
+      const refundAmt =
+        it.refundAmount !== undefined && !(posReceiptNetRatio < 1 && !it.netDiscountApplied)
+          ? Math.min(Number(it.refundAmount) || computedNetRefund, matchedPosReceipt ? Math.round((matchedReceiptLine?.unitPrice || uPrice) * returnQty) : Number(it.refundAmount) || computedNetRefund)
+          : computedNetRefund;
       return {
         sku: it.sku || inv?.sku || 'SKU-PRD-001',
         productName: it.productName || it.name || inv?.productName || 'GroceMart Item',
@@ -18401,6 +19501,16 @@ async function startServer() {
     };
 
     posReturnsList.unshift(newReturn);
+
+    appendAuditTrailLog({
+      req,
+      branchScope: storeId,
+      module: 'POS',
+      action: 'POS_RETURN_PROCESSED',
+      referenceId: returnId,
+      summary: `Processed POS Return ${returnId} (Rp ${totalRefund.toLocaleString('id-ID')} via ${resolvedChannel}) for ${originalReceiptNumber || 'Walk-in'}.`,
+    });
+    scheduleStateSave();
 
     const slipText = [
       '================================',
@@ -19282,9 +20392,34 @@ async function startServer() {
     let totalRestockCogs = 0;
     let totalScrapLoss = 0;
 
+    const erpActiveVat = getErpSettings().activeVatRatePct;
+    const matchedPosSrc = posTransactionsHistory.find((r) => r.receiptNumber === sourceReferenceId);
+    const matchedPickerSrc = pickerOrders.find((p) => p.orderId === sourceReferenceId);
+    const matchedB2bSrc = b2bOrdersList.find((b) => b.id === sourceReferenceId);
+
+    const sourceNetRatio = (() => {
+      if (matchedPosSrc && matchedPosSrc.subtotal > 0 && matchedPosSrc.discount > 0) {
+        return Math.max(0, matchedPosSrc.subtotal - matchedPosSrc.discount) / matchedPosSrc.subtotal;
+      }
+      if (matchedPickerSrc && matchedPickerSrc.discountIDR && matchedPickerSrc.discountIDR > 0) {
+        const g = matchedPickerSrc.items.reduce((s, pi) => s + (pi.finalPrice || pi.pricePerUnit * pi.orderedQty), 0);
+        return g > 0 ? Math.max(0, g - matchedPickerSrc.discountIDR) / g : 1;
+      }
+      if (matchedB2bSrc && matchedB2bSrc.subtotalIDR > 0 && matchedB2bSrc.pwpDiscountIDR > 0) {
+        return Math.max(0, matchedB2bSrc.subtotalIDR - matchedB2bSrc.pwpDiscountIDR) / matchedB2bSrc.subtotalIDR;
+      }
+      return 1;
+    })();
+
     const processedItems: CustomerRmaItem[] = items.map((it) => {
       const qty = Math.max(0.01, Number(it.quantity) || 1);
-      const uPrice = Math.max(0, Number(it.unitPriceIDR) || 0);
+      const rawUPrice = Math.max(0, Number(it.unitPriceIDR) || 0);
+      const matchedLine =
+        matchedPosSrc?.items?.find((ri: any) => ri.sku === it.sku) ||
+        matchedB2bSrc?.items?.find((bi: any) => (bi.product?.sku || bi.sku) === it.sku);
+      const refUnitPrice = Number((matchedLine as any)?.unitPrice || 0);
+      const maxNetUnitPrice = refUnitPrice > 0 && sourceNetRatio < 1 ? Math.round(refUnitPrice * sourceNetRatio) : rawUPrice;
+      const uPrice = sourceNetRatio < 1 ? Math.min(rawUPrice, maxNetUnitPrice) : rawUPrice;
       const uCost = Math.max(0, Number(it.unitCostIDR) || Math.round(uPrice * 0.65));
       const lineGross = Math.round(qty * uPrice);
 
@@ -19295,7 +20430,7 @@ async function startServer() {
         lineGross,
         taxCat,
         sourceChannel !== 'B2B',
-        rule?.taxRatePercent || 11
+        rule?.taxRatePercent ?? erpActiveVat
       );
 
       totalSubtotalReversed += taxCalc.dppIDR;
@@ -19619,6 +20754,16 @@ async function startServer() {
       status: 'COMPLETED',
       customerName,
     });
+
+    appendAuditTrailLog({
+      req,
+      branchScope: storeId,
+      module: 'FINANCE',
+      action: 'CUSTOMER_RMA_NOTA_RETUR_ISSUED',
+      referenceId: notaReturNumber,
+      summary: `Issued Customer RMA ${rmaId} (${notaReturNumber}, Rp ${totalCreditNoteIDR.toLocaleString('id-ID')} via ${refundMethod}) for ${sourceReferenceId}.`,
+    });
+    scheduleStateSave();
 
     res.json({
       success: true,
@@ -21043,6 +22188,48 @@ async function startServer() {
         `Sales Kanvas: ${kasbon.salesmanName} (${kasbon.routeArea})`,
         `Total Tagihan Kasbon: ${formatCurrencyRp(kasbon.outstandingBalanceIDR)} | Jatuh Tempo: ${kasbon.dueDate}`,
         `Mohon siapkan pembayaran tunai / transfer BCA saat kunjungan salesman kanvas kami.`,
+      ];
+    } else if (docType === 'SUBSTITUTION_NOTICE') {
+      isCustomerFacing = true;
+      docLabel = 'Smart Out-of-Stock Substitution Notice';
+      docNumber = docId;
+      outletName = 'GroceMart Omnichannel Fulfillment Desk';
+      totalDisplay = 'Customer Confirmation Requested';
+      detailRowsHtml = `
+        <tr><td><strong>Customer</strong></td><td>${escapeHtmlText(recipientName)}</td></tr>
+        <tr><td><strong>Order Reference</strong></td><td>${escapeHtmlText(docId)}</td></tr>
+        <tr><td><strong>Substitution Detail</strong></td><td>${escapeHtmlText(customNote || 'Replacement item proposed from same category')}</td></tr>`;
+      waDetailsLines = [
+        `Order #${docId} — Penggantian Produk Otomatis`,
+        customNote || 'Stok item utama habis; kami siapkan produk pengganti sejenis yang lebih segar.',
+      ];
+    } else if (docType === 'CLAIM_VOUCHER') {
+      isCustomerFacing = true;
+      docLabel = 'Customer Care Claim e-Voucher';
+      docNumber = docId;
+      outletName = 'GroceMart Freshness Guarantee Desk';
+      totalDisplay = 'Active Compensation Voucher';
+      detailRowsHtml = `
+        <tr><td><strong>Customer</strong></td><td>${escapeHtmlText(recipientName)}</td></tr>
+        <tr><td><strong>Voucher / Claim Ref</strong></td><td>${escapeHtmlText(docId)}</td></tr>
+        <tr><td><strong>Compensation Note</strong></td><td>${escapeHtmlText(customNote || 'Freshness Guarantee Instant e-Voucher')}</td></tr>`;
+      waDetailsLines = [
+        `Kompensasi Klaim Pelanggan GroceMart: ${docId}`,
+        customNote || 'Gunakan kode e-Voucher di kasir POS atau checkout online.',
+      ];
+    } else if (docType === 'STANDING_ORDER') {
+      isCustomerFacing = true;
+      docLabel = 'Standing Order / Pre-Order Confirmation';
+      docNumber = docId;
+      outletName = 'GroceMart Subscription & Pre-Order Desk';
+      totalDisplay = 'Scheduled Fulfillment';
+      detailRowsHtml = `
+        <tr><td><strong>Customer</strong></td><td>${escapeHtmlText(recipientName)}</td></tr>
+        <tr><td><strong>Standing Order Ref</strong></td><td>${escapeHtmlText(docId)}</td></tr>
+        <tr><td><strong>Schedule / Note</strong></td><td>${escapeHtmlText(customNote || 'Scheduled Grocery Subscription')}</td></tr>`;
+      waDetailsLines = [
+        `Konfirmasi Langganan / Pre-Order #${docId}`,
+        customNote || 'Pesanan berulang Anda telah dijadwalkan untuk pengemasan.',
       ];
     } else {
       throw new Error(`Unsupported document type '${String(docType)}'.`);
@@ -22815,7 +24002,7 @@ async function startServer() {
     const cat = String(params.category || inv?.category || tier?.category || '').toLowerCase();
 
     const skuHalalStatus = resolveSkuHalalStatus(params.sku);
-    const bpjphExpiryInfo = getBpjphExpiryInfo(inv?.bpjphExpiryDate);
+    const bpjphExpiryInfo = getBpjphExpiryInfo(inv?.bpjphExpiryDate, Date.now(), getErpSettings().halalCertExpiryWarningDays);
 
     let requiredStorageZone: WarehouseRackStorageZone = 'Ambient Dry';
     if (rawZone.includes('freez') || cat.includes('meat') || cat.includes('seafood') || cat.includes('frozen')) {
@@ -24624,11 +25811,14 @@ async function startServer() {
     });
 
     scheduleStateSave();
+    const safeDropThresholdIDR = getErpSettings().safeDropThresholdIDR;
     res.json({
       success: true,
       safeDrop: record,
       shift: activeShift,
       glVoucherIds: [gle1, gle2],
+      safeDropThresholdIDR,
+      thresholdExceeded: afterBalance >= safeDropThresholdIDR,
       message: `Safe Drop ${slipNumber} (Rp ${amount.toLocaleString('id-ID')}) posted to Main Safe Vault (#1010).`,
     });
   });
@@ -25961,6 +27151,604 @@ async function startServer() {
   });
 
   // -------------------------------------------------------------
+  // STANDING ORDERS (WEEKLY SUBSCRIPTION & SEASONAL PRE-ORDER DP)
+  // -------------------------------------------------------------
+  app.get('/api/admin/crm/standing-orders', (req: Request, res: Response) => {
+    const storeId = String(req.query.storeId || '').trim();
+    const typeFilter = String(req.query.type || '').trim();
+    let list = [...standingOrdersList];
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((o) => o.storeId === storeId);
+    }
+    if (typeFilter && typeFilter !== 'ALL') {
+      list = list.filter((o) => o.type === typeFilter);
+    }
+    res.json({
+      orders: list,
+      summary: {
+        totalCount: list.length,
+        activeCount: list.filter((o) => o.status === 'ACTIVE' || o.status === 'DUE').length,
+        dueCount: list.filter((o) => o.status === 'DUE').length,
+        weeklyCount: list.filter((o) => o.type === 'WEEKLY_SUBSCRIPTION').length,
+        seasonalPreOrderCount: list.filter((o) => o.type === 'SEASONAL_PREORDER').length,
+        totalDpLiabilityIDR: list.reduce(
+          (s, o) => s + (o.dpPaid && o.status !== 'CONVERTED' && o.status !== 'CANCELLED' ? o.downPaymentIDR : 0),
+          0
+        ),
+      },
+    });
+  });
+
+  app.post('/api/admin/crm/standing-orders', (req: Request, res: Response) => {
+    const body = (req.body || {}) as Record<string, any>;
+    const type: StandingOrderType =
+      body.type === 'SEASONAL_PREORDER' ? 'SEASONAL_PREORDER' : 'WEEKLY_SUBSCRIPTION';
+    const customerName = String(body.customerName || '').trim();
+    const customerPhone = String(body.customerPhone || '').trim();
+    const customerEmail = String(body.customerEmail || 'customer@grocemart.co.id').trim();
+    const deliveryAddress = String(body.deliveryAddress || 'Outlet Pickup / Jakarta Delivery').trim();
+    const rawStoreId = String(body.storeId || 'store-jkt-senopati').trim();
+    const targetOutlet = storeSchedules.find((s) => s.storeId === rawStoreId);
+    const storeId = targetOutlet?.storeId || 'store-jkt-senopati';
+    const storeName = targetOutlet?.storeName || 'GroceMart Senopati Flagship';
+    const scheduleDays: string[] = Array.isArray(body.scheduleDays)
+      ? body.scheduleDays.map((d: any) => String(d))
+      : type === 'WEEKLY_SUBSCRIPTION'
+      ? ['Monday', 'Thursday']
+      : [];
+    const rawItems = Array.isArray(body.items) ? body.items : [];
+
+    if (!customerName || !customerPhone) {
+      return res.status(400).json({ error: 'customerName and customerPhone are required.' });
+    }
+    if (rawItems.length === 0) {
+      return res.status(400).json({ error: 'At least one SKU item is required for standing order.' });
+    }
+
+    const resolvedItems: StandingOrderItem[] = rawItems.map((it: any) => {
+      const inv = inventoryList.find(
+        (i) => (it.sku && i.sku === it.sku) || (it.productId && i.productId === it.productId)
+      );
+      const prod = PRODUCTS.find((p) => p.id === (it.productId || inv?.productId) || p.sku === it.sku);
+      const sku = String(it.sku || inv?.sku || prod?.sku || prod?.id || 'SKU-PRD-001');
+      const productName = String(it.productName || inv?.productName || prod?.name || sku);
+      const quantity = Math.max(1, Number(it.quantity) || 1);
+      const unitPriceIDR = roundIDR(
+        Number(it.unitPriceIDR ?? it.price ?? inv?.sellingPrice ?? prod?.price ?? 25000) || 0
+      );
+      return { sku, productName, quantity, unitPriceIDR };
+    });
+
+    const estimatedTotalIDR = resolvedItems.reduce(
+      (s, it) => s + roundIDR(it.unitPriceIDR * it.quantity),
+      0
+    );
+    const downPaymentIDR = Math.max(0, roundIDR(Number(body.downPaymentIDR) || 0));
+    const dpMethod: 'CASH' | 'BANK_QRIS' = body.dpMethod === 'CASH' ? 'CASH' : 'BANK_QRIS';
+    const nowIso = new Date().toISOString();
+    const id = `STO-2026-${(standingOrdersList.length + 1).toString().padStart(4, '0')}`;
+    const dpGlEntryIds: string[] = [];
+
+    if (downPaymentIDR > 0) {
+      ensureRegulatoryCoaAccounts();
+      const gle1 = `GLE-DP-${Date.now().toString().slice(-6)}-1`;
+      const gle2 = `GLE-DP-${Date.now().toString().slice(-6)}-2`;
+      dpGlEntryIds.push(gle1, gle2);
+      const cashBankCode = dpMethod === 'CASH' ? '1011' : '1020';
+      const cashBankName =
+        dpMethod === 'CASH'
+          ? 'POS Cash Drawer (Laci Kasir Register)'
+          : 'Bank BCA Operational Account';
+
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp: nowIso,
+            storeId,
+            storeName,
+            accountCode: cashBankCode,
+            accountName: cashBankName,
+            category: 'Asset',
+            debit: downPaymentIDR,
+            credit: 0,
+            referenceType: 'CUSTOMER_PREORDER_DP',
+            referenceId: id,
+            description: `Uang Muka (DP) ${type === 'SEASONAL_PREORDER' ? 'Seasonal Pre-Order' : 'Standing Order'} [${id}] — ${customerName}`,
+          },
+          {
+            id: gle2,
+            timestamp: nowIso,
+            storeId,
+            storeName,
+            accountCode: '2130',
+            accountName: 'Customer Advance Deposits (Uang Muka / Pre-Order DP)',
+            category: 'Liability',
+            debit: 0,
+            credit: downPaymentIDR,
+            referenceType: 'CUSTOMER_PREORDER_DP',
+            referenceId: id,
+            description: `Kewajiban Uang Muka Pelanggan [#2130] untuk ${id} (${customerName})`,
+          },
+        ],
+        true
+      );
+    }
+
+    const record: StandingOrderRecord = {
+      id,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      type,
+      title: String(
+        body.title ||
+          (type === 'SEASONAL_PREORDER'
+            ? `Seasonal Pre-Order — ${customerName}`
+            : `Langganan Mingguan (${scheduleDays.join('/')}) — ${customerName}`)
+      ),
+      crmAccountId: body.crmAccountId ? String(body.crmAccountId) : undefined,
+      customerName,
+      customerPhone,
+      customerEmail,
+      deliveryAddress,
+      storeId,
+      storeName,
+      scheduleDays,
+      targetFulfillmentDate: body.targetFulfillmentDate ? String(body.targetFulfillmentDate) : undefined,
+      items: resolvedItems,
+      estimatedTotalIDR,
+      downPaymentIDR,
+      dpPaid: downPaymentIDR > 0,
+      dpMethod: downPaymentIDR > 0 ? dpMethod : undefined,
+      dpGlEntryIds,
+      status: (body.status as StandingOrderStatus) || (type === 'WEEKLY_SUBSCRIPTION' ? 'DUE' : 'ACTIVE'),
+      triggerCount: 0,
+      notes: body.notes ? String(body.notes) : undefined,
+    };
+
+    standingOrdersList.unshift(record);
+    appendAuditTrailLog({
+      req,
+      actorName: getEffectiveOperatorName(req),
+      branchScope: storeId,
+      module: 'POS',
+      action: 'STANDING_ORDER_CREATED',
+      referenceId: id,
+      summary: `Created ${type} [${id}] for ${customerName} (${resolvedItems.length} SKUs, Est. ${formatCurrencyRp(estimatedTotalIDR)}${
+        downPaymentIDR > 0 ? `, DP ${formatCurrencyRp(downPaymentIDR)} booked to #2130` : ''
+      }).`,
+    });
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      standingOrder: record,
+      glEntryIds: dpGlEntryIds,
+      message:
+        downPaymentIDR > 0
+          ? `${id} created & DP ${formatCurrencyRp(downPaymentIDR)} booked (DR #${dpMethod === 'CASH' ? '1011' : '1020'} / CR #2130).`
+          : `${id} standing order scheduled for ${customerName}.`,
+    });
+  });
+
+  app.post('/api/admin/crm/standing-orders/trigger-due', async (req: Request, res: Response) => {
+    try {
+      const requestedIds: string[] = Array.isArray(req.body?.standingOrderIds)
+        ? req.body.standingOrderIds.map((x: any) => String(x))
+        : [];
+
+      const targets =
+        requestedIds.length > 0
+          ? standingOrdersList.filter((o) => requestedIds.includes(o.id))
+          : standingOrdersList.filter(
+              (o) =>
+                o.status === 'DUE' ||
+                (o.status === 'ACTIVE' && o.type === 'WEEKLY_SUBSCRIPTION')
+            );
+
+      if (targets.length === 0) {
+        return res.status(400).json({ error: 'No DUE or ACTIVE standing orders available to trigger.' });
+      }
+
+      const createdOrderIds: string[] = [];
+      const skipped: Array<{ standingOrderId: string; reason: string }> = [];
+      const nowIso = new Date().toISOString();
+      const nowMs = Date.now();
+      const actorName = getEffectiveOperatorName(req);
+
+      for (const sto of targets) {
+        const lockKeys = sto.items.map((it) => `lock_sku_${it.sku}`);
+        try {
+          const orderId = `GCM-STO-${Date.now().toString().slice(-5)}-${Math.floor(Math.random() * 90 + 10)}`;
+          await inventoryConcurrencyManager.runWithLock(lockKeys, async () => {
+            for (const it of sto.items) {
+              const atp = getSellableNonExpiredAtpStock(it.sku, sto.storeId);
+              if (it.quantity > atp.effectiveAtp) {
+                throw new Error(
+                  `Insufficient ATP stock for ${it.sku} at ${sto.storeName} (Avail ${atp.effectiveAtp}, Need ${it.quantity}).`
+                );
+              }
+            }
+
+            const pickerItems: PickerOrderItem[] = [];
+            for (let idx = 0; idx < sto.items.length; idx++) {
+              const it = sto.items[idx];
+              const inv = inventoryList.find((i) => i.sku === it.sku);
+              const tier = storeInventoryTiers.find(
+                (t) => t.sku === it.sku && t.storeId === sto.storeId
+              );
+              const strategy = getEffectiveRemovalStrategy(it.sku, undefined, sto.storeId);
+              const candidateBatches = inventoryBatches
+                .filter((b) => {
+                  syncBatchExpiryStatus(b, nowMs);
+                  return (
+                    b.sku === it.sku &&
+                    b.storeId === sto.storeId &&
+                    Math.max(0, b.currentStock - (b.reservedQuantity || 0)) > 0 &&
+                    b.status !== 'quarantined' &&
+                    b.status !== 'recalled' &&
+                    b.status !== 'expired' &&
+                    b.status !== 'depleted' &&
+                    new Date(b.expiryDate).getTime() > nowMs
+                  );
+                })
+                .sort((a, b) =>
+                  strategy === 'FIFO'
+                    ? new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime()
+                    : new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()
+                );
+
+              let rem = it.quantity;
+              const reservedAllocations: FEFOAllocationTrace[] = [];
+              for (const batch of candidateBatches) {
+                if (rem <= 0) break;
+                const availB = Math.max(0, batch.currentStock - (batch.reservedQuantity || 0));
+                const take = Math.min(availB, rem);
+                if (take <= 0) continue;
+                batch.reservedQuantity = Number(((batch.reservedQuantity || 0) + take).toFixed(2));
+                rem = Math.max(0, Number((rem - take).toFixed(2)));
+                reservedAllocations.push({
+                  batchId: batch.batchId,
+                  lotNumber: batch.lotNumber,
+                  expiryDate: batch.expiryDate,
+                  allocatedQty: take,
+                  unitCost: batch.unitCost,
+                  subtotalCost: Math.round(take * batch.unitCost),
+                });
+              }
+
+              if (tier) {
+                tier.reservedStock = Number(((tier.reservedStock || 0) + it.quantity).toFixed(2));
+                tier.availableStock = Math.max(
+                  0,
+                  Number((tier.physicalStock - tier.reservedStock).toFixed(2))
+                );
+                tier.updatedAt = nowIso;
+              }
+
+              const category = String(tier?.category || inv?.category || 'produce');
+              const storageZone: StorageZoneType =
+                tier?.storageType ||
+                (category === 'frozen' ? 'freezer' : category === 'pantry' || category === 'bakery' ? 'ambient' : 'cold_chilled');
+
+              pickerItems.push({
+                id: `${orderId}-ITM-${idx + 1}`,
+                orderId,
+                productId: String(tier?.productId || inv?.productId || it.sku),
+                productName: it.productName,
+                sku: it.sku,
+                barcode: `899${it.sku.replace(/\D/g, '').padStart(4, '0')}${(idx + 1).toString().padStart(3, '0')}12`,
+                aisleLocation:
+                  storageZone === 'freezer'
+                    ? 'Aisle 4 - Deep Freeze'
+                    : storageZone === 'cold_chilled'
+                    ? 'Aisle 2 - Chilled Fresh'
+                    : 'Aisle 1 - Dry Pantry',
+                shelfLocation: tier?.binLocation || tier?.rackBinCode || 'Bay A-01',
+                storageZone,
+                orderedQty: it.quantity,
+                pickedQty: 0,
+                unit: String(tier?.unit || inv?.unit || 'pack'),
+                pricePerUnit: it.unitPriceIDR,
+                isCatchWeight: false,
+                finalPrice: roundIDR(it.unitPriceIDR * it.quantity),
+                status: 'pending',
+                isReserved: true,
+                reservedAllocations,
+              });
+            }
+
+            const newPickerOrder: PickerOrder = {
+              orderId,
+              customerName: sto.customerName,
+              customerPhone: sto.customerPhone,
+              customerEmail: sto.customerEmail,
+              storeId: sto.storeId,
+              storeName: sto.storeName,
+              deliveryMethod: 'scheduled',
+              fulfillmentType: 'DELIVERY',
+              fulfillmentStatus: 'PENDING_PICKING',
+              assignedPicker: 'Store Fulfillment Queue',
+              pickerStatus: 'assigned',
+              priority: 'scheduled',
+              targetDispatchTime: 'Standing Order Batch (08:00 WIB)',
+              items: pickerItems,
+              totalItems: pickerItems.length,
+              pickedItems: 0,
+              hasCatchWeight: false,
+              notes: `Auto-generated from ${sto.type} [${sto.id}]${sto.dpPaid ? ` (DP Paid: ${formatCurrencyRp(sto.downPaymentIDR)})` : ''}`,
+              crmAccountId: sto.crmAccountId,
+              discountIDR: 0,
+              deliveryFeeIDR: 0,
+              deliveryAddress: sto.deliveryAddress,
+              paymentStatus: sto.dpPaid && sto.downPaymentIDR >= sto.estimatedTotalIDR ? 'paid' : 'pending',
+              stockReserved: true,
+              totalFinalIDR: sto.estimatedTotalIDR,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+            };
+            pickerOrders.unshift(newPickerOrder);
+          });
+
+          sto.triggerCount = (sto.triggerCount || 0) + 1;
+          sto.lastTriggeredAt = nowIso;
+          sto.lastFulfillmentOrderId = orderId;
+          sto.status = sto.type === 'SEASONAL_PREORDER' ? 'CONVERTED' : 'ACTIVE';
+          sto.updatedAt = nowIso;
+          createdOrderIds.push(orderId);
+
+          if (sto.customerPhone) {
+            dispatchWhatsappMessage({
+              toPhone: sto.customerPhone,
+              messageText: `Halo ${sto.customerName}, pesanan ${sto.type === 'SEASONAL_PREORDER' ? 'Pre-Order' : 'Langganan Mingguan'} (${sto.id}) telah dikonversi menjadi Order Fulfillment *#${orderId}* (${formatCurrencyRp(sto.estimatedTotalIDR)}) di ${sto.storeName}. Tim kami sedang menyiapkan produk segar untuk Anda!`,
+              docType: 'STANDING_ORDER',
+              docId: sto.id,
+              docNumber: orderId,
+              recipientName: sto.customerName,
+              sentBy: actorName,
+            }).catch(() => {});
+          }
+        } catch (err: any) {
+          skipped.push({
+            standingOrderId: sto.id,
+            reason: err?.message || 'ATP stock insufficient',
+          });
+        }
+      }
+
+      if (createdOrderIds.length > 0) {
+        appendAuditTrailLog({
+          req,
+          actorName,
+          branchScope: 'CONSOLIDATED',
+          module: 'INVENTORY',
+          action: 'STANDING_ORDERS_TRIGGERED',
+          referenceId: createdOrderIds[0],
+          summary: `Triggered ${createdOrderIds.length} standing order(s) into Fulfillment queue (${createdOrderIds.join(', ')}).`,
+        });
+        scheduleStateSave();
+      }
+
+      res.json({
+        success: true,
+        triggeredCount: createdOrderIds.length,
+        createdOrderIds,
+        skipped,
+        orders: standingOrdersList,
+        message:
+          createdOrderIds.length > 0
+            ? `${createdOrderIds.length} standing order(s) converted into Fulfillment & locked ATP stock (${createdOrderIds.join(', ')}).`
+            : `No standing orders triggered (${skipped[0]?.reason || 'stock unavailable'}).`,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to trigger standing orders.' });
+    }
+  });
+
+  // -------------------------------------------------------------
+  // 1-KLIK INSTANT CUSTOMER CLAIM & AUTO E-VOUCHER COMPENSATION
+  // -------------------------------------------------------------
+  app.get('/api/admin/crm/claims', (_req: Request, res: Response) => {
+    const totalCompensationIDR = customerClaimsList.reduce(
+      (s, c) => s + roundIDR(c.compensationAmountIDR),
+      0
+    );
+    res.json({
+      claims: customerClaimsList,
+      summary: {
+        totalClaims: customerClaimsList.length,
+        totalCompensationIDR,
+      },
+    });
+  });
+
+  app.post('/api/admin/crm/claims', async (req: Request, res: Response) => {
+    try {
+      const body = (req.body || {}) as Record<string, any>;
+      const referenceId = String(body.referenceId || '').trim();
+      const compensationAmountIDR = Math.max(0, roundIDR(Number(body.compensationAmountIDR) || 0));
+      const issueCategory = (String(body.issueCategory || 'SPOILED_NEAR_EXPIRY') as CustomerClaimIssueCategory);
+      const dispatchChannel = (body.dispatchChannel === 'email' || body.dispatchChannel === 'both'
+        ? body.dispatchChannel
+        : 'whatsapp') as 'whatsapp' | 'email' | 'both';
+
+      if (!referenceId) {
+        return res.status(400).json({ error: 'Receipt or Order Reference ID is required.' });
+      }
+      if (compensationAmountIDR <= 0) {
+        return res.status(400).json({ error: 'compensationAmountIDR must be greater than 0.' });
+      }
+
+      // Cross-reference POS Receipt, PickerOrder, or CustomerOrder if available
+      const posMatch = posTransactionsHistory.find(
+        (r) => r.receiptNumber === referenceId || r.transactionId === referenceId || r.orderId === referenceId
+      );
+      const pickerMatch = pickerOrders.find((o) => o.orderId === referenceId);
+      const crmMatch = crmAccounts.find(
+        (a) =>
+          (body.crmAccountId && a.id === body.crmAccountId) ||
+          (posMatch?.crmAccountId && a.id === posMatch.crmAccountId) ||
+          (pickerMatch?.crmAccountId && a.id === pickerMatch.crmAccountId)
+      );
+
+      const storeId = String(
+        body.storeId || posMatch?.storeId || pickerMatch?.storeId || crmMatch?.storeId || 'store-jkt-senopati'
+      );
+      const storeOutlet = storeSchedules.find((s) => s.storeId === storeId);
+      const storeName = storeOutlet?.storeName || posMatch?.storeName || pickerMatch?.storeName || 'GroceMart Senopati Flagship';
+
+      const customerName = String(
+        body.customerName || pickerMatch?.customerName || crmMatch?.name || 'Pelanggan GroceMart'
+      ).trim();
+      const customerPhone = String(
+        body.customerPhone || pickerMatch?.customerPhone || crmMatch?.phone || ''
+      ).trim();
+      const customerEmail = String(
+        body.customerEmail || pickerMatch?.customerEmail || crmMatch?.email || ''
+      ).trim();
+
+      const nowIso = new Date().toISOString();
+      const todayIso = nowIso.slice(0, 10);
+      const validUntilIso = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+      let voucherCode = '';
+      for (let i = 0; i < 6; i++) {
+        const candidate = `CLAIM-${Math.random().toString(36).slice(2, 6).toUpperCase()}${Date.now().toString().slice(-2)}`;
+        if (!promotionRulesList.some((r) => r.code.toUpperCase() === candidate)) {
+          voucherCode = candidate;
+          break;
+        }
+      }
+      if (!voucherCode) voucherCode = `CLAIM-${Date.now().toString().slice(-6)}`;
+
+      const voucherRuleId = `PRM-CLM-${Date.now().toString().slice(-6)}`;
+      const voucherRule: PromotionRule = {
+        id: voucherRuleId,
+        name: `Kompensasi Klaim (${issueCategory}) — ${customerName}`,
+        code: voucherCode,
+        type: 'CRM_VOUCHER',
+        targetType: 'ALL',
+        targetValue: 'ALL',
+        discountAmountIDR: compensationAmountIDR,
+        minOrderSubtotalIDR: 0,
+        active: true,
+        startDate: todayIso,
+        endDate: validUntilIso,
+        description: `Auto-generated 1-use Freshness Guarantee e-Voucher for ${referenceId} (${issueCategory}).`,
+        usageCount: 0,
+      };
+      promotionRulesList.unshift(voucherRule);
+
+      const claimId = `CLM-2026-${(customerClaimsList.length + 1).toString().padStart(4, '0')}`;
+      const actorName = getEffectiveOperatorName(req);
+
+      let waMeUrl: string | undefined;
+      if ((dispatchChannel === 'whatsapp' || dispatchChannel === 'both') && customerPhone) {
+        try {
+          const waLog = await dispatchWhatsappMessage({
+            toPhone: customerPhone,
+            messageText: [
+              `*[GroceMart Freshness Guarantee — Kompensasi Klaim]*`,
+              `Halo ${customerName}, kami mohon maaf atas kendala pada pesanan/struk *${referenceId}* (${issueCategory.replace(/_/g, ' ')}).`,
+              `Sebagai komitmen kualitas, berikut e-Voucher Kompensasi instan senilai *${formatCurrencyRp(compensationAmountIDR)}*:`,
+              `Kode Voucher: *${voucherCode}*`,
+              `Berlaku s/d: ${validUntilIso} (1x pakai di Kasir POS atau Checkout Online tanpa min. belanja).`,
+              body.notes ? `Catatan CS: ${body.notes}` : '',
+            ]
+              .filter(Boolean)
+              .join('\n'),
+            docType: 'CLAIM_VOUCHER',
+            docId: voucherCode,
+            docNumber: claimId,
+            recipientName: customerName,
+            sentBy: actorName,
+          });
+          waMeUrl = waLog.waMeUrl;
+        } catch {
+          // Non-fatal if phone invalid
+        }
+      }
+
+      if ((dispatchChannel === 'email' || dispatchChannel === 'both') && customerEmail) {
+        try {
+          const rendered = buildFormattedDocumentContent(
+            'CLAIM_VOUCHER',
+            voucherCode,
+            customerName,
+            `Ref ${referenceId} • Nilai ${formatCurrencyRp(compensationAmountIDR)} • Berlaku s/d ${validUntilIso}`
+          );
+          await dispatchEmailMessage({
+            toEmail: customerEmail,
+            subject: rendered.subject,
+            htmlBody: rendered.htmlBody,
+            docType: 'CLAIM_VOUCHER',
+            docId: voucherCode,
+            docNumber: claimId,
+            recipientName: customerName,
+            sentBy: actorName,
+          });
+        } catch {
+          // Non-fatal
+        }
+      }
+
+      const claim: CustomerClaimRecord = {
+        id: claimId,
+        createdAt: nowIso,
+        referenceId,
+        crmAccountId: crmMatch?.id,
+        customerName,
+        customerPhone,
+        customerEmail: customerEmail || undefined,
+        storeId,
+        storeName,
+        sku: body.sku ? String(body.sku) : undefined,
+        productName: body.productName ? String(body.productName) : undefined,
+        issueCategory,
+        compensationAmountIDR,
+        voucherCode,
+        voucherRuleId,
+        dispatchChannel,
+        waMeUrl,
+        notes: body.notes ? String(body.notes) : undefined,
+        recordedBy: actorName,
+      };
+      customerClaimsList.unshift(claim);
+
+      emitEnterpriseNotification({
+        dedupeKey: `CRM_CLAIM:${claimId}`,
+        category: 'INVENTORY',
+        severity: 'WARNING',
+        title: `Customer Claim Issued (${claimId})`,
+        message: `${customerName} • Ref ${referenceId} (${issueCategory}) → e-Voucher ${voucherCode} (${formatCurrencyRp(compensationAmountIDR)})`,
+        metadataLabel: voucherCode,
+        targetTab: 'crm_loyalty',
+      });
+
+      appendAuditTrailLog({
+        req,
+        actorName,
+        branchScope: storeId,
+        module: 'POS',
+        action: 'CRM_INSTANT_CLAIM_VOUCHER',
+        referenceId: claimId,
+        summary: `Issued instant claim ${claimId} for ${referenceId} (${issueCategory}) → live voucher ${voucherCode} (${formatCurrencyRp(compensationAmountIDR)}).`,
+      });
+      scheduleStateSave();
+
+      res.json({
+        success: true,
+        claim,
+        voucherRule,
+        waMeUrl,
+        message: `Claim ${claimId} logged & live e-Voucher ${voucherCode} (${formatCurrencyRp(compensationAmountIDR)}) activated + dispatched!`,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to record customer claim.' });
+    }
+  });
+
+  // -------------------------------------------------------------
   // PPH PASAL 22 (1.5%) & PPH PASAL 23 (2%) WITHHOLDING TAX LEDGER
   // -------------------------------------------------------------
   app.get('/api/admin/accounting/pph-withholding', (_req: Request, res: Response) => {
@@ -26009,7 +27797,17 @@ async function startServer() {
       return res.status(400).json({ error: 'pphType must be PPH_22 or PPH_23.' });
     }
 
-    const ratePercent: 1.5 | 2 = pphType === 'PPH_22' ? 1.5 : 2;
+    const periodLock = checkAccountingPeriodLock(req.body?.transactionDate);
+    if (periodLock.locked) {
+      return res.status(400).json({
+        error: 'ACCOUNTING_PERIOD_LOCKED',
+        lockDate: periodLock.lockDate,
+        message: periodLock.message,
+      });
+    }
+
+    const erp = getErpSettings();
+    const ratePercent = pphType === 'PPH_22' ? Number(erp.pph22RatePct || 1.5) : Number(erp.pph23RatePct || 2.0);
     const withheldAmountIDR = Math.max(1, Math.round((dpp * ratePercent) / 100));
     const nowIso = new Date().toISOString();
     const actorName = getEffectiveOperatorName(req);
@@ -26032,7 +27830,7 @@ async function startServer() {
           credit: 0,
           referenceType: 'PPH_WITHHOLDING',
           referenceId: cleanInv,
-          description: `Kredit Pajak ${pphType === 'PPH_22' ? 'PPh Pasal 22 (1.5%)' : 'PPh Pasal 23 (2%)'} atas ${cleanInv} (${cleanName})`,
+          description: `Kredit Pajak ${pphType === 'PPH_22' ? `PPh Pasal 22 (${ratePercent}%)` : `PPh Pasal 23 (${ratePercent}%)`} atas ${cleanInv} (${cleanName})`,
         },
         {
           id: gle2,
@@ -26692,11 +28490,12 @@ async function startServer() {
     const qrisAcc = chartOfAccounts.find((c) => c.accountCode === '1030');
     const edcPendingSum = unsettledEdcItems.reduce((s, i) => s + i.amountIDR, 0);
 
+    const erp = getErpSettings();
     res.json({
       qrisReceivableCoaBalanceIDR: roundIDR(qrisAcc?.balance || 0),
       edcClearingPendingIDR: edcPendingSum,
-      defaultQrisMdrPercent: 0.7,
-      defaultEdcMdrPercent: 1.0,
+      defaultQrisMdrPercent: erp.qrisMdrPct,
+      defaultEdcMdrPercent: erp.edcCardMdrPct,
       unsettledQrisItems,
       unsettledEdcItems,
       batches: settlementBatchesList,
@@ -26704,6 +28503,15 @@ async function startServer() {
   });
 
   app.post('/api/admin/accounting/settlement-reconcile', (req: Request, res: Response) => {
+    const periodLock = checkAccountingPeriodLock(req.body?.transactionDate);
+    if (periodLock.locked) {
+      return res.status(400).json({
+        error: 'ACCOUNTING_PERIOD_LOCKED',
+        lockDate: periodLock.lockDate,
+        message: periodLock.message,
+      });
+    }
+
     const {
       channel = 'QRIS',
       grossAmountIDR,
@@ -26725,12 +28533,13 @@ async function startServer() {
     };
 
     const resolvedChannel: 'QRIS' | 'EDC' = channel === 'EDC' ? 'EDC' : 'QRIS';
+    const erpMdr = getErpSettings();
     const effectiveMdrPercent =
       mdrPercent !== undefined && mdrPercent !== null && String(mdrPercent) !== ''
         ? Number(mdrPercent)
         : resolvedChannel === 'QRIS'
-        ? 0.7
-        : 1.0;
+        ? erpMdr.qrisMdrPct
+        : erpMdr.edcCardMdrPct;
 
     if (!Number.isFinite(effectiveMdrPercent) || effectiveMdrPercent < 0 || effectiveMdrPercent > 15) {
       return res.status(400).json({ error: 'mdrPercent must be between 0% and 15%.' });
@@ -27042,6 +28851,15 @@ async function startServer() {
   };
 
   app.post('/api/admin/accounting/bank-mutation-reconcile', (req: Request, res: Response) => {
+    const periodLock = checkAccountingPeriodLock(req.body?.transactionDate);
+    if (periodLock.locked && !req.body?.previewOnly) {
+      return res.status(400).json({
+        error: 'ACCOUNTING_PERIOD_LOCKED',
+        lockDate: periodLock.lockDate,
+        message: periodLock.message,
+      });
+    }
+
     const {
       csvText,
       mutations: providedMutations,

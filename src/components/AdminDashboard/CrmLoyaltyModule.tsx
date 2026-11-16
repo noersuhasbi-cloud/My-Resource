@@ -18,6 +18,10 @@ import type {
   StaffShiftSession,
   StoreOutletSchedule,
   WarungKasbonAccount,
+  StandingOrderRecord,
+  StandingOrderType,
+  CustomerClaimRecord,
+  CustomerClaimIssueCategory,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -69,7 +73,8 @@ type CrmSubTab =
   | 'rfm_campaigns'
   | 'predictive_restock'
   | 'promo_rules'
-  | 'kanvas_kasbon';
+  | 'kanvas_kasbon'
+  | 'standing_orders';
 
 const PIPELINE_STAGES: Array<{
   key: CrmDealStage;
@@ -252,6 +257,77 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
     dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
   });
 
+  const [standingOrders, setStandingOrders] = useState<StandingOrderRecord[]>([]);
+  const [standingSummary, setStandingSummary] = useState<{
+    totalCount: number;
+    activeCount: number;
+    dueCount: number;
+    weeklyCount: number;
+    seasonalPreOrderCount: number;
+    totalDpLiabilityIDR: number;
+  }>({
+    totalCount: 0,
+    activeCount: 0,
+    dueCount: 0,
+    weeklyCount: 0,
+    seasonalPreOrderCount: 0,
+    totalDpLiabilityIDR: 0,
+  });
+  const [isNewStandingOpen, setIsNewStandingOpen] = useState<boolean>(false);
+  const [standingForm, setStandingForm] = useState({
+    type: 'WEEKLY_SUBSCRIPTION' as StandingOrderType,
+    title: '',
+    customerName: '',
+    customerPhone: '+62 812-',
+    customerEmail: '',
+    deliveryAddress: '',
+    storeId: selectedStore !== 'CONSOLIDATED' ? selectedStore : 'store-jkt-senopati',
+    scheduleDays: 'Monday, Thursday',
+    targetFulfillmentDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    sku: 'SKU-PRD-001',
+    quantity: 2,
+    downPaymentIDR: 0,
+    dpMethod: 'BANK_QRIS' as 'CASH' | 'BANK_QRIS',
+    notes: '',
+  });
+
+  const [claimsList, setClaimsList] = useState<CustomerClaimRecord[]>([]);
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState<boolean>(false);
+  const [claimForm, setClaimForm] = useState({
+    referenceId: 'RCP-SEN-882104',
+    customerName: '',
+    customerPhone: '+62 812-8899-1122',
+    customerEmail: '',
+    issueCategory: 'SPOILED_NEAR_EXPIRY' as CustomerClaimIssueCategory,
+    compensationAmountIDR: 25000,
+    dispatchChannel: 'whatsapp' as 'whatsapp' | 'email' | 'both',
+    notes: '',
+  });
+  const [lastIssuedClaim, setLastIssuedClaim] = useState<{
+    voucherCode: string;
+    waMeUrl?: string;
+    message: string;
+  } | null>(null);
+
+  const loadStandingOrders = async () => {
+    try {
+      const res = await apiClient.getStandingOrders(selectedStore);
+      setStandingOrders(res.orders);
+      setStandingSummary(res.summary);
+    } catch {
+      // Non-fatal
+    }
+  };
+
+  const loadClaims = async () => {
+    try {
+      const res = await apiClient.getCrmClaims();
+      setClaimsList(res.claims);
+    } catch {
+      // Non-fatal
+    }
+  };
+
   const loadKanvasLedger = async () => {
     setKanvasLoading(true);
     try {
@@ -279,13 +355,105 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
   useEffect(() => {
     loadOverview();
     loadKanvasLedger();
+    loadStandingOrders();
+    loadClaims();
   }, [selectedStore]);
 
   useEffect(() => {
     if (subTab === 'kanvas_kasbon') {
       loadKanvasLedger();
+    } else if (subTab === 'standing_orders') {
+      loadStandingOrders();
     }
   }, [subTab]);
+
+  const handleCreateStandingOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!standingForm.customerName.trim() || !standingForm.customerPhone.trim()) {
+      onShowToast('Form Incomplete', 'Nama dan nomor WhatsApp pelanggan wajib diisi.');
+      return;
+    }
+    setBusyActionId('create-standing');
+    try {
+      const res = await apiClient.createStandingOrder({
+        type: standingForm.type,
+        title: standingForm.title.trim() || undefined,
+        customerName: standingForm.customerName.trim(),
+        customerPhone: standingForm.customerPhone.trim(),
+        customerEmail: standingForm.customerEmail.trim() || undefined,
+        deliveryAddress: standingForm.deliveryAddress.trim() || undefined,
+        storeId: standingForm.storeId,
+        scheduleDays:
+          standingForm.type === 'WEEKLY_SUBSCRIPTION'
+            ? standingForm.scheduleDays
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [],
+        targetFulfillmentDate:
+          standingForm.type === 'SEASONAL_PREORDER' ? standingForm.targetFulfillmentDate : undefined,
+        items: [{ sku: standingForm.sku, quantity: Math.max(1, Number(standingForm.quantity) || 1) }],
+        downPaymentIDR: standingForm.type === 'SEASONAL_PREORDER' ? Number(standingForm.downPaymentIDR) || 0 : 0,
+        dpMethod: standingForm.dpMethod,
+        notes: standingForm.notes.trim() || undefined,
+      });
+      onShowToast('Standing Order Saved', res.message);
+      setIsNewStandingOpen(false);
+      setStandingForm((p) => ({ ...p, title: '', customerName: '', downPaymentIDR: 0, notes: '' }));
+      await loadStandingOrders();
+    } catch (err: any) {
+      onShowToast('Standing Order Error', err?.message || 'Unable to save standing order.');
+    } finally {
+      setBusyActionId(null);
+    }
+  };
+
+  const handleTriggerDueStandingOrders = async (ids?: string[]) => {
+    setBusyActionId(ids ? `trigger-${ids[0]}` : 'trigger-due-all');
+    try {
+      const res = await apiClient.triggerDueStandingOrders(ids);
+      onShowToast('Standing Orders Converted', res.message);
+      await loadStandingOrders();
+      if (onRefreshData) onRefreshData();
+    } catch (err: any) {
+      onShowToast('Trigger Failed', err?.message || 'Failed to convert standing orders to Fulfillment.');
+    } finally {
+      setBusyActionId(null);
+    }
+  };
+
+  const handleSubmitInstantClaim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!claimForm.referenceId.trim()) {
+      onShowToast('Reference Missing', 'Masukkan No. Struk POS atau Order ID.');
+      return;
+    }
+    setBusyActionId('submit-claim');
+    setLastIssuedClaim(null);
+    try {
+      const res = await apiClient.createCrmClaim({
+        referenceId: claimForm.referenceId.trim(),
+        customerName: claimForm.customerName.trim() || undefined,
+        customerPhone: claimForm.customerPhone.trim() || undefined,
+        customerEmail: claimForm.customerEmail.trim() || undefined,
+        issueCategory: claimForm.issueCategory,
+        compensationAmountIDR: Math.max(1000, Number(claimForm.compensationAmountIDR) || 25000),
+        dispatchChannel: claimForm.dispatchChannel,
+        notes: claimForm.notes.trim() || undefined,
+      });
+      setLastIssuedClaim({
+        voucherCode: res.claim.voucherCode,
+        waMeUrl: res.waMeUrl,
+        message: res.message,
+      });
+      onShowToast('e-Voucher Kompensasi Aktif', res.message);
+      await loadClaims();
+    } catch (err: any) {
+      onShowToast('Claim Error', err?.message || 'Unable to create instant claim voucher.');
+    } finally {
+      setBusyActionId(null);
+    }
+  };
 
   const handleCreateKanvasRoute = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -671,6 +839,17 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
           <button
             type="button"
             onClick={() => {
+              setLastIssuedClaim(null);
+              setIsClaimModalOpen(true);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+          >
+            <Ticket className="w-3.5 h-3.5" />
+            <span>Quick Customer Claim / e-Voucher</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               if (!dealForm.crmAccountId && overview?.accounts?.length) {
                 setDealForm((p) => ({ ...p, crmAccountId: overview.accounts[0].id }));
               }
@@ -770,6 +949,12 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
               label: 'Sales Kanvas & Kasbon',
               icon: Truck,
               badge: kanvasLedger?.summary.overdueKasbonCount || undefined,
+            },
+            {
+              id: 'standing_orders',
+              label: 'Standing Orders & Pre-Order',
+              icon: Calendar,
+              badge: standingSummary.dueCount || undefined,
             },
           ] as Array<{ id: CrmSubTab; label: string; icon: any; badge?: number }>
         ).map((tab) => {
@@ -1731,6 +1916,152 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       )}
 
       {/* ============================================================ */}
+      {/* SUB-TAB 7: STANDING ORDERS & SEASONAL PRE-ORDER DP           */}
+      {/* ============================================================ */}
+      {subTab === 'standing_orders' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className={`${cardClass} p-3.5`}>
+              <span className={`text-[11px] font-bold uppercase ${textMuted}`}>Active Schedules</span>
+              <p className="text-xl font-extrabold font-mono mt-1">{standingSummary.activeCount}</p>
+            </div>
+            <div className={`${cardClass} p-3.5`}>
+              <span className={`text-[11px] font-bold uppercase ${textMuted}`}>Due for Fulfillment</span>
+              <p className="text-xl font-extrabold font-mono mt-1 text-amber-600 dark:text-amber-400">
+                {standingSummary.dueCount}
+              </p>
+            </div>
+            <div className={`${cardClass} p-3.5`}>
+              <span className={`text-[11px] font-bold uppercase ${textMuted}`}>Weekly / Pre-Order</span>
+              <p className="text-xl font-extrabold font-mono mt-1">
+                {standingSummary.weeklyCount} / {standingSummary.seasonalPreOrderCount}
+              </p>
+            </div>
+            <div className={`${cardClass} p-3.5`}>
+              <span className={`text-[11px] font-bold uppercase ${textMuted}`}>Pre-Order DP Held (#2130)</span>
+              <p className="text-xl font-extrabold font-mono mt-1 text-emerald-600 dark:text-emerald-400">
+                {formatIDR(standingSummary.totalDpLiabilityIDR)}
+              </p>
+            </div>
+          </div>
+
+          <div className={`${cardClass} p-4 flex flex-wrap items-center justify-between gap-3`}>
+            <div>
+              <h3 className={`text-sm font-extrabold ${textTitle}`}>
+                Langganan Mingguan &amp; Seasonal Pre-Order DP
+              </h3>
+              <p className={`text-xs ${textMuted}`}>
+                Konversi jadwal langganan/pre-order menjadi order Fulfillment dengan penguncian ATP otomatis &amp; pembukuan DP ke COA #2130.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsNewStandingOpen(true)}
+                className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+                  isLight ? 'bg-white border-slate-200 hover:bg-slate-50' : 'bg-slate-900/90 border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Standing Order / DP</span>
+              </button>
+              <button
+                type="button"
+                disabled={busyActionId === 'trigger-due-all'}
+                onClick={() => handleTriggerDueStandingOrders()}
+                className="px-3.5 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${busyActionId === 'trigger-due-all' ? 'animate-spin' : ''}`} />
+                <span>Trigger Due Standing Orders</span>
+              </button>
+            </div>
+          </div>
+
+          <div className={`${cardClass} overflow-hidden`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="border-b border-slate-200 dark:border-slate-800/80 text-[11px] uppercase text-slate-500">
+                  <tr>
+                    <th className="py-2.5 px-3">ID &amp; Type</th>
+                    <th className="py-2.5 px-3">Customer</th>
+                    <th className="py-2.5 px-3">Items</th>
+                    <th className="py-2.5 px-3">Schedule / Target</th>
+                    <th className="py-2.5 px-3 text-right">Est. Total</th>
+                    <th className="py-2.5 px-3 text-right">DP (#2130)</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                    <th className="py-2.5 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                  {standingOrders.map((sto) => (
+                    <tr key={sto.id}>
+                      <td className="py-2.5 px-3">
+                        <div className="font-mono font-bold">{sto.id}</div>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-semibold">
+                          {sto.type === 'SEASONAL_PREORDER' ? 'Pre-Order DP' : 'Weekly Sub'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <div className="font-bold">{sto.customerName}</div>
+                        <div className={`text-[10px] ${textMuted}`}>{sto.customerPhone} · {sto.storeName}</div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {sto.items.map((it) => `${it.productName} x${it.quantity}`).join(', ')}
+                      </td>
+                      <td className="py-2.5 px-3 font-mono text-[11px]">
+                        {sto.type === 'WEEKLY_SUBSCRIPTION'
+                          ? sto.scheduleDays.join(', ')
+                          : sto.targetFulfillmentDate || '-'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold">
+                        {formatIDR(sto.estimatedTotalIDR)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono">
+                        {sto.downPaymentIDR > 0 ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                            {formatIDR(sto.downPaymentIDR)}
+                          </span>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                          {sto.status}
+                        </span>
+                        {sto.lastFulfillmentOrderId && (
+                          <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+                            → {sto.lastFulfillmentOrderId}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <button
+                          type="button"
+                          disabled={busyActionId === `trigger-${sto.id}`}
+                          onClick={() => handleTriggerDueStandingOrders([sto.id])}
+                          className="px-2.5 py-1 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-[11px] font-bold cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                        >
+                          Trigger Order
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {standingOrders.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-400">
+                        Belum ada Standing Order atau Pre-Order DP terdaftar.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
       {/* MODAL 1: CUSTOMER 360 PROFILE MODAL                          */}
       {/* ============================================================ */}
       {selectedProfileId &&
@@ -2288,6 +2619,275 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>{busyActionId === 'dispatch-cmp' ? 'Dispatching...' : 'Send via Gateway'}</span>
+                </button>
+              </div>
+            </form>
+          </div>,
+          document.body
+        )}
+
+      {/* MODAL: NEW STANDING ORDER / SEASONAL PRE-ORDER DP */}
+      {isNewStandingOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            onClick={() => setIsNewStandingOpen(false)}
+          >
+            <form
+              onSubmit={handleCreateStandingOrder}
+              onClick={(e) => e.stopPropagation()}
+              className={`w-full max-w-lg rounded-2xl border p-5 shadow-2xl space-y-3.5 my-auto ${
+                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+              }`}
+            >
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-slate-800/80">
+                <h3 className="text-sm sm:text-base font-extrabold">New Standing Order / Seasonal Pre-Order DP</h3>
+                <button type="button" onClick={() => setIsNewStandingOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                <div className="sm:col-span-2">
+                  <label className="block font-bold mb-1">Type</label>
+                  <select
+                    value={standingForm.type}
+                    onChange={(e) => setStandingForm((p) => ({ ...p, type: e.target.value as StandingOrderType }))}
+                    className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                  >
+                    <option value="WEEKLY_SUBSCRIPTION">Langganan Mingguan (Weekly Standing Order)</option>
+                    <option value="SEASONAL_PREORDER">Seasonal Pre-Order (with Customer DP #2130)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Customer Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={standingForm.customerName}
+                    onChange={(e) => setStandingForm((p) => ({ ...p, customerName: e.target.value }))}
+                    className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">WhatsApp Phone</label>
+                  <input
+                    type="tel"
+                    required
+                    value={standingForm.customerPhone}
+                    onChange={(e) => setStandingForm((p) => ({ ...p, customerPhone: e.target.value }))}
+                    className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">SKU</label>
+                  <input
+                    type="text"
+                    value={standingForm.sku}
+                    onChange={(e) => setStandingForm((p) => ({ ...p, sku: e.target.value }))}
+                    className={`w-full px-3 py-2 rounded-xl font-mono ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Qty</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={standingForm.quantity}
+                    onChange={(e) => setStandingForm((p) => ({ ...p, quantity: Number(e.target.value) || 1 }))}
+                    className={`w-full px-3 py-2 rounded-xl font-mono ${inputClass}`}
+                  />
+                </div>
+                {standingForm.type === 'WEEKLY_SUBSCRIPTION' ? (
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold mb-1">Schedule Days</label>
+                    <input
+                      type="text"
+                      value={standingForm.scheduleDays}
+                      onChange={(e) => setStandingForm((p) => ({ ...p, scheduleDays: e.target.value }))}
+                      className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block font-bold mb-1">Target Delivery Date</label>
+                      <input
+                        type="date"
+                        value={standingForm.targetFulfillmentDate}
+                        onChange={(e) => setStandingForm((p) => ({ ...p, targetFulfillmentDate: e.target.value }))}
+                        className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold mb-1">Customer DP (IDR · CR #2130)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={standingForm.downPaymentIDR}
+                        onChange={(e) => setStandingForm((p) => ({ ...p, downPaymentIDR: Number(e.target.value) || 0 }))}
+                        className={`w-full px-3 py-2 rounded-xl font-mono ${inputClass}`}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setIsNewStandingOpen(false)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs font-bold cursor-pointer">
+                  Cancel
+                </button>
+                <button type="submit" disabled={busyActionId === 'create-standing'} className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold cursor-pointer">
+                  {busyActionId === 'create-standing' ? 'Saving...' : 'Save Standing Order'}
+                </button>
+              </div>
+            </form>
+          </div>,
+          document.body
+        )}
+
+      {/* MODAL: 1-KLIK QUICK CUSTOMER CLAIM / AUTO E-VOUCHER */}
+      {isClaimModalOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            onClick={() => setIsClaimModalOpen(false)}
+          >
+            <form
+              onSubmit={handleSubmitInstantClaim}
+              onClick={(e) => e.stopPropagation()}
+              className={`w-full max-w-xl rounded-2xl border p-5 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto ${
+                isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+              }`}
+            >
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-slate-800/80">
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold">1-Klik Instant Customer Claim &amp; Auto e-Voucher</h3>
+                  <p className={`text-[11px] ${textMuted}`}>
+                    Log komplain kesegaran/kerusakan &amp; terbitkan voucher 1x pakai (CLAIM-XXXX) langsung ke WhatsApp / Email pelanggan.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setIsClaimModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                <div>
+                  <label className="block font-bold mb-1">POS Receipt / Order Ref</label>
+                  <input
+                    type="text"
+                    required
+                    value={claimForm.referenceId}
+                    onChange={(e) => setClaimForm((p) => ({ ...p, referenceId: e.target.value }))}
+                    placeholder="e.g. RCP-SEN-882104"
+                    className={`w-full px-3 py-2 rounded-xl font-mono ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Issue Category</label>
+                  <select
+                    value={claimForm.issueCategory}
+                    onChange={(e) => setClaimForm((p) => ({ ...p, issueCategory: e.target.value as CustomerClaimIssueCategory }))}
+                    className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                  >
+                    <option value="SPOILED_NEAR_EXPIRY">Freshness / Spoiled Item</option>
+                    <option value="DAMAGED_IN_TRANSIT">Damaged in Transit</option>
+                    <option value="MISSING_ITEM">Missing Item</option>
+                    <option value="QUALITY_MISMATCH">Quality / Catch-Weight Mismatch</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Customer Name (Optional if linked)</label>
+                  <input
+                    type="text"
+                    value={claimForm.customerName}
+                    onChange={(e) => setClaimForm((p) => ({ ...p, customerName: e.target.value }))}
+                    placeholder="Ibu Clarissa"
+                    className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">WhatsApp Phone</label>
+                  <input
+                    type="tel"
+                    value={claimForm.customerPhone}
+                    onChange={(e) => setClaimForm((p) => ({ ...p, customerPhone: e.target.value }))}
+                    className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Compensation Value (IDR)</label>
+                  <input
+                    type="number"
+                    min={1000}
+                    required
+                    value={claimForm.compensationAmountIDR}
+                    onChange={(e) => setClaimForm((p) => ({ ...p, compensationAmountIDR: Number(e.target.value) || 0 }))}
+                    className={`w-full px-3 py-2 rounded-xl font-mono font-bold ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Dispatch Channel</label>
+                  <select
+                    value={claimForm.dispatchChannel}
+                    onChange={(e) => setClaimForm((p) => ({ ...p, dispatchChannel: e.target.value as any }))}
+                    className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                  >
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="email">Email</option>
+                    <option value="both">WhatsApp + Email</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block font-bold mb-1">CS Notes</label>
+                  <input
+                    type="text"
+                    value={claimForm.notes}
+                    onChange={(e) => setClaimForm((p) => ({ ...p, notes: e.target.value }))}
+                    placeholder="Sayur layu saat tiba; ganti kompensasi voucher."
+                    className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
+                  />
+                </div>
+              </div>
+
+              {lastIssuedClaim && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-1">
+                  <div className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center justify-between">
+                    <span>Live Voucher Code: {lastIssuedClaim.voucherCode}</span>
+                    {lastIssuedClaim.waMeUrl && (
+                      <a href={lastIssuedClaim.waMeUrl} target="_blank" rel="noreferrer" className="underline font-mono">
+                        Open wa.me
+                      </a>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-emerald-800 dark:text-emerald-200">{lastIssuedClaim.message}</p>
+                </div>
+              )}
+
+              {claimsList.length > 0 && (
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                  <div className="text-[11px] font-bold uppercase text-slate-500 mb-1.5">Recent Claims ({claimsList.length})</div>
+                  <div className="max-h-32 overflow-y-auto space-y-1 text-[11px]">
+                    {claimsList.slice(0, 5).map((cl) => (
+                      <div key={cl.id} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800">
+                        <span>
+                          <strong>{cl.voucherCode}</strong> · {cl.customerName} ({cl.referenceId})
+                        </span>
+                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                          {formatIDR(cl.compensationAmountIDR)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setIsClaimModalOpen(false)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs font-bold cursor-pointer">
+                  Close
+                </button>
+                <button type="submit" disabled={busyActionId === 'submit-claim'} className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5">
+                  <Ticket className="w-3.5 h-3.5" />
+                  <span>{busyActionId === 'submit-claim' ? 'Issuing Voucher...' : 'Issue e-Voucher & Send'}</span>
                 </button>
               </div>
             </form>

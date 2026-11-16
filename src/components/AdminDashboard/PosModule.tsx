@@ -201,6 +201,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
   // 7. Electronic Receipt Modal (Struk)
   const [completedReceipt, setCompletedReceipt] = useState<POSTransactionReceipt | null>(null);
+  const [waReceiptPhone, setWaReceiptPhone] = useState<string>('');
+  const [isSendingWaReceipt, setIsSendingWaReceipt] = useState<boolean>(false);
+  const [waReceiptFeedback, setWaReceiptFeedback] = useState<{ message: string; waMeUrl?: string } | null>(null);
 
   // 8. Parked Tickets (Hold / Resume)
   const [parkedTickets, setParkedTickets] = useState<{ id: string; timestamp: string; cart: POSCartItem[]; customer: string }[]>([]);
@@ -216,6 +219,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [isSafeDropModalOpen, setIsSafeDropModalOpen] = useState<boolean>(false);
   const [rmaTargetReceipt, setRmaTargetReceipt] = useState<POSTransactionReceipt | null>(null);
   const [isBarcodeLabelModalOpen, setIsBarcodeLabelModalOpen] = useState<boolean>(false);
+  const [safeDropThresholdIDR, setSafeDropThresholdIDR] = useState<number>(5000000);
+  const [loyaltyPointRedeemValueIDR, setLoyaltyPointRedeemValueIDR] = useState<number>(100);
 
   // Sound generator for barcode scan feedback (clean Web Audio API beep)
   const playBeep = () => {
@@ -283,6 +288,23 @@ export const PosModule: React.FC<PosModuleProps> = ({
       .then((cfg) => {
         if (cfg && typeof cfg.ppnTaxPercent === 'number') {
           setPosPpnTaxPercent(cfg.ppnTaxPercent);
+        }
+      })
+      .catch(() => {});
+    apiClient
+      .getErpSettingsConfig()
+      .then((res) => {
+        const cfg = res?.config || res?.erpSettings;
+        if (cfg) {
+          if (typeof cfg.safeDropThresholdIDR === 'number' && cfg.safeDropThresholdIDR > 0) {
+            setSafeDropThresholdIDR(cfg.safeDropThresholdIDR);
+          }
+          if (typeof cfg.loyaltyPointRedeemValueIDR === 'number' && cfg.loyaltyPointRedeemValueIDR > 0) {
+            setLoyaltyPointRedeemValueIDR(cfg.loyaltyPointRedeemValueIDR);
+          }
+          if (typeof cfg.activeVatRatePct === 'number' && cfg.activeVatRatePct >= 0) {
+            setPosPpnTaxPercent(cfg.activeVatRatePct);
+          }
         }
       })
       .catch(() => {});
@@ -403,16 +425,17 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
   const maxRedeemablePoints = useMemo(() => {
     if (!selectedCrmMember || selectedCrmMember.pointsBalance <= 0) return 0;
-    const maxByBill = Math.floor(Math.max(0, subtotal - baseDiscountAmount - promoDiscountIDR) / 100);
+    const perPtValue = Math.max(1, loyaltyPointRedeemValueIDR || 100);
+    const maxByBill = Math.floor(Math.max(0, subtotal - baseDiscountAmount - promoDiscountIDR) / perPtValue);
     return Math.min(selectedCrmMember.pointsBalance, maxByBill);
-  }, [selectedCrmMember, subtotal, baseDiscountAmount, promoDiscountIDR]);
+  }, [selectedCrmMember, subtotal, baseDiscountAmount, promoDiscountIDR, loyaltyPointRedeemValueIDR]);
 
   const effectiveRedeemPoints = useMemo(() => {
     if (!selectedCrmMember) return 0;
     return Math.min(maxRedeemablePoints, Math.max(0, Math.floor(redeemPointsInput || 0)));
   }, [selectedCrmMember, maxRedeemablePoints, redeemPointsInput]);
 
-  const pointsDiscountIDR = effectiveRedeemPoints * 100;
+  const pointsDiscountIDR = effectiveRedeemPoints * Math.max(1, loyaltyPointRedeemValueIDR || 100);
 
   const discountAmount = useMemo(() => {
     return Math.min(subtotal, baseDiscountAmount + promoDiscountIDR + pointsDiscountIDR);
@@ -607,22 +630,35 @@ export const PosModule: React.FC<PosModuleProps> = ({
     // 1. Check for Variable-Weight embedded scale barcode (EAN-13 GS1 prefix 20-29 / 02)
     const scaleBarcode = parseVariableWeightBarcode(rawCode, products);
     if (scaleBarcode && scaleBarcode.isVariableWeight) {
-      const targetProduct =
-        products.find((p) => p.sku === scaleBarcode.matchedSku) ||
-        products.find((p) => p.isWeighted) ||
-        products[0];
-
-      if (targetProduct) {
-        addToCart(targetProduct, 1, true, scaleBarcode.netWeightGrams);
+      if (scaleBarcode.error || !scaleBarcode.matchedSku || scaleBarcode.netWeightGrams <= 0) {
         onShowToast(
-          'Catch-Weight Scale Barcode Parsed',
-          `GS1 Scale Barcode (${rawCode}): ${targetProduct.name} @ ${scaleBarcode.netWeightGrams}g (${scaleBarcode.netWeightKg}kg). Added to cart for ${formatIDR(
-            Math.round((targetProduct.pricePerKg || targetProduct.sellingPrice) * scaleBarcode.netWeightKg)
-          )}.`
+          'Invalid Scale Barcode',
+          scaleBarcode.error ||
+            `Scale barcode "${rawCode}" has unknown PLU (${scaleBarcode.skuOrPlu}) or invalid weight.`
         );
         setBarcodeInput('');
         return;
       }
+
+      const targetProduct = products.find((p) => p.sku === scaleBarcode.matchedSku);
+      if (!targetProduct) {
+        onShowToast(
+          'Scale PLU Not In Stock',
+          `Matched SKU "${scaleBarcode.matchedSku}" is unavailable in this outlet catalog.`
+        );
+        setBarcodeInput('');
+        return;
+      }
+
+      addToCart(targetProduct, 1, true, scaleBarcode.netWeightGrams);
+      onShowToast(
+        'Catch-Weight Scale Barcode Parsed',
+        `GS1 Scale Barcode (${rawCode}): ${targetProduct.name} @ ${scaleBarcode.netWeightGrams}g (${scaleBarcode.netWeightKg}kg). Added to cart for ${formatIDR(
+          Math.round((targetProduct.pricePerKg || targetProduct.sellingPrice) * scaleBarcode.netWeightKg)
+        )}.`
+      );
+      setBarcodeInput('');
+      return;
     }
 
     const query = rawCode.toLowerCase();
@@ -860,7 +896,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 type="button"
                 onClick={() => setIsSafeDropModalOpen(true)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                  (activeShift.expectedTotalCashInDrawerIDR || 0) >= 5000000
+                  (activeShift.expectedTotalCashInDrawerIDR || 0) >= safeDropThresholdIDR
                     ? 'bg-amber-500 text-slate-950 border-amber-600 animate-pulse shadow-xs'
                     : isLight
                     ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -2157,6 +2193,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     onClick={() => {
                       setRmaTargetReceipt(completedReceipt);
                       setCompletedReceipt(null);
+                      setWaReceiptFeedback(null);
+                      setWaReceiptPhone('');
                     }}
                     className="py-2 px-3 rounded-xl border border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
                   >
@@ -2165,7 +2203,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setCompletedReceipt(null)}
+                    onClick={() => {
+                      setCompletedReceipt(null);
+                      setWaReceiptFeedback(null);
+                      setWaReceiptPhone('');
+                    }}
                     className="flex-1 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer"
                   >
                     New Sale (F2)
@@ -2193,6 +2235,63 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     <MessageCircle className="w-3.5 h-3.5" />
                     <span>WhatsApp Receipt</span>
                   </button>
+                </div>
+
+                {/* Frictionless 1-Tap Struk WA + Live Loyalty Statement */}
+                <div className="pt-1.5 border-t border-slate-200 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="tel"
+                      value={waReceiptPhone || selectedCrmMember?.phone || customerPhone || ''}
+                      onChange={(e) => setWaReceiptPhone(e.target.value)}
+                      placeholder="No. WA (+62 812...)"
+                      className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 text-[11px] font-mono text-slate-900 bg-white"
+                    />
+                    <button
+                      type="button"
+                      disabled={isSendingWaReceipt}
+                      onClick={async () => {
+                        const targetPhone = (waReceiptPhone || selectedCrmMember?.phone || customerPhone || '').trim();
+                        if (!targetPhone) {
+                          onShowToast('No. WhatsApp Diperlukan', 'Masukkan nomor WhatsApp pelanggan untuk mengirim Struk WA + Saldo Poin.');
+                          return;
+                        }
+                        setIsSendingWaReceipt(true);
+                        setWaReceiptFeedback(null);
+                        try {
+                          const res = await apiClient.sendPosReceiptWhatsapp(completedReceipt.receiptNumber, {
+                            toPhone: targetPhone,
+                            recipientName: selectedCrmMember?.name || customerName || 'Pelanggan GroceMart',
+                          });
+                          setWaReceiptFeedback({ message: res.message, waMeUrl: res.waMeUrl });
+                          onShowToast('Struk WA + Poin Terkirim', res.message);
+                        } catch (err: any) {
+                          onShowToast('Gagal Kirim Struk WA', err?.message || 'Unable to dispatch WhatsApp receipt.');
+                        } finally {
+                          setIsSendingWaReceipt(false);
+                        }
+                      }}
+                      className="py-1.5 px-3 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-50 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <MessageCircle className="w-3 h-3" />
+                      <span>{isSendingWaReceipt ? 'Mengirim...' : 'Kirim Struk WA + Poin'}</span>
+                    </button>
+                  </div>
+                  {waReceiptFeedback && (
+                    <div className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 flex items-center justify-between gap-2">
+                      <span className="truncate">{waReceiptFeedback.message}</span>
+                      {waReceiptFeedback.waMeUrl && (
+                        <a
+                          href={waReceiptFeedback.waMeUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-bold underline shrink-0"
+                        >
+                          wa.me
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2297,6 +2396,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
         storeId={effectiveStoreId}
         storeName={currentStoreInfo.storeName}
         activeShift={activeShift}
+        safeDropThresholdIDR={safeDropThresholdIDR}
         onSafeDropCompleted={(updatedShift) => {
           setActiveShift(updatedShift);
           loadShiftState();

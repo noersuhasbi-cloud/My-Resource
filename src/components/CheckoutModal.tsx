@@ -57,6 +57,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [blockedNotice, setBlockedNotice] = useState<string>('');
   const reservedOrderRef = useRef<{ orderId: string; signature: string } | null>(null);
 
+  // Standing Order / Seasonal Pre-Order DP Option
+  const [enableStandingOrder, setEnableStandingOrder] = useState<boolean>(false);
+  const [standingOrderType, setStandingOrderType] = useState<'WEEKLY_SUBSCRIPTION' | 'SEASONAL_PREORDER'>('WEEKLY_SUBSCRIPTION');
+  const [standingScheduleDays, setStandingScheduleDays] = useState<string>('Monday, Thursday');
+  const [standingTargetDate, setStandingTargetDate] = useState<string>(
+    new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+  );
+  const [standingDpAmountIDR, setStandingDpAmountIDR] = useState<number>(0);
+
   // Sync customer account updates
   useEffect(() => {
     if (customerAccount) {
@@ -196,6 +205,42 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryFee,
         items,
       });
+      if (enableStandingOrder) {
+        apiClient
+          .createStandingOrder({
+            type: standingOrderType,
+            title:
+              standingOrderType === 'SEASONAL_PREORDER'
+                ? `Pre-Order Storefront (${recipientName})`
+                : `Langganan Mingguan Storefront (${recipientName})`,
+            crmAccountId: customerAccount?.id,
+            customerName: recipientName,
+            customerPhone: recipientPhone,
+            customerEmail: recipientEmail,
+            deliveryAddress: addressLine,
+            storeId: selectedPickupStore?.id || 'store-jkt-senopati',
+            scheduleDays:
+              standingOrderType === 'WEEKLY_SUBSCRIPTION'
+                ? standingScheduleDays
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                : [],
+            targetFulfillmentDate:
+              standingOrderType === 'SEASONAL_PREORDER' ? standingTargetDate : undefined,
+            items: items.map((it) => ({
+              sku: it.product.sku || it.product.id,
+              productId: it.product.id,
+              productName: it.product.name,
+              quantity: it.quantity,
+              unitPriceIDR: it.product.price,
+            })),
+            downPaymentIDR: standingOrderType === 'SEASONAL_PREORDER' ? standingDpAmountIDR : 0,
+            dpMethod: 'BANK_QRIS',
+            notes: `Created from Storefront Checkout #${currentOrderId}`,
+          })
+          .catch(() => {});
+      }
     } catch (err: any) {
       setIsSimulatingPayment(false);
       setBlockedNotice(err?.message || 'QRIS settlement blocked by backend validation. Please review your order or outlet.');
@@ -477,6 +522,86 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </span>
                 </div>
               </div>
+            </div>
+
+            {/* Optional: Langganan Mingguan / Seasonal Pre-Order DP */}
+            <div className="p-3.5 rounded-xl border border-stone-200 dark:border-slate-800/80 bg-stone-50/70 dark:bg-[#090A0F] space-y-2.5">
+              <label className="flex items-center justify-between gap-2 cursor-pointer">
+                <div>
+                  <span className="text-xs font-bold text-stone-900 dark:text-slate-100 block">
+                    Jadikan Langganan Mingguan / Pre-Order DP
+                  </span>
+                  <span className="text-[11px] text-stone-500 dark:text-slate-400">
+                    Jadwalkan pengiriman rutin otomatis atau kunci slot Seasonal Pre-Order (Hampers/Durian/Kurma).
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={enableStandingOrder}
+                  onChange={(e) => setEnableStandingOrder(e.target.checked)}
+                  className="w-4 h-4 rounded accent-emerald-700 cursor-pointer shrink-0"
+                />
+              </label>
+
+              {enableStandingOrder && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-stone-200 dark:border-slate-800/80 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-stone-600 dark:text-slate-400 mb-1">
+                      Mode Jadwal
+                    </label>
+                    <select
+                      value={standingOrderType}
+                      onChange={(e) => setStandingOrderType(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-[#12141C] text-stone-900 dark:text-slate-100"
+                    >
+                      <option value="WEEKLY_SUBSCRIPTION">Langganan Mingguan (Standing Order)</option>
+                      <option value="SEASONAL_PREORDER">Seasonal Pre-Order (dengan DP)</option>
+                    </select>
+                  </div>
+
+                  {standingOrderType === 'WEEKLY_SUBSCRIPTION' ? (
+                    <div>
+                      <label className="block text-[11px] font-semibold text-stone-600 dark:text-slate-400 mb-1">
+                        Hari Kirim Mingguan
+                      </label>
+                      <input
+                        type="text"
+                        value={standingScheduleDays}
+                        onChange={(e) => setStandingScheduleDays(e.target.value)}
+                        placeholder="Monday, Thursday"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-[#12141C] text-stone-900 dark:text-slate-100"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-stone-600 dark:text-slate-400 mb-1">
+                          Tanggal Kirim Pre-Order
+                        </label>
+                        <input
+                          type="date"
+                          value={standingTargetDate}
+                          onChange={(e) => setStandingTargetDate(e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-[#12141C] text-stone-900 dark:text-slate-100"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-semibold text-stone-600 dark:text-slate-400 mb-1">
+                          Uang Muka / DP Pre-Order (IDR · Terbukukan ke #2130 Customer Advance Deposits)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={standingDpAmountIDR}
+                          onChange={(e) => setStandingDpAmountIDR(Math.max(0, Number(e.target.value) || 0))}
+                          placeholder="e.g. 150000"
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-slate-800 bg-white dark:bg-[#12141C] text-stone-900 dark:text-slate-100 font-mono"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Total breakdown & submit */}

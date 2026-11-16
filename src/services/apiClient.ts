@@ -58,6 +58,7 @@ import type {
   AutoReplenishmentItemPlan,
   AutoReplenishmentConsolidatedPlan,
   EnterpriseSettingsConfig,
+  ErpConfigurationSettings,
   LandedCostRecord,
   WarehouseBinLocation,
   WarehouseMultiStepRoute,
@@ -143,6 +144,12 @@ import type {
   BankMutationRowInput,
   BankMutationCsvReconcileResponse,
   ExecutiveFinancialHealthSummary,
+  StandingOrderRecord,
+  StandingOrderType,
+  StandingOrderItem,
+  CustomerClaimRecord,
+  CustomerClaimIssueCategory,
+  StorefrontProductTrustMeta,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
@@ -952,6 +959,29 @@ export const apiClient = {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(data.error || 'Failed to place storefront order & reserve stock');
+    }
+    return data;
+  },
+
+  async cancelStorefrontOrder(
+    orderId: string,
+    reason?: string
+  ): Promise<{
+    success: boolean;
+    alreadyCancelled?: boolean;
+    order?: any;
+    fulfillmentOrder?: PickerOrder;
+    releasedAllocations: Array<{ sku: string; releasedQty: number; newReservedStock: number; newAvailableStock: number }>;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/storefront/orders/${encodeURIComponent(orderId)}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to cancel storefront order');
     }
     return data;
   },
@@ -2119,6 +2149,36 @@ export const apiClient = {
       throw new Error(err.error || 'Failed to update enterprise settings');
     }
     return res.json();
+  },
+
+  async getErpSettingsConfig(): Promise<{
+    success: boolean;
+    config: ErpConfigurationSettings;
+    erpSettings: ErpConfigurationSettings;
+    settings: EnterpriseSettingsConfig;
+  }> {
+    const res = await fetchApi('/api/admin/settings/config');
+    if (!res.ok) throw new Error('Failed to fetch ERP configuration parameters');
+    return res.json();
+  },
+
+  async updateErpSettingsConfig(patch: Partial<ErpConfigurationSettings>): Promise<{
+    success: boolean;
+    config: ErpConfigurationSettings;
+    erpSettings: ErpConfigurationSettings;
+    settings: EnterpriseSettingsConfig;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/settings/config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to update ERP configuration parameters');
+    }
+    return data;
   },
 
   async getLandedCosts(): Promise<LandedCostRecord[]> {
@@ -3976,6 +4036,228 @@ export const apiClient = {
     const res = await fetchApi(`/api/admin/accounting/executive-summary${query}`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Failed to load executive financial summary');
+    return data;
+  },
+
+  // -------------------------------------------------------------
+  // INDONESIAN GROCERY CUSTOMER-CENTRIC BLIND SPOT PACK APIs
+  // -------------------------------------------------------------
+  async getFulfillmentSubstituteSuggestions(
+    orderId: string,
+    sku: string
+  ): Promise<{
+    orderId: string;
+    storeId: string;
+    suggestions: Array<{
+      sku: string;
+      productName: string;
+      category: string;
+      sellingPrice: number;
+      availableAtp: number;
+      sameCategory: boolean;
+      priceDelta: number;
+    }>;
+  }> {
+    const res = await fetchApi(
+      `/api/admin/fulfillment/${encodeURIComponent(orderId)}/substitute-suggestions?sku=${encodeURIComponent(sku)}`
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load substitute suggestions');
+    return data;
+  },
+
+  async proposeFulfillmentSubstitute(
+    orderId: string,
+    payload: {
+      itemId?: string;
+      originalSku?: string;
+      replacementSku?: string;
+      reason?: string;
+      absorbPriceDelta?: boolean;
+      channel?: 'whatsapp' | 'email';
+      customerPhone?: string;
+      customerEmail?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    order: PickerOrder;
+    item: PickerOrderItem;
+    reservationSwap: {
+      oldProductName: string;
+      originalLineTotal: number;
+      replacementLineFull: number;
+      rawPriceDelta: number;
+      effectivePriceDelta: number;
+      oldTierAvailableAfter: number | null;
+      newTierAvailableAfter: number | null;
+    };
+    waMeUrl?: string;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/fulfillment/${encodeURIComponent(orderId)}/substitute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to propose substitution');
+    return data;
+  },
+
+  async getStorefrontCatalogTrust(storeId?: string): Promise<{
+    storeId: string;
+    generatedAt: string;
+    items: StorefrontProductTrustMeta[];
+    byProductId: Record<string, StorefrontProductTrustMeta>;
+    bySku: Record<string, StorefrontProductTrustMeta>;
+  }> {
+    const qs = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+    const res = await fetchApi(`/api/storefront/catalog-trust${qs}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load storefront catalog trust metadata');
+    return data;
+  },
+
+  async getStandingOrders(
+    storeId?: string,
+    type?: StandingOrderType | 'ALL'
+  ): Promise<{
+    orders: StandingOrderRecord[];
+    summary: {
+      totalCount: number;
+      activeCount: number;
+      dueCount: number;
+      weeklyCount: number;
+      seasonalPreOrderCount: number;
+      totalDpLiabilityIDR: number;
+    };
+  }> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    if (type && type !== 'ALL') params.append('type', type);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetchApi(`/api/admin/crm/standing-orders${qs}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load standing orders');
+    return data;
+  },
+
+  async createStandingOrder(payload: {
+    type: StandingOrderType;
+    title?: string;
+    crmAccountId?: string;
+    customerName: string;
+    customerPhone: string;
+    customerEmail?: string;
+    deliveryAddress?: string;
+    storeId?: string;
+    scheduleDays?: string[];
+    targetFulfillmentDate?: string;
+    items: Array<Partial<StandingOrderItem> & { productId?: string }>;
+    downPaymentIDR?: number;
+    dpMethod?: 'CASH' | 'BANK_QRIS';
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    standingOrder: StandingOrderRecord;
+    glEntryIds: string[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/crm/standing-orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to create standing order');
+    return data;
+  },
+
+  async triggerDueStandingOrders(standingOrderIds?: string[]): Promise<{
+    success: boolean;
+    triggeredCount: number;
+    createdOrderIds: string[];
+    skipped: Array<{ standingOrderId: string; reason: string }>;
+    orders: StandingOrderRecord[];
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/crm/standing-orders/trigger-due', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ standingOrderIds }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to trigger standing orders');
+    return data;
+  },
+
+  async getCrmClaims(): Promise<{
+    claims: CustomerClaimRecord[];
+    summary: {
+      totalClaims: number;
+      totalCompensationIDR: number;
+    };
+  }> {
+    const res = await fetchApi('/api/admin/crm/claims');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load CRM claims');
+    return data;
+  },
+
+  async createCrmClaim(payload: {
+    referenceId: string;
+    crmAccountId?: string;
+    customerName?: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    storeId?: string;
+    sku?: string;
+    productName?: string;
+    issueCategory: CustomerClaimIssueCategory;
+    compensationAmountIDR: number;
+    dispatchChannel?: 'whatsapp' | 'email' | 'both';
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    claim: CustomerClaimRecord;
+    voucherRule: PromotionRule;
+    waMeUrl?: string;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/crm/claims', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to create instant customer claim');
+    return data;
+  },
+
+  async sendPosReceiptWhatsapp(
+    receiptId: string,
+    payload: {
+      toPhone: string;
+      recipientName?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    log: CommunicationDispatchLog;
+    waMeUrl?: string;
+    loyaltyStatement: {
+      tier: string;
+      pointsEarned: number;
+      liveBalancePoints: number;
+    };
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/pos/receipts/${encodeURIComponent(receiptId)}/send-wa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to dispatch WhatsApp POS receipt');
     return data;
   },
 };

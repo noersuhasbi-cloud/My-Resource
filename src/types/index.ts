@@ -692,6 +692,7 @@ export interface VariableWeightBarcodeInfo {
   embeddedPriceIDR?: number;
   matchedSku?: string;
   calculatedLineTotal: number;
+  error?: string;
 }
 
 // -------------------------------------------------------------
@@ -827,7 +828,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'GIRO_PDC_ISSUE' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK' | 'KASBON_COLLECTION' | 'PPH_WITHHOLDING' | 'RETURNABLE_CONTAINER' | 'SUPPLIER_DEBIT_NOTE' | 'SETTLEMENT_RECONCILE' | 'BANK_MUTATION_RECONCILE';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'GIRO_PDC_ISSUE' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK' | 'KASBON_COLLECTION' | 'PPH_WITHHOLDING' | 'RETURNABLE_CONTAINER' | 'SUPPLIER_DEBIT_NOTE' | 'SETTLEMENT_RECONCILE' | 'BANK_MUTATION_RECONCILE' | 'CUSTOMER_PREORDER_DP';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -2125,6 +2126,43 @@ export interface EnterpriseSettingsConfig {
     autoGeneratePdfQuote: boolean;
     termsAndConditionsText: string;
   };
+  erpSettings?: ErpConfigurationSettings;
+}
+
+export interface ErpChannelRateConfig {
+  markupPct: number;
+  commissionPct: number;
+}
+
+export interface ErpConfigurationSettings {
+  // Indonesian Tax & Coretax
+  activeVatRatePct: number;
+  pph22RatePct: number;
+  pph23RatePct: number;
+  companyNpwp: string;
+  efakturSignerName: string;
+  // POS Treasury, MDR & Quick-Commerce Rules
+  safeDropThresholdIDR: number;
+  pettyCashMaxWithoutPinIDR: number;
+  qrisMdrPct: number;
+  edcCardMdrPct: number;
+  ojolChannelRates: {
+    grabMart: ErpChannelRateConfig;
+    goMart: ErpChannelRateConfig;
+    shopeeFood: ErpChannelRateConfig;
+  };
+  // Warehouse, Cold-Chain & Halal Compliance
+  naturalMoistureShrinkageTolerancePct: number;
+  halalCertExpiryWarningDays: number;
+  threeWayMatchTolerancePct: number;
+  // CRM Loyalty & Accounting Period Lock
+  loyaltySpendPerPointIDR: number;
+  loyaltyPointRedeemValueIDR: number;
+  goldTierThresholdIDR: number;
+  platinumTierThresholdIDR: number;
+  accountingLockBeforeDate: string; // Optional YYYY-MM-DD preventing backdated GL mutations
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 export interface LandedCostRecord {
@@ -2731,7 +2769,10 @@ export type CommunicationDocType =
   | 'SURAT_JALAN'
   | 'RECALL_ALERT'
   | 'CRM_CAMPAIGN'
-  | 'KASBON_BILLING';
+  | 'KASBON_BILLING'
+  | 'SUBSTITUTION_NOTICE'
+  | 'CLAIM_VOUCHER'
+  | 'STANDING_ORDER';
 
 export type SmtpProviderPreset =
   | 'custom'
@@ -3520,7 +3561,7 @@ export interface PphWithholdingRecord {
   id: string;
   timestamp: string;
   pphType: PphWithholdingType;
-  ratePercent: 1.5 | 2;
+  ratePercent: number;
   counterpartyName: string;
   counterpartyNpwp: string;
   invoiceRef: string;
@@ -3708,6 +3749,88 @@ export interface ExecutiveFinancialHealthSummary {
     openVendorBillsCount: number;
   };
 }
+
+// =============================================================
+// INDONESIAN GROCERY CUSTOMER-CENTRIC BLIND SPOT PACK TYPES
+// =============================================================
+export type StandingOrderType = 'WEEKLY_SUBSCRIPTION' | 'SEASONAL_PREORDER';
+export type StandingOrderStatus = 'ACTIVE' | 'PAUSED' | 'DUE' | 'CONVERTED' | 'CANCELLED';
+
+export interface StandingOrderItem {
+  sku: string;
+  productName: string;
+  quantity: number;
+  unitPriceIDR: number;
+}
+
+export interface StandingOrderRecord {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  type: StandingOrderType;
+  title: string;
+  crmAccountId?: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  deliveryAddress: string;
+  storeId: string;
+  storeName: string;
+  scheduleDays: string[];
+  targetFulfillmentDate?: string;
+  items: StandingOrderItem[];
+  estimatedTotalIDR: number;
+  downPaymentIDR: number;
+  dpPaid: boolean;
+  dpMethod?: 'CASH' | 'BANK_QRIS';
+  dpGlEntryIds: string[];
+  status: StandingOrderStatus;
+  lastTriggeredAt?: string;
+  lastFulfillmentOrderId?: string;
+  triggerCount: number;
+  notes?: string;
+}
+
+export type CustomerClaimIssueCategory =
+  | 'DAMAGED_IN_TRANSIT'
+  | 'SPOILED_NEAR_EXPIRY'
+  | 'MISSING_ITEM'
+  | 'QUALITY_MISMATCH';
+
+export interface CustomerClaimRecord {
+  id: string;
+  createdAt: string;
+  referenceId: string;
+  crmAccountId?: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  storeId: string;
+  storeName: string;
+  sku?: string;
+  productName?: string;
+  issueCategory: CustomerClaimIssueCategory;
+  compensationAmountIDR: number;
+  voucherCode: string;
+  voucherRuleId: string;
+  dispatchChannel: 'whatsapp' | 'email' | 'both';
+  waMeUrl?: string;
+  notes?: string;
+  recordedBy: string;
+}
+
+export interface StorefrontProductTrustMeta {
+  sku: string;
+  productId?: string;
+  halalStatus?: 'HALAL_CERTIFIED' | 'NON_HALAL' | 'FRESH_UNPROCESSED';
+  bpjphCertNumber?: string;
+  nearestBatchDaysUntilExpiry: number | null;
+  hasFreshnessGuarantee: boolean;
+  activeMarkdownPercent: number;
+  basePriceIDR: number;
+  discountedPriceIDR?: number;
+}
+
 
 
 

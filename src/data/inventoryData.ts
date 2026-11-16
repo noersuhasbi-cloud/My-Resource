@@ -1746,7 +1746,33 @@ export const INITIAL_ENTERPRISE_SETTINGS: EnterpriseSettingsConfig = {
     autoGeneratePdfQuote: true,
     termsAndConditionsText: 'Prices quoted are valid for 14 calendar days. Perishable goods subject to daily harvest availability. Payment of 50% deposit confirms warehouse allocation; balance due upon delivery receipt.',
   },
+  erpSettings: {
+    activeVatRatePct: 11,
+    pph22RatePct: 1.5,
+    pph23RatePct: 2.0,
+    companyNpwp: '01.308.449.2-007.000',
+    efakturSignerName: 'Siti Rahmawati (Tax Director)',
+    safeDropThresholdIDR: 5000000,
+    pettyCashMaxWithoutPinIDR: 250000,
+    qrisMdrPct: 0.7,
+    edcCardMdrPct: 1.0,
+    ojolChannelRates: {
+      grabMart: { markupPct: 15, commissionPct: 12 },
+      goMart: { markupPct: 15, commissionPct: 12 },
+      shopeeFood: { markupPct: 18, commissionPct: 15 },
+    },
+    naturalMoistureShrinkageTolerancePct: 2.5,
+    halalCertExpiryWarningDays: 30,
+    threeWayMatchTolerancePct: 0.5,
+    loyaltySpendPerPointIDR: 10000,
+    loyaltyPointRedeemValueIDR: 100,
+    goldTierThresholdIDR: 5000000,
+    platinumTierThresholdIDR: 20000000,
+    accountingLockBeforeDate: '',
+  },
 };
+
+export const INITIAL_ERP_SETTINGS = INITIAL_ENTERPRISE_SETTINGS.erpSettings!;
 
 export const INITIAL_LANDED_COSTS: LandedCostRecord[] = [
   {

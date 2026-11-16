@@ -44,6 +44,9 @@ const DOC_TYPE_LABELS: Record<CommunicationDocType, string> = {
   RECALL_ALERT: 'BPOM / HACCP Batch Recall Alert',
   CRM_CAMPAIGN: 'CRM Promo & Restock Campaign',
   KASBON_BILLING: 'Tagihan Kasbon Warung (WA Billing)',
+  SUBSTITUTION_NOTICE: 'Out-of-Stock Substitution Notice',
+  CLAIM_VOUCHER: 'Customer Claim Instant e-Voucher',
+  STANDING_ORDER: 'Standing Order / Pre-Order Confirmation',
 };
 
 function normalizeIndoPhonePreview(raw: string): string {

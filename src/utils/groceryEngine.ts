@@ -210,10 +210,36 @@ export function parseVariableWeightBarcode(
   if (matchCustom) {
     const skuCode = matchCustom[1];
     const grams = parseInt(matchCustom[2], 10);
+    if (!Number.isFinite(grams) || grams <= 0) {
+      return {
+        rawBarcode: clean,
+        isVariableWeight: true,
+        prefix: 'SCALE',
+        skuOrPlu: skuCode,
+        netWeightGrams: 0,
+        netWeightKg: 0,
+        matchedSku: undefined,
+        calculatedLineTotal: 0,
+        error: `Invalid weight (${grams || 0}g) encoded in scale barcode "${clean}".`,
+      };
+    }
     const matched = catalog.find(
       (p) => p.sku.toLowerCase() === skuCode.toLowerCase() || p.barcode.toLowerCase() === skuCode.toLowerCase()
     );
-    const pricePerKg = matched?.pricePerKg || matched?.sellingPrice || 100000;
+    if (!matched) {
+      return {
+        rawBarcode: clean,
+        isVariableWeight: true,
+        prefix: 'SCALE',
+        skuOrPlu: skuCode,
+        netWeightGrams: grams,
+        netWeightKg: Number((grams / 1000).toFixed(3)),
+        matchedSku: undefined,
+        calculatedLineTotal: 0,
+        error: `Unknown scale SKU "${skuCode}" — not found in store catalog.`,
+      };
+    }
+    const pricePerKg = matched.pricePerKg || matched.sellingPrice || 100000;
     const kg = grams / 1000;
     return {
       rawBarcode: clean,
@@ -222,28 +248,51 @@ export function parseVariableWeightBarcode(
       skuOrPlu: skuCode,
       netWeightGrams: grams,
       netWeightKg: Number(kg.toFixed(3)),
-      matchedSku: matched?.sku,
+      matchedSku: matched.sku,
       calculatedLineTotal: Math.round(pricePerKg * kg),
     };
   }
 
-  // 2. Standard Retail EAN-13 Variable Measure Barcode: 12 or 13 digits starting with 02 or 20-29
-  // Supports Indonesian 13-digit standard: [2-Digit Prefix (21)] + [5-Digit PLU] + [5-Digit Weight Grams] + [1 Checksum]
-  // Plus legacy 12-digit [2][4][5][1] format for full backward compatibility.
+  // 2. Standard Retail EAN-13 / Legacy Variable Measure Barcode: 11, 12, or 13 digits starting with 02 or 20-29
+  // Supports Indonesian 13-digit standard: [2-Digit Prefix (20-29/02)] + [5-Digit PLU] + [5-Digit Weight Grams] + [1 Checksum]
+  // Plus legacy 12-digit [2][4][5][1] and 11-digit [2][4][4][1] preset formats.
   const isEan13Variable =
-    (clean.length === 12 || clean.length === 13) &&
-    /^(02|20|21|22|23|24|25|26|27|28|29)\d+$/.test(clean);
+    (clean.length === 11 || clean.length === 12 || clean.length === 13) &&
+    /^(02|2[0-9])\d+$/.test(clean);
 
   if (isEan13Variable) {
     const prefix = clean.slice(0, 2);
-    const is13Digit5Plu = clean.length === 13;
-    const pluCode = is13Digit5Plu ? clean.slice(2, 7) : clean.slice(2, 6);
-    const weightOrPriceStr = is13Digit5Plu ? clean.slice(7, 12) : clean.slice(6, 11);
+    const pluCode = clean.length === 13 ? clean.slice(2, 7) : clean.slice(2, 6);
+    const weightOrPriceStr =
+      clean.length === 13
+        ? clean.slice(7, 12)
+        : clean.length === 12
+        ? clean.slice(6, 11)
+        : clean.slice(6, 10);
     const weightGrams = parseInt(weightOrPriceStr, 10);
 
-    // Map 5-digit PLU (e.g. 00105 -> PRD-005 or SKU-PRD-005) or 4-digit PLU to catalog product
+    if (!Number.isFinite(weightGrams) || weightGrams <= 0) {
+      return {
+        rawBarcode: clean,
+        isVariableWeight: true,
+        prefix,
+        skuOrPlu: pluCode,
+        netWeightGrams: 0,
+        netWeightKg: 0,
+        matchedSku: undefined,
+        calculatedLineTotal: 0,
+        error: `Invalid scale weight (0g) on barcode "${clean}". Re-weigh item at scale.`,
+      };
+    }
+
+    // Map 5-digit PLU (e.g. 00105 -> SKU-PRD-005) or 4-digit PLU (e.g. 0001 -> SKU-PRD-001) to catalog product
     const pluTrimmed = pluCode.replace(/^0+/, '');
     const explicitPluSkuMap: Record<string, string> = {
+      '0001': 'SKU-PRD-001',
+      '0002': 'SKU-PRD-002',
+      '0003': 'SKU-PRD-003',
+      '0004': 'SKU-PRD-004',
+      '0005': 'SKU-PRD-005',
       '00101': 'SKU-PRD-001',
       '00102': 'SKU-PRD-002',
       '00103': 'SKU-PRD-003',
@@ -262,13 +311,31 @@ export function parseVariableWeightBarcode(
 
     const matched =
       (mappedSku ? catalog.find((p) => p.sku === mappedSku) : undefined) ||
-      catalog.find((p) => p.barcode.includes(pluCode)) ||
+      catalog.find((p) => p.barcode === clean || p.barcode.includes(pluCode)) ||
       catalog.find((p) => p.sku.includes(pluCode)) ||
-      (pluTrimmed ? catalog.find((p) => p.sku.endsWith(pluTrimmed.slice(-3))) : undefined) ||
-      catalog.find((p) => p.isWeighted) ||
-      catalog[0];
+      (pluTrimmed && /^\d+$/.test(pluTrimmed)
+        ? catalog.find((p) => {
+            const skuDigits = p.sku.replace(/\D/g, '');
+            const padded3 = pluTrimmed.padStart(3, '0');
+            return skuDigits === pluTrimmed.padStart(skuDigits.length, '0') || p.sku.endsWith(`-${padded3}`);
+          })
+        : undefined);
 
-    const pricePerKg = matched?.pricePerKg || (matched ? matched.sellingPrice * 2 : 120000);
+    if (!matched) {
+      return {
+        rawBarcode: clean,
+        isVariableWeight: true,
+        prefix,
+        skuOrPlu: pluCode,
+        netWeightGrams: weightGrams,
+        netWeightKg: Number((weightGrams / 1000).toFixed(3)),
+        matchedSku: undefined,
+        calculatedLineTotal: 0,
+        error: `Unknown scale PLU "${pluCode}" — SKU not found in outlet catalog.`,
+      };
+    }
+
+    const pricePerKg = matched.pricePerKg || matched.sellingPrice * 2;
     const kg = weightGrams / 1000;
     const calculatedLineTotal = Math.round(pricePerKg * kg);
 
@@ -279,7 +346,7 @@ export function parseVariableWeightBarcode(
       skuOrPlu: pluCode,
       netWeightGrams: weightGrams,
       netWeightKg: Number(kg.toFixed(3)),
-      matchedSku: matched?.sku,
+      matchedSku: matched.sku,
       calculatedLineTotal,
     };
   }

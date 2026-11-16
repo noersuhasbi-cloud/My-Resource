@@ -28,9 +28,11 @@ import type {
   BranchMonitorResponse,
   OperatorBranchAssignment,
   UserRole,
+  ErpConfigurationSettings,
 } from '../../types/index.ts';
 import {
   INITIAL_ENTERPRISE_SETTINGS,
+  INITIAL_ERP_SETTINGS,
   INITIAL_LANDED_COSTS,
   INITIAL_WAREHOUSE_BINS,
   INITIAL_WAREHOUSE_ROUTES,
@@ -187,6 +189,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
   // Enterprise Settings & Related Logistics State
   const [enterpriseSettings, setEnterpriseSettings] = useState<EnterpriseSettingsConfig>(INITIAL_ENTERPRISE_SETTINGS);
+  const [erpConfigDraft, setErpConfigDraft] = useState<ErpConfigurationSettings>(INITIAL_ERP_SETTINGS);
+  const [isSavingErpConfig, setIsSavingErpConfig] = useState<boolean>(false);
   const [landedCosts, setLandedCosts] = useState<LandedCostRecord[]>(INITIAL_LANDED_COSTS);
   const [warehouseBins, setWarehouseBins] = useState<WarehouseBinLocation[]>(INITIAL_WAREHOUSE_BINS);
   const [warehouseRoutes, setWarehouseRoutes] = useState<WarehouseMultiStepRoute[]>(INITIAL_WAREHOUSE_ROUTES);
@@ -194,7 +198,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptRecord[]>([]);
   const [isSavingEnterprise, setIsSavingEnterprise] = useState<boolean>(false);
-  const [enterpriseQuickFilter, setEnterpriseQuickFilter] = useState<'ALL' | 'VALUATION' | 'WAREHOUSE' | 'ANALYTICS' | 'QUOTATIONS' | 'MATCHING' | 'TAX'>('ALL');
+  const [enterpriseQuickFilter, setEnterpriseQuickFilter] = useState<'ALL' | 'VALUATION' | 'WAREHOUSE' | 'ANALYTICS' | 'QUOTATIONS' | 'MATCHING' | 'TAX' | 'ERP_CONFIG'>('ALL');
 
   // Loading states
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -366,7 +370,35 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       if (rulesRes) setApprovalRules(rulesRes);
       if (queueRes) setApprovalQueue(queueRes);
       if (promoRes) setPromotions(promoRes);
-      if (entRes) setEnterpriseSettings(entRes);
+      if (entRes) {
+        setEnterpriseSettings(entRes);
+        if (entRes.erpSettings) {
+          setErpConfigDraft({
+            ...INITIAL_ERP_SETTINGS,
+            ...entRes.erpSettings,
+            ojolChannelRates: {
+              ...INITIAL_ERP_SETTINGS.ojolChannelRates,
+              ...(entRes.erpSettings.ojolChannelRates || {}),
+            },
+          });
+        }
+      }
+      apiClient
+        .getErpSettingsConfig()
+        .then((cfgRes) => {
+          const cfg = cfgRes?.config || cfgRes?.erpSettings;
+          if (cfg) {
+            setErpConfigDraft({
+              ...INITIAL_ERP_SETTINGS,
+              ...cfg,
+              ojolChannelRates: {
+                ...INITIAL_ERP_SETTINGS.ojolChannelRates,
+                ...(cfg.ojolChannelRates || {}),
+              },
+            });
+          }
+        })
+        .catch(() => {});
       if (lcRes) setLandedCosts(lcRes);
       if (binsRes) setWarehouseBins(binsRes);
       if (routesRes) setWarehouseRoutes(routesRes);
@@ -463,6 +495,9 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       const res = await apiClient.updateEnterpriseSettings(updated);
       if (res.success && res.settings) {
         setEnterpriseSettings(res.settings);
+        if (res.settings.erpSettings) {
+          setErpConfigDraft((prev) => ({ ...prev, ...res.settings.erpSettings }));
+        }
         onShowToast('Enterprise Settings Updated', 'System configurations synchronized across all modules.');
       }
     } catch (err: unknown) {
@@ -470,6 +505,31 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       onShowToast('Error', msg);
     } finally {
       setIsSavingEnterprise(false);
+    }
+  };
+
+  const handleSaveErpConfig = async () => {
+    setIsSavingErpConfig(true);
+    try {
+      const res = await apiClient.updateErpSettingsConfig(erpConfigDraft);
+      if (res.success) {
+        setErpConfigDraft({
+          ...INITIAL_ERP_SETTINGS,
+          ...(res.config || res.erpSettings),
+          ojolChannelRates: {
+            ...INITIAL_ERP_SETTINGS.ojolChannelRates,
+            ...((res.config || res.erpSettings)?.ojolChannelRates || {}),
+          },
+        });
+        if (res.settings) setEnterpriseSettings(res.settings);
+        onShowToast('ERP Policy Parameters Saved', res.message || 'Dynamic tax, POS treasury, compliance, and period lock parameters updated.');
+        onRefreshData?.();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Save ERP Parameters Failed', msg);
+    } finally {
+      setIsSavingErpConfig(false);
     }
   };
 
@@ -1255,6 +1315,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 { id: 'QUOTATIONS', label: 'Quotations & Policies' },
                 { id: 'MATCHING', label: '3-Way Matching' },
                 { id: 'TAX', label: 'Indonesian Tax & NPWP' },
+                { id: 'ERP_CONFIG', label: 'ERP Rules & Period Lock' },
               ] as const
             ).map((filter) => (
               <button
@@ -1841,6 +1902,457 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'TAX') && (
               <div className="lg:col-span-2">
                 <IndonesianTaxRulesPanel theme={theme} canEdit={isSuperAdmin} onShowToast={onShowToast} />
+              </div>
+            )}
+
+            {/* SECTION 7: RETAIL & WHOLESALE ERP PARAMETERS (TAX, TREASURY, COLD-CHAIN, LOYALTY & PERIOD LOCK) */}
+            {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'ERP_CONFIG') && (
+              <div className={`${cardClass} p-5 sm:p-6 space-y-5 lg:col-span-2`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-gray-100 dark:border-slate-800/80">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
+                      <Sliders className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100">
+                        Retail &amp; Wholesale ERP Policy Parameters
+                      </h3>
+                      <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                        Dynamic Coretax rates, POS Safe Drop &amp; MDR fees, Ojol markups, Halal/shrinkage tolerances, Loyalty ratios &amp; Accounting Period Lock
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isReadOnlyPolicyRole || isSavingErpConfig}
+                    onClick={handleSaveErpConfig}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSavingErpConfig ? 'Saving Parameters...' : 'Save ERP Parameters'}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Group 1: Indonesian Tax & Coretax */}
+                  <div className={`${subCardClass} space-y-3`}>
+                    <div className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                      1. Indonesian Tax &amp; Coretax
+                    </div>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Active PPN (%)</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="25"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.activeVatRatePct}
+                          onChange={(e) => setErpConfigDraft((p) => ({ ...p, activeVatRatePct: Number(e.target.value) || 0 }))}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>PPh 22 (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="15"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.pph22RatePct}
+                          onChange={(e) => setErpConfigDraft((p) => ({ ...p, pph22RatePct: Number(e.target.value) || 0 }))}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>PPh 23 (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="15"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.pph23RatePct}
+                          onChange={(e) => setErpConfigDraft((p) => ({ ...p, pph23RatePct: Number(e.target.value) || 0 }))}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Company NPWP (16-Digit)</label>
+                        <input
+                          type="text"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.companyNpwp}
+                          onChange={(e) => setErpConfigDraft((p) => ({ ...p, companyNpwp: e.target.value }))}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>e-Faktur Signer</label>
+                        <input
+                          type="text"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.efakturSignerName}
+                          onChange={(e) => setErpConfigDraft((p) => ({ ...p, efakturSignerName: e.target.value }))}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Group 2: POS Treasury, MDR & Quick-Commerce */}
+                  <div className={`${subCardClass} space-y-3`}>
+                    <div className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                      2. POS Treasury, MDR &amp; Quick-Commerce
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Safe Drop Threshold (IDR)</label>
+                        <input
+                          type="number"
+                          step="100000"
+                          min="100000"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.safeDropThresholdIDR}
+                          onChange={(e) => setErpConfigDraft((p) => ({ ...p, safeDropThresholdIDR: Math.max(0, Number(e.target.value) || 0) }))}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Paid-Out Max No PIN (IDR)</label>
+                        <input
+                          type="number"
+                          step="25000"
+                          min="0"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.pettyCashMaxWithoutPinIDR}
+                          onChange={(e) => setErpConfigDraft((p) => ({ ...p, pettyCashMaxWithoutPinIDR: Math.max(0, Number(e.target.value) || 0) }))}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className={labelClass}>QRIS MDR (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="10"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.qrisMdrPct}
+                          onChange={(e) => setErpConfigDraft((p) => ({ ...p, qrisMdrPct: Math.max(0, Number(e.target.value) || 0) }))}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>EDC Card MDR (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="10"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.edcCardMdrPct}
+                          onChange={(e) => setErpConfigDraft((p) => ({ ...p, edcCardMdrPct: Math.max(0, Number(e.target.value) || 0) }))}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-[11px]">
+                      <div>
+                        <label className={labelClass}>GrabMart Mkp/Comm %</label>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            max="50"
+                            disabled={isReadOnlyPolicyRole}
+                            value={erpConfigDraft.ojolChannelRates.grabMart.markupPct}
+                            onChange={(e) =>
+                              setErpConfigDraft((p) => ({
+                                ...p,
+                                ojolChannelRates: {
+                                  ...p.ojolChannelRates,
+                                  grabMart: { ...p.ojolChannelRates.grabMart, markupPct: Number(e.target.value) || 0 },
+                                },
+                              }))
+                            }
+                            className={`${inputClass} border font-mono px-2`}
+                            title="GrabMart Markup %"
+                          />
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            max="50"
+                            disabled={isReadOnlyPolicyRole}
+                            value={erpConfigDraft.ojolChannelRates.grabMart.commissionPct}
+                            onChange={(e) =>
+                              setErpConfigDraft((p) => ({
+                                ...p,
+                                ojolChannelRates: {
+                                  ...p.ojolChannelRates,
+                                  grabMart: { ...p.ojolChannelRates.grabMart, commissionPct: Number(e.target.value) || 0 },
+                                },
+                              }))
+                            }
+                            className={`${inputClass} border font-mono px-2`}
+                            title="GrabMart Commission %"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelClass}>GoMart Mkp/Comm %</label>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            max="50"
+                            disabled={isReadOnlyPolicyRole}
+                            value={erpConfigDraft.ojolChannelRates.goMart.markupPct}
+                            onChange={(e) =>
+                              setErpConfigDraft((p) => ({
+                                ...p,
+                                ojolChannelRates: {
+                                  ...p.ojolChannelRates,
+                                  goMart: { ...p.ojolChannelRates.goMart, markupPct: Number(e.target.value) || 0 },
+                                },
+                              }))
+                            }
+                            className={`${inputClass} border font-mono px-2`}
+                            title="GoMart Markup %"
+                          />
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            max="50"
+                            disabled={isReadOnlyPolicyRole}
+                            value={erpConfigDraft.ojolChannelRates.goMart.commissionPct}
+                            onChange={(e) =>
+                              setErpConfigDraft((p) => ({
+                                ...p,
+                                ojolChannelRates: {
+                                  ...p.ojolChannelRates,
+                                  goMart: { ...p.ojolChannelRates.goMart, commissionPct: Number(e.target.value) || 0 },
+                                },
+                              }))
+                            }
+                            className={`${inputClass} border font-mono px-2`}
+                            title="GoMart Commission %"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelClass}>ShopeeFood Mkp/Comm %</label>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            max="50"
+                            disabled={isReadOnlyPolicyRole}
+                            value={erpConfigDraft.ojolChannelRates.shopeeFood.markupPct}
+                            onChange={(e) =>
+                              setErpConfigDraft((p) => ({
+                                ...p,
+                                ojolChannelRates: {
+                                  ...p.ojolChannelRates,
+                                  shopeeFood: { ...p.ojolChannelRates.shopeeFood, markupPct: Number(e.target.value) || 0 },
+                                },
+                              }))
+                            }
+                            className={`${inputClass} border font-mono px-2`}
+                            title="ShopeeFood Markup %"
+                          />
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            max="50"
+                            disabled={isReadOnlyPolicyRole}
+                            value={erpConfigDraft.ojolChannelRates.shopeeFood.commissionPct}
+                            onChange={(e) =>
+                              setErpConfigDraft((p) => ({
+                                ...p,
+                                ojolChannelRates: {
+                                  ...p.ojolChannelRates,
+                                  shopeeFood: { ...p.ojolChannelRates.shopeeFood, commissionPct: Number(e.target.value) || 0 },
+                                },
+                              }))
+                            }
+                            className={`${inputClass} border font-mono px-2`}
+                            title="ShopeeFood Commission %"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Group 3: Warehouse, Cold-Chain & Halal Compliance */}
+                  <div className={`${subCardClass} space-y-3`}>
+                    <div className="text-xs font-bold text-cyan-700 dark:text-cyan-400 uppercase tracking-wider">
+                      3. Warehouse, Cold-Chain &amp; Halal Compliance
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Susut Timbang Cap (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          max="15"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.naturalMoistureShrinkageTolerancePct}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              naturalMoistureShrinkageTolerancePct: Math.max(0.1, Number(e.target.value) || 2.5),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>BPJPH Alert (Days)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="365"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.halalCertExpiryWarningDays}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              halalCertExpiryWarningDays: Math.max(1, Number(e.target.value) || 30),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>3-Way Tolerance (%)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="10"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.threeWayMatchTolerancePct}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              threeWayMatchTolerancePct: Math.max(0, Number(e.target.value) || 0),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Group 4: CRM Loyalty & Accounting Period Lock */}
+                  <div className={`${subCardClass} space-y-3`}>
+                    <div className="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
+                      4. CRM Loyalty &amp; Accounting Period Lock
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Spend / 1 Pt (IDR)</label>
+                        <input
+                          type="number"
+                          step="1000"
+                          min="1000"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.loyaltySpendPerPointIDR}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              loyaltySpendPerPointIDR: Math.max(100, Number(e.target.value) || 10000),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Redeem / Pt (IDR)</label>
+                        <input
+                          type="number"
+                          step="10"
+                          min="1"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.loyaltyPointRedeemValueIDR}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              loyaltyPointRedeemValueIDR: Math.max(1, Number(e.target.value) || 100),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Period Lock Before</label>
+                        <input
+                          type="date"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.accountingLockBeforeDate || ''}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              accountingLockBeforeDate: e.target.value,
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className={labelClass}>GOLD Tier Threshold (IDR)</label>
+                        <input
+                          type="number"
+                          step="500000"
+                          min="0"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.goldTierThresholdIDR}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              goldTierThresholdIDR: Math.max(0, Number(e.target.value) || 0),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>PLATINUM Tier Threshold (IDR)</label>
+                        <input
+                          type="number"
+                          step="1000000"
+                          min="0"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.platinumTierThresholdIDR}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              platinumTierThresholdIDR: Math.max(0, Number(e.target.value) || 0),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>

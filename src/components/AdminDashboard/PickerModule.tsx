@@ -87,6 +87,17 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
   const [absorbPriceDifference, setAbsorbPriceDifference] = useState<boolean>(true);
   const [isSubmittingSub, setIsSubmittingSub] = useState<boolean>(false);
   const [isSimulatingCustomerResponse, setIsSimulatingCustomerResponse] = useState<string | null>(null);
+  const [subSuggestions, setSubSuggestions] = useState<
+    Array<{
+      sku: string;
+      productName: string;
+      category: string;
+      sellingPrice: number;
+      availableAtp: number;
+      sameCategory: boolean;
+      priceDelta: number;
+    }>
+  >([]);
 
   // =============================================================
   // GROCERY MODULE: Zone-Based Picking & HACCP Cross-Contamination
@@ -187,6 +198,34 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
       loadPickerData();
     } catch (err) {
       onShowToast('Substitution Prompt Failed', String(err));
+    } finally {
+      setIsSubmittingSub(false);
+    }
+  };
+
+  // Smart OOS Substitution: Swap Reservation & Dispatch WA/Email Notice Immediately
+  const handleExecuteSmartSubstitution = async () => {
+    const activeTargetOrder = subOrder || selectedOrder;
+    if (!activeTargetOrder || !subItem) return;
+    setIsSubmittingSub(true);
+    try {
+      const res = await apiClient.proposeFulfillmentSubstitute(activeTargetOrder.orderId, {
+        itemId: subItem.id,
+        originalSku: subItem.sku,
+        replacementSku: replacementSku || 'AUTO',
+        reason: 'Out of Stock during Cold-Chain Picking',
+        absorbPriceDelta: absorbPriceDifference,
+        channel: promptChannel === 'WhatsApp' ? 'whatsapp' : 'email',
+      });
+      onShowToast(
+        'Substitution Swapped & Buyer Notified',
+        res.message + (res.waMeUrl ? ' (WhatsApp gateway link logged)' : '')
+      );
+      setSubItem(null);
+      setSubOrder(null);
+      loadPickerData();
+    } catch (err: any) {
+      onShowToast('Smart Substitution Failed', err?.message || String(err));
     } finally {
       setIsSubmittingSub(false);
     }
@@ -787,10 +826,24 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
 
                             {!isPicked && !isSubstituted && (
                               <button
-                                onClick={() => {
+                                onClick={async () => {
                                   setSubItem(item);
                                   setSubOrder(selectedOrder);
-                                  setReplacementSku(inventory.find((i) => i.sku !== item.sku)?.sku || 'SKU-PRD-002');
+                                  setSubSuggestions([]);
+                                  const fallbackSku = inventory.find((i) => i.sku !== item.sku)?.sku || 'SKU-PRD-002';
+                                  setReplacementSku(fallbackSku);
+                                  try {
+                                    const sug = await apiClient.getFulfillmentSubstituteSuggestions(
+                                      selectedOrder.orderId,
+                                      item.sku
+                                    );
+                                    if (sug.suggestions.length > 0) {
+                                      setSubSuggestions(sug.suggestions);
+                                      setReplacementSku(sug.suggestions[0].sku);
+                                    }
+                                  } catch {
+                                    // Keep inventory dropdown fallback
+                                  }
                                 }}
                                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                                   isLight
@@ -798,7 +851,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                                     : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
                                 }`}
                               >
-                                Quick Substitution
+                                Propose Substitute
                               </button>
                             )}
 
@@ -1093,7 +1146,9 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold block mb-1 text-slate-800 dark:text-slate-200">Select Replacement Product</label>
+                <label className="font-semibold block mb-1 text-slate-800 dark:text-slate-200">
+                  Select Replacement Product {subSuggestions.length > 0 && '(Smart Same-Category ATP Ranked)'}
+                </label>
                 <select
                   value={replacementSku}
                   onChange={(e) => setReplacementSku(e.target.value)}
@@ -1101,13 +1156,20 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                     isLight ? "bg-white border-slate-300 text-slate-900" : "bg-[#090A0F] border-slate-800/80 text-slate-100"
                   }`}
                 >
-                  {inventory
-                    .filter((i) => i.sku !== subItem.sku)
-                    .map((item, idx) => (
-                      <option key={`${item.sku}-${idx}`} value={item.sku}>
-                        {item.productName} - {formatIDR(item.sellingPrice)} (Stock: {item.currentStock})
-                      </option>
-                    ))}
+                  {subSuggestions.length > 0
+                    ? subSuggestions.map((s) => (
+                        <option key={s.sku} value={s.sku}>
+                          {s.sameCategory ? '★ Same Category · ' : ''}
+                          {s.productName} ({s.sku}) — {formatIDR(s.sellingPrice)} (ATP: {s.availableAtp})
+                        </option>
+                      ))
+                    : inventory
+                        .filter((i) => i.sku !== subItem.sku)
+                        .map((item, idx) => (
+                          <option key={`${item.sku}-${idx}`} value={item.sku}>
+                            {item.productName} - {formatIDR(item.sellingPrice)} (Stock: {item.currentStock})
+                          </option>
+                        ))}
                 </select>
               </div>
 
@@ -1158,7 +1220,7 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                 &ldquo;GroceMart Notice: We ran out of {subItem.productName}. We suggested upgrading you to {targetReplacementItem?.productName || replacementSku} {absorbPriceDifference ? 'at no additional cost' : `with ${formatIDR(priceDelta)} difference`}. Tap to approve.&rdquo;
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2 flex-wrap">
                 <button
                   type="button"
                   onClick={() => setSubItem(null)}
@@ -1170,10 +1232,19 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
                   type="button"
                   disabled={isSubmittingSub}
                   onClick={handleDispatchSubstitutionPrompt}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-blue-500/40 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmittingSub ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Dispatch Prompt to Buyer
+                  <Send className="w-3.5 h-3.5" />
+                  Prompt Only
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmittingSub}
+                  onClick={handleExecuteSmartSubstitution}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmittingSub ? <RefreshCw className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+                  Swap Stock &amp; Notify WA
                 </button>
               </div>
             </div>
