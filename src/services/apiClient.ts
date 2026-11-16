@@ -526,6 +526,9 @@ export const apiClient = {
       coldChainLogisticsIDR?: number;
       allocationMethod?: 'BY_QUANTITY' | 'BY_VALUE';
     };
+    unloadingLaborFeeIDR?: number;
+    unloadingFeePayerCoa?: '1011' | '1010' | '2010';
+    capitalizedToLandedCost?: boolean;
   }): Promise<{
     success: boolean;
     goodsReceipt: GoodsReceiptRecord;
@@ -545,6 +548,12 @@ export const apiClient = {
         newUnitCost: number;
         totalLineLandedCost: number;
       }>;
+    };
+    unloadingLaborSummary?: {
+      unloadingLaborFeeIDR: number;
+      capitalizedToLandedCost: boolean;
+      payerCoa: string;
+      glEntryIds: string[];
     };
   }> {
     const res = await fetchApi('/api/admin/procurement/gr/receive-partial', {
@@ -1320,6 +1329,7 @@ export const apiClient = {
 
   async posCheckout(payload: POSTransactionRequest): Promise<{
     success: boolean;
+    alreadySynced?: boolean;
     receipt: POSTransactionReceipt;
     message: string;
   }> {
@@ -1667,11 +1677,14 @@ export const apiClient = {
     departureHub?: string;
     estimatedArrival?: string;
     notifyCustomers?: boolean;
+    driverTripAllowanceIDR?: number;
+    allowancePayerCoa?: '1011' | '1010';
   }): Promise<{
     success: boolean;
     trip: ShipmentQuotaTracking;
     suratJalans: SuratJalanDocument[];
     notificationsSent: number;
+    journalEntryIds?: string[];
     message: string;
   }> {
     const res = await fetchApi('/api/admin/logistics/trips', {
@@ -3754,11 +3767,12 @@ export const apiClient = {
   },
 
   async validatePosPromo(payload: {
-    cartItems: Array<{ sku: string; name?: string; category?: string; quantity: number; unitPrice: number; lineTotal?: number }>;
+    cartItems: Array<{ sku: string; name?: string; category?: string; quantity: number; unitPrice: number; lineTotal?: number; isPromoGimmick?: boolean }>;
     promoCode?: string;
     memberId?: string;
     memberTier?: string;
     simulateHappyHourActive?: boolean;
+    storeId?: string;
   }): Promise<PosValidatePromoResponse> {
     const res = await fetchApi('/api/pos/validate-promo', {
       method: 'POST',
@@ -3767,6 +3781,26 @@ export const apiClient = {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Failed to validate promo / voucher');
+    return data;
+  },
+
+  async updateInventorySkuPrice(payload: {
+    sku: string;
+    sellingPrice: number;
+    wholesaleTiers?: WholesaleVolumeTier[];
+  }): Promise<{
+    success: boolean;
+    item: InventoryItem;
+    priceUpdatedAt: string;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/inventory/sku-price', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to update SKU retail price');
     return data;
   },
 

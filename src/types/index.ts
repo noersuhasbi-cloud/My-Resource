@@ -333,6 +333,8 @@ export interface InventoryItem {
   bpjphExpiryDate?: string;
   bpomRegNumber?: string;
   wholesaleTiers?: WholesaleVolumeTier[];
+  priceUpdatedAt?: string;
+  isPromoGimmick?: boolean;
 }
 
 export type HalalStatus = 'HALAL_CERTIFIED' | 'FRESH_UNPROCESSED' | 'NON_HALAL';
@@ -443,6 +445,9 @@ export interface GoodsReceiptRecord {
   items: GoodsReceiptItem[];
   receiverNotes?: string;
   glEntryId?: string;
+  unloadingLaborFeeIDR?: number;
+  unloadingFeePayerCoa?: '1011' | '1010' | '2010';
+  capitalizedToLandedCost?: boolean;
 }
 
 // -------------------------------------------------------------
@@ -1239,6 +1244,8 @@ export interface POSProductItem {
   originalSellingPrice?: number;
   discountPercent?: number;
   markdownStatus?: 'Marked Down';
+  priceUpdatedAt?: string;
+  isPromoGimmick?: boolean;
 }
 
 export interface POSCartItem {
@@ -1266,6 +1273,7 @@ export interface POSCartItem {
   consignmentSupplier?: string;
   appliedWholesaleTierLabel?: string;
   isManualPriceOverride?: boolean;
+  isPromoGimmick?: boolean;
 }
 
 export type POSPaymentMethod = 'cash' | 'qris' | 'debit_card' | 'credit_card' | 'split';
@@ -1304,6 +1312,8 @@ export interface POSTransactionRequest {
   promoDiscountIDR?: number;
   simulateHappyHourActive?: boolean;
   notes?: string;
+  clientIdempotencyKey?: string;
+  offlineReceiptNumber?: string;
 }
 
 export interface POSTransactionReceipt {
@@ -1343,6 +1353,9 @@ export interface POSTransactionReceipt {
   promoCode?: string;
   appliedPromos?: AppliedPromotionSummary[];
   promoDiscountIDR?: number;
+  clientIdempotencyKey?: string;
+  offlineReceiptNumber?: string;
+  offlineSynced?: boolean;
 }
 
 // -------------------------------------------------------------
@@ -1661,6 +1674,8 @@ export interface ShipmentQuotaTracking {
   coldChainCompliant?: boolean;
   coldChainAdvisory?: string;
   customerNotificationsSent?: number;
+  driverTripAllowanceIDR?: number;
+  allowancePayerCoa?: '1011' | '1010';
 }
 
 // =============================================================
@@ -1956,7 +1971,8 @@ export type PromotionType =
   | 'PERCENTAGE_DISCOUNT'
   | 'FIXED_DISCOUNT'
   | 'MEMBER_TIER'
-  | 'CATEGORY_BUNDLE';
+  | 'CATEGORY_BUNDLE'
+  | 'PROMO_GIMMICK';
 
 export type MemberLoyaltyTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
 
@@ -1978,6 +1994,8 @@ export interface PromotionRule {
   happyHourEnd?: string; // HH:MM (e.g. '21:00')
   simulateHappyHourActive?: boolean;
   memberTier?: MemberLoyaltyTier;
+  gimmickSkuId?: string;
+  gimmickMinSpendIDR?: number;
   active: boolean;
   startDate?: string;
   endDate?: string;
@@ -3509,6 +3527,13 @@ export interface PosValidatePromoResponse {
   appliedPromos: AppliedPromotionSummary[];
   lineDiscounts: Record<string, number>;
   happyHourActive: boolean;
+  freeGimmickItems?: Array<{
+    sku: string;
+    name: string;
+    quantity: number;
+    ruleCode: string;
+    ruleName: string;
+  }>;
 }
 
 // =============================================================

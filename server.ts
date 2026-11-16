@@ -1855,6 +1855,15 @@ function ensureRegulatoryCoaAccounts() {
       balance: 0,
       description: 'Refundable customer advance deposits for Weekly Standing Orders & Seasonal Pre-Orders',
     },
+    {
+      accountCode: '5030',
+      accountName: 'Biaya Bongkar Muat & Distribusi',
+      category: 'Expense',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Unloading labor SPSI (Biaya Bongkar Muat) and driver trip allowances (Uang Jalan Sopir)',
+    },
   ];
   requiredAccounts.forEach((acc) => {
     if (!chartOfAccounts.some((c) => c.accountCode === acc.accountCode)) {
@@ -1916,8 +1925,14 @@ function ensureHalalComplianceMetadata() {
       if (!existing.wholesaleTiers && seed.wholesaleTiers) {
         existing.wholesaleTiers = JSON.parse(JSON.stringify(seed.wholesaleTiers));
       }
+      if (!existing.priceUpdatedAt && seed.priceUpdatedAt) existing.priceUpdatedAt = seed.priceUpdatedAt;
+      if (seed.isPromoGimmick && !existing.isPromoGimmick) existing.isPromoGimmick = true;
     }
   });
+  if (!promotionRulesList.some((r) => r.type === 'PROMO_GIMMICK')) {
+    const gimmickSeed = createInitialPromotionRules().find((r) => r.type === 'PROMO_GIMMICK');
+    if (gimmickSeed) promotionRulesList.push(gimmickSeed);
+  }
   INITIAL_STORE_INVENTORY_TIERS.forEach((seedTier) => {
     const existingTier = storeInventoryTiers.find(
       (t) => t.sku === seedTier.sku && t.storeId === seedTier.storeId
@@ -3579,6 +3594,21 @@ function createInitialPromotionRules(): PromotionRule[] {
       active: true,
       description: 'Exclusive 10% automatic discount for Gold tier cardholders.',
       usageCount: 88,
+    },
+    {
+      id: 'PRM-2026-08',
+      name: 'Hadiah Langsung Sponsor: Gratis Piring Cantik POSM (Min Rp 100.000)',
+      code: 'GIMMICK_PIRING',
+      type: 'PROMO_GIMMICK',
+      targetType: 'ALL',
+      targetValue: 'ALL',
+      gimmickSkuId: 'SKU-POSM-001',
+      gimmickMinSpendIDR: 100000,
+      active: true,
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      description: 'Otomatis gratis 1x Piring Cantik Sponsor POSM (Rp 0 / Bebas PPN) untuk belanja minimal Rp 100.000.',
+      usageCount: 12,
     },
   ];
 }
@@ -5245,6 +5275,7 @@ function evaluatePromosServer(
     memberTier?: string;
     memberId?: string;
     simulateHappyHourActive?: boolean;
+    storeId?: string;
   }
 ): PosValidatePromoResponse {
   const activeRules = promotionRulesList.filter((r) => r.active);
@@ -5260,23 +5291,27 @@ function evaluatePromosServer(
       ? 'SILVER'
       : undefined);
 
-  const normalizedCart = (Array.isArray(rawCartItems) ? rawCartItems : []).map((it: any) => {
-    const sku = String(it.sku || it.product?.sku || '').trim();
-    const inv = inventoryList.find((i) => i.sku === sku);
-    const unitPrice = Math.max(0, roundIDR(Number(it.unitPrice ?? it.product?.price ?? it.price ?? inv?.sellingPrice ?? 0)));
-    const quantity = Math.max(0, Number(it.quantity) || 0);
-    const lineTotal = roundIDR(
-      Number(it.lineTotal !== undefined ? it.lineTotal : Math.round(unitPrice * quantity))
-    );
-    return {
-      sku,
-      name: String(it.name || it.product?.name || inv?.productName || sku),
-      category: String(it.category || it.product?.category || inv?.category || 'produce'),
-      quantity,
-      unitPrice,
-      lineTotal,
-    };
-  });
+  const normalizedCart = (Array.isArray(rawCartItems) ? rawCartItems : [])
+    .filter((it: any) => !it?.isPromoGimmick)
+    .map((it: any) => {
+      const sku = String(it.sku || it.product?.sku || '').trim();
+      const inv = inventoryList.find((i) => i.sku === sku);
+      const unitPrice = Math.max(0, roundIDR(Number(it.unitPrice ?? it.product?.price ?? it.price ?? inv?.sellingPrice ?? 0)));
+      const quantity = Math.max(0, Number(it.quantity) || 0);
+      const lineTotal = roundIDR(
+        Number(it.lineTotal !== undefined ? it.lineTotal : Math.round(unitPrice * quantity))
+      );
+      return {
+        sku,
+        name: String(it.name || it.product?.name || inv?.productName || sku),
+        category: String(it.category || it.product?.category || inv?.category || 'produce'),
+        quantity,
+        unitPrice,
+        lineTotal,
+        isPromoGimmick: Boolean(inv?.isPromoGimmick),
+      };
+    })
+    .filter((it) => !it.isPromoGimmick);
 
   const cartSubtotal = roundIDR(normalizedCart.reduce((sum, it) => sum + it.lineTotal, 0));
   let totalPromoDiscountIDR = 0;
@@ -5498,6 +5533,46 @@ function evaluatePromosServer(
   }
 
   totalPromoDiscountIDR = Math.min(cartSubtotal, roundIDR(totalPromoDiscountIDR));
+
+  // 6. PRINCIPAL PROMOTIONAL GIMMICK / FREE GIFT INVENTORY (Rp 0 POSM)
+  const freeGimmickItems: NonNullable<PosValidatePromoResponse['freeGimmickItems']> = [];
+  const targetStoreId = options?.storeId || 'store-jkt-senopati';
+  for (const rule of activeRules.filter((r) => r.type === 'PROMO_GIMMICK')) {
+    const gimmickSku = String(rule.gimmickSkuId || '').trim();
+    if (!gimmickSku) continue;
+    const minSpend = Math.max(0, Number(rule.gimmickMinSpendIDR ?? rule.minOrderSubtotalIDR ?? 0));
+    if (cartSubtotal <= 0 || cartSubtotal < minSpend) continue;
+    const gimmickInv = inventoryList.find((i) => i.sku === gimmickSku);
+    const gimmickTier = storeInventoryTiers.find(
+      (t) => t.sku === gimmickSku && (t.storeId === targetStoreId || targetStoreId === 'CONSOLIDATED')
+    );
+    const atp = getSellableNonExpiredAtpStock(gimmickSku, targetStoreId);
+    const availableUnits = atp.hasBatchTracking
+      ? atp.effectiveAtp
+      : gimmickTier
+      ? gimmickTier.availableStock
+      : gimmickInv?.currentStock || 0;
+    if (availableUnits >= 1) {
+      const gimmickName = gimmickInv?.productName || gimmickTier?.productName || gimmickSku;
+      freeGimmickItems.push({
+        sku: gimmickSku,
+        name: gimmickName,
+        quantity: 1,
+        ruleCode: rule.code,
+        ruleName: rule.name,
+      });
+      appliedPromos.push({
+        ruleId: rule.id,
+        ruleCode: rule.code,
+        name: rule.name,
+        discountAmountIDR: 0,
+        promoType: 'PROMO_GIMMICK',
+        appliedSku: gimmickSku,
+        badgeLabel: `GRATIS GIMMICK: ${gimmickName}`,
+      });
+    }
+  }
+
   return {
     valid,
     promoCode: normalizedCoupon,
@@ -5508,6 +5583,7 @@ function evaluatePromosServer(
     appliedPromos,
     lineDiscounts,
     happyHourActive,
+    freeGimmickItems: freeGimmickItems.length > 0 ? freeGimmickItems : undefined,
   };
 }
 
@@ -7653,6 +7729,56 @@ async function startServer() {
 
     res.json({ success: true, item });
   });
+
+  const handleUpdateSkuPrice = (req: Request, res: Response) => {
+    const { sku, sellingPrice, wholesaleTiers } = (req.body || {}) as {
+      sku?: string;
+      sellingPrice?: number;
+      wholesaleTiers?: WholesaleVolumeTier[];
+    };
+    const cleanSku = String(sku || '').trim();
+    const item = inventoryList.find((i) => i.sku === cleanSku);
+    if (!item) {
+      return res.status(404).json({ error: `SKU '${cleanSku}' not found` });
+    }
+    const newPrice = Math.max(0, roundIDR(Number(sellingPrice)));
+    if (!Number.isFinite(Number(sellingPrice)) || newPrice < 0) {
+      return res.status(400).json({ error: 'Valid non-negative sellingPrice is required.' });
+    }
+    const nowIso = new Date().toISOString();
+    item.sellingPrice = newPrice;
+    item.priceUpdatedAt = nowIso;
+    if (Array.isArray(wholesaleTiers)) {
+      item.wholesaleTiers = wholesaleTiers;
+    }
+    storeInventoryTiers.forEach((tier) => {
+      if (tier.sku === cleanSku) {
+        tier.sellingPrice = newPrice;
+        tier.updatedAt = nowIso;
+      }
+    });
+    const prod = PRODUCTS.find((p) => p.id === item.productId || p.name.toLowerCase() === item.productName.toLowerCase());
+    if (prod) {
+      prod.price = newPrice;
+    }
+    appendAuditTrailLog({
+      req,
+      branchScope: 'CONSOLIDATED',
+      module: 'INVENTORY',
+      action: 'SKU_PRICE_UPDATED',
+      referenceId: cleanSku,
+      summary: `Updated retail price for ${cleanSku} (${item.productName}) to Rp ${newPrice.toLocaleString('id-ID')} — queued for Shelf Price Tag batch printing.`,
+    });
+    scheduleStateSave();
+    res.json({
+      success: true,
+      item,
+      priceUpdatedAt: nowIso,
+      message: `Retail price for ${cleanSku} updated to Rp ${newPrice.toLocaleString('id-ID')}.`,
+    });
+  };
+  app.patch('/api/admin/inventory/sku-price', handleUpdateSkuPrice);
+  app.post('/api/admin/inventory/sku-price', handleUpdateSkuPrice);
 
   app.post('/api/admin/inventory/adjust', (req: Request, res: Response) => {
     const { sku, adjustmentQty, reason = 'Inventory Stocktake Variance', storeId = 'store-jkt-senopati' } = req.body;
