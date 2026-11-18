@@ -94,13 +94,13 @@ export const BatchRecallTraceModal: React.FC<BatchRecallTraceModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[210] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-[210] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto gm-backdrop-fade"
       role="dialog"
       aria-modal="true"
       aria-label="BPOM HACCP Batch Recall Traceability"
     >
       <div
-        className={`w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${
+        className={`w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden gm-modal-pop ${
           isLight ? 'bg-white border-stone-200 text-stone-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
         }`}
       >

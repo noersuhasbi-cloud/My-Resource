@@ -59,10 +59,145 @@ button, input, select, textarea {
   animation: modalFadeZoomIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* ========================================================================= */
+/* SILKY-SMOOTH ENTERPRISE MOTION & MENU TRANSITIONS                         */
+/* ========================================================================= */
+@keyframes gmViewEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gm-view-enter {
+  animation: gmViewEnter 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  will-change: opacity, transform;
+}
+
+@keyframes gmTabEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gm-tab-enter {
+  animation: gmTabEnter 160ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  will-change: opacity, transform;
+}
+
+@keyframes gmBackdropFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.gm-backdrop-fade {
+  animation: gmBackdropFade 160ms ease-out both;
+}
+
+@keyframes gmModalPop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.gm-modal-pop {
+  animation: gmModalPop 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+@keyframes gmDrawerSlideRight {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.gm-drawer-right {
+  animation: gmDrawerSlideRight 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+@keyframes gmToastEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.gm-toast-enter {
+  animation: gmToastEnter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+/* Tactile Sidebar, Sub-Tab & Interactive Button Micro-Feedback */
+aside nav button,
+.gm-nav-item,
+.gm-tab-btn {
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+button:not(:disabled) {
+  transition-property: background-color, color, border-color, box-shadow, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+button:not(:disabled):active {
+  transform: scale(0.985);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-in.fade-in.zoom-in-95,
-  .animate-fadeIn {
-    animation: none;
+  .animate-fadeIn,
+  .gm-view-enter,
+  .gm-tab-enter,
+  .gm-backdrop-fade,
+  .gm-modal-pop,
+  .gm-drawer-right,
+  .gm-toast-enter {
+    animation: none !important;
+  }
+
+  aside nav button,
+  .gm-nav-item,
+  .gm-tab-btn,
+  button:not(:disabled) {
+    transition: none !important;
+  }
+
+  button:not(:disabled):active {
+    transform: none !important;
   }
 }
 
@@ -128,6 +263,14 @@ html.dark,
 }
 
 @media print {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+
   html,
   body {
     background: #ffffff !important;

@@ -1102,6 +1102,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* 3. Main Content Area */}
         <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div key={activeTab} className="gm-view-enter">
           {/* ========================================================================= */}
           {/* TAB: POS (POINT OF SALE) / CASHIER STATION */}
           {/* ========================================================================= */}
@@ -1539,8 +1540,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Edit Outlet Modal */}
             {editingOutlet && typeof document !== 'undefined' && createPortal(
-              <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4 my-auto`}>
+              <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto gm-backdrop-fade">
+                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4 my-auto gm-modal-pop`}>
                   <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
                     <h3 className={`text-base font-bold ${textTitle}`}>Edit Schedule: {editingOutlet.storeName}</h3>
                     <button
@@ -1865,8 +1866,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Edit Stock Tier Modal */}
             {editingTier && typeof document !== 'undefined' && createPortal(
-              <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4 my-auto`}>
+              <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto gm-backdrop-fade">
+                <div className={`${modalClass} max-w-lg w-full p-6 space-y-4 my-auto gm-modal-pop`}>
                   <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
                     <div>
                       <h3 className={`text-base font-bold ${textTitle}`}>Item Metadata &amp; Handling Notes</h3>
@@ -1958,8 +1959,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             {/* Audit Adjustment Modal */}
             {adjustingSku && typeof document !== 'undefined' && createPortal(
-              <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-                <div className={`${modalClass} max-w-md w-full p-6 space-y-4 my-auto`}>
+              <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto gm-backdrop-fade">
+                <div className={`${modalClass} max-w-md w-full p-6 space-y-4 my-auto gm-modal-pop`}>
                   <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
                     <h3 className={`text-base font-bold ${textTitle}`}>Physical Stocktake Adjustment</h3>
                     <button
@@ -2371,11 +2372,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onNavigateToQuotations={() => setActiveTab('quotations')}
           />
         )}
+          </div>
 
         {/* State Machine Guard Y.4: Active Delivery In-Flight Store Closure Warning Modal */}
         {closureWarningModal && typeof document !== 'undefined' && createPortal(
-          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-            <div className={`${modalClass} max-w-md w-full p-6 space-y-4 shadow-2xl my-auto`}>
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto gm-backdrop-fade">
+            <div className={`${modalClass} max-w-md w-full p-6 space-y-4 shadow-2xl my-auto gm-modal-pop`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
                   <AlertTriangle className="w-6 h-6" />

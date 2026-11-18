@@ -21,7 +21,7 @@ export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
       {toasts.map((toast, idx) => (
         <div
           key={`${toast.id}-${idx}`}
-          className="pointer-events-auto bg-[#12141C]/95 text-slate-100 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-slate-800/80 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-5 duration-200"
+          className="pointer-events-auto bg-[#12141C]/95 text-slate-100 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-slate-800/80 flex items-center justify-between gap-3 gm-toast-enter"
         >
           <div className="flex items-center gap-3 min-w-0">
             {toast.image ? (

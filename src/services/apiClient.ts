@@ -197,7 +197,7 @@ export function getApiOperatorContext(): { userRole: string; storeId: string; us
 }
 
 async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const retryDelays = [500, 1000, 1500, 2500, 3500];
+  const retryDelays = [400, 800, 1500, 2500, 3500, 5000];
   let lastError: unknown = null;
 
   const headers = new Headers(init?.headers || {});
@@ -207,7 +207,12 @@ async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<R
     if (!headers.has('x-operator-branch')) headers.set('x-operator-branch', opCtx.storeId || 'ALL');
     if (opCtx.userId && !headers.has('x-operator-id')) headers.set('x-operator-id', opCtx.userId);
   }
-  const finalInit: RequestInit = { ...init, headers };
+  const finalInit: RequestInit = {
+    credentials: init?.credentials ?? 'same-origin',
+    cache: init?.cache ?? 'no-store',
+    ...init,
+    headers,
+  };
 
   for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
     try {

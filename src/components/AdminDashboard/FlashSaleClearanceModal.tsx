@@ -166,9 +166,9 @@ export const FlashSaleClearanceModal: React.FC<FlashSaleClearanceModalProps> = (
   };
 
   return createPortal(
-    <div className={`${theme === 'dark' ? 'dark' : ''} fixed inset-0 z-[120] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto`}>
+    <div className={`${theme === 'dark' ? 'dark' : ''} fixed inset-0 z-[120] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto gm-backdrop-fade`}>
       <div
-        className="max-w-lg w-full rounded-2xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] text-slate-900 dark:text-slate-100 p-5 sm:p-6 space-y-4 shadow-2xl my-auto transition-colors animate-in fade-in zoom-in-95 duration-200"
+        className="max-w-lg w-full rounded-2xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] text-slate-900 dark:text-slate-100 p-5 sm:p-6 space-y-4 shadow-2xl my-auto transition-colors gm-modal-pop"
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">

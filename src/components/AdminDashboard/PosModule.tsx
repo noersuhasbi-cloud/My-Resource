@@ -1930,11 +1930,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
       {scalingProduct &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
             onClick={() => setScalingProduct(null)}
           >
             <div
-              className={`w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
+              className={`w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop ${
                 isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
               onClick={(e) => e.stopPropagation()}
@@ -2071,11 +2071,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
       {isTenderModalOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
             onClick={() => setIsTenderModalOpen(false)}
           >
             <div
-              className={`w-full max-w-lg rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto animate-in zoom-in-95 ${
+              className={`w-full max-w-lg rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop ${
                 isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
               onClick={(e) => e.stopPropagation()}
@@ -2382,11 +2382,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
       {completedReceipt &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto print:hidden"
+            className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto print:hidden gm-backdrop-fade"
             onClick={() => setCompletedReceipt(null)}
           >
             <div
-              className="w-full max-w-sm rounded-2xl bg-white text-slate-900 border border-slate-200 p-6 shadow-2xl space-y-4 font-mono text-xs my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto animate-in zoom-in-95"
+              className="w-full max-w-sm rounded-2xl bg-white text-slate-900 border border-slate-200 p-6 shadow-2xl space-y-4 font-mono text-xs my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -2669,9 +2669,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
       {/* 6. RECENT TRANSACTIONS DRAWER */}
       {isHistoryDrawerOpen &&
         createPortal(
-          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex justify-end">
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex justify-end gm-backdrop-fade">
             <div
-              className={`w-full max-w-md h-full p-6 shadow-2xl flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200 ${
+              className={`w-full max-w-md h-full p-6 shadow-2xl flex flex-col justify-between overflow-y-auto gm-drawer-right ${
                 isLight ? 'bg-white text-slate-900' : 'bg-[#12141C] text-slate-100 border-l border-slate-800/80'
               }`}
             >
@@ -2826,11 +2826,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
       {marginOverridePrompt &&
         createPortal(
           <div
-            className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+            className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 gm-backdrop-fade"
             onClick={() => setMarginOverridePrompt(null)}
           >
             <div
-              className={`w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 ${
+              className={`w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 gm-modal-pop ${
                 isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
               onClick={(e) => e.stopPropagation()}

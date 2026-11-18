@@ -6569,6 +6569,8 @@ async function startServer() {
       : NaN;
   const PORT = Number.isFinite(cliPort) ? cliPort : Number.isFinite(prodEnvPort) ? prodEnvPort : 3000;
   const httpServer = http.createServer(app);
+  httpServer.keepAliveTimeout = 65000;
+  httpServer.headersTimeout = 66000;
 
   // Same-origin Firestore WebChannel & RPC streaming proxy (prevents browser/proxy/extension WebChannel blocks)
   app.all('/google.firestore.v1.Firestore/*', (req: Request, res: Response) => {

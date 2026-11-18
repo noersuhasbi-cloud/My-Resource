@@ -136,11 +136,11 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-3xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
+        className={`w-full max-w-3xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-5 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop ${
           isLight
             ? 'bg-white border-gray-200 text-slate-900'
             : 'bg-[#12141C] border-slate-800/80 text-slate-100'
@@ -617,11 +617,11 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
+        className={`w-full max-w-xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop ${
           isLight
             ? 'bg-white border-gray-200 text-slate-900'
             : 'bg-[#12141C] border-slate-800/80 text-slate-100'
@@ -848,11 +848,11 @@ export const PosSafeDropModal: React.FC<PosSafeDropModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-lg rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto ${
+        className={`w-full max-w-lg rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop ${
           isLight
             ? 'bg-white border-gray-200 text-slate-900'
             : 'bg-[#12141C] border-slate-800/80 text-slate-100'

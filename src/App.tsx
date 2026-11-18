@@ -573,7 +573,7 @@ export default function App() {
   // 1. DEDICATED ADMIN LOGIN SCREEN (AUTHENTICATION GATE)
   if (portalView === 'admin_login') {
     return (
-      <div className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white">
+      <div key="portal-admin-login" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-view-enter">
         <AdminLogin
           onLoginSuccess={handleAdminLoginSuccess}
           onReturnToStorefront={handleExitToStorefront}
@@ -589,7 +589,7 @@ export default function App() {
     // If not authenticated, force redirect to Login Gate
     if (!adminSession) {
       return (
-        <div className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white">
+        <div key="portal-admin-gate" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-view-enter">
           <AdminLogin
             onLoginSuccess={handleAdminLoginSuccess}
             onReturnToStorefront={handleExitToStorefront}
@@ -601,7 +601,7 @@ export default function App() {
     }
 
     return (
-      <div className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white">
+      <div key="portal-admin-erp" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-view-enter">
         <AdminDashboard
           initialStaffSession={adminSession}
           onCloseToStorefront={handleExitToStorefront}
@@ -615,7 +615,7 @@ export default function App() {
 
   // 3. PUBLIC CUSTOMER STOREFRONT
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-[#090A0F] text-stone-900 dark:text-slate-100 flex flex-col font-sans selection:bg-emerald-800 selection:text-white transition-colors duration-200">
+    <div key="portal-customer" className="min-h-screen bg-stone-50 dark:bg-[#090A0F] text-stone-900 dark:text-slate-100 flex flex-col font-sans selection:bg-emerald-800 selection:text-white transition-colors duration-200 gm-view-enter">
       {/* Top Navigation - Customer only, completely removed Admin HQ shortcut */}
       <Header
         cartItems={cartItems}
@@ -648,6 +648,7 @@ export default function App() {
       />
 
       <main className="flex-1">
+        <div key={storefrontMode} className="gm-view-enter">
         {storefrontMode === 'b2b' ? (
           <B2BWholesalePortal
             onBackToRetailStorefront={() => setStorefrontMode('b2c')}
@@ -702,6 +703,7 @@ export default function App() {
             />
           </>
         )}
+        </div>
       </main>
 
       {/* Corporate & Retail Footer */}

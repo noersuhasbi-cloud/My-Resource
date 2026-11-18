@@ -241,6 +241,7 @@ export const AuditTrailKpiTab: React.FC<AuditTrailKpiTabProps> = ({ theme, onSho
         </div>
       </div>
 
+      <div key={activeSubView} className="gm-tab-enter">
       {activeSubView === 'FRAUD_RADAR' ? (
         <div className="space-y-5">
           {/* RADAR SUMMARY CARDS */}
@@ -787,6 +788,7 @@ export const AuditTrailKpiTab: React.FC<AuditTrailKpiTabProps> = ({ theme, onSho
       </div>
         </>
       )}
+      </div>
     </div>
   );
 };

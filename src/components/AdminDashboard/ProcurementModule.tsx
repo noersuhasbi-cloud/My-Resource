@@ -1156,6 +1156,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         )}
       </div>
 
+      <div key={activeTab} className="gm-tab-enter">
       {/* SECTION 0: PREDICTIVE AUTO-REPLENISHMENT & MIN-MAX PLANNING */}
       {(activeTab === 'auto_replenishment') && (
         <div
@@ -2547,12 +2548,13 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* MODAL: INTERACTIVE PARTIAL GOODS RECEIPT */}
       {activeReceivingPO && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade">
           <div
-            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto my-auto ${
+            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto my-auto gm-modal-pop ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
@@ -3258,9 +3260,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       {/* MODAL: CREATE RESTOCK PR */}
       {isCreatingPR && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade">
           <div
-            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
+            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto gm-modal-pop ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >
@@ -3433,9 +3435,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
       {/* MODAL: CREATE DIRECT PURCHASE ORDER */}
       {isCreatingDirectPO && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade">
           <div
-            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-lg p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
+            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-lg p-4 sm:p-6 space-y-4 shadow-2xl my-auto gm-modal-pop ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >

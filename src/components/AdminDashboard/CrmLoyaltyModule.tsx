@@ -989,6 +989,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
         })}
       </div>
 
+      <div key={subTab} className="gm-tab-enter">
       {/* ============================================================ */}
       {/* SUB-TAB 1: B2B DEAL PIPELINE (ODOO KANBAN + LIST)            */}
       {/* ============================================================ */}
@@ -2060,6 +2061,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* ============================================================ */}
       {/* MODAL 1: CUSTOMER 360 PROFILE MODAL                          */}
@@ -2067,11 +2069,11 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {selectedProfileId &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
             onClick={() => setSelectedProfileId(null)}
           >
             <div
-              className={`w-full max-w-4xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto ${
+              className={`w-full max-w-4xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto gm-modal-pop ${
                 isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
               onClick={(e) => e.stopPropagation()}
@@ -2282,13 +2284,13 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {isNewAccountOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
             onClick={() => setIsNewAccountOpen(false)}
           >
             <form
               onSubmit={handleCreateAccount}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md rounded-2xl border p-5 shadow-2xl space-y-3.5 ${
+              className={`w-full max-w-md rounded-2xl border p-5 shadow-2xl space-y-3.5 gm-modal-pop ${
                 isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
             >
@@ -2408,13 +2410,13 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {isNewDealOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
             onClick={() => setIsNewDealOpen(false)}
           >
             <form
               onSubmit={handleCreateDeal}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md rounded-2xl border p-5 shadow-2xl space-y-3.5 ${
+              className={`w-full max-w-md rounded-2xl border p-5 shadow-2xl space-y-3.5 gm-modal-pop ${
                 isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
             >
@@ -2511,13 +2513,13 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {campaignModal.open &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
             onClick={() => setCampaignModal((p) => ({ ...p, open: false }))}
           >
             <form
               onSubmit={handleDispatchCampaign}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-lg rounded-2xl border p-5 shadow-2xl space-y-3.5 ${
+              className={`w-full max-w-lg rounded-2xl border p-5 shadow-2xl space-y-3.5 gm-modal-pop ${
                 isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
             >
@@ -2630,13 +2632,13 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {isNewStandingOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
             onClick={() => setIsNewStandingOpen(false)}
           >
             <form
               onSubmit={handleCreateStandingOrder}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-lg rounded-2xl border p-5 shadow-2xl space-y-3.5 my-auto ${
+              className={`w-full max-w-lg rounded-2xl border p-5 shadow-2xl space-y-3.5 my-auto gm-modal-pop ${
                 isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
             >
@@ -2748,13 +2750,13 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {isClaimModalOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
             onClick={() => setIsClaimModalOpen(false)}
           >
             <form
               onSubmit={handleSubmitInstantClaim}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-xl rounded-2xl border p-5 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto ${
+              className={`w-full max-w-xl rounded-2xl border p-5 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto gm-modal-pop ${
                 isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
               }`}
             >

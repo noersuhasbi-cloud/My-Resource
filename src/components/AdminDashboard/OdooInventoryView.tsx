@@ -986,6 +986,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         </div>
       </div>
 
+      <div key={viewMode} className="gm-tab-enter">
       {/* ===================================================================== */}
       {/* VIEW 1: ODOO-STYLE KANBAN OPERATIONS DASHBOARD */}
       {/* ===================================================================== */}
@@ -1977,14 +1978,15 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* ===================================================================== */}
       {/* MODAL 1: FEFO / FIFO REMOVAL STRATEGY CONFIGURATION */}
       {/* ===================================================================== */}
       {showStrategyModal &&
         createPortal(
-          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
-          <div className={`${modalClass} max-w-2xl w-full p-6 space-y-4 my-auto`}>
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4 gm-backdrop-fade">
+          <div className={`${modalClass} max-w-2xl w-full p-6 space-y-4 my-auto gm-modal-pop`}>
             <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
               <div>
                 <h3 className={`text-base font-bold ${textTitle}`}>
@@ -2082,8 +2084,8 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         const multiUom = formatMultiUomStock(mediaInspector.physicalStock, profile.uomConversion);
 
         return createPortal(
-          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4">
-            <div className={`${modalClass} max-w-3xl w-full p-6 space-y-5 my-auto`}>
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center overflow-y-auto p-4 gm-backdrop-fade">
+            <div className={`${modalClass} max-w-3xl w-full p-6 space-y-5 my-auto gm-modal-pop`}>
               <div className={`flex items-start justify-between gap-3 border-b pb-3 ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">

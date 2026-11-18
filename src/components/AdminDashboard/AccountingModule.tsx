@@ -549,6 +549,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
         </div>
       </div>
 
+      <div key={complianceSubView || subTab} className="gm-tab-enter">
       {/* SUB-TAB 1: PROFIT & LOSS STATEMENT */}
       {!complianceSubView && subTab === 'pnl' && pnlReport && (
         <div
@@ -2254,12 +2255,13 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* MODAL: POST REVERSING JOURNAL ENTRY */}
       {reversingEntry && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade">
           <div
-            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto ${
+            className={`border rounded-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 space-y-4 shadow-2xl my-auto gm-modal-pop ${
               isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}
           >

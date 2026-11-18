@@ -377,7 +377,7 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
   const content = (
     <div
       className={`w-full flex flex-col rounded-2xl border transition-all overflow-hidden ${
-        isStandalonePage ? 'shadow-xs min-h-[750px]' : 'max-w-6xl max-h-[94vh] shadow-2xl'
+        isStandalonePage ? 'shadow-xs min-h-[750px]' : 'max-w-6xl max-h-[94vh] shadow-2xl gm-modal-pop'
       } ${
         isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
       }`}
@@ -945,8 +945,8 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
         {/* Modal Create Surat Jalan Drawer */}
         {isCreatingSj && typeof document !== 'undefined' && createPortal(
-          <div className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-            <div className={`w-full max-w-lg p-6 rounded-2xl border shadow-xl space-y-4 my-auto ${
+          <div className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto gm-backdrop-fade">
+            <div className={`w-full max-w-lg p-6 rounded-2xl border shadow-xl space-y-4 my-auto gm-modal-pop ${
               isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
             }`}>
               <div className="flex justify-between items-center border-b border-gray-200 dark:border-slate-800/80 pb-3">
@@ -1058,8 +1058,8 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
       {/* Route Trip Consolidation Builder Modal */}
       {isTripBuilderOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[115] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto ${
+        <div className="fixed inset-0 z-[115] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade">
+          <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto gm-modal-pop ${
             isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
           }`}>
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800/80 pb-3">
@@ -1296,8 +1296,8 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
 
       {/* Electronic Proof of Delivery (e-POD) Modal */}
       {epodTargetSj && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[115] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto ${
+        <div className="fixed inset-0 z-[115] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade">
+          <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-2xl border shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto gm-modal-pop ${
             isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
           }`}>
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800/80 pb-3">
@@ -1523,13 +1523,13 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
   ) : (
     typeof document !== 'undefined'
       ? createPortal(
-          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden">
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden gm-backdrop-fade">
             {content}
           </div>,
           document.body
         )
       : (
-          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden">
+          <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:hidden gm-backdrop-fade">
             {content}
           </div>
         )

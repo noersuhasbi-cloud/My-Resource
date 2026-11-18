@@ -1286,6 +1286,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
         </div>
       </div>
 
+      <div key={activeSubTab} className="gm-tab-enter">
       {/* ========================================================================= */}
       {/* 0. ENTERPRISE CONFIGURATION HUB (GRID-ALIGNED SECTIONS) */}
       {/* ========================================================================= */}
@@ -3362,14 +3363,14 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {/* Manual COA Create / Edit Modal */}
       {isAddingCoa && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
           onClick={() => {
             setIsAddingCoa(false);
             setEditingCoa(null);
           }}
         >
           <div 
-            className={`${cardClass} max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto`}
+            className={`${cardClass} max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
@@ -3980,11 +3981,11 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           {/* Create Promotion Rule Modal */}
           {isCreatingPromo && typeof document !== 'undefined' && createPortal(
             <div 
-              className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+              className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
               onClick={() => setIsCreatingPromo(false)}
             >
               <div 
-                className={`${cardClass} max-w-xl w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto`}
+                className={`${cardClass} max-w-xl w-full p-5 sm:p-6 space-y-4 shadow-2xl my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop`}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800/80 pb-3">
@@ -5206,6 +5207,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {activeSubTab === 'audit_kpis' && canViewAuditAndKpis && (
         <AuditTrailKpiTab theme={theme} onShowToast={onShowToast} />
       )}
+      </div>
     </div>
   );
 };
