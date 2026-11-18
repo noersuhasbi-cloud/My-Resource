@@ -1,9 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { AuditTrailModuleType, AuditTrailOverviewResponse } from '../../types/index.ts';
+import type {
+  AuditTrailModuleType,
+  AuditTrailOverviewResponse,
+  FraudRadarResponse,
+} from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import {
   ShieldCheck,
+  ShieldAlert,
   Download,
   RefreshCw,
   Search,
@@ -12,6 +17,7 @@ import {
   FileCheck2,
   CheckCircle2,
   AlertTriangle,
+  Flame,
 } from 'lucide-react';
 
 interface AuditTrailKpiTabProps {
@@ -31,8 +37,12 @@ const MODULE_OPTIONS: Array<{ value: 'ALL' | AuditTrailModuleType; label: string
 
 export const AuditTrailKpiTab: React.FC<AuditTrailKpiTabProps> = ({ theme, onShowToast }) => {
   const isLight = theme === 'light';
+  const [activeSubView, setActiveSubView] = useState<'AUDIT' | 'FRAUD_RADAR'>('AUDIT');
   const [overview, setOverview] = useState<AuditTrailOverviewResponse | null>(null);
+  const [fraudRadar, setFraudRadar] = useState<FraudRadarResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoadingRadar, setIsLoadingRadar] = useState<boolean>(false);
+  const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
   const [moduleFilter, setModuleFilter] = useState<'ALL' | AuditTrailModuleType>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -49,9 +59,44 @@ export const AuditTrailKpiTab: React.FC<AuditTrailKpiTabProps> = ({ theme, onSho
     }
   }, [onShowToast]);
 
+  const loadFraudRadar = React.useCallback(async () => {
+    setIsLoadingRadar(true);
+    try {
+      const data = await apiClient.getFraudRadar();
+      setFraudRadar(data);
+    } catch {
+      // Keep non-blocking if role cannot load radar
+    } finally {
+      setIsLoadingRadar(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadAuditOverview();
-  }, [loadAuditOverview]);
+    loadFraudRadar();
+  }, [loadAuditOverview, loadFraudRadar]);
+
+  const handleResolveFraudAlert = async (alertId: string) => {
+    setResolvingAlertId(alertId);
+    try {
+      const res = await apiClient.resolveFraudRadarAlert(
+        alertId,
+        'Investigated & verified by Loss Prevention Supervisor'
+      );
+      if (res.overview) {
+        setFraudRadar(res.overview);
+      } else {
+        await loadFraudRadar();
+      }
+      await loadAuditOverview();
+      onShowToast('Fraud Alert Resolved', res.message || `Alert ${alertId} marked as investigated.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Resolution Failed', msg);
+    } finally {
+      setResolvingAlertId(null);
+    }
+  };
 
   const filteredLogs = useMemo(() => {
     const logs = overview?.logs || [];
@@ -150,6 +195,259 @@ export const AuditTrailKpiTab: React.FC<AuditTrailKpiTabProps> = ({ theme, onSho
 
   return (
     <div className="space-y-6 animate-fadeIn">
+      {/* SUB-VIEW TOGGLE: AUDIT TRAIL VS FRAUD & LOSS PREVENTION RADAR */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          className={`inline-flex items-center gap-1 p-1 rounded-xl border ${
+            isLight ? 'bg-gray-100 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setActiveSubView('AUDIT')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeSubView === 'AUDIT'
+                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Audit Trail &amp; Operator KPIs</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSubView('FRAUD_RADAR');
+              loadFraudRadar();
+            }}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeSubView === 'FRAUD_RADAR'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : isLight
+                ? 'text-gray-600 hover:text-gray-900'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>Fraud &amp; Loss Prevention Radar</span>
+            {fraudRadar && fraudRadar.activeCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-amber-400 text-slate-950 font-black">
+                {fraudRadar.activeCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {activeSubView === 'FRAUD_RADAR' ? (
+        <div className="space-y-5">
+          {/* RADAR SUMMARY CARDS */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div
+              className={`p-4 rounded-2xl border ${
+                isLight ? 'bg-white border-gray-200/90' : 'bg-[#12141C] border-slate-800/80'
+              }`}
+            >
+              <div className="text-[11px] font-semibold text-gray-500 dark:text-slate-400">Active Anomalies</div>
+              <div className="text-2xl font-black font-mono mt-1 text-rose-600 dark:text-rose-400">
+                {fraudRadar?.activeCount ?? 0}
+              </div>
+            </div>
+            <div
+              className={`p-4 rounded-2xl border ${
+                isLight ? 'bg-white border-gray-200/90' : 'bg-[#12141C] border-slate-800/80'
+              }`}
+            >
+              <div className="text-[11px] font-semibold text-gray-500 dark:text-slate-400">Critical Loss SKUs</div>
+              <div className="text-2xl font-black font-mono mt-1 text-red-600 dark:text-red-400">
+                {fraudRadar?.criticalCount ?? 0}
+              </div>
+            </div>
+            <div
+              className={`p-4 rounded-2xl border ${
+                isLight ? 'bg-white border-gray-200/90' : 'bg-[#12141C] border-slate-800/80'
+              }`}
+            >
+              <div className="text-[11px] font-semibold text-gray-500 dark:text-slate-400">High-Risk POS Alerts</div>
+              <div className="text-2xl font-black font-mono mt-1 text-amber-600 dark:text-amber-400">
+                {fraudRadar?.highRiskCount ?? 0}
+              </div>
+            </div>
+            <div
+              className={`p-4 rounded-2xl border ${
+                isLight ? 'bg-white border-gray-200/90' : 'bg-[#12141C] border-slate-800/80'
+              }`}
+            >
+              <div className="text-[11px] font-semibold text-gray-500 dark:text-slate-400">Resolved Cases</div>
+              <div className="text-2xl font-black font-mono mt-1 text-emerald-600 dark:text-emerald-400">
+                {fraudRadar?.resolvedCount ?? 0}
+              </div>
+            </div>
+          </div>
+
+          {/* ANOMALY ALERT CARDS */}
+          <div
+            className={`rounded-2xl border overflow-hidden ${
+              isLight ? 'bg-white border-gray-200/90' : 'bg-[#12141C] border-slate-800/80'
+            }`}
+          >
+            <div
+              className={`p-5 border-b flex flex-wrap items-center justify-between gap-3 ${
+                isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'
+              }`}
+            >
+              <div>
+                <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                  <Flame className="w-4 h-4 text-rose-500" />
+                  Real-Time Shrinkage &amp; Cashier Fraud Radar
+                </h3>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+                  Flags ≥3 POS cart voids/shift, Exchange/Paid-Out &gt; Rp 500.000, high-value SKU shrinkage (≥ Rp 50k), and supervisor margin overrides.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadFraudRadar}
+                disabled={isLoadingRadar}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer ${
+                  isLight
+                    ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRadar ? 'animate-spin' : ''}`} />
+                Refresh Radar
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {!fraudRadar || fraudRadar.alerts.length === 0 ? (
+                <div className="py-10 text-center space-y-1.5">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+                  <p className={`text-sm font-bold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
+                    All Clear — Zero Active Fraud or Critical Shrinkage Anomalies
+                  </p>
+                  <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+                    POS line voids, RMA/paid-outs, margin overrides, and stocktake variances are within policy thresholds.
+                  </p>
+                </div>
+              ) : (
+                fraudRadar.alerts.map((alert) => {
+                  const isResolved = alert.status === 'RESOLVED';
+                  const badgeStyle =
+                    alert.severity === 'CRITICAL_LOSS'
+                      ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30'
+                      : alert.severity === 'HIGH_RISK'
+                      ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30';
+
+                  return (
+                    <div
+                      key={alert.id}
+                      className={`p-4 rounded-xl border flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                        isResolved
+                          ? isLight
+                            ? 'bg-gray-50/70 border-gray-200 opacity-75'
+                            : 'bg-[#090A0F]/60 border-slate-800/60 opacity-75'
+                          : isLight
+                          ? 'bg-white border-gray-200'
+                          : 'bg-[#090A0F] border-slate-800/80'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeStyle}`}>
+                            {alert.severity}
+                          </span>
+                          <span className="text-[11px] font-mono text-gray-500 dark:text-slate-400">
+                            {alert.ruleCode} · {alert.storeId}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              isResolved
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                            }`}
+                          >
+                            {alert.status}
+                          </span>
+                        </div>
+                        <h4 className={`text-sm font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                          {alert.title}
+                        </h4>
+                        <p className={`text-xs ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
+                          {alert.description}
+                        </p>
+                        {isResolved && alert.resolvedBy && (
+                          <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
+                            Resolved by {alert.resolvedBy} on{' '}
+                            {alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleString('id-ID') : ''}
+                            {alert.resolutionNote ? ` — "${alert.resolutionNote}"` : ''}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {!isResolved && (
+                          <button
+                            type="button"
+                            disabled={resolvingAlertId === alert.id}
+                            onClick={() => handleResolveFraudAlert(alert.id)}
+                            className="px-3.5 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-50 text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                          >
+                            {resolvingAlertId === alert.id
+                              ? 'Resolving...'
+                              : 'Mark Investigated / Resolve Alert'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* RECENT TELEMETRY STREAM */}
+          {fraudRadar && fraudRadar.recentEvents.length > 0 && (
+            <div
+              className={`rounded-2xl border overflow-hidden ${
+                isLight ? 'bg-white border-gray-200/90' : 'bg-[#12141C] border-slate-800/80'
+              }`}
+            >
+              <div className={`px-5 py-3.5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
+                <h4 className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
+                  Recent Cashier Security Telemetry ({fraudRadar.recentEvents.length})
+                </h4>
+              </div>
+              <div className="divide-y divide-gray-200 dark:divide-slate-800/80 max-h-64 overflow-y-auto">
+                {fraudRadar.recentEvents.slice(0, 20).map((evt) => (
+                  <div key={evt.id} className="px-5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md font-mono text-[10px] font-bold bg-slate-500/15 text-slate-700 dark:text-slate-300">
+                        {evt.eventType}
+                      </span>
+                      <span className="font-semibold">{evt.operatorName}</span>
+                      {evt.sku && <span className="font-mono text-[11px] text-gray-500 dark:text-slate-400">({evt.sku})</span>}
+                    </div>
+                    <div className="flex items-center gap-3 font-mono text-[11px]">
+                      {typeof evt.amountIDR === 'number' && evt.amountIDR > 0 && (
+                        <span className="font-bold text-amber-600 dark:text-amber-400">{formatIDR(evt.amountIDR)}</span>
+                      )}
+                      <span className="text-gray-400 dark:text-slate-500">
+                        {new Date(evt.timestamp).toLocaleTimeString('id-ID')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {/* OPERATOR PRODUCTIVITY & COMPLIANCE KPI CARDS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Card 1: Frontline Cashiers */}
@@ -487,6 +785,8 @@ export const AuditTrailKpiTab: React.FC<AuditTrailKpiTabProps> = ({ theme, onSho
           </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };

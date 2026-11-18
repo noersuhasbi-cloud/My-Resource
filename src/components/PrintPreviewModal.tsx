@@ -45,6 +45,8 @@ function getDocumentMeta(payload: PrintPayload): {
       return { ...base, title: `FEFO Clearance Sticker — ${payload.candidate.batchId}` };
     case 'barcode_shelf_label':
       return { ...base, title: `Barcode & Shelf-Edge Label — ${payload.ean13Code}` };
+    case 'shelf_price_tags_a4':
+      return { ...base, title: `Label Harga Rak (A4 Batch) — ${payload.tags.length} SKU` };
     case 'logistics_doc':
       return {
         ...base,

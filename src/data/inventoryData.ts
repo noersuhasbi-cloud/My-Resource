@@ -1823,6 +1823,7 @@ export const INITIAL_ENTERPRISE_SETTINGS: EnterpriseSettingsConfig = {
     goldTierThresholdIDR: 5000000,
     platinumTierThresholdIDR: 20000000,
     accountingLockBeforeDate: '',
+    minMarginFloorPct: 2.0,
   },
 };
 

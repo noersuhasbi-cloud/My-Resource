@@ -18,6 +18,8 @@ import {
 } from '../../utils/indonesianCompliance';
 import { usePrint } from '../../context/PrintContext';
 
+import type { HalalStatus, WholesaleVolumeTier } from '../../types/index.ts';
+
 export interface LabelableProductItem {
   sku: string;
   productName: string;
@@ -27,6 +29,10 @@ export interface LabelableProductItem {
   pricePerKg?: number;
   isWeighted?: boolean;
   promoValidityText?: string;
+  priceUpdatedAt?: string;
+  wholesaleTiers?: WholesaleVolumeTier[];
+  halalStatus?: HalalStatus;
+  bpjphCertNumber?: string;
 }
 
 interface BarcodeShelfLabelModalProps {
@@ -59,12 +65,37 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
   const [promoText, setPromoText] = useState<string>('Tebus Murah s/d 30 Nov 2026');
   const [taxInclusiveDisplay, setTaxInclusiveDisplay] = useState<boolean>(true);
   const [labelMode, setLabelMode] = useState<'BOTH' | 'SCALE_ONLY' | 'SHELF_ONLY'>('BOTH');
+  const [priceChangeQueueOnly, setPriceChangeQueueOnly] = useState<boolean>(false);
+  const [batchSelectedSkus, setBatchSelectedSkus] = useState<string[]>([]);
+
+  const recentPriceChangedProducts = useMemo(() => {
+    const cutoffMs = Date.now() - 24 * 3600 * 1000;
+    return products.filter((p) => {
+      if (!p.priceUpdatedAt) return false;
+      const ms = new Date(p.priceUpdatedAt).getTime();
+      return Number.isFinite(ms) && ms >= cutoffMs;
+    });
+  }, [products]);
+
+  const visibleProducts = useMemo(
+    () => (priceChangeQueueOnly ? recentPriceChangedProducts : products),
+    [priceChangeQueueOnly, recentPriceChangedProducts, products]
+  );
 
   useEffect(() => {
     if (isOpen && initialSku) {
       setSelectedSku(initialSku);
     }
   }, [isOpen, initialSku]);
+
+  useEffect(() => {
+    if (priceChangeQueueOnly) {
+      setBatchSelectedSkus(recentPriceChangedProducts.map((p) => p.sku));
+      if (recentPriceChangedProducts[0]) {
+        setSelectedSku(recentPriceChangedProducts[0].sku);
+      }
+    }
+  }, [priceChangeQueueOnly, recentPriceChangedProducts]);
 
   const activeProduct = useMemo(() => {
     return (
@@ -141,25 +172,76 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* Left Controls (5 cols) */}
           <div className="lg:col-span-5 space-y-4 text-xs">
-            <div>
-              <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-200">
-                Select Product / Bulk SKU
+            <div className="space-y-2">
+              <label className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 cursor-pointer">
+                <div className="min-w-0">
+                  <span className="font-bold text-amber-800 dark:text-amber-300 block">
+                    Harga Berubah 24 Jam Terakhir (Price Change Queue)
+                  </span>
+                  <span className="text-[10px] text-amber-700/80 dark:text-amber-300/80">
+                    {recentPriceChangedProducts.length} SKU dengan update harga ritel / grosir / markdown
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={priceChangeQueueOnly}
+                  onChange={(e) => setPriceChangeQueueOnly(e.target.checked)}
+                  className="w-4 h-4 rounded accent-[#0F4C3A] shrink-0"
+                />
               </label>
-              <select
-                value={activeProduct.sku}
-                onChange={(e) => setSelectedSku(e.target.value)}
-                className={`w-full px-3 py-2 rounded-xl border font-medium ${
-                  isLight
-                    ? 'bg-white border-gray-300 text-slate-900'
-                    : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
-                }`}
-              >
-                {products.map((p) => (
-                  <option key={p.sku} value={p.sku}>
-                    {p.sku} · {p.productName}
-                  </option>
-                ))}
-              </select>
+
+              <div>
+                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-200">
+                  Select Product / Bulk SKU
+                </label>
+                <select
+                  value={activeProduct.sku}
+                  onChange={(e) => setSelectedSku(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-xl border font-medium ${
+                    isLight
+                      ? 'bg-white border-gray-300 text-slate-900'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                  }`}
+                >
+                  {(visibleProducts.length > 0 ? visibleProducts : products).map((p) => (
+                    <option key={p.sku} value={p.sku}>
+                      {p.sku} · {p.productName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {priceChangeQueueOnly && recentPriceChangedProducts.length > 0 && (
+                <div
+                  className={`max-h-28 overflow-y-auto p-2 rounded-xl border space-y-1 ${
+                    isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
+                  }`}
+                >
+                  {recentPriceChangedProducts.map((p) => {
+                    const checked = batchSelectedSkus.includes(p.sku);
+                    return (
+                      <label key={p.sku} className="flex items-center justify-between gap-2 text-[11px] cursor-pointer">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setBatchSelectedSkus((prev) =>
+                                e.target.checked ? [...prev, p.sku] : prev.filter((s) => s !== p.sku)
+                              )
+                            }
+                            className="rounded accent-[#0F4C3A]"
+                          />
+                          <span className="truncate font-semibold">{p.productName}</span>
+                        </span>
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400 shrink-0">
+                          {formatIDR(p.sellingPrice)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -469,6 +551,61 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                   Scan into Active POS Cart
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const sourcePool =
+                    priceChangeQueueOnly && batchSelectedSkus.length > 0
+                      ? products.filter((p) => batchSelectedSkus.includes(p.sku))
+                      : priceChangeQueueOnly && recentPriceChangedProducts.length > 0
+                      ? recentPriceChangedProducts
+                      : [activeProduct];
+                  const tags = sourcePool.map((item) => {
+                    const itemPlu5 = derivePlu5FromSku(item.sku);
+                    const itemEan13 = generateVariableWeightEan13(itemPlu5, weightGrams, prefix);
+                    const itemBits = encodeEan13Bars(itemEan13);
+                    const effDate = item.priceUpdatedAt
+                      ? new Date(item.priceUpdatedAt).toLocaleDateString('id-ID', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                      : new Date().toLocaleDateString('id-ID', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        });
+                    return {
+                      sku: item.sku,
+                      productName: item.productName,
+                      unit: item.unit,
+                      sellingPrice: item.sellingPrice,
+                      wholesaleTiers: item.wholesaleTiers,
+                      halalStatus: item.halalStatus ?? (isHalalCertified ? 'HALAL_CERTIFIED' : undefined),
+                      bpjphCertNumber: item.bpjphCertNumber,
+                      ean13Code: itemEan13,
+                      barBits: itemBits,
+                      priceUpdatedAt: item.priceUpdatedAt,
+                      effectiveDate: effDate,
+                    };
+                  });
+                  triggerPrint({
+                    type: 'shelf_price_tags_a4',
+                    format: 'a4',
+                    taxInclusiveDisplay,
+                    tags,
+                  });
+                  onShowToast(
+                    'Batch Label Harga Rak (A4)',
+                    `Rendering ${tags.length} ready-to-cut Shelf Price Tag(s) to A4 print portal.`
+                  );
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-emerald-600/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-[#0F4C3A] dark:text-emerald-300 text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <Tag className="w-3.5 h-3.5" />
+                Cetak Label Harga Rak (A4 Batch)
+              </button>
 
               <button
                 type="button"

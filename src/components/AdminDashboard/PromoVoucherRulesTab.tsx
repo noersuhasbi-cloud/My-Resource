@@ -69,6 +69,11 @@ const PROMO_TYPE_META: Record<
     badgeClass: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30',
     icon: Layers,
   },
+  PROMO_GIMMICK: {
+    label: 'Free Gimmick / POSM',
+    badgeClass: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
+    icon: Gift,
+  },
 };
 
 export const PromoVoucherRulesTab: React.FC<PromoVoucherRulesTabProps> = ({
@@ -120,6 +125,8 @@ export const PromoVoucherRulesTab: React.FC<PromoVoucherRulesTabProps> = ({
     happyHourStart: string;
     happyHourEnd: string;
     simulateHappyHourActive: boolean;
+    gimmickSkuId: string;
+    gimmickMinSpendIDR: number;
     endDate: string;
     description: string;
   }>({
@@ -139,6 +146,8 @@ export const PromoVoucherRulesTab: React.FC<PromoVoucherRulesTabProps> = ({
     happyHourStart: '19:00',
     happyHourEnd: '21:00',
     simulateHappyHourActive: true,
+    gimmickSkuId: 'SKU-POSM-001',
+    gimmickMinSpendIDR: 100000,
     endDate: '2026-12-31',
     description: '',
   });
@@ -240,6 +249,11 @@ export const PromoVoucherRulesTab: React.FC<PromoVoucherRulesTabProps> = ({
         payload.happyHourStart = formState.happyHourStart;
         payload.happyHourEnd = formState.happyHourEnd;
         payload.simulateHappyHourActive = formState.simulateHappyHourActive;
+      } else if (formState.type === 'PROMO_GIMMICK') {
+        payload.targetType = 'ALL';
+        payload.targetValue = 'ALL';
+        payload.gimmickSkuId = formState.gimmickSkuId.trim() || 'SKU-POSM-001';
+        payload.gimmickMinSpendIDR = Math.max(0, Number(formState.gimmickMinSpendIDR) || 0);
       } else {
         if (formState.discountType === 'percent') {
           payload.discountPercent = formState.discountPercent;
@@ -274,6 +288,10 @@ export const PromoVoucherRulesTab: React.FC<PromoVoucherRulesTabProps> = ({
     }
     if (rule.type === 'MEMBER_TIER') {
       return `${rule.memberTier || 'GOLD'} Member auto-perk → ${rule.discountPercent || 10}% off cart`;
+    }
+    if (rule.type === 'PROMO_GIMMICK') {
+      const minSpend = rule.gimmickMinSpendIDR ? ` · Min ${formatIDR(rule.gimmickMinSpendIDR)}` : '';
+      return `Free ${rule.gimmickSkuId || 'POSM Gift'}${minSpend}${rule.endDate ? ` · Exp ${rule.endDate}` : ''}`;
     }
     const valStr = rule.discountPercent
       ? `${rule.discountPercent}% off`
@@ -359,6 +377,7 @@ export const PromoVoucherRulesTab: React.FC<PromoVoucherRulesTabProps> = ({
               { id: 'HAPPY_HOUR', label: 'Happy Hour' },
               { id: 'CRM_VOUCHER', label: 'CRM Vouchers' },
               { id: 'MEMBER_TIER', label: 'VIP Tier Perks' },
+              { id: 'PROMO_GIMMICK', label: 'Free Gimmicks' },
             ] as const
           ).map((f) => (
             <button
@@ -476,13 +495,14 @@ export const PromoVoucherRulesTab: React.FC<PromoVoucherRulesTabProps> = ({
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                 {(
                   [
                     { id: 'CRM_VOUCHER', label: 'CRM Voucher' },
                     { id: 'BOGO', label: 'Buy X Get Y' },
                     { id: 'MIX_AND_MATCH', label: 'Mix & Match' },
                     { id: 'HAPPY_HOUR', label: 'Happy Hour' },
+                    { id: 'PROMO_GIMMICK', label: 'Free Gimmick' },
                   ] as const
                 ).map((t) => (
                   <button
@@ -492,9 +512,9 @@ export const PromoVoucherRulesTab: React.FC<PromoVoucherRulesTabProps> = ({
                       setFormState((p) => ({
                         ...p,
                         type: t.id,
-                        targetType: t.id === 'CRM_VOUCHER' ? 'ALL' : t.id === 'BOGO' ? 'SKU' : 'CATEGORY',
+                        targetType: t.id === 'CRM_VOUCHER' || t.id === 'PROMO_GIMMICK' ? 'ALL' : t.id === 'BOGO' ? 'SKU' : 'CATEGORY',
                         targetValue:
-                          t.id === 'CRM_VOUCHER'
+                          t.id === 'CRM_VOUCHER' || t.id === 'PROMO_GIMMICK'
                             ? 'ALL'
                             : t.id === 'BOGO'
                             ? 'SKU-PRD-001'
@@ -714,6 +734,32 @@ export const PromoVoucherRulesTab: React.FC<PromoVoucherRulesTabProps> = ({
                         step={5000}
                         value={formState.minOrderSubtotalIDR}
                         onChange={(e) => setFormState((p) => ({ ...p, minOrderSubtotalIDR: Number(e.target.value) }))}
+                        className={`w-full px-3 py-2 rounded-xl font-mono ${inputClass}`}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {formState.type === 'PROMO_GIMMICK' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold mb-1">Gimmick / POSM SKU ID (Rp 0)</label>
+                      <input
+                        type="text"
+                        value={formState.gimmickSkuId}
+                        onChange={(e) => setFormState((p) => ({ ...p, gimmickSkuId: e.target.value.toUpperCase() }))}
+                        placeholder="SKU-POSM-001"
+                        className={`w-full px-3 py-2 rounded-xl font-mono uppercase ${inputClass}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold mb-1">Min Belanja Trigger Gimmick (IDR)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={10000}
+                        value={formState.gimmickMinSpendIDR}
+                        onChange={(e) => setFormState((p) => ({ ...p, gimmickMinSpendIDR: Number(e.target.value) }))}
                         className={`w-full px-3 py-2 rounded-xl font-mono ${inputClass}`}
                       />
                     </div>

@@ -833,7 +833,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'GIRO_PDC_ISSUE' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK' | 'KASBON_COLLECTION' | 'PPH_WITHHOLDING' | 'RETURNABLE_CONTAINER' | 'SUPPLIER_DEBIT_NOTE' | 'SETTLEMENT_RECONCILE' | 'BANK_MUTATION_RECONCILE' | 'CUSTOMER_PREORDER_DP';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'GIRO_PDC_ISSUE' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK' | 'KASBON_COLLECTION' | 'PPH_WITHHOLDING' | 'RETURNABLE_CONTAINER' | 'SUPPLIER_DEBIT_NOTE' | 'SETTLEMENT_RECONCILE' | 'BANK_MUTATION_RECONCILE' | 'CUSTOMER_PREORDER_DP' | 'UNLOADING_LABOR' | 'DRIVER_ALLOWANCE';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -1274,6 +1274,12 @@ export interface POSCartItem {
   appliedWholesaleTierLabel?: string;
   isManualPriceOverride?: boolean;
   isPromoGimmick?: boolean;
+  isDynamicDiscountSku?: boolean;
+  sourceBatchId?: string;
+  originalSku?: string;
+  originalSellingPrice?: number;
+  discountPercent?: number;
+  markdownStatus?: 'Marked Down';
 }
 
 export type POSPaymentMethod = 'cash' | 'qris' | 'debit_card' | 'credit_card' | 'split';
@@ -1314,6 +1320,10 @@ export interface POSTransactionRequest {
   notes?: string;
   clientIdempotencyKey?: string;
   offlineReceiptNumber?: string;
+  offlineReceiptId?: string;
+  supervisorMarginOverride?: boolean;
+  supervisorPin?: string;
+  supervisorName?: string;
 }
 
 export interface POSTransactionReceipt {
@@ -1353,9 +1363,19 @@ export interface POSTransactionReceipt {
   promoCode?: string;
   appliedPromos?: AppliedPromotionSummary[];
   promoDiscountIDR?: number;
+  freeGimmickItems?: Array<{
+    sku: string;
+    name: string;
+    quantity: number;
+    ruleCode: string;
+    ruleName: string;
+  }>;
   clientIdempotencyKey?: string;
   offlineReceiptNumber?: string;
   offlineSynced?: boolean;
+  isOfflinePendingSync?: boolean;
+  marginComplianceStatus?: 'NORMAL' | 'SUPERVISOR_OVERRIDE' | 'CLEARANCE_BELOW_COST';
+  belowCostClearanceSkus?: string[];
 }
 
 // -------------------------------------------------------------
@@ -2179,6 +2199,7 @@ export interface ErpConfigurationSettings {
   goldTierThresholdIDR: number;
   platinumTierThresholdIDR: number;
   accountingLockBeforeDate: string; // Optional YYYY-MM-DD preventing backdated GL mutations
+  minMarginFloorPct?: number; // Dynamic Margin Floor above WAC unitCost (default 2.0%)
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -3855,6 +3876,66 @@ export interface StorefrontProductTrustMeta {
   basePriceIDR: number;
   discountedPriceIDR?: number;
 }
+
+export type FraudEventType =
+  | 'CART_LINE_VOID'
+  | 'HIGH_VALUE_EXCHANGE'
+  | 'CASH_PAID_OUT'
+  | 'MARGIN_OVERRIDE_APPROVED';
+
+export interface FraudTelemetryEvent {
+  id: string;
+  timestamp: string;
+  eventType: FraudEventType;
+  storeId: string;
+  shiftId?: string;
+  operatorId: string;
+  operatorName: string;
+  operatorRole: string;
+  sku?: string;
+  productName?: string;
+  amountIDR?: number;
+  quantity?: number;
+  reason?: string;
+  supervisorName?: string;
+}
+
+export interface FraudRadarAlert {
+  id: string;
+  ruleCode:
+    | 'EXCESSIVE_POS_VOIDS'
+    | 'HIGH_VALUE_EXCHANGE_PAIDOUT'
+    | 'HIGH_VALUE_SKU_SHRINKAGE'
+    | 'MARGIN_OVERRIDE_ACTIVITY';
+  severity: 'HIGH_RISK' | 'MEDIUM_RISK' | 'CRITICAL_LOSS';
+  title: string;
+  description: string;
+  storeId: string;
+  operatorId?: string;
+  operatorName?: string;
+  sku?: string;
+  productName?: string;
+  metricValue: number;
+  thresholdValue: number;
+  amountIDR?: number;
+  eventIds: string[];
+  detectedAt: string;
+  status: 'ACTIVE' | 'RESOLVED';
+  resolvedBy?: string;
+  resolvedAt?: string;
+  resolutionNote?: string;
+}
+
+export interface FraudRadarResponse {
+  alerts: FraudRadarAlert[];
+  activeCount: number;
+  criticalCount: number;
+  highRiskCount: number;
+  resolvedCount: number;
+  recentEvents: FraudTelemetryEvent[];
+  generatedAt: string;
+}
+
 
 
 

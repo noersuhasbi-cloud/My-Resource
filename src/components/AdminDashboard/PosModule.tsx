@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   POSProductItem,
@@ -73,8 +73,22 @@ import {
   Lock,
   Award,
   Ticket,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Gift,
 } from 'lucide-react';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
+
+const OFFLINE_POS_QUEUE_KEY = 'grocematrix_offline_pos_queue';
+
+interface OfflineQueuedPosTx {
+  id: string;
+  offlineReceiptNumber: string;
+  queuedAt: string;
+  payload: POSTransactionRequest;
+  localReceipt: POSTransactionReceipt;
+}
 
 interface PosModuleProps {
   theme: 'light' | 'dark';
@@ -142,6 +156,33 @@ export const PosModule: React.FC<PosModuleProps> = ({
       setDiscountPercent(0);
     }
   }, [canOverrideDiscount, discountPercent]);
+
+  // 3B. Offline-First Resilience Queue (Anti-Putus Internet)
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [offlineQueue, setOfflineQueue] = useState<OfflineQueuedPosTx[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(OFFLINE_POS_QUEUE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isSyncingOfflineQueue, setIsSyncingOfflineQueue] = useState<boolean>(false);
+
+  const persistOfflineQueue = useCallback((next: OfflineQueuedPosTx[]) => {
+    setOfflineQueue(next);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(OFFLINE_POS_QUEUE_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore storage quota errors
+      }
+    }
+  }, []);
   const [customerName, setCustomerName] = useState<string>('Walk-in Retail Shopper');
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [customerMemberId, setCustomerMemberId] = useState<string>('');
@@ -221,6 +262,22 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [isBarcodeLabelModalOpen, setIsBarcodeLabelModalOpen] = useState<boolean>(false);
   const [safeDropThresholdIDR, setSafeDropThresholdIDR] = useState<number>(5000000);
   const [loyaltyPointRedeemValueIDR, setLoyaltyPointRedeemValueIDR] = useState<number>(100);
+  const [minMarginFloorPct, setMinMarginFloorPct] = useState<number>(2.0);
+  const [marginOverridePrompt, setMarginOverridePrompt] = useState<{
+    payload: POSTransactionRequest;
+    message: string;
+    violations: Array<{
+      sku: string;
+      name: string;
+      unitCost: number;
+      netEffectiveUnitPrice: number;
+      minAllowedUnitPrice: number;
+    }>;
+  } | null>(null);
+  const [supervisorPinInput, setSupervisorPinInput] = useState<string>('');
+  const [supervisorNameInput, setSupervisorNameInput] = useState<string>('Store Manager (On-Duty)');
+  const [supervisorPinError, setSupervisorPinError] = useState<string>('');
+  const [isAuthorizingOverride, setIsAuthorizingOverride] = useState<boolean>(false);
 
   // Sound generator for barcode scan feedback (clean Web Audio API beep)
   const playBeep = () => {
@@ -304,6 +361,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
           }
           if (typeof cfg.activeVatRatePct === 'number' && cfg.activeVatRatePct >= 0) {
             setPosPpnTaxPercent(cfg.activeVatRatePct);
+          }
+          if (typeof cfg.minMarginFloorPct === 'number' && cfg.minMarginFloorPct >= 0) {
+            setMinMarginFloorPct(cfg.minMarginFloorPct);
           }
         }
       })
@@ -548,6 +608,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
         lineTotal,
         image: product.image,
         appliedWholesaleTierLabel: tierResolved.appliedTier?.label,
+        isDynamicDiscountSku: product.isDynamicDiscountSku,
+        sourceBatchId: product.sourceBatchId,
+        originalSku: product.originalSku,
+        originalSellingPrice: product.originalSellingPrice,
+        discountPercent: product.discountPercent,
+        markdownStatus: product.markdownStatus,
       };
 
       return [newLine, ...prev];
@@ -602,7 +668,24 @@ export const PosModule: React.FC<PosModuleProps> = ({
   };
 
   const removeFromCart = (lineId: string) => {
+    const removedLine = cart.find((item) => item.id === lineId);
     setCart((prev) => prev.filter((item) => item.id !== lineId));
+    if (removedLine && !removedLine.isPromoGimmick) {
+      apiClient
+        .logPosTelemetryEvent({
+          eventType: 'CART_LINE_VOID',
+          storeId: currentStoreInfo.storeId,
+          shiftId: activeShift?.id || activeStaffSession?.activeShiftId,
+          operatorId: activeStaffSession?.userId,
+          operatorName: activeStaffSession?.userName,
+          sku: removedLine.sku,
+          productName: removedLine.name,
+          amountIDR: removedLine.lineTotal,
+          quantity: removedLine.quantity,
+          reason: 'Cashier voided cart line item',
+        })
+        .catch(() => {});
+    }
   };
 
   const clearCart = () => {
@@ -749,16 +832,57 @@ export const PosModule: React.FC<PosModuleProps> = ({
         : 'debit_card'
       : paymentMethod;
 
-    try {
-      const payload: POSTransactionRequest = {
+    const clientIdempotencyKey = `OFF-KEY-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const offlineReceiptNumber = `OFF-2026-${Date.now().toString().slice(-6)}`;
+
+    const payload: POSTransactionRequest = {
+      storeId: currentStoreInfo.storeId,
+      storeName: currentStoreInfo.storeName,
+      cashierId: activeStaffSession?.userId || 'USR-CASH-01',
+      cashierName: activeStaffSession?.userName || 'Andi Wijaya (Frontline Cashier)',
+      shiftId: activeStaffSession?.activeShiftId || 'SHIFT-JKT-SEN-MORNING',
+      items: cart,
+      subtotal,
+      discount: baseDiscountAmount,
+      tax: taxAmount,
+      total: totalAmount,
+      currency: activeCurrency,
+      currencyTotal: totalInActiveCurrency,
+      currencyRateToIDR: currentFx.rateToIDR,
+      paymentMethod: resolvedMethod,
+      splitPayments,
+      cashTendered: isSplitMode
+        ? cashLeg?.amountIDR || totalAmount
+        : paymentMethod === 'cash'
+        ? cashTendered
+        : totalAmount,
+      cashChange: isSplitMode ? 0 : paymentMethod === 'cash' ? cashChange : 0,
+      customerName,
+      customerPhone,
+      customerMemberId,
+      crmAccountId: selectedCrmMember?.id,
+      redeemPoints: effectiveRedeemPoints > 0 ? effectiveRedeemPoints : undefined,
+      promoCode: appliedPromoCode || undefined,
+      appliedPromos: promoValidation?.appliedPromos,
+      promoDiscountIDR: promoDiscountIDR > 0 ? promoDiscountIDR : undefined,
+      clientIdempotencyKey,
+      offlineReceiptNumber,
+    };
+
+    const enqueueOfflineFallback = () => {
+      const localReceipt: POSTransactionReceipt = {
+        receiptNumber: offlineReceiptNumber,
+        transactionId: `TXN-OFF-${Date.now().toString().slice(-6)}`,
+        orderId: offlineReceiptNumber,
+        timestamp: new Date().toISOString(),
         storeId: currentStoreInfo.storeId,
         storeName: currentStoreInfo.storeName,
-        cashierId: activeStaffSession?.userId || 'USR-CASH-01',
-        cashierName: activeStaffSession?.userName || 'Andi Wijaya (Frontline Cashier)',
-        shiftId: activeStaffSession?.activeShiftId || 'SHIFT-JKT-SEN-MORNING',
+        cashierId: payload.cashierId,
+        cashierName: payload.cashierName,
+        shiftId: payload.shiftId,
         items: cart,
         subtotal,
-        discount: baseDiscountAmount,
+        discount: baseDiscountAmount + promoDiscountIDR + pointsDiscountIDR,
         tax: taxAmount,
         total: totalAmount,
         currency: activeCurrency,
@@ -766,25 +890,47 @@ export const PosModule: React.FC<PosModuleProps> = ({
         currencyRateToIDR: currentFx.rateToIDR,
         paymentMethod: resolvedMethod,
         splitPayments,
-        cashTendered: isSplitMode
-          ? cashLeg?.amountIDR || totalAmount
-          : paymentMethod === 'cash'
-          ? cashTendered
-          : totalAmount,
-        cashChange: isSplitMode ? 0 : paymentMethod === 'cash' ? cashChange : 0,
-        customerName,
-        customerPhone,
-        customerMemberId,
-        crmAccountId: selectedCrmMember?.id,
-        redeemPoints: effectiveRedeemPoints > 0 ? effectiveRedeemPoints : undefined,
-        promoCode: appliedPromoCode || undefined,
+        cashTendered: payload.cashTendered,
+        cashChange: payload.cashChange,
+        journalEntryIds: ['PENDING-OFFLINE-SYNC'],
+        inventoryDeductedCount: cart.reduce((s, it) => s + it.quantity, 0),
+        totalCogsCost: 0,
+        promoCode: payload.promoCode,
         appliedPromos: promoValidation?.appliedPromos,
-        promoDiscountIDR: promoDiscountIDR > 0 ? promoDiscountIDR : undefined,
+        promoDiscountIDR: payload.promoDiscountIDR,
+        freeGimmickItems: promoValidation?.freeGimmickItems,
+        clientIdempotencyKey,
+        offlineReceiptNumber,
+        isOfflinePendingSync: true,
       };
+      const entry: OfflineQueuedPosTx = {
+        id: clientIdempotencyKey,
+        offlineReceiptNumber,
+        queuedAt: localReceipt.timestamp,
+        payload,
+        localReceipt,
+      };
+      persistOfflineQueue([...offlineQueue, entry]);
+      setIsOnline(false);
+      setCompletedReceipt(localReceipt);
+      setIsTenderModalOpen(false);
+      clearCart();
+      onShowToast(
+        'Saved Offline (Anti-Putus Internet)',
+        `Koneksi terputus — Struk ${offlineReceiptNumber} disimpan di Offline Queue & siap dicetak 80mm.`
+      );
+    };
+
+    try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        enqueueOfflineFallback();
+        return;
+      }
 
       const res = await apiClient.posCheckout(payload);
 
       if (res.success && res.receipt) {
+        setIsOnline(true);
         setCompletedReceipt(res.receipt);
         setIsTenderModalOpen(false);
         clearCart();
@@ -804,21 +950,151 @@ export const PosModule: React.FC<PosModuleProps> = ({
         }
       }
     } catch (err: any) {
-      onShowToast('Checkout Failed', err.message || 'Error processing transaction');
+      const errMsg = String(err?.message || err || '');
+      if (err?.code === 'MARGIN_FLOOR_VIOLATION' || err?.data?.requiresSupervisorPin) {
+        setSupervisorPinInput('');
+        setSupervisorPinError('');
+        setMarginOverridePrompt({
+          payload,
+          message: errMsg || `Proteksi Margin Aktif: Harga jual bersih di bawah batas minimum HPP + ${minMarginFloorPct}%.`,
+          violations: Array.isArray(err?.data?.violations) ? err.data.violations : [],
+        });
+        return;
+      }
+      const isNetworkFailure =
+        err instanceof TypeError ||
+        /failed to fetch|networkerror|network request failed|fetch failed|load failed|err_internet|offline/i.test(errMsg);
+      if (isNetworkFailure) {
+        enqueueOfflineFallback();
+      } else {
+        onShowToast('Checkout Failed', errMsg || 'Error processing transaction');
+      }
     } finally {
       setIsProcessingCheckout(false);
     }
   };
 
+  const handleConfirmSupervisorMarginOverride = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!marginOverridePrompt) return;
+    if (!supervisorPinInput.trim()) {
+      setSupervisorPinError('Masukkan PIN Supervisor (mis. 1234) untuk otorisasi.');
+      return;
+    }
+    setIsAuthorizingOverride(true);
+    setSupervisorPinError('');
+    try {
+      const res = await apiClient.posCheckout({
+        ...marginOverridePrompt.payload,
+        supervisorMarginOverride: true,
+        supervisorPin: supervisorPinInput.trim(),
+        supervisorName: supervisorNameInput.trim() || 'Store Manager (PIN Verified)',
+      });
+      if (res.success && res.receipt) {
+        setIsOnline(true);
+        setMarginOverridePrompt(null);
+        setCompletedReceipt(res.receipt);
+        setIsTenderModalOpen(false);
+        clearCart();
+        onShowToast(
+          'Supervisor Override Approved',
+          `Receipt #${res.receipt.receiptNumber} completed with Supervisor Margin Override.`
+        );
+        loadProducts();
+        loadHistory();
+        loadShiftState();
+        if (onInventoryUpdated) onInventoryUpdated();
+      }
+    } catch (err: any) {
+      setSupervisorPinError(String(err?.message || 'PIN Supervisor tidak valid.'));
+    } finally {
+      setIsAuthorizingOverride(false);
+    }
+  };
+
+  const syncOfflineQueue = useCallback(async () => {
+    if (isSyncingOfflineQueue || offlineQueue.length === 0) return;
+    setIsSyncingOfflineQueue(true);
+    let syncedCount = 0;
+    const remaining: OfflineQueuedPosTx[] = [];
+    let abortDueToNetwork = false;
+
+    for (let idx = 0; idx < offlineQueue.length; idx++) {
+      const qItem = offlineQueue[idx];
+      if (abortDueToNetwork) {
+        remaining.push(qItem);
+        continue;
+      }
+      try {
+        const res = await apiClient.posCheckout(qItem.payload);
+        if (res.success) {
+          syncedCount++;
+          setIsOnline(true);
+        } else {
+          remaining.push(qItem);
+        }
+      } catch (err: any) {
+        const msg = String(err?.message || err || '');
+        if (err instanceof TypeError || /failed to fetch|networkerror|fetch failed/i.test(msg)) {
+          abortDueToNetwork = true;
+          setIsOnline(false);
+        }
+        remaining.push(qItem);
+      }
+    }
+
+    persistOfflineQueue(remaining);
+    setIsSyncingOfflineQueue(false);
+
+    if (syncedCount > 0) {
+      onShowToast(
+        'Offline Queue Synced',
+        `${syncedCount} struk offline berhasil disinkronkan ke server & GL (${remaining.length} tersisa).`
+      );
+      loadProducts();
+      loadHistory();
+      loadShiftState();
+      if (onInventoryUpdated) {
+        onInventoryUpdated();
+      }
+    } else if (abortDueToNetwork) {
+      onShowToast('Sync Pending', 'Koneksi server masih terputus. Struk tetap aman di Offline Queue.');
+    }
+  }, [isSyncingOfflineQueue, offlineQueue, persistOfflineQueue, onShowToast, onInventoryUpdated]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isOnline && offlineQueue.length > 0 && !isSyncingOfflineQueue) {
+      syncOfflineQueue();
+    }
+  }, [isOnline, offlineQueue.length, isSyncingOfflineQueue, syncOfflineQueue]);
+
   // Filtered product items
   const filteredProducts = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return products.filter((prod) => {
       const matchesCategory = selectedCategory === 'ALL' || prod.category === selectedCategory;
       const matchesQuery =
-        !searchQuery ||
-        prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.barcode.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        prod.name.toLowerCase().includes(q) ||
+        prod.sku.toLowerCase().includes(q) ||
+        prod.barcode.toLowerCase().includes(q) ||
+        (prod.originalSku && prod.originalSku.toLowerCase().includes(q)) ||
+        (prod.lotNumber && prod.lotNumber.toLowerCase().includes(q));
       return matchesCategory && matchesQuery;
     });
   }, [products, selectedCategory, searchQuery]);
@@ -947,6 +1223,29 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     <span>{parked.id}</span>
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Offline-First Resilience Queue Indicator & 1-Click Sync */}
+            {!isOnline && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-[11px] font-bold whitespace-nowrap">
+                <WifiOff className="w-3 h-3" />
+                <span>OFFLINE</span>
+              </span>
+            )}
+            {offlineQueue.length > 0 && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-[11px] font-bold whitespace-nowrap">
+                {isOnline ? <Wifi className="w-3 h-3 text-emerald-500" /> : <WifiOff className="w-3 h-3 text-rose-500" />}
+                <span>Offline Queue: {offlineQueue.length} Struk Menunggu Sync</span>
+                <button
+                  type="button"
+                  disabled={isSyncingOfflineQueue}
+                  onClick={syncOfflineQueue}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-[10px] font-bold cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-2.5 h-2.5 ${isSyncingOfflineQueue ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingOfflineQueue ? 'Syncing...' : 'Sync Sekarang'}</span>
+                </button>
               </div>
             )}
 
@@ -1122,14 +1421,20 @@ export const PosModule: React.FC<PosModuleProps> = ({
                         <h4 className="text-xs font-bold line-clamp-2 text-slate-900 dark:text-slate-100 leading-tight">
                           {prod.name}
                         </h4>
-                        {prod.isConsignment && (
+                        {prod.isDynamicDiscountSku ? (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500 text-slate-950 shadow-2xs">
+                            -{prod.discountPercent || 50}%
+                          </span>
+                        ) : prod.isConsignment ? (
                           <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                             Titip Jual
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                        <span className="font-mono">{prod.sku}</span>
+                        <span className="font-mono truncate max-w-[110px]" title={prod.sku}>
+                          {prod.sku}
+                        </span>
                         <span>Stock: {prod.availableStock}</span>
                       </div>
                     </div>
@@ -1137,9 +1442,16 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     {/* Price & Action Button */}
                     <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1">
                       <div>
-                        <span className="text-xs font-extrabold text-emerald-800 dark:text-emerald-400 block">
-                          {formatCurrency(prod.sellingPrice)}
-                        </span>
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                          <span className="text-xs font-extrabold text-emerald-800 dark:text-emerald-400 block">
+                            {formatCurrency(prod.sellingPrice)}
+                          </span>
+                          {prod.isDynamicDiscountSku && prod.originalSellingPrice && (
+                            <span className="text-[10px] text-slate-400 line-through font-mono">
+                              {formatCurrency(prod.originalSellingPrice)}
+                            </span>
+                          )}
+                        </div>
                         {prod.isWeighted && (
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 block -mt-0.5">
                             {formatCurrency(prod.pricePerKg || prod.sellingPrice * 4)}/kg
@@ -1384,8 +1696,29 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       >
                         <Ticket className="w-2.5 h-2.5" />
                         <span>{ap.badgeLabel}</span>
-                        <span className="font-mono">-{formatIDR(ap.discountAmountIDR)}</span>
+                        <span className="font-mono">
+                          {ap.promoType === 'PROMO_GIMMICK' ? 'GRATIS' : `-${formatIDR(ap.discountAmountIDR)}`}
+                        </span>
                       </span>
+                    ))}
+                  </div>
+                )}
+
+                {promoValidation?.freeGimmickItems && promoValidation.freeGimmickItems.length > 0 && (
+                  <div className="space-y-1 pt-0.5">
+                    {promoValidation.freeGimmickItems.map((gItem, idx) => (
+                      <div
+                        key={`gimmick-${gItem.sku}-${idx}`}
+                        className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] font-bold text-rose-700 dark:text-rose-300"
+                      >
+                        <span className="flex items-center gap-1.5 truncate">
+                          <Gift className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">
+                            {gItem.quantity}x [GRATIS GIMMICK] {gItem.name}
+                          </span>
+                        </span>
+                        <span className="font-mono shrink-0">Rp 0</span>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -1474,6 +1807,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
                         {item.appliedWholesaleTierLabel && (
                           <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold whitespace-nowrap">
                             Harga Grosir Aktif ({item.appliedWholesaleTierLabel})
+                          </span>
+                        )}
+                        {item.isDynamicDiscountSku && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold whitespace-nowrap">
+                            Marked Down -{item.discountPercent || 50}%
                           </span>
                         )}
                       </div>
@@ -2078,6 +2416,21 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   <span>Cashier:</span>
                   <span>{completedReceipt.cashierName.split(' ')[0]} (Reg #04)</span>
                 </div>
+                {(completedReceipt.isOfflinePendingSync || completedReceipt.receiptNumber.startsWith('OFF-')) && (
+                  <div className="mt-1 py-0.5 px-1.5 rounded bg-amber-100 border border-amber-400 text-amber-900 font-bold text-center text-[9px]">
+                    [OFFLINE RECEIPT · MENUNGGU SYNC]
+                  </div>
+                )}
+                {completedReceipt.marginComplianceStatus === 'SUPERVISOR_OVERRIDE' && (
+                  <div className="mt-1 py-0.5 px-1.5 rounded bg-rose-100 border border-rose-300 text-rose-800 font-bold text-center text-[9px]">
+                    [SUPERVISOR MARGIN OVERRIDE APPROVED]
+                  </div>
+                )}
+                {completedReceipt.marginComplianceStatus === 'CLEARANCE_BELOW_COST' && (
+                  <div className="mt-1 py-0.5 px-1.5 rounded bg-amber-50 border border-amber-300 text-amber-800 font-bold text-center text-[9px]">
+                    [CLEARANCE MARKDOWN BELOW WAC]
+                  </div>
+                )}
               </div>
 
               {/* Line Items */}
@@ -2093,6 +2446,20 @@ export const PosModule: React.FC<PosModuleProps> = ({
                         {item.quantity} x {formatIDR(item.unitPrice)}
                       </span>
                       {item.lotNumber && <span>LOT: {item.lotNumber}</span>}
+                    </div>
+                  </div>
+                ))}
+                {completedReceipt.freeGimmickItems?.map((gItem, idx) => (
+                  <div key={`rcp-g-${gItem.sku}-${idx}`} className="text-[10px] pt-1 border-t border-dotted border-slate-300 text-rose-700">
+                    <div className="flex justify-between font-bold">
+                      <span className="truncate max-w-[190px]">
+                        {gItem.quantity}x [GRATIS GIMMICK] {gItem.name}
+                      </span>
+                      <span>Rp 0</span>
+                    </div>
+                    <div className="text-[8.5px] text-slate-500 flex justify-between">
+                      <span>Sponsor POSM ({gItem.ruleCode})</span>
+                      <span>Bebas PPN</span>
                     </div>
                   </div>
                 ))}
@@ -2454,6 +2821,108 @@ export const PosModule: React.FC<PosModuleProps> = ({
           onShowToast={onShowToast}
         />
       )}
+
+      {/* SUPERVISOR MARGIN FLOOR OVERRIDE PIN MODAL */}
+      {marginOverridePrompt &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+            onClick={() => setMarginOverridePrompt(null)}
+          >
+            <div
+              className={`w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 ${
+                isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                      Dynamic Margin Floor Guard
+                    </span>
+                    <h3 className="text-base font-bold">Otorisasi PIN Supervisor Diperlukan</h3>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMarginOverridePrompt(null)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-900 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs text-rose-800 dark:text-rose-200 space-y-1.5">
+                <p className="font-semibold">{marginOverridePrompt.message}</p>
+                {marginOverridePrompt.violations.length > 0 && (
+                  <ul className="space-y-1 pt-1 font-mono text-[11px]">
+                    {marginOverridePrompt.violations.map((v) => (
+                      <li key={v.sku} className="flex justify-between gap-2">
+                        <span className="truncate">{v.sku}</span>
+                        <span>
+                          Net {formatIDR(v.netEffectiveUnitPrice)} &lt; Min {formatIDR(v.minAllowedUnitPrice)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <form onSubmit={handleConfirmSupervisorMarginOverride} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-semibold mb-1">Supervisor Name</label>
+                  <input
+                    type="text"
+                    value={supervisorNameInput}
+                    onChange={(e) => setSupervisorNameInput(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border ${
+                      isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Supervisor PIN (Default Store Manager PIN: 1234)</label>
+                  <input
+                    type="password"
+                    value={supervisorPinInput}
+                    onChange={(e) => setSupervisorPinInput(e.target.value)}
+                    placeholder="Masukkan PIN Supervisor..."
+                    autoFocus
+                    className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                      isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                    }`}
+                  />
+                </div>
+                {supervisorPinError && (
+                  <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                    {supervisorPinError}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setMarginOverridePrompt(null)}
+                    className="px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 font-semibold cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAuthorizingOverride}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold cursor-pointer"
+                  >
+                    {isAuthorizingOverride ? 'Memverifikasi...' : 'Otorisasi & Selesaikan Transaksi'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

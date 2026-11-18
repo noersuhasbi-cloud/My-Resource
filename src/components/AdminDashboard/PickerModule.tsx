@@ -286,8 +286,9 @@ export const PickerModule: React.FC<PickerModuleProps> = ({
 
   // Live price delta calculations for modal
   const targetReplacementItem = inventory.find((i) => i.sku === replacementSku);
-  const originalItemPrice = subItem?.finalPrice || subItem?.pricePerUnit || 0;
-  const replacementPrice = targetReplacementItem?.sellingPrice || 0;
+  const subQtyMult = Math.max(1, Number(subItem?.orderedQty) || 1);
+  const originalItemPrice = subItem?.finalPrice ?? (subItem?.pricePerUnit || 0) * subQtyMult;
+  const replacementPrice = (targetReplacementItem?.sellingPrice || 0) * subQtyMult;
   const priceDelta = replacementPrice - originalItemPrice;
 
   // GROCERY MODULE: Zone grouping & HACCP cross-contamination check

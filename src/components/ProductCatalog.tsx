@@ -92,11 +92,16 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
   };
 
   const handleAddWithFeedback = (product: Product) => {
-    onAddToCart(product, 1);
+    const trust = trustMap[product.id];
+    const hasMarkdown = !!(trust && trust.activeMarkdownPercent > 0 && trust.discountedPriceIDR);
+    const effectivePrice = hasMarkdown && trust?.discountedPriceIDR ? trust.discountedPriceIDR : product.price;
+    const effectiveProduct = effectivePrice !== product.price ? { ...product, price: effectivePrice } : product;
+
+    onAddToCart(effectiveProduct, 1);
     if (onShowToast) {
       onShowToast(
         `Added to Cart: ${product.name}`,
-        `${formatIDR(product.price)} · ${product.unit}`,
+        `${formatIDR(effectivePrice)} · ${product.unit}`,
         product.image
       );
     }

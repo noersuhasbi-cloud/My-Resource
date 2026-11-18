@@ -63,6 +63,17 @@ export function renderPrintDocument(
                 <span>Cashier:</span>
                 <span>{r.cashierName} (Shift {r.shiftId})</span>
               </div>
+              {(r.isOfflinePendingSync || r.receiptNumber.startsWith('OFF-')) && (
+                <div className="mt-1 py-0.5 px-1 border border-black text-center font-black text-[8.5px] uppercase">
+                  [OFFLINE RECEIPT · PENDING SYNC]
+                </div>
+              )}
+              {r.offlineReceiptNumber && !r.isOfflinePendingSync && (
+                <div className="flex justify-between text-[8.5px]">
+                  <span>Offline Ref:</span>
+                  <span className="font-bold">{r.offlineReceiptNumber}</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5 py-0.5">
@@ -80,6 +91,21 @@ export function renderPrintDocument(
                   </div>
                 </div>
               ))}
+              {Array.isArray(r.freeGimmickItems) &&
+                r.freeGimmickItems.map((gItem, idx) => (
+                  <div key={`prg-${gItem.sku}-${idx}`} className="text-[9.5px] pt-1 border-t border-dotted border-black">
+                    <div className="flex justify-between font-bold gap-2">
+                      <span className="truncate">
+                        {gItem.quantity}x [GRATIS GIMMICK] {gItem.name}
+                      </span>
+                      <span className="shrink-0">Rp 0</span>
+                    </div>
+                    <div className="text-[8px] flex justify-between">
+                      <span>Promo: {gItem.ruleCode} (Sponsor POSM)</span>
+                      <span>Bebas PPN</span>
+                    </div>
+                  </div>
+                ))}
             </div>
 
             <div className="pt-2 border-t border-dashed border-black space-y-0.5 text-[9.5px]">
@@ -637,6 +663,111 @@ export function renderPrintDocument(
                 </div>
               </div>
             )}
+          </div>
+        );
+      }
+
+      // =====================================================================
+      // FORMAT GROUP C: A4 READY-TO-CUT SHELF PRICE TAGS (LABEL HARGA RAK)
+      // =====================================================================
+      case 'shelf_price_tags_a4': {
+        const { tags, taxInclusiveDisplay } = activePrintPayload;
+        return (
+          <div className="print-page-a4 bg-white text-slate-900 font-sans space-y-4">
+            <div className="border-b-2 border-slate-900 pb-3 flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-[#0F4C3A] text-white font-mono font-black text-[11px]">
+                    GROCEMART
+                  </span>
+                  <h2 className="text-sm font-black uppercase tracking-wider">
+                    BATCH CETAK LABEL HARGA RAK (SHELF PRICE TALKER)
+                  </h2>
+                </div>
+                <p className="text-[10px] text-slate-600 mt-1">
+                  Permendag RI Price Transparency · Ready-to-Cut A4 Grid ({tags.length} SKU terpilih)
+                </p>
+              </div>
+              <div className="text-right font-mono text-[10px] text-slate-600">
+                <div>Dicetak: {printedAt}</div>
+                <div>{taxInclusiveDisplay ? 'Harga Termasuk PPN' : 'Harga Sebelum PPN'}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {tags.map((tag) => {
+                const bestWholesale =
+                  Array.isArray(tag.wholesaleTiers) && tag.wholesaleTiers.length > 0
+                    ? [...tag.wholesaleTiers].sort((a, b) => a.minQty - b.minQty)[0]
+                    : undefined;
+                const displayPrice = taxInclusiveDisplay
+                  ? tag.sellingPrice
+                  : Math.round(tag.sellingPrice * 1.11);
+
+                return (
+                  <div
+                    key={tag.sku}
+                    className="border-2 border-dashed border-slate-800 rounded-lg p-3 bg-white text-slate-900 flex flex-col justify-between gap-2 break-inside-avoid"
+                  >
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-200 pb-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1 flex-wrap mb-1">
+                          <span className="px-1.5 py-0.5 bg-[#0F4C3A] text-white text-[8px] font-black uppercase rounded">
+                            GROCEMART
+                          </span>
+                          {tag.halalStatus === 'HALAL_CERTIFIED' && (
+                            <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-900 border border-emerald-700 text-[8px] font-black uppercase rounded">
+                              HALAL BPJPH{tag.bpjphCertNumber ? ` · ${tag.bpjphCertNumber.slice(0, 10)}` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs font-black leading-tight text-slate-950">
+                          {tag.productName}
+                        </div>
+                        <div className="text-[9.5px] font-mono text-slate-600 mt-0.5">
+                          SKU: {tag.sku} · Satuan: {tag.unit}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-[8.5px] uppercase font-bold text-slate-500">
+                          {taxInclusiveDisplay ? 'Harga Eceran (Incl. PPN)' : 'Harga Eceran (+ PPN)'}
+                        </div>
+                        <div className="text-xl font-black font-mono tabular-nums text-[#0F4C3A] leading-tight">
+                          {formatIDR(displayPrice)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {bestWholesale && (
+                      <div className="px-2 py-1 rounded bg-amber-50 border border-amber-400 flex items-center justify-between text-[9.5px] font-bold text-amber-950">
+                        <span>
+                          Harga Grosir ≥ {bestWholesale.minQty} {tag.unit}:
+                        </span>
+                        <span className="font-mono font-black">
+                          {formatIDR(bestWholesale.unitPriceIDR)} / {tag.unit}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2 pt-1 text-[9px] font-mono text-slate-700">
+                      <div className="flex items-center gap-1.5">
+                        <svg viewBox={`0 0 ${tag.barBits.length + 8} 18`} className="w-20 h-4 bg-white">
+                          {tag.barBits.split('').map((bit, idx) =>
+                            bit === '1' ? (
+                              <rect key={idx} x={idx + 4} y={1} width={1} height={16} fill="#000000" />
+                            ) : null
+                          )}
+                        </svg>
+                        <span className="font-bold">{tag.ean13Code}</span>
+                      </div>
+                      <span className="text-[8.5px] font-semibold text-slate-500">
+                        Berlaku: {tag.effectiveDate}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       }

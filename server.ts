@@ -204,6 +204,10 @@ import type {
   CustomerClaimIssueCategory,
   StorefrontProductTrustMeta,
   ErpConfigurationSettings,
+  FraudEventType,
+  FraudTelemetryEvent,
+  FraudRadarAlert,
+  FraudRadarResponse,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -300,9 +304,11 @@ let enterpriseSettings: EnterpriseSettingsConfig = JSON.parse(JSON.stringify(INI
 function mergeErpSettings(raw?: Partial<ErpConfigurationSettings> | null): ErpConfigurationSettings {
   const base = INITIAL_ERP_SETTINGS;
   const src = raw || {};
+  const rawMarginFloor = Number(src.minMarginFloorPct);
   return {
     ...base,
     ...src,
+    minMarginFloorPct: Number.isFinite(rawMarginFloor) ? Math.max(0, Math.min(50, rawMarginFloor)) : (base.minMarginFloorPct ?? 2.0),
     ojolChannelRates: {
       grabMart: { ...base.ojolChannelRates.grabMart, ...(src.ojolChannelRates?.grabMart || {}) },
       goMart: { ...base.ojolChannelRates.goMart, ...(src.ojolChannelRates?.goMart || {}) },
@@ -1929,10 +1935,6 @@ function ensureHalalComplianceMetadata() {
       if (seed.isPromoGimmick && !existing.isPromoGimmick) existing.isPromoGimmick = true;
     }
   });
-  if (!promotionRulesList.some((r) => r.type === 'PROMO_GIMMICK')) {
-    const gimmickSeed = createInitialPromotionRules().find((r) => r.type === 'PROMO_GIMMICK');
-    if (gimmickSeed) promotionRulesList.push(gimmickSeed);
-  }
   INITIAL_STORE_INVENTORY_TIERS.forEach((seedTier) => {
     const existingTier = storeInventoryTiers.find(
       (t) => t.sku === seedTier.sku && t.storeId === seedTier.storeId
@@ -3613,6 +3615,12 @@ function createInitialPromotionRules(): PromotionRule[] {
   ];
 }
 let promotionRulesList: PromotionRule[] = createInitialPromotionRules();
+function ensurePromoGimmickRuleSeeded() {
+  if (!promotionRulesList.some((r) => r.type === 'PROMO_GIMMICK')) {
+    const gimmickSeed = createInitialPromotionRules().find((r) => r.type === 'PROMO_GIMMICK');
+    if (gimmickSeed) promotionRulesList.push(gimmickSeed);
+  }
+}
 let posTransactionsHistory: POSTransactionReceipt[] = [
   {
     receiptNumber: 'RCP-SEN-882104',
@@ -4831,6 +4839,397 @@ function appendAuditTrailLog(params: {
   return entry;
 }
 
+let fraudEvents: FraudTelemetryEvent[] = [];
+let resolvedFraudAlertMeta: Record<
+  string,
+  { resolvedBy: string; resolvedAt: string; resolutionNote?: string }
+> = {};
+
+function recordFraudTelemetryEvent(params: {
+  req?: Request;
+  eventType: FraudEventType;
+  storeId?: string;
+  shiftId?: string;
+  operatorId?: string;
+  operatorName?: string;
+  operatorRole?: string;
+  sku?: string;
+  productName?: string;
+  amountIDR?: number;
+  quantity?: number;
+  reason?: string;
+  supervisorName?: string;
+  timestamp?: string;
+}): FraudTelemetryEvent {
+  const reqHeaders = params.req?.headers;
+  const rawRole = typeof reqHeaders?.['x-operator-role'] === 'string' ? reqHeaders['x-operator-role'].trim() : undefined;
+  const rawBranch = typeof reqHeaders?.['x-operator-branch'] === 'string' ? reqHeaders['x-operator-branch'].trim() : undefined;
+  const rawOpId = typeof reqHeaders?.['x-operator-id'] === 'string' ? reqHeaders['x-operator-id'].trim() : undefined;
+
+  const matchedOp = (params.operatorId || rawOpId)
+    ? AVAILABLE_STAFF_USERS.find((u) => u.userId === (params.operatorId || rawOpId))
+    : undefined;
+  const resolvedRole = params.operatorRole || (rawRole ? normalizeServerRole(rawRole) : normalizeServerRole(currentActiveStaffSession.userRole));
+  const resolvedOperatorId = params.operatorId || rawOpId || matchedOp?.userId || currentActiveStaffSession.userId;
+  const resolvedOperatorName = params.operatorName || matchedOp?.userName || currentActiveStaffSession.userName;
+  const resolvedStoreId =
+    params.storeId ||
+    (rawBranch && rawBranch !== 'ALL' && rawBranch !== 'CONSOLIDATED' ? rawBranch : undefined) ||
+    matchedOp?.storeId ||
+    'store-jkt-senopati';
+
+  const seq = (fraudEvents.length + 1).toString().padStart(4, '0');
+  const evt: FraudTelemetryEvent = {
+    id: `FRD-EVT-2026-${seq}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+    timestamp: params.timestamp || new Date().toISOString(),
+    eventType: params.eventType,
+    storeId: resolvedStoreId,
+    shiftId: params.shiftId || currentActiveStaffSession.activeShiftId || 'SHIFT-DEFAULT',
+    operatorId: resolvedOperatorId,
+    operatorName: resolvedOperatorName,
+    operatorRole: resolvedRole,
+    sku: params.sku,
+    productName: params.productName,
+    amountIDR: params.amountIDR !== undefined ? roundIDR(Number(params.amountIDR) || 0) : undefined,
+    quantity: params.quantity !== undefined ? Number(params.quantity) : undefined,
+    reason: params.reason,
+    supervisorName: params.supervisorName,
+  };
+  fraudEvents.unshift(evt);
+  return evt;
+}
+
+function computeFraudRadarOverview(storeFilter?: string): FraudRadarResponse {
+  const erp = getErpSettings();
+  const shrinkTolerancePct = Number(erp.naturalMoistureShrinkageTolerancePct ?? 2.0);
+  const alerts: FraudRadarAlert[] = [];
+
+  const scopedEvents = storeFilter && storeFilter !== 'ALL' && storeFilter !== 'CONSOLIDATED'
+    ? fraudEvents.filter((e) => e.storeId === storeFilter)
+    : fraudEvents;
+
+  const resolveStatusMeta = (alertId: string, latestTs: string) => {
+    const meta = resolvedFraudAlertMeta[alertId];
+    if (meta && new Date(latestTs).getTime() <= new Date(meta.resolvedAt).getTime()) {
+      return {
+        status: 'RESOLVED' as const,
+        resolvedBy: meta.resolvedBy,
+        resolvedAt: meta.resolvedAt,
+        resolutionNote: meta.resolutionNote,
+      };
+    }
+    return { status: 'ACTIVE' as const };
+  };
+
+  // Rule 1 (EXCESSIVE_POS_VOIDS): >= 3 CART_LINE_VOID events for an operator in a shift
+  const voidsByOpShift = new Map<string, FraudTelemetryEvent[]>();
+  scopedEvents
+    .filter((e) => e.eventType === 'CART_LINE_VOID')
+    .forEach((e) => {
+      const key = `${e.operatorId || e.operatorName}::${e.shiftId || 'SHIFT-DEFAULT'}`;
+      const arr = voidsByOpShift.get(key) || [];
+      arr.push(e);
+      voidsByOpShift.set(key, arr);
+    });
+
+  voidsByOpShift.forEach((evts, key) => {
+    if (evts.length >= 3) {
+      const sorted = [...evts].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const latest = sorted[0];
+      const totalVoidValue = sorted.reduce((s, e) => s + (e.amountIDR || 0), 0);
+      const alertId = `FRD-VOIDS-${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      const resMeta = resolveStatusMeta(alertId, latest.timestamp);
+      alerts.push({
+        id: alertId,
+        ruleCode: 'EXCESSIVE_POS_VOIDS',
+        severity: 'HIGH_RISK',
+        title: `Excessive POS Cart Line Voids (${evts.length}x in Shift)`,
+        description: `${latest.operatorName} performed ${evts.length} cart line voids in shift ${latest.shiftId || 'Active'} (total potential value Rp ${totalVoidValue.toLocaleString('id-ID')}).`,
+        storeId: latest.storeId,
+        operatorId: latest.operatorId,
+        operatorName: latest.operatorName,
+        metricValue: evts.length,
+        thresholdValue: 3,
+        amountIDR: totalVoidValue,
+        eventIds: sorted.map((e) => e.id),
+        detectedAt: latest.timestamp,
+        ...resMeta,
+      });
+    }
+  });
+
+  // Rule 2 (HIGH_VALUE_EXCHANGE_PAIDOUT): Single-shift Exchange + Cash Paid-Out > Rp 500.000
+  const payoutByOpShift = new Map<string, FraudTelemetryEvent[]>();
+  scopedEvents
+    .filter((e) => e.eventType === 'HIGH_VALUE_EXCHANGE' || e.eventType === 'CASH_PAID_OUT')
+    .forEach((e) => {
+      const key = `${e.operatorId || e.operatorName}::${e.shiftId || 'SHIFT-DEFAULT'}`;
+      const arr = payoutByOpShift.get(key) || [];
+      arr.push(e);
+      payoutByOpShift.set(key, arr);
+    });
+
+  payoutByOpShift.forEach((evts, key) => {
+    const totalAmt = evts.reduce((s, e) => s + (e.amountIDR || 0), 0);
+    if (totalAmt > 500000) {
+      const sorted = [...evts].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const latest = sorted[0];
+      const alertId = `FRD-PAYOUT-${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      const resMeta = resolveStatusMeta(alertId, latest.timestamp);
+      alerts.push({
+        id: alertId,
+        ruleCode: 'HIGH_VALUE_EXCHANGE_PAIDOUT',
+        severity: totalAmt > 1000000 ? 'HIGH_RISK' : 'MEDIUM_RISK',
+        title: `High-Value Exchange / Cash Paid-Out (Rp ${totalAmt.toLocaleString('id-ID')})`,
+        description: `${latest.operatorName} logged ${evts.length} POS exchange / paid-out event(s) totaling Rp ${totalAmt.toLocaleString('id-ID')} in shift ${latest.shiftId || 'Active'} (threshold Rp 500.000).`,
+        storeId: latest.storeId,
+        operatorId: latest.operatorId,
+        operatorName: latest.operatorName,
+        metricValue: totalAmt,
+        thresholdValue: 500000,
+        amountIDR: totalAmt,
+        eventIds: sorted.map((e) => e.id),
+        detectedAt: latest.timestamp,
+        ...resMeta,
+      });
+    }
+  });
+
+  // Rule 3 (HIGH_VALUE_SKU_SHRINKAGE): unitCost >= Rp 50.000 with repeated negative variances or shrinkage > tolerance
+  interface SkuShrinkStat {
+    sku: string;
+    productName: string;
+    storeId: string;
+    unitCost: number;
+    negativeVarianceCount: number;
+    toleranceBreachCount: number;
+    totalLossIDR: number;
+    latestAt: string;
+    eventIds: string[];
+  }
+  const skuStats = new Map<string, SkuShrinkStat>();
+
+  const resolveSkuUnitCost = (sku: string, fallbackCost?: number): { unitCost: number; productName?: string } => {
+    const inv = inventoryList.find((i) => i.sku === sku);
+    const tier = storeInventoryTiers.find((t) => t.sku === sku);
+    const batch = inventoryBatches.find((b) => b.sku === sku && (b.unitCost || 0) > 0);
+    const cost = Math.max(
+      Number(fallbackCost) || 0,
+      Number(inv?.wacUnitCost) || 0,
+      Number(inv?.unitCost) || 0,
+      Number(tier?.unitCost) || 0,
+      Number(batch?.unitCost) || 0
+    );
+    return { unitCost: roundIDR(cost), productName: inv?.productName || inv?.name || batch?.productName };
+  };
+
+  const pushSkuStat = (params: {
+    sku: string;
+    productName?: string;
+    storeId: string;
+    unitCost: number;
+    lossIDR: number;
+    isToleranceBreach?: boolean;
+    timestamp: string;
+    refId: string;
+  }) => {
+    if (params.unitCost < 50000) return;
+    if (storeFilter && storeFilter !== 'ALL' && storeFilter !== 'CONSOLIDATED' && params.storeId !== storeFilter) return;
+    const prev = skuStats.get(params.sku) || {
+      sku: params.sku,
+      productName: params.productName || params.sku,
+      storeId: params.storeId,
+      unitCost: params.unitCost,
+      negativeVarianceCount: 0,
+      toleranceBreachCount: 0,
+      totalLossIDR: 0,
+      latestAt: params.timestamp,
+      eventIds: [],
+    };
+    prev.negativeVarianceCount += 1;
+    if (params.isToleranceBreach) prev.toleranceBreachCount += 1;
+    prev.totalLossIDR += Math.abs(roundIDR(params.lossIDR));
+    if (new Date(params.timestamp).getTime() > new Date(prev.latestAt).getTime()) {
+      prev.latestAt = params.timestamp;
+    }
+    prev.eventIds.push(params.refId);
+    skuStats.set(params.sku, prev);
+  };
+
+  rackStocktakeSubmissions.forEach((sub) => {
+    (sub.lines || []).forEach((line) => {
+      if ((line.varianceQty || 0) < 0) {
+        const meta = resolveSkuUnitCost(line.sku, line.unitCostIDR);
+        const pctLoss = line.systemOnHand > 0 ? (Math.abs(line.varianceQty) / line.systemOnHand) * 100 : 100;
+        pushSkuStat({
+          sku: line.sku,
+          productName: line.productName || meta.productName,
+          storeId: sub.storeId,
+          unitCost: meta.unitCost,
+          lossIDR: Math.abs(line.varianceValueIDR || line.varianceQty * meta.unitCost),
+          isToleranceBreach: pctLoss > shrinkTolerancePct,
+          timestamp: sub.submittedAt,
+          refId: `${sub.sheetNumber}:${line.rackBinCode}`,
+        });
+      }
+    });
+  });
+
+  stockOpnameSessions.forEach((sess) => {
+    (sess.items || []).forEach((it) => {
+      if ((it.varianceQty || 0) < 0) {
+        const meta = resolveSkuUnitCost(it.sku, it.unitCost);
+        const pctLoss = it.systemStock > 0 ? (Math.abs(it.varianceQty) / it.systemStock) * 100 : 100;
+        pushSkuStat({
+          sku: it.sku,
+          productName: it.productName || meta.productName,
+          storeId: it.storeId || sess.storeId,
+          unitCost: meta.unitCost,
+          lossIDR: Math.abs(it.financialVarianceIDR || it.varianceQty * meta.unitCost),
+          isToleranceBreach: pctLoss > shrinkTolerancePct,
+          timestamp: sess.completedAt || sess.date,
+          refId: sess.id,
+        });
+      }
+    });
+  });
+
+  blindOpnameSheetsList.forEach((sheet) => {
+    (sheet.items || []).forEach((it) => {
+      if ((it.varianceQty || 0) < 0) {
+        const meta = resolveSkuUnitCost(it.sku, it.unitCostIDR);
+        const pctLoss = (it.systemQty || 0) > 0 ? (Math.abs(it.varianceQty || 0) / (it.systemQty || 1)) * 100 : 100;
+        pushSkuStat({
+          sku: it.sku,
+          productName: it.productName || meta.productName,
+          storeId: sheet.storeId,
+          unitCost: meta.unitCost,
+          lossIDR: Math.abs(it.varianceValueIDR || (it.varianceQty || 0) * meta.unitCost),
+          isToleranceBreach: pctLoss > shrinkTolerancePct,
+          timestamp: sheet.submittedAt || sheet.createdAt,
+          refId: sheet.sheetNumber,
+        });
+      }
+    });
+  });
+
+  naturalShrinkageAdjustments.forEach((adj) => {
+    const meta = resolveSkuUnitCost(adj.sku, adj.unitCost);
+    const exceedsTolerance = !adj.isWithinNaturalTolerance || (adj.weightLossPercent || 0) > shrinkTolerancePct;
+    if (exceedsTolerance || (adj.weightLossGrams || 0) > 0) {
+      pushSkuStat({
+        sku: adj.sku,
+        productName: adj.productName || meta.productName,
+        storeId: adj.storeId,
+        unitCost: meta.unitCost,
+        lossIDR: adj.totalLossCost || 0,
+        isToleranceBreach: exceedsTolerance,
+        timestamp: adj.timestamp,
+        refId: adj.id,
+      });
+    }
+  });
+
+  wasteRecords.forEach((w) => {
+    const meta = resolveSkuUnitCost(w.sku, w.unitCost);
+    if ((w.totalShrinkageCost || 0) > 0) {
+      pushSkuStat({
+        sku: w.sku,
+        productName: w.productName || meta.productName,
+        storeId: w.storeId,
+        unitCost: meta.unitCost,
+        lossIDR: w.totalShrinkageCost,
+        isToleranceBreach: true,
+        timestamp: w.reportedAt,
+        refId: w.id,
+      });
+    }
+  });
+
+  skuStats.forEach((stat) => {
+    if (stat.negativeVarianceCount >= 2 || stat.toleranceBreachCount >= 1) {
+      const alertId = `FRD-SHRINK-${stat.sku.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      const resMeta = resolveStatusMeta(alertId, stat.latestAt);
+      alerts.push({
+        id: alertId,
+        ruleCode: 'HIGH_VALUE_SKU_SHRINKAGE',
+        severity: 'CRITICAL_LOSS',
+        title: `Critical Loss on High-Value SKU: ${stat.productName}`,
+        description: `${stat.sku} (WAC Rp ${stat.unitCost.toLocaleString('id-ID')}/unit) recorded ${stat.negativeVarianceCount} negative variance/shrinkage event(s) (${stat.toleranceBreachCount} exceeding ${shrinkTolerancePct}% tolerance), total loss Rp ${stat.totalLossIDR.toLocaleString('id-ID')}.`,
+        storeId: stat.storeId,
+        sku: stat.sku,
+        productName: stat.productName,
+        metricValue: stat.negativeVarianceCount,
+        thresholdValue: 2,
+        amountIDR: stat.totalLossIDR,
+        eventIds: stat.eventIds,
+        detectedAt: stat.latestAt,
+        ...resMeta,
+      });
+    }
+  });
+
+  // Margin Override activity visibility
+  const overrideEvents = scopedEvents.filter((e) => e.eventType === 'MARGIN_OVERRIDE_APPROVED');
+  if (overrideEvents.length > 0) {
+    const byOp = new Map<string, FraudTelemetryEvent[]>();
+    overrideEvents.forEach((e) => {
+      const key = `${e.operatorId || e.operatorName}::${e.shiftId || 'SHIFT-DEFAULT'}`;
+      const arr = byOp.get(key) || [];
+      arr.push(e);
+      byOp.set(key, arr);
+    });
+    byOp.forEach((evts, key) => {
+      const sorted = [...evts].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const latest = sorted[0];
+      const totalOverrideAmt = sorted.reduce((s, e) => s + (e.amountIDR || 0), 0);
+      const alertId = `FRD-MARGIN-${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      const resMeta = resolveStatusMeta(alertId, latest.timestamp);
+      alerts.push({
+        id: alertId,
+        ruleCode: 'MARGIN_OVERRIDE_ACTIVITY',
+        severity: 'MEDIUM_RISK',
+        title: `Supervisor Margin Floor Overrides (${evts.length}x)`,
+        description: `${latest.operatorName} executed ${evts.length} below-floor sale(s) authorized by ${latest.supervisorName || 'Supervisor'} (total receipt value Rp ${totalOverrideAmt.toLocaleString('id-ID')}).`,
+        storeId: latest.storeId,
+        operatorId: latest.operatorId,
+        operatorName: latest.operatorName,
+        sku: latest.sku,
+        productName: latest.productName,
+        metricValue: evts.length,
+        thresholdValue: 1,
+        amountIDR: totalOverrideAmt,
+        eventIds: sorted.map((e) => e.id),
+        detectedAt: latest.timestamp,
+        ...resMeta,
+      });
+    });
+  }
+
+  const severityOrder: Record<FraudRadarAlert['severity'], number> = {
+    CRITICAL_LOSS: 0,
+    HIGH_RISK: 1,
+    MEDIUM_RISK: 2,
+  };
+  alerts.sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'ACTIVE' ? -1 : 1;
+    if (severityOrder[a.severity] !== severityOrder[b.severity]) {
+      return severityOrder[a.severity] - severityOrder[b.severity];
+    }
+    return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
+  });
+
+  return {
+    alerts,
+    activeCount: alerts.filter((a) => a.status === 'ACTIVE').length,
+    criticalCount: alerts.filter((a) => a.status === 'ACTIVE' && a.severity === 'CRITICAL_LOSS').length,
+    highRiskCount: alerts.filter((a) => a.status === 'ACTIVE' && a.severity === 'HIGH_RISK').length,
+    resolvedCount: alerts.filter((a) => a.status === 'RESOLVED').length,
+    recentEvents: scopedEvents.slice(0, 50),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 function normalizeSrmVendorKey(rawName?: string): string {
   return String(rawName || '')
     .toLowerCase()
@@ -5503,6 +5902,38 @@ function evaluatePromosServer(
       } else {
         message = `Tier voucher ${normalizedCoupon} is already applied.`;
       }
+    } else if (matchedCoupon.type === 'PROMO_GIMMICK') {
+      const gimmickSku = String(matchedCoupon.gimmickSkuId || '').trim();
+      const minSpend = Math.max(
+        0,
+        Number(matchedCoupon.gimmickMinSpendIDR ?? matchedCoupon.minOrderSubtotalIDR ?? 0)
+      );
+      if (cartSubtotal <= 0 || cartSubtotal < minSpend) {
+        valid = false;
+        message = `Minimum spend of Rp ${minSpend.toLocaleString('id-ID')} required to unlock free gift ${matchedCoupon.code}.`;
+      } else if (!gimmickSku) {
+        valid = false;
+        message = `Free gift SKU is not configured for ${matchedCoupon.code}.`;
+      } else {
+        const targetStoreId = options?.storeId || 'store-jkt-senopati';
+        const gimmickInv = inventoryList.find((i) => i.sku === gimmickSku);
+        const gimmickTier = storeInventoryTiers.find(
+          (t) => t.sku === gimmickSku && (t.storeId === targetStoreId || targetStoreId === 'CONSOLIDATED')
+        );
+        const atp = getSellableNonExpiredAtpStock(gimmickSku, targetStoreId);
+        const availableUnits = atp.hasBatchTracking
+          ? atp.effectiveAtp
+          : gimmickTier
+          ? gimmickTier.availableStock
+          : gimmickInv?.currentStock || 0;
+        if (availableUnits >= 1) {
+          valid = true;
+          message = `Free Gimmick (${gimmickInv?.productName || gimmickSku}) unlocked for this order!`;
+        } else {
+          valid = false;
+          message = `Free gift ${gimmickInv?.productName || gimmickSku} is currently out of stock at this branch.`;
+        }
+      }
     } else {
       const eligibleItems = normalizedCart.filter((it) => isRuleTargetMatch(matchedCoupon, it));
       const eligibleSubtotal = eligibleItems.reduce((sum, it) => sum + it.lineTotal, 0);
@@ -5839,6 +6270,8 @@ function captureServerState() {
     crmDeals,
     crmActivities,
     auditTrailLogs,
+    fraudEvents,
+    resolvedFraudAlertMeta,
     standingOrdersList,
     customerClaimsList,
     qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
@@ -5969,6 +6402,11 @@ function applyServerState(snap: any) {
     Array.isArray(snap.auditTrailLogs) && snap.auditTrailLogs.length > 0
       ? snap.auditTrailLogs
       : createInitialAuditTrailLogs();
+  fraudEvents = Array.isArray(snap.fraudEvents) ? snap.fraudEvents : [];
+  resolvedFraudAlertMeta =
+    snap.resolvedFraudAlertMeta && typeof snap.resolvedFraudAlertMeta === 'object'
+      ? snap.resolvedFraudAlertMeta
+      : {};
   standingOrdersList =
     Array.isArray(snap.standingOrdersList) && snap.standingOrdersList.length > 0
       ? snap.standingOrdersList
@@ -6044,6 +6482,7 @@ function hydrateStateFromSnapshot() {
         applyServerState(parsed);
         ensureRegulatoryCoaAccounts();
         ensureHalalComplianceMetadata();
+        ensurePromoGimmickRuleSeeded();
         ensureConsignmentSeedItems();
         syncAllBatchesExpiryStatus(Date.now());
         syncWarehouseRackOccupancy();
@@ -6057,6 +6496,7 @@ function hydrateStateFromSnapshot() {
   inventoryBatches = createInitialBatches();
   ensureRegulatoryCoaAccounts();
   ensureHalalComplianceMetadata();
+  ensurePromoGimmickRuleSeeded();
   ensureConsignmentSeedItems();
   syncWarehouseRackOccupancy();
   seedBaselineEnterpriseNotifications();
@@ -6088,11 +6528,14 @@ async function resetDemoStateToBaseline() {
     crmDeals = createInitialCrmDeals();
     crmActivities = createInitialCrmActivities();
     auditTrailLogs = createInitialAuditTrailLogs();
+    fraudEvents = [];
+    resolvedFraudAlertMeta = {};
     promotionRulesList = createInitialPromotionRules();
     standingOrdersList = createInitialStandingOrders();
     customerClaimsList = [];
     ensureRegulatoryCoaAccounts();
     ensureHalalComplianceMetadata();
+    ensurePromoGimmickRuleSeeded();
     ensureConsignmentSeedItems();
     syncAllBatchesExpiryStatus(Date.now());
     syncWarehouseRackOccupancy();
@@ -6358,6 +6801,11 @@ async function startServer() {
         if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
       }
 
+      if (urlPath === '/admin/audit/fraud-radar' || urlPath.startsWith('/admin/audit/fraud-radar/')) {
+        const allowed: CanonicalServerRole[] = ['store_manager', 'admin', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
+      }
+
       if (
         (urlPath === '/admin/settings/enterprise' ||
           urlPath === '/admin/settings/pos-config' ||
@@ -6461,6 +6909,7 @@ async function startServer() {
 
       if (
         urlPath === '/admin/procurement/gr/receive-partial' ||
+        urlPath === '/admin/procurement/goods-receipts' ||
         urlPath === '/admin/procurement/cross-dock' ||
         urlPath === '/admin/qc/inspections' ||
         urlPath === '/admin/qc/putaway-suggestion'
@@ -7741,8 +8190,9 @@ async function startServer() {
     if (!item) {
       return res.status(404).json({ error: `SKU '${cleanSku}' not found` });
     }
-    const newPrice = Math.max(0, roundIDR(Number(sellingPrice)));
-    if (!Number.isFinite(Number(sellingPrice)) || newPrice < 0) {
+    const rawPriceInput = sellingPrice !== undefined ? Number(sellingPrice) : item.sellingPrice;
+    const newPrice = Math.max(0, roundIDR(rawPriceInput));
+    if (!Number.isFinite(rawPriceInput) || newPrice < 0) {
       return res.status(400).json({ error: 'Valid non-negative sellingPrice is required.' });
     }
     const nowIso = new Date().toISOString();
@@ -10345,7 +10795,7 @@ async function startServer() {
   });
 
   // GOODS RECEIPT WITH PARTIAL SHIPMENT FULFILLMENT + ADVANCED LANDED COST INJECTION
-  app.post('/api/admin/procurement/gr/receive-partial', (req: Request, res: Response) => {
+  const handleReceivePartialGoods = (req: Request, res: Response) => {
     const {
       poId,
       deliveryNoteNumber = `SJ-${Date.now().toString().slice(-6)}`,
@@ -10354,6 +10804,9 @@ async function startServer() {
       warehouseZoneId = 'WH-JKT-SEN-COLD',
       items, // array of { sku, quantityReceived, batchNumber, expiryDate, qualityCondition, tempCheckCelsius }
       landedCostAllocation,
+      unloadingLaborFeeIDR,
+      unloadingFeePayerCoa = '1011',
+      capitalizedToLandedCost = false,
     } = req.body as {
       poId: string;
       deliveryNoteNumber?: string;
@@ -10368,6 +10821,9 @@ async function startServer() {
         coldChainLogisticsIDR?: number;
         allocationMethod?: 'BY_QUANTITY' | 'BY_VALUE';
       };
+      unloadingLaborFeeIDR?: number;
+      unloadingFeePayerCoa?: '1011' | '1010' | '2010';
+      capitalizedToLandedCost?: boolean;
     };
 
     const po = purchaseOrders.find((p) => p.id === poId);
@@ -10395,11 +10851,15 @@ async function startServer() {
       }
     }
 
-    // Compute optional Advanced Landed Cost & Import Allocation extras
+    // Compute optional Advanced Landed Cost & Import Allocation extras + Unloading Labor (Biaya Bongkar Muat SPSI)
     const safeFreight = Math.max(0, roundIDR(Number(landedCostAllocation?.freightCostIDR) || 0));
     const safeInsurance = Math.max(0, roundIDR(Number(landedCostAllocation?.insuranceCostIDR) || 0));
     const safeCustoms = Math.max(0, roundIDR(Number(landedCostAllocation?.customsDutyIDR) || 0));
     const safeColdChain = Math.max(0, roundIDR(Number(landedCostAllocation?.coldChainLogisticsIDR) || 0));
+    const safeUnloadingFee = Math.max(0, roundIDR(Number(unloadingLaborFeeIDR) || 0));
+    const resolvedUnloadingPayerCoa: '1011' | '1010' | '2010' =
+      unloadingFeePayerCoa === '1010' || unloadingFeePayerCoa === '2010' ? unloadingFeePayerCoa : '1011';
+    const isUnloadingCapitalized = Boolean(capitalizedToLandedCost) && safeUnloadingFee > 0;
     const totalLandedExtrasIDR = safeFreight + safeInsurance + safeCustoms + safeColdChain;
     const lcMethod: 'BY_QUANTITY' | 'BY_VALUE' =
       landedCostAllocation?.allocationMethod === 'BY_VALUE' ? 'BY_VALUE' : 'BY_QUANTITY';
@@ -10425,20 +10885,22 @@ async function startServer() {
       })
       .filter(Boolean) as Array<{ sku: string; totalAdded: number; baseCost: number }>;
 
+    const totalCapitalizedPoolIDR =
+      totalLandedExtrasIDR + (isUnloadingCapitalized && ownedLinesMetrics.length > 0 ? safeUnloadingFee : 0);
     const totalOwnedUnitsAdded = ownedLinesMetrics.reduce((s, m) => s + m.totalAdded, 0);
     const totalOwnedBaseCost = ownedLinesMetrics.reduce((s, m) => s + m.baseCost, 0);
     const landedShareBySku = new Map<string, number>();
-    if (totalLandedExtrasIDR > 0 && ownedLinesMetrics.length > 0) {
+    if (totalCapitalizedPoolIDR > 0 && ownedLinesMetrics.length > 0) {
       let runningAllocated = 0;
       ownedLinesMetrics.forEach((m, idx) => {
         const share =
           idx === ownedLinesMetrics.length - 1
-            ? Math.max(0, totalLandedExtrasIDR - runningAllocated)
+            ? Math.max(0, totalCapitalizedPoolIDR - runningAllocated)
             : lcMethod === 'BY_VALUE' && totalOwnedBaseCost > 0
-            ? Math.round((totalLandedExtrasIDR * m.baseCost) / totalOwnedBaseCost)
+            ? Math.round((totalCapitalizedPoolIDR * m.baseCost) / totalOwnedBaseCost)
             : totalOwnedUnitsAdded > 0
-            ? Math.round((totalLandedExtrasIDR * m.totalAdded) / totalOwnedUnitsAdded)
-            : Math.round(totalLandedExtrasIDR / ownedLinesMetrics.length);
+            ? Math.round((totalCapitalizedPoolIDR * m.totalAdded) / totalOwnedUnitsAdded)
+            : Math.round(totalCapitalizedPoolIDR / ownedLinesMetrics.length);
         runningAllocated += share;
         landedShareBySku.set(m.sku, share);
       });
@@ -10651,6 +11113,9 @@ async function startServer() {
           ? `Partial shipment received. ${totalRemaining} units backorder remaining.`
           : 'Order 100% fulfilled.'),
       glEntryId: roundedOwnedCost > 0 ? gleId1 : undefined,
+      unloadingLaborFeeIDR: safeUnloadingFee > 0 ? safeUnloadingFee : undefined,
+      unloadingFeePayerCoa: safeUnloadingFee > 0 ? resolvedUnloadingPayerCoa : undefined,
+      capitalizedToLandedCost: safeUnloadingFee > 0 ? isUnloadingCapitalized : undefined,
     };
 
     po.goodsReceiptIds = po.goodsReceiptIds || [];
@@ -10698,47 +11163,55 @@ async function startServer() {
     }
 
     // Capitalize optional Import / Freight / Cold-Chain Landed Cost extras into #1040 vs #2040 Clearing
-    const effectiveLandedAbsorbed = landedAllocatedItems.reduce((s, it) => s + it.totalLineLandedCost, 0);
+    const effectiveTotalAbsorbed = landedAllocatedItems.reduce((s, it) => s + it.totalLineLandedCost, 0);
+    const effectiveLandedExtrasOnly =
+      isUnloadingCapitalized && ownedLinesMetrics.length > 0
+        ? Math.max(0, effectiveTotalAbsorbed - safeUnloadingFee)
+        : effectiveTotalAbsorbed;
     let createdLandedRecord: LandedCostRecord | undefined;
-    if (effectiveLandedAbsorbed > 0 && landedAllocatedItems.length > 0) {
+    if (effectiveTotalAbsorbed > 0 && landedAllocatedItems.length > 0) {
       const lcId = `LC-GR-${Date.now().toString().slice(-4)}-${landedCostsList.length + 1}`;
-      const lcGlDrId = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
-      const lcGlCrId = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      const lcGlIds: string[] = [];
       const nowLcIso = new Date().toISOString();
-      commitBalancedGlBatch(
-        [
-          {
-            id: lcGlDrId,
-            timestamp: nowLcIso,
-            storeId: po.storeId,
-            storeName: po.storeName,
-            accountCode: '1040',
-            accountName: 'Merchandise Inventory Asset',
-            category: 'Asset',
-            debit: effectiveLandedAbsorbed,
-            credit: 0,
-            referenceType: 'LANDED_COST',
-            referenceId: lcId,
-            description: `Stock-In Import & Cold-Chain Landed Cost absorbed for ${grId} (PO #${po.id})`,
-          },
-          {
-            id: lcGlCrId,
-            timestamp: nowLcIso,
-            storeId: po.storeId,
-            storeName: po.storeName,
-            accountCode: '2040',
-            accountName: 'Accrued Freight, Duties & Cold-Chain Clearing',
-            category: 'Liability',
-            debit: 0,
-            credit: effectiveLandedAbsorbed,
-            referenceType: 'LANDED_COST',
-            referenceId: lcId,
-            description: `Landed cost clearing (Freight/Insurance/Duty/Cold Chain) on ${grId}`,
-          },
-        ],
-        true
-      );
-      createdJournalIds.push(lcGlDrId, lcGlCrId);
+      if (effectiveLandedExtrasOnly > 0) {
+        const lcGlDrId = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+        const lcGlCrId = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+        commitBalancedGlBatch(
+          [
+            {
+              id: lcGlDrId,
+              timestamp: nowLcIso,
+              storeId: po.storeId,
+              storeName: po.storeName,
+              accountCode: '1040',
+              accountName: 'Merchandise Inventory Asset',
+              category: 'Asset',
+              debit: effectiveLandedExtrasOnly,
+              credit: 0,
+              referenceType: 'LANDED_COST',
+              referenceId: lcId,
+              description: `Stock-In Import & Cold-Chain Landed Cost absorbed for ${grId} (PO #${po.id})`,
+            },
+            {
+              id: lcGlCrId,
+              timestamp: nowLcIso,
+              storeId: po.storeId,
+              storeName: po.storeName,
+              accountCode: '2040',
+              accountName: 'Accrued Freight, Duties & Cold-Chain Clearing',
+              category: 'Liability',
+              debit: 0,
+              credit: effectiveLandedExtrasOnly,
+              referenceType: 'LANDED_COST',
+              referenceId: lcId,
+              description: `Landed cost clearing (Freight/Insurance/Duty/Cold Chain) on ${grId}`,
+            },
+          ],
+          true
+        );
+        createdJournalIds.push(lcGlDrId, lcGlCrId);
+        lcGlIds.push(lcGlDrId, lcGlCrId);
+      }
 
       createdLandedRecord = {
         id: lcId,
@@ -10750,16 +11223,102 @@ async function startServer() {
         exchangeRate: 1,
         freightCostIDR: safeFreight,
         customsDutyIDR: safeCustoms,
-        handlingCostIDR: safeColdChain,
+        handlingCostIDR: safeColdChain + (isUnloadingCapitalized ? safeUnloadingFee : 0),
         insuranceCostIDR: safeInsurance,
-        totalLandedCostIDR: effectiveLandedAbsorbed,
+        totalLandedCostIDR: effectiveTotalAbsorbed,
         allocationMethod: lcMethod,
         allocatedItems: landedAllocatedItems,
-        glEntryIds: [lcGlDrId, lcGlCrId],
+        glEntryIds: lcGlIds,
         status: 'POSTED',
         createdBy: getEffectiveOperatorName(req),
       };
       landedCostsList.unshift(createdLandedRecord);
+    }
+
+    // Unloading Labor Fee (Biaya Bongkar Muat SPSI) — Capitalized to #1040 or Expensed to #5030
+    let unloadingLaborSummary:
+      | {
+          unloadingLaborFeeIDR: number;
+          capitalizedToLandedCost: boolean;
+          payerCoa: string;
+          glEntryIds: string[];
+        }
+      | undefined;
+
+    if (safeUnloadingFee > 0) {
+      ensureRegulatoryCoaAccounts();
+      const ulGlDrId = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+      const ulGlCrId = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+      const nowUlIso = new Date().toISOString();
+      const payerAccountMeta =
+        resolvedUnloadingPayerCoa === '2010'
+          ? { code: '2010' as AccountCode, name: 'Trade Accounts Payable (Vendors)', category: 'Liability' as const }
+          : resolvedUnloadingPayerCoa === '1010'
+          ? { code: '1010' as AccountCode, name: 'Cash on Hand & Main Bank Vault', category: 'Asset' as const }
+          : { code: '1011' as AccountCode, name: 'POS Cash Drawer (Petty Cash & Register)', category: 'Asset' as const };
+      const debitToInventory = isUnloadingCapitalized && ownedLinesMetrics.length > 0;
+      const ulDebitMeta = debitToInventory
+        ? { code: '1040' as AccountCode, name: 'Merchandise Inventory Asset', category: 'Asset' as const }
+        : { code: '5030' as AccountCode, name: 'Biaya Bongkar Muat & Distribusi', category: 'Expense' as const };
+
+      commitBalancedGlBatch(
+        [
+          {
+            id: ulGlDrId,
+            timestamp: nowUlIso,
+            storeId: po.storeId,
+            storeName: po.storeName,
+            accountCode: ulDebitMeta.code,
+            accountName: ulDebitMeta.name,
+            category: ulDebitMeta.category,
+            debit: safeUnloadingFee,
+            credit: 0,
+            referenceType: debitToInventory ? 'LANDED_COST' : 'UNLOADING_LABOR',
+            referenceId: grId,
+            description: debitToInventory
+              ? `Biaya Bongkar Muat SPSI capitalized to Merchandise Inventory (#1040) on ${grId}`
+              : `Biaya Bongkar Muat SPSI expensed (#5030) on Goods Receipt ${grId}`,
+          },
+          {
+            id: ulGlCrId,
+            timestamp: nowUlIso,
+            storeId: po.storeId,
+            storeName: po.storeName,
+            accountCode: payerAccountMeta.code,
+            accountName: payerAccountMeta.name,
+            category: payerAccountMeta.category,
+            debit: 0,
+            credit: safeUnloadingFee,
+            referenceType: debitToInventory ? 'LANDED_COST' : 'UNLOADING_LABOR',
+            referenceId: grId,
+            description: `Payout/Accrual Biaya Bongkar Muat SPSI on ${grId} via #${payerAccountMeta.code}`,
+          },
+        ],
+        true
+      );
+
+      createdJournalIds.push(ulGlDrId, ulGlCrId);
+      if (createdLandedRecord && debitToInventory) {
+        createdLandedRecord.glEntryIds.push(ulGlDrId, ulGlCrId);
+      }
+
+      unloadingLaborSummary = {
+        unloadingLaborFeeIDR: safeUnloadingFee,
+        capitalizedToLandedCost: debitToInventory,
+        payerCoa: resolvedUnloadingPayerCoa,
+        glEntryIds: [ulGlDrId, ulGlCrId],
+      };
+
+      appendAuditTrailLog({
+        req,
+        branchScope: po.storeId,
+        module: 'INVENTORY',
+        action: 'GR_UNLOADING_LABOR_POSTED',
+        referenceId: grId,
+        summary: `Posted Biaya Bongkar Muat SPSI Rp ${safeUnloadingFee.toLocaleString('id-ID')} on ${grId} (${
+          debitToInventory ? 'DR 1040 Inventory Landed Cost' : 'DR 5030 Biaya Bongkar Muat'
+        } / CR ${resolvedUnloadingPayerCoa}).`,
+      });
     }
 
     syncWarehouseRackOccupancy();
@@ -10794,12 +11353,15 @@ async function startServer() {
       landedCostSummary: createdLandedRecord
         ? {
             id: createdLandedRecord.id,
-            totalLandedCostIDR: effectiveLandedAbsorbed,
+            totalLandedCostIDR: effectiveTotalAbsorbed,
             allocatedItems: landedAllocatedItems,
           }
         : undefined,
+      unloadingLaborSummary,
     });
-  });
+  };
+  app.post('/api/admin/procurement/gr/receive-partial', handleReceivePartialGoods);
+  app.post('/api/admin/procurement/goods-receipts', handleReceivePartialGoods);
 
   // -------------------------------------------------------------
   // STORE-SPECIFIC CHART OF ACCOUNTS & FINANCIAL ACCOUNTING
@@ -12373,7 +12935,31 @@ async function startServer() {
       redeemPoints = 0,
       promoCode,
       simulateHappyHourActive,
+      clientIdempotencyKey,
+      offlineReceiptNumber,
+      supervisorMarginOverride,
+      supervisorPin,
+      supervisorName,
     } = req.body as POSTransactionRequest;
+
+    const cleanIdempotencyKey = clientIdempotencyKey ? String(clientIdempotencyKey).trim() : '';
+    const rawOfflineId = offlineReceiptNumber || (req.body as any)?.offlineReceiptId;
+    const cleanOfflineReceiptNo = rawOfflineId ? String(rawOfflineId).trim() : '';
+    if (cleanIdempotencyKey || cleanOfflineReceiptNo) {
+      const existingReceipt = posTransactionsHistory.find(
+        (r) =>
+          (cleanIdempotencyKey && r.clientIdempotencyKey === cleanIdempotencyKey) ||
+          (cleanOfflineReceiptNo && r.offlineReceiptNumber === cleanOfflineReceiptNo)
+      );
+      if (existingReceipt) {
+        return res.json({
+          success: true,
+          receipt: existingReceipt,
+          deduplicated: true,
+          message: `Idempotent POS replay recognized for ${cleanOfflineReceiptNo || cleanIdempotencyKey} — zero duplicate GL or stock mutation.`,
+        });
+      }
+    }
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: 'Cannot process POS checkout with an empty cart.' });
@@ -12560,13 +13146,30 @@ async function startServer() {
         appliedWholesaleTierLabel = undefined;
       }
 
-      const unitCost = roundIDR(
-        Number(dynBatch?.unitCost ?? item.unitCost ?? inv?.wacUnitCost ?? inv?.unitCost) || Math.round(effectiveUnitPrice * 0.62)
+      const isGimmickLine = Boolean(item.isPromoGimmick || inv?.isPromoGimmick);
+      if (isGimmickLine) {
+        effectiveUnitPrice = 0;
+        appliedWholesaleTierLabel = undefined;
+      }
+
+      const unitCost = isGimmickLine
+        ? 0
+        : roundIDR(
+            Number(dynBatch?.unitCost ?? inv?.wacUnitCost ?? inv?.unitCost ?? nearestBatch?.unitCost ?? item.unitCost) || Math.round(effectiveUnitPrice * 0.62)
+          );
+      const lineTotal = isGimmickLine
+        ? 0
+        : effectiveUnitPrice !== rawUnitPrice || !item.lineTotal
+        ? Math.round(effectiveUnitPrice * qty)
+        : Math.round(Number(item.lineTotal));
+      const isClearanceMarkdown = Boolean(
+        dynBatch ||
+          nearestBatch?.markdownStatus === 'Marked Down' ||
+          (nearestBatch?.markdownDiscountPercent || 0) > 0 ||
+          mdCandidate ||
+          item?.isDynamicDiscountSku ||
+          item?.markdownStatus === 'Marked Down'
       );
-      const lineTotal =
-        effectiveUnitPrice !== rawUnitPrice || !item.lineTotal
-          ? Math.round(effectiveUnitPrice * qty)
-          : Math.round(Number(item.lineTotal));
 
       return {
         rawItem: item,
@@ -12576,10 +13179,12 @@ async function startServer() {
         inv,
         prod,
         nearestBatch,
-        effectiveUnitPrice: roundIDR(effectiveUnitPrice),
+        effectiveUnitPrice: isGimmickLine ? 0 : roundIDR(effectiveUnitPrice),
         appliedWholesaleTierLabel,
         unitCost,
         lineTotal,
+        isPromoGimmick: isGimmickLine,
+        isClearanceMarkdown,
         category: item.category || inv?.category || prod?.category || 'produce',
         name: item.name || inv?.productName || prod?.name || item.sku,
       };
@@ -12603,6 +13208,7 @@ async function startServer() {
         memberTier: matchedCrmAccount?.tier,
         memberId: customerMemberId || crmAccountId,
         simulateHappyHourActive,
+        storeId,
       }
     );
     if (promoCode && String(promoCode).trim() && !promoEval.valid) {
@@ -12627,15 +13233,47 @@ async function startServer() {
     let remainingCartDiscount = discountAmount;
     let resolvedPpn = 0;
     let resolvedPb1 = 0;
+    const minMarginFloorPct = Math.max(0, Number(erpCfg.minMarginFloorPct ?? 2.0));
+    const marginViolations: Array<{
+      sku: string;
+      name: string;
+      unitCost: number;
+      netEffectiveUnitPrice: number;
+      minAllowedUnitPrice: number;
+    }> = [];
+    const clearanceBelowCostSkus: string[] = [];
+
+    const lastNonGimmickIdx = prePricedLines.reduce((acc, l, i) => (!l.isPromoGimmick ? i : acc), -1);
     prePricedLines.forEach((line, idx) => {
+      if (line.isPromoGimmick) return;
       const discountShare =
-        idx === prePricedLines.length - 1
+        idx === lastNonGimmickIdx
           ? remainingCartDiscount
           : preSubtotal > 0
           ? Math.min(remainingCartDiscount, Math.round((line.lineTotal / preSubtotal) * discountAmount))
           : 0;
       remainingCartDiscount = Math.max(0, remainingCartDiscount - discountShare);
       const netDiscountedLineTotal = Math.max(0, line.lineTotal - discountShare);
+
+      // Dynamic Margin Floor Guard (excludes Rp 0 gimmick lines & flags active near-expiry clearance markdowns)
+      if (line.unitCost > 0) {
+        const netEffectiveUnitPrice = Math.round(netDiscountedLineTotal / Math.max(0.001, line.qty));
+        const minAllowedUnitPrice = Math.ceil(line.unitCost * (1 + minMarginFloorPct / 100));
+        if (netEffectiveUnitPrice < minAllowedUnitPrice) {
+          if (line.isClearanceMarkdown) {
+            clearanceBelowCostSkus.push(String(line.rawItem.sku || line.baseLookupSku));
+          } else {
+            marginViolations.push({
+              sku: String(line.rawItem.sku || line.baseLookupSku),
+              name: line.name,
+              unitCost: line.unitCost,
+              netEffectiveUnitPrice,
+              minAllowedUnitPrice,
+            });
+          }
+        }
+      }
+
       const taxRuleLookupSku = line.baseLookupSku || line.rawItem.sku;
       const rule = skuTaxRulesList.find((r) => r.sku === line.rawItem.sku) || skuTaxRulesList.find((r) => r.sku === taxRuleLookupSku);
       const taxCat: IndonesianTaxCategory =
@@ -12645,6 +13283,31 @@ async function startServer() {
       resolvedPpn += roundIDR(taxCalc.ppnIDR);
       resolvedPb1 += roundIDR(taxCalc.pb1IDR);
     });
+
+    let marginComplianceStatus: 'NORMAL' | 'SUPERVISOR_OVERRIDE' | 'CLEARANCE_BELOW_COST' = 'NORMAL';
+    if (marginViolations.length > 0) {
+      if (!supervisorMarginOverride) {
+        return res.status(400).json({
+          success: false,
+          code: 'MARGIN_FLOOR_VIOLATION',
+          requiresSupervisorPin: true,
+          minMarginFloorPct,
+          violations: marginViolations,
+          error: `Proteksi Margin Aktif: Harga jual bersih di bawah batas minimum HPP + ${minMarginFloorPct}%. Masukkan PIN Supervisor untuk melanjutkan.`,
+        });
+      }
+      if (String(supervisorPin || '').trim() !== '1234') {
+        return res.status(403).json({
+          success: false,
+          code: 'INVALID_SUPERVISOR_PIN',
+          requiresSupervisorPin: true,
+          error: 'PIN Supervisor tidak valid. Otorisasi override margin ditolak.',
+        });
+      }
+      marginComplianceStatus = 'SUPERVISOR_OVERRIDE';
+    } else if (clearanceBelowCostSkus.length > 0) {
+      marginComplianceStatus = 'CLEARANCE_BELOW_COST';
+    }
 
     resolvedPpn = roundIDR(resolvedPpn);
     resolvedPb1 = roundIDR(resolvedPb1);
@@ -12729,8 +13392,11 @@ async function startServer() {
       } else {
         batchDeduction = deductBatchesByStrategy(deductionSku, qty, storeId, unitCost);
       }
-      const cogsLine =
-        batchDeduction.allocatedQty > 0 ? roundIDR(batchDeduction.totalCogs) : roundIDR(unitCost * qty);
+      const cogsLine = line.isPromoGimmick
+        ? 0
+        : batchDeduction.allocatedQty > 0
+        ? roundIDR(batchDeduction.totalCogs)
+        : roundIDR(unitCost * qty);
       totalCogsCost = roundIDR(totalCogsCost + cogsLine);
 
       const primaryLot =
@@ -12793,6 +13459,24 @@ async function startServer() {
 
     const resolvedSubtotal = preSubtotal;
     const appliedPromos = promoEval.appliedPromos;
+    if (Array.isArray(promoEval.freeGimmickItems) && promoEval.freeGimmickItems.length > 0) {
+      promoEval.freeGimmickItems.forEach((gItem) => {
+        const gQty = Math.max(1, Number(gItem.quantity) || 1);
+        const gInv = inventoryList.find((i) => i.sku === gItem.sku);
+        const gTier = storeInventoryTiers.find(
+          (t) => t.sku === gItem.sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
+        );
+        if (gTier && gTier.physicalStock >= gQty) {
+          gTier.physicalStock = Math.max(0, Number((gTier.physicalStock - gQty).toFixed(2)));
+          gTier.reservedStock = Math.min(gTier.reservedStock, gTier.physicalStock);
+          gTier.availableStock = Math.max(0, Number((gTier.physicalStock - gTier.reservedStock).toFixed(2)));
+          gTier.updatedAt = timestamp;
+        }
+        if (gInv && gInv.currentStock >= gQty) {
+          gInv.currentStock = Math.max(0, Number((gInv.currentStock - gQty).toFixed(2)));
+        }
+      });
+    }
     if (appliedPromos.length > 0) {
       appliedPromos.forEach((ap) => {
         const r = promotionRulesList.find((rule) => rule.id === ap.ruleId);
@@ -13130,6 +13814,12 @@ async function startServer() {
       promoCode: promoCode ? String(promoCode).trim().toUpperCase() : undefined,
       appliedPromos: appliedPromos.length > 0 ? appliedPromos : undefined,
       promoDiscountIDR: promoDiscountIDR > 0 ? promoDiscountIDR : undefined,
+      freeGimmickItems: promoEval.freeGimmickItems,
+      clientIdempotencyKey: cleanIdempotencyKey || undefined,
+      offlineReceiptNumber: cleanOfflineReceiptNo || undefined,
+      offlineSynced: Boolean(cleanIdempotencyKey || cleanOfflineReceiptNo) || undefined,
+      marginComplianceStatus,
+      belowCostClearanceSkus: clearanceBelowCostSkus.length > 0 ? clearanceBelowCostSkus : undefined,
     };
 
     posTransactionsHistory.unshift(receipt);
@@ -13181,6 +13871,32 @@ async function startServer() {
         summary: `POS Checkout #${receiptNumber} processed with Rp ${discountAmount.toLocaleString('id-ID')} discount${
           promoCode ? ` (Voucher: ${String(promoCode).toUpperCase()})` : ''
         }.`,
+      });
+    }
+    if (marginComplianceStatus === 'SUPERVISOR_OVERRIDE') {
+      const approver = String(supervisorName || 'Store Manager (PIN Verified)').trim();
+      recordFraudTelemetryEvent({
+        req,
+        eventType: 'MARGIN_OVERRIDE_APPROVED',
+        storeId,
+        shiftId: shiftId || 'SHIFT-01',
+        operatorId: cashierId,
+        operatorName: cashierName,
+        operatorRole: effectiveRole,
+        sku: marginViolations[0]?.sku,
+        productName: marginViolations[0]?.name,
+        amountIDR: resolvedTotal,
+        reason: `Supervisor PIN override (${approver}) authorized sale below HPP + ${minMarginFloorPct}% on ${receiptNumber}`,
+        supervisorName: approver,
+      });
+      appendAuditTrailLog({
+        req,
+        actorName: approver,
+        branchScope: storeId,
+        module: 'SECURITY',
+        action: 'MARGIN_OVERRIDE_APPROVED',
+        referenceId: receiptNumber,
+        summary: `Supervisor PIN override authorized below-floor POS checkout #${receiptNumber} (${marginViolations.map((v) => v.sku).join(', ')}) below HPP + ${minMarginFloorPct}% for ${cashierName}.`,
       });
     }
     scheduleStateSave();
@@ -13372,6 +14088,11 @@ async function startServer() {
     ) {
       return res.status(400).json({ error: 'threeWayMatchTolerancePct must be between 0% and 25%.' });
     }
+    const normalizedMarginFloor = Number(mergedErp.minMarginFloorPct ?? 2.0);
+    if (!Number.isFinite(normalizedMarginFloor) || normalizedMarginFloor < 0 || normalizedMarginFloor > 50) {
+      return res.status(400).json({ error: 'minMarginFloorPct must be between 0% and 50%.' });
+    }
+    mergedErp.minMarginFloorPct = Number(normalizedMarginFloor.toFixed(2));
 
     enterpriseSettings = {
       ...enterpriseSettings,
@@ -13395,7 +14116,7 @@ async function startServer() {
       module: 'SECURITY',
       action: 'ERP_CONFIG_PARAMETERS_UPDATED',
       referenceId: 'ERP_SETTINGS_CONFIG',
-      summary: `Updated ERP Policy Config (PPN ${mergedErp.activeVatRatePct}%, PPh22 ${mergedErp.pph22RatePct}%, PPh23 ${mergedErp.pph23RatePct}%, QRIS MDR ${mergedErp.qrisMdrPct}%, Lock: ${mergedErp.accountingLockBeforeDate || 'None'}).`,
+      summary: `Updated ERP Policy Config (PPN ${mergedErp.activeVatRatePct}%, PPh22 ${mergedErp.pph22RatePct}%, PPh23 ${mergedErp.pph23RatePct}%, QRIS MDR ${mergedErp.qrisMdrPct}%, Margin Floor ${mergedErp.minMarginFloorPct}%, Lock: ${mergedErp.accountingLockBeforeDate || 'None'}).`,
     });
     scheduleStateSave();
 
@@ -17780,6 +18501,8 @@ async function startServer() {
         departureHub,
         estimatedArrival = '45 mins',
         notifyCustomers = false,
+        driverTripAllowanceIDR,
+        allowancePayerCoa = '1011',
       } = req.body || {};
 
       if (!Array.isArray(suratJalanIds) || suratJalanIds.length === 0) {
@@ -17921,6 +18644,10 @@ async function startServer() {
         }
       }
 
+      const safeDriverAllowance = Math.max(0, roundIDR(Number(driverTripAllowanceIDR) || 0));
+      const resolvedAllowanceCoa: '1011' | '1010' = allowancePayerCoa === '1010' ? '1010' : '1011';
+      const tripGlIds: string[] = [];
+
       const newTrip: ShipmentQuotaTracking = {
         id: shpId,
         tripId,
@@ -17948,8 +18675,70 @@ async function startServer() {
           ? `Cold-Chain Verified (${currentTemp}°C / target ${targetTemp}°C)`
           : 'Ambient Cargo Compliant',
         customerNotificationsSent: notificationsSent,
+        driverTripAllowanceIDR: safeDriverAllowance > 0 ? safeDriverAllowance : undefined,
+        allowancePayerCoa: safeDriverAllowance > 0 ? resolvedAllowanceCoa : undefined,
       };
       shipmentsList.unshift(newTrip);
+
+      if (safeDriverAllowance > 0) {
+        ensureRegulatoryCoaAccounts();
+        const trpGleDrId = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
+        const trpGleCrId = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+        const tripStoreId = selectedSjs[0].senderStoreId || 'store-jkt-senopati';
+        const tripStoreName = selectedSjs[0].senderStoreName || 'GroceMart Senopati Flagship';
+        const crMeta =
+          resolvedAllowanceCoa === '1010'
+            ? { code: '1010' as AccountCode, name: 'Cash on Hand & Main Bank Vault' }
+            : { code: '1011' as AccountCode, name: 'POS Cash Drawer (Petty Cash & Register)' };
+
+        commitBalancedGlBatch(
+          [
+            {
+              id: trpGleDrId,
+              timestamp: nowIso,
+              storeId: tripStoreId,
+              storeName: tripStoreName,
+              accountCode: '5030',
+              accountName: 'Biaya Bongkar Muat & Distribusi',
+              category: 'Expense',
+              debit: safeDriverAllowance,
+              credit: 0,
+              referenceType: 'DRIVER_ALLOWANCE',
+              referenceId: tripId,
+              description: `Uang Jalan, BBM & Tol Sopir (${driverName} • ${vehiclePlate}) for Route Trip ${tripId}`,
+            },
+            {
+              id: trpGleCrId,
+              timestamp: nowIso,
+              storeId: tripStoreId,
+              storeName: tripStoreName,
+              accountCode: crMeta.code,
+              accountName: crMeta.name,
+              category: 'Asset',
+              debit: 0,
+              credit: safeDriverAllowance,
+              referenceType: 'DRIVER_ALLOWANCE',
+              referenceId: tripId,
+              description: `Disbursement Uang Jalan Sopir ${tripId} via #${crMeta.code}`,
+            },
+          ],
+          true
+        );
+        tripGlIds.push(trpGleDrId, trpGleCrId);
+
+        auditTrail.unshift({
+          id: `AUD-2026-${(auditTrail.length + 1).toString().padStart(4, '0')}`,
+          orderId: tripId,
+          customerName: `${driverName} (${vehiclePlate})`,
+          customerEmail: driverContact || '-',
+          amount: safeDriverAllowance,
+          paymentTimestamp: nowIso,
+          settlementChannel: `Uang Jalan Sopir (#5030 / #${resolvedAllowanceCoa})`,
+          journalEntryIds: [trpGleDrId, trpGleCrId],
+          inventoryDeducted: [],
+          status: 'SETTLED',
+        });
+      }
 
       appendAuditTrailLog({
         req,
@@ -17957,7 +18746,11 @@ async function startServer() {
         module: 'INVENTORY',
         action: 'LOGISTICS_TRIP_CONSOLIDATED',
         referenceId: tripId,
-        summary: `Consolidated ${selectedSjs.length} Surat Jalan(s) into Trip ${tripId} (${routeZone}) on ${vehiclePlate} (${totalWeightKg}/${maxPayloadKg} kg, ${utilizationPercent}%).`,
+        summary: `Consolidated ${selectedSjs.length} Surat Jalan(s) into Trip ${tripId} (${routeZone}) on ${vehiclePlate} (${totalWeightKg}/${maxPayloadKg} kg, ${utilizationPercent}%)${
+          safeDriverAllowance > 0
+            ? ` · Uang Jalan Sopir Rp ${safeDriverAllowance.toLocaleString('id-ID')} (#5030/#${resolvedAllowanceCoa})`
+            : ''
+        }.`,
       });
 
       emitEnterpriseNotification({
@@ -17977,7 +18770,10 @@ async function startServer() {
         trip: newTrip,
         suratJalans: selectedSjs,
         notificationsSent,
-        message: `Trip ${tripId} consolidated with ${selectedSjs.length} Surat Jalan(s) (${utilizationPercent}% payload) and dispatched IN_TRANSIT.`,
+        journalEntryIds: tripGlIds.length > 0 ? tripGlIds : undefined,
+        message: `Trip ${tripId} consolidated with ${selectedSjs.length} Surat Jalan(s) (${utilizationPercent}% payload) and dispatched IN_TRANSIT.${
+          safeDriverAllowance > 0 ? ` Uang Jalan Rp ${safeDriverAllowance.toLocaleString('id-ID')} posted to #5030.` : ''
+        }`,
       });
     } catch (err: any) {
       res.status(500).json({
@@ -20348,6 +21144,15 @@ async function startServer() {
           b.dynamicDiscountSku = `${b.sku}-MD${appliedPct}-${lotSuffix}`;
           const basePrice = b.sellingPrice || Math.round(b.unitCost * 1.45);
           const mdPrice = Math.round(basePrice * (1 - appliedPct / 100));
+          const matchingInv = inventoryList.find((i) => i.sku === b.sku);
+          if (matchingInv) {
+            matchingInv.priceUpdatedAt = nowIso;
+          }
+          storeInventoryTiers.forEach((t) => {
+            if (t.sku === b.sku && t.storeId === b.storeId) {
+              t.updatedAt = nowIso;
+            }
+          });
           createdDynamicSkus.push({
             dynamicSku: b.dynamicDiscountSku,
             originalSku: b.sku,
@@ -20880,6 +21685,21 @@ async function startServer() {
       status: 'COMPLETED',
       customerName,
     });
+
+    if (sourceChannel === 'POS' && totalCreditNoteIDR > 0) {
+      const activeShiftForStore = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
+      recordFraudTelemetryEvent({
+        req,
+        eventType: 'HIGH_VALUE_EXCHANGE',
+        storeId,
+        shiftId: activeShiftForStore?.id || currentActiveStaffSession.activeShiftId || 'SHIFT-DEFAULT',
+        sku: processedItems[0]?.sku,
+        productName: processedItems[0]?.productName,
+        amountIDR: totalCreditNoteIDR,
+        quantity: processedItems.reduce((s, it) => s + (it.quantity || 0), 0),
+        reason: `POS RMA / Exchange (${notaReturNumber}) via ${refundMethod}`,
+      });
+    }
 
     appendAuditTrailLog({
       req,
@@ -26793,6 +27613,150 @@ async function startServer() {
   });
 
   // =============================================================
+  // FRAUD & LOSS PREVENTION RADAR + POS TELEMETRY ENDPOINTS
+  // =============================================================
+  app.post('/api/pos/telemetry-event', (req: Request, res: Response) => {
+    const {
+      eventType,
+      storeId = 'store-jkt-senopati',
+      shiftId,
+      operatorId,
+      operatorName,
+      sku,
+      productName,
+      amountIDR,
+      quantity,
+      reason,
+      supervisorName,
+    } = (req.body || {}) as {
+      eventType?: FraudEventType;
+      storeId?: string;
+      shiftId?: string;
+      operatorId?: string;
+      operatorName?: string;
+      sku?: string;
+      productName?: string;
+      amountIDR?: number;
+      quantity?: number;
+      reason?: string;
+      supervisorName?: string;
+    };
+
+    const allowedTypes: FraudEventType[] = [
+      'CART_LINE_VOID',
+      'HIGH_VALUE_EXCHANGE',
+      'CASH_PAID_OUT',
+      'MARGIN_OVERRIDE_APPROVED',
+    ];
+    if (!eventType || !allowedTypes.includes(eventType)) {
+      return res.status(400).json({
+        error: `Invalid eventType. Must be one of: ${allowedTypes.join(', ')}`,
+      });
+    }
+
+    const evt = recordFraudTelemetryEvent({
+      req,
+      eventType,
+      storeId,
+      shiftId,
+      operatorId,
+      operatorName,
+      sku,
+      productName,
+      amountIDR,
+      quantity,
+      reason,
+      supervisorName,
+    });
+
+    appendAuditTrailLog({
+      req,
+      actorName: evt.operatorName,
+      actorRole: evt.operatorRole,
+      branchScope: evt.storeId,
+      module: eventType === 'MARGIN_OVERRIDE_APPROVED' ? 'SECURITY' : 'POS',
+      action: `POS_TELEMETRY_${eventType}`,
+      referenceId: evt.id,
+      summary: `Logged ${eventType}${sku ? ` for ${sku}` : ''}${evt.amountIDR ? ` (Rp ${evt.amountIDR.toLocaleString('id-ID')})` : ''}${reason ? `: ${reason}` : '.'}`,
+    });
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      event: evt,
+    });
+  });
+
+  app.get('/api/admin/audit/fraud-radar', (req: Request, res: Response) => {
+    const role = getEffectiveRequestRole(req);
+    if (!['store_manager', 'admin', 'coo', 'super_admin'].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Access Denied (403): Only Store Manager, Finance Admin, COO, or Super Admin may access Fraud & Loss Prevention Radar.',
+      });
+    }
+    const storeId = typeof req.query?.storeId === 'string' ? req.query.storeId : undefined;
+    const overview = computeFraudRadarOverview(storeId);
+    res.json(overview);
+  });
+
+  app.post('/api/admin/audit/fraud-radar/:id/resolve', (req: Request, res: Response) => {
+    const role = getEffectiveRequestRole(req);
+    if (!['store_manager', 'admin', 'coo', 'super_admin'].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Access Denied (403): Only Store Manager, Finance Admin, COO, or Super Admin may resolve Fraud Radar alerts.',
+      });
+    }
+    const alertId = String(req.params.id || '').trim();
+    const resolutionNote = typeof req.body?.resolutionNote === 'string' ? req.body.resolutionNote.trim() : 'Investigated & cleared by supervisor';
+    const currentOverview = computeFraudRadarOverview();
+    const targetAlert = currentOverview.alerts.find((a) => a.id === alertId);
+    if (!targetAlert) {
+      return res.status(404).json({
+        error: `Fraud Radar alert "${alertId}" was not found.`,
+      });
+    }
+
+    const resolvedAt = new Date().toISOString();
+    const resolvedBy = getEffectiveOperatorName(req);
+    resolvedFraudAlertMeta[alertId] = {
+      resolvedBy,
+      resolvedAt,
+      resolutionNote,
+    };
+
+    appendAuditTrailLog({
+      req,
+      actorName: resolvedBy,
+      branchScope: targetAlert.storeId || 'CONSOLIDATED',
+      module: 'SECURITY',
+      action: 'FRAUD_RADAR_ALERT_RESOLVED',
+      referenceId: alertId,
+      summary: `Marked Fraud Radar alert ${alertId} (${targetAlert.ruleCode}) as RESOLVED: ${resolutionNote}`,
+    });
+    scheduleStateSave();
+
+    const updatedOverview = computeFraudRadarOverview();
+    const updatedAlert = updatedOverview.alerts.find((a) => a.id === alertId) || {
+      ...targetAlert,
+      status: 'RESOLVED' as const,
+      resolvedBy,
+      resolvedAt,
+      resolutionNote,
+    };
+
+    res.json({
+      success: true,
+      alert: updatedAlert,
+      overview: updatedOverview,
+      message: `Fraud alert ${alertId} marked as investigated & resolved.`,
+    });
+  });
+
+  // =============================================================
   // SMART DEMAND FORECASTING & PROMOTIONAL VOUCHER ENGINE ROUTES
   // =============================================================
   app.get('/api/admin/procurement/demand-forecast', (req: Request, res: Response) => {
@@ -26952,6 +27916,8 @@ async function startServer() {
       if (body.getDiscountPercent !== undefined) existing.getDiscountPercent = Number(body.getDiscountPercent);
       if (body.happyHourStart !== undefined) existing.happyHourStart = body.happyHourStart;
       if (body.happyHourEnd !== undefined) existing.happyHourEnd = body.happyHourEnd;
+      if (body.gimmickSkuId !== undefined) existing.gimmickSkuId = String(body.gimmickSkuId).trim();
+      if (body.gimmickMinSpendIDR !== undefined) existing.gimmickMinSpendIDR = Number(body.gimmickMinSpendIDR);
       if (body.simulateHappyHourActive !== undefined) {
         existing.simulateHappyHourActive = Boolean(body.simulateHappyHourActive);
       }
@@ -27006,6 +27972,8 @@ async function startServer() {
       getDiscountPercent: body.getDiscountPercent !== undefined ? Number(body.getDiscountPercent) : 100,
       happyHourStart: body.happyHourStart,
       happyHourEnd: body.happyHourEnd,
+      gimmickSkuId: body.gimmickSkuId ? String(body.gimmickSkuId).trim() : undefined,
+      gimmickMinSpendIDR: body.gimmickMinSpendIDR !== undefined ? Number(body.gimmickMinSpendIDR) : undefined,
       simulateHappyHourActive: Boolean(body.simulateHappyHourActive),
       memberTier: body.memberTier,
       active: body.active !== undefined ? Boolean(body.active) : true,
@@ -27034,24 +28002,29 @@ async function startServer() {
 
   app.post('/api/pos/validate-promo', (req: Request, res: Response) => {
     const {
-      cartItems = [],
+      cartItems,
+      items,
       promoCode = '',
       memberTier,
       memberId,
       simulateHappyHourActive,
+      storeId,
     } = (req.body || {}) as {
       cartItems?: any[];
+      items?: any[];
       promoCode?: string;
       memberTier?: string;
       memberId?: string;
       simulateHappyHourActive?: boolean;
+      storeId?: string;
     };
 
-    const result = evaluatePromosServer(cartItems, {
+    const result = evaluatePromosServer(Array.isArray(cartItems) ? cartItems : items || [], {
       promoCode,
       memberTier,
       memberId,
       simulateHappyHourActive,
+      storeId,
     });
     res.json(result);
   });

@@ -138,6 +138,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [grCustomsDuty, setGrCustomsDuty] = useState<number>(0);
   const [grColdChainCost, setGrColdChainCost] = useState<number>(0);
   const [grLandedMethod, setGrLandedMethod] = useState<'BY_QUANTITY' | 'BY_VALUE'>('BY_QUANTITY');
+  const [grUnloadingLaborFee, setGrUnloadingLaborFee] = useState<number>(0);
+  const [grUnloadingPayerCoa, setGrUnloadingPayerCoa] = useState<'1011' | '1010' | '2010'>('1011');
+  const [grCapitalizedToLandedCost, setGrCapitalizedToLandedCost] = useState<boolean>(false);
 
   // Direct Purchase Order Modal State
   const [isCreatingDirectPO, setIsCreatingDirectPO] = useState<boolean>(false);
@@ -651,6 +654,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     setGrCustomsDuty(0);
     setGrColdChainCost(0);
     setGrLandedMethod('BY_QUANTITY');
+    setGrUnloadingLaborFee(0);
+    setGrUnloadingPayerCoa('1011');
+    setGrCapitalizedToLandedCost(false);
 
     const initialMap: typeof receivingItemsState = {};
     const initialCdMap: Record<string, Record<string, number>> = {};
@@ -770,15 +776,27 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               },
             }
           : {}),
+        ...(Number(grUnloadingLaborFee) > 0
+          ? {
+              unloadingLaborFeeIDR: Number(grUnloadingLaborFee),
+              unloadingFeePayerCoa: grUnloadingPayerCoa,
+              capitalizedToLandedCost: grCapitalizedToLandedCost,
+            }
+          : {}),
       });
 
       const landedNote = res.landedCostSummary
         ? ` Landed Cost ${formatIDR(res.landedCostSummary.totalLandedCostIDR)} capitalized into FEFO batch HPP.`
         : '';
+      const unloadingNote = res.unloadingLaborSummary
+        ? ` Bongkar Muat SPSI ${formatIDR(res.unloadingLaborSummary.unloadingLaborFeeIDR)} (${
+            res.unloadingLaborSummary.capitalizedToLandedCost ? 'DR 1040' : 'DR 5030'
+          } / CR ${res.unloadingLaborSummary.payerCoa}).`
+        : '';
 
       onShowToast(
         res.isPartial ? 'Partial Goods Receipt Recorded' : 'PO 100% Fulfilled',
-        `GR #${res.goodsReceipt.id} processed. ${res.remainingBackorder} units backorder remaining. GL #${res.journalEntryIds[0] || 'GLE-Posted'} auto-posted.${landedNote}`
+        `GR #${res.goodsReceipt.id} processed. ${res.remainingBackorder} units backorder remaining. GL #${res.journalEntryIds[0] || 'GLE-Posted'} auto-posted.${landedNote}${unloadingNote}`
       );
 
       setActiveReceivingPO(null);
@@ -3085,6 +3103,55 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                         }`}
                       />
                     </div>
+                  </div>
+
+                  {/* Biaya Bongkar Muat SPSI */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200/70 dark:border-slate-800/80 items-end">
+                    <div>
+                      <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Biaya Bongkar Muat SPSI (IDR)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={5000}
+                        value={grUnloadingLaborFee || ''}
+                        placeholder="0"
+                        onChange={(e) => setGrUnloadingLaborFee(Math.max(0, Number(e.target.value) || 0))}
+                        className={`w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-900'
+                            : 'bg-[#12141C] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Sumber Pembayaran Bongkar Muat
+                      </label>
+                      <select
+                        value={grUnloadingPayerCoa}
+                        onChange={(e) => setGrUnloadingPayerCoa(e.target.value as '1011' | '1010' | '2010')}
+                        className={`w-full px-2.5 py-1.5 text-xs rounded-lg border ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-900'
+                            : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+                        }`}
+                      >
+                        <option value="1011">1011 · Cash Drawer / Petty Cash</option>
+                        <option value="1010">1010 · Main Bank Vault</option>
+                        <option value="2010">2010 · Accounts Payable (AP)</option>
+                      </select>
+                    </div>
+                    <label className="flex items-center gap-2 pb-1.5 cursor-pointer text-[11px] font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={grCapitalizedToLandedCost}
+                        onChange={(e) => setGrCapitalizedToLandedCost(e.target.checked)}
+                        className="rounded accent-[#0F4C3A]"
+                      />
+                      <span>Kapitalisasi ke HPP (#1040 vs #5030)</span>
+                    </label>
                   </div>
 
                   {totalLandedExtras > 0 && (

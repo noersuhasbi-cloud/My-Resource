@@ -177,6 +177,8 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
   const [tripRouteZone, setTripRouteZone] = useState<string>('South Jakarta / SCBD-Senopati');
   const [tripFleetPresetId, setTripFleetPresetId] = useState<string>('chiller_van');
   const [tripNotifyCustomers, setTripNotifyCustomers] = useState<boolean>(true);
+  const [tripDriverAllowanceIDR, setTripDriverAllowanceIDR] = useState<number>(150000);
+  const [tripAllowancePayerCoa, setTripAllowancePayerCoa] = useState<'1011' | '1010'>('1011');
   const [isSubmittingTrip, setIsSubmittingTrip] = useState<boolean>(false);
 
   // e-POD Modal State
@@ -282,6 +284,8 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
         driverName: activeFleetPreset.driverName,
         driverContact: activeFleetPreset.driverContact,
         notifyCustomers: tripNotifyCustomers,
+        driverTripAllowanceIDR: Math.max(0, Number(tripDriverAllowanceIDR) || 0),
+        allowancePayerCoa: tripAllowancePayerCoa,
       });
       await fetchDocs();
       setIsTripBuilderOpen(false);
@@ -1215,6 +1219,41 @@ export const LogisticsDocsModal: React.FC<LogisticsDocsModalProps> = ({
                       );
                     })
                   )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-gray-200 dark:border-slate-800/80 bg-gray-50/70 dark:bg-[#090A0F]">
+                <div>
+                  <label className="block font-semibold mb-1">
+                    Uang Jalan, BBM &amp; Tol Sopir (IDR)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={10000}
+                    value={tripDriverAllowanceIDR || ''}
+                    placeholder="0"
+                    onChange={(e) => setTripDriverAllowanceIDR(Math.max(0, Number(e.target.value) || 0))}
+                    className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+                    }`}
+                  />
+                  <span className="text-[10px] text-gray-500 dark:text-slate-400">
+                    Auto-posts DR #5030 Biaya Bongkar Muat &amp; Distribusi
+                  </span>
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Sumber Kas Uang Jalan</label>
+                  <select
+                    value={tripAllowancePayerCoa}
+                    onChange={(e) => setTripAllowancePayerCoa(e.target.value as '1011' | '1010')}
+                    className={`w-full px-3 py-2 rounded-xl border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+                    }`}
+                  >
+                    <option value="1011">1011 · POS Cash Drawer / Petty Cash</option>
+                    <option value="1010">1010 · Main Bank / Kas Besar</option>
+                  </select>
                 </div>
               </div>
 

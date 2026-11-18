@@ -26,6 +26,8 @@ import type {
   VendorRtvDebitNote,
   BatchMarkdownCandidate,
   SafeDropRecord,
+  HalalStatus,
+  WholesaleVolumeTier,
 } from '../types/index.ts';
 import type { LabelableProductItem } from '../components/AdminDashboard/BarcodeShelfLabelModal';
 import type { AccountingSubTab } from '../components/AdminDashboard/AdminSidebar';
@@ -75,6 +77,24 @@ export type PrintPayload =
       isHalalCertified: boolean;
       promoText: string;
       labelMode: 'BOTH' | 'SCALE_ONLY' | 'SHELF_ONLY';
+    }
+  | {
+      type: 'shelf_price_tags_a4';
+      format: 'a4';
+      taxInclusiveDisplay: boolean;
+      tags: Array<{
+        sku: string;
+        productName: string;
+        unit: string;
+        sellingPrice: number;
+        wholesaleTiers?: WholesaleVolumeTier[];
+        halalStatus?: HalalStatus;
+        bpjphCertNumber?: string;
+        ean13Code: string;
+        barBits: string;
+        priceUpdatedAt?: string;
+        effectiveDate: string;
+      }>;
     }
   | {
       type: 'logistics_doc';

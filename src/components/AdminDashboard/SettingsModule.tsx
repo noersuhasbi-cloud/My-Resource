@@ -2063,6 +2063,26 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         />
                       </div>
                     </div>
+                    <div className="grid grid-cols-1 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Dynamic Margin Floor Min (%) Above WAC</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="50"
+                          disabled={isReadOnlyPolicyRole}
+                          value={erpConfigDraft.minMarginFloorPct ?? 2.0}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              minMarginFloorPct: Math.max(0, Math.min(50, Number(e.target.value) || 0)),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                    </div>
                     <div className="grid grid-cols-3 gap-2 text-[11px]">
                       <div>
                         <label className={labelClass}>GrabMart Mkp/Comm %</label>

@@ -150,6 +150,11 @@ import type {
   CustomerClaimRecord,
   CustomerClaimIssueCategory,
   StorefrontProductTrustMeta,
+  WholesaleVolumeTier,
+  FraudEventType,
+  FraudTelemetryEvent,
+  FraudRadarAlert,
+  FraudRadarResponse,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
@@ -1340,7 +1345,13 @@ export const apiClient = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'POS Transaction processing failed');
+      const errorObj = new Error(err.error || 'POS Transaction processing failed') as Error & {
+        code?: string;
+        data?: any;
+      };
+      errorObj.code = err.code;
+      errorObj.data = err;
+      throw errorObj;
     }
     return res.json();
   },
@@ -4292,6 +4303,58 @@ export const apiClient = {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Failed to dispatch WhatsApp POS receipt');
+    return data;
+  },
+
+  async logPosTelemetryEvent(payload: {
+    eventType: FraudEventType;
+    storeId?: string;
+    shiftId?: string;
+    operatorId?: string;
+    operatorName?: string;
+    sku?: string;
+    productName?: string;
+    amountIDR?: number;
+    quantity?: number;
+    reason?: string;
+    supervisorName?: string;
+  }): Promise<{ success: boolean; event: FraudTelemetryEvent }> {
+    const res = await fetchApi('/api/pos/telemetry-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to record POS telemetry event');
+    return data;
+  },
+
+  async getFraudRadar(storeId?: string): Promise<FraudRadarResponse> {
+    const qs = storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED'
+      ? `?storeId=${encodeURIComponent(storeId)}`
+      : '';
+    const res = await fetchApi(`/api/admin/audit/fraud-radar${qs}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load Fraud & Loss Prevention Radar');
+    return data;
+  },
+
+  async resolveFraudRadarAlert(
+    alertId: string,
+    resolutionNote?: string
+  ): Promise<{
+    success: boolean;
+    alert: FraudRadarAlert;
+    overview: FraudRadarResponse;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/audit/fraud-radar/${encodeURIComponent(alertId)}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolutionNote }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to resolve Fraud Radar alert');
     return data;
   },
 };

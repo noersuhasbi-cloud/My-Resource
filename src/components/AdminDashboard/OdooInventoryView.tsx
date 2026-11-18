@@ -1565,7 +1565,9 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                   (lotInfo.lotNumber ? b.lotNumber === lotInfo.lotNumber : true)
                               );
                               if (!urgentBatch) return null;
-                              const isPromoActive = (urgentBatch.markdownDiscountPercent || 0) >= 50;
+                              const isPromoActive =
+                                urgentBatch.markdownStatus === 'Marked Down' ||
+                                (urgentBatch.markdownDiscountPercent || 0) >= 50;
                               return (
                                 <button
                                   type="button"
@@ -1575,10 +1577,20 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                                       ? 'bg-emerald-100 text-[#164E29] border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800/50 shadow-xs'
                                       : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-900/20'
                                   }`}
-                                  title={`1-Click Flash Sale 50% untuk batch ${urgentBatch.lotNumber}`}
+                                  title={
+                                    urgentBatch.dynamicDiscountSku
+                                      ? `Marked Down POS SKU: ${urgentBatch.dynamicDiscountSku}`
+                                      : `1-Click Auto Markdown 50% untuk batch ${urgentBatch.lotNumber}`
+                                  }
                                 >
                                   <Zap className="w-3 h-3" />
-                                  <span>{isPromoActive ? 'Obrar 50% Aktif' : '⚡ Obrar Kilat 50%'}</span>
+                                  <span>
+                                    {urgentBatch.markdownStatus === 'Marked Down'
+                                      ? `Marked Down (-${urgentBatch.markdownDiscountPercent || 50}%)`
+                                      : isPromoActive
+                                      ? 'Obrar 50% Aktif'
+                                      : '⚡ Auto Markdown 50%'}
+                                  </span>
                                 </button>
                               );
                             })()}
@@ -2255,6 +2267,10 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             sellingPrice: it.sellingPrice,
             pricePerKg: isWeighted ? it.sellingPrice : it.sellingPrice * 2,
             isWeighted,
+            priceUpdatedAt: it.priceUpdatedAt,
+            wholesaleTiers: it.wholesaleTiers,
+            halalStatus: it.halalStatus,
+            bpjphCertNumber: it.bpjphCertNumber,
           };
         })}
         onShowToast={onShowToast}

@@ -100,6 +100,9 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
         statusFilter === 'ALL' ? undefined : statusFilter
       );
       setBatches(res);
+      setAppliedMarkdownBatches(
+        new Set(res.filter((b) => b.markdownStatus === 'Marked Down').map((b) => b.batchId))
+      );
     } catch (e) {
       console.error('Failed to load batches:', e);
       onShowToast('Error', 'Failed to retrieve FEFO batch records');
@@ -179,6 +182,7 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
       const ids = markdownCandidates.map((c) => c.batchId);
       await apiClient.applyDynamicBatchMarkdowns(ids);
       setAppliedMarkdownBatches(new Set(ids));
+      await loadBatches();
       onShowToast(
         'Dynamic Markdowns Activated',
         `Pushed ${markdownCandidates.length} batch clearance discounts to POS and Storefront checkout. Salvaging ${formatIDR(totalSalvageRecovery)} in grocery revenue.`
@@ -192,11 +196,12 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
 
   const handleApplySingleMarkdown = async (candidate: BatchMarkdownCandidate) => {
     try {
-      await apiClient.applyDynamicBatchMarkdowns([candidate.batchId]);
+      const res = await apiClient.applyDynamicBatchMarkdowns([candidate.batchId]);
       setAppliedMarkdownBatches((prev) => new Set([...prev, candidate.batchId]));
+      await loadBatches();
       onShowToast(
         'Markdown Applied to Batch',
-        `Batch #${candidate.batchId} (${candidate.productName}) clearance tag ${candidate.discountPercent}% active at POS.`
+        res.message || `Batch #${candidate.batchId} (${candidate.productName}) clearance tag ${candidate.discountPercent}% active at POS.`
       );
     } catch (err) {
       onShowToast('Markdown Apply Failed', err instanceof Error ? err.message : String(err));
@@ -758,6 +763,14 @@ export const FefoModule: React.FC<FefoModuleProps> = ({
                             ? 'Near Expiry'
                             : 'Fresh'}
                         </span>
+                        {batch.markdownStatus === 'Marked Down' && (
+                          <div
+                            className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400"
+                            title={batch.dynamicDiscountSku ? `POS Dynamic Discount SKU: ${batch.dynamicDiscountSku}` : 'Marked Down'}
+                          >
+                            Marked Down · {batch.dynamicDiscountSku || `-${batch.markdownDiscountPercent || 50}%`}
+                          </div>
+                        )}
                         <div className="flex flex-wrap items-center justify-center gap-1">
                           {batch.currentStock > 0 &&
                             batch.daysUntilExpiry > 0 &&
