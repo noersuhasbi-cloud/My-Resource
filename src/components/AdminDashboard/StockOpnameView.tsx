@@ -235,6 +235,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
 
   // Execute reconciliation submission
   const handleExecuteReconciliation = async () => {
+    if (isReconciling) return;
     if (warehouseTiers.length === 0) {
       onShowToast('No Warehouse Data', 'No inventory tiers found for the selected warehouse.');
       return;

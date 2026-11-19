@@ -1193,12 +1193,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     ? formatIDR(inventoryMetrics.totalValuationWAC || 48200000)
                     : `${inventoryMetrics.totalStockCount.toLocaleString('id-ID')} Units`}
                 </div>
-                <div className="mt-2 flex items-center gap-2 text-xs">
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                   <span className={`font-semibold ${inventoryMetrics.lowStockCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'}`}>
                     {inventoryMetrics.lowStockCount} items low stock
                   </span>
                   <span className={textMuted}>•</span>
                   <span className={textMuted}>{inventoryMetrics.totalStockCount} units in bins</span>
+                  {(() => {
+                    const warnDays = Math.max(1, Number(enterpriseSettings?.erpSettings?.halalCertExpiryWarningDays ?? 30));
+                    const nowMs = Date.now();
+                    const skuLabels = new Map<string, string>();
+                    inventory.forEach((item) => {
+                      const certExp = item.bpjphExpiryDate || (item as any).halalCertExpiry;
+                      if (item.halalStatus === 'HALAL_CERTIFIED' && certExp) {
+                        const expMs = new Date(certExp).getTime();
+                        if (Number.isFinite(expMs) && Math.ceil((expMs - nowMs) / 86400000) <= warnDays) {
+                          skuLabels.set(item.sku, `${item.sku} (BPJPH ${certExp})`);
+                        }
+                      }
+                    });
+                    inventoryBatches.forEach((b) => {
+                      if ((Number(b.currentStock) || 0) <= 0 || !b.expiryDate) return;
+                      if (selectedGlobalStore !== 'CONSOLIDATED' && selectedGlobalStore !== 'ALL' && b.storeId !== selectedGlobalStore) return;
+                      const expMs = new Date(b.expiryDate).getTime();
+                      if (Number.isFinite(expMs) && Math.ceil((expMs - nowMs) / 86400000) <= warnDays && !skuLabels.has(b.sku)) {
+                        skuLabels.set(b.sku, `${b.sku} (${b.lotNumber} exp ${b.expiryDate})`);
+                      }
+                    });
+                    if (skuLabels.size === 0) return null;
+                    return (
+                      <span
+                        title={`BPJPH Halal / BPOM Expiry Alert (≤${warnDays}d): ${Array.from(skuLabels.values()).join(' • ')}`}
+                        className="inline-flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30"
+                      >
+                        BPJPH/BPOM ≤{warnDays}d: {skuLabels.size} SKU
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -2273,6 +2304,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             selectedStore={selectedGlobalStore}
             inventory={inventory}
+            batches={inventoryBatches}
+            halalWarningDays={enterpriseSettings?.erpSettings?.halalCertExpiryWarningDays ?? 30}
             activeStaffSession={activeStaffSession}
             onRefreshData={refreshAllData}
             onShowToast={onShowToast}

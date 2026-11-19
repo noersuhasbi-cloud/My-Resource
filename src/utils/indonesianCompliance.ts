@@ -235,6 +235,34 @@ export function validateNpwpOrNik(raw: string): {
   };
 }
 
+/**
+ * Normalizes Indonesian WhatsApp/mobile numbers (08xx, +628xx, 00628xx, spaces, dashes)
+ * into clean international digits starting with 628xxxxxxxxx.
+ */
+export function sanitizeIndonesianPhone(raw: string): string {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0062')) {
+    return `62${digits.slice(4)}`;
+  }
+  if (digits.startsWith('620')) {
+    return `62${digits.slice(3)}`;
+  }
+  if (digits.startsWith('62')) {
+    return digits;
+  }
+  if (digits.startsWith('08')) {
+    return `62${digits.slice(1)}`;
+  }
+  if (digits.startsWith('0') && digits.length >= 9) {
+    return `62${digits.slice(1)}`;
+  }
+  if (digits.startsWith('8') && digits.length >= 9 && digits.length <= 13) {
+    return `62${digits}`;
+  }
+  return digits;
+}
+
 // ============================================================================
 // 3. DJP CORETAX / E-FAKTUR CSV & XML BUILDERS
 // ============================================================================

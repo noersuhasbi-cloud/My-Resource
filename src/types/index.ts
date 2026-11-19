@@ -1319,6 +1319,7 @@ export interface POSTransactionRequest {
   simulateHappyHourActive?: boolean;
   notes?: string;
   clientIdempotencyKey?: string;
+  idempotencyKey?: string;
   offlineReceiptNumber?: string;
   offlineReceiptId?: string;
   supervisorMarginOverride?: boolean;
@@ -3273,6 +3274,7 @@ export interface CrmAccount {
   storeName: string;
   phone: string;
   email: string;
+  npwp?: string;
   tier: CrmLoyaltyTier;
   pointsBalance: number;
   lifetimeSpendIDR: number;

@@ -177,6 +177,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   const [payRefInput, setPayRefInput] = useState<string>('');
   const [payNotesInput, setPayNotesInput] = useState<string>('');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [approvingBillId, setApprovingBillId] = useState<string | null>(null);
 
   // Auto-populate when PO / GR changes in Create Modal
   const activeSelectedPO = useMemo(() => {
@@ -308,6 +309,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   // Handle Create Vendor Bill
   const handleCreateVendorBill = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingBill) return;
     if (!selectedPoId || !selectedGrId || !invoiceNumberInput.trim()) {
       onShowToast('Missing Fields', 'Please select a PO, Goods Receipt, and provide the Supplier Invoice Number.');
       return;
@@ -371,6 +373,8 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
   // Handle Approve Bill
   const handleApproveBill = async (billId: string) => {
+    if (approvingBillId) return;
+    setApprovingBillId(billId);
     try {
       const res = await apiClient.approveVendorBill(billId, 'Finance Lead (ERP)');
       if (res.success) {
@@ -379,6 +383,8 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
       }
     } catch (err: any) {
       onShowToast('Approval Failed', err.message || 'Could not approve bill');
+    } finally {
+      setApprovingBillId(null);
     }
   };
 
@@ -394,7 +400,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   // Submit Payment
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!billToPay || payAmountInput <= 0) return;
+    if (isSubmittingPayment || !billToPay || payAmountInput <= 0) return;
 
     setIsSubmittingPayment(true);
     try {
@@ -839,11 +845,12 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                           {canApprovePayVoidBill && bill.status !== 'APPROVED' && bill.status !== 'PAID' && bill.status !== 'VOID' && (
                             <button
                               type="button"
+                              disabled={approvingBillId === bill.id}
                               onClick={() => handleApproveBill(bill.id)}
-                              className="px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
+                              className="px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 transition-colors"
                               title={isVarianceBlocked ? 'Override Variance & Approve 3-Way Match' : 'Approve 3-Way Match & Post to GL'}
                             >
-                              Approve
+                              {approvingBillId === bill.id ? 'Approving...' : 'Approve'}
                             </button>
                           )}
 

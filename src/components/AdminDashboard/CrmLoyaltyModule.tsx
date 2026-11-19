@@ -25,6 +25,7 @@ import type {
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
+import { sanitizeIndonesianPhone, validateNpwpOrNik } from '../../utils/indonesianCompliance';
 import {
   Award,
   Banknote,
@@ -166,6 +167,8 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
   const [editTier, setEditTier] = useState<CrmLoyaltyTier>('SILVER');
   const [editDiscountPct, setEditDiscountPct] = useState<number>(0);
   const [editCreditLimitIDR, setEditCreditLimitIDR] = useState<number>(0);
+  const [editPhone, setEditPhone] = useState<string>('');
+  const [editNpwp, setEditNpwp] = useState<string>('');
   const [newActivityType, setNewActivityType] = useState<CrmActivity['type']>('CALL');
   const [newActivitySubject, setNewActivitySubject] = useState<string>('');
   const [newActivityOutcome, setNewActivityOutcome] = useState<string>('');
@@ -178,6 +181,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
     companyName: string;
     phone: string;
     email: string;
+    npwp: string;
     storeId: string;
     contractDiscountPct: number;
     creditLimitIDR: number;
@@ -188,6 +192,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
     companyName: '',
     phone: '',
     email: '',
+    npwp: '',
     storeId: selectedStore !== 'ALL' && selectedStore !== 'CONSOLIDATED' ? selectedStore : 'store-jkt-senopati',
     contractDiscountPct: 5,
     creditLimitIDR: 25000000,
@@ -588,6 +593,8 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       setEditTier(res.account.tier);
       setEditDiscountPct(res.account.contractDiscountPct);
       setEditCreditLimitIDR(res.account.creditLimitIDR);
+      setEditPhone(res.account.phone || '');
+      setEditNpwp(res.account.npwp || '');
     } catch (err: any) {
       onShowToast('Profile Error', err?.message || 'Unable to load Customer 360° profile.');
       setSelectedProfileId(null);
@@ -626,12 +633,23 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
 
   const handleSaveProfileTerms = async () => {
     if (!profileHistory) return;
+    const normalizedPhone = editPhone.trim() ? sanitizeIndonesianPhone(editPhone) : undefined;
+    const trimmedNpwp = editNpwp.trim();
+    if (trimmedNpwp) {
+      const tinCheck = validateNpwpOrNik(trimmedNpwp);
+      if (!tinCheck.valid) {
+        onShowToast('Invalid NPWP / NIK', tinCheck.error || 'NPWP/NIK must be 15 or 16 numeric digits for Coretax.');
+        return;
+      }
+    }
     setBusyActionId(`save-prof-${profileHistory.account.id}`);
     try {
       const res = await apiClient.updateCrmAccount(profileHistory.account.id, {
         tier: editTier,
         contractDiscountPct: editDiscountPct,
         creditLimitIDR: editCreditLimitIDR,
+        ...(normalizedPhone ? { phone: normalizedPhone } : {}),
+        npwp: trimmedNpwp ? validateNpwpOrNik(trimmedNpwp).cleanDigits : '',
       });
       onShowToast('Customer Updated', res.message);
       await openAccountProfile(profileHistory.account.id);
@@ -668,9 +686,20 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accForm.name.trim() || !accForm.phone.trim()) {
+    const sanitizedPhone = sanitizeIndonesianPhone(accForm.phone);
+    if (!accForm.name.trim() || !sanitizedPhone) {
       onShowToast('Missing Fields', 'Contact name and WhatsApp/phone number are required.');
       return;
+    }
+    const trimmedNpwp = accForm.npwp.trim();
+    let cleanNpwp: string | undefined;
+    if (trimmedNpwp) {
+      const tinCheck = validateNpwpOrNik(trimmedNpwp);
+      if (!tinCheck.valid) {
+        onShowToast('Invalid NPWP / NIK', tinCheck.error || 'NPWP/NIK must be 15 or 16 numeric digits for Coretax.');
+        return;
+      }
+      cleanNpwp = tinCheck.cleanDigits;
     }
     setBusyActionId('create-acc');
     try {
@@ -679,15 +708,16 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
         name: accForm.name.trim(),
         companyName: accForm.accountType === 'B2B_ACCOUNT' ? accForm.companyName.trim() : undefined,
         storeId: accForm.storeId,
-        phone: accForm.phone.trim(),
+        phone: sanitizedPhone,
         email: accForm.email.trim() || undefined,
+        npwp: cleanNpwp,
         contractDiscountPct: accForm.contractDiscountPct,
         creditLimitIDR: accForm.accountType === 'B2B_ACCOUNT' ? accForm.creditLimitIDR : 0,
         paymentTerms: accForm.accountType === 'B2B_ACCOUNT' ? accForm.paymentTerms : 'CASH',
       });
       onShowToast('Account Onboarded', res.message);
       setIsNewAccountOpen(false);
-      setAccForm((prev) => ({ ...prev, name: '', companyName: '', phone: '', email: '' }));
+      setAccForm((prev) => ({ ...prev, name: '', companyName: '', phone: '', email: '', npwp: '' }));
       await loadOverview();
     } catch (err: any) {
       onShowToast('Onboarding Failed', err?.message || 'Could not create CRM account.');
@@ -2172,6 +2202,27 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                         className={`w-40 px-2.5 py-1.5 rounded-lg text-xs font-mono ${inputClass}`}
                       />
                     </div>
+                    <div>
+                      <label className={`block text-[10px] font-bold mb-1 ${textMuted}`}>WhatsApp (628xxx)</label>
+                      <input
+                        type="text"
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        onBlur={(e) => setEditPhone(sanitizeIndonesianPhone(e.target.value))}
+                        placeholder="62812..."
+                        className={`w-36 px-2.5 py-1.5 rounded-lg text-xs font-mono ${inputClass}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-[10px] font-bold mb-1 ${textMuted}`}>NPWP / NIK (15/16d)</label>
+                      <input
+                        type="text"
+                        value={editNpwp}
+                        onChange={(e) => setEditNpwp(e.target.value)}
+                        placeholder="15/16 digits (Coretax)"
+                        className={`w-40 px-2.5 py-1.5 rounded-lg text-xs font-mono ${inputClass}`}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={handleSaveProfileTerms}
@@ -2352,7 +2403,8 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                       type="text"
                       value={accForm.phone}
                       onChange={(e) => setAccForm((p) => ({ ...p, phone: e.target.value }))}
-                      placeholder="+62 812..."
+                      onBlur={(e) => setAccForm((p) => ({ ...p, phone: sanitizeIndonesianPhone(e.target.value) }))}
+                      placeholder="0812... -> 62812..."
                       className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
                     />
                   </div>
@@ -2366,6 +2418,16 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                       className={`w-full px-3 py-2 rounded-xl ${inputClass}`}
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">NPWP / NIK (Coretax 15 or 16 Digits — Optional)</label>
+                  <input
+                    type="text"
+                    value={accForm.npwp}
+                    onChange={(e) => setAccForm((p) => ({ ...p, npwp: e.target.value }))}
+                    placeholder="e.g. 01.234.567.8-011.000 or 16-digit NIK"
+                    className={`w-full px-3 py-2 rounded-xl font-mono ${inputClass}`}
+                  />
                 </div>
                 <div>
                   <label className="block font-bold mb-1">Home Branch Outlet</label>

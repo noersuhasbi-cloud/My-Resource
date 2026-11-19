@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   PurchaseRequest,
@@ -106,6 +106,8 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [receivedByInput, setReceivedByInput] = useState<string>('');
   const [receiverNotesInput, setReceiverNotesInput] = useState<string>('');
   const [isSubmittingGR, setIsSubmittingGR] = useState<boolean>(false);
+  const grSubmitLockRef = useRef<boolean>(false);
+  const grIdempotencyKeyRef = useRef<string | null>(null);
 
   // State Machine Guard: Force Close PO with Written Adjustment Notes
   const [forceClosingPO, setForceClosingPO] = useState<PurchaseOrder | null>(null);
@@ -681,7 +683,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   };
 
   const handleSubmitPartialGR = async () => {
-    if (!activeReceivingPO) return;
+    if (!activeReceivingPO || isSubmittingGR || grSubmitLockRef.current) return;
 
     // Strict State Machine Guard: Verify no line item exceeds remaining open backorder
     for (const item of activeReceivingPO.items) {
@@ -695,7 +697,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       }
     }
 
+    grSubmitLockRef.current = true;
     setIsSubmittingGR(true);
+    const grIdempotencyKey =
+      grIdempotencyKeyRef.current ||
+      `GR-KEY-${activeReceivingPO.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    grIdempotencyKeyRef.current = grIdempotencyKey;
     try {
       if (receiveMode === 'cross_dock') {
         const cdItems = activeReceivingPO.items
@@ -783,6 +790,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               capitalizedToLandedCost: grCapitalizedToLandedCost,
             }
           : {}),
+        idempotencyKey: grIdempotencyKey,
       });
 
       const landedNote = res.landedCostSummary
@@ -799,12 +807,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         `GR #${res.goodsReceipt.id} processed. ${res.remainingBackorder} units backorder remaining. GL #${res.journalEntryIds[0] || 'GLE-Posted'} auto-posted.${landedNote}${unloadingNote}`
       );
 
+      grIdempotencyKeyRef.current = null;
       setActiveReceivingPO(null);
       onRefreshData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       onShowToast('Goods Receipt Failed', msg);
     } finally {
+      grSubmitLockRef.current = false;
       setIsSubmittingGR(false);
     }
   };

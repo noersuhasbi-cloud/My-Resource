@@ -219,6 +219,7 @@ import {
   getTaxRateForCategory,
   computeIndonesianTax,
   validateNpwpOrNik,
+  sanitizeIndonesianPhone,
   buildCoretaxCsv,
   buildCoretaxXml,
   resolveWholesaleTierPrice,
@@ -227,6 +228,40 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 10-second rapid double-submit idempotency cache for POS Checkout & Goods Receipt
+const IDEMPOTENCY_WINDOW_MS = 10_000;
+const recentIdempotencyCache = new Map<string, { expiresAt: number; payload: any }>();
+
+function extractRequestIdempotencyKey(req: Request): string {
+  const headerKey =
+    (typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : '') ||
+    (typeof req.headers['x-idempotency-key'] === 'string' ? req.headers['x-idempotency-key'] : '');
+  const bodyKey = String((req.body as any)?.idempotencyKey || (req.body as any)?.clientIdempotencyKey || '');
+  return String(headerKey || bodyKey).trim();
+}
+
+function getCachedIdempotencyPayload(scope: string, key: string): any | null {
+  if (!key) return null;
+  const now = Date.now();
+  // Prune expired entries opportunistically
+  for (const [k, entry] of recentIdempotencyCache.entries()) {
+    if (entry.expiresAt <= now) recentIdempotencyCache.delete(k);
+  }
+  const hit = recentIdempotencyCache.get(`${scope}:${key}`);
+  if (hit && hit.expiresAt > now) {
+    return hit.payload;
+  }
+  return null;
+}
+
+function storeIdempotencyPayload(scope: string, key: string, payload: any): void {
+  if (!key) return;
+  recentIdempotencyCache.set(`${scope}:${key}`, {
+    expiresAt: Date.now() + IDEMPOTENCY_WINDOW_MS,
+    payload,
+  });
+}
 
 // In-Memory Data Store (Initialized with realistic seed data)
 let storeStatus: StoreOperationalStatus = { ...INITIAL_STORE_STATUS };
@@ -2626,21 +2661,33 @@ function syncBatchesForStockVariance(
       if (batch.currentStock === 0) batch.status = 'depleted';
     }
   } else {
+    const targetStoreId = storeId === 'ALL' || storeId === 'CONSOLIDATED' ? 'store-jkt-senopati' : storeId;
+    const storeInfo = storeSchedules.find((s) => s.storeId === targetStoreId);
+    const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === targetStoreId);
+    const inv = inventoryList.find((i) => i.sku === sku);
+    const targetUnitCost = roundIDR(unitCost || tier?.unitCost || inv?.unitCost || 15000);
+
     const activeMatch =
       (preferredLotNumber ? candidates.find((b) => b.lotNumber === preferredLotNumber) : undefined) ||
       candidates
         .filter((b) => new Date(b.expiryDate).getTime() > nowMs)
         .sort((a, b) => new Date(b.expiryDate).getTime() - new Date(a.expiryDate).getTime())[0];
-    if (activeMatch) {
-      activeMatch.currentStock = Number((activeMatch.currentStock + deltaQty).toFixed(2));
+
+    const sameUnitCost = activeMatch && Math.abs((Number(activeMatch.unitCost) || 0) - targetUnitCost) < 0.0001;
+
+    if (activeMatch && (sameUnitCost || Boolean(preferredLotNumber))) {
+      const oldStock = Math.max(0, Number(activeMatch.currentStock) || 0);
+      const oldCost = Number(activeMatch.unitCost) || 0;
+      const newStock = Number((oldStock + deltaQty).toFixed(2));
+      if (!sameUnitCost && newStock > 0) {
+        const blendedTotalVal = oldStock * oldCost + deltaQty * targetUnitCost;
+        activeMatch.unitCost = Number((blendedTotalVal / newStock).toFixed(4));
+      }
+      activeMatch.currentStock = newStock;
       if (activeMatch.status === 'depleted') {
         activeMatch.status = activeMatch.daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh';
       }
     } else {
-      const targetStoreId = storeId === 'ALL' || storeId === 'CONSOLIDATED' ? 'store-jkt-senopati' : storeId;
-      const storeInfo = storeSchedules.find((s) => s.storeId === targetStoreId);
-      const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === targetStoreId);
-      const inv = inventoryList.find((i) => i.sku === sku);
       inventoryBatches.unshift({
         batchId: `BAT-ADJ-${Date.now().toString().slice(-5)}-${inventoryBatches.length + 1}`,
         sku,
@@ -2651,8 +2698,8 @@ function syncBatchesForStockVariance(
         lotNumber: preferredLotNumber || `LOT-ADJ-${Date.now().toString().slice(-4)}`,
         initialQuantity: deltaQty,
         currentStock: deltaQty,
-        unitCost: unitCost || tier?.unitCost || inv?.unitCost || 15000,
-        sellingPrice: inv?.sellingPrice || tier?.sellingPrice || Math.round((unitCost || 15000) * 1.4),
+        unitCost: targetUnitCost,
+        sellingPrice: inv?.sellingPrice || tier?.sellingPrice || Math.round((targetUnitCost || 15000) * 1.4),
         receivedDate: new Date().toISOString(),
         expiryDate: new Date(nowMs + 86400000 * 30).toISOString(),
         daysUntilExpiry: 30,
@@ -2663,6 +2710,106 @@ function syncBatchesForStockVariance(
       });
     }
   }
+}
+
+function applyProportionalBatchCostAdjustment(params: {
+  skus?: string[];
+  storeId?: string;
+  supplierName?: string;
+  deltaTotalIDR: number;
+  reasonTag: string;
+}): number {
+  const deltaIDR = roundIDR(params.deltaTotalIDR);
+  if (deltaIDR === 0) return 0;
+
+  const targetSkus = new Set((params.skus || []).map((s) => String(s || '').trim()).filter(Boolean));
+  const isScopedStore = Boolean(params.storeId && params.storeId !== 'ALL' && params.storeId !== 'CONSOLIDATED');
+
+  const isOwnedActive = (b: InventoryBatch) =>
+    !b.isConsignment && (Number(b.currentStock) || 0) > 0 && b.status !== 'depleted';
+
+  let matched: InventoryBatch[] = [];
+  if (targetSkus.size > 0) {
+    if (isScopedStore) {
+      matched = inventoryBatches.filter(
+        (b) => isOwnedActive(b) && targetSkus.has(b.sku) && b.storeId === params.storeId
+      );
+    }
+    if (matched.length === 0) {
+      matched = inventoryBatches.filter((b) => isOwnedActive(b) && targetSkus.has(b.sku));
+    }
+  }
+  if (matched.length === 0 && params.supplierName) {
+    const normSup = params.supplierName.trim().toLowerCase();
+    matched = inventoryBatches.filter(
+      (b) =>
+        isOwnedActive(b) &&
+        String(b.supplierName || '').trim().toLowerCase().includes(normSup) &&
+        (!isScopedStore || b.storeId === params.storeId)
+    );
+    if (matched.length === 0) {
+      matched = inventoryBatches.filter(
+        (b) => isOwnedActive(b) && String(b.supplierName || '').trim().toLowerCase().includes(normSup)
+      );
+    }
+  }
+
+  const totalQty = matched.reduce((s, b) => s + (Number(b.currentStock) || 0), 0);
+  if (matched.length === 0 || totalQty <= 0) return 0;
+
+  let remainingDelta = deltaIDR;
+  let appliedTotal = 0;
+  const affectedSkus = new Set<string>();
+
+  matched.forEach((batch, idx) => {
+    const qty = Number(batch.currentStock) || 0;
+    const isLast = idx === matched.length - 1;
+    const shareIDR = isLast ? remainingDelta : Math.round((deltaIDR * qty) / totalQty);
+    remainingDelta -= shareIDR;
+
+    const currentVal = qty * (Number(batch.unitCost) || 0);
+    const targetVal = Math.max(0, currentVal + shareIDR);
+    const actualDelta = Math.round(targetVal) - Math.round(currentVal);
+    appliedTotal += actualDelta;
+
+    const nextUnitCost = targetVal / qty;
+    batch.unitCost =
+      Math.abs(nextUnitCost - Math.round(nextUnitCost)) < 0.00005
+        ? Math.round(nextUnitCost)
+        : Number(nextUnitCost.toFixed(4));
+    batch.notes = batch.notes ? `${batch.notes} | ${params.reasonTag}` : params.reasonTag;
+    affectedSkus.add(batch.sku);
+  });
+
+  // Synchronize catalog & store tier WAC with updated active owned batches
+  affectedSkus.forEach((sku) => {
+    const skuBatches = inventoryBatches.filter((b) => isOwnedActive(b) && b.sku === sku);
+    const skuQty = skuBatches.reduce((s, b) => s + (Number(b.currentStock) || 0), 0);
+    const skuVal = skuBatches.reduce((s, b) => s + (Number(b.currentStock) || 0) * (Number(b.unitCost) || 0), 0);
+    const catalog = inventoryList.find((i) => i.sku === sku);
+    if (catalog && !catalog.isConsignment && skuQty > 0) {
+      const nextWac = Math.round(skuVal / skuQty);
+      catalog.unitCost = nextWac;
+      catalog.wacUnitCost = nextWac;
+    }
+    storeInventoryTiers
+      .filter((t) => t.sku === sku && !t.isConsignment)
+      .forEach((tier) => {
+        const storeBatches = skuBatches.filter((b) => b.storeId === tier.storeId);
+        const stQty = storeBatches.reduce((s, b) => s + (Number(b.currentStock) || 0), 0);
+        const stVal = storeBatches.reduce(
+          (s, b) => s + (Number(b.currentStock) || 0) * (Number(b.unitCost) || 0),
+          0
+        );
+        if (stQty > 0) {
+          tier.unitCost = Math.round(stVal / stQty);
+          tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+          tier.updatedAt = new Date().toISOString();
+        }
+      });
+  });
+
+  return appliedTotal;
 }
 
 function updateCoaLedgerBalance(accountCode: string, debitAmount: number, creditAmount: number) {
@@ -6207,10 +6354,13 @@ function computeDemandForecast(params?: {
 // -------------------------------------------------------------
 const STATE_SNAPSHOT_PATH = path.resolve(__dirname, '.grocematrix-state.json');
 const STATE_SNAPSHOT_TMP_PATH = path.resolve(__dirname, '.grocematrix-state.json.tmp');
+let isCleanProductionMode = false;
 
 function captureServerState() {
   return {
     savedAt: new Date().toISOString(),
+    isCleanProductionMode,
+    erpSettings: enterpriseSettings.erpSettings,
     storeStatus,
     storeSchedules,
     warehouseZones,
@@ -6296,6 +6446,7 @@ function captureServerState() {
 
 function applyServerState(snap: any) {
   if (!snap || typeof snap !== 'object') return;
+  isCleanProductionMode = Boolean(snap.isCleanProductionMode);
   if (snap.storeStatus) storeStatus = snap.storeStatus;
   if (Array.isArray(snap.storeSchedules)) storeSchedules = snap.storeSchedules;
   if (Array.isArray(snap.warehouseZones)) warehouseZones = snap.warehouseZones;
@@ -6459,20 +6610,34 @@ const INITIAL_STATE_BASELINE_JSON = JSON.stringify(captureServerState());
 
 let snapshotSaveTimer: NodeJS.Timeout | null = null;
 let snapshotWriteQueue: Promise<void> = Promise.resolve();
+let snapshotWritePending = false;
+let snapshotWriteInFlight = false;
 let isResettingState = false;
 
-function flushSnapshotAtomic(): Promise<void> {
-  if (isResettingState) return snapshotWriteQueue;
+function flushSnapshotAtomic(force: boolean = false): Promise<void> {
+  if (isResettingState && !force) return snapshotWriteQueue;
+  snapshotWritePending = true;
+  if (snapshotWriteInFlight) {
+    return snapshotWriteQueue;
+  }
+  snapshotWriteInFlight = true;
   snapshotWriteQueue = snapshotWriteQueue
     .catch(() => {})
     .then(async () => {
-      if (isResettingState) return;
       try {
-        const payload = JSON.stringify(captureServerState());
-        await fsPromises.writeFile(STATE_SNAPSHOT_TMP_PATH, payload, 'utf-8');
-        await fsPromises.rename(STATE_SNAPSHOT_TMP_PATH, STATE_SNAPSHOT_PATH);
-      } catch (err) {
-        console.warn('[GroceMart Snapshot] Failed to persist state snapshot:', err);
+        while (snapshotWritePending) {
+          snapshotWritePending = false;
+          if (isResettingState && !force) break;
+          try {
+            const payload = JSON.stringify(captureServerState());
+            await fsPromises.writeFile(STATE_SNAPSHOT_TMP_PATH, payload, 'utf-8');
+            await fsPromises.rename(STATE_SNAPSHOT_TMP_PATH, STATE_SNAPSHOT_PATH);
+          } catch (err) {
+            console.warn('[GroceMart Snapshot] Failed to persist state snapshot:', err);
+          }
+        }
+      } finally {
+        snapshotWriteInFlight = false;
       }
     });
   return snapshotWriteQueue;
@@ -6526,6 +6691,7 @@ async function resetDemoStateToBaseline() {
     await snapshotWriteQueue.catch(() => {});
     const baseline = JSON.parse(INITIAL_STATE_BASELINE_JSON);
     applyServerState(baseline);
+    isCleanProductionMode = false;
     inventoryBatches = createInitialBatches();
     warehouseRacks = createInitialWarehouseRacks();
     rackStocktakeSubmissions = [];
@@ -6561,6 +6727,131 @@ async function resetDemoStateToBaseline() {
     if (fs.existsSync(STATE_SNAPSHOT_PATH)) {
       await fsPromises.unlink(STATE_SNAPSHOT_PATH).catch(() => {});
     }
+  } finally {
+    isResettingState = false;
+  }
+}
+
+async function initializeCleanProductionStore(req?: Request) {
+  isResettingState = true;
+  if (snapshotSaveTimer) {
+    clearTimeout(snapshotSaveTimer);
+    snapshotSaveTimer = null;
+  }
+  try {
+    await snapshotWriteQueue.catch(() => {});
+
+    // Preserve enterpriseSettings (Coretax/PPN/MDR/Margin Floor), COA mapping, POS config, RBAC & warehouse structure
+    const preservedEnterpriseSettings = JSON.parse(JSON.stringify(enterpriseSettings));
+    const preservedCoaMapping = JSON.parse(JSON.stringify(coaMappingConfig));
+    const preservedPosConfig = JSON.parse(JSON.stringify(posCheckoutConfig));
+    const preservedOperatorAssignments = JSON.parse(JSON.stringify(operatorBranchAssignments));
+    const preservedApprovalRules = JSON.parse(JSON.stringify(approvalRulesList));
+    const preservedTaxRules = JSON.parse(JSON.stringify(skuTaxRulesList));
+    const preservedWeightTolerances = JSON.parse(JSON.stringify(weightToleranceConfigs));
+    const preservedCommGateway = JSON.parse(JSON.stringify(communicationGatewayConfig));
+
+    // Clear all transactional, ledger, and sample batch records
+    generalLedger = [];
+    inventoryBatches = [];
+    purchaseRequests = [];
+    purchaseOrders = [];
+    goodsReceipts = [];
+    vendorBillsList = [];
+    vendorCreditNotesList = [];
+    vendorRtvList = [];
+    landedCostsList = [];
+    supplierDebitNotesList = [];
+    customerOrders = [];
+    pickerOrders = [];
+    posTransactionsHistory = [];
+    posReturnsList = [];
+    customerRmaList = [];
+    customerClaimsList = [];
+    enterpriseQuotationsList = [];
+    b2bOrdersList = [];
+    giroRecordsList = [];
+    standingOrdersList = [];
+    kanvasRoutes = [];
+    warungKasbonAccounts = [];
+    wasteRecords = [];
+    naturalShrinkageAdjustments = [];
+    blindOpnameSheetsList = [];
+    stockOpnameSessions = [];
+    rackStocktakeSubmissions = [];
+    stockTransfersList = [];
+    recallEventsList = [];
+    returnableContainersList = [];
+    consignmentLedger = [];
+    suratJalanList = [];
+    deliveryOrdersList = [];
+    shipmentsList = [];
+    qcInspectionsList = [];
+    coldChainLogs = [];
+    posShiftsList = [];
+    safeDropsList = [];
+    settlementBatchesList = [];
+    pphWithholdingList = [];
+    approvalQueueList = [];
+    fraudEvents = [];
+    resolvedFraudAlertMeta = {};
+    auditTrail = [];
+    securityAuditTrail = [];
+    enterpriseNotificationsList = [];
+    substitutionPromptRecords = [];
+    communicationLogs = [];
+    crmDeals = [];
+    crmActivities = [];
+    qrisTransactions.clear();
+    idempotencyStore.clear();
+    inTransitTransferLots.clear();
+
+    // Zero out physical stock quantities while preserving product & warehouse catalog definitions
+    inventoryList.forEach((item) => {
+      item.currentStock = 0;
+      item.incomingStock = 0;
+      item.stockBatches = [];
+    });
+    storeInventoryTiers.forEach((tier) => {
+      tier.physicalStock = 0;
+      tier.reservedStock = 0;
+      tier.availableStock = 0;
+      tier.incomingStock = 0;
+      tier.totalValuation = 0;
+      tier.updatedAt = new Date().toISOString();
+    });
+
+    // Preserve full Indonesian Chart of Accounts structure with zeroed opening balances (COA #1040 = Rp 0, DR === CR = Rp 0)
+    ensureRegulatoryCoaAccounts();
+    chartOfAccounts.forEach((acc) => {
+      acc.balance = 0;
+    });
+
+    // Restore preserved configuration & RBAC roles
+    enterpriseSettings = preservedEnterpriseSettings;
+    coaMappingConfig = preservedCoaMapping;
+    posCheckoutConfig = preservedPosConfig;
+    operatorBranchAssignments = preservedOperatorAssignments;
+    approvalRulesList = preservedApprovalRules;
+    skuTaxRulesList = preservedTaxRules;
+    weightToleranceConfigs = preservedWeightTolerances;
+    communicationGatewayConfig = preservedCommGateway;
+    syncAssignmentsOntoProfiles();
+
+    isCleanProductionMode = true;
+    syncWarehouseRackOccupancy();
+
+    auditTrailLogs = [];
+    appendAuditTrailLog({
+      req,
+      branchScope: 'ALL',
+      module: 'SECURITY',
+      action: 'SYSTEM_PRODUCTION_INITIALIZED',
+      referenceId: 'INIT-PROD',
+      summary: `Initialized Clean Production Store Mode (COA #1040 = Rp 0, GL = 0 entries, ${chartOfAccounts.length} Indonesian COA accounts & RBAC roles preserved).`,
+    });
+
+    await flushSnapshotAtomic(true);
   } finally {
     isResettingState = false;
   }
@@ -6656,7 +6947,7 @@ async function startServer() {
     req.pipe(proxyReq);
   });
 
-  app.use(express.json());
+  app.use(express.json({ limit: '25mb' }));
 
   // 7-Role Enterprise RBAC & Branch-Scope Express Guard Middleware
   app.use('/api', (req: Request, res: Response, next) => {
@@ -6747,6 +7038,9 @@ async function startServer() {
       if (
         urlPath === '/admin/system/reset-demo-data' ||
         urlPath === '/admin/reset-demo-data' ||
+        urlPath === '/admin/system/backup' ||
+        urlPath === '/admin/system/restore' ||
+        urlPath === '/admin/system/init-production' ||
         urlPath === '/admin/rbac/switch-session' ||
         (urlPath === '/admin/settings/operator-assignments' && method === 'POST') ||
         (urlPath.startsWith('/admin/settings/coa-account') && method === 'DELETE') ||
@@ -7088,7 +7382,9 @@ async function startServer() {
         if (
           res.statusCode < 400 &&
           !isResettingState &&
-          !req.originalUrl.includes('reset-demo-data')
+          !req.originalUrl.includes('reset-demo-data') &&
+          !req.originalUrl.includes('init-production') &&
+          !req.originalUrl.includes('/admin/system/restore')
         ) {
           scheduleStateSave();
         }
@@ -7108,6 +7404,133 @@ async function startServer() {
       timestamp: new Date().toISOString(),
       batchesCount: inventoryBatches.length,
       message: 'Demo state snapshot cleared and re-initialized with fresh relative-date seed baseline.',
+    });
+  });
+
+  app.get('/api/admin/system/backup', (req: Request, res: Response) => {
+    const exportedAt = new Date().toISOString();
+    const dateStamp = exportedAt.slice(0, 10);
+    const filename = `.grocematrix-backup-${dateStamp}.json`;
+    const snapshot = {
+      backupVersion: '4.2',
+      exportedAt,
+      exportedBy: getEffectiveOperatorName(req),
+      ...captureServerState(),
+    };
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(snapshot, null, 2));
+  });
+
+  app.post('/api/admin/system/restore', async (req: Request, res: Response) => {
+    const rawBody = req.body;
+    const snap =
+      rawBody && typeof rawBody === 'object' && rawBody.snapshot && typeof rawBody.snapshot === 'object'
+        ? rawBody.snapshot
+        : rawBody;
+
+    const schemaErrors: string[] = [];
+    if (!snap || typeof snap !== 'object' || Array.isArray(snap)) {
+      schemaErrors.push('Snapshot payload must be a valid JSON object.');
+    } else {
+      if (!Array.isArray(snap.generalLedger)) {
+        schemaErrors.push('Missing or invalid array field: generalLedger.');
+      }
+      if (!Array.isArray(snap.inventoryBatches)) {
+        schemaErrors.push('Missing or invalid array field: inventoryBatches.');
+      }
+      if (
+        !Array.isArray(snap.chartOfAccounts) ||
+        snap.chartOfAccounts.length === 0 ||
+        !snap.chartOfAccounts.every((c: any) => c && typeof c.accountCode === 'string' && typeof c.balance === 'number')
+      ) {
+        schemaErrors.push('Missing or invalid non-empty array field: chartOfAccounts.');
+      }
+      const resolvedErpSettings = snap.erpSettings || snap.enterpriseSettings?.erpSettings;
+      if (!resolvedErpSettings || typeof resolvedErpSettings !== 'object' || Array.isArray(resolvedErpSettings)) {
+        schemaErrors.push('Missing or invalid object field: erpSettings.');
+      }
+    }
+
+    if (schemaErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_SNAPSHOT_SCHEMA',
+        error: `Snapshot validation failed: ${schemaErrors.join(' ')}`,
+        details: schemaErrors,
+      });
+    }
+
+    isResettingState = true;
+    if (snapshotSaveTimer) {
+      clearTimeout(snapshotSaveTimer);
+      snapshotSaveTimer = null;
+    }
+    try {
+      await snapshotWriteQueue.catch(() => {});
+      applyServerState(snap);
+      if (snap.erpSettings && typeof snap.erpSettings === 'object') {
+        enterpriseSettings = {
+          ...enterpriseSettings,
+          erpSettings: {
+            ...INITIAL_ERP_SETTINGS,
+            ...(enterpriseSettings.erpSettings || {}),
+            ...snap.erpSettings,
+            ojolChannelRates: {
+              ...INITIAL_ERP_SETTINGS.ojolChannelRates,
+              ...(enterpriseSettings.erpSettings?.ojolChannelRates || {}),
+              ...(snap.erpSettings.ojolChannelRates || {}),
+            },
+          },
+        };
+      }
+      ensureRegulatoryCoaAccounts();
+      ensureHalalComplianceMetadata();
+      syncAllBatchesExpiryStatus(Date.now());
+      syncWarehouseRackOccupancy();
+
+      appendAuditTrailLog({
+        req,
+        branchScope: 'ALL',
+        module: 'SECURITY',
+        action: 'SYSTEM_SNAPSHOT_RESTORED',
+        referenceId: `RESTORE-${Date.now().toString().slice(-6)}`,
+        summary: `Atomically restored ERP snapshot (${generalLedger.length} GL entries, ${inventoryBatches.length} inventory batches, ${chartOfAccounts.length} COA accounts).`,
+      });
+
+      await flushSnapshotAtomic(true);
+    } finally {
+      isResettingState = false;
+    }
+
+    res.json({
+      success: true,
+      restoredAt: new Date().toISOString(),
+      stats: {
+        glEntries: generalLedger.length,
+        batchesCount: inventoryBatches.length,
+        coaAccounts: chartOfAccounts.length,
+      },
+      message: `Snapshot validated and atomically restored (${generalLedger.length} GL entries, ${inventoryBatches.length} batches).`,
+    });
+  });
+
+  app.post('/api/admin/system/init-production', async (req: Request, res: Response) => {
+    await initializeCleanProductionStore(req);
+    const coa1040Balance = chartOfAccounts.find((c) => c.accountCode === '1040')?.balance ?? 0;
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      isCleanProductionMode,
+      stats: {
+        coa1040BalanceIDR: coa1040Balance,
+        glEntries: generalLedger.length,
+        batchesCount: inventoryBatches.length,
+        coaAccountsPreserved: chartOfAccounts.length,
+        rbacUsersPreserved: Object.keys(operatorBranchAssignments).length,
+      },
+      message:
+        'Clean Production Store initialized: dummy transactions, GL entries, and demo batches cleared while preserving Indonesian COA, ERP settings, and RBAC roles.',
     });
   });
 
@@ -10812,6 +11235,16 @@ async function startServer() {
 
   // GOODS RECEIPT WITH PARTIAL SHIPMENT FULFILLMENT + ADVANCED LANDED COST INJECTION
   const handleReceivePartialGoods = (req: Request, res: Response) => {
+    const grIdempotencyKey = extractRequestIdempotencyKey(req);
+    const cachedGrResponse = getCachedIdempotencyPayload('gr', grIdempotencyKey);
+    if (cachedGrResponse) {
+      return res.json({
+        ...cachedGrResponse,
+        deduplicated: true,
+        message: `Duplicate Goods Receipt ignored within 10s idempotency window (${grIdempotencyKey}).`,
+      });
+    }
+
     const {
       poId,
       deliveryNoteNumber = `SJ-${Date.now().toString().slice(-6)}`,
@@ -11359,7 +11792,7 @@ async function startServer() {
       });
     }
 
-    res.json({
+    const grResponsePayload = {
       success: true,
       goodsReceipt: newGR,
       purchaseOrder: po,
@@ -11374,7 +11807,9 @@ async function startServer() {
           }
         : undefined,
       unloadingLaborSummary,
-    });
+    };
+    storeIdempotencyPayload('gr', grIdempotencyKey, grResponsePayload);
+    res.json(grResponsePayload);
   };
   app.post('/api/admin/procurement/gr/receive-partial', handleReceivePartialGoods);
   app.post('/api/admin/procurement/goods-receipts', handleReceivePartialGoods);
@@ -11549,7 +11984,7 @@ async function startServer() {
     const getStoreScopedBalance = (code: string): number => {
       const liveAcc = chartOfAccounts.find((c) => c.accountCode === code);
       if (!isSingleStore) return liveAcc?.balance ?? 0;
-      const base = BASELINE_COA_BY_CODE[code]?.balance ?? liveAcc?.balance ?? 0;
+      const base = isCleanProductionMode ? 0 : (BASELINE_COA_BY_CODE[code]?.balance ?? liveAcc?.balance ?? 0);
       const category = liveAcc?.category || BASELINE_COA_BY_CODE[code]?.category || 'Expense';
       let delta = 0;
       generalLedger.forEach((entry) => {
@@ -11612,7 +12047,7 @@ async function startServer() {
 
     const getScopedAccBalance = (acc: ChartOfAccount): number => {
       if (!isSingleStore) return acc.balance;
-      const base = BASELINE_COA_BY_CODE[acc.accountCode]?.balance ?? acc.balance;
+      const base = isCleanProductionMode ? 0 : (BASELINE_COA_BY_CODE[acc.accountCode]?.balance ?? acc.balance);
       let delta = 0;
       generalLedger.forEach((entry) => {
         if (entry.accountCode !== acc.accountCode || entry.storeId !== storeIdStr || INITIAL_SEED_GL_IDS.has(entry.id)) {
@@ -12958,7 +13393,15 @@ async function startServer() {
       supervisorName,
     } = req.body as POSTransactionRequest;
 
-    const cleanIdempotencyKey = clientIdempotencyKey ? String(clientIdempotencyKey).trim() : '';
+    const cleanIdempotencyKey = extractRequestIdempotencyKey(req) || (clientIdempotencyKey ? String(clientIdempotencyKey).trim() : '');
+    const cachedPosResponse = getCachedIdempotencyPayload('pos', cleanIdempotencyKey);
+    if (cachedPosResponse) {
+      return res.json({
+        ...cachedPosResponse,
+        deduplicated: true,
+        message: `Duplicate POS checkout ignored within 10s idempotency window (${cleanIdempotencyKey}) — zero duplicate GL or stock mutation.`,
+      });
+    }
     const rawOfflineId = offlineReceiptNumber || (req.body as any)?.offlineReceiptId;
     const cleanOfflineReceiptNo = rawOfflineId ? String(rawOfflineId).trim() : '';
     if (cleanIdempotencyKey || cleanOfflineReceiptNo) {
@@ -13917,7 +14360,7 @@ async function startServer() {
     }
     scheduleStateSave();
 
-    res.json({
+    const posResponsePayload = {
       success: true,
       receipt,
       crmAccountUpdated: matchedCrmAccount || undefined,
@@ -13927,7 +14370,9 @@ async function startServer() {
         pb1IDR: resolvedPb1,
       },
       message: `POS checkout completed! Receipt #${receiptNumber}. Stock deducted across ${items.length} items & GL ledger posted.`,
-    });
+    };
+    storeIdempotencyPayload('pos', cleanIdempotencyKey, posResponsePayload);
+    res.json(posResponsePayload);
   });
 
   app.get('/api/pos/history', (req: Request, res: Response) => {
@@ -16337,6 +16782,20 @@ async function startServer() {
     }
 
     commitBalancedGlBatch(approvalGlBatch, true);
+
+    const totalCapitalizedTo1040IDR =
+      (Boolean(bill.isNonCreditableVat) ? billTaxIDR : 0) + netInventoryVarianceIDR;
+    if (totalCapitalizedTo1040IDR !== 0) {
+      applyProportionalBatchCostAdjustment({
+        skus: (bill.items || []).map((i) => i.sku).filter(Boolean),
+        storeId: bill.storeId,
+        supplierName: bill.supplierName,
+        deltaTotalIDR: totalCapitalizedTo1040IDR,
+        reasonTag: bill.isNonCreditableVat
+          ? `Non-Creditable VAT & Bill Variance capitalized (${bill.id})`
+          : `Vendor Bill 3-Way Match variance (${bill.id})`,
+      });
+    }
 
     // Automatic Settlement of Vendor Prepayments (COA #1150 Auto-Offset on Approved Vendor Bill)
     const billPayableIDR =
@@ -26952,9 +27411,23 @@ async function startServer() {
   app.post('/api/admin/crm/accounts', (req: Request, res: Response) => {
     const body = req.body || {};
     const name = String(body.name || '').trim();
-    const phone = String(body.phone || '').trim();
+    const rawPhone = String(body.phone || '').trim();
+    const phone = sanitizeIndonesianPhone(rawPhone);
     if (!name || !phone) {
       return res.status(400).json({ error: 'Account name and phone are required.' });
+    }
+
+    const rawNpwp = String(body.npwp ?? body.nik ?? '').trim();
+    let sanitizedNpwp: string | undefined;
+    if (rawNpwp) {
+      const tinCheck = validateNpwpOrNik(rawNpwp);
+      if (!tinCheck.valid) {
+        return res.status(400).json({
+          code: 'INVALID_NPWP_NIK',
+          error: `Coretax NPWP/NIK Guard: ${tinCheck.error || 'Must be 15 or 16 numeric digits.'}`,
+        });
+      }
+      sanitizedNpwp = tinCheck.cleanDigits;
     }
 
     const { isBranchScoped, storeId: scopedBranch } = resolveRequestBranchScope(req);
@@ -26980,6 +27453,7 @@ async function startServer() {
       storeName,
       phone,
       email: String(body.email || `${name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@member.grocemart.id`).trim(),
+      npwp: sanitizedNpwp,
       tier,
       pointsBalance: initialPts,
       lifetimeSpendIDR: initialSpend,
@@ -27024,9 +27498,24 @@ async function startServer() {
     }
 
     const body = req.body || {};
+    if (body.npwp !== undefined || body.nik !== undefined) {
+      const rawNpwp = String(body.npwp ?? body.nik ?? '').trim();
+      if (rawNpwp) {
+        const tinCheck = validateNpwpOrNik(rawNpwp);
+        if (!tinCheck.valid) {
+          return res.status(400).json({
+            code: 'INVALID_NPWP_NIK',
+            error: `Coretax NPWP/NIK Guard: ${tinCheck.error || 'Must be 15 or 16 numeric digits.'}`,
+          });
+        }
+        acc.npwp = tinCheck.cleanDigits;
+      } else {
+        acc.npwp = undefined;
+      }
+    }
     if (body.name !== undefined) acc.name = String(body.name).trim();
     if (body.companyName !== undefined) acc.companyName = String(body.companyName).trim();
-    if (body.phone !== undefined) acc.phone = String(body.phone).trim();
+    if (body.phone !== undefined) acc.phone = sanitizeIndonesianPhone(String(body.phone).trim());
     if (body.email !== undefined) acc.email = String(body.email).trim();
     if (body.tier && ['SILVER', 'GOLD', 'PLATINUM'].includes(body.tier)) acc.tier = body.tier;
     if (body.contractDiscountPct !== undefined) acc.contractDiscountPct = Math.max(0, Math.min(35, Number(body.contractDiscountPct) || 0));
@@ -27038,9 +27527,14 @@ async function startServer() {
 
     if (acc.linkedB2bCustomerId) {
       const b2bCust = b2bCustomersList.find((c) => c.id === acc.linkedB2bCustomerId);
-      if (b2bCust && body.creditLimitIDR !== undefined) {
-        b2bCust.creditLimit = acc.creditLimitIDR;
-        b2bCust.availableCredit = Math.max(0, b2bCust.creditLimit - b2bCust.outstandingAR);
+      if (b2bCust) {
+        if (body.creditLimitIDR !== undefined) {
+          b2bCust.creditLimit = acc.creditLimitIDR;
+          b2bCust.availableCredit = Math.max(0, b2bCust.creditLimit - b2bCust.outstandingAR);
+        }
+        if (acc.npwp) {
+          b2bCust.npwp = acc.npwp;
+        }
       }
     }
 
@@ -29499,6 +29993,22 @@ async function startServer() {
       ],
       true
     );
+
+    if (!isRebate) {
+      const linkedBill = vendorBillId
+        ? vendorBillsList.find((b) => b.id === vendorBillId || b.billNumber === vendorBillId)
+        : undefined;
+      const rafaksiSkus = invItem?.sku
+        ? [invItem.sku]
+        : linkedBill?.items?.map((i) => i.sku).filter(Boolean) || [];
+      applyProportionalBatchCostAdjustment({
+        skus: rafaksiSkus,
+        storeId: outlet.storeId,
+        supplierName: cleanSupplier,
+        deltaTotalIDR: -nominal,
+        reasonTag: `Rafaksi Debit Note ${dnId} (-Rp ${nominal.toLocaleString('id-ID')})`,
+      });
+    }
 
     const actorName = getEffectiveOperatorName(req);
     const newDn: SupplierDebitNote = {

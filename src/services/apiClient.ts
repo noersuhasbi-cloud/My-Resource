@@ -539,8 +539,10 @@ export const apiClient = {
     unloadingLaborFeeIDR?: number;
     unloadingFeePayerCoa?: '1011' | '1010' | '2010';
     capitalizedToLandedCost?: boolean;
+    idempotencyKey?: string;
   }): Promise<{
     success: boolean;
+    deduplicated?: boolean;
     goodsReceipt: GoodsReceiptRecord;
     purchaseOrder: PurchaseOrder;
     isPartial: boolean;
@@ -566,9 +568,13 @@ export const apiClient = {
       glEntryIds: string[];
     };
   }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (payload.idempotencyKey) {
+      headers['Idempotency-Key'] = payload.idempotencyKey;
+    }
     const res = await fetchApi('/api/admin/procurement/gr/receive-partial', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -1340,12 +1346,18 @@ export const apiClient = {
   async posCheckout(payload: POSTransactionRequest): Promise<{
     success: boolean;
     alreadySynced?: boolean;
+    deduplicated?: boolean;
     receipt: POSTransactionReceipt;
     message: string;
   }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const idemKey = payload.idempotencyKey || payload.clientIdempotencyKey;
+    if (idemKey) {
+      headers['Idempotency-Key'] = idemKey;
+    }
     const res = await fetchApi('/api/pos/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -3101,6 +3113,67 @@ export const apiClient = {
     return res.json();
   },
 
+  async downloadSystemBackup(): Promise<{ blob: Blob; filename: string }> {
+    const res = await fetchApi('/api/admin/system/backup', {
+      method: 'GET',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to export system backup');
+    }
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = match?.[1] || `.grocematrix-backup-${today}.json`;
+    const blob = await res.blob();
+    return { blob, filename };
+  },
+
+  async restoreSystemSnapshot(snapshot: Record<string, unknown>): Promise<{
+    success: boolean;
+    restoredAt: string;
+    stats: {
+      glEntries: number;
+      batchesCount: number;
+      coaAccounts: number;
+    };
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/system/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to restore system snapshot');
+    }
+    return data;
+  },
+
+  async initProductionStore(): Promise<{
+    success: boolean;
+    timestamp: string;
+    isCleanProductionMode: boolean;
+    stats: {
+      coa1040BalanceIDR: number;
+      glEntries: number;
+      batchesCount: number;
+      coaAccountsPreserved: number;
+      rbacUsersPreserved: number;
+    };
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/system/init-production', {
+      method: 'POST',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to initialize clean production store');
+    }
+    return data;
+  },
+
   async getCommunicationGateway(): Promise<{
     config: CommunicationGatewayConfig;
     logs: CommunicationDispatchLog[];
@@ -3525,6 +3598,7 @@ export const apiClient = {
     storeId?: string;
     phone: string;
     email?: string;
+    npwp?: string;
     tier?: CrmLoyaltyTier;
     pointsBalance?: number;
     contractDiscountPct?: number;
@@ -3552,6 +3626,7 @@ export const apiClient = {
         | 'companyName'
         | 'phone'
         | 'email'
+        | 'npwp'
         | 'tier'
         | 'contractDiscountPct'
         | 'creditLimitIDR'

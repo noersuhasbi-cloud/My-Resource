@@ -5,6 +5,7 @@ import type {
   QCDisposition,
   QCDispositionAction,
   InventoryItem,
+  InventoryBatch,
   PutawaySuggestionResponse,
   StaffShiftSession,
 } from '../../types/index.ts';
@@ -39,6 +40,8 @@ interface InventoryQCModuleProps {
   theme: 'light' | 'dark';
   selectedStore: string;
   inventory: InventoryItem[];
+  batches?: InventoryBatch[];
+  halalWarningDays?: number;
   qcRecords?: QCInspectionRecord[];
   activeStaffSession?: StaffShiftSession | null;
   onRefreshData: () => void;
@@ -49,6 +52,8 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   theme,
   selectedStore,
   inventory,
+  batches = [],
+  halalWarningDays = 30,
   qcRecords,
   activeStaffSession,
   onRefreshData,
@@ -256,23 +261,64 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
   const rejectedCount = activeQcRecords.filter((r) => r.disposition === 'REJECTED').length;
   const passRate = activeQcRecords.length > 0 ? Math.round((passedCount / activeQcRecords.length) * 100) : 100;
 
+  const effectiveWarningDays = Math.max(1, Math.round(Number(halalWarningDays) || 30));
+
   const bpjphExpiringAlerts = React.useMemo(() => {
+    const nowMs = Date.now();
     return inventory
       .map((item) => {
-        if (item.halalStatus !== 'HALAL_CERTIFIED' || !item.bpjphExpiryDate) return null;
-        const info = getBpjphExpiryInfo(item.bpjphExpiryDate);
+        const certExpiry = item.bpjphExpiryDate || (item as any).halalCertExpiry;
+        if (item.halalStatus !== 'HALAL_CERTIFIED' || !certExpiry) return null;
+        const info = getBpjphExpiryInfo(certExpiry, nowMs, effectiveWarningDays);
         if (!info.isExpiringSoon && !info.isExpired) return null;
         return {
           sku: item.sku,
           name: item.productName || item.name || item.sku,
           certNumber: item.bpjphCertNumber || '-',
-          expiryDate: item.bpjphExpiryDate,
+          expiryDate: certExpiry,
           daysUntilExpiry: info.daysUntilExpiry,
           isExpired: info.isExpired,
         };
       })
       .filter((x): x is NonNullable<typeof x> => Boolean(x));
-  }, [inventory]);
+  }, [inventory, effectiveWarningDays]);
+
+  const bpomBatchExpiringAlerts = React.useMemo(() => {
+    const nowMs = Date.now();
+    const seenSkus = new Set<string>();
+    const list: Array<{ sku: string; name: string; batchNumber: string; expiryDate: string; daysUntilExpiry: number | null }> = [];
+    batches.forEach((b) => {
+      if ((Number(b.currentStock) || 0) <= 0 || !b.expiryDate) return;
+      if (selectedStore !== 'CONSOLIDATED' && selectedStore !== 'ALL' && b.storeId !== selectedStore) return;
+      const info = getBpjphExpiryInfo(b.expiryDate, nowMs, effectiveWarningDays);
+      if (!info.isExpiringSoon && !info.isExpired) return;
+      if (seenSkus.has(b.sku)) return;
+      seenSkus.add(b.sku);
+      list.push({
+        sku: b.sku,
+        name: b.productName || b.sku,
+        batchNumber: b.lotNumber,
+        expiryDate: b.expiryDate,
+        daysUntilExpiry: info.daysUntilExpiry,
+      });
+    });
+    return list;
+  }, [batches, selectedStore, effectiveWarningDays]);
+
+  const complianceExpirySummary = React.useMemo(() => {
+    const skuMap = new Map<string, string>();
+    bpjphExpiringAlerts.forEach((a) => skuMap.set(a.sku, `${a.sku} (BPJPH ${a.expiryDate})`));
+    bpomBatchExpiringAlerts.forEach((b) => {
+      const prev = skuMap.get(b.sku);
+      skuMap.set(b.sku, prev ? `${prev} + Batch ${b.batchNumber}` : `${b.sku} (Batch ${b.batchNumber} exp ${b.expiryDate})`);
+    });
+    return {
+      totalSkus: skuMap.size,
+      halalCount: bpjphExpiringAlerts.length,
+      batchCount: bpomBatchExpiringAlerts.length,
+      tooltip: Array.from(skuMap.values()).join(' • '),
+    };
+  }, [bpjphExpiringAlerts, bpomBatchExpiringAlerts]);
 
   // Card classes
   const cardClass = `rounded-2xl border transition-all ${
@@ -292,13 +338,24 @@ export const InventoryQCModule: React.FC<InventoryQCModuleProps> = ({
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
                   HACCP &amp; BPOM Standard
                 </span>
                 <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/10 text-teal-800 dark:text-teal-300 border border-teal-500/25">
                   Gate 1 Quality Control
                 </span>
+                {complianceExpirySummary.totalSkus > 0 && (
+                  <span
+                    title={`BPJPH Halal / BPOM Expiry Alert (≤${effectiveWarningDays}d): ${complianceExpirySummary.tooltip}`}
+                    className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30"
+                  >
+                    <ShieldAlert className="w-3 h-3 shrink-0" />
+                    <span>
+                      BPJPH/BPOM ≤{effectiveWarningDays}d: {complianceExpirySummary.totalSkus} SKU
+                    </span>
+                  </span>
+                )}
               </div>
               <h1 className={`text-xl font-bold mt-1 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 Perishables Quality Control (QC) &amp; Disposition

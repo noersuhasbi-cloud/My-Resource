@@ -100,7 +100,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
   };
 
   const handleSubmitCount = async () => {
-    if (!activeSheet) return;
+    if (!activeSheet || isActioning) return;
     const missing = activeSheet.items.some((it) => {
       const val = countsDraft[it.sku]?.qty;
       return val === undefined || val === '' || Number.isNaN(Number(val));
@@ -130,7 +130,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
   };
 
   const handleSupervisorApprove = async (action: 'APPROVED' | 'REJECTED') => {
-    if (!activeSheet) return;
+    if (!activeSheet || isActioning) return;
     setIsActioning(true);
     try {
       const res = await apiClient.approveBlindOpnameSheet(

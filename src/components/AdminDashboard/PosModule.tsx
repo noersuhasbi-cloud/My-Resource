@@ -81,6 +81,7 @@ import {
 import { DocumentDispatchModal } from './DocumentDispatchModal';
 
 const OFFLINE_POS_QUEUE_KEY = 'grocematrix_offline_pos_queue';
+const POS_ACTIVE_CART_STORAGE_KEY = 'grocematrix_active_pos_cart';
 
 interface OfflineQueuedPosTx {
   id: string;
@@ -147,9 +148,45 @@ export const PosModule: React.FC<PosModuleProps> = ({
     })}`;
   };
 
-  // 3. Register Cart State
-  const [cart, setCart] = useState<POSCartItem[]>([]);
+  // 3. Register Cart State (auto-draft persisted in sessionStorage for accidental F5 recovery)
+  const [cart, setCart] = useState<POSCartItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.sessionStorage.getItem(POS_ACTIVE_CART_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed)
+        ? parsed.filter((item) => item && typeof item.sku === 'string' && Number(item.quantity) > 0)
+        : [];
+    } catch {
+      return [];
+    }
+  });
   const [discountPercent, setDiscountPercent] = useState<number>(0);
+
+  // Persist active cart draft to sessionStorage & warn before tab close/refresh when unpaid items exist
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (cart.length > 0) {
+        window.sessionStorage.setItem(POS_ACTIVE_CART_STORAGE_KEY, JSON.stringify(cart));
+      } else {
+        window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [cart]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || cart.length === 0) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [cart.length]);
 
   useEffect(() => {
     if (!canOverrideDiscount && discountPercent !== 0) {
@@ -224,6 +261,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
   // 4. Barcode Quick Scanner State
   const [barcodeInput, setBarcodeInput] = useState<string>('');
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const lastCartQtyInputRef = useRef<HTMLInputElement>(null);
 
   // 5. Digital Weight Scale Modal
   const [scalingProduct, setScalingProduct] = useState<POSProductItem | null>(null);
@@ -239,6 +277,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [splitLeg2Method, setSplitLeg2Method] = useState<'CASH' | 'QRIS' | 'CARD'>('QRIS');
   const [splitLeg1Amount, setSplitLeg1Amount] = useState<number>(0);
   const [isProcessingCheckout, setIsProcessingCheckout] = useState<boolean>(false);
+  const checkoutSubmitLockRef = useRef<boolean>(false);
+  const activeCartIdempotencyKeyRef = useRef<string | null>(null);
 
   // 7. Electronic Receipt Modal (Struk)
   const [completedReceipt, setCompletedReceipt] = useState<POSTransactionReceipt | null>(null);
@@ -667,6 +707,44 @@ export const PosModule: React.FC<PosModuleProps> = ({
     );
   };
 
+  const setCartItemQuantity = (lineId: string, rawQty: number) => {
+    const targetLine = cart.find((c) => c.id === lineId);
+    if (!targetLine || !Number.isFinite(rawQty)) return;
+    const clampedQty = targetLine.isWeighted
+      ? Number(Math.max(0.1, rawQty).toFixed(3))
+      : Math.max(1, Math.round(rawQty));
+    const prod = products.find((p) => p.sku === targetLine.sku);
+    if (prod) {
+      const otherQtyForSku = cart
+        .filter((c) => c.sku === targetLine.sku && c.id !== lineId)
+        .reduce((s, c) => s + c.quantity, 0);
+      if (otherQtyForSku + clampedQty > prod.availableStock) {
+        onShowToast('Stock Cap Reached', `Maximum available at outlet: ${prod.availableStock} ${prod.unit}`);
+        return;
+      }
+    }
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.id !== lineId) return item;
+        if (!item.isWeighted && prod) {
+          const tierResolved = resolveWholesaleTierPrice(prod.wholesaleTiers, clampedQty, prod.sellingPrice);
+          return {
+            ...item,
+            quantity: clampedQty,
+            unitPrice: tierResolved.unitPriceIDR,
+            lineTotal: Math.round(clampedQty * tierResolved.unitPriceIDR),
+            appliedWholesaleTierLabel: tierResolved.appliedTier?.label,
+          };
+        }
+        return {
+          ...item,
+          quantity: clampedQty,
+          lineTotal: Math.round(clampedQty * item.unitPrice),
+        };
+      })
+    );
+  };
+
   const removeFromCart = (lineId: string) => {
     const removedLine = cart.find((item) => item.id === lineId);
     setCart((prev) => prev.filter((item) => item.id !== lineId));
@@ -690,6 +768,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
   const clearCart = () => {
     setCart([]);
+    activeCartIdempotencyKeyRef.current = null;
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.removeItem(POS_ACTIVE_CART_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+    }
     setDiscountPercent(0);
     setCustomerName('Walk-in Retail Shopper');
     setCustomerPhone('');
@@ -802,18 +888,24 @@ export const PosModule: React.FC<PosModuleProps> = ({
     Math.round(splitLeg1Amount || 0) + splitLeg2Amount === totalAmount;
 
   // Checkout execution
-  const handleExecuteCheckout = async () => {
-    if (cart.length === 0) return;
+  const handleExecuteCheckout = async (overrideCashTendered?: number) => {
+    if (cart.length === 0 || isProcessingCheckout || checkoutSubmitLockRef.current) return;
+    const effectiveCashTendered =
+      typeof overrideCashTendered === 'number' && Number.isFinite(overrideCashTendered)
+        ? overrideCashTendered
+        : cashTendered;
+    const effectiveCashChange = Math.max(0, effectiveCashTendered - totalAmount);
     if (isSplitMode) {
       if (!isSplitValid) {
         onShowToast('Invalid Split Tender', 'Split payment requires two distinct methods summing exactly to Total Due.');
         return;
       }
-    } else if (paymentMethod === 'cash' && cashTendered < totalAmount) {
+    } else if (paymentMethod === 'cash' && effectiveCashTendered < totalAmount) {
       onShowToast('Insufficient Cash', 'Amount tendered must cover total bill.');
       return;
     }
 
+    checkoutSubmitLockRef.current = true;
     setIsProcessingCheckout(true);
 
     const splitPayments: POSSplitPaymentLeg[] | undefined = isSplitMode
@@ -832,7 +924,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
         : 'debit_card'
       : paymentMethod;
 
-    const clientIdempotencyKey = `OFF-KEY-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const clientIdempotencyKey =
+      activeCartIdempotencyKeyRef.current ||
+      `OFF-KEY-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    activeCartIdempotencyKeyRef.current = clientIdempotencyKey;
     const offlineReceiptNumber = `OFF-2026-${Date.now().toString().slice(-6)}`;
 
     const payload: POSTransactionRequest = {
@@ -854,9 +949,9 @@ export const PosModule: React.FC<PosModuleProps> = ({
       cashTendered: isSplitMode
         ? cashLeg?.amountIDR || totalAmount
         : paymentMethod === 'cash'
-        ? cashTendered
+        ? effectiveCashTendered
         : totalAmount,
-      cashChange: isSplitMode ? 0 : paymentMethod === 'cash' ? cashChange : 0,
+      cashChange: isSplitMode ? 0 : paymentMethod === 'cash' ? effectiveCashChange : 0,
       customerName,
       customerPhone,
       customerMemberId,
@@ -866,6 +961,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
       appliedPromos: promoValidation?.appliedPromos,
       promoDiscountIDR: promoDiscountIDR > 0 ? promoDiscountIDR : undefined,
       clientIdempotencyKey,
+      idempotencyKey: clientIdempotencyKey,
       offlineReceiptNumber,
     };
 
@@ -970,9 +1066,33 @@ export const PosModule: React.FC<PosModuleProps> = ({
         onShowToast('Checkout Failed', errMsg || 'Error processing transaction');
       }
     } finally {
+      checkoutSubmitLockRef.current = false;
       setIsProcessingCheckout(false);
     }
   };
+
+  // Guard #1: Stale POS Shift Detection (opened on a previous calendar day OR open > 14 hours)
+  const staleShiftStatus = useMemo(() => {
+    if (!activeShift?.openedAt) {
+      return { isStale: false, hoursOpen: 0, isPreviousDay: false };
+    }
+    const openedDate = new Date(activeShift.openedAt);
+    const openedMs = openedDate.getTime();
+    if (!Number.isFinite(openedMs)) {
+      return { isStale: false, hoursOpen: 0, isPreviousDay: false };
+    }
+    const now = new Date();
+    const hoursOpen = Math.max(0, (now.getTime() - openedMs) / (1000 * 60 * 60));
+    const isPreviousDay =
+      openedDate.getFullYear() !== now.getFullYear() ||
+      openedDate.getMonth() !== now.getMonth() ||
+      openedDate.getDate() !== now.getDate();
+    return {
+      isStale: isPreviousDay || hoursOpen > 14,
+      hoursOpen: Math.round(hoursOpen * 10) / 10,
+      isPreviousDay,
+    };
+  }, [activeShift?.openedAt]);
 
   const handleConfirmSupervisorMarginOverride = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1082,6 +1202,170 @@ export const PosModule: React.FC<PosModuleProps> = ({
       syncOfflineQueue();
     }
   }, [isOnline, offlineQueue.length, isSyncingOfflineQueue, syncOfflineQueue]);
+
+  // High-Speed POS Cashier Keyboard Shortcuts (non-visual, scoped strictly to POS Cashier Station)
+  const shortcutStateRef = useRef({
+    cartLength: cart.length,
+    totalAmount,
+    isSplitMode,
+    splitLeg1Amount,
+    isTenderModalOpen,
+    isProcessingCheckout,
+    marginOverridePrompt,
+    scalingProduct,
+    completedReceipt,
+    isHistoryDrawerOpen,
+    isShiftModalOpen,
+    isSafeDropModalOpen,
+    rmaTargetReceipt,
+    isBarcodeLabelModalOpen,
+    handleExecuteCheckout,
+  });
+  shortcutStateRef.current = {
+    cartLength: cart.length,
+    totalAmount,
+    isSplitMode,
+    splitLeg1Amount,
+    isTenderModalOpen,
+    isProcessingCheckout,
+    marginOverridePrompt,
+    scalingProduct,
+    completedReceipt,
+    isHistoryDrawerOpen,
+    isShiftModalOpen,
+    isSafeDropModalOpen,
+    rmaTargetReceipt,
+    isBarcodeLabelModalOpen,
+    handleExecuteCheckout,
+  };
+
+  useEffect(() => {
+    const onPosKeyDown = (e: KeyboardEvent) => {
+      const s = shortcutStateRef.current;
+
+      if (e.key === 'Escape') {
+        if (s.marginOverridePrompt) {
+          e.preventDefault();
+          setMarginOverridePrompt(null);
+          setSupervisorPinInput('');
+          setSupervisorPinError('');
+          return;
+        }
+        if (s.scalingProduct) {
+          e.preventDefault();
+          setScalingProduct(null);
+          return;
+        }
+        if (s.isTenderModalOpen) {
+          e.preventDefault();
+          setIsTenderModalOpen(false);
+          return;
+        }
+        if (s.completedReceipt) {
+          e.preventDefault();
+          setCompletedReceipt(null);
+          return;
+        }
+        if (s.isHistoryDrawerOpen) {
+          e.preventDefault();
+          setIsHistoryDrawerOpen(false);
+          return;
+        }
+        if (s.isShiftModalOpen) {
+          e.preventDefault();
+          setIsShiftModalOpen(false);
+          return;
+        }
+        if (s.isSafeDropModalOpen) {
+          e.preventDefault();
+          setIsSafeDropModalOpen(false);
+          return;
+        }
+        if (s.rmaTargetReceipt) {
+          e.preventDefault();
+          setRmaTargetReceipt(null);
+          return;
+        }
+        if (s.isBarcodeLabelModalOpen) {
+          e.preventDefault();
+          setIsBarcodeLabelModalOpen(false);
+          return;
+        }
+        return;
+      }
+
+      if (!['F2', 'F4', 'F8', 'F12'].includes(e.key)) return;
+
+      // Ignore function shortcuts while typing inside any modal input
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isInputFocused =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.tagName === 'SELECT' ||
+          activeEl.isContentEditable);
+      const isInsideModal = Boolean(activeEl?.closest('[role="dialog"], .fixed.inset-0'));
+      if (isInputFocused && isInsideModal) return;
+
+      const hasBlockingSubModal = Boolean(
+        s.marginOverridePrompt ||
+          s.scalingProduct ||
+          s.completedReceipt ||
+          s.isShiftModalOpen ||
+          s.isSafeDropModalOpen ||
+          s.rmaTargetReceipt ||
+          s.isBarcodeLabelModalOpen
+      );
+
+      if (e.key === 'F2') {
+        if (hasBlockingSubModal) return;
+        e.preventDefault();
+        barcodeInputRef.current?.focus();
+        barcodeInputRef.current?.select();
+        return;
+      }
+
+      if (e.key === 'F4') {
+        if (hasBlockingSubModal || s.cartLength === 0) return;
+        e.preventDefault();
+        lastCartQtyInputRef.current?.focus();
+        lastCartQtyInputRef.current?.select();
+        return;
+      }
+
+      if (e.key === 'F8') {
+        if (hasBlockingSubModal || s.cartLength === 0) return;
+        e.preventDefault();
+        if (!s.isTenderModalOpen) {
+          setCashTendered(s.totalAmount);
+          setIsTenderModalOpen(true);
+          setIsSplitMode(true);
+          setSplitLeg1Amount(Math.floor(s.totalAmount / 2));
+        } else {
+          const next = !s.isSplitMode;
+          setIsSplitMode(next);
+          if (next && s.splitLeg1Amount <= 0) {
+            setSplitLeg1Amount(Math.floor(s.totalAmount / 2));
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'F12') {
+        if (hasBlockingSubModal || s.cartLength === 0 || s.isProcessingCheckout) return;
+        e.preventDefault();
+        if (s.isTenderModalOpen) {
+          void s.handleExecuteCheckout();
+        } else {
+          setCashTendered(s.totalAmount);
+          void s.handleExecuteCheckout(s.totalAmount);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onPosKeyDown);
+    return () => window.removeEventListener('keydown', onPosKeyDown);
+  }, []);
 
   // Filtered product items
   const filteredProducts = useMemo(() => {
@@ -1259,6 +1543,27 @@ export const PosModule: React.FC<PosModuleProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Stale POS Shift Guard Banner (Previous calendar day or open > 14 hours) */}
+        {staleShiftStatus.isStale && activeShift && (
+          <div className="mt-3 px-3.5 py-2.5 rounded-xl border border-amber-300 dark:border-amber-500/40 bg-amber-50/90 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>
+                <strong>Stale POS Shift Detected:</strong> Shift #{activeShift.id} was opened{' '}
+                {staleShiftStatus.isPreviousDay ? 'on a previous calendar day' : `${staleShiftStatus.hoursOpen}h ago (>14h)`}. Complete{' '}
+                <strong>Close Shift / Z-Report</strong> before continuing new day sales to keep cash drawer reconciliation clean.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsShiftModalOpen(true)}
+              className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold cursor-pointer whitespace-nowrap shrink-0 transition-colors"
+            >
+              Close Shift / Z-Report
+            </button>
+          </div>
+        )}
 
         {/* Barcode Scanner Input Form */}
         <form onSubmit={handleBarcodeSubmit} className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800/80 flex items-center gap-2">
@@ -1835,9 +2140,19 @@ export const PosModule: React.FC<PosModuleProps> = ({
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="text-xs font-bold font-mono min-w-[24px] text-center text-slate-900 dark:text-slate-100">
-                        {item.quantity}
-                      </span>
+                      <input
+                        ref={idx === 0 ? lastCartQtyInputRef : undefined}
+                        type="number"
+                        min={item.isWeighted ? 0.1 : 1}
+                        step={item.isWeighted ? 0.25 : 1}
+                        value={item.quantity}
+                        onChange={(e) => {
+                          const parsed = Number(e.target.value);
+                          if (parsed > 0) setCartItemQuantity(item.id, parsed);
+                        }}
+                        aria-label={`Quantity for ${item.name}`}
+                        className="w-8 bg-transparent text-xs font-bold font-mono text-center text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.id, 1)}
@@ -2357,7 +2672,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                     isProcessingCheckout ||
                     (isSplitMode ? !isSplitValid : paymentMethod === 'cash' && cashTendered < totalAmount)
                   }
-                  onClick={handleExecuteCheckout}
+                  onClick={() => handleExecuteCheckout()}
                   className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   {isProcessingCheckout ? (

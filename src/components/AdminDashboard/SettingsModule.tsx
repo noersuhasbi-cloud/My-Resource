@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   ChartOfAccount,
@@ -191,6 +191,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [enterpriseSettings, setEnterpriseSettings] = useState<EnterpriseSettingsConfig>(INITIAL_ENTERPRISE_SETTINGS);
   const [erpConfigDraft, setErpConfigDraft] = useState<ErpConfigurationSettings>(INITIAL_ERP_SETTINGS);
   const [isSavingErpConfig, setIsSavingErpConfig] = useState<boolean>(false);
+  const [isDownloadingBackup, setIsDownloadingBackup] = useState<boolean>(false);
+  const [isRestoringSnapshot, setIsRestoringSnapshot] = useState<boolean>(false);
+  const [isInitializingProduction, setIsInitializingProduction] = useState<boolean>(false);
+  const [isResettingDemo, setIsResettingDemo] = useState<boolean>(false);
+  const [confirmSystemAction, setConfirmSystemAction] = useState<'init_production' | 'reset_demo' | null>(null);
+  const restoreFileInputRef = useRef<HTMLInputElement>(null);
   const [landedCosts, setLandedCosts] = useState<LandedCostRecord[]>(INITIAL_LANDED_COSTS);
   const [warehouseBins, setWarehouseBins] = useState<WarehouseBinLocation[]>(INITIAL_WAREHOUSE_BINS);
   const [warehouseRoutes, setWarehouseRoutes] = useState<WarehouseMultiStepRoute[]>(INITIAL_WAREHOUSE_ROUTES);
@@ -2372,6 +2378,196 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         />
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Off-Site Backup, Restore & Store Mode Initialization (Super Admin) */}
+            {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'ERP_CONFIG') && (
+              <div className={`${cardClass} p-5`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800/80">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800/80 dark:text-slate-200">
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        System Snapshot Backup, Restore &amp; Store Lifecycle
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Export full ERP state snapshots (.JSON), restore validated backups, or initialize a clean production store.
+                      </p>
+                    </div>
+                  </div>
+                  {!isSuperAdmin && (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <Lock className="w-3.5 h-3.5" /> Super Admin Only
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  {/* Off-Site Backup & Restore Card */}
+                  <div className={`${subCardClass} space-y-3`}>
+                    <div className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                      Off-Site Snapshot Backup &amp; Restore
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Download a timestamped snapshot of all ledgers, batches, COA, and ERP settings, or restore a previously exported `.json` backup with schema validation.
+                    </p>
+                    <input
+                      ref={restoreFileInputRef}
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = '';
+                        if (!file) return;
+                        setIsRestoringSnapshot(true);
+                        try {
+                          const rawText = await file.text();
+                          let parsed: any;
+                          try {
+                            parsed = JSON.parse(rawText);
+                          } catch {
+                            throw new Error('Selected file is not valid JSON.');
+                          }
+                          const res = await apiClient.restoreSystemSnapshot(parsed);
+                          onShowToast('Snapshot Restored', res.message);
+                          onRefreshData?.();
+                        } catch (err: any) {
+                          onShowToast('Restore Failed', err?.message || 'Failed to validate or restore snapshot.');
+                        } finally {
+                          setIsRestoringSnapshot(false);
+                        }
+                      }}
+                    />
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={!isSuperAdmin || isDownloadingBackup}
+                        onClick={async () => {
+                          setIsDownloadingBackup(true);
+                          try {
+                            const { blob, filename } = await apiClient.downloadSystemBackup();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = filename;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            onShowToast('Backup Downloaded', `Saved ${filename} cleanly.`);
+                          } catch (err: any) {
+                            onShowToast('Backup Failed', err?.message || 'Failed to download backup snapshot.');
+                          } finally {
+                            setIsDownloadingBackup(false);
+                          }
+                        }}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b3a2c] text-white disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>{isDownloadingBackup ? 'Exporting...' : 'Download Backup (.JSON)'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!isSuperAdmin || isRestoringSnapshot}
+                        onClick={() => restoreFileInputRef.current?.click()}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{isRestoringSnapshot ? 'Validating & Restoring...' : 'Restore Snapshot (.JSON)'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Store Lifecycle: Initialize Clean Production Store & Reset Demo Data */}
+                  <div className={`${subCardClass} space-y-3`}>
+                    <div className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                      Store Lifecycle Initialization
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Start a live store with zeroed balances (preserving Indonesian COA, Coretax/PPN settings &amp; RBAC roles) or restore the fresh demo seed baseline.
+                    </p>
+                    {confirmSystemAction ? (
+                      <div className="p-2.5 rounded-xl border border-amber-300 dark:border-amber-500/40 bg-amber-50/70 dark:bg-amber-950/30 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                          {confirmSystemAction === 'init_production'
+                            ? 'Confirm wiping demo transactions & zeroing COA balances for live production?'
+                            : 'Confirm resetting all records back to the demo seed baseline?'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmSystemAction(null)}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isInitializingProduction || isResettingDemo}
+                            onClick={async () => {
+                              const action = confirmSystemAction;
+                              setConfirmSystemAction(null);
+                              if (action === 'init_production') {
+                                setIsInitializingProduction(true);
+                                try {
+                                  const res = await apiClient.initProductionStore();
+                                  onShowToast('Clean Production Store Ready', res.message);
+                                  onRefreshData?.();
+                                } catch (err: any) {
+                                  onShowToast('Initialization Failed', err?.message || 'Failed to initialize production store.');
+                                } finally {
+                                  setIsInitializingProduction(false);
+                                }
+                              } else {
+                                setIsResettingDemo(true);
+                                try {
+                                  const res = await apiClient.resetDemoData();
+                                  onShowToast('Demo Data Restored', res.message);
+                                  onRefreshData?.();
+                                } catch (err: any) {
+                                  onShowToast('Reset Failed', err?.message || 'Failed to reset demo data.');
+                                } finally {
+                                  setIsResettingDemo(false);
+                                }
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 cursor-pointer"
+                          >
+                            Confirm
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          disabled={!isSuperAdmin || isInitializingProduction}
+                          onClick={() => setConfirmSystemAction('init_production')}
+                          className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>{isInitializingProduction ? 'Initializing...' : 'Initialize Clean Production Store'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={!isSuperAdmin || isResettingDemo}
+                          onClick={() => setConfirmSystemAction('reset_demo')}
+                          className="px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isResettingDemo ? 'animate-spin' : ''}`} />
+                          <span>{isResettingDemo ? 'Resetting...' : 'Reset Demo Data'}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
