@@ -1,6 +1,6 @@
 import React from 'react';
 import type { StaffShiftSession } from '../../types/index.ts';
-import { isRoleTabAllowed } from '../../utils/rbac';
+import { isModulePermissionTabAllowed, isRoleTabAllowed } from '../../utils/rbac';
 import {
   LayoutDashboard,
   Store,
@@ -107,6 +107,9 @@ interface AdminSidebarProps {
 
 export function isDashboardTabAllowed(session: StaffShiftSession | null | undefined, tab: AdminDashboardTab): boolean {
   if (!session) return true;
+  if (session.modulePermissions) {
+    return isModulePermissionTabAllowed(session.modulePermissions, tab, session.roleCode);
+  }
   return isRoleTabAllowed(session.userRole, tab);
 }
 

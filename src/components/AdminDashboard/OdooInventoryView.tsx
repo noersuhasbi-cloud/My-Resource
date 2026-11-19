@@ -96,9 +96,10 @@ interface OdooInventoryViewProps {
   onEditTier: (tier: StoreInventoryStock) => void;
   onRefreshData?: () => Promise<void> | void;
   onShowToast: (title: string, message: string) => void;
+  renderStocktakeImport?: () => React.ReactNode;
 }
 
-type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'fefo_heatmap' | 'blind_opname' | 'repack_bundle' | 'returnables';
+type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'fefo_heatmap' | 'blind_opname' | 'stocktake_import' | 'repack_bundle' | 'returnables';
 type ChannelFilter = 'ALL' | 'B2C' | 'B2B' | 'BOTH';
 type HubScope = 'ALL' | 'CDC' | 'DARK_STORE' | 'RETAIL_FRONTS';
 
@@ -190,6 +191,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   onEditTier,
   onRefreshData,
   onShowToast,
+  renderStocktakeImport,
 }) => {
   const isLight = theme === 'light';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
@@ -780,11 +782,11 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
 
         {/* ROW 2: Dedicated White/Dark Card Container for Navigation Tabs */}
         <div
-          className="w-full rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] shadow-xs p-1.5 overflow-x-auto"
+          className="w-full rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] shadow-xs p-1.5"
           role="tablist"
           aria-label="Inventory view switcher"
         >
-          <div className="flex items-center gap-1.5 min-w-max">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               role="tab"
@@ -847,6 +849,20 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                   <ClipboardList className="w-3.5 h-3.5" />
                   Rack Blind Opname
                 </button>
+                {renderStocktakeImport && (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === 'stocktake_import'}
+                    onClick={() => setViewMode('stocktake_import')}
+                    className={`${tabButtonBase} ${
+                      viewMode === 'stocktake_import' ? tabButtonActive : tabButtonInactive
+                    }`}
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    Stocktake &amp; Import
+                  </button>
+                )}
                 <button
                   type="button"
                   role="tab"
@@ -1976,6 +1992,12 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {viewMode === 'stocktake_import' && renderStocktakeImport && (
+        <div className="gm-tab-enter">
+          {renderStocktakeImport()}
         </div>
       )}
       </div>

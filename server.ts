@@ -41,6 +41,14 @@ import {
   INITIAL_GIRO_RECORDS,
   INITIAL_B2B_ORDERS,
 } from './src/data/b2bWholesaleData.ts';
+import {
+  DIVISION_ROLE_PRESETS,
+  DIVISION_ROLE_CODES,
+  MODULE_PERMISSION_KEYS,
+  MODULE_PERMISSION_META,
+  getDefaultModulePermissions,
+  divisionRoleToCanonicalRole,
+} from './src/utils/rbac.ts';
 
 import type {
   InventoryItem,
@@ -70,6 +78,11 @@ import type {
   SecurityAuditTrailRecord,
   ClimateAdaptiveThresholdConfig,
   UserRole,
+  DivisionRoleCode,
+  ModulePermissionKey,
+  ModulePermissionAction,
+  ModulePermissionsMap,
+  SystemUserAccount,
   SupportedCurrency,
   StorageZoneType,
   CurrencyExchangeRate,
@@ -4585,6 +4598,631 @@ function syncAssignmentsOntoProfiles() {
 
 syncAssignmentsOntoProfiles();
 
+// =============================================================
+// CONFIGURABLE ENTERPRISE RBAC: 14-DIVISION SYSTEM USER ACCOUNTS
+// Persisted in .grocematrix-state.json (systemUsers)
+// =============================================================
+const MODULE_DISPLAY_LABELS: Record<ModulePermissionKey, string> = {
+  pos: 'POS Cashier',
+  inventory: 'Inventory / Stock Opname',
+  warehouseTransfers: 'Warehouse Transfers',
+  procurement: 'Purchasing & Procurement',
+  qualityControl: 'Quality Control & Halal',
+  crm: 'CRM & Claims',
+  logistics: 'Logistics & Surat Jalan',
+  accounting: 'Accounting & Tax',
+  ar: 'Account Receivable (AR)',
+  ap: 'Account Payable (AP)',
+  approvalMatrix: 'Approval Matrix',
+  fraudRadar: 'Fraud Radar & Audit',
+  settings: 'Enterprise Settings',
+};
+
+function resolveBranchNameById(branchId: string): string {
+  if (!branchId || branchId === 'ALL' || branchId === 'CONSOLIDATED') {
+    return 'All Outlets (Consolidated)';
+  }
+  const foundOpt = BRANCH_ASSIGNMENT_OPTIONS.find((b) => b.storeId === branchId);
+  if (foundOpt) return foundOpt.storeName;
+  const foundSched = storeSchedules.find((s) => s.storeId === branchId);
+  if (foundSched) return foundSched.storeName;
+  return branchId;
+}
+
+function normalizeModulePermissionsInput(
+  raw: any,
+  fallbackRoleCode: DivisionRoleCode
+): ModulePermissionsMap {
+  const base = getDefaultModulePermissions(fallbackRoleCode);
+  if (!raw || typeof raw !== 'object') return base;
+  for (const modKey of MODULE_PERMISSION_KEYS) {
+    const incoming = raw[modKey];
+    if (incoming && typeof incoming === 'object') {
+      base[modKey] = {
+        view: Boolean(incoming.view),
+        create: Boolean(incoming.create),
+        edit: Boolean(incoming.edit),
+        approve: Boolean(incoming.approve),
+        export: Boolean(incoming.export),
+      };
+    }
+  }
+  return base;
+}
+
+function createInitialSystemUsers(): SystemUserAccount[] {
+  const nowIso = new Date().toISOString();
+  const seeds: Array<{
+    id: string;
+    fullName: string;
+    email: string;
+    password: string;
+    roleCode: DivisionRoleCode;
+    branchId: string;
+    supervisorPin?: string;
+    viewCost?: boolean;
+  }> = [
+    {
+      id: 'SYS-USR-01',
+      fullName: 'Hendra Wijaya (Owner / Super Admin)',
+      email: 'owner@grocematrix.id',
+      password: 'Groce@2026',
+      roleCode: 'SUPER_ADMIN',
+      branchId: 'ALL',
+      supervisorPin: '1234',
+      viewCost: true,
+    },
+    {
+      id: 'SYS-USR-02',
+      fullName: 'Budi Santoso (Staf Gudang)',
+      email: 'gudang.staf@grocematrix.id',
+      password: 'Gudang@123',
+      roleCode: 'WAREHOUSE_STAFF',
+      branchId: 'store-jkt-senopati',
+      viewCost: false,
+    },
+    {
+      id: 'SYS-USR-03',
+      fullName: 'Agus Setiawan (Admin Gudang)',
+      email: 'gudang.admin@grocematrix.id',
+      password: 'Gudang@123',
+      roleCode: 'WAREHOUSE_ADMIN',
+      branchId: 'store-jkt-senopati',
+      viewCost: false,
+    },
+    {
+      id: 'SYS-USR-04',
+      fullName: 'Darmawan Putra (Head Gudang)',
+      email: 'gudang.head@grocematrix.id',
+      password: 'Gudang@123',
+      roleCode: 'WAREHOUSE_HEAD',
+      branchId: 'ALL',
+      viewCost: true,
+    },
+    {
+      id: 'SYS-USR-05',
+      fullName: 'Nadia Putri (Staf Purchasing)',
+      email: 'purchasing.staf@grocematrix.id',
+      password: 'Beli@123',
+      roleCode: 'PURCHASING_STAFF',
+      branchId: 'ALL',
+      viewCost: true,
+    },
+    {
+      id: 'SYS-USR-06',
+      fullName: 'Dewi Lestari (Head Purchasing)',
+      email: 'purchasing.head@grocematrix.id',
+      password: 'Beli@123',
+      roleCode: 'PURCHASING_HEAD',
+      branchId: 'ALL',
+      viewCost: true,
+    },
+    {
+      id: 'SYS-USR-07',
+      fullName: 'Rahmawati Nur (QC & Halal Inspector)',
+      email: 'qc.halal@grocematrix.id',
+      password: 'Halal@123',
+      roleCode: 'QC_INSPECTOR',
+      branchId: 'store-jkt-senopati',
+      viewCost: false,
+    },
+    {
+      id: 'SYS-USR-08',
+      fullName: 'Andi Pratama (Kasir POS)',
+      email: 'kasir.pos@grocematrix.id',
+      password: 'Kasir@123',
+      roleCode: 'POS_CASHIER',
+      branchId: 'store-jkt-senopati',
+      viewCost: false,
+    },
+    {
+      id: 'SYS-USR-09',
+      fullName: 'Rina Kartika (Store Manager / Supervisor)',
+      email: 'store.manager@grocematrix.id',
+      password: 'Store@123',
+      roleCode: 'STORE_MANAGER',
+      branchId: 'store-jkt-senopati',
+      supervisorPin: '1234',
+      viewCost: true,
+    },
+    {
+      id: 'SYS-USR-10',
+      fullName: 'Fajar Ramadhan (Account Receivable)',
+      email: 'ar.finance@grocematrix.id',
+      password: 'Finance@123',
+      roleCode: 'AR_STAFF',
+      branchId: 'ALL',
+      viewCost: true,
+    },
+    {
+      id: 'SYS-USR-11',
+      fullName: 'Siti Aminah (Account Payable)',
+      email: 'ap.finance@grocematrix.id',
+      password: 'Finance@123',
+      roleCode: 'AP_STAFF',
+      branchId: 'ALL',
+      viewCost: true,
+    },
+    {
+      id: 'SYS-USR-12',
+      fullName: 'Yusuf Maulana (Accounting & Tax)',
+      email: 'accounting.tax@grocematrix.id',
+      password: 'Acc@123',
+      roleCode: 'ACCOUNTING_TAX',
+      branchId: 'ALL',
+      viewCost: true,
+    },
+    {
+      id: 'SYS-USR-13',
+      fullName: 'Lina Marlina (Finance Manager)',
+      email: 'finance.head@grocematrix.id',
+      password: 'Finance@123',
+      roleCode: 'FINANCE_MANAGER',
+      branchId: 'ALL',
+      viewCost: true,
+    },
+    {
+      id: 'SYS-USR-14',
+      fullName: 'Irfan Hakim (Head Accounting / Controller)',
+      email: 'controller@grocematrix.id',
+      password: 'Acc@123',
+      roleCode: 'HEAD_ACCOUNTING',
+      branchId: 'ALL',
+      viewCost: true,
+    },
+  ];
+
+  return seeds.map((s) => {
+    const preset = DIVISION_ROLE_PRESETS[s.roleCode];
+    return {
+      id: s.id,
+      fullName: s.fullName,
+      email: s.email.toLowerCase(),
+      password: s.password,
+      roleCode: s.roleCode,
+      divisionLabel: preset.divisionLabel,
+      branchId: s.branchId,
+      branchName: resolveBranchNameById(s.branchId),
+      isActive: true,
+      supervisorPin: s.supervisorPin,
+      viewCost: s.viewCost ?? preset.defaultViewCost,
+      modulePermissions: getDefaultModulePermissions(s.roleCode),
+      updatedAt: nowIso,
+      updatedBy: 'System Seed',
+    };
+  });
+}
+
+let systemUsers: SystemUserAccount[] = createInitialSystemUsers();
+const activeAuthTokens = new Map<string, string>(); // bearer token -> systemUser.id
+
+function sanitizeSystemUserForClient(u: SystemUserAccount): SystemUserAccount {
+  const { password, ...rest } = u;
+  return {
+    ...rest,
+    branchName: resolveBranchNameById(u.branchId),
+    maskedPassword: password ? '•'.repeat(Math.min(Math.max(password.length, 6), 12)) : '••••••••',
+    modulePermissions: normalizeModulePermissionsInput(u.modulePermissions, u.roleCode),
+  };
+}
+
+function buildSessionFromSystemUser(
+  user: SystemUserAccount,
+  shiftName?: 'Morning Shift' | 'Afternoon Shift' | 'Night Shift'
+): StaffShiftSession {
+  const canonicalRole = divisionRoleToCanonicalRole(user.roleCode) as CanonicalServerRole;
+  const mp = normalizeModulePermissionsInput(user.modulePermissions, user.roleCode);
+  const isSuper = user.roleCode === 'SUPER_ADMIN';
+  const branchScoped = user.branchId !== 'ALL' && user.branchId !== 'CONSOLIDATED';
+  const canViewCost = user.viewCost !== undefined ? user.viewCost : DIVISION_ROLE_PRESETS[user.roleCode]?.defaultViewCost ?? true;
+
+  return {
+    userId: user.id,
+    userName: user.fullName,
+    email: user.email,
+    userRole: canonicalRole,
+    roleCode: user.roleCode,
+    divisionLabel: user.divisionLabel,
+    supervisorPin: user.supervisorPin,
+    viewCost: canViewCost,
+    modulePermissions: mp,
+    storeId: user.branchId || 'ALL',
+    assignedBranchId: user.branchId || 'ALL',
+    isBranchScoped: branchScoped,
+    storeName: resolveBranchNameById(user.branchId),
+    activeShiftId: `SHIFT-${user.roleCode}-${Date.now().toString().slice(-4)}`,
+    shiftName: shiftName || 'Morning Shift',
+    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
+    loginTimestamp: new Date().toISOString(),
+    isActive: user.isActive,
+    permissions: {
+      canViewPos: isSuper || mp.pos.view,
+      canViewInventory: isSuper || mp.inventory.view,
+      canAdjustInventory: isSuper || mp.inventory.edit || mp.inventory.approve,
+      canPickZone: () => isSuper || mp.inventory.view || mp.logistics.view,
+      canReceiveGoods: isSuper || mp.inventory.create || mp.qualityControl.create,
+      canApprovePurchaseOrder: isSuper || mp.procurement.approve,
+      canViewFinancePnL: isSuper || mp.accounting.view || mp.ar.view || mp.ap.view,
+      canManageOutlets: isSuper || mp.settings.edit,
+      canOverrideStoreClosure: isSuper || mp.settings.approve || mp.pos.approve,
+      canViewValuation: isSuper || canViewCost,
+      canCreatePrPo: isSuper || mp.procurement.create,
+      canPayVendorBills: isSuper || mp.ap.approve,
+      canManageGiro: isSuper || mp.ar.edit || mp.ap.approve,
+      canModifyCoa: isSuper || mp.accounting.edit,
+      canFactoryReset: isSuper,
+      canManagePromos: isSuper || mp.crm.edit || mp.pos.approve,
+      canOverridePosPrice: isSuper || mp.pos.approve,
+      canApproveStocktake: isSuper || mp.inventory.approve,
+      canViewMultiBranchRevenue: isSuper || !branchScoped,
+      canViewBranchMonitor: isSuper || mp.settings.view || mp.accounting.view,
+      canConfirmArrival: isSuper || mp.warehouseTransfers.edit || mp.warehouseTransfers.approve,
+      canManageOperatorAssignments: isSuper,
+    },
+  };
+}
+
+function findSystemUserByIdOrEmail(identifier?: string | null): SystemUserAccount | undefined {
+  if (!identifier) return undefined;
+  const trimmed = String(identifier).trim();
+  if (!trimmed) return undefined;
+  const lower = trimmed.toLowerCase();
+  return systemUsers.find((u) => u.id === trimmed || u.email.toLowerCase() === lower);
+}
+
+function resolveSystemUserForRequest(req: Request): SystemUserAccount | undefined {
+  // 1. Authorization: Bearer <token>
+  const authHeader = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
+  if (authHeader.toLowerCase().startsWith('bearer ')) {
+    const token = authHeader.slice(7).trim();
+    const mappedId = activeAuthTokens.get(token);
+    if (mappedId) {
+      const byToken = systemUsers.find((u) => u.id === mappedId);
+      if (byToken) return byToken;
+    }
+  }
+  // 2. Explicit x-operator-id or x-user-id header matching a SystemUserAccount
+  const rawOpId =
+    (typeof req.headers['x-operator-id'] === 'string' && req.headers['x-operator-id'].trim()) ||
+    (typeof req.headers['x-user-id'] === 'string' && req.headers['x-user-id'].trim()) ||
+    undefined;
+  if (rawOpId) {
+    const matched = findSystemUserByIdOrEmail(rawOpId);
+    if (matched) return matched;
+    // Legacy USR-* header explicitly sent -> do NOT fall back to active systemUser
+    return undefined;
+  }
+  // 3. Explicit legacy x-operator-role header without system user ID -> let legacy 7-role middleware handle
+  const rawRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : '';
+  if (rawRole) {
+    const asDivision = systemUsers.find((u) => u.roleCode === rawRole.toUpperCase());
+    if (asDivision) return asDivision;
+    return undefined;
+  }
+  // 4. Current active session if logged in as a SystemUserAccount
+  if (currentActiveStaffSession?.userId) {
+    return systemUsers.find((u) => u.id === currentActiveStaffSession.userId);
+  }
+  return undefined;
+}
+
+function evaluateSystemUserModulePermission(
+  user: SystemUserAccount,
+  urlPath: string,
+  method: string,
+  body: any
+): { allowed: boolean; moduleKey?: ModulePermissionKey; action?: ModulePermissionAction; reason?: string } {
+  if (!user.isActive) {
+    return {
+      allowed: false,
+      reason: `Akses Ditolak: Akun '${user.email}' sedang dinonaktifkan oleh Super Admin.`,
+    };
+  }
+  if (user.roleCode === 'SUPER_ADMIN') {
+    return { allowed: true };
+  }
+
+  const mp = normalizeModulePermissionsInput(user.modulePermissions, user.roleCode);
+  const isRead = method === 'GET';
+  const deny = (moduleKey: ModulePermissionKey, action: ModulePermissionAction) => ({
+    allowed: false,
+    moduleKey,
+    action,
+    reason: `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [${action.toUpperCase()}] pada modul ${MODULE_DISPLAY_LABELS[moduleKey]}.`,
+  });
+
+  // 1. Strictly Super Admin Only endpoints (System lifecycle & User/Permission mutations)
+  if (
+    urlPath === '/admin/system/reset-demo-data' ||
+    urlPath === '/admin/reset-demo-data' ||
+    urlPath === '/admin/system/backup' ||
+    urlPath === '/admin/system/restore' ||
+    urlPath === '/admin/system/init-production' ||
+    urlPath === '/admin/rbac/switch-session' ||
+    (urlPath === '/admin/settings/operator-assignments' && method !== 'GET') ||
+    ((urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) && method !== 'GET') ||
+    (urlPath.startsWith('/admin/settings/coa-account') && method === 'DELETE') ||
+    (urlPath === '/admin/compliance/sku-tax-rules' && method === 'PUT')
+  ) {
+    return deny('settings', 'approve');
+  }
+
+  // 2. Settings Users Read / Branch Monitor Read
+  if (
+    urlPath === '/admin/settings/users' ||
+    urlPath === '/admin/settings/branch-monitor' ||
+    (urlPath === '/admin/settings/operator-assignments' && isRead)
+  ) {
+    if (mp.settings.view || mp.accounting.view) return { allowed: true };
+    return deny('settings', 'view');
+  }
+
+  // 3. Period Lock & ERP Config Update
+  if (urlPath === '/admin/settings/config') {
+    if (isRead) return { allowed: true };
+    if (body && body.accountingPeriodLockDate !== undefined) {
+      if (mp.accounting.approve || mp.settings.approve) return { allowed: true };
+      return deny('accounting', 'approve');
+    }
+    if (mp.settings.edit) return { allowed: true };
+    return deny('settings', 'edit');
+  }
+
+  // 4. Enterprise Settings / POS Config / Gateway / Audit Trail
+  if (urlPath === '/admin/settings/audit-trail') {
+    if (mp.fraudRadar.view || mp.settings.view) return { allowed: true };
+    return deny('settings', 'view');
+  }
+  if (
+    urlPath === '/admin/settings/enterprise' ||
+    urlPath === '/admin/settings/pos-config' ||
+    urlPath === '/admin/settings/communication-gateway' ||
+    urlPath === '/admin/communications/test-email' ||
+    urlPath === '/admin/communications/test-whatsapp'
+  ) {
+    if (isRead) return { allowed: true };
+    if (mp.settings.edit) return { allowed: true };
+    return deny('settings', 'edit');
+  }
+  if (urlPath === '/admin/communications/send-document') {
+    return { allowed: true };
+  }
+
+  // 5. Fraud Radar
+  if (urlPath === '/admin/audit/fraud-radar' || urlPath.startsWith('/admin/audit/fraud-radar/')) {
+    if (isRead) {
+      return mp.fraudRadar.view ? { allowed: true } : deny('fraudRadar', 'view');
+    }
+    return mp.fraudRadar.approve ? { allowed: true } : deny('fraudRadar', 'approve');
+  }
+
+  // 6. Approval Matrix
+  if (urlPath.startsWith('/admin/approvals/')) {
+    if (isRead) {
+      return mp.approvalMatrix.view ? { allowed: true } : deny('approvalMatrix', 'view');
+    }
+    return mp.approvalMatrix.approve ? { allowed: true } : deny('approvalMatrix', 'approve');
+  }
+
+  // 7. Account Payable (Vendor Bills, Payment Release, 3-Way Match Approval)
+  if (urlPath.startsWith('/admin/procurement/vendor-bills')) {
+    if (isRead) {
+      return mp.ap.view || mp.procurement.view ? { allowed: true } : deny('ap', 'view');
+    }
+    if (urlPath === '/admin/procurement/vendor-bills' && method === 'POST') {
+      return mp.ap.create ? { allowed: true } : deny('ap', 'create');
+    }
+    // Approve / Pay (Finance Payment Release) / Void requires AP APPROVE
+    return mp.ap.approve ? { allowed: true } : deny('ap', 'approve');
+  }
+
+  // 8. Account Receivable (Bilyet Giro, B2B Checkout, Settlements, Kasbon Kanvas)
+  if (
+    urlPath.startsWith('/b2b/giro') ||
+    urlPath.startsWith('/admin/accounting/settlement-reconcile') ||
+    urlPath.startsWith('/admin/kanvas') ||
+    urlPath.startsWith('/admin/warung-kasbon')
+  ) {
+    if (isRead) {
+      return mp.ar.view || mp.accounting.view ? { allowed: true } : deny('ar', 'view');
+    }
+    if (urlPath.endsWith('/clear') || urlPath.endsWith('/bounce') || urlPath.includes('settlement-reconcile')) {
+      return mp.ar.approve || mp.ap.approve ? { allowed: true } : deny('ar', 'approve');
+    }
+    return mp.ar.create || mp.ar.edit ? { allowed: true } : deny('ar', 'create');
+  }
+
+  // 9. Accounting, General Ledger, COA, Coretax Export, PPh, Consignment
+  if (
+    urlPath.startsWith('/admin/accounting/') ||
+    urlPath.startsWith('/admin/settings/coa-account') ||
+    urlPath === '/admin/settings/coa-mapping' ||
+    urlPath === '/admin/compliance/coretax-export' ||
+    urlPath === '/admin/analytics/omzet' ||
+    urlPath === '/admin/omzet-analytics'
+  ) {
+    if (urlPath === '/admin/compliance/coretax-export' || urlPath === '/admin/accounting/coretax-export') {
+      return mp.accounting.export ? { allowed: true } : deny('accounting', 'export');
+    }
+    if (isRead) {
+      if (mp.accounting.view || mp.ar.view || mp.ap.view) return { allowed: true };
+      // Allow Store Manager / POS Approver to view omzet analytics dashboard KPIs
+      if ((urlPath === '/admin/analytics/omzet' || urlPath === '/admin/omzet-analytics') && (mp.pos.approve || mp.inventory.approve)) {
+        return { allowed: true };
+      }
+      return deny('accounting', 'view');
+    }
+    if (urlPath.endsWith('/reverse')) {
+      return mp.accounting.approve ? { allowed: true } : deny('accounting', 'approve');
+    }
+    if (urlPath.startsWith('/admin/accounting/pph-withholding')) {
+      return mp.ap.create || mp.accounting.create ? { allowed: true } : deny('accounting', 'create');
+    }
+    return mp.accounting.edit || mp.accounting.create ? { allowed: true } : deny('accounting', 'edit');
+  }
+
+  // 10. Stock Opname Approval & Blind Opname Approval (Critical Inventory Approve Guard)
+  if (
+    urlPath === '/admin/inventory/stock-opname/reconcile' ||
+    urlPath === '/admin/inventory/stocktake/commit' ||
+    (urlPath.startsWith('/admin/compliance/blind-opname/') && urlPath.endsWith('/approve'))
+  ) {
+    return mp.inventory.approve ? { allowed: true } : deny('inventory', 'approve');
+  }
+
+  if (urlPath === '/admin/compliance/blind-opname' || urlPath.startsWith('/admin/compliance/blind-opname/')) {
+    if (isRead) return mp.inventory.view ? { allowed: true } : deny('inventory', 'view');
+    return mp.inventory.create || mp.inventory.edit ? { allowed: true } : deny('inventory', 'create');
+  }
+
+  // 11. Batch Recall & Quarantine Release
+  if (urlPath.startsWith('/admin/batch-recall/') || urlPath.startsWith('/admin/compliance/recall-execute')) {
+    if (isRead) return mp.inventory.view || mp.qualityControl.view ? { allowed: true } : deny('qualityControl', 'view');
+    return mp.inventory.approve || mp.qualityControl.approve
+      ? { allowed: true }
+      : deny('qualityControl', 'approve');
+  }
+
+  // 12. Warehouse Transfers
+  if (urlPath.startsWith('/admin/inventory/transfer') || urlPath === '/admin/settings/confirm-arrival') {
+    if (isRead) return mp.warehouseTransfers.view ? { allowed: true } : deny('warehouseTransfers', 'view');
+    if (urlPath === '/admin/inventory/transfer' && method === 'POST') {
+      return mp.warehouseTransfers.create ? { allowed: true } : deny('warehouseTransfers', 'create');
+    }
+    return mp.warehouseTransfers.edit || mp.warehouseTransfers.approve
+      ? { allowed: true }
+      : deny('warehouseTransfers', 'edit');
+  }
+
+  // 13. Physical Goods Receipt (Dock Receiving) vs Procurement PR/PO/Rafaksi
+  if (
+    urlPath === '/admin/procurement/gr/receive-partial' ||
+    urlPath === '/admin/procurement/goods-receipts' ||
+    urlPath === '/admin/procurement/cross-dock'
+  ) {
+    if (isRead) return mp.procurement.view || mp.inventory.view ? { allowed: true } : deny('procurement', 'view');
+    return mp.inventory.create || mp.procurement.approve
+      ? { allowed: true }
+      : deny('inventory', 'create');
+  }
+
+  if (
+    urlPath.startsWith('/admin/procurement/requests') ||
+    urlPath.startsWith('/admin/procurement/orders') ||
+    urlPath === '/admin/procurement/demand-forecast/create-pr' ||
+    urlPath === '/admin/replenishment/generate-po' ||
+    urlPath.startsWith('/admin/procurement/debit-notes') ||
+    urlPath.startsWith('/admin/vendor-credit-notes') ||
+    urlPath === '/admin/compliance/rtv' ||
+    urlPath.startsWith('/admin/valuation/landed-costs')
+  ) {
+    if (isRead) {
+      return mp.procurement.view || mp.ap.view || mp.inventory.view ? { allowed: true } : deny('procurement', 'view');
+    }
+    if (
+      urlPath.endsWith('/approve') ||
+      urlPath.endsWith('/apply') ||
+      (urlPath.includes('/procurement/orders/') &&
+        urlPath.endsWith('/status') &&
+        ['Approved', 'Sent', 'Ordered'].includes(String(body?.status || '')))
+    ) {
+      return mp.procurement.approve ? { allowed: true } : deny('procurement', 'approve');
+    }
+    return mp.procurement.create || mp.procurement.edit ? { allowed: true } : deny('procurement', 'create');
+  }
+
+  // 14. Quality Control & Cold Chain
+  if (urlPath.startsWith('/admin/qc/') || urlPath.startsWith('/admin/cold-chain/')) {
+    if (isRead) return mp.qualityControl.view || mp.inventory.view ? { allowed: true } : deny('qualityControl', 'view');
+    return mp.qualityControl.create || mp.qualityControl.edit ? { allowed: true } : deny('qualityControl', 'create');
+  }
+
+  // 15. Inventory Operations, Waste, Shrinkage, Markdown, Racks
+  if (
+    urlPath.startsWith('/admin/inventory/') ||
+    urlPath.startsWith('/admin/warehouse/') ||
+    urlPath === '/admin/waste' ||
+    urlPath.startsWith('/admin/waste/') ||
+    urlPath.startsWith('/admin/shrinkage/') ||
+    urlPath === '/admin/markdown-rules' ||
+    urlPath.startsWith('/admin/markdown-rules/') ||
+    urlPath.startsWith('/admin/scalability/climate-thresholds')
+  ) {
+    if (isRead) return mp.inventory.view ? { allowed: true } : deny('inventory', 'view');
+    if (urlPath === '/admin/inventory/adjust') {
+      return mp.inventory.edit || mp.inventory.approve ? { allowed: true } : deny('inventory', 'edit');
+    }
+    return mp.inventory.create || mp.inventory.edit ? { allowed: true } : deny('inventory', 'edit');
+  }
+
+  // 16. Logistics, Picker, Fulfillment, Catch-Weight
+  if (
+    urlPath.startsWith('/admin/logistics/') ||
+    urlPath.startsWith('/admin/picker/') ||
+    urlPath.startsWith('/admin/fulfillment/') ||
+    urlPath.startsWith('/admin/substitutions/') ||
+    urlPath.startsWith('/admin/catch-weight/')
+  ) {
+    if (isRead) return mp.logistics.view || mp.inventory.view || mp.ar.view ? { allowed: true } : deny('logistics', 'view');
+    if (urlPath === '/admin/logistics/trips' && body?.approve === true) {
+      return mp.logistics.approve ? { allowed: true } : deny('logistics', 'approve');
+    }
+    return mp.logistics.create || mp.logistics.edit || mp.inventory.create ? { allowed: true } : deny('logistics', 'create');
+  }
+
+  // 17. CRM, Promotions, Quotations
+  if (
+    urlPath.startsWith('/admin/crm/') ||
+    urlPath.startsWith('/admin/sales/quotations') ||
+    ((urlPath === '/admin/promotions' || urlPath.startsWith('/admin/promotions/')) && urlPath !== '/admin/promotions/evaluate')
+  ) {
+    if (isRead) return mp.crm.view || mp.ar.view ? { allowed: true } : deny('crm', 'view');
+    return mp.crm.create || mp.crm.edit ? { allowed: true } : deny('crm', 'edit');
+  }
+
+  // 18. POS Terminal, Returns, Hardware
+  if (
+    urlPath.startsWith('/pos/') ||
+    urlPath === '/admin/returns' ||
+    urlPath === '/admin/compliance/rma' ||
+    urlPath.startsWith('/admin/hardware/')
+  ) {
+    if (urlPath === '/pos/crm-members') {
+      return mp.pos.view || mp.crm.view ? { allowed: true } : deny('pos', 'view');
+    }
+    if (isRead) return mp.pos.view ? { allowed: true } : deny('pos', 'view');
+    return mp.pos.create || mp.pos.edit ? { allowed: true } : deny('pos', 'create');
+  }
+
+  // 19. Store Emergency Status / Outlets Config
+  if (urlPath === '/admin/store-status' || urlPath.startsWith('/admin/store-outlets/') || urlPath.startsWith('/admin/outlets/')) {
+    if (isRead) return { allowed: true };
+    return mp.settings.edit || mp.pos.approve ? { allowed: true } : deny('settings', 'edit');
+  }
+
+  return { allowed: true };
+}
+
 // Module 4: Climate-Adaptive Cold-Chain Configs & Multi-Currency FX Rates
 const CURRENCY_RATES: Record<SupportedCurrency, CurrencyExchangeRate> = {
   IDR: { code: 'IDR', symbol: 'Rp', rateToIDR: 1, decimalPlaces: 0 },
@@ -6417,6 +7055,7 @@ function captureServerState() {
     climateAdaptiveConfigs,
     enterpriseNotificationsList,
     operatorBranchAssignments,
+    systemUsers,
     communicationGatewayConfig,
     communicationLogs,
     warehouseRacks,
@@ -6604,6 +7243,30 @@ function applyServerState(snap: any) {
     operatorBranchAssignments = JSON.parse(JSON.stringify(DEFAULT_OPERATOR_ASSIGNMENTS));
   }
   syncAssignmentsOntoProfiles();
+  if (Array.isArray(snap.systemUsers) && snap.systemUsers.length > 0) {
+    systemUsers = snap.systemUsers.map((u: any) => {
+      const roleCode: DivisionRoleCode = DIVISION_ROLE_CODES.includes(u.roleCode) ? u.roleCode : 'POS_CASHIER';
+      const preset = DIVISION_ROLE_PRESETS[roleCode];
+      return {
+        id: String(u.id || `SYS-USR-${Date.now()}`),
+        fullName: String(u.fullName || u.email || 'ERP User'),
+        email: String(u.email || '').trim().toLowerCase(),
+        password: String(u.password || 'Groce@2026'),
+        roleCode,
+        divisionLabel: String(u.divisionLabel || preset.divisionLabel),
+        branchId: String(u.branchId || preset.defaultBranchId || 'ALL'),
+        branchName: resolveBranchNameById(String(u.branchId || preset.defaultBranchId || 'ALL')),
+        isActive: u.isActive !== false,
+        supervisorPin: u.supervisorPin ? String(u.supervisorPin) : undefined,
+        viewCost: typeof u.viewCost === 'boolean' ? u.viewCost : preset.defaultViewCost,
+        modulePermissions: normalizeModulePermissionsInput(u.modulePermissions, roleCode),
+        updatedAt: u.updatedAt || new Date().toISOString(),
+        updatedBy: u.updatedBy || 'Snapshot Restore',
+      };
+    });
+  } else {
+    systemUsers = createInitialSystemUsers();
+  }
 }
 
 const INITIAL_STATE_BASELINE_JSON = JSON.stringify(captureServerState());
@@ -6719,6 +7382,8 @@ async function resetDemoStateToBaseline() {
     ensureConsignmentSeedItems();
     syncAllBatchesExpiryStatus(Date.now());
     syncWarehouseRackOccupancy();
+    systemUsers = createInitialSystemUsers();
+    activeAuthTokens.clear();
     enterpriseNotificationsList = [];
     seedBaselineEnterpriseNotifications();
     if (fs.existsSync(STATE_SNAPSHOT_TMP_PATH)) {
@@ -6746,6 +7411,7 @@ async function initializeCleanProductionStore(req?: Request) {
     const preservedCoaMapping = JSON.parse(JSON.stringify(coaMappingConfig));
     const preservedPosConfig = JSON.parse(JSON.stringify(posCheckoutConfig));
     const preservedOperatorAssignments = JSON.parse(JSON.stringify(operatorBranchAssignments));
+    const preservedSystemUsers = JSON.parse(JSON.stringify(systemUsers));
     const preservedApprovalRules = JSON.parse(JSON.stringify(approvalRulesList));
     const preservedTaxRules = JSON.parse(JSON.stringify(skuTaxRulesList));
     const preservedWeightTolerances = JSON.parse(JSON.stringify(weightToleranceConfigs));
@@ -6832,6 +7498,7 @@ async function initializeCleanProductionStore(req?: Request) {
     coaMappingConfig = preservedCoaMapping;
     posCheckoutConfig = preservedPosConfig;
     operatorBranchAssignments = preservedOperatorAssignments;
+    systemUsers = preservedSystemUsers;
     approvalRulesList = preservedApprovalRules;
     skuTaxRulesList = preservedTaxRules;
     weightToleranceConfigs = preservedWeightTolerances;
@@ -7007,6 +7674,8 @@ async function startServer() {
     // Public / auth / health / read-only lookup exceptions
     if (
       urlPath === '/health' ||
+      urlPath === '/auth/login' ||
+      urlPath === '/auth/demo-accounts' ||
       urlPath.startsWith('/admin/auth/') ||
       urlPath === '/admin/rbac/current-session' ||
       urlPath === '/admin/rbac/handover' ||
@@ -7015,7 +7684,73 @@ async function startServer() {
       return next();
     }
 
-    // Check scoped rules for /api/admin/*, /api/pos/*, and /api/b2b/giro*
+    // Configurable 14-Division Granular Module Permissions Enforcement (SystemUserAccount)
+    if (urlPath.startsWith('/admin/') || urlPath.startsWith('/pos/') || urlPath.startsWith('/b2b/giro')) {
+      const resolvedSystemUser = resolveSystemUserForRequest(req);
+      if (resolvedSystemUser) {
+        const permResult = evaluateSystemUserModulePermission(resolvedSystemUser, urlPath, method, req.body);
+        if (!permResult.allowed) {
+          const reason =
+            permResult.reason ||
+            `Akses Ditolak: Peran Anda (${resolvedSystemUser.divisionLabel}) tidak memiliki izin pada modul ini.`;
+          securityAuditTrail.unshift({
+            id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+            timestamp: new Date().toISOString(),
+            actionType: 'ZONE_CONFIG_UPDATE',
+            resourceId: `${method} ${urlPath}`,
+            userId: resolvedSystemUser.id,
+            userName: resolvedSystemUser.fullName,
+            userRole: divisionRoleToCanonicalRole(resolvedSystemUser.roleCode),
+            storeId: resolvedSystemUser.branchId || 'ALL',
+            shiftId: currentActiveStaffSession.activeShiftId,
+            status: 'PERMISSION_DENIED',
+            metadata: {
+              roleCode: resolvedSystemUser.roleCode,
+              moduleKey: permResult.moduleKey,
+              action: permResult.action,
+              reason,
+            },
+          });
+          return res.status(403).json({
+            success: false,
+            code: 'MODULE_PERMISSION_FORBIDDEN',
+            roleCode: resolvedSystemUser.roleCode,
+            divisionLabel: resolvedSystemUser.divisionLabel,
+            module: permResult.moduleKey,
+            action: permResult.action,
+            error: reason,
+          });
+        }
+        // Branch-scope write isolation for branch-bound division users
+        if (
+          method !== 'GET' &&
+          resolvedSystemUser.roleCode !== 'SUPER_ADMIN' &&
+          resolvedSystemUser.branchId &&
+          resolvedSystemUser.branchId !== 'ALL' &&
+          resolvedSystemUser.branchId !== 'CONSOLIDATED' &&
+          resolvedSystemUser.branchId !== 'WH-CDC-01'
+        ) {
+          const bodyStoreId = typeof req.body?.storeId === 'string' ? req.body.storeId : undefined;
+          if (
+            bodyStoreId &&
+            bodyStoreId !== 'ALL' &&
+            bodyStoreId !== 'CONSOLIDATED' &&
+            bodyStoreId !== resolvedSystemUser.branchId
+          ) {
+            return res.status(403).json({
+              success: false,
+              code: 'BRANCH_SCOPE_FORBIDDEN',
+              roleCode: resolvedSystemUser.roleCode,
+              branch: resolvedSystemUser.branchId,
+              error: `Akses Ditolak: Akun (${resolvedSystemUser.divisionLabel}) terikat cabang '${resolvedSystemUser.branchId}' dan tidak dapat mengubah data cabang '${bodyStoreId}'.`,
+            });
+          }
+        }
+        return next();
+      }
+    }
+
+    // Check scoped rules for /api/admin/*, /api/pos/*, and /api/b2b/giro* (Legacy 7-Role compatibility)
     if (urlPath.startsWith('/admin/') || urlPath.startsWith('/pos/') || urlPath.startsWith('/b2b/giro')) {
       // Reject deactivated operator or unknown role header spoofing
       if (rawHeaderRole && !strictHeaderRole) {
@@ -7043,6 +7778,7 @@ async function startServer() {
         urlPath === '/admin/system/init-production' ||
         urlPath === '/admin/rbac/switch-session' ||
         (urlPath === '/admin/settings/operator-assignments' && method === 'POST') ||
+        ((urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) && method !== 'GET') ||
         (urlPath.startsWith('/admin/settings/coa-account') && method === 'DELETE') ||
         (urlPath === '/admin/compliance/sku-tax-rules' && method === 'PUT')
       ) {
@@ -12838,16 +13574,113 @@ async function startServer() {
   // MODULE 3: GRANULAR RBAC BY SHIFT, PHYSICAL ZONE & MULTI-OUTLET
   // Staff switch + zone-authorization checks + audit log
   // =============================================================
-  app.post('/api/admin/auth/login', (req: Request, res: Response) => {
+  // Public lightweight listing of demo accounts for Login Gate Quick-Fill (never exposes passwords)
+  app.get('/api/auth/demo-accounts', (_req: Request, res: Response) => {
+    const accounts = systemUsers.map((u) => ({
+      id: u.id,
+      fullName: u.fullName,
+      email: u.email,
+      roleCode: u.roleCode,
+      divisionLabel: u.divisionLabel,
+      branchId: u.branchId,
+      branchName: resolveBranchNameById(u.branchId),
+      isActive: u.isActive,
+    }));
+    res.json({ success: true, accounts });
+  });
+
+  // Unified Authentication Handler (Email + Password for 14 Division SystemUsers + Legacy Roster compatibility)
+  const handleEnterpriseAuthLogin = (req: Request, res: Response) => {
     syncAssignmentsOntoProfiles();
-    const { userId, username, password, pin, shiftName } = req.body || {};
+    const { email, userId, username, password, pin, shiftName } = req.body || {};
 
-    let target = resolveStaffUser(userId || username);
+    const rawIdentifier =
+      (typeof email === 'string' && email.trim()) ||
+      (typeof username === 'string' && username.trim()) ||
+      (typeof userId === 'string' && userId.trim()) ||
+      '';
 
+    // 1. Check configurable 14-Division SystemUserAccount by Email or SYS-USR-* ID
+    const matchedSystemUser = rawIdentifier ? findSystemUserByIdOrEmail(rawIdentifier) : undefined;
+    if (matchedSystemUser) {
+      if (!matchedSystemUser.isActive) {
+        return res.status(403).json({
+          success: false,
+          code: 'ACCOUNT_SUSPENDED',
+          error: `Akun '${matchedSystemUser.fullName}' (${matchedSystemUser.email}) sedang dinonaktifkan oleh Super Admin.`,
+        });
+      }
+
+      // Require password verification whenever logging in by email/credentials (unless quick userId roster selection without email/password)
+      const isEmailLogin = Boolean(email) || rawIdentifier.includes('@') || password !== undefined;
+      if (isEmailLogin) {
+        const providedPassword = password !== undefined ? String(password) : '';
+        if (!providedPassword || providedPassword !== matchedSystemUser.password) {
+          return res.status(401).json({
+            success: false,
+            code: 'INVALID_CREDENTIALS',
+            error: 'Email atau password tidak sesuai. Silakan periksa kembali kredensial Anda.',
+          });
+        }
+      }
+
+      const session = buildSessionFromSystemUser(matchedSystemUser, shiftName);
+      currentActiveStaffSession = session;
+      const token = `erp-sys-jwt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${matchedSystemUser.id}`;
+      activeAuthTokens.set(token, matchedSystemUser.id);
+
+      securityAuditTrail.unshift({
+        id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+        timestamp: new Date().toISOString(),
+        actionType: 'USER_AUTHENTICATION',
+        resourceId: `SESSION-${matchedSystemUser.id}`,
+        userId: matchedSystemUser.id,
+        userName: matchedSystemUser.fullName,
+        userRole: session.userRole,
+        storeId: matchedSystemUser.branchId,
+        shiftId: session.activeShiftId,
+        status: 'AUTHORIZED_EXECUTED',
+        metadata: {
+          loginMethod: 'email_password_rbac',
+          email: matchedSystemUser.email,
+          roleCode: matchedSystemUser.roleCode,
+          divisionLabel: matchedSystemUser.divisionLabel,
+          branchId: matchedSystemUser.branchId,
+          clientIp: req.ip || '127.0.0.1',
+          shift: session.shiftName,
+        },
+      });
+
+      const sanitizedUser = sanitizeSystemUserForClient(matchedSystemUser);
+      return res.json({
+        success: true,
+        token,
+        user: sanitizedUser,
+        roleCode: matchedSystemUser.roleCode,
+        divisionLabel: matchedSystemUser.divisionLabel,
+        branchId: matchedSystemUser.branchId,
+        modulePermissions: sanitizedUser.modulePermissions,
+        session,
+        availableProfiles: AVAILABLE_STAFF_USERS,
+        message: `Login berhasil sebagai ${matchedSystemUser.fullName} (${matchedSystemUser.divisionLabel}).`,
+      });
+    }
+
+    // If an email address was explicitly typed but didn't match any systemUser, return clean 401
+    if ((typeof email === 'string' && email.trim().length > 0) || rawIdentifier.includes('@')) {
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_CREDENTIALS',
+        error: 'Email tidak terdaftar atau password tidak sesuai.',
+      });
+    }
+
+    // 2. Fallback: Legacy 7-Role Quick Roster / Employee ID compatibility
+    const target = resolveStaffUser(userId || username);
     if (!target) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid credentials. Please select an authorized staff profile or enter a valid Employee ID.',
+        error: 'Invalid credentials. Please enter a valid Email & Password or select an authorized staff profile.',
       });
     }
 
@@ -12902,14 +13735,17 @@ async function startServer() {
       },
     });
 
-    res.json({
+    return res.json({
       success: true,
       token: `erp-session-jwt-${Date.now()}-${target.userId}`,
       session: currentActiveStaffSession,
       availableProfiles: AVAILABLE_STAFF_USERS,
       message: `Authentication successful. Logged in as ${target.userName}`,
     });
-  });
+  };
+
+  app.post('/api/auth/login', handleEnterpriseAuthLogin);
+  app.post('/api/admin/auth/login', handleEnterpriseAuthLogin);
 
   app.post('/api/admin/auth/logout', (req: Request, res: Response) => {
     const callerId = getEffectiveOperatorId(req);
@@ -15201,6 +16037,307 @@ async function startServer() {
         shiftName: currentActiveStaffSession.shiftName,
       },
       availableProfiles: AVAILABLE_STAFF_USERS,
+    });
+  });
+
+  // =============================================================
+  // ENTERPRISE USER, CREDENTIAL & PER-MODULE PERMISSION MANAGEMENT
+  // GET / POST / PATCH /api/admin/settings/users
+  // =============================================================
+  const isCallerSuperAdminForUserMgmt = (req: Request): boolean => {
+    const resolvedSys = resolveSystemUserForRequest(req);
+    if (resolvedSys) return resolvedSys.roleCode === 'SUPER_ADMIN' && resolvedSys.isActive;
+    const rawHeaderRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : undefined;
+    const callerRole = rawHeaderRole
+      ? normalizeServerRoleStrict(rawHeaderRole)
+      : normalizeServerRole(currentActiveStaffSession.userRole);
+    return callerRole === 'super_admin';
+  };
+
+  app.get('/api/admin/settings/users', (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      users: systemUsers.map(sanitizeSystemUserForClient),
+      rolePresets: DIVISION_ROLE_CODES.map((code) => DIVISION_ROLE_PRESETS[code]),
+      moduleMetadata: MODULE_PERMISSION_META,
+      branchOptions: BRANCH_ASSIGNMENT_OPTIONS,
+    });
+  });
+
+  app.post('/api/admin/settings/users', (req: Request, res: Response) => {
+    if (!isCallerSuperAdminForUserMgmt(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat menambah akun user baru.',
+      });
+    }
+
+    const { fullName, email, password, roleCode, branchId, isActive, supervisorPin, viewCost, modulePermissions } =
+      (req.body || {}) as {
+        fullName?: string;
+        email?: string;
+        password?: string;
+        roleCode?: DivisionRoleCode;
+        branchId?: string;
+        isActive?: boolean;
+        supervisorPin?: string;
+        viewCost?: boolean;
+        modulePermissions?: ModulePermissionsMap;
+      };
+
+    const cleanName = String(fullName || '').trim();
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanPassword = String(password || '');
+
+    if (!cleanName) {
+      return res.status(400).json({ success: false, error: 'Nama lengkap (fullName) wajib diisi.' });
+    }
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ success: false, error: 'Format alamat email tidak valid.' });
+    }
+    if (systemUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      return res.status(400).json({ success: false, error: `Email '${cleanEmail}' sudah digunakan oleh akun lain.` });
+    }
+    if (cleanPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'Password wajib minimal 6 karakter.' });
+    }
+
+    const resolvedRoleCode: DivisionRoleCode =
+      roleCode && DIVISION_ROLE_CODES.includes(roleCode) ? roleCode : 'POS_CASHIER';
+    const preset = DIVISION_ROLE_PRESETS[resolvedRoleCode];
+    const resolvedBranchId = String(branchId || preset.defaultBranchId || 'ALL').trim();
+
+    const nextSeq = systemUsers.length + 1;
+    let newId = `SYS-USR-${String(nextSeq).padStart(2, '0')}`;
+    while (systemUsers.some((u) => u.id === newId)) {
+      newId = `SYS-USR-${Date.now().toString().slice(-5)}`;
+    }
+
+    const actorName = getEffectiveOperatorName(req);
+    const nowIso = new Date().toISOString();
+    const createdUser: SystemUserAccount = {
+      id: newId,
+      fullName: cleanName,
+      email: cleanEmail,
+      password: cleanPassword,
+      roleCode: resolvedRoleCode,
+      divisionLabel: preset.divisionLabel,
+      branchId: resolvedBranchId,
+      branchName: resolveBranchNameById(resolvedBranchId),
+      isActive: isActive !== false,
+      supervisorPin: supervisorPin ? String(supervisorPin).trim() : preset.defaultSupervisorPin,
+      viewCost: typeof viewCost === 'boolean' ? viewCost : preset.defaultViewCost,
+      modulePermissions: normalizeModulePermissionsInput(modulePermissions, resolvedRoleCode),
+      updatedAt: nowIso,
+      updatedBy: actorName,
+    };
+
+    systemUsers.push(createdUser);
+
+    appendAuditTrailLog({
+      req,
+      actorName,
+      actorRole: 'super_admin',
+      branchScope: resolvedBranchId,
+      module: 'SECURITY',
+      action: 'SYSTEM_USER_CREATED',
+      referenceId: createdUser.id,
+      summary: `Created division account ${createdUser.fullName} (${createdUser.email}) — Role: ${createdUser.roleCode}, Branch: ${createdUser.branchName}.`,
+    });
+
+    scheduleStateSave();
+
+    return res.status(201).json({
+      success: true,
+      message: `Akun '${createdUser.fullName}' (${createdUser.email}) berhasil dibuat.`,
+      user: sanitizeSystemUserForClient(createdUser),
+      users: systemUsers.map(sanitizeSystemUserForClient),
+    });
+  });
+
+  app.patch('/api/admin/settings/users/:id', (req: Request, res: Response) => {
+    if (!isCallerSuperAdminForUserMgmt(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat mengubah akun, password, atau hak akses modul.',
+      });
+    }
+
+    const targetId = String(req.params.id || '').trim();
+    const targetUser = systemUsers.find((u) => u.id === targetId);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: `Akun user '${targetId}' tidak ditemukan.` });
+    }
+
+    const {
+      fullName,
+      email,
+      password,
+      roleCode,
+      branchId,
+      isActive,
+      supervisorPin,
+      viewCost,
+      modulePermissions,
+    } = (req.body || {}) as {
+      fullName?: string;
+      email?: string;
+      password?: string;
+      roleCode?: DivisionRoleCode;
+      branchId?: string;
+      isActive?: boolean;
+      supervisorPin?: string;
+      viewCost?: boolean;
+      modulePermissions?: ModulePermissionsMap;
+    };
+
+    const nextRoleCode: DivisionRoleCode =
+      roleCode !== undefined
+        ? DIVISION_ROLE_CODES.includes(roleCode)
+          ? roleCode
+          : (() => {
+              return targetUser.roleCode;
+            })()
+        : targetUser.roleCode;
+
+    if (roleCode !== undefined && !DIVISION_ROLE_CODES.includes(roleCode)) {
+      return res.status(400).json({ success: false, error: `Role divisi '${roleCode}' tidak valid.` });
+    }
+
+    const nextIsActive = isActive !== undefined ? Boolean(isActive) : targetUser.isActive;
+
+    // Guard: Prevent disabling or demoting the last active SUPER_ADMIN account
+    const isCurrentlyActiveSuperAdmin = targetUser.roleCode === 'SUPER_ADMIN' && targetUser.isActive;
+    const willStopBeingActiveSuperAdmin = !nextIsActive || nextRoleCode !== 'SUPER_ADMIN';
+    if (isCurrentlyActiveSuperAdmin && willStopBeingActiveSuperAdmin) {
+      const otherActiveSuperAdmins = systemUsers.filter(
+        (u) => u.id !== targetUser.id && u.roleCode === 'SUPER_ADMIN' && u.isActive
+      );
+      if (otherActiveSuperAdmins.length === 0) {
+        return res.status(400).json({
+          success: false,
+          code: 'LAST_SUPER_ADMIN_GUARD',
+          error: 'Proteksi Sistem: Tidak dapat menonaktifkan atau menurunkan peran akun SUPER_ADMIN aktif terakhir.',
+        });
+      }
+    }
+
+    const changes: string[] = [];
+
+    if (fullName !== undefined) {
+      const cleanName = String(fullName).trim();
+      if (!cleanName) {
+        return res.status(400).json({ success: false, error: 'Nama lengkap tidak boleh kosong.' });
+      }
+      if (cleanName !== targetUser.fullName) {
+        targetUser.fullName = cleanName;
+        changes.push(`name=${cleanName}`);
+      }
+    }
+
+    if (email !== undefined) {
+      const cleanEmail = String(email).trim().toLowerCase();
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ success: false, error: 'Format alamat email tidak valid.' });
+      }
+      const duplicate = systemUsers.find((u) => u.id !== targetUser.id && u.email.toLowerCase() === cleanEmail);
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          error: `Email '${cleanEmail}' sudah digunakan oleh '${duplicate.fullName}'.`,
+        });
+      }
+      if (cleanEmail !== targetUser.email) {
+        targetUser.email = cleanEmail;
+        changes.push(`email=${cleanEmail}`);
+      }
+    }
+
+    if (password !== undefined && String(password).length > 0) {
+      const cleanPassword = String(password);
+      if (cleanPassword.length < 6) {
+        return res.status(400).json({ success: false, error: 'Password baru wajib minimal 6 karakter.' });
+      }
+      targetUser.password = cleanPassword;
+      changes.push('password=UPDATED');
+    }
+
+    if (roleCode !== undefined && roleCode !== targetUser.roleCode) {
+      const preset = DIVISION_ROLE_PRESETS[roleCode];
+      targetUser.roleCode = roleCode;
+      targetUser.divisionLabel = preset.divisionLabel;
+      if (modulePermissions === undefined) {
+        targetUser.modulePermissions = getDefaultModulePermissions(roleCode);
+      }
+      if (viewCost === undefined) {
+        targetUser.viewCost = preset.defaultViewCost;
+      }
+      changes.push(`role=${roleCode}`);
+    }
+
+    if (branchId !== undefined) {
+      const cleanBranch = String(branchId).trim() || 'ALL';
+      targetUser.branchId = cleanBranch;
+      targetUser.branchName = resolveBranchNameById(cleanBranch);
+      changes.push(`branch=${cleanBranch}`);
+    }
+
+    if (isActive !== undefined && Boolean(isActive) !== targetUser.isActive) {
+      targetUser.isActive = Boolean(isActive);
+      changes.push(`active=${targetUser.isActive}`);
+      if (!targetUser.isActive) {
+        // Invalidate any live tokens belonging to the suspended account
+        for (const [tok, uid] of activeAuthTokens.entries()) {
+          if (uid === targetUser.id) activeAuthTokens.delete(tok);
+        }
+      }
+    }
+
+    if (supervisorPin !== undefined) {
+      const cleanPin = String(supervisorPin).trim();
+      targetUser.supervisorPin = cleanPin || undefined;
+      changes.push('supervisorPin=UPDATED');
+    }
+
+    if (typeof viewCost === 'boolean') {
+      targetUser.viewCost = viewCost;
+      changes.push(`viewCost=${viewCost}`);
+    }
+
+    if (modulePermissions !== undefined) {
+      targetUser.modulePermissions = normalizeModulePermissionsInput(modulePermissions, targetUser.roleCode);
+      changes.push('modulePermissions=UPDATED');
+    }
+
+    const actorName = getEffectiveOperatorName(req);
+    targetUser.updatedAt = new Date().toISOString();
+    targetUser.updatedBy = actorName;
+
+    // Refresh live currentActiveStaffSession if it belongs to this updated account
+    if (currentActiveStaffSession?.userId === targetUser.id) {
+      currentActiveStaffSession = buildSessionFromSystemUser(targetUser, currentActiveStaffSession.shiftName);
+    }
+
+    appendAuditTrailLog({
+      req,
+      actorName,
+      actorRole: 'super_admin',
+      branchScope: targetUser.branchId,
+      module: 'SECURITY',
+      action: 'SYSTEM_USER_UPDATED',
+      referenceId: targetUser.id,
+      summary: `Updated ${targetUser.fullName} (${targetUser.email}): ${changes.join(', ') || 'saved'}.`,
+    });
+
+    scheduleStateSave();
+
+    return res.json({
+      success: true,
+      message: `Perubahan akun '${targetUser.fullName}' berhasil disimpan.`,
+      user: sanitizeSystemUserForClient(targetUser),
+      users: systemUsers.map(sanitizeSystemUserForClient),
     });
   });
 
@@ -23231,6 +24368,10 @@ async function startServer() {
   }
 
   function getEffectiveRequestRole(req: Request): CanonicalServerRole {
+    const resolvedSys = resolveSystemUserForRequest(req);
+    if (resolvedSys) {
+      return divisionRoleToCanonicalRole(resolvedSys.roleCode) as CanonicalServerRole;
+    }
     const rawHeaderRole =
       typeof req.headers['x-operator-role'] === 'string'
         ? req.headers['x-operator-role'].trim()
@@ -23253,6 +24394,8 @@ async function startServer() {
   }
 
   function getEffectiveOperatorName(req: Request): string {
+    const resolvedSys = resolveSystemUserForRequest(req);
+    if (resolvedSys) return resolvedSys.fullName;
     const rawHeaderOpId =
       typeof req.headers['x-operator-id'] === 'string'
         ? req.headers['x-operator-id'].trim()
@@ -23264,6 +24407,8 @@ async function startServer() {
   }
 
   function getEffectiveOperatorId(req: Request): string {
+    const resolvedSys = resolveSystemUserForRequest(req);
+    if (resolvedSys) return resolvedSys.id;
     const rawHeaderOpId =
       typeof req.headers['x-operator-id'] === 'string'
         ? req.headers['x-operator-id'].trim()
@@ -23275,6 +24420,8 @@ async function startServer() {
   }
 
   function getEffectiveOperatorBranch(req: Request): string {
+    const resolvedSys = resolveSystemUserForRequest(req);
+    if (resolvedSys) return resolvedSys.branchId || 'ALL';
     const rawHeaderBranch =
       typeof req.headers['x-operator-branch'] === 'string'
         ? req.headers['x-operator-branch'].trim()

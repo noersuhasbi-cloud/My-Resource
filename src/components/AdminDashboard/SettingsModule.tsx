@@ -28,6 +28,11 @@ import type {
   BranchMonitorResponse,
   OperatorBranchAssignment,
   UserRole,
+  DivisionRoleCode,
+  ModulePermissionAction,
+  ModulePermissionKey,
+  ModulePermissionsMap,
+  SystemUserAccount,
   ErpConfigurationSettings,
 } from '../../types/index.ts';
 import {
@@ -44,6 +49,10 @@ import {
   normalizeEnterpriseRole,
   getRoleDisplayLabel,
   isBranchScopedRole,
+  DIVISION_ROLE_CODES,
+  DIVISION_ROLE_PRESETS,
+  MODULE_PERMISSION_META,
+  getDefaultModulePermissions,
 } from '../../utils/rbac';
 import {
   Settings,
@@ -86,7 +95,9 @@ import {
   Layers,
   BarChart3,
   Lock,
+  Eye,
   EyeOff,
+  KeyRound,
   Users,
   PackageCheck,
   MapPin,
@@ -127,6 +138,7 @@ interface SettingsModuleProps {
   warehouseZones: WarehouseZone[];
   inventoryTiers: StoreInventoryStock[];
   initialSubTab?: SettingsSubTab;
+  standaloneMode?: 'transfer' | 'import_opname';
   onShowToast: (title: string, message: string) => void;
   onRefreshData?: () => void;
   onOperatorAssignmentsUpdated?: (data: {
@@ -147,6 +159,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   warehouseZones,
   inventoryTiers,
   initialSubTab,
+  standaloneMode,
   onShowToast,
   onRefreshData,
   onOperatorAssignmentsUpdated,
@@ -169,20 +182,26 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
   // Active Sub-Tab
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(
-    initialSubTab || 'enterprise'
+    standaloneMode || initialSubTab || 'enterprise'
   );
 
   useEffect(() => {
-    if (initialSubTab) {
+    if (standaloneMode) {
+      setActiveSubTab(standaloneMode);
+    } else if (initialSubTab) {
       setActiveSubTab(initialSubTab);
     }
-  }, [initialSubTab]);
+  }, [standaloneMode, initialSubTab]);
 
   useEffect(() => {
+    if (!standaloneMode && (activeSubTab === 'transfer' || activeSubTab === 'import_opname')) {
+      setActiveSubTab('enterprise');
+      return;
+    }
     if (activeSubTab === 'audit_kpis' && !canViewAuditAndKpis) {
       setActiveSubTab('enterprise');
     }
-  }, [activeSubTab, canViewAuditAndKpis]);
+  }, [standaloneMode, activeSubTab, canViewAuditAndKpis]);
 
   const [opnameSubTab, setOpnameSubTab] = useState<'stocktake' | 'bulk_import'>('stocktake');
   const [opnameAuditMode, setOpnameAuditMode] = useState<'standard' | 'blind'>('standard');
@@ -205,6 +224,27 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptRecord[]>([]);
   const [isSavingEnterprise, setIsSavingEnterprise] = useState<boolean>(false);
   const [enterpriseQuickFilter, setEnterpriseQuickFilter] = useState<'ALL' | 'VALUATION' | 'WAREHOUSE' | 'ANALYTICS' | 'QUOTATIONS' | 'MATCHING' | 'TAX' | 'ERP_CONFIG'>('ALL');
+
+  // Configurable 14-Division System Users & Per-Module Permission Matrix State
+  const [systemUsersList, setSystemUsersList] = useState<SystemUserAccount[]>([]);
+  const [userSearchQuery, setUserSearchQuery] = useState<string>('');
+  const [userDivisionFilter, setUserDivisionFilter] = useState<string>('ALL');
+  const [isUserModalOpen, setIsUserModalOpen] = useState<boolean>(false);
+  const [editingSystemUser, setEditingSystemUser] = useState<SystemUserAccount | null>(null);
+  const [userFormFullName, setUserFormFullName] = useState<string>('');
+  const [userFormEmail, setUserFormEmail] = useState<string>('');
+  const [userFormPassword, setUserFormPassword] = useState<string>('');
+  const [showUserFormPassword, setShowUserFormPassword] = useState<boolean>(false);
+  const [userFormRoleCode, setUserFormRoleCode] = useState<DivisionRoleCode>('POS_CASHIER');
+  const [userFormBranchId, setUserFormBranchId] = useState<string>('store-jkt-senopati');
+  const [userFormIsActive, setUserFormIsActive] = useState<boolean>(true);
+  const [userFormSupervisorPin, setUserFormSupervisorPin] = useState<string>('');
+  const [userFormViewCost, setUserFormViewCost] = useState<boolean>(false);
+  const [userFormApplyPresetOnSave, setUserFormApplyPresetOnSave] = useState<boolean>(false);
+  const [isSavingSystemUser, setIsSavingSystemUser] = useState<boolean>(false);
+  const [permModalUser, setPermModalUser] = useState<SystemUserAccount | null>(null);
+  const [permDraft, setPermDraft] = useState<ModulePermissionsMap | null>(null);
+  const [isSavingPermMatrix, setIsSavingPermMatrix] = useState<boolean>(false);
 
   // Loading states
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -433,9 +473,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     if (!canViewBranchMonitor) return;
     setIsLoadingMonitor(true);
     try {
-      const [monitorRes, assignRes] = await Promise.all([
+      const [monitorRes, assignRes, sysUsersRes] = await Promise.all([
         apiClient.getBranchMonitor().catch(() => null),
         apiClient.getOperatorAssignments().catch(() => null),
+        apiClient.getSystemUsers().catch(() => null),
       ]);
       if (monitorRes) setBranchMonitorData(monitorRes);
       if (assignRes) {
@@ -448,8 +489,146 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         });
         setOperatorPinDrafts(pinMap);
       }
+      if (sysUsersRes?.users) {
+        setSystemUsersList(sysUsersRes.users);
+        if (sysUsersRes.branchOptions?.length && branchAssignmentOptions.length === 0) {
+          setBranchAssignmentOptions(sysUsersRes.branchOptions);
+        }
+      }
     } finally {
       setIsLoadingMonitor(false);
+    }
+  };
+
+  useEffect(() => {
+    if (canViewBranchMonitor) {
+      apiClient
+        .getSystemUsers()
+        .then((res) => {
+          if (res?.users) setSystemUsersList(res.users);
+        })
+        .catch(() => {});
+    }
+  }, [canViewBranchMonitor]);
+
+  const openCreateSystemUserModal = () => {
+    const defaultRole: DivisionRoleCode = 'POS_CASHIER';
+    const preset = DIVISION_ROLE_PRESETS[defaultRole];
+    setEditingSystemUser(null);
+    setUserFormFullName('');
+    setUserFormEmail('');
+    setUserFormPassword('');
+    setShowUserFormPassword(false);
+    setUserFormRoleCode(defaultRole);
+    setUserFormBranchId(preset.defaultBranchId);
+    setUserFormIsActive(true);
+    setUserFormSupervisorPin(preset.defaultSupervisorPin || '');
+    setUserFormViewCost(preset.defaultViewCost);
+    setUserFormApplyPresetOnSave(true);
+    setIsUserModalOpen(true);
+  };
+
+  const openEditSystemUserModal = (user: SystemUserAccount) => {
+    setEditingSystemUser(user);
+    setUserFormFullName(user.fullName);
+    setUserFormEmail(user.email);
+    setUserFormPassword('');
+    setShowUserFormPassword(false);
+    setUserFormRoleCode(user.roleCode);
+    setUserFormBranchId(user.branchId || 'ALL');
+    setUserFormIsActive(user.isActive !== false);
+    setUserFormSupervisorPin(user.supervisorPin || '');
+    setUserFormViewCost(user.viewCost ?? DIVISION_ROLE_PRESETS[user.roleCode]?.defaultViewCost ?? true);
+    setUserFormApplyPresetOnSave(false);
+    setIsUserModalOpen(true);
+  };
+
+  const handleSaveSystemUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isSuperAdmin) return;
+    setIsSavingSystemUser(true);
+    try {
+      if (editingSystemUser) {
+        const patch: Parameters<typeof apiClient.updateSystemUser>[1] = {
+          fullName: userFormFullName.trim(),
+          email: userFormEmail.trim().toLowerCase(),
+          roleCode: userFormRoleCode,
+          branchId: userFormBranchId,
+          isActive: userFormIsActive,
+          supervisorPin: userFormSupervisorPin.trim(),
+          viewCost: userFormViewCost,
+        };
+        if (userFormPassword.trim().length > 0) {
+          patch.password = userFormPassword;
+        }
+        if (userFormApplyPresetOnSave || userFormRoleCode !== editingSystemUser.roleCode) {
+          patch.modulePermissions = getDefaultModulePermissions(userFormRoleCode);
+        }
+        const res = await apiClient.updateSystemUser(editingSystemUser.id, patch);
+        setSystemUsersList(res.users || []);
+        onShowToast('Akun User Diperbarui', res.message);
+      } else {
+        const res = await apiClient.createSystemUser({
+          fullName: userFormFullName.trim(),
+          email: userFormEmail.trim().toLowerCase(),
+          password: userFormPassword,
+          roleCode: userFormRoleCode,
+          branchId: userFormBranchId,
+          isActive: userFormIsActive,
+          supervisorPin: userFormSupervisorPin.trim() || undefined,
+          viewCost: userFormViewCost,
+          modulePermissions: getDefaultModulePermissions(userFormRoleCode),
+        });
+        setSystemUsersList(res.users || []);
+        onShowToast('Akun User Ditambahkan', res.message);
+      }
+      setIsUserModalOpen(false);
+      setEditingSystemUser(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Gagal Menyimpan User', msg);
+    } finally {
+      setIsSavingSystemUser(false);
+    }
+  };
+
+  const openPermissionMatrixModal = (user: SystemUserAccount) => {
+    setPermModalUser(user);
+    setPermDraft(JSON.parse(JSON.stringify(user.modulePermissions || getDefaultModulePermissions(user.roleCode))));
+  };
+
+  const handleToggleModulePermissionCell = (modKey: ModulePermissionKey, action: ModulePermissionAction) => {
+    setPermDraft((prev) => {
+      if (!prev) return prev;
+      const currentSet = prev[modKey] || { view: false, create: false, edit: false, approve: false, export: false };
+      const nextVal = !currentSet[action];
+      return {
+        ...prev,
+        [modKey]: {
+          ...currentSet,
+          [action]: nextVal,
+          ...(action !== 'view' && nextVal ? { view: true } : {}),
+        },
+      };
+    });
+  };
+
+  const handleSavePermissionMatrix = async () => {
+    if (!permModalUser || !permDraft || !isSuperAdmin) return;
+    setIsSavingPermMatrix(true);
+    try {
+      const res = await apiClient.updateSystemUser(permModalUser.id, {
+        modulePermissions: permDraft,
+      });
+      setSystemUsersList(res.users || []);
+      onShowToast('Hak Akses Modul Disimpan', `Matriks izin ${permModalUser.fullName} berhasil diperbarui.`);
+      setPermModalUser(null);
+      setPermDraft(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Gagal Menyimpan Hak Akses', msg);
+    } finally {
+      setIsSavingPermMatrix(false);
     }
   };
 
@@ -1047,14 +1226,52 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
   return (
     <div className="space-y-6">
       {/* Module Header & Top Breadcrumb */}
+      {standaloneMode === 'transfer' && (
+        <div className={`${cardClass} p-5 sm:p-6`}>
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 min-w-0">
+            <div className="flex items-start gap-3.5 min-w-0 flex-1">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 flex items-center justify-center shadow-xs shrink-0">
+                <ArrowRightLeft className="w-6 h-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
+                    Inter-Warehouse Operations
+                  </span>
+                  <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-800 dark:text-indigo-300 border border-indigo-500/25">
+                    Double Sign-Off Audit Trail
+                  </span>
+                </div>
+                <h1 className="text-lg sm:text-xl font-bold mt-1 text-slate-900 dark:text-slate-100 break-words">
+                  Official Inter-Warehouse Stock Transfer &amp; Allocation
+                </h1>
+                <p className="text-xs mt-0.5 max-w-2xl text-slate-500 dark:text-slate-400 leading-relaxed break-words">
+                  Safely relocate inventory stock between store outlets with double-sign-off audit trail. Strictly isolates quantities to eliminate multi-warehouse inventory overlap bleed.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0 max-w-full">
+              <span className={`text-[11px] font-mono px-3 py-1.5 rounded-xl border inline-flex items-center gap-1.5 max-w-full break-words ${
+                isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-[#090A0F] border-slate-800/80 text-slate-300'
+              }`}>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Strict Warehouse Isolation Active</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!standaloneMode && (
       <div className={`${cardClass} p-5 sm:p-6`}>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 min-w-0">
+          <div className="flex items-start gap-3.5 min-w-0 flex-1">
             <div className="p-3 rounded-xl bg-[#0F4C3A] text-white shadow-xs shrink-0">
               <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center whitespace-nowrap text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30 uppercase tracking-wider">
                   ERP Hub
                 </span>
@@ -1062,27 +1279,27 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   Enterprise System Architecture v4.2
                 </span>
               </div>
-              <h1 className="text-lg sm:text-xl font-bold mt-1 text-slate-900 dark:text-slate-100">
+              <h1 className="text-lg sm:text-xl font-bold mt-1 text-slate-900 dark:text-slate-100 break-words">
                 Settings &amp; Configuration Hub
               </h1>
-              <p className="text-xs mt-0.5 max-w-2xl text-slate-500 dark:text-slate-400 leading-relaxed">
-                Centralized enterprise administration: configure product valuation, multi-step warehouse routes, department cost centers, quotation rules, frontline POS controls, dynamic COA mappings, and periodic physical stocktakes.
+              <p className="text-xs mt-0.5 max-w-2xl text-slate-500 dark:text-slate-400 leading-relaxed break-words">
+                Centralized enterprise administration: configure product valuation, multi-step warehouse routes, department cost centers, quotation rules, frontline POS controls, and dynamic COA mappings.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-[11px] font-mono px-3 py-1.5 rounded-xl border flex items-center gap-1.5 ${
+          <div className="flex flex-wrap items-center gap-2 shrink-0 max-w-full">
+            <span className={`text-[11px] font-mono px-3 py-1.5 rounded-xl border inline-flex items-center gap-1.5 max-w-full break-words ${
               isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-[#090A0F] border-slate-800/80 text-slate-300'
             }`}>
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              Strict Warehouse Isolation Active
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Strict Warehouse Isolation Active</span>
             </span>
           </div>
         </div>
 
         {/* Primary Sub-Tab Navigation Bar */}
-        <div className="flex items-center gap-2 mt-6 pt-5 border-t border-slate-200 dark:border-slate-800/80 overflow-x-auto pb-1">
+        <div className="flex flex-wrap items-center gap-2 mt-6 pt-5 border-t border-slate-200 dark:border-slate-800/80">
           <button
             onClick={() => setActiveSubTab('enterprise')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
@@ -1219,34 +1436,6 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           </button>
 
           <button
-            onClick={() => setActiveSubTab('import_opname')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              activeSubTab === 'import_opname'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
-            }`}
-          >
-            <Boxes className="w-4 h-4" />
-            <span>Stocktake &amp; Import</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('transfer')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-              activeSubTab === 'transfer'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
-                : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
-            }`}
-          >
-            <ArrowRightLeft className="w-4 h-4" />
-            <span>Transfers</span>
-          </button>
-
-          <button
             onClick={() => setActiveSubTab('approval_matrix')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'approval_matrix'
@@ -1291,6 +1480,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
           )}
         </div>
       </div>
+      )}
 
       <div key={activeSubTab} className="gm-tab-enter">
       {/* ========================================================================= */}
@@ -1309,7 +1499,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             </div>
           )}
           {/* Quick Filter Pill Bar */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider shrink-0 mr-1">
               Filter Sections:
             </span>
@@ -3075,6 +3265,546 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               </table>
             </div>
           </div>
+
+          {/* 4. Manajemen User, Email/Password & Hak Akses Per Modul (14-Division RBAC) */}
+          <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">
+              <div className="min-w-0 flex-1">
+                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                  <KeyRound className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 shrink-0" />
+                  <span>Manajemen User, Email/Password &amp; Hak Akses Per Modul</span>
+                </h3>
+                <p className={`text-xs mt-0.5 break-words ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Kelola akun 14 divisi operasional (Email, Password, Cabang, Status Aktif) serta atur matriks hak akses granular (View, Create, Edit, Approve, Export) pada seluruh 13 modul ERP.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <span className="font-mono text-[11px] font-bold px-2.5 py-1 rounded-xl bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/20">
+                  {systemUsersList.length} Akun Terdaftar
+                </span>
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    onClick={openCreateSystemUserModal}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah Akun User</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Search & Division Filter */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+              <div className="relative flex-1 min-w-0">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  placeholder="Cari nama, email, ID, atau divisi..."
+                  className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border ${inputClass}`}
+                />
+              </div>
+              <select
+                value={userDivisionFilter}
+                onChange={(e) => setUserDivisionFilter(e.target.value)}
+                className={`sm:w-64 px-3 py-2 text-xs rounded-xl border cursor-pointer ${inputClass}`}
+              >
+                <option value="ALL">Semua Divisi (14 Role)</option>
+                {DIVISION_ROLE_CODES.map((code) => (
+                  <option key={code} value={code}>
+                    {DIVISION_ROLE_PRESETS[code].divisionLabel} ({code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* System Users Table */}
+            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
+              <table className="w-full text-left text-xs min-w-[1020px]">
+                <thead>
+                  <tr
+                    className={`border-b text-[10px] font-bold uppercase tracking-wider ${
+                      isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
+                    }`}
+                  >
+                    <th className="py-3 px-3.5">Nama &amp; ID</th>
+                    <th className="py-3 px-3">Divisi / Role</th>
+                    <th className="py-3 px-3">Email &amp; Password</th>
+                    <th className="py-3 px-3">Cabang / Hub</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3">Modul Aktif</th>
+                    <th className="py-3 px-3.5 text-right">Aksi Pengaturan</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
+                  {systemUsersList
+                    .filter((u) => {
+                      if (userDivisionFilter !== 'ALL' && u.roleCode !== userDivisionFilter) return false;
+                      const q = userSearchQuery.trim().toLowerCase();
+                      if (!q) return true;
+                      return (
+                        u.fullName.toLowerCase().includes(q) ||
+                        u.email.toLowerCase().includes(q) ||
+                        u.id.toLowerCase().includes(q) ||
+                        u.divisionLabel.toLowerCase().includes(q) ||
+                        u.roleCode.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((u) => {
+                      const activeModulesCount = MODULE_PERMISSION_META.filter(
+                        (m) => u.modulePermissions?.[m.key]?.view
+                      ).length;
+                      const approveModulesCount = MODULE_PERMISSION_META.filter(
+                        (m) => u.modulePermissions?.[m.key]?.approve
+                      ).length;
+
+                      return (
+                        <tr key={u.id} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
+                          <td className="py-3 px-3.5">
+                            <div className="font-bold text-slate-900 dark:text-slate-100">{u.fullName}</div>
+                            <div className="font-mono text-[10px] text-slate-400 flex items-center gap-1.5">
+                              <span>{u.id}</span>
+                              {u.supervisorPin && (
+                                <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                                  PIN: {u.supervisorPin}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${
+                                u.roleCode === 'SUPER_ADMIN'
+                                  ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
+                                  : u.roleCode.includes('WAREHOUSE') || u.roleCode === 'QC_INSPECTOR'
+                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25'
+                                  : u.roleCode.includes('PURCHASING')
+                                  ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/25'
+                                  : u.roleCode.includes('POS') || u.roleCode === 'STORE_MANAGER'
+                                  ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/25'
+                                  : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/25'
+                              }`}
+                            >
+                              {u.divisionLabel}
+                            </span>
+                            <div className="font-mono text-[10px] text-slate-400 mt-0.5">{u.roleCode}</div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">{u.email}</div>
+                            <div className="font-mono text-[10px] text-slate-400">
+                              Pass: {u.maskedPassword || '••••••••'}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="font-medium text-xs text-slate-700 dark:text-slate-300">
+                              {u.branchName || u.branchId}
+                            </div>
+                            <div className="font-mono text-[10px] text-slate-400">
+                              {u.viewCost === false ? 'Cost Tersembunyi' : 'Cost Visible'}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                u.isActive
+                                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
+                                  : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                              {u.isActive ? 'Active' : 'Suspended'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <div className="font-mono text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">
+                              {activeModulesCount} / {MODULE_PERMISSION_META.length} Modul
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Approve: {approveModulesCount} modul
+                            </div>
+                          </td>
+                          <td className="py-3 px-3.5 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={!isSuperAdmin}
+                                onClick={() => openEditSystemUserModal(u)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
+                                  isSuperAdmin
+                                    ? isLight
+                                      ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700 cursor-pointer'
+                                      : 'bg-[#090A0F] hover:bg-slate-800 border-slate-700 text-slate-200 cursor-pointer'
+                                    : 'opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-800 text-slate-400'
+                                }`}
+                                title={isSuperAdmin ? 'Ubah Email, Password, Role & Status' : 'Super Admin Only'}
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                <span>Edit Akun &amp; Password</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!isSuperAdmin}
+                                onClick={() => openPermissionMatrixModal(u)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${
+                                  isSuperAdmin
+                                    ? 'bg-[#0F4C3A] hover:bg-[#0b382b] text-white cursor-pointer shadow-2xs'
+                                    : 'opacity-50 cursor-not-allowed bg-slate-200 dark:bg-slate-800 text-slate-400'
+                                }`}
+                                title={isSuperAdmin ? 'Atur Checkbox View/Create/Edit/Approve/Export per Modul' : 'Super Admin Only'}
+                              >
+                                <Sliders className="w-3 h-3" />
+                                <span>Atur Hak Akses Modul</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Modal 1: Edit Akun & Password / Tambah Akun User */}
+          {isUserModalOpen &&
+            createPortal(
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+                <div
+                  className={`w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden ${
+                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800 text-slate-100'
+                  }`}
+                >
+                  <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 flex items-center justify-center">
+                        <KeyRound className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold">
+                          {editingSystemUser ? 'Edit Akun, Email & Password' : 'Tambah Akun User Divisi Baru'}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {editingSystemUser ? `${editingSystemUser.id} • ${editingSystemUser.divisionLabel}` : 'Otomatis mengisi matriks hak akses sesuai preset divisi'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsUserModalOpen(false)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveSystemUser} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="sm:col-span-2">
+                        <label className={labelClass}>Nama Lengkap</label>
+                        <input
+                          type="text"
+                          required
+                          value={userFormFullName}
+                          onChange={(e) => setUserFormFullName(e.target.value)}
+                          placeholder="e.g. Budi Santoso (Staf Gudang)"
+                          className={`w-full ${inputClass}`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Email Login (Unik)</label>
+                        <input
+                          type="email"
+                          required
+                          value={userFormEmail}
+                          onChange={(e) => setUserFormEmail(e.target.value)}
+                          placeholder="nama@grocematrix.id"
+                          className={`w-full font-mono ${inputClass}`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>
+                          {editingSystemUser ? 'Password Baru (Kosongkan jika tetap)' : 'Password (Min 6 karakter)'}
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showUserFormPassword ? 'text' : 'password'}
+                            required={!editingSystemUser}
+                            minLength={editingSystemUser && !userFormPassword ? undefined : 6}
+                            value={userFormPassword}
+                            onChange={(e) => setUserFormPassword(e.target.value)}
+                            placeholder={editingSystemUser ? 'Isi untuk reset password' : 'Min. 6 karakter'}
+                            className={`w-full pr-9 font-mono ${inputClass}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowUserFormPassword((v) => !v)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                          >
+                            {showUserFormPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Preset Role Divisi (14 Divisi)</label>
+                        <select
+                          value={userFormRoleCode}
+                          onChange={(e) => {
+                            const nextRole = e.target.value as DivisionRoleCode;
+                            const preset = DIVISION_ROLE_PRESETS[nextRole];
+                            setUserFormRoleCode(nextRole);
+                            setUserFormViewCost(preset.defaultViewCost);
+                            if (preset.defaultSupervisorPin && !userFormSupervisorPin) {
+                              setUserFormSupervisorPin(preset.defaultSupervisorPin);
+                            }
+                            setUserFormApplyPresetOnSave(true);
+                          }}
+                          className={`w-full cursor-pointer ${inputClass}`}
+                        >
+                          {DIVISION_ROLE_CODES.map((code) => (
+                            <option key={code} value={code}>
+                              {DIVISION_ROLE_PRESETS[code].divisionLabel} ({code})
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                          {DIVISION_ROLE_PRESETS[userFormRoleCode]?.description}
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Assigned Branch / Outlet</label>
+                        <select
+                          value={userFormBranchId}
+                          onChange={(e) => setUserFormBranchId(e.target.value)}
+                          className={`w-full cursor-pointer ${inputClass}`}
+                        >
+                          <option value="ALL">All Outlets (Consolidated)</option>
+                          {storeOutlets.map((st) => (
+                            <option key={st.storeId} value={st.storeId}>
+                              {st.storeName} ({st.city})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Supervisor PIN (Opsional)</label>
+                        <input
+                          type="text"
+                          value={userFormSupervisorPin}
+                          onChange={(e) => setUserFormSupervisorPin(e.target.value)}
+                          placeholder="e.g. 1234 (Store Manager)"
+                          maxLength={12}
+                          className={`w-full font-mono ${inputClass}`}
+                        />
+                      </div>
+
+                      <div className="flex flex-col justify-center gap-2 pt-2">
+                        <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={userFormIsActive}
+                            onChange={(e) => setUserFormIsActive(e.target.checked)}
+                            className="w-4 h-4 rounded text-[#0F4C3A]"
+                          />
+                          <span>Akun Aktif (Diizinkan Login)</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={userFormViewCost}
+                            onChange={(e) => setUserFormViewCost(e.target.checked)}
+                            className="w-4 h-4 rounded text-[#0F4C3A]"
+                          />
+                          <span>Boleh Melihat HPP / Cost &amp; Valuasi</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {editingSystemUser && (
+                      <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 pt-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={userFormApplyPresetOnSave}
+                          onChange={(e) => setUserFormApplyPresetOnSave(e.target.checked)}
+                          className="w-4 h-4 rounded text-[#0F4C3A]"
+                        />
+                        <span>Auto-fill ulang seluruh checkbox hak akses modul sesuai preset divisi yang dipilih</span>
+                      </label>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setIsUserModalOpen(false)}
+                        className={`px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                            : 'bg-[#090A0F] border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingSystemUser}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>{isSavingSystemUser ? 'Menyimpan...' : 'Simpan Perubahan Akun'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>,
+              document.body
+            )}
+
+          {/* Modal 2: Granular 13-Module Permission Matrix */}
+          {permModalUser &&
+            permDraft &&
+            createPortal(
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+                <div
+                  className={`w-full max-w-4xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[88vh] ${
+                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800 text-slate-100'
+                  }`}
+                >
+                  <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold truncate">
+                          Matriks Hak Akses Per Modul — {permModalUser.fullName}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate">
+                          {permModalUser.email} • {permModalUser.divisionLabel} ({permModalUser.roleCode})
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPermDraft(getDefaultModulePermissions(permModalUser.roleCode))}
+                        className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border cursor-pointer ${
+                          isLight
+                            ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                            : 'bg-[#090A0F] hover:bg-slate-800 border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        Reset ke Preset Divisi
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPermModalUser(null);
+                          setPermDraft(null);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-5 overflow-y-auto flex-1">
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
+                      <table className="w-full text-left text-xs min-w-[680px]">
+                        <thead>
+                          <tr
+                            className={`border-b text-[10px] font-bold uppercase tracking-wider ${
+                              isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
+                            }`}
+                          >
+                            <th className="py-3 px-3.5">Modul ERP (13 Modul)</th>
+                            <th className="py-3 px-3 text-center">View</th>
+                            <th className="py-3 px-3 text-center">Create</th>
+                            <th className="py-3 px-3 text-center">Edit</th>
+                            <th className="py-3 px-3 text-center">Approve</th>
+                            <th className="py-3 px-3 text-center">Export</th>
+                          </tr>
+                        </thead>
+                        <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
+                          {MODULE_PERMISSION_META.map((mod) => {
+                            const p = permDraft[mod.key] || {
+                              view: false,
+                              create: false,
+                              edit: false,
+                              approve: false,
+                              export: false,
+                            };
+                            return (
+                              <tr key={mod.key} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
+                                <td className="py-2.5 px-3.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-slate-900 dark:text-slate-100">{mod.label}</span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold">
+                                      {mod.category}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400">{mod.description}</div>
+                                </td>
+                                {(['view', 'create', 'edit', 'approve', 'export'] as ModulePermissionAction[]).map((act) => (
+                                  <td key={act} className="py-2.5 px-3 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(p[act])}
+                                      onChange={() => handleToggleModulePermissionCell(mod.key, act)}
+                                      className="w-4 h-4 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] cursor-pointer"
+                                      aria-label={`${mod.label} ${act}`}
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Perubahan langsung berlaku pada middleware RBAC &amp; dicatat di Immutable Audit Trail.
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPermModalUser(null);
+                          setPermDraft(null);
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                            : 'bg-[#090A0F] border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingPermMatrix}
+                        onClick={handleSavePermissionMatrix}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>{isSavingPermMatrix ? 'Menyimpan...' : 'Simpan Hak Akses Modul'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )}
         </div>
       )}
 
@@ -4418,7 +5148,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {activeSubTab === 'import_opname' && (
         <div className="space-y-6 animate-fadeIn">
           {/* Inner Tab Pill Toggle */}
-          <div className="flex items-center gap-2 border-b border-gray-200 dark:border-slate-800/80 pb-3">
+          <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-slate-800/80 pb-3">
             <button
               onClick={() => setOpnameSubTab('stocktake')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
@@ -5025,17 +5755,19 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {activeSubTab === 'transfer' && (
         <div className="space-y-6 animate-fadeIn">
           <div className={`${cardClass} p-5 sm:p-6 space-y-6`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-slate-800/80">
-              <div>
-                <h2 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
-                  <ArrowRightLeft className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                  Official Inter-Warehouse Stock Transfer &amp; Allocation
-                </h2>
-                <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
-                  Safely relocate inventory stock between store outlets with double-sign-off audit trail. Strictly isolates quantities to eliminate multi-warehouse inventory overlap bleed.
-                </p>
+            {standaloneMode !== 'transfer' && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-slate-800/80 min-w-0">
+                <div className="min-w-0 flex-1">
+                  <h2 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex flex-wrap items-center gap-2 break-words`}>
+                    <ArrowRightLeft className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    <span>Official Inter-Warehouse Stock Transfer &amp; Allocation</span>
+                  </h2>
+                  <p className={`text-xs mt-0.5 break-words ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+                    Safely relocate inventory stock between store outlets with double-sign-off audit trail. Strictly isolates quantities to eliminate multi-warehouse inventory overlap bleed.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Transfer Action Card */}
             <div className={subCardClass}>

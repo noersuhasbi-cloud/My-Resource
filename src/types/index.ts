@@ -1093,10 +1093,77 @@ export interface SubstitutionPromptRecord {
 // MODULE 3: Granular RBAC by Shift, Physical Zone & Multi-Outlet
 // =============================================================
 
+export type DivisionRoleCode =
+  | 'SUPER_ADMIN'
+  | 'WAREHOUSE_STAFF'
+  | 'WAREHOUSE_ADMIN'
+  | 'WAREHOUSE_HEAD'
+  | 'PURCHASING_STAFF'
+  | 'PURCHASING_HEAD'
+  | 'QC_INSPECTOR'
+  | 'POS_CASHIER'
+  | 'STORE_MANAGER'
+  | 'AR_STAFF'
+  | 'AP_STAFF'
+  | 'ACCOUNTING_TAX'
+  | 'FINANCE_MANAGER'
+  | 'HEAD_ACCOUNTING';
+
+export type ModulePermissionKey =
+  | 'pos'
+  | 'inventory'
+  | 'warehouseTransfers'
+  | 'procurement'
+  | 'qualityControl'
+  | 'crm'
+  | 'logistics'
+  | 'accounting'
+  | 'ar'
+  | 'ap'
+  | 'approvalMatrix'
+  | 'fraudRadar'
+  | 'settings';
+
+export type ModulePermissionAction = 'view' | 'create' | 'edit' | 'approve' | 'export';
+
+export interface ModulePermissionSet {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  approve: boolean;
+  export: boolean;
+}
+
+export type ModulePermissionsMap = Record<ModulePermissionKey, ModulePermissionSet>;
+
+export interface SystemUserAccount {
+  id: string;
+  fullName: string;
+  email: string;
+  password?: string;
+  maskedPassword?: string;
+  roleCode: DivisionRoleCode;
+  divisionLabel: string;
+  branchId: string; // 'ALL' or specific storeId
+  branchName?: string;
+  isActive: boolean;
+  supervisorPin?: string;
+  viewCost?: boolean;
+  modulePermissions: ModulePermissionsMap;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface StaffShiftSession {
   userId: string;
   userName: string;
+  email?: string;
   userRole: UserRole;
+  roleCode?: DivisionRoleCode;
+  divisionLabel?: string;
+  supervisorPin?: string;
+  viewCost?: boolean;
+  modulePermissions?: ModulePermissionsMap;
   storeId: string; // Assigned physical store/hub or 'ALL' for multi-branch roles
   assignedBranchId?: string; // Explicit branch/hub ID mirror for branch-scoped locks
   isBranchScoped?: boolean; // True for cashier, warehouse, store_manager
@@ -1173,6 +1240,11 @@ export interface AdminAuthResponse {
   success: boolean;
   token?: string;
   session: StaffShiftSession;
+  user?: SystemUserAccount;
+  roleCode?: DivisionRoleCode;
+  divisionLabel?: string;
+  branchId?: string;
+  modulePermissions?: ModulePermissionsMap;
   availableProfiles?: StaffShiftSession[];
   message?: string;
 }

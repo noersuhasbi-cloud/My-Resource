@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import type { StaffShiftSession, UserRole, StorageZoneType } from '../types/index.ts';
+import type { StaffShiftSession, UserRole, StorageZoneType, DivisionRoleCode } from '../types/index.ts';
 import { apiClient } from '../services/apiClient';
 import { useDarkMode } from '../context/DarkModeContext';
 import {
@@ -227,6 +227,51 @@ const FALLBACK_STAFF_ROSTER: StaffShiftSession[] = [
   },
 ];
 
+interface DemoDivisionAccountOption {
+  id: string;
+  fullName: string;
+  email: string;
+  roleCode: DivisionRoleCode;
+  divisionLabel: string;
+  branchId: string;
+  branchName: string;
+  isActive: boolean;
+}
+
+const DEFAULT_DEMO_PASSWORDS_BY_ROLE: Record<DivisionRoleCode, string> = {
+  SUPER_ADMIN: 'Groce@2026',
+  WAREHOUSE_STAFF: 'Gudang@123',
+  WAREHOUSE_ADMIN: 'Gudang@123',
+  WAREHOUSE_HEAD: 'Gudang@123',
+  PURCHASING_STAFF: 'Beli@123',
+  PURCHASING_HEAD: 'Beli@123',
+  QC_INSPECTOR: 'Halal@123',
+  POS_CASHIER: 'Kasir@123',
+  STORE_MANAGER: 'Store@123',
+  AR_STAFF: 'Finance@123',
+  AP_STAFF: 'Finance@123',
+  ACCOUNTING_TAX: 'Acc@123',
+  FINANCE_MANAGER: 'Finance@123',
+  HEAD_ACCOUNTING: 'Acc@123',
+};
+
+const FALLBACK_DIVISION_DEMO_ACCOUNTS: DemoDivisionAccountOption[] = [
+  { id: 'SYS-USR-01', fullName: 'Hendra Wijaya (Owner / Super Admin)', email: 'owner@grocematrix.id', roleCode: 'SUPER_ADMIN', divisionLabel: 'Owner / Super Admin', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
+  { id: 'SYS-USR-02', fullName: 'Budi Santoso (Staf Gudang)', email: 'gudang.staf@grocematrix.id', roleCode: 'WAREHOUSE_STAFF', divisionLabel: 'Staf Gudang', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
+  { id: 'SYS-USR-03', fullName: 'Agus Setiawan (Admin Gudang)', email: 'gudang.admin@grocematrix.id', roleCode: 'WAREHOUSE_ADMIN', divisionLabel: 'Admin Gudang', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
+  { id: 'SYS-USR-04', fullName: 'Darmawan Putra (Head Gudang)', email: 'gudang.head@grocematrix.id', roleCode: 'WAREHOUSE_HEAD', divisionLabel: 'Head Gudang', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
+  { id: 'SYS-USR-05', fullName: 'Nadia Putri (Staf Purchasing)', email: 'purchasing.staf@grocematrix.id', roleCode: 'PURCHASING_STAFF', divisionLabel: 'Staf Purchasing', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
+  { id: 'SYS-USR-06', fullName: 'Dewi Lestari (Head Purchasing)', email: 'purchasing.head@grocematrix.id', roleCode: 'PURCHASING_HEAD', divisionLabel: 'Head Purchasing', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
+  { id: 'SYS-USR-07', fullName: 'Rahmawati Nur (QC & Halal Inspector)', email: 'qc.halal@grocematrix.id', roleCode: 'QC_INSPECTOR', divisionLabel: 'QC & Halal Inspector', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
+  { id: 'SYS-USR-08', fullName: 'Andi Pratama (Kasir POS)', email: 'kasir.pos@grocematrix.id', roleCode: 'POS_CASHIER', divisionLabel: 'Kasir POS', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
+  { id: 'SYS-USR-09', fullName: 'Rina Kartika (Store Manager / Supervisor)', email: 'store.manager@grocematrix.id', roleCode: 'STORE_MANAGER', divisionLabel: 'Store Manager / Supervisor', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
+  { id: 'SYS-USR-10', fullName: 'Fajar Ramadhan (Account Receivable)', email: 'ar.finance@grocematrix.id', roleCode: 'AR_STAFF', divisionLabel: 'Account Receivable', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
+  { id: 'SYS-USR-11', fullName: 'Siti Aminah (Account Payable)', email: 'ap.finance@grocematrix.id', roleCode: 'AP_STAFF', divisionLabel: 'Account Payable', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
+  { id: 'SYS-USR-12', fullName: 'Yusuf Maulana (Accounting & Tax)', email: 'accounting.tax@grocematrix.id', roleCode: 'ACCOUNTING_TAX', divisionLabel: 'Accounting & Tax', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
+  { id: 'SYS-USR-13', fullName: 'Lina Marlina (Finance Manager)', email: 'finance.head@grocematrix.id', roleCode: 'FINANCE_MANAGER', divisionLabel: 'Finance Manager', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
+  { id: 'SYS-USR-14', fullName: 'Irfan Hakim (Head Accounting / Controller)', email: 'controller@grocematrix.id', roleCode: 'HEAD_ACCOUNTING', divisionLabel: 'Head Accounting / Controller', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
+];
+
 export const AdminLogin: React.FC<AdminLoginProps> = ({
   onLoginSuccess,
   onReturnToStorefront,
@@ -238,16 +283,18 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
   const [activeTab, setActiveTab] = useState<'roster' | 'credentials'>('roster');
   const [availableProfiles, setAvailableProfiles] = useState<StaffShiftSession[]>(FALLBACK_STAFF_ROSTER);
+  const [demoAccounts, setDemoAccounts] = useState<DemoDivisionAccountOption[]>(FALLBACK_DIVISION_DEMO_ACCOUNTS);
+  const [selectedDemoAccountId, setSelectedDemoAccountId] = useState<string>('SYS-USR-01');
   const [selectedUserId, setSelectedUserId] = useState<string>('USR-SADM-01');
-  const [usernameInput, setUsernameInput] = useState<string>('USR-SADM-01');
-  const [passwordInput, setPasswordInput] = useState<string>('admin123');
+  const [usernameInput, setUsernameInput] = useState<string>('owner@grocematrix.id');
+  const [passwordInput, setPasswordInput] = useState<string>('Groce@2026');
   const [selectedShift, setSelectedShift] = useState<'Morning Shift' | 'Afternoon Shift' | 'Night Shift'>('Morning Shift');
   const [rememberWorkstation, setRememberWorkstation] = useState<boolean>(true);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Fetch live available profiles from the server
+  // Fetch live available profiles & 14 division demo accounts from the server
   useEffect(() => {
     let isMounted = true;
     apiClient
@@ -257,17 +304,34 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
           setAvailableProfiles(res.availableProfiles);
           if (!res.availableProfiles.some((p) => p.userId === selectedUserId)) {
             setSelectedUserId(res.availableProfiles[0].userId);
-            setUsernameInput(res.availableProfiles[0].userId);
           }
         }
       })
       .catch((err) => {
         console.warn('Using local fallback staff roster:', err);
       });
+    apiClient
+      .getDemoAccounts()
+      .then((res) => {
+        if (isMounted && res.success && Array.isArray(res.accounts) && res.accounts.length > 0) {
+          setDemoAccounts(res.accounts);
+        }
+      })
+      .catch(() => {});
     return () => {
       isMounted = false;
     };
   }, []);
+
+  const handleQuickFillDemoAccount = (accountId: string) => {
+    setSelectedDemoAccountId(accountId);
+    const found = demoAccounts.find((a) => a.id === accountId);
+    if (found) {
+      setUsernameInput(found.email);
+      setPasswordInput(DEFAULT_DEMO_PASSWORDS_BY_ROLE[found.roleCode] || '');
+      setErrorMessage(null);
+    }
+  };
 
   const handleSelectProfile = (profile: StaffShiftSession) => {
     setSelectedUserId(profile.userId);
@@ -281,30 +345,38 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
     setIsAuthenticating(true);
 
     try {
+      const trimmedInput = usernameInput.trim();
       const payload =
         activeTab === 'roster'
           ? {
               userId: selectedUserId,
               shiftName: selectedShift,
             }
+          : trimmedInput.includes('@')
+          ? {
+              email: trimmedInput,
+              password: passwordInput,
+              shiftName: selectedShift,
+            }
           : {
-              username: usernameInput.trim(),
+              username: trimmedInput,
               password: passwordInput,
               shiftName: selectedShift,
             };
 
       const res = await apiClient.adminLogin(payload);
       if (res.success && res.session) {
-        apiClient.setOperatorContext(res.session);
+        apiClient.setOperatorContext({ ...res.session, authToken: res.token });
         if (rememberWorkstation) {
           try {
             localStorage.setItem('grocemart_admin_session', JSON.stringify(res.session));
+            if (res.token) localStorage.setItem('grocemart_auth_token', res.token);
           } catch {}
         }
         if (onShowToast) {
           onShowToast(
             'Authentication Successful',
-            `Welcome back, ${res.session.userName} (${res.session.userRole.replace(/_/g, ' ')})`
+            `Welcome back, ${res.session.userName} (${res.session.divisionLabel || res.session.userRole.replace(/_/g, ' ')})`
           );
         }
         onLoginSuccess(res.session);
@@ -463,7 +535,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                 }`}
               >
                 <KeyRound className="w-4 h-4" />
-                <span>Employee ID &amp; Password</span>
+                <span>Email / Employee ID &amp; Password</span>
               </button>
             </div>
           </div>
@@ -640,30 +712,56 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
             </div>
           )}
 
-          {/* Tab 2: Manual Credentials Form */}
+          {/* Tab 2: Manual Credentials Form (Email + Password & 14-Division Quick Fill) */}
           {activeTab === 'credentials' && (
             <form onSubmit={handleExecuteLogin} className="p-6 sm:p-8 space-y-5">
+              {/* Compact 14-Division Demo Account Quick-Fill Selector */}
+              <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#090A0F] border border-gray-200 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="text-xs">
+                  <span className="font-bold text-gray-800 dark:text-slate-200 block">
+                    Quick Fill Demo Account (14 Divisions)
+                  </span>
+                  <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                    Pilih akun divisi untuk mengisi Email &amp; Password uji coba otomatis.
+                  </span>
+                </div>
+                <select
+                  value={selectedDemoAccountId}
+                  onChange={(e) => handleQuickFillDemoAccount(e.target.value)}
+                  className="bg-white dark:bg-[#12141C] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] cursor-pointer sm:min-w-[290px]"
+                >
+                  {demoAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.divisionLabel} — {acc.email}{!acc.isActive ? ' [SUSPENDED]' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Employee ID */}
+                {/* Email or Employee ID */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider block">
-                    Employee ID or Username
+                    Email Address or Employee ID
                   </label>
                   <input
                     type="text"
                     required
                     value={usernameInput}
                     onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="e.g. USR-EXEC-01 or USR-CASH-01"
+                    placeholder="e.g. owner@grocematrix.id or USR-CASH-01"
                     className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] font-mono"
                   />
                   <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px] text-gray-500 dark:text-slate-400">
-                    <span>Quick fill:</span>
+                    <span>Legacy ID:</span>
                     {availableProfiles.map((p) => (
                       <button
                         key={p.userId}
                         type="button"
-                        onClick={() => setUsernameInput(p.userId)}
+                        onClick={() => {
+                          setUsernameInput(p.userId);
+                          setPasswordInput('admin123');
+                        }}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-[#090A0F] text-gray-700 dark:text-slate-300 hover:text-[#0F4C3A] dark:hover:text-emerald-300 border border-gray-200 dark:border-slate-800/80 font-mono transition-colors cursor-pointer"
                       >
                         {p.userId}
@@ -695,7 +793,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                     </button>
                   </div>
                   <span className="text-[11px] text-gray-500 dark:text-slate-400 block pt-1">
-                    Default demo credentials: password <code className="font-mono font-bold text-gray-800 dark:text-slate-200">admin123</code> or PIN <code className="font-mono font-bold text-gray-800 dark:text-slate-200">8821</code>
+                    Owner demo: <code className="font-mono font-bold text-gray-800 dark:text-slate-200">owner@grocematrix.id</code> / <code className="font-mono font-bold text-gray-800 dark:text-slate-200">Groce@2026</code>
                   </span>
                 </div>
               </div>

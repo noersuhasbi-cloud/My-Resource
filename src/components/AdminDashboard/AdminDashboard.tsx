@@ -113,6 +113,7 @@ import {
   normalizeEnterpriseRole,
   isBranchScopedRole,
   getDefaultTabForRole,
+  getDefaultTabForSession,
   canSessionViewValuation,
   isRoleTabAllowed,
 } from '../../utils/rbac';
@@ -195,6 +196,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const canViewValuation = canSessionViewValuation(activeStaffSession);
   const canViewFinancialModules = (() => {
     if (!activeStaffSession) return true;
+    if (activeStaffSession.modulePermissions) {
+      return Boolean(
+        activeStaffSession.roleCode === 'SUPER_ADMIN' ||
+          activeStaffSession.modulePermissions.accounting?.view ||
+          activeStaffSession.modulePermissions.ar?.view ||
+          activeStaffSession.modulePermissions.ap?.view
+      );
+    }
     return canonicalRole === 'store_manager' || canonicalRole === 'admin' || canonicalRole === 'coo' || canonicalRole === 'super_admin';
   })();
 
@@ -203,11 +212,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     apiClient.setOperatorContext(activeStaffSession);
     if (!activeStaffSession) return;
 
-    if (!isRoleTabAllowed(activeStaffSession.userRole, activeTab)) {
-      setActiveTab(getDefaultTabForRole(activeStaffSession.userRole));
+    if (!isDashboardTabAllowed(activeStaffSession, activeTab)) {
+      setActiveTab(getDefaultTabForSession(activeStaffSession));
     }
 
-    if (isBranchScopedRole(activeStaffSession.userRole)) {
+    const isScoped =
+      activeStaffSession.modulePermissions !== undefined
+        ? Boolean(activeStaffSession.isBranchScoped)
+        : isBranchScopedRole(activeStaffSession.userRole);
+
+    if (isScoped) {
       const assigned =
         activeStaffSession.assignedBranchId ||
         (activeStaffSession.storeId && activeStaffSession.storeId !== 'ALL'
@@ -1893,6 +1907,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               onEditTier={(tier) => setEditingTier(tier)}
               onRefreshData={() => refreshAllData()}
               onShowToast={onShowToast}
+              renderStocktakeImport={() => (
+                <SettingsModule
+                  theme={theme}
+                  activeStaffSession={activeStaffSession}
+                  chartOfAccounts={chartOfAccounts}
+                  storeOutlets={storeOutlets}
+                  warehouseZones={warehouseZones}
+                  inventoryTiers={inventoryTiers}
+                  initialSubTab="import_opname"
+                  standaloneMode="import_opname"
+                  onRefreshData={() => refreshAllData()}
+                  onShowToast={onShowToast}
+                />
+              )}
             />
 
             {/* Edit Stock Tier Modal */}
@@ -2338,6 +2366,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             warehouseZones={warehouseZones}
             inventoryTiers={inventoryTiers}
             initialSubTab="transfer"
+            standaloneMode="transfer"
             onRefreshData={() => refreshAllData()}
             onShowToast={onShowToast}
           />

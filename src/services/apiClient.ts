@@ -27,6 +27,9 @@ import type {
   SubstitutionPromptRecord,
   StaffShiftSession,
   UserRole,
+  DivisionRoleCode,
+  ModulePermissionsMap,
+  SystemUserAccount,
   SecurityAuditTrailRecord,
   ClimateAdaptiveThresholdConfig,
   SupportedCurrency,
@@ -161,25 +164,43 @@ import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groc
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-let activeOperatorContext: { userRole: string; storeId: string; userId: string } | null = null;
+let activeOperatorContext: { userRole: string; storeId: string; userId: string; authToken?: string } | null = null;
 
-export function setApiOperatorContext(session: Pick<StaffShiftSession, 'userRole' | 'storeId' | 'userId'> | null) {
+export function setApiOperatorContext(
+  session: (Pick<StaffShiftSession, 'userRole' | 'storeId' | 'userId'> & { authToken?: string }) | null
+) {
   if (!session) {
     activeOperatorContext = null;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('grocemart_auth_token');
+      } catch {}
+    }
     return;
   }
+  const existingToken =
+    session.authToken ||
+    activeOperatorContext?.authToken ||
+    (typeof window !== 'undefined' ? (() => { try { return localStorage.getItem('grocemart_auth_token') || undefined; } catch { return undefined; } })() : undefined);
   activeOperatorContext = {
     userRole: session.userRole,
     storeId: session.storeId,
     userId: session.userId,
+    authToken: existingToken,
   };
+  if (session.authToken && typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('grocemart_auth_token', session.authToken);
+    } catch {}
+  }
 }
 
-export function getApiOperatorContext(): { userRole: string; storeId: string; userId: string } | null {
+export function getApiOperatorContext(): { userRole: string; storeId: string; userId: string; authToken?: string } | null {
   if (activeOperatorContext) return activeOperatorContext;
   if (typeof window !== 'undefined') {
     try {
       const saved = localStorage.getItem('grocemart_admin_session');
+      const savedToken = localStorage.getItem('grocemart_auth_token') || undefined;
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed?.userRole) {
@@ -187,6 +208,7 @@ export function getApiOperatorContext(): { userRole: string; storeId: string; us
             userRole: parsed.userRole,
             storeId: parsed.storeId || 'ALL',
             userId: parsed.userId || '',
+            authToken: savedToken,
           };
           return activeOperatorContext;
         }
@@ -206,6 +228,9 @@ async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<R
     if (!headers.has('x-operator-role')) headers.set('x-operator-role', opCtx.userRole);
     if (!headers.has('x-operator-branch')) headers.set('x-operator-branch', opCtx.storeId || 'ALL');
     if (opCtx.userId && !headers.has('x-operator-id')) headers.set('x-operator-id', opCtx.userId);
+    if (opCtx.authToken && !headers.has('authorization')) {
+      headers.set('authorization', `Bearer ${opCtx.authToken}`);
+    }
   }
   const finalInit: RequestInit = {
     credentials: init?.credentials ?? 'same-origin',
@@ -1195,7 +1220,7 @@ export const apiClient = {
   // -------------------------------------------------------------
   // MODULE 3: Granular RBAC by Shift, Physical Zone & Multi-Outlet
   // -------------------------------------------------------------
-  setOperatorContext(session: Pick<StaffShiftSession, 'userRole' | 'storeId' | 'userId'> | null) {
+  setOperatorContext(session: (Pick<StaffShiftSession, 'userRole' | 'storeId' | 'userId'> & { authToken?: string }) | null) {
     setApiOperatorContext(session);
   },
 
@@ -1231,14 +1256,35 @@ export const apiClient = {
     return data;
   },
 
+  async getDemoAccounts(): Promise<{
+    success: boolean;
+    accounts: Array<{
+      id: string;
+      fullName: string;
+      email: string;
+      roleCode: DivisionRoleCode;
+      divisionLabel: string;
+      branchId: string;
+      branchName: string;
+      isActive: boolean;
+    }>;
+  }> {
+    const res = await fetchApi('/api/auth/demo-accounts');
+    if (!res.ok) {
+      return { success: false, accounts: [] };
+    }
+    return res.json();
+  },
+
   async adminLogin(params: {
+    email?: string;
     userId?: string;
     username?: string;
     password?: string;
     pin?: string;
     shiftName?: string;
   }): Promise<AdminAuthResponse> {
-    const res = await fetchApi('/api/admin/auth/login', {
+    const res = await fetchApi('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
@@ -1249,7 +1295,7 @@ export const apiClient = {
     }
     const data: AdminAuthResponse = await res.json();
     if (data?.session) {
-      setApiOperatorContext(data.session);
+      setApiOperatorContext({ ...data.session, authToken: data.token });
     }
     return data;
   },
@@ -3093,6 +3139,78 @@ export const apiClient = {
           }
         } catch {}
       }
+    }
+    return data;
+  },
+
+  async getSystemUsers(): Promise<{
+    success: boolean;
+    users: SystemUserAccount[];
+    branchOptions: Array<{ storeId: string; storeName: string; hubType: string }>;
+  }> {
+    const res = await fetchApi('/api/admin/settings/users');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Gagal memuat daftar user & hak akses modul');
+    }
+    return data;
+  },
+
+  async createSystemUser(payload: {
+    fullName: string;
+    email: string;
+    password: string;
+    roleCode: DivisionRoleCode;
+    branchId: string;
+    isActive?: boolean;
+    supervisorPin?: string;
+    viewCost?: boolean;
+    modulePermissions?: ModulePermissionsMap;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    user: SystemUserAccount;
+    users: SystemUserAccount[];
+  }> {
+    const res = await fetchApi('/api/admin/settings/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Gagal membuat akun user baru');
+    }
+    return data;
+  },
+
+  async updateSystemUser(
+    id: string,
+    patch: {
+      fullName?: string;
+      email?: string;
+      password?: string;
+      roleCode?: DivisionRoleCode;
+      branchId?: string;
+      isActive?: boolean;
+      supervisorPin?: string;
+      viewCost?: boolean;
+      modulePermissions?: ModulePermissionsMap;
+    }
+  ): Promise<{
+    success: boolean;
+    message: string;
+    user: SystemUserAccount;
+    users: SystemUserAccount[];
+  }> {
+    const res = await fetchApi(`/api/admin/settings/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Gagal memperbarui akun user');
     }
     return data;
   },
