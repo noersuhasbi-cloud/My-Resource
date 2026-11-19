@@ -2715,7 +2715,21 @@ function commitBalancedGlBatch(entries: GeneralLedgerEntry[], updateCoa: boolean
       }
     }
   }
+  const existingGlIds = new Set(generalLedger.map((g) => g.id));
+  let maxGlSeq = generalLedger.length;
+  for (const g of generalLedger) {
+    const m = /^GLE-\d{4}-(\d+)$/.exec(g.id);
+    if (m) {
+      const seq = Number(m[1]);
+      if (Number.isFinite(seq) && seq > maxGlSeq) maxGlSeq = seq;
+    }
+  }
   for (const entry of entries) {
+    if (!entry.id || existingGlIds.has(entry.id)) {
+      maxGlSeq += 1;
+      entry.id = `GLE-2026-${maxGlSeq.toString().padStart(4, '0')}`;
+    }
+    existingGlIds.add(entry.id);
     generalLedger.unshift(entry);
     if (updateCoa) {
       updateCoaLedgerBalance(entry.accountCode, entry.debit, entry.credit);
