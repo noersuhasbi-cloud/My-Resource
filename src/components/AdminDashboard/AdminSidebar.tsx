@@ -1,6 +1,11 @@
 import React from 'react';
 import type { StaffShiftSession } from '../../types/index.ts';
-import { isModulePermissionTabAllowed, isRoleTabAllowed } from '../../utils/rbac';
+import {
+  hasModuleAccess,
+  isAccountingSubTabAllowed,
+  isModulePermissionTabAllowed,
+  isRoleTabAllowed,
+} from '../../utils/rbac';
 import {
   LayoutDashboard,
   Store,
@@ -136,6 +141,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 }) => {
   const isLight = theme === 'light';
   const allow = (tab: AdminDashboardTab) => isDashboardTabAllowed(activeStaffSession, tab);
+  const allowAccountingSub = (sub: AccountingSubTab) => isAccountingSubTabAllowed(activeStaffSession, sub);
+  const canViewStorefront = activeStaffSession
+    ? hasModuleAccess(activeStaffSession, 'storefront', 'view') === true
+    : true;
 
   const handleTabClick = (tab: AdminDashboardTab) => {
     onSelectTab(tab);
@@ -880,6 +889,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             {/* Nested Sub-Menu (Desktop & Expanded Drawer) */}
             {!isCollapsed && isFinanceMenuOpen && (
               <div className="pl-6 pr-1 py-1 space-y-1 border-l-2 border-emerald-900/10 dark:border-emerald-500/20 ml-4 animate-fadeIn">
+                {allowAccountingSub('pnl') && (
                 <button
                   onClick={() => handleAccountingSubClick('pnl')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
@@ -893,7 +903,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   <TrendingUp className="w-3 h-3 text-emerald-600" />
                   <span className="truncate">P&amp;L Statement</span>
                 </button>
+                )}
 
+                {allowAccountingSub('balance_sheet') && (
                 <button
                   onClick={() => handleAccountingSubClick('balance_sheet')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
@@ -907,7 +919,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   <Scale className="w-3 h-3 text-blue-600" />
                   <span className="truncate">Balance Sheet</span>
                 </button>
+                )}
 
+                {allowAccountingSub('cash_flow') && (
                 <button
                   onClick={() => handleAccountingSubClick('cash_flow')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
@@ -921,7 +935,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   <DollarSign className="w-3 h-3 text-amber-600" />
                   <span className="truncate">Cash Flow Statement</span>
                 </button>
+                )}
 
+                {allowAccountingSub('gl') && (
                 <button
                   onClick={() => handleAccountingSubClick('gl')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
@@ -935,7 +951,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   <ReceiptText className="w-3 h-3 text-purple-600" />
                   <span className="truncate">General Ledger (GL)</span>
                 </button>
+                )}
 
+                {allowAccountingSub('coa') && (
                 <button
                   onClick={() => handleAccountingSubClick('coa')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
@@ -949,7 +967,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   <Building2 className="w-3 h-3 text-teal-600" />
                   <span className="truncate">Chart of Accounts (COA)</span>
                 </button>
+                )}
 
+                {allowAccountingSub('vendor_bills') && (
                 <button
                   onClick={() => handleAccountingSubClick('vendor_bills')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
@@ -963,7 +983,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   <FileCheck2 className="w-3 h-3 text-indigo-600" />
                   <span className="truncate">Vendor Bills &amp; AP</span>
                 </button>
+                )}
 
+                {allowAccountingSub('b2b_ar') && (
                 <button
                   onClick={() => handleAccountingSubClick('b2b_ar')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
@@ -977,7 +999,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   <CreditCard className="w-3 h-3 text-emerald-600" />
                   <span className="truncate">B2B AR &amp; Giro Clearing</span>
                 </button>
+                )}
 
+                {allowAccountingSub('analytic_budgets') && (
                 <button
                   onClick={() => handleAccountingSubClick('analytic_budgets')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
@@ -991,7 +1015,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   <PieChart className="w-3 h-3 text-purple-600" />
                   <span className="truncate">Analytic Budgets</span>
                 </button>
+                )}
 
+                {allowAccountingSub('margin_analysis') && (
                 <button
                   onClick={() => handleAccountingSubClick('margin_analysis')}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
@@ -1005,6 +1031,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   <BarChart3 className="w-3 h-3 text-emerald-600" />
                   <span className="truncate">Real-Time Margin Analysis</span>
                 </button>
+                )}
               </div>
             )}
           </div>
@@ -1164,6 +1191,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         }`}
       >
         <div className="space-y-1.5">
+          {canViewStorefront && (
           <button
             onClick={onCloseToStorefront}
             title={isCollapsed ? 'Back to Customer Storefront' : undefined}
@@ -1180,6 +1208,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <StoreIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
             {!isCollapsed && <span className="truncate">Storefront View</span>}
           </button>
+          )}
 
           {onLogout && (
             <button

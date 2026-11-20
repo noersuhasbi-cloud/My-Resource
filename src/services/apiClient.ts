@@ -3165,6 +3165,8 @@ export const apiClient = {
     isActive?: boolean;
     supervisorPin?: string;
     viewCost?: boolean;
+    hideFinancialCost?: boolean;
+    defaultLandingTab?: string;
     modulePermissions?: ModulePermissionsMap;
   }): Promise<{
     success: boolean;
@@ -3195,6 +3197,8 @@ export const apiClient = {
       isActive?: boolean;
       supervisorPin?: string;
       viewCost?: boolean;
+      hideFinancialCost?: boolean;
+      defaultLandingTab?: string;
       modulePermissions?: ModulePermissionsMap;
     }
   ): Promise<{

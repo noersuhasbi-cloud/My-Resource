@@ -52,6 +52,7 @@ import {
   DIVISION_ROLE_CODES,
   DIVISION_ROLE_PRESETS,
   MODULE_PERMISSION_META,
+  ACCOUNTING_SUB_FLAGS,
   getDefaultModulePermissions,
 } from '../../utils/rbac';
 import {
@@ -557,6 +558,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           isActive: userFormIsActive,
           supervisorPin: userFormSupervisorPin.trim(),
           viewCost: userFormViewCost,
+          hideFinancialCost: !userFormViewCost,
         };
         if (userFormPassword.trim().length > 0) {
           patch.password = userFormPassword;
@@ -577,6 +579,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           isActive: userFormIsActive,
           supervisorPin: userFormSupervisorPin.trim() || undefined,
           viewCost: userFormViewCost,
+          hideFinancialCost: !userFormViewCost,
           modulePermissions: getDefaultModulePermissions(userFormRoleCode),
         });
         setSystemUsersList(res.users || []);
@@ -608,6 +611,30 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           ...currentSet,
           [action]: nextVal,
           ...(action !== 'view' && nextVal ? { view: true } : {}),
+        },
+      };
+    });
+  };
+
+  const handleToggleAccountingSubFlag = (
+    flagKey: 'canAccessAR' | 'canAccessAP' | 'canAccessGLTax' | 'canApprovePayments' | 'canLockPeriod'
+  ) => {
+    setPermDraft((prev) => {
+      if (!prev) return prev;
+      const currentAcct = prev.accounting || {
+        view: false,
+        create: false,
+        edit: false,
+        approve: false,
+        export: false,
+      };
+      const nextVal = !(currentAcct[flagKey] === true);
+      return {
+        ...prev,
+        accounting: {
+          ...currentAcct,
+          [flagKey]: nextVal,
+          ...(nextVal ? { view: true } : {}),
         },
       };
     });
@@ -3724,7 +3751,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                               isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
                             }`}
                           >
-                            <th className="py-3 px-3.5">Modul ERP (13 Modul)</th>
+                            <th className="py-3 px-3.5">Modul ERP ({MODULE_PERMISSION_META.length} Modul)</th>
                             <th className="py-3 px-3 text-center">View</th>
                             <th className="py-3 px-3 text-center">Create</th>
                             <th className="py-3 px-3 text-center">Edit</th>
@@ -3742,28 +3769,56 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                               export: false,
                             };
                             return (
-                              <tr key={mod.key} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
-                                <td className="py-2.5 px-3.5">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-slate-900 dark:text-slate-100">{mod.label}</span>
-                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold">
-                                      {mod.category}
-                                    </span>
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 dark:text-slate-400">{mod.description}</div>
-                                </td>
-                                {(['view', 'create', 'edit', 'approve', 'export'] as ModulePermissionAction[]).map((act) => (
-                                  <td key={act} className="py-2.5 px-3 text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(p[act])}
-                                      onChange={() => handleToggleModulePermissionCell(mod.key, act)}
-                                      className="w-4 h-4 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] cursor-pointer"
-                                      aria-label={`${mod.label} ${act}`}
-                                    />
+                              <React.Fragment key={mod.key}>
+                                <tr className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
+                                  <td className="py-2.5 px-3.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-slate-900 dark:text-slate-100">{mod.label}</span>
+                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold">
+                                        {mod.category}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{mod.description}</div>
                                   </td>
-                                ))}
-                              </tr>
+                                  {(['view', 'create', 'edit', 'approve', 'export'] as ModulePermissionAction[]).map((act) => (
+                                    <td key={act} className="py-2.5 px-3 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={p[act] === true}
+                                        onChange={() => handleToggleModulePermissionCell(mod.key, act)}
+                                        className="w-4 h-4 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] cursor-pointer"
+                                        aria-label={`${mod.label} ${act}`}
+                                      />
+                                    </td>
+                                  ))}
+                                </tr>
+                                {mod.key === 'accounting' && (
+                                  <tr className={isLight ? 'bg-emerald-50/40' : 'bg-emerald-950/15'}>
+                                    <td colSpan={6} className="py-2 px-4">
+                                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
+                                        <span className="font-bold text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                                          Granular Finance Sub-Flags:
+                                        </span>
+                                        {ACCOUNTING_SUB_FLAGS.map((sf) => (
+                                          <label
+                                            key={sf.key}
+                                            title={sf.description}
+                                            className="inline-flex items-center gap-1.5 cursor-pointer select-none text-slate-700 dark:text-slate-300"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={p[sf.key] === true}
+                                              onChange={() => handleToggleAccountingSubFlag(sf.key)}
+                                              className="w-3.5 h-3.5 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] cursor-pointer"
+                                            />
+                                            <span className="font-semibold">{sf.label}</span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
                             );
                           })}
                         </tbody>

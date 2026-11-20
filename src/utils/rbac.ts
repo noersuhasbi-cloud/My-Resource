@@ -1,4 +1,5 @@
 import type {
+  AccountingSubFlagKey,
   DivisionRoleCode,
   ModulePermissionAction,
   ModulePermissionKey,
@@ -7,7 +8,7 @@ import type {
   StaffShiftSession,
   UserRole,
 } from '../types/index.ts';
-import type { AdminDashboardTab } from '../components/AdminDashboard/AdminSidebar';
+import type { AccountingSubTab, AdminDashboardTab } from '../components/AdminDashboard/AdminSidebar';
 
 export type CanonicalEnterpriseRole =
   | 'cashier'
@@ -19,19 +20,37 @@ export type CanonicalEnterpriseRole =
   | 'super_admin';
 
 export const MODULE_PERMISSION_KEYS: ModulePermissionKey[] = [
+  'dashboard',
   'pos',
+  'storefront',
+  'crm',
+  'quotations',
+  'outlets',
   'inventory',
+  'fefoBatches',
+  'wasteShrinkage',
+  'fulfillment',
   'warehouseTransfers',
+  'logistics',
   'procurement',
   'qualityControl',
-  'crm',
-  'logistics',
-  'accounting',
-  'ar',
-  'ap',
   'approvalMatrix',
+  'analytics',
+  'accounting',
   'fraudRadar',
   'settings',
+];
+
+export const ACCOUNTING_SUB_FLAGS: Array<{
+  key: AccountingSubFlagKey;
+  label: string;
+  description: string;
+}> = [
+  { key: 'canAccessAR', label: 'AR & Giro Masuk', description: 'B2B AR Aging, Giro Clearing, Safe Drop & Kasbon Kanvas' },
+  { key: 'canAccessAP', label: 'AP & Vendor Bills', description: '3-Way Match, Vendor Bills, Input VAT & PPh 22/23' },
+  { key: 'canAccessGLTax', label: 'GL, COA & Coretax', description: 'General Ledger, COA, P&L, Balance Sheet & e-Faktur CSV' },
+  { key: 'canApprovePayments', label: 'Approve Payment Release', description: 'Approve AP payment release, Giro Keluar & Settlement' },
+  { key: 'canLockPeriod', label: 'Accounting Period Lock', description: 'Lock/unlock accounting cut-off period & GL reversal' },
 ];
 
 export const MODULE_PERMISSION_META: Array<{
@@ -40,29 +59,73 @@ export const MODULE_PERMISSION_META: Array<{
   category: string;
   description: string;
 }> = [
-  { key: 'pos', label: 'POS Cashier & Register', category: 'Frontline', description: 'Checkout, Split Payment, Ojol, Scale Barcode, Z-Report & Paid-Out' },
-  { key: 'inventory', label: 'Multi-Warehouse & Stock', category: 'Warehouse', description: 'Stock Quants, FEFO/FIFO, Blind Opname, Waste, Markdown & Batch Recall' },
-  { key: 'warehouseTransfers', label: 'Warehouse Transfers', category: 'Warehouse', description: 'Inter-warehouse transfer dispatch, double sign-off & transfer loss' },
-  { key: 'procurement', label: 'Purchasing & Procurement', category: 'Supply Chain', description: 'Demand Forecast, PR/PO, FOC/SPSI, Rafaksi Debit Notes & Goods Receipt' },
-  { key: 'qualityControl', label: 'Quality Control & Halal', category: 'Quality', description: 'GR Quality/Cold-Chain/Halal BPJPH Inspection & Quarantine/Release' },
-  { key: 'crm', label: 'CRM, B2B & Claims', category: 'Commercial', description: 'Member lookup, B2B Credit Limit, Quotations & Freshness Claims' },
-  { key: 'logistics', label: 'Logistics & Surat Jalan', category: 'Fulfillment', description: 'Order Picking, Fulfillment, Trips, Surat Jalan & e-POD' },
-  { key: 'accounting', label: 'Accounting & Tax (GL/COA)', category: 'Finance', description: 'Chart of Accounts, General Ledger, Coretax e-Faktur, P&L & Period Lock' },
-  { key: 'ar', label: 'Account Receivable (AR)', category: 'Finance', description: 'B2B Invoices, AR Aging, Ojol Receivables, Giro Masuk, Safe Drop & Kasbon' },
-  { key: 'ap', label: 'Account Payable (AP)', category: 'Finance', description: '3-Way Match, Vendor Bills, Input VAT, PPh 22/23 & AP Payment Release' },
-  { key: 'approvalMatrix', label: 'Approval Matrix', category: 'Governance', description: 'Multi-tier approval workflow routing & authorization decisions' },
-  { key: 'fraudRadar', label: 'Fraud Radar & Audit', category: 'Governance', description: 'Anomaly alerts, margin overrides, shrinkage spikes & resolution' },
+  { key: 'dashboard', label: 'Executive Dashboard', category: 'Executive', description: 'Omzet KPIs, multi-branch sales summary & executive overview' },
+  { key: 'pos', label: 'POS Cashier Station', category: 'Frontline', description: 'Checkout, Split Payment, Ojol, Scale Barcode, Z-Report & Paid-Out' },
+  { key: 'storefront', label: 'Storefront View', category: 'Frontline', description: 'Switch from ERP back-office to Customer Storefront view' },
+  { key: 'crm', label: 'CRM & Loyalty 360', category: 'Commercial', description: 'Customer loyalty tiers, B2B credit limit & freshness claims' },
+  { key: 'quotations', label: 'Quotations & Pro Forma B2B', category: 'Commercial', description: 'B2B wholesale quotations, pro forma & order conversion' },
+  { key: 'outlets', label: 'Store & Outlets', category: 'Operations', description: 'Store operating hours, emergency closure & outlet network status' },
+  { key: 'inventory', label: 'Multi-Warehouse & Stock', category: 'Warehouse', description: 'Stock Quants, Stocktake/Blind Opname, Bulk Import & Markdown' },
+  { key: 'fefoBatches', label: 'FEFO & Expiry Batches', category: 'Warehouse', description: 'Lot/batch expiry ledger, FEFO allocation & near-expiry alerts' },
+  { key: 'wasteShrinkage', label: 'Waste & Shrinkage', category: 'Warehouse', description: 'Spoilage write-off, natural shrinkage & waste approvals' },
+  { key: 'fulfillment', label: 'Fulfillment & Catch Weight', category: 'Fulfillment', description: 'Order picking, packing, catch-weight reconciliation & substitutions' },
+  { key: 'warehouseTransfers', label: 'Warehouse Transfers', category: 'Warehouse', description: 'Inter-warehouse stock transfer dispatch, double sign-off & loss' },
+  { key: 'logistics', label: 'Logistics & Surat Jalan', category: 'Fulfillment', description: 'Fleet trips, Surat Jalan dispatch, crates & e-POD delivery' },
+  { key: 'procurement', label: 'Procurement PR/PO/GR', category: 'Supply Chain', description: 'Demand Forecast, PR/PO, FOC/SPSI, Rafaksi & Dock Goods Receipt' },
+  { key: 'qualityControl', label: 'Quality Control QC', category: 'Quality', description: 'GR Quality/Cold-Chain/Halal BPJPH inspection & Batch Recall' },
+  { key: 'approvalMatrix', label: 'Approval Matrix', category: 'Governance', description: 'Multi-tier approval workflow routing & authorization queue' },
+  { key: 'analytics', label: 'Grocery Analytics', category: 'Analytics', description: 'Margin intelligence, branch omzet analytics & KPI exports' },
+  { key: 'accounting', label: 'Accounting & Finance Suite', category: 'Finance', description: 'AR, AP, COA, General Ledger, Coretax e-Faktur, P&L & Period Lock' },
+  { key: 'fraudRadar', label: 'Audit Trail & Fraud Radar', category: 'Governance', description: 'Anomaly alerts, margin overrides, shrinkage spikes & immutable audit' },
   { key: 'settings', label: 'Enterprise Settings', category: 'System', description: 'SaaS Config, Branches, User Accounts, Backups & Gateway Config' },
 ];
 
 const ALL_PERM = (): ModulePermissionSet => ({ view: true, create: true, edit: true, approve: true, export: true });
+const ALL_ACCOUNTING_PERM = (): ModulePermissionSet => ({
+  view: true,
+  create: true,
+  edit: true,
+  approve: true,
+  export: true,
+  canAccessAR: true,
+  canAccessAP: true,
+  canAccessGLTax: true,
+  canApprovePayments: true,
+  canLockPeriod: true,
+});
 const NO_PERM = (): ModulePermissionSet => ({ view: false, create: false, edit: false, approve: false, export: false });
+const NO_ACCOUNTING_PERM = (): ModulePermissionSet => ({
+  view: false,
+  create: false,
+  edit: false,
+  approve: false,
+  export: false,
+  canAccessAR: false,
+  canAccessAP: false,
+  canAccessGLTax: false,
+  canApprovePayments: false,
+  canLockPeriod: false,
+});
+
 const makePerm = (p: Partial<ModulePermissionSet>): ModulePermissionSet => ({
-  view: Boolean(p.view),
-  create: Boolean(p.create),
-  edit: Boolean(p.edit),
-  approve: Boolean(p.approve),
-  export: Boolean(p.export),
+  view: p.view === true,
+  create: p.create === true,
+  edit: p.edit === true,
+  approve: p.approve === true,
+  export: p.export === true,
+});
+
+const makeAccountingPerm = (p: Partial<ModulePermissionSet>): ModulePermissionSet => ({
+  view: p.view === true,
+  create: p.create === true,
+  edit: p.edit === true,
+  approve: p.approve === true,
+  export: p.export === true,
+  canAccessAR: p.canAccessAR === true,
+  canAccessAP: p.canAccessAP === true,
+  canAccessGLTax: p.canAccessGLTax === true,
+  canApprovePayments: p.canApprovePayments === true,
+  canLockPeriod: p.canLockPeriod === true,
 });
 
 export interface DivisionRolePreset {
@@ -70,6 +133,8 @@ export interface DivisionRolePreset {
   divisionLabel: string;
   canonicalRole: CanonicalEnterpriseRole;
   defaultBranchId: string;
+  defaultLandingTab: string;
+  hideFinancialCost: boolean;
   defaultViewCost: boolean;
   defaultSupervisorPin?: string;
   description: string;
@@ -78,19 +143,25 @@ export interface DivisionRolePreset {
 
 function buildModuleMap(overrides: Partial<Record<ModulePermissionKey, ModulePermissionSet>>): ModulePermissionsMap {
   return {
-    pos: overrides.pos ? { ...overrides.pos } : NO_PERM(),
-    inventory: overrides.inventory ? { ...overrides.inventory } : NO_PERM(),
-    warehouseTransfers: overrides.warehouseTransfers ? { ...overrides.warehouseTransfers } : NO_PERM(),
-    procurement: overrides.procurement ? { ...overrides.procurement } : NO_PERM(),
-    qualityControl: overrides.qualityControl ? { ...overrides.qualityControl } : NO_PERM(),
-    crm: overrides.crm ? { ...overrides.crm } : NO_PERM(),
-    logistics: overrides.logistics ? { ...overrides.logistics } : NO_PERM(),
-    accounting: overrides.accounting ? { ...overrides.accounting } : NO_PERM(),
-    ar: overrides.ar ? { ...overrides.ar } : NO_PERM(),
-    ap: overrides.ap ? { ...overrides.ap } : NO_PERM(),
-    approvalMatrix: overrides.approvalMatrix ? { ...overrides.approvalMatrix } : NO_PERM(),
-    fraudRadar: overrides.fraudRadar ? { ...overrides.fraudRadar } : NO_PERM(),
-    settings: overrides.settings ? { ...overrides.settings } : NO_PERM(),
+    dashboard: overrides.dashboard ? makePerm(overrides.dashboard) : NO_PERM(),
+    pos: overrides.pos ? makePerm(overrides.pos) : NO_PERM(),
+    storefront: overrides.storefront ? makePerm(overrides.storefront) : NO_PERM(),
+    crm: overrides.crm ? makePerm(overrides.crm) : NO_PERM(),
+    quotations: overrides.quotations ? makePerm(overrides.quotations) : NO_PERM(),
+    outlets: overrides.outlets ? makePerm(overrides.outlets) : NO_PERM(),
+    inventory: overrides.inventory ? makePerm(overrides.inventory) : NO_PERM(),
+    fefoBatches: overrides.fefoBatches ? makePerm(overrides.fefoBatches) : NO_PERM(),
+    wasteShrinkage: overrides.wasteShrinkage ? makePerm(overrides.wasteShrinkage) : NO_PERM(),
+    fulfillment: overrides.fulfillment ? makePerm(overrides.fulfillment) : NO_PERM(),
+    warehouseTransfers: overrides.warehouseTransfers ? makePerm(overrides.warehouseTransfers) : NO_PERM(),
+    logistics: overrides.logistics ? makePerm(overrides.logistics) : NO_PERM(),
+    procurement: overrides.procurement ? makePerm(overrides.procurement) : NO_PERM(),
+    qualityControl: overrides.qualityControl ? makePerm(overrides.qualityControl) : NO_PERM(),
+    approvalMatrix: overrides.approvalMatrix ? makePerm(overrides.approvalMatrix) : NO_PERM(),
+    analytics: overrides.analytics ? makePerm(overrides.analytics) : NO_PERM(),
+    accounting: overrides.accounting ? makeAccountingPerm(overrides.accounting) : NO_ACCOUNTING_PERM(),
+    fraudRadar: overrides.fraudRadar ? makePerm(overrides.fraudRadar) : NO_PERM(),
+    settings: overrides.settings ? makePerm(overrides.settings) : NO_PERM(),
   };
 }
 
@@ -100,21 +171,29 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Owner / Super Admin',
     canonicalRole: 'super_admin',
     defaultBranchId: 'ALL',
+    defaultLandingTab: 'dashboard',
+    hideFinancialCost: false,
     defaultViewCost: true,
     defaultSupervisorPin: '1234',
-    description: 'Full unrestricted access across all 13 ERP modules, user management & system governance.',
+    description: 'Full unrestricted access across all 19 ERP modules, user management & system governance.',
     permissions: buildModuleMap({
+      dashboard: ALL_PERM(),
       pos: ALL_PERM(),
+      storefront: ALL_PERM(),
+      crm: ALL_PERM(),
+      quotations: ALL_PERM(),
+      outlets: ALL_PERM(),
       inventory: ALL_PERM(),
+      fefoBatches: ALL_PERM(),
+      wasteShrinkage: ALL_PERM(),
+      fulfillment: ALL_PERM(),
       warehouseTransfers: ALL_PERM(),
+      logistics: ALL_PERM(),
       procurement: ALL_PERM(),
       qualityControl: ALL_PERM(),
-      crm: ALL_PERM(),
-      logistics: ALL_PERM(),
-      accounting: ALL_PERM(),
-      ar: ALL_PERM(),
-      ap: ALL_PERM(),
       approvalMatrix: ALL_PERM(),
+      analytics: ALL_PERM(),
+      accounting: ALL_ACCOUNTING_PERM(),
       fraudRadar: ALL_PERM(),
       settings: ALL_PERM(),
     }),
@@ -124,14 +203,17 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Staf Gudang',
     canonicalRole: 'warehouse',
     defaultBranchId: 'store-jkt-senopati',
+    defaultLandingTab: 'inventory',
+    hideFinancialCost: true,
     defaultViewCost: false,
-    description: 'Blind GR physical count, Putaway, Fulfillment, Blind Stocktake; cost/valuation hidden.',
+    description: 'Blind GR physical count, Putaway, FEFO, Fulfillment, Transfers & Blind Stocktake; cost/valuation hidden.',
     permissions: buildModuleMap({
       inventory: makePerm({ view: true, create: true, edit: true }),
+      fefoBatches: makePerm({ view: true }),
+      fulfillment: makePerm({ view: true, create: true, edit: true }),
       warehouseTransfers: makePerm({ view: true }),
-      procurement: makePerm({ view: true, create: true }),
-      qualityControl: makePerm({ view: true }),
       logistics: makePerm({ view: true, create: true, edit: true }),
+      procurement: makePerm({ view: true }), // View incoming POs for dock GR; physical GR authorized via inventory.create
     }),
   },
   WAREHOUSE_ADMIN: {
@@ -139,14 +221,18 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Admin Gudang',
     canonicalRole: 'warehouse',
     defaultBranchId: 'store-jkt-senopati',
+    defaultLandingTab: 'inventory',
+    hideFinancialCost: true,
     defaultViewCost: false,
-    description: 'Inventory, Transfers, Returnable Crates, Shelf Labels, Shrinkage draft; no Approve/Accounting.',
+    description: 'Inventory, FEFO, Waste draft, Fulfillment, Transfers, Logistics & GR; cost/valuation hidden, no Approve/Accounting.',
     permissions: buildModuleMap({
       inventory: makePerm({ view: true, create: true, edit: true, export: true }),
+      fefoBatches: makePerm({ view: true, create: true, edit: true, export: true }),
+      wasteShrinkage: makePerm({ view: true, create: true, edit: true, export: true }),
+      fulfillment: makePerm({ view: true, create: true, edit: true, export: true }),
       warehouseTransfers: makePerm({ view: true, create: true, edit: true, export: true }),
-      procurement: makePerm({ view: true, create: true }),
-      qualityControl: makePerm({ view: true }),
       logistics: makePerm({ view: true, create: true, edit: true, export: true }),
+      procurement: makePerm({ view: true }), // View incoming POs for dock GR; physical GR authorized via inventory.create
     }),
   },
   WAREHOUSE_HEAD: {
@@ -154,14 +240,19 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Head Gudang',
     canonicalRole: 'warehouse',
     defaultBranchId: 'ALL',
+    defaultLandingTab: 'inventory',
+    hideFinancialCost: false,
     defaultViewCost: true,
-    description: 'Full Warehouse + Approve Opname/Waste/Transfer Loss/Trips + Batch Recall; no PO creation or GL posting.',
+    description: 'Full Warehouse + Approve Opname/Waste/Transfer Loss/Trips + QC Batch Recall; no PO creation, CRM or GL posting.',
     permissions: buildModuleMap({
       inventory: ALL_PERM(),
+      fefoBatches: ALL_PERM(),
+      wasteShrinkage: ALL_PERM(),
+      fulfillment: ALL_PERM(),
       warehouseTransfers: ALL_PERM(),
       logistics: ALL_PERM(),
       qualityControl: ALL_PERM(),
-      procurement: makePerm({ view: true }),
+      procurement: makePerm({ view: true }), // View incoming POs & dock GR status; no PO creation/approval
       approvalMatrix: makePerm({ view: true, approve: true }),
     }),
   },
@@ -170,12 +261,14 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Staf Purchasing',
     canonicalRole: 'purchasing',
     defaultBranchId: 'ALL',
+    defaultLandingTab: 'procurement',
+    hideFinancialCost: false,
     defaultViewCost: true,
-    description: 'Demand Forecast, PR/PO draft, FOC & SPSI input, Rafaksi draft; no PO Approve or GR physical receipt.',
+    description: 'Demand Forecast, PR/PO draft, FOC & SPSI input, Rafaksi draft; no PO Approve, physical GR, CRM or Settings.',
     permissions: buildModuleMap({
       procurement: makePerm({ view: true, create: true, edit: true, export: true }),
       inventory: makePerm({ view: true, export: true }),
-      qualityControl: makePerm({ view: true }),
+      fefoBatches: makePerm({ view: true }),
     }),
   },
   PURCHASING_HEAD: {
@@ -183,14 +276,16 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Head Purchasing',
     canonicalRole: 'purchasing',
     defaultBranchId: 'ALL',
+    defaultLandingTab: 'procurement',
+    hideFinancialCost: false,
     defaultViewCost: true,
-    description: 'Approve PO, Approve Rafaksi, Approve 3-Way Match price tolerance; no Stock Adjustment or Bank Payment.',
+    description: 'Approve PO, Approve Rafaksi, Approve 3-Way Match price tolerance; no Stock Adjustment, CRM, Bank Payment or Settings.',
     permissions: buildModuleMap({
       procurement: ALL_PERM(),
-      ap: makePerm({ view: true, approve: true, export: true }),
       inventory: makePerm({ view: true, export: true }),
-      qualityControl: makePerm({ view: true, export: true }),
+      fefoBatches: makePerm({ view: true, export: true }),
       approvalMatrix: makePerm({ view: true, approve: true }),
+      analytics: makePerm({ view: true, export: true }),
     }),
   },
   QC_INSPECTOR: {
@@ -198,13 +293,14 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'QC & Halal Inspector',
     canonicalRole: 'warehouse',
     defaultBranchId: 'store-jkt-senopati',
+    defaultLandingTab: 'qualityControl',
+    hideFinancialCost: true,
     defaultViewCost: false,
-    description: 'GR Quality/Cold-Chain/Halal BPJPH inspection, Quarantine/Release, Customer Freshness Claims.',
+    description: 'GR Quality/Cold-Chain/Halal BPJPH inspection, FEFO expiry quarantine & spoilage log; zero commercial/finance leakage.',
     permissions: buildModuleMap({
       qualityControl: ALL_PERM(),
-      inventory: makePerm({ view: true, edit: true, export: true }),
-      crm: makePerm({ view: true, create: true, edit: true, approve: true }),
-      procurement: makePerm({ view: true }),
+      fefoBatches: makePerm({ view: true, edit: true, approve: true, export: true }),
+      wasteShrinkage: makePerm({ view: true, create: true }),
     }),
   },
   POS_CASHIER: {
@@ -212,11 +308,12 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Kasir POS',
     canonicalRole: 'cashier',
     defaultBranchId: 'store-jkt-senopati',
+    defaultLandingTab: 'pos',
+    hideFinancialCost: true,
     defaultViewCost: false,
-    description: 'POS Checkout, Split Payment, Ojol, Scale Barcode, Z-Report, CRM Member lookup; no cost/P&L/settings.',
+    description: 'POS Checkout, Split Payment, Ojol, Scale Barcode & Z-Report only; cost/HPP, CRM, P&L & Settings hidden.',
     permissions: buildModuleMap({
       pos: makePerm({ view: true, create: true, edit: true, export: true }),
-      crm: makePerm({ view: true, create: true }),
     }),
   },
   STORE_MANAGER: {
@@ -224,18 +321,27 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Store Manager / Supervisor',
     canonicalRole: 'store_manager',
     defaultBranchId: 'store-jkt-senopati',
+    defaultLandingTab: 'dashboard',
+    hideFinancialCost: false,
     defaultViewCost: true,
     defaultSupervisorPin: '1234',
-    description: 'POS + Supervisor PIN 1234 for Margin Floor Override/Exchange/Paid-Out + Clearance Markdown + CRM Claims.',
+    description: 'Branch Executive Dashboard, POS + PIN 1234 overrides, Storefront, CRM, Quotations, Outlets, Stock & Approvals; no Accounting/Settings.',
     permissions: buildModuleMap({
+      dashboard: makePerm({ view: true, export: true }),
       pos: ALL_PERM(),
-      inventory: ALL_PERM(),
-      warehouseTransfers: makePerm({ view: true, create: true, edit: true, approve: true }),
+      storefront: makePerm({ view: true }),
       crm: ALL_PERM(),
-      qualityControl: makePerm({ view: true, create: true, edit: true, export: true }),
+      quotations: ALL_PERM(),
+      outlets: makePerm({ view: true, edit: true, approve: true }),
+      inventory: ALL_PERM(),
+      fefoBatches: ALL_PERM(),
+      wasteShrinkage: ALL_PERM(),
+      fulfillment: ALL_PERM(),
+      warehouseTransfers: makePerm({ view: true, create: true, edit: true, approve: true, export: true }),
       logistics: makePerm({ view: true, create: true, edit: true, export: true }),
-      procurement: makePerm({ view: true, create: true }),
+      qualityControl: makePerm({ view: true, create: true, edit: true, export: true }),
       approvalMatrix: makePerm({ view: true, approve: true }),
+      analytics: makePerm({ view: true, export: true }),
       fraudRadar: makePerm({ view: true }),
     }),
   },
@@ -244,13 +350,25 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Account Receivable',
     canonicalRole: 'admin',
     defaultBranchId: 'ALL',
+    defaultLandingTab: 'accounting',
+    hideFinancialCost: false,
     defaultViewCost: true,
-    description: 'B2B Invoices, AR Aging, e-POD Credit Memos, Ojol Receivables, Bilyet Giro Masuk, Kasbon Kanvas.',
+    description: 'B2B Invoices, Quotations, CRM Credit Limit, AR Aging, Bilyet Giro Masuk & Kasbon Kanvas; no AP, GL edit or Settings.',
     permissions: buildModuleMap({
-      ar: makePerm({ view: true, create: true, edit: true, export: true }),
+      accounting: makeAccountingPerm({
+        view: true,
+        create: true,
+        edit: true,
+        approve: false,
+        export: true,
+        canAccessAR: true,
+        canAccessAP: false,
+        canAccessGLTax: false,
+        canApprovePayments: false,
+        canLockPeriod: false,
+      }),
       crm: makePerm({ view: true, create: true, edit: true, export: true }),
-      accounting: makePerm({ view: true, export: true }),
-      logistics: makePerm({ view: true, export: true }),
+      quotations: makePerm({ view: true, create: true, edit: true, export: true }),
     }),
   },
   AP_STAFF: {
@@ -258,12 +376,24 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Account Payable',
     canonicalRole: 'admin',
     defaultBranchId: 'ALL',
+    defaultLandingTab: 'accounting',
+    hideFinancialCost: false,
     defaultViewCost: true,
-    description: '3-Way Matching, Vendor Bills, Non-Creditable Input VAT, PPh 22/23, Vendor DP deduction; no Bank Release.',
+    description: '3-Way Matching, Vendor Bills, Non-Creditable Input VAT & PPh 22/23; no Bank Payment Release, CRM, Quotations or Settings.',
     permissions: buildModuleMap({
-      ap: makePerm({ view: true, create: true, edit: true, export: true }),
+      accounting: makeAccountingPerm({
+        view: true,
+        create: true,
+        edit: true,
+        approve: false,
+        export: true,
+        canAccessAR: false,
+        canAccessAP: true,
+        canAccessGLTax: false,
+        canApprovePayments: false,
+        canLockPeriod: false,
+      }),
       procurement: makePerm({ view: true, export: true }),
-      accounting: makePerm({ view: true, export: true }),
     }),
   },
   ACCOUNTING_TAX: {
@@ -271,13 +401,24 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Accounting & Tax',
     canonicalRole: 'admin',
     defaultBranchId: 'ALL',
+    defaultLandingTab: 'accounting',
+    hideFinancialCost: false,
     defaultViewCost: true,
-    description: 'Chart of Accounts, General Ledger, Coretax e-Faktur CSV, P&L/Balance Sheet, Inventory Valuation.',
+    description: 'Chart of Accounts, General Ledger, Coretax e-Faktur CSV, P&L/Balance Sheet & Analytics; no Payment Release, Period Lock or Settings.',
     permissions: buildModuleMap({
-      accounting: makePerm({ view: true, create: true, edit: true, export: true }),
-      ar: makePerm({ view: true, export: true }),
-      ap: makePerm({ view: true, export: true }),
-      inventory: makePerm({ view: true, export: true }),
+      accounting: makeAccountingPerm({
+        view: true,
+        create: true,
+        edit: true,
+        approve: false,
+        export: true,
+        canAccessAR: true,
+        canAccessAP: true,
+        canAccessGLTax: true,
+        canApprovePayments: false,
+        canLockPeriod: false,
+      }),
+      analytics: makePerm({ view: true, export: true }),
     }),
   },
   FINANCE_MANAGER: {
@@ -285,15 +426,26 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Finance Manager',
     canonicalRole: 'admin',
     defaultBranchId: 'ALL',
+    defaultLandingTab: 'accounting',
+    hideFinancialCost: false,
     defaultViewCost: true,
-    description: 'Approve AP Payment Release, Bilyet Giro Keluar, QRIS/EDC MDR Batch Settlement, Safe Drop & Credit Limit Approval.',
+    description: 'Executive Dashboard, Full Finance & AP Payment Release, Settlement Approval, Approvals & Fraud Radar (view); no Period Lock or Settings.',
     permissions: buildModuleMap({
-      ap: ALL_PERM(),
-      ar: ALL_PERM(),
-      accounting: ALL_PERM(),
-      crm: makePerm({ view: true, edit: true, approve: true, export: true }),
-      procurement: makePerm({ view: true, approve: true, export: true }),
+      dashboard: makePerm({ view: true, export: true }),
+      accounting: makeAccountingPerm({
+        view: true,
+        create: true,
+        edit: true,
+        approve: true,
+        export: true,
+        canAccessAR: true,
+        canAccessAP: true,
+        canAccessGLTax: true,
+        canApprovePayments: true,
+        canLockPeriod: false,
+      }),
       approvalMatrix: makePerm({ view: true, approve: true, export: true }),
+      analytics: makePerm({ view: true, export: true }),
       fraudRadar: makePerm({ view: true, export: true }),
     }),
   },
@@ -302,18 +454,16 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
     divisionLabel: 'Head Accounting / Controller',
     canonicalRole: 'coo',
     defaultBranchId: 'ALL',
+    defaultLandingTab: 'accounting',
+    hideFinancialCost: false,
     defaultViewCost: true,
-    description: 'Full Accounting + Accounting Period Lock, GL Reversal Approval, Fraud Radar Resolution.',
+    description: 'Executive Dashboard, Full Accounting + Period Lock, GL Reversal Approval, Approvals & Fraud Radar Resolution; no Commercial/Settings.',
     permissions: buildModuleMap({
-      accounting: ALL_PERM(),
-      ar: ALL_PERM(),
-      ap: ALL_PERM(),
-      fraudRadar: ALL_PERM(),
+      dashboard: makePerm({ view: true, export: true }),
+      accounting: ALL_ACCOUNTING_PERM(),
       approvalMatrix: ALL_PERM(),
-      inventory: makePerm({ view: true, export: true }),
-      procurement: makePerm({ view: true, export: true }),
-      crm: makePerm({ view: true, export: true }),
-      settings: makePerm({ view: true, edit: true, approve: true, export: true }),
+      analytics: makePerm({ view: true, export: true }),
+      fraudRadar: ALL_PERM(),
     }),
   },
 };
@@ -323,6 +473,65 @@ export const DIVISION_ROLE_CODES: DivisionRoleCode[] = Object.keys(DIVISION_ROLE
 export function getDefaultModulePermissions(roleCode: DivisionRoleCode): ModulePermissionsMap {
   const preset = DIVISION_ROLE_PRESETS[roleCode] || DIVISION_ROLE_PRESETS.POS_CASHIER;
   return JSON.parse(JSON.stringify(preset.permissions));
+}
+
+export function getDefaultLandingTabKey(roleCode?: DivisionRoleCode | string | null): string {
+  if (!roleCode) return 'dashboard';
+  const preset = DIVISION_ROLE_PRESETS[roleCode as DivisionRoleCode];
+  return preset ? preset.defaultLandingTab : 'dashboard';
+}
+
+export function mapLandingKeyToDashboardTab(landingKey?: string | null): AdminDashboardTab {
+  switch (landingKey) {
+    case 'dashboard':
+    case 'overview':
+      return 'overview';
+    case 'pos':
+      return 'pos';
+    case 'crm':
+      return 'crm';
+    case 'quotations':
+      return 'quotations';
+    case 'outlets':
+    case 'operations':
+      return 'operations';
+    case 'inventory':
+      return 'inventory';
+    case 'fefoBatches':
+    case 'fefo':
+      return 'fefo';
+    case 'wasteShrinkage':
+    case 'waste':
+      return 'waste';
+    case 'fulfillment':
+    case 'picker':
+      return 'picker';
+    case 'warehouseTransfers':
+    case 'transfers':
+      return 'transfers';
+    case 'logistics':
+      return 'logistics';
+    case 'procurement':
+      return 'procurement';
+    case 'qualityControl':
+    case 'qc':
+      return 'qc';
+    case 'approvalMatrix':
+    case 'approvals':
+      return 'approvals';
+    case 'analytics':
+    case 'reports':
+      return 'reports';
+    case 'accounting':
+      return 'accounting';
+    case 'fraudRadar':
+    case 'audit':
+      return 'audit';
+    case 'settings':
+      return 'settings';
+    default:
+      return 'overview';
+  }
 }
 
 export function divisionRoleToCanonicalRole(roleCode?: DivisionRoleCode | string | null): CanonicalEnterpriseRole {
@@ -428,6 +637,33 @@ const ROLE_ALLOWED_TABS: Record<CanonicalEnterpriseRole, AdminDashboardTab[]> = 
   ],
 };
 
+/**
+ * Strict Default-Deny helper (=== true for all non-SUPER_ADMIN users).
+ * Never falls back to `!== false`.
+ */
+export function hasModuleAccess(
+  session: StaffShiftSession | null | undefined,
+  moduleKey: ModulePermissionKey,
+  action: ModulePermissionAction = 'view'
+): boolean {
+  if (!session) return false;
+  if (session.roleCode === 'SUPER_ADMIN') return true;
+  if (session.modulePermissions) {
+    return session.modulePermissions[moduleKey]?.[action] === true;
+  }
+  // Legacy session without modulePermissions map
+  if (normalizeEnterpriseRole(session.userRole) === 'super_admin') return true;
+  if (moduleKey === 'storefront') {
+    const canonical = normalizeEnterpriseRole(session.userRole);
+    return canonical === 'store_manager' || canonical === 'coo' || canonical === 'super_admin';
+  }
+  const tab = mapLandingKeyToDashboardTab(moduleKey);
+  return isRoleTabAllowed(session.userRole, tab);
+}
+
+/**
+ * Strict 1-to-1 tab visibility check using exact `=== true` default-deny evaluation.
+ */
 export function isModulePermissionTabAllowed(
   mp: ModulePermissionsMap,
   tab: AdminDashboardTab,
@@ -436,56 +672,91 @@ export function isModulePermissionTabAllowed(
   if (roleCode === 'SUPER_ADMIN') return true;
   switch (tab) {
     case 'overview':
-      return Boolean(
-        mp.accounting?.view ||
-          mp.ar?.view ||
-          mp.ap?.view ||
-          mp.pos?.approve ||
-          mp.inventory?.approve ||
-          mp.procurement?.approve
-      );
+      return mp.dashboard?.view === true;
     case 'pos':
-      return Boolean(mp.pos?.view);
+      return mp.pos?.view === true;
     case 'crm':
-      return Boolean(mp.crm?.view || mp.ar?.view);
-    case 'operations':
-      return Boolean(mp.settings?.view || mp.pos?.approve);
-    case 'inventory':
-      return Boolean(mp.inventory?.view);
-    case 'fefo':
-      return Boolean(mp.inventory?.view || mp.qualityControl?.view);
-    case 'waste':
-      return Boolean(mp.inventory?.edit || mp.inventory?.approve);
-    case 'picker':
-      return Boolean(mp.logistics?.view || mp.inventory?.create);
-    case 'procurement':
-      return Boolean(mp.procurement?.view || mp.ap?.view);
+      return mp.crm?.view === true;
     case 'quotations':
-      return Boolean(mp.crm?.view || mp.ar?.view);
-    case 'qc':
-      return Boolean(mp.qualityControl?.view);
-    case 'logistics':
-      return Boolean(mp.logistics?.view);
+      return mp.quotations?.view === true;
+    case 'operations':
+      return mp.outlets?.view === true;
+    case 'inventory':
+      return mp.inventory?.view === true;
+    case 'fefo':
+      return mp.fefoBatches?.view === true;
+    case 'waste':
+      return mp.wasteShrinkage?.view === true;
+    case 'picker':
+      return mp.fulfillment?.view === true;
     case 'transfers':
-      return Boolean(mp.warehouseTransfers?.view);
+      return mp.warehouseTransfers?.view === true;
+    case 'logistics':
+      return mp.logistics?.view === true;
+    case 'procurement':
+      return mp.procurement?.view === true;
+    case 'qc':
+      return mp.qualityControl?.view === true;
     case 'approvals':
-      return Boolean(mp.approvalMatrix?.view);
+      return mp.approvalMatrix?.view === true;
     case 'reports':
-      return Boolean(mp.accounting?.view || mp.ar?.view || mp.ap?.view || mp.pos?.approve || mp.inventory?.approve);
+      return mp.analytics?.view === true;
     case 'accounting':
-      return Boolean(mp.accounting?.view || mp.ar?.view || mp.ap?.view);
-    case 'settings':
-      return Boolean(mp.settings?.view);
-    case 'rbac':
-      return Boolean(mp.settings?.approve);
+      return mp.accounting?.view === true;
     case 'audit':
-      return Boolean(mp.fraudRadar?.view || mp.settings?.view);
+      return mp.fraudRadar?.view === true;
+    case 'settings':
+      return mp.settings?.view === true;
+    case 'rbac':
     case 'openapi':
     case 'erd':
-      return Boolean(mp.settings?.approve);
+      return mp.settings?.approve === true;
     default:
       return false;
   }
+}
+
+export function isAccountingSubTabAllowed(
+  session: StaffShiftSession | null | undefined,
+  subTab: AccountingSubTab
+): boolean {
+  if (!session) return false;
+  if (session.roleCode === 'SUPER_ADMIN') return true;
+  const acct = session.modulePermissions?.accounting;
+  if (!acct) return true; // legacy session fallback
+  if (acct.view !== true) return false;
+
+  const canAR = acct.canAccessAR === true;
+  const canAP = acct.canAccessAP === true;
+  const canGL = acct.canAccessGLTax === true;
+
+  switch (subTab) {
+    case 'b2b_ar':
+      return canAR;
+    case 'vendor_bills':
+      return canAP;
+    case 'pnl':
+    case 'balance_sheet':
+    case 'cash_flow':
+    case 'gl':
+    case 'coa':
+    case 'analytic_budgets':
+    case 'margin_analysis':
+    case 'consignment':
+      return canGL;
+    default:
+      return canGL || canAR || canAP;
+  }
+}
+
+export function getDefaultAccountingSubTabForSession(session?: StaffShiftSession | null): AccountingSubTab {
+  if (!session || session.roleCode === 'SUPER_ADMIN') return 'pnl';
+  const acct = session.modulePermissions?.accounting;
+  if (!acct) return 'pnl';
+  if (acct.canAccessGLTax === true) return 'pnl';
+  if (acct.canAccessAR === true) return 'b2b_ar';
+  if (acct.canAccessAP === true) return 'vendor_bills';
+  return 'pnl';
 }
 
 export function isRoleTabAllowed(role: UserRole | string | null | undefined, tab: AdminDashboardTab): boolean {
@@ -514,47 +785,32 @@ export function getDefaultTabForRole(role?: UserRole | string | null): AdminDash
 
 export function getDefaultTabForSession(session?: StaffShiftSession | null): AdminDashboardTab {
   if (!session) return 'overview';
+  if (session.roleCode === 'SUPER_ADMIN') return 'overview';
+
   if (session.modulePermissions) {
-    if (session.roleCode === 'SUPER_ADMIN') return 'overview';
-    if (session.roleCode === 'POS_CASHIER' && session.modulePermissions.pos?.view) return 'pos';
-    if (session.roleCode === 'QC_INSPECTOR' && session.modulePermissions.qualityControl?.view) return 'qc';
-    if (
-      (session.roleCode === 'WAREHOUSE_STAFF' ||
-        session.roleCode === 'WAREHOUSE_ADMIN' ||
-        session.roleCode === 'WAREHOUSE_HEAD') &&
-      session.modulePermissions.inventory?.view
-    ) {
-      return 'inventory';
+    const preferredKey = session.defaultLandingTab || getDefaultLandingTabKey(session.roleCode);
+    const preferredTab = mapLandingKeyToDashboardTab(preferredKey);
+    if (isModulePermissionTabAllowed(session.modulePermissions, preferredTab, session.roleCode)) {
+      return preferredTab;
     }
-    if (
-      (session.roleCode === 'PURCHASING_STAFF' || session.roleCode === 'PURCHASING_HEAD') &&
-      session.modulePermissions.procurement?.view
-    ) {
-      return 'procurement';
-    }
-    if (
-      (session.roleCode === 'AR_STAFF' ||
-        session.roleCode === 'AP_STAFF' ||
-        session.roleCode === 'ACCOUNTING_TAX' ||
-        session.roleCode === 'FINANCE_MANAGER' ||
-        session.roleCode === 'HEAD_ACCOUNTING') &&
-      (session.modulePermissions.accounting?.view ||
-        session.modulePermissions.ar?.view ||
-        session.modulePermissions.ap?.view)
-    ) {
-      return 'accounting';
-    }
+
     const ordered: AdminDashboardTab[] = [
       'overview',
       'pos',
       'inventory',
+      'fefo',
+      'waste',
+      'picker',
       'transfers',
+      'logistics',
       'procurement',
       'qc',
-      'logistics',
       'crm',
+      'quotations',
+      'operations',
       'accounting',
       'approvals',
+      'reports',
       'audit',
       'settings',
     ];
@@ -572,22 +828,16 @@ export function hasModulePermission(
   moduleKey: ModulePermissionKey,
   action: ModulePermissionAction
 ): boolean {
-  if (!session) return true;
-  if (session.roleCode === 'SUPER_ADMIN' || normalizeEnterpriseRole(session.userRole) === 'super_admin') {
-    return true;
-  }
-  if (session.modulePermissions) {
-    return Boolean(session.modulePermissions[moduleKey]?.[action]);
-  }
-  return true;
+  return hasModuleAccess(session, moduleKey, action);
 }
 
 export function canSessionViewValuation(session?: StaffShiftSession | null): boolean {
   if (!session) return true;
-  if (session.viewCost === false) return false;
+  if (session.roleCode === 'SUPER_ADMIN') return true;
+  if (session.hideFinancialCost === true || session.viewCost === false) return false;
   if (session.roleCode) {
     const preset = DIVISION_ROLE_PRESETS[session.roleCode];
-    if (preset && preset.defaultViewCost === false && session.viewCost !== true) return false;
+    if (preset && preset.hideFinancialCost === true && session.viewCost !== true) return false;
     return true;
   }
   const canonical = normalizeEnterpriseRole(session.userRole);

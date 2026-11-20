@@ -4603,18 +4603,24 @@ syncAssignmentsOntoProfiles();
 // Persisted in .grocematrix-state.json (systemUsers)
 // =============================================================
 const MODULE_DISPLAY_LABELS: Record<ModulePermissionKey, string> = {
-  pos: 'POS Cashier',
-  inventory: 'Inventory / Stock Opname',
+  dashboard: 'Executive Dashboard',
+  pos: 'POS Cashier Station',
+  storefront: 'Storefront View',
+  crm: 'CRM & Loyalty 360',
+  quotations: 'Quotations & Pro Forma B2B',
+  outlets: 'Store & Outlets',
+  inventory: 'Multi-Warehouse & Stock',
+  fefoBatches: 'FEFO & Expiry Batches',
+  wasteShrinkage: 'Waste & Shrinkage',
+  fulfillment: 'Fulfillment & Catch Weight',
   warehouseTransfers: 'Warehouse Transfers',
-  procurement: 'Purchasing & Procurement',
-  qualityControl: 'Quality Control & Halal',
-  crm: 'CRM & Claims',
   logistics: 'Logistics & Surat Jalan',
-  accounting: 'Accounting & Tax',
-  ar: 'Account Receivable (AR)',
-  ap: 'Account Payable (AP)',
+  procurement: 'Procurement PR/PO/GR',
+  qualityControl: 'Quality Control QC',
   approvalMatrix: 'Approval Matrix',
-  fraudRadar: 'Fraud Radar & Audit',
+  analytics: 'Grocery Analytics',
+  accounting: 'Accounting & Finance Suite',
+  fraudRadar: 'Audit Trail & Fraud Radar',
   settings: 'Enterprise Settings',
 };
 
@@ -4633,21 +4639,72 @@ function normalizeModulePermissionsInput(
   raw: any,
   fallbackRoleCode: DivisionRoleCode
 ): ModulePermissionsMap {
-  const base = getDefaultModulePermissions(fallbackRoleCode);
-  if (!raw || typeof raw !== 'object') return base;
+  const presetMap = getDefaultModulePermissions(fallbackRoleCode);
+  if (!raw || typeof raw !== 'object') return presetMap;
+  // Detect legacy 13-key snapshot lacking v2 19-key strict schema -> cleanly upgrade to strict default-deny preset
+  const isV2Schema = raw.dashboard !== undefined || raw.storefront !== undefined || raw.quotations !== undefined;
+  if (!isV2Schema) {
+    return presetMap;
+  }
+
+  const result = {} as ModulePermissionsMap;
   for (const modKey of MODULE_PERMISSION_KEYS) {
     const incoming = raw[modKey];
     if (incoming && typeof incoming === 'object') {
-      base[modKey] = {
-        view: Boolean(incoming.view),
-        create: Boolean(incoming.create),
-        edit: Boolean(incoming.edit),
-        approve: Boolean(incoming.approve),
-        export: Boolean(incoming.export),
-      };
+      if (modKey === 'accounting') {
+        const presetAcct = presetMap.accounting;
+        result[modKey] = {
+          view: incoming.view === true,
+          create: incoming.create === true,
+          edit: incoming.edit === true,
+          approve: incoming.approve === true,
+          export: incoming.export === true,
+          canAccessAR:
+            typeof incoming.canAccessAR === 'boolean' ? incoming.canAccessAR : presetAcct.canAccessAR === true,
+          canAccessAP:
+            typeof incoming.canAccessAP === 'boolean' ? incoming.canAccessAP : presetAcct.canAccessAP === true,
+          canAccessGLTax:
+            typeof incoming.canAccessGLTax === 'boolean'
+              ? incoming.canAccessGLTax
+              : presetAcct.canAccessGLTax === true,
+          canApprovePayments:
+            typeof incoming.canApprovePayments === 'boolean'
+              ? incoming.canApprovePayments
+              : presetAcct.canApprovePayments === true,
+          canLockPeriod:
+            typeof incoming.canLockPeriod === 'boolean'
+              ? incoming.canLockPeriod
+              : presetAcct.canLockPeriod === true,
+        };
+      } else {
+        result[modKey] = {
+          view: incoming.view === true,
+          create: incoming.create === true,
+          edit: incoming.edit === true,
+          approve: incoming.approve === true,
+          export: incoming.export === true,
+        };
+      }
+    } else {
+      // Strict default-deny for any omitted module key
+      result[modKey] =
+        modKey === 'accounting'
+          ? {
+              view: false,
+              create: false,
+              edit: false,
+              approve: false,
+              export: false,
+              canAccessAR: false,
+              canAccessAP: false,
+              canAccessGLTax: false,
+              canApprovePayments: false,
+              canLockPeriod: false,
+            }
+          : { view: false, create: false, edit: false, approve: false, export: false };
     }
   }
-  return base;
+  return result;
 }
 
 function createInitialSystemUsers(): SystemUserAccount[] {
@@ -4794,6 +4851,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
 
   return seeds.map((s) => {
     const preset = DIVISION_ROLE_PRESETS[s.roleCode];
+    const resolvedViewCost = s.viewCost ?? preset.defaultViewCost;
     return {
       id: s.id,
       fullName: s.fullName,
@@ -4805,7 +4863,9 @@ function createInitialSystemUsers(): SystemUserAccount[] {
       branchName: resolveBranchNameById(s.branchId),
       isActive: true,
       supervisorPin: s.supervisorPin,
-      viewCost: s.viewCost ?? preset.defaultViewCost,
+      viewCost: resolvedViewCost,
+      hideFinancialCost: preset.hideFinancialCost === true || resolvedViewCost === false,
+      defaultLandingTab: preset.defaultLandingTab,
       modulePermissions: getDefaultModulePermissions(s.roleCode),
       updatedAt: nowIso,
       updatedBy: 'System Seed',
@@ -4818,10 +4878,18 @@ const activeAuthTokens = new Map<string, string>(); // bearer token -> systemUse
 
 function sanitizeSystemUserForClient(u: SystemUserAccount): SystemUserAccount {
   const { password, ...rest } = u;
+  const preset = DIVISION_ROLE_PRESETS[u.roleCode] || DIVISION_ROLE_PRESETS.POS_CASHIER;
+  const hideFinancialCost =
+    typeof u.hideFinancialCost === 'boolean'
+      ? u.hideFinancialCost
+      : u.viewCost === false || preset.hideFinancialCost === true;
   return {
     ...rest,
     branchName: resolveBranchNameById(u.branchId),
     maskedPassword: password ? '•'.repeat(Math.min(Math.max(password.length, 6), 12)) : '••••••••',
+    viewCost: !hideFinancialCost,
+    hideFinancialCost,
+    defaultLandingTab: u.defaultLandingTab || preset.defaultLandingTab,
     modulePermissions: normalizeModulePermissionsInput(u.modulePermissions, u.roleCode),
   };
 }
@@ -4830,11 +4898,18 @@ function buildSessionFromSystemUser(
   user: SystemUserAccount,
   shiftName?: 'Morning Shift' | 'Afternoon Shift' | 'Night Shift'
 ): StaffShiftSession {
+  const preset = DIVISION_ROLE_PRESETS[user.roleCode] || DIVISION_ROLE_PRESETS.POS_CASHIER;
   const canonicalRole = divisionRoleToCanonicalRole(user.roleCode) as CanonicalServerRole;
   const mp = normalizeModulePermissionsInput(user.modulePermissions, user.roleCode);
   const isSuper = user.roleCode === 'SUPER_ADMIN';
   const branchScoped = user.branchId !== 'ALL' && user.branchId !== 'CONSOLIDATED';
-  const canViewCost = user.viewCost !== undefined ? user.viewCost : DIVISION_ROLE_PRESETS[user.roleCode]?.defaultViewCost ?? true;
+  const hideFinancialCost = isSuper
+    ? false
+    : typeof user.hideFinancialCost === 'boolean'
+    ? user.hideFinancialCost
+    : user.viewCost === false || preset.hideFinancialCost === true;
+  const canViewCost = !hideFinancialCost;
+  const defaultLandingTab = user.defaultLandingTab || preset.defaultLandingTab;
 
   return {
     userId: user.id,
@@ -4845,6 +4920,8 @@ function buildSessionFromSystemUser(
     divisionLabel: user.divisionLabel,
     supervisorPin: user.supervisorPin,
     viewCost: canViewCost,
+    hideFinancialCost,
+    defaultLandingTab,
     modulePermissions: mp,
     storeId: user.branchId || 'ALL',
     assignedBranchId: user.branchId || 'ALL',
@@ -4856,27 +4933,29 @@ function buildSessionFromSystemUser(
     loginTimestamp: new Date().toISOString(),
     isActive: user.isActive,
     permissions: {
-      canViewPos: isSuper || mp.pos.view,
-      canViewInventory: isSuper || mp.inventory.view,
-      canAdjustInventory: isSuper || mp.inventory.edit || mp.inventory.approve,
-      canPickZone: () => isSuper || mp.inventory.view || mp.logistics.view,
-      canReceiveGoods: isSuper || mp.inventory.create || mp.qualityControl.create,
-      canApprovePurchaseOrder: isSuper || mp.procurement.approve,
-      canViewFinancePnL: isSuper || mp.accounting.view || mp.ar.view || mp.ap.view,
-      canManageOutlets: isSuper || mp.settings.edit,
-      canOverrideStoreClosure: isSuper || mp.settings.approve || mp.pos.approve,
+      canViewPos: isSuper || mp.pos.view === true,
+      canViewInventory: isSuper || mp.inventory.view === true,
+      canAdjustInventory: isSuper || mp.inventory.edit === true || mp.inventory.approve === true,
+      canPickZone: () => isSuper || mp.fulfillment.view === true || mp.inventory.view === true || mp.logistics.view === true,
+      canReceiveGoods: isSuper || mp.inventory.create === true || mp.qualityControl.create === true,
+      canApprovePurchaseOrder: isSuper || mp.procurement.approve === true,
+      canViewFinancePnL: isSuper || (mp.accounting.view === true && mp.accounting.canAccessGLTax === true),
+      canManageOutlets: isSuper || mp.outlets.edit === true || mp.settings.edit === true,
+      canOverrideStoreClosure: isSuper || mp.outlets.approve === true || mp.settings.approve === true || mp.pos.approve === true,
       canViewValuation: isSuper || canViewCost,
-      canCreatePrPo: isSuper || mp.procurement.create,
-      canPayVendorBills: isSuper || mp.ap.approve,
-      canManageGiro: isSuper || mp.ar.edit || mp.ap.approve,
-      canModifyCoa: isSuper || mp.accounting.edit,
+      canCreatePrPo: isSuper || mp.procurement.create === true,
+      canPayVendorBills: isSuper || (mp.accounting.view === true && mp.accounting.canApprovePayments === true),
+      canManageGiro:
+        isSuper ||
+        (mp.accounting.view === true && (mp.accounting.canAccessAR === true || mp.accounting.canApprovePayments === true)),
+      canModifyCoa: isSuper || (mp.accounting.view === true && mp.accounting.canAccessGLTax === true && mp.accounting.edit === true),
       canFactoryReset: isSuper,
-      canManagePromos: isSuper || mp.crm.edit || mp.pos.approve,
-      canOverridePosPrice: isSuper || mp.pos.approve,
-      canApproveStocktake: isSuper || mp.inventory.approve,
-      canViewMultiBranchRevenue: isSuper || !branchScoped,
-      canViewBranchMonitor: isSuper || mp.settings.view || mp.accounting.view,
-      canConfirmArrival: isSuper || mp.warehouseTransfers.edit || mp.warehouseTransfers.approve,
+      canManagePromos: isSuper || mp.crm.edit === true || mp.pos.approve === true,
+      canOverridePosPrice: isSuper || mp.pos.approve === true,
+      canApproveStocktake: isSuper || mp.inventory.approve === true,
+      canViewMultiBranchRevenue: isSuper || (!branchScoped && (mp.dashboard.view === true || mp.analytics.view === true)),
+      canViewBranchMonitor: isSuper || mp.settings.view === true || mp.dashboard.view === true,
+      canConfirmArrival: isSuper || mp.warehouseTransfers.edit === true || mp.warehouseTransfers.approve === true,
       canManageOperatorAssignments: isSuper,
     },
   };
@@ -4944,11 +5023,13 @@ function evaluateSystemUserModulePermission(
 
   const mp = normalizeModulePermissionsInput(user.modulePermissions, user.roleCode);
   const isRead = method === 'GET';
-  const deny = (moduleKey: ModulePermissionKey, action: ModulePermissionAction) => ({
+  const deny = (moduleKey: ModulePermissionKey, action: ModulePermissionAction, detail?: string) => ({
     allowed: false,
     moduleKey,
     action,
-    reason: `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [${action.toUpperCase()}] pada modul ${MODULE_DISPLAY_LABELS[moduleKey]}.`,
+    reason:
+      detail ||
+      `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [${action.toUpperCase()}] pada modul ${MODULE_DISPLAY_LABELS[moduleKey]}.`,
   });
 
   // 1. Strictly Super Admin Only endpoints (System lifecycle & User/Permission mutations)
@@ -4967,13 +5048,15 @@ function evaluateSystemUserModulePermission(
     return deny('settings', 'approve');
   }
 
-  // 2. Settings Users Read / Branch Monitor Read
+  // 2. Settings Users Read (strictly settings.view === true) & Branch Monitor Read
+  if (urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) {
+    return mp.settings.view === true ? { allowed: true } : deny('settings', 'view');
+  }
   if (
-    urlPath === '/admin/settings/users' ||
     urlPath === '/admin/settings/branch-monitor' ||
     (urlPath === '/admin/settings/operator-assignments' && isRead)
   ) {
-    if (mp.settings.view || mp.accounting.view) return { allowed: true };
+    if (mp.settings.view === true || mp.dashboard.view === true) return { allowed: true };
     return deny('settings', 'view');
   }
 
@@ -4981,17 +5064,25 @@ function evaluateSystemUserModulePermission(
   if (urlPath === '/admin/settings/config') {
     if (isRead) return { allowed: true };
     if (body && body.accountingPeriodLockDate !== undefined) {
-      if (mp.accounting.approve || mp.settings.approve) return { allowed: true };
-      return deny('accounting', 'approve');
+      if (
+        (mp.accounting.view === true && mp.accounting.canLockPeriod === true) ||
+        mp.settings.approve === true
+      ) {
+        return { allowed: true };
+      }
+      return deny(
+        'accounting',
+        'approve',
+        `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [PERIOD LOCK] pada modul Accounting & Finance.`
+      );
     }
-    if (mp.settings.edit) return { allowed: true };
-    return deny('settings', 'edit');
+    return mp.settings.edit === true ? { allowed: true } : deny('settings', 'edit');
   }
 
   // 4. Enterprise Settings / POS Config / Gateway / Audit Trail
   if (urlPath === '/admin/settings/audit-trail') {
-    if (mp.fraudRadar.view || mp.settings.view) return { allowed: true };
-    return deny('settings', 'view');
+    if (mp.fraudRadar.view === true || mp.settings.view === true) return { allowed: true };
+    return deny('fraudRadar', 'view');
   }
   if (
     urlPath === '/admin/settings/enterprise' ||
@@ -5001,8 +5092,7 @@ function evaluateSystemUserModulePermission(
     urlPath === '/admin/communications/test-whatsapp'
   ) {
     if (isRead) return { allowed: true };
-    if (mp.settings.edit) return { allowed: true };
-    return deny('settings', 'edit');
+    return mp.settings.edit === true ? { allowed: true } : deny('settings', 'edit');
   }
   if (urlPath === '/admin/communications/send-document') {
     return { allowed: true };
@@ -5011,119 +5101,203 @@ function evaluateSystemUserModulePermission(
   // 5. Fraud Radar
   if (urlPath === '/admin/audit/fraud-radar' || urlPath.startsWith('/admin/audit/fraud-radar/')) {
     if (isRead) {
-      return mp.fraudRadar.view ? { allowed: true } : deny('fraudRadar', 'view');
+      return mp.fraudRadar.view === true ? { allowed: true } : deny('fraudRadar', 'view');
     }
-    return mp.fraudRadar.approve ? { allowed: true } : deny('fraudRadar', 'approve');
+    return mp.fraudRadar.approve === true ? { allowed: true } : deny('fraudRadar', 'approve');
   }
 
   // 6. Approval Matrix
   if (urlPath.startsWith('/admin/approvals/')) {
     if (isRead) {
-      return mp.approvalMatrix.view ? { allowed: true } : deny('approvalMatrix', 'view');
+      return mp.approvalMatrix.view === true ? { allowed: true } : deny('approvalMatrix', 'view');
     }
-    return mp.approvalMatrix.approve ? { allowed: true } : deny('approvalMatrix', 'approve');
+    return mp.approvalMatrix.approve === true ? { allowed: true } : deny('approvalMatrix', 'approve');
   }
 
-  // 7. Account Payable (Vendor Bills, Payment Release, 3-Way Match Approval)
+  // 7. Executive Dashboard & Grocery Analytics
+  if (urlPath === '/admin/analytics/omzet' || urlPath === '/admin/omzet-analytics') {
+    if (mp.dashboard.view === true || mp.analytics.view === true || mp.accounting.view === true) {
+      return { allowed: true };
+    }
+    return deny('dashboard', 'view');
+  }
+  if (urlPath.startsWith('/admin/reports/')) {
+    return mp.analytics.view === true ? { allowed: true } : deny('analytics', 'view');
+  }
+
+  // 8. Account Payable (Vendor Bills, Payment Release, 3-Way Match Approval)
   if (urlPath.startsWith('/admin/procurement/vendor-bills')) {
+    const canAP = mp.accounting.view === true && mp.accounting.canAccessAP === true;
     if (isRead) {
-      return mp.ap.view || mp.procurement.view ? { allowed: true } : deny('ap', 'view');
+      return canAP || mp.procurement.approve === true ? { allowed: true } : deny('accounting', 'view');
     }
     if (urlPath === '/admin/procurement/vendor-bills' && method === 'POST') {
-      return mp.ap.create ? { allowed: true } : deny('ap', 'create');
+      return canAP && mp.accounting.create === true ? { allowed: true } : deny('accounting', 'create');
     }
-    // Approve / Pay (Finance Payment Release) / Void requires AP APPROVE
-    return mp.ap.approve ? { allowed: true } : deny('ap', 'approve');
+    if (urlPath.endsWith('/pay') || urlPath.endsWith('/void')) {
+      return mp.accounting.view === true && mp.accounting.canApprovePayments === true
+        ? { allowed: true }
+        : deny(
+            'accounting',
+            'approve',
+            `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [APPROVE PAYMENT RELEASE] pada Account Payable.`
+          );
+    }
+    // 3-Way Match Price Tolerance Approval: Finance Manager / Head Accounting OR Head Purchasing
+    return (mp.accounting.view === true && mp.accounting.canApprovePayments === true) || mp.procurement.approve === true
+      ? { allowed: true }
+      : deny('accounting', 'approve');
   }
 
-  // 8. Account Receivable (Bilyet Giro, B2B Checkout, Settlements, Kasbon Kanvas)
+  // 9. Account Receivable (Bilyet Giro, Settlements, Kasbon Kanvas)
   if (
     urlPath.startsWith('/b2b/giro') ||
     urlPath.startsWith('/admin/accounting/settlement-reconcile') ||
     urlPath.startsWith('/admin/kanvas') ||
     urlPath.startsWith('/admin/warung-kasbon')
   ) {
+    const canAR = mp.accounting.view === true && mp.accounting.canAccessAR === true;
     if (isRead) {
-      return mp.ar.view || mp.accounting.view ? { allowed: true } : deny('ar', 'view');
+      return canAR ? { allowed: true } : deny('accounting', 'view');
     }
     if (urlPath.endsWith('/clear') || urlPath.endsWith('/bounce') || urlPath.includes('settlement-reconcile')) {
-      return mp.ar.approve || mp.ap.approve ? { allowed: true } : deny('ar', 'approve');
+      return mp.accounting.view === true && mp.accounting.canApprovePayments === true
+        ? { allowed: true }
+        : deny(
+            'accounting',
+            'approve',
+            `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [APPROVE SETTLEMENT / GIRO] pada Finance.`
+          );
     }
-    return mp.ar.create || mp.ar.edit ? { allowed: true } : deny('ar', 'create');
+    return canAR && (mp.accounting.create === true || mp.accounting.edit === true)
+      ? { allowed: true }
+      : deny('accounting', 'create');
   }
 
-  // 9. Accounting, General Ledger, COA, Coretax Export, PPh, Consignment
+  // 10. Accounting, General Ledger, COA, Coretax Export, PPh, Financial Statements
   if (
     urlPath.startsWith('/admin/accounting/') ||
     urlPath.startsWith('/admin/settings/coa-account') ||
     urlPath === '/admin/settings/coa-mapping' ||
-    urlPath === '/admin/compliance/coretax-export' ||
-    urlPath === '/admin/analytics/omzet' ||
-    urlPath === '/admin/omzet-analytics'
+    urlPath === '/admin/compliance/coretax-export'
   ) {
+    const canGL = mp.accounting.view === true && mp.accounting.canAccessGLTax === true;
     if (urlPath === '/admin/compliance/coretax-export' || urlPath === '/admin/accounting/coretax-export') {
-      return mp.accounting.export ? { allowed: true } : deny('accounting', 'export');
+      return canGL && mp.accounting.export === true ? { allowed: true } : deny('accounting', 'export');
     }
     if (isRead) {
-      if (mp.accounting.view || mp.ar.view || mp.ap.view) return { allowed: true };
-      // Allow Store Manager / POS Approver to view omzet analytics dashboard KPIs
-      if ((urlPath === '/admin/analytics/omzet' || urlPath === '/admin/omzet-analytics') && (mp.pos.approve || mp.inventory.approve)) {
-        return { allowed: true };
+      if (urlPath === '/admin/accounting/executive-summary') {
+        return mp.dashboard.view === true || mp.accounting.view === true
+          ? { allowed: true }
+          : deny('dashboard', 'view');
       }
-      return deny('accounting', 'view');
+      return mp.accounting.view === true ? { allowed: true } : deny('accounting', 'view');
     }
     if (urlPath.endsWith('/reverse')) {
-      return mp.accounting.approve ? { allowed: true } : deny('accounting', 'approve');
+      return canGL && mp.accounting.approve === true ? { allowed: true } : deny('accounting', 'approve');
     }
     if (urlPath.startsWith('/admin/accounting/pph-withholding')) {
-      return mp.ap.create || mp.accounting.create ? { allowed: true } : deny('accounting', 'create');
+      return mp.accounting.view === true &&
+        (mp.accounting.canAccessAP === true || mp.accounting.canAccessGLTax === true) &&
+        mp.accounting.create === true
+        ? { allowed: true }
+        : deny('accounting', 'create');
     }
-    return mp.accounting.edit || mp.accounting.create ? { allowed: true } : deny('accounting', 'edit');
+    return canGL && (mp.accounting.create === true || mp.accounting.edit === true)
+      ? { allowed: true }
+      : deny('accounting', 'edit');
   }
 
-  // 10. Stock Opname Approval & Blind Opname Approval (Critical Inventory Approve Guard)
+  // 11. Quotations & Pro Forma B2B (strictly mp.quotations === true)
+  if (urlPath === '/admin/sales/quotations' || urlPath.startsWith('/admin/sales/quotations/')) {
+    if (isRead) {
+      return mp.quotations.view === true ? { allowed: true } : deny('quotations', 'view');
+    }
+    if (urlPath.endsWith('/approve') || urlPath.endsWith('/convert')) {
+      return mp.quotations.approve === true || mp.quotations.edit === true
+        ? { allowed: true }
+        : deny('quotations', 'approve');
+    }
+    return mp.quotations.create === true || mp.quotations.edit === true
+      ? { allowed: true }
+      : deny('quotations', 'create');
+  }
+
+  // 12. CRM & Loyalty 360 / Promotions / B2B Customers (strictly mp.crm === true)
+  if (
+    urlPath.startsWith('/admin/crm/') ||
+    urlPath === '/admin/crm' ||
+    urlPath.startsWith('/b2b/customers') ||
+    ((urlPath === '/admin/promotions' || urlPath.startsWith('/admin/promotions/')) &&
+      urlPath !== '/admin/promotions/evaluate')
+  ) {
+    if (isRead) {
+      return mp.crm.view === true ? { allowed: true } : deny('crm', 'view');
+    }
+    return mp.crm.create === true || mp.crm.edit === true ? { allowed: true } : deny('crm', 'edit');
+  }
+
+  // 13. Stock Opname Approval & Blind Opname Approval (Critical Inventory Approve Guard)
   if (
     urlPath === '/admin/inventory/stock-opname/reconcile' ||
     urlPath === '/admin/inventory/stocktake/commit' ||
     (urlPath.startsWith('/admin/compliance/blind-opname/') && urlPath.endsWith('/approve'))
   ) {
-    return mp.inventory.approve ? { allowed: true } : deny('inventory', 'approve');
+    return mp.inventory.approve === true ? { allowed: true } : deny('inventory', 'approve');
   }
 
   if (urlPath === '/admin/compliance/blind-opname' || urlPath.startsWith('/admin/compliance/blind-opname/')) {
-    if (isRead) return mp.inventory.view ? { allowed: true } : deny('inventory', 'view');
-    return mp.inventory.create || mp.inventory.edit ? { allowed: true } : deny('inventory', 'create');
+    if (isRead) return mp.inventory.view === true ? { allowed: true } : deny('inventory', 'view');
+    return mp.inventory.create === true || mp.inventory.edit === true ? { allowed: true } : deny('inventory', 'create');
   }
 
-  // 11. Batch Recall & Quarantine Release
+  // 14. Batch Recall & Quality Control / Cold Chain
   if (urlPath.startsWith('/admin/batch-recall/') || urlPath.startsWith('/admin/compliance/recall-execute')) {
-    if (isRead) return mp.inventory.view || mp.qualityControl.view ? { allowed: true } : deny('qualityControl', 'view');
-    return mp.inventory.approve || mp.qualityControl.approve
-      ? { allowed: true }
-      : deny('qualityControl', 'approve');
+    if (isRead) {
+      return mp.qualityControl.view === true || mp.fefoBatches.view === true
+        ? { allowed: true }
+        : deny('qualityControl', 'view');
+    }
+    return mp.qualityControl.approve === true ? { allowed: true } : deny('qualityControl', 'approve');
   }
 
-  // 12. Warehouse Transfers
-  if (urlPath.startsWith('/admin/inventory/transfer') || urlPath === '/admin/settings/confirm-arrival') {
-    if (isRead) return mp.warehouseTransfers.view ? { allowed: true } : deny('warehouseTransfers', 'view');
-    if (urlPath === '/admin/inventory/transfer' && method === 'POST') {
-      return mp.warehouseTransfers.create ? { allowed: true } : deny('warehouseTransfers', 'create');
+  if (urlPath.startsWith('/admin/qc/') || urlPath.startsWith('/admin/cold-chain/')) {
+    if (isRead) {
+      return mp.qualityControl.view === true || mp.inventory.view === true
+        ? { allowed: true }
+        : deny('qualityControl', 'view');
     }
-    return mp.warehouseTransfers.edit || mp.warehouseTransfers.approve
+    return mp.qualityControl.create === true || mp.qualityControl.edit === true
+      ? { allowed: true }
+      : deny('qualityControl', 'create');
+  }
+
+  // 15. Warehouse Transfers
+  if (urlPath.startsWith('/admin/inventory/transfer') || urlPath === '/admin/settings/confirm-arrival') {
+    if (isRead) {
+      return mp.warehouseTransfers.view === true ? { allowed: true } : deny('warehouseTransfers', 'view');
+    }
+    if (urlPath === '/admin/inventory/transfer' && method === 'POST') {
+      return mp.warehouseTransfers.create === true ? { allowed: true } : deny('warehouseTransfers', 'create');
+    }
+    return mp.warehouseTransfers.edit === true || mp.warehouseTransfers.approve === true
       ? { allowed: true }
       : deny('warehouseTransfers', 'edit');
   }
 
-  // 13. Physical Goods Receipt (Dock Receiving) vs Procurement PR/PO/Rafaksi
+  // 16. Physical Goods Receipt (Dock Receiving) vs Procurement PR/PO/Rafaksi
   if (
     urlPath === '/admin/procurement/gr/receive-partial' ||
     urlPath === '/admin/procurement/goods-receipts' ||
     urlPath === '/admin/procurement/cross-dock'
   ) {
-    if (isRead) return mp.procurement.view || mp.inventory.view ? { allowed: true } : deny('procurement', 'view');
-    return mp.inventory.create || mp.procurement.approve
-      ? { allowed: true }
-      : deny('inventory', 'create');
+    if (isRead) {
+      return mp.procurement.view === true || mp.inventory.view === true
+        ? { allowed: true }
+        : deny('procurement', 'view');
+    }
+    // Physical GR is strictly dock/warehouse receiving (inventory.create === true) — blocks PURCHASING_STAFF
+    return mp.inventory.create === true ? { allowed: true } : deny('inventory', 'create');
   }
 
   if (
@@ -5137,7 +5311,9 @@ function evaluateSystemUserModulePermission(
     urlPath.startsWith('/admin/valuation/landed-costs')
   ) {
     if (isRead) {
-      return mp.procurement.view || mp.ap.view || mp.inventory.view ? { allowed: true } : deny('procurement', 'view');
+      return mp.procurement.view === true || (mp.accounting.view === true && mp.accounting.canAccessAP === true)
+        ? { allowed: true }
+        : deny('procurement', 'view');
     }
     if (
       urlPath.endsWith('/approve') ||
@@ -5146,61 +5322,88 @@ function evaluateSystemUserModulePermission(
         urlPath.endsWith('/status') &&
         ['Approved', 'Sent', 'Ordered'].includes(String(body?.status || '')))
     ) {
-      return mp.procurement.approve ? { allowed: true } : deny('procurement', 'approve');
+      return mp.procurement.approve === true ? { allowed: true } : deny('procurement', 'approve');
     }
-    return mp.procurement.create || mp.procurement.edit ? { allowed: true } : deny('procurement', 'create');
+    return mp.procurement.create === true || mp.procurement.edit === true
+      ? { allowed: true }
+      : deny('procurement', 'create');
   }
 
-  // 14. Quality Control & Cold Chain
-  if (urlPath.startsWith('/admin/qc/') || urlPath.startsWith('/admin/cold-chain/')) {
-    if (isRead) return mp.qualityControl.view || mp.inventory.view ? { allowed: true } : deny('qualityControl', 'view');
-    return mp.qualityControl.create || mp.qualityControl.edit ? { allowed: true } : deny('qualityControl', 'create');
+  // 17. Waste & Shrinkage
+  if (urlPath === '/admin/waste' || urlPath.startsWith('/admin/waste/') || urlPath.startsWith('/admin/shrinkage/')) {
+    if (isRead) {
+      return mp.wasteShrinkage.view === true ? { allowed: true } : deny('wasteShrinkage', 'view');
+    }
+    if (urlPath.endsWith('/approve')) {
+      return mp.wasteShrinkage.approve === true ? { allowed: true } : deny('wasteShrinkage', 'approve');
+    }
+    return mp.wasteShrinkage.create === true || mp.wasteShrinkage.edit === true
+      ? { allowed: true }
+      : deny('wasteShrinkage', 'create');
   }
 
-  // 15. Inventory Operations, Waste, Shrinkage, Markdown, Racks
+  // 18. FEFO & Expiry Batches
+  if (urlPath === '/inventory/fefo-allocate' || urlPath.startsWith('/admin/inventory/batches')) {
+    if (isRead) {
+      return mp.fefoBatches.view === true || mp.inventory.view === true
+        ? { allowed: true }
+        : deny('fefoBatches', 'view');
+    }
+    return mp.fefoBatches.edit === true || mp.inventory.edit === true
+      ? { allowed: true }
+      : deny('fefoBatches', 'edit');
+  }
+
+  // 19. Inventory Operations, Markdown, Racks, Climate Thresholds
   if (
     urlPath.startsWith('/admin/inventory/') ||
     urlPath.startsWith('/admin/warehouse/') ||
-    urlPath === '/admin/waste' ||
-    urlPath.startsWith('/admin/waste/') ||
-    urlPath.startsWith('/admin/shrinkage/') ||
     urlPath === '/admin/markdown-rules' ||
     urlPath.startsWith('/admin/markdown-rules/') ||
     urlPath.startsWith('/admin/scalability/climate-thresholds')
   ) {
-    if (isRead) return mp.inventory.view ? { allowed: true } : deny('inventory', 'view');
-    if (urlPath === '/admin/inventory/adjust') {
-      return mp.inventory.edit || mp.inventory.approve ? { allowed: true } : deny('inventory', 'edit');
+    if (isRead) {
+      return mp.inventory.view === true || mp.pos.view === true ? { allowed: true } : deny('inventory', 'view');
     }
-    return mp.inventory.create || mp.inventory.edit ? { allowed: true } : deny('inventory', 'edit');
+    if (urlPath === '/admin/inventory/adjust') {
+      return mp.inventory.edit === true || mp.inventory.approve === true
+        ? { allowed: true }
+        : deny('inventory', 'edit');
+    }
+    return mp.inventory.create === true || mp.inventory.edit === true
+      ? { allowed: true }
+      : deny('inventory', 'edit');
   }
 
-  // 16. Logistics, Picker, Fulfillment, Catch-Weight
+  // 20. Fulfillment, Picker & Catch-Weight
   if (
-    urlPath.startsWith('/admin/logistics/') ||
     urlPath.startsWith('/admin/picker/') ||
     urlPath.startsWith('/admin/fulfillment/') ||
     urlPath.startsWith('/admin/substitutions/') ||
     urlPath.startsWith('/admin/catch-weight/')
   ) {
-    if (isRead) return mp.logistics.view || mp.inventory.view || mp.ar.view ? { allowed: true } : deny('logistics', 'view');
-    if (urlPath === '/admin/logistics/trips' && body?.approve === true) {
-      return mp.logistics.approve ? { allowed: true } : deny('logistics', 'approve');
+    if (isRead) {
+      return mp.fulfillment.view === true ? { allowed: true } : deny('fulfillment', 'view');
     }
-    return mp.logistics.create || mp.logistics.edit || mp.inventory.create ? { allowed: true } : deny('logistics', 'create');
+    return mp.fulfillment.create === true || mp.fulfillment.edit === true
+      ? { allowed: true }
+      : deny('fulfillment', 'create');
   }
 
-  // 17. CRM, Promotions, Quotations
-  if (
-    urlPath.startsWith('/admin/crm/') ||
-    urlPath.startsWith('/admin/sales/quotations') ||
-    ((urlPath === '/admin/promotions' || urlPath.startsWith('/admin/promotions/')) && urlPath !== '/admin/promotions/evaluate')
-  ) {
-    if (isRead) return mp.crm.view || mp.ar.view ? { allowed: true } : deny('crm', 'view');
-    return mp.crm.create || mp.crm.edit ? { allowed: true } : deny('crm', 'edit');
+  // 21. Logistics & Surat Jalan
+  if (urlPath.startsWith('/admin/logistics/')) {
+    if (isRead) {
+      return mp.logistics.view === true ? { allowed: true } : deny('logistics', 'view');
+    }
+    if (urlPath === '/admin/logistics/trips' && body?.approve === true) {
+      return mp.logistics.approve === true ? { allowed: true } : deny('logistics', 'approve');
+    }
+    return mp.logistics.create === true || mp.logistics.edit === true
+      ? { allowed: true }
+      : deny('logistics', 'create');
   }
 
-  // 18. POS Terminal, Returns, Hardware
+  // 22. POS Terminal, Returns, Hardware
   if (
     urlPath.startsWith('/pos/') ||
     urlPath === '/admin/returns' ||
@@ -5208,16 +5411,22 @@ function evaluateSystemUserModulePermission(
     urlPath.startsWith('/admin/hardware/')
   ) {
     if (urlPath === '/pos/crm-members') {
-      return mp.pos.view || mp.crm.view ? { allowed: true } : deny('pos', 'view');
+      return mp.pos.view === true || mp.crm.view === true ? { allowed: true } : deny('pos', 'view');
     }
-    if (isRead) return mp.pos.view ? { allowed: true } : deny('pos', 'view');
-    return mp.pos.create || mp.pos.edit ? { allowed: true } : deny('pos', 'create');
+    if (isRead) return mp.pos.view === true ? { allowed: true } : deny('pos', 'view');
+    return mp.pos.create === true || mp.pos.edit === true ? { allowed: true } : deny('pos', 'create');
   }
 
-  // 19. Store Emergency Status / Outlets Config
-  if (urlPath === '/admin/store-status' || urlPath.startsWith('/admin/store-outlets/') || urlPath.startsWith('/admin/outlets/')) {
+  // 23. Store Emergency Status / Outlets Config
+  if (
+    urlPath === '/admin/store-status' ||
+    urlPath.startsWith('/admin/store-outlets/') ||
+    urlPath.startsWith('/admin/outlets/')
+  ) {
     if (isRead) return { allowed: true };
-    return mp.settings.edit || mp.pos.approve ? { allowed: true } : deny('settings', 'edit');
+    return mp.outlets.edit === true || mp.outlets.approve === true || mp.settings.edit === true
+      ? { allowed: true }
+      : deny('outlets', 'edit');
   }
 
   return { allowed: true };
@@ -7247,6 +7456,10 @@ function applyServerState(snap: any) {
     systemUsers = snap.systemUsers.map((u: any) => {
       const roleCode: DivisionRoleCode = DIVISION_ROLE_CODES.includes(u.roleCode) ? u.roleCode : 'POS_CASHIER';
       const preset = DIVISION_ROLE_PRESETS[roleCode];
+      const hideFinancialCost =
+        typeof u.hideFinancialCost === 'boolean'
+          ? u.hideFinancialCost
+          : u.viewCost === false || preset.hideFinancialCost === true;
       return {
         id: String(u.id || `SYS-USR-${Date.now()}`),
         fullName: String(u.fullName || u.email || 'ERP User'),
@@ -7258,7 +7471,9 @@ function applyServerState(snap: any) {
         branchName: resolveBranchNameById(String(u.branchId || preset.defaultBranchId || 'ALL')),
         isActive: u.isActive !== false,
         supervisorPin: u.supervisorPin ? String(u.supervisorPin) : undefined,
-        viewCost: typeof u.viewCost === 'boolean' ? u.viewCost : preset.defaultViewCost,
+        viewCost: !hideFinancialCost,
+        hideFinancialCost,
+        defaultLandingTab: String(u.defaultLandingTab || preset.defaultLandingTab),
         modulePermissions: normalizeModulePermissionsInput(u.modulePermissions, roleCode),
         updatedAt: u.updatedAt || new Date().toISOString(),
         updatedBy: u.updatedBy || 'Snapshot Restore',
@@ -7685,7 +7900,12 @@ async function startServer() {
     }
 
     // Configurable 14-Division Granular Module Permissions Enforcement (SystemUserAccount)
-    if (urlPath.startsWith('/admin/') || urlPath.startsWith('/pos/') || urlPath.startsWith('/b2b/giro')) {
+    if (
+      urlPath.startsWith('/admin/') ||
+      urlPath.startsWith('/pos/') ||
+      urlPath.startsWith('/b2b/') ||
+      urlPath === '/inventory/fefo-allocate'
+    ) {
       const resolvedSystemUser = resolveSystemUserForRequest(req);
       if (resolvedSystemUser) {
         const permResult = evaluateSystemUserModulePermission(resolvedSystemUser, urlPath, method, req.body);
@@ -13659,6 +13879,8 @@ async function startServer() {
         roleCode: matchedSystemUser.roleCode,
         divisionLabel: matchedSystemUser.divisionLabel,
         branchId: matchedSystemUser.branchId,
+        defaultLandingTab: sanitizedUser.defaultLandingTab,
+        hideFinancialCost: sanitizedUser.hideFinancialCost,
         modulePermissions: sanitizedUser.modulePermissions,
         session,
         availableProfiles: AVAILABLE_STAFF_USERS,
@@ -16073,18 +16295,31 @@ async function startServer() {
       });
     }
 
-    const { fullName, email, password, roleCode, branchId, isActive, supervisorPin, viewCost, modulePermissions } =
-      (req.body || {}) as {
-        fullName?: string;
-        email?: string;
-        password?: string;
-        roleCode?: DivisionRoleCode;
-        branchId?: string;
-        isActive?: boolean;
-        supervisorPin?: string;
-        viewCost?: boolean;
-        modulePermissions?: ModulePermissionsMap;
-      };
+    const {
+      fullName,
+      email,
+      password,
+      roleCode,
+      branchId,
+      isActive,
+      supervisorPin,
+      viewCost,
+      hideFinancialCost,
+      defaultLandingTab,
+      modulePermissions,
+    } = (req.body || {}) as {
+      fullName?: string;
+      email?: string;
+      password?: string;
+      roleCode?: DivisionRoleCode;
+      branchId?: string;
+      isActive?: boolean;
+      supervisorPin?: string;
+      viewCost?: boolean;
+      hideFinancialCost?: boolean;
+      defaultLandingTab?: string;
+      modulePermissions?: ModulePermissionsMap;
+    };
 
     const cleanName = String(fullName || '').trim();
     const cleanEmail = String(email || '').trim().toLowerCase();
@@ -16107,6 +16342,12 @@ async function startServer() {
       roleCode && DIVISION_ROLE_CODES.includes(roleCode) ? roleCode : 'POS_CASHIER';
     const preset = DIVISION_ROLE_PRESETS[resolvedRoleCode];
     const resolvedBranchId = String(branchId || preset.defaultBranchId || 'ALL').trim();
+    const resolvedHideCost =
+      typeof hideFinancialCost === 'boolean'
+        ? hideFinancialCost
+        : typeof viewCost === 'boolean'
+        ? !viewCost
+        : preset.hideFinancialCost === true;
 
     const nextSeq = systemUsers.length + 1;
     let newId = `SYS-USR-${String(nextSeq).padStart(2, '0')}`;
@@ -16127,7 +16368,9 @@ async function startServer() {
       branchName: resolveBranchNameById(resolvedBranchId),
       isActive: isActive !== false,
       supervisorPin: supervisorPin ? String(supervisorPin).trim() : preset.defaultSupervisorPin,
-      viewCost: typeof viewCost === 'boolean' ? viewCost : preset.defaultViewCost,
+      viewCost: !resolvedHideCost,
+      hideFinancialCost: resolvedHideCost,
+      defaultLandingTab: defaultLandingTab ? String(defaultLandingTab).trim() : preset.defaultLandingTab,
       modulePermissions: normalizeModulePermissionsInput(modulePermissions, resolvedRoleCode),
       updatedAt: nowIso,
       updatedBy: actorName,
@@ -16180,6 +16423,8 @@ async function startServer() {
       isActive,
       supervisorPin,
       viewCost,
+      hideFinancialCost,
+      defaultLandingTab,
       modulePermissions,
     } = (req.body || {}) as {
       fullName?: string;
@@ -16190,6 +16435,8 @@ async function startServer() {
       isActive?: boolean;
       supervisorPin?: string;
       viewCost?: boolean;
+      hideFinancialCost?: boolean;
+      defaultLandingTab?: string;
       modulePermissions?: ModulePermissionsMap;
     };
 
@@ -16271,8 +16518,12 @@ async function startServer() {
       if (modulePermissions === undefined) {
         targetUser.modulePermissions = getDefaultModulePermissions(roleCode);
       }
-      if (viewCost === undefined) {
-        targetUser.viewCost = preset.defaultViewCost;
+      if (defaultLandingTab === undefined) {
+        targetUser.defaultLandingTab = preset.defaultLandingTab;
+      }
+      if (hideFinancialCost === undefined && viewCost === undefined) {
+        targetUser.hideFinancialCost = preset.hideFinancialCost;
+        targetUser.viewCost = !preset.hideFinancialCost;
       }
       changes.push(`role=${roleCode}`);
     }
@@ -16301,9 +16552,19 @@ async function startServer() {
       changes.push('supervisorPin=UPDATED');
     }
 
-    if (typeof viewCost === 'boolean') {
+    if (typeof hideFinancialCost === 'boolean') {
+      targetUser.hideFinancialCost = hideFinancialCost;
+      targetUser.viewCost = !hideFinancialCost;
+      changes.push(`hideFinancialCost=${hideFinancialCost}`);
+    } else if (typeof viewCost === 'boolean') {
       targetUser.viewCost = viewCost;
+      targetUser.hideFinancialCost = !viewCost;
       changes.push(`viewCost=${viewCost}`);
+    }
+
+    if (defaultLandingTab !== undefined && String(defaultLandingTab).trim().length > 0) {
+      targetUser.defaultLandingTab = String(defaultLandingTab).trim();
+      changes.push(`defaultLandingTab=${targetUser.defaultLandingTab}`);
     }
 
     if (modulePermissions !== undefined) {

@@ -19,7 +19,7 @@ import type {
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
-import { normalizeEnterpriseRole } from '../../utils/rbac';
+import { canSessionViewValuation, normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   Truck,
   Plus,
@@ -91,6 +91,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const canReceiveGR = ['warehouse', 'purchasing', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
   const canCreateVendorBill = ['purchasing', 'admin', 'coo', 'super_admin'].includes(canonicalRole);
   const isWarehouseRole = canonicalRole === 'warehouse';
+  const canViewValuation = canSessionViewValuation(activeStaffSession);
 
   // Modal States
   const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
@@ -1472,27 +1473,33 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           </span>
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
-                          {formatIDR(item.estimatedOrderCostIDR)}
-                          <div className="text-[10px] text-slate-400 font-normal">
-                            @{formatIDR(item.unitCost)}/unit
-                          </div>
-                          {(() => {
-                            const hist = getLocalLastPoPrice(item.sku, item.supplierName);
-                            if (!hist) return null;
-                            const diffPct =
-                              hist.price > 0 ? Math.round(((item.unitCost - hist.price) / hist.price) * 100) : 0;
-                            return (
-                              <div
-                                className={`text-[10px] font-normal mt-0.5 ${
-                                  diffPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'
-                                }`}
-                                title={`Last bought from ${hist.vendorName || item.supplierName} (${hist.docRef})`}
-                              >
-                                Last bought: {formatIDR(hist.price)} on {hist.date}
-                                {diffPct > 0 ? ` (+${diffPct}%)` : diffPct < 0 ? ` (${diffPct}%)` : ''}
+                          {canViewValuation ? (
+                            <>
+                              {formatIDR(item.estimatedOrderCostIDR)}
+                              <div className="text-[10px] text-slate-400 font-normal">
+                                @{formatIDR(item.unitCost)}/unit
                               </div>
-                            );
-                          })()}
+                              {(() => {
+                                const hist = getLocalLastPoPrice(item.sku, item.supplierName);
+                                if (!hist) return null;
+                                const diffPct =
+                                  hist.price > 0 ? Math.round(((item.unitCost - hist.price) / hist.price) * 100) : 0;
+                                return (
+                                  <div
+                                    className={`text-[10px] font-normal mt-0.5 ${
+                                      diffPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'
+                                    }`}
+                                    title={`Last bought from ${hist.vendorName || item.supplierName} (${hist.docRef})`}
+                                  >
+                                    Last bought: {formatIDR(hist.price)} on {hist.date}
+                                    {diffPct > 0 ? ` (+${diffPct}%)` : diffPct < 0 ? ` (${diffPct}%)` : ''}
+                                  </div>
+                                );
+                              })()}
+                            </>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap">
                           {item.urgencyLevel === 'CRITICAL_OUT_OF_STOCK' && (
@@ -3547,7 +3554,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 <option value="">-- Choose Product SKU --</option>
                 {inventory.map((item, idx) => (
                   <option key={`${item.sku}-${idx}`} value={item.sku}>
-                    {item.productName} ({item.sku}) · {formatIDR(item.unitCost || 25000)}
+                    {item.productName} ({item.sku}){canViewValuation ? ` · ${formatIDR(item.unitCost || 25000)}` : ' · —'}
                   </option>
                 ))}
               </select>

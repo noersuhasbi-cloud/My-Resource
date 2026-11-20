@@ -114,6 +114,8 @@ import {
   isBranchScopedRole,
   getDefaultTabForRole,
   getDefaultTabForSession,
+  getDefaultAccountingSubTabForSession,
+  isAccountingSubTabAllowed,
   canSessionViewValuation,
   isRoleTabAllowed,
 } from '../../utils/rbac';
@@ -173,8 +175,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const [activeTab, setActiveTab] = useState<AdminDashboardTab>(() => {
-    if (initialStaffSession?.userRole) {
-      return getDefaultTabForRole(initialStaffSession.userRole);
+    if (initialStaffSession) {
+      return getDefaultTabForSession(initialStaffSession);
     }
     return 'overview';
   });
@@ -197,23 +199,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const canViewFinancialModules = (() => {
     if (!activeStaffSession) return true;
     if (activeStaffSession.modulePermissions) {
-      return Boolean(
+      return (
         activeStaffSession.roleCode === 'SUPER_ADMIN' ||
-          activeStaffSession.modulePermissions.accounting?.view ||
-          activeStaffSession.modulePermissions.ar?.view ||
-          activeStaffSession.modulePermissions.ap?.view
+        activeStaffSession.modulePermissions.accounting?.view === true
       );
     }
     return canonicalRole === 'store_manager' || canonicalRole === 'admin' || canonicalRole === 'coo' || canonicalRole === 'super_admin';
   })();
 
-  // Synchronize API operator context & branch scope whenever activeStaffSession updates
+  // Climate-Adaptive Cold Chain State (Module 4)
+  const [climateConfigs, setClimateConfigs] = useState<ClimateAdaptiveThresholdConfig[]>([]);
+
+  // Active sub-item for Accounting deep-linking
+  const [accountingDeepSubTab, setAccountingDeepSubTab] = useState<AccountingSubTab>(() =>
+    getDefaultAccountingSubTabForSession(initialStaffSession)
+  );
+
+  // Synchronize API operator context, activeTab guard & branch scope whenever activeStaffSession updates
   useEffect(() => {
     apiClient.setOperatorContext(activeStaffSession);
     if (!activeStaffSession) return;
 
     if (!isDashboardTabAllowed(activeStaffSession, activeTab)) {
       setActiveTab(getDefaultTabForSession(activeStaffSession));
+    }
+
+    if (!isAccountingSubTabAllowed(activeStaffSession, accountingDeepSubTab)) {
+      setAccountingDeepSubTab(getDefaultAccountingSubTabForSession(activeStaffSession));
     }
 
     const isScoped =
@@ -231,13 +243,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setSelectedOutletFilter(assigned);
       setSelectedFinanceStore(assigned);
     }
-  }, [activeStaffSession, activeTab]);
-
-  // Climate-Adaptive Cold Chain State (Module 4)
-  const [climateConfigs, setClimateConfigs] = useState<ClimateAdaptiveThresholdConfig[]>([]);
-
-  // Active sub-item for Accounting deep-linking
-  const [accountingDeepSubTab, setAccountingDeepSubTab] = useState<AccountingSubTab>('pnl');
+  }, [activeStaffSession, activeTab, accountingDeepSubTab]);
 
   // Loading & refresh
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -1111,7 +1117,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           storeOutlets={storeOutlets}
           lowStockCount={inventoryMetrics.lowStockCount}
           totalStockCount={inventoryMetrics.totalStockCount}
-          onNavigateTab={(tab) => setActiveTab(tab)}
+          onNavigateTab={(tab) => {
+            if (isDashboardTabAllowed(activeStaffSession, tab)) {
+              setActiveTab(tab);
+            }
+          }}
         />
 
         {/* 3. Main Content Area */}

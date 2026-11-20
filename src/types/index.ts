@@ -1110,21 +1110,34 @@ export type DivisionRoleCode =
   | 'HEAD_ACCOUNTING';
 
 export type ModulePermissionKey =
+  | 'dashboard'
   | 'pos'
+  | 'storefront'
+  | 'crm'
+  | 'quotations'
+  | 'outlets'
   | 'inventory'
+  | 'fefoBatches'
+  | 'wasteShrinkage'
+  | 'fulfillment'
   | 'warehouseTransfers'
+  | 'logistics'
   | 'procurement'
   | 'qualityControl'
-  | 'crm'
-  | 'logistics'
-  | 'accounting'
-  | 'ar'
-  | 'ap'
   | 'approvalMatrix'
+  | 'analytics'
+  | 'accounting'
   | 'fraudRadar'
   | 'settings';
 
 export type ModulePermissionAction = 'view' | 'create' | 'edit' | 'approve' | 'export';
+
+export type AccountingSubFlagKey =
+  | 'canAccessAR'
+  | 'canAccessAP'
+  | 'canAccessGLTax'
+  | 'canApprovePayments'
+  | 'canLockPeriod';
 
 export interface ModulePermissionSet {
   view: boolean;
@@ -1132,6 +1145,12 @@ export interface ModulePermissionSet {
   edit: boolean;
   approve: boolean;
   export: boolean;
+  // Granular Finance & Accounting sub-flags (populated on modulePermissions.accounting)
+  canAccessAR?: boolean;
+  canAccessAP?: boolean;
+  canAccessGLTax?: boolean;
+  canApprovePayments?: boolean;
+  canLockPeriod?: boolean;
 }
 
 export type ModulePermissionsMap = Record<ModulePermissionKey, ModulePermissionSet>;
@@ -1149,6 +1168,8 @@ export interface SystemUserAccount {
   isActive: boolean;
   supervisorPin?: string;
   viewCost?: boolean;
+  hideFinancialCost: boolean;
+  defaultLandingTab: string;
   modulePermissions: ModulePermissionsMap;
   updatedAt?: string;
   updatedBy?: string;
@@ -1163,6 +1184,8 @@ export interface StaffShiftSession {
   divisionLabel?: string;
   supervisorPin?: string;
   viewCost?: boolean;
+  hideFinancialCost?: boolean;
+  defaultLandingTab?: string;
   modulePermissions?: ModulePermissionsMap;
   storeId: string; // Assigned physical store/hub or 'ALL' for multi-branch roles
   assignedBranchId?: string; // Explicit branch/hub ID mirror for branch-scoped locks
