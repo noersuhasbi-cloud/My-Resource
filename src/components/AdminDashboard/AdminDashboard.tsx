@@ -353,8 +353,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         effectiveRole === 'super_admin';
     const allowOmzetReads = hasMod('dashboard') || hasMod('analytics') || allowAccountingReads;
     const allowAuditReads = hasMod('fraudRadar') || hasMod('settings');
-    const allowInventoryReads = hasMod('inventory') || hasMod('pos');
+    const allowInventoryReads = hasMod('inventory');
     const allowFefoReads = hasMod('fefoBatches') || hasMod('inventory');
+    const allowB2bOrderReads =
+      hasMod('crm') ||
+      hasMod('quotations') ||
+      Boolean(
+        !effectiveSession?.modulePermissions ||
+          effectiveSession.roleCode === 'SUPER_ADMIN' ||
+          (effectiveSession.modulePermissions.accounting?.view &&
+            effectiveSession.modulePermissions.accounting?.canAccessAR)
+      );
     const allowProcurementReads =
       hasMod('procurement') ||
       Boolean(effectiveSession?.modulePermissions?.accounting?.view && effectiveSession?.modulePermissions?.accounting?.canAccessAP);
@@ -432,7 +441,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         allowQcReads ? apiClient.getQCInspections().catch(() => []) : Promise.resolve([]),
         allowTransferReads ? apiClient.getStockTransfers().catch(() => []) : Promise.resolve([]),
         allowPickerReads ? apiClient.getPickerOrders().catch(() => []) : Promise.resolve([]),
-        apiClient.getB2BOrders().catch(() => []),
+        allowB2bOrderReads ? apiClient.getB2BOrders().catch(() => []) : Promise.resolve([]),
         apiClient.getB2BProducts().catch(() => []),
         allowWasteReads ? apiClient.getWasteRecords().catch(() => ({ records: [] })) : Promise.resolve({ records: [] }),
         allowInventoryReads ? apiClient.getRemovalStrategies().catch(() => null) : Promise.resolve(null),

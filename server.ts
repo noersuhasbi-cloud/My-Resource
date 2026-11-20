@@ -4991,8 +4991,11 @@ function resolveSystemUserForRequest(req: Request): SystemUserAccount | undefine
     // Legacy USR-* header explicitly sent -> do NOT fall back to active systemUser
     return undefined;
   }
-  // 3. Explicit legacy x-operator-role header without system user ID -> let legacy 7-role middleware handle
-  const rawRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : '';
+  // 3. Explicit x-role-code or x-operator-role header without system user ID
+  const rawRole =
+    (typeof req.headers['x-role-code'] === 'string' && req.headers['x-role-code'].trim()) ||
+    (typeof req.headers['x-operator-role'] === 'string' && req.headers['x-operator-role'].trim()) ||
+    '';
   if (rawRole) {
     const asDivision = systemUsers.find((u) => u.roleCode === rawRole.toUpperCase());
     if (asDivision) return asDivision;
@@ -5003,6 +5006,16 @@ function resolveSystemUserForRequest(req: Request): SystemUserAccount | undefine
     return systemUsers.find((u) => u.id === currentActiveStaffSession.userId);
   }
   return undefined;
+}
+
+function shouldHideFinancialCostForRequest(req: Request): boolean {
+  const user = resolveSystemUserForRequest(req);
+  if (!user) return false;
+  if (user.roleCode === 'SUPER_ADMIN') return false;
+  const preset = DIVISION_ROLE_PRESETS[user.roleCode] || DIVISION_ROLE_PRESETS.POS_CASHIER;
+  if (typeof user.hideFinancialCost === 'boolean') return user.hideFinancialCost;
+  if (typeof user.viewCost === 'boolean') return !user.viewCost;
+  return preset.hideFinancialCost === true;
 }
 
 function evaluateSystemUserModulePermission(
@@ -5149,15 +5162,23 @@ function evaluateSystemUserModulePermission(
       : deny('accounting', 'approve');
   }
 
-  // 9. Account Receivable (Bilyet Giro, Settlements, Kasbon Kanvas)
+  // 9. Account Receivable (Bilyet Giro, B2B Invoices/Checkout, Settlements, Kasbon Kanvas)
   if (
     urlPath.startsWith('/b2b/giro') ||
+    urlPath === '/b2b/checkout' ||
+    urlPath === '/b2b/orders' ||
+    urlPath.startsWith('/b2b/orders/') ||
     urlPath.startsWith('/admin/accounting/settlement-reconcile') ||
     urlPath.startsWith('/admin/kanvas') ||
     urlPath.startsWith('/admin/warung-kasbon')
   ) {
     const canAR = mp.accounting.view === true && mp.accounting.canAccessAR === true;
     if (isRead) {
+      if (urlPath === '/b2b/orders' || urlPath.startsWith('/b2b/orders/')) {
+        return canAR || mp.crm.view === true || mp.quotations.view === true
+          ? { allowed: true }
+          : deny('accounting', 'view');
+      }
       return canAR ? { allowed: true } : deny('accounting', 'view');
     }
     if (urlPath.includes('settlement-reconcile')) {
@@ -5238,7 +5259,11 @@ function evaluateSystemUserModulePermission(
     if (isRead) {
       return mp.quotations.view === true ? { allowed: true } : deny('quotations', 'view');
     }
-    if (urlPath.endsWith('/approve') || urlPath.endsWith('/convert')) {
+    if (
+      urlPath.endsWith('/approve') ||
+      urlPath.endsWith('/convert') ||
+      urlPath.endsWith('/convert-to-order')
+    ) {
       return mp.quotations.approve === true || mp.quotations.edit === true
         ? { allowed: true }
         : deny('quotations', 'approve');
@@ -5309,13 +5334,16 @@ function evaluateSystemUserModulePermission(
       : deny('qualityControl', 'create');
   }
 
-  // 15. Warehouse Transfers
+  // 15. Warehouse Transfers (Segregation of Duties: Create vs Approve/Receive)
   if (urlPath.startsWith('/admin/inventory/transfer') || urlPath === '/admin/settings/confirm-arrival') {
     if (isRead) {
       return mp.warehouseTransfers.view === true ? { allowed: true } : deny('warehouseTransfers', 'view');
     }
     if (urlPath === '/admin/inventory/transfer' && method === 'POST') {
       return mp.warehouseTransfers.create === true ? { allowed: true } : deny('warehouseTransfers', 'create');
+    }
+    if (urlPath.endsWith('/receive') || urlPath.endsWith('/approve') || urlPath === '/admin/settings/confirm-arrival') {
+      return mp.warehouseTransfers.approve === true ? { allowed: true } : deny('warehouseTransfers', 'approve');
     }
     return mp.warehouseTransfers.edit === true || mp.warehouseTransfers.approve === true
       ? { allowed: true }
@@ -5324,12 +5352,15 @@ function evaluateSystemUserModulePermission(
 
   // 16. Physical Goods Receipt (Dock Receiving) vs Procurement PR/PO/Rafaksi
   if (
-    urlPath === '/admin/procurement/gr/receive-partial' ||
+    urlPath === '/admin/procurement/gr' ||
+    urlPath.startsWith('/admin/procurement/gr/') ||
     urlPath === '/admin/procurement/goods-receipts' ||
     urlPath === '/admin/procurement/cross-dock'
   ) {
     if (isRead) {
-      return mp.procurement.view === true || mp.inventory.view === true
+      return mp.procurement.view === true ||
+        mp.inventory.view === true ||
+        (mp.accounting.view === true && mp.accounting.canAccessAP === true)
         ? { allowed: true }
         : deny('procurement', 'view');
     }
@@ -5348,6 +5379,11 @@ function evaluateSystemUserModulePermission(
     urlPath.startsWith('/admin/valuation/landed-costs')
   ) {
     if (isRead) {
+      if (urlPath === '/admin/compliance/rtv' || urlPath.startsWith('/admin/vendor-credit-notes')) {
+        return mp.procurement.view === true || mp.accounting.view === true || mp.wasteShrinkage.view === true
+          ? { allowed: true }
+          : deny('procurement', 'view');
+      }
       return mp.procurement.view === true || (mp.accounting.view === true && mp.accounting.canAccessAP === true)
         ? { allowed: true }
         : deny('procurement', 'view');
@@ -5395,6 +5431,7 @@ function evaluateSystemUserModulePermission(
 
   // 19. Inventory Operations, Markdown, Racks, Climate Thresholds
   if (
+    urlPath === '/admin/inventory' ||
     urlPath.startsWith('/admin/inventory/') ||
     urlPath.startsWith('/admin/warehouse/') ||
     urlPath === '/admin/markdown-rules' ||
@@ -5402,7 +5439,7 @@ function evaluateSystemUserModulePermission(
     urlPath.startsWith('/admin/scalability/climate-thresholds')
   ) {
     if (isRead) {
-      return mp.inventory.view === true || mp.pos.view === true ? { allowed: true } : deny('inventory', 'view');
+      return mp.inventory.view === true ? { allowed: true } : deny('inventory', 'view');
     }
     if (urlPath === '/admin/inventory/adjust') {
       return mp.inventory.edit === true || mp.inventory.approve === true
@@ -5447,10 +5484,23 @@ function evaluateSystemUserModulePermission(
     urlPath.startsWith('/pos/') ||
     urlPath === '/admin/returns' ||
     urlPath === '/admin/compliance/rma' ||
+    urlPath === '/admin/compliance/rma-sources' ||
     urlPath.startsWith('/admin/hardware/')
   ) {
     if (urlPath === '/pos/crm-members') {
       return mp.pos.view === true || mp.crm.view === true ? { allowed: true } : deny('pos', 'view');
+    }
+    if (urlPath === '/admin/compliance/rma' || urlPath === '/admin/compliance/rma-sources') {
+      if (isRead) {
+        return mp.pos.view === true || mp.accounting.view === true || mp.crm.view === true
+          ? { allowed: true }
+          : deny('pos', 'view');
+      }
+      return mp.pos.create === true ||
+        mp.pos.edit === true ||
+        (mp.accounting.view === true && (mp.accounting.create === true || mp.accounting.edit === true))
+        ? { allowed: true }
+        : deny('pos', 'create');
     }
     if (isRead) return mp.pos.view === true ? { allowed: true } : deny('pos', 'view');
     return mp.pos.create === true || mp.pos.edit === true ? { allowed: true } : deny('pos', 'create');
@@ -9523,8 +9573,9 @@ async function startServer() {
   // -------------------------------------------------------------
   // MULTI-WAREHOUSE & INVENTORY MANAGEMENT ENDPOINTS
   // -------------------------------------------------------------
-  app.get('/api/admin/inventory', (_req: Request, res: Response) => {
+  app.get('/api/admin/inventory', (req: Request, res: Response) => {
     syncAllBatchesExpiryStatus(Date.now());
+    const hideCost = shouldHideFinancialCostForRequest(req);
     let totalStockCount = 0;
     let totalValuationWAC = 0;
     let lowStockCount = 0;
@@ -9555,23 +9606,36 @@ async function startServer() {
       })
       .filter(Boolean);
 
+    const sanitizedItems = hideCost
+      ? inventoryList.map((item) => ({
+          ...item,
+          unitCost: 0,
+          wacUnitCost: undefined,
+          costMasked: true,
+        }))
+      : inventoryList;
+
     res.json({
-      items: inventoryList,
+      items: sanitizedItems,
       metrics: {
         totalStockCount,
-        totalValuationWAC,
+        totalValuationWAC: hideCost ? 0 : totalValuationWAC,
         lowStockCount,
         totalSkus: inventoryList.length,
+        financialCostMasked: hideCost,
       },
       bpjphExpiringAlerts,
     });
   });
 
-  app.get('/api/admin/inventory/matrix', (_req: Request, res: Response) => {
+  app.get('/api/admin/inventory/matrix', (req: Request, res: Response) => {
     syncAllBatchesExpiryStatus(Date.now());
+    const hideCost = shouldHideFinancialCostForRequest(req);
     res.json({
       warehouseZones,
-      storeInventoryTiers,
+      storeInventoryTiers: hideCost
+        ? storeInventoryTiers.map((t) => ({ ...t, unitCost: 0, costMasked: true }))
+        : storeInventoryTiers,
       outlets: storeSchedules,
     });
   });
@@ -9758,7 +9822,12 @@ async function startServer() {
     // Sort ascending by expiration date (FEFO sequence)
     list.sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
 
-    res.json(list);
+    const hideCost = shouldHideFinancialCostForRequest(req);
+    res.json(
+      hideCost
+        ? list.map((b) => ({ ...b, unitCost: 0, costMasked: true }))
+        : list
+    );
   });
 
   // -------------------------------------------------------------
@@ -14454,7 +14523,12 @@ async function startServer() {
       );
     }
 
-    res.json(filtered);
+    const hideCost = shouldHideFinancialCostForRequest(req);
+    res.json(
+      hideCost
+        ? filtered.map((p) => ({ ...p, unitCost: 0, costMasked: true }))
+        : filtered
+    );
   });
 
   app.post('/api/pos/checkout', (req: Request, res: Response) => {
@@ -18044,7 +18118,12 @@ async function startServer() {
     if (status && status !== 'ALL') {
       filtered = filtered.filter((b) => b.status === status);
     }
-    res.json(filtered);
+    const hideCost = shouldHideFinancialCostForRequest(req);
+    res.json(
+      hideCost
+        ? filtered.map((p) => ({ ...p, unitCost: 0, costMasked: true }))
+        : filtered
+    );
   });
 
   app.post('/api/admin/warehouse/bins', (req: Request, res: Response) => {
@@ -18857,7 +18936,26 @@ async function startServer() {
       return res.status(400).json({ error: 'Customer name and line items are required.' });
     }
 
-    let enrichedItems: EnterpriseQuotationItem[] = [...items];
+    let enrichedItems: EnterpriseQuotationItem[] = items.map((it: any) => {
+      const invMatch = it?.sku ? inventoryList.find((inv) => inv.sku === it.sku) : undefined;
+      const prodMatch = invMatch
+        ? PRODUCTS.find((p) => p.name.toLowerCase() === invMatch.productName.toLowerCase())
+        : undefined;
+      const qty = Math.max(1, Number(it?.quantity) || 1);
+      const unitPrice = Number(it?.unitPrice ?? prodMatch?.price ?? Math.round((invMatch?.unitCost || 0) * 1.25));
+      const unitCost = Number(it?.unitCost ?? invMatch?.unitCost ?? Math.round(unitPrice * 0.65));
+      return {
+        ...it,
+        sku: String(it?.sku || invMatch?.sku || 'SKU-CUSTOM'),
+        productName: String(it?.productName || invMatch?.productName || it?.sku || 'GroceMart Item'),
+        category: String(it?.category || invMatch?.category || 'groceries'),
+        quantity: qty,
+        unit: String(it?.unit || invMatch?.unit || 'pcs'),
+        unitPrice,
+        unitCost,
+        lineTotal: Number(it?.lineTotal) || Math.round(qty * unitPrice),
+      };
+    });
     if (enterpriseSettings.quotationsAndSales.mandatoryProductsEnabled) {
       enterpriseSettings.quotationsAndSales.mandatoryRules.forEach((rule) => {
         const hasTargetCategory = enrichedItems.some((it) => it.category === rule.targetCategory);
@@ -18964,10 +19062,13 @@ async function startServer() {
         city: 'Jakarta',
       },
       items: quo.items.map((it) => {
-        const prod = PRODUCTS.find((p) => p.name.toLowerCase() === it.productName.toLowerCase()) || PRODUCTS[0];
+        const targetName = String(it.productName || '').trim().toLowerCase();
+        const prod =
+          (targetName ? PRODUCTS.find((p) => p.name.toLowerCase() === targetName) : undefined) ||
+          PRODUCTS[0];
         return {
-          product: { ...prod, price: it.unitPrice, name: it.productName },
-          quantity: it.quantity,
+          product: { ...prod, price: Number(it.unitPrice) || prod.price, name: it.productName || prod.name },
+          quantity: Number(it.quantity) || 1,
           notes: `Converted from Quotation #${quo.quotationNumber}`,
         };
       }),
@@ -26638,12 +26739,15 @@ async function startServer() {
       return res.status(400).json({ error: 'counts array with at least 1 batch line is required.' });
     }
 
+    const resolvedSys = resolveSystemUserForRequest(req);
     const effectiveRole = getEffectiveRequestRole(req);
     const actorName = getEffectiveOperatorName(req);
     const isSupervisorRole =
       effectiveRole === 'store_manager' ||
       effectiveRole === 'coo' ||
-      effectiveRole === 'super_admin';
+      effectiveRole === 'super_admin' ||
+      resolvedSys?.roleCode === 'SUPER_ADMIN' ||
+      resolvedSys?.modulePermissions?.inventory?.approve === true;
 
     const lines: RackStocktakeLineResult[] = [];
     const skuDeltaTracker: Record<string, number> = {};
@@ -29538,12 +29642,18 @@ async function startServer() {
   });
 
   app.get('/api/admin/settings/audit-trail', (req: Request, res: Response) => {
+    const resolvedSys = resolveSystemUserForRequest(req);
     const role = getEffectiveRequestRole(req);
-    if (role !== 'super_admin' && role !== 'coo') {
+    const canViewAuditTrail = resolvedSys
+      ? resolvedSys.roleCode === 'SUPER_ADMIN' ||
+        resolvedSys.modulePermissions?.fraudRadar?.view === true ||
+        resolvedSys.modulePermissions?.settings?.view === true
+      : role === 'super_admin' || role === 'coo';
+    if (!canViewAuditTrail) {
       return res.status(403).json({
         success: false,
         code: 'RBAC_FORBIDDEN',
-        error: 'Access Denied (403): Only Super Admin or COO may access Audit Trail & Operator KPIs.',
+        error: 'Access Denied (403): Only authorized Audit / Fraud Radar / Super Admin roles may access Audit Trail & Operator KPIs.',
       });
     }
 

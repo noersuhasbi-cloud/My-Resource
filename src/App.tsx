@@ -546,6 +546,7 @@ export default function App() {
   };
 
   const handleAdminLoginSuccess = (session: StaffShiftSession) => {
+    apiClient.setOperatorContext(session);
     setAdminSession(session);
     try {
       localStorage.setItem('grocemart_admin_session', JSON.stringify(session));
@@ -555,11 +556,12 @@ export default function App() {
   };
 
   const handleAdminLogout = () => {
+    apiClient.adminLogout().catch(() => {});
+    apiClient.setOperatorContext(null);
     setAdminSession(null);
     try {
       localStorage.removeItem('grocemart_admin_session');
     } catch {}
-    apiClient.adminLogout().catch(() => {});
     window.location.hash = '#admin-login';
     setPortalView('admin_login');
     showToast('ERP Workstation Locked', 'Session ended. Log in to regain access.');
@@ -603,6 +605,7 @@ export default function App() {
     return (
       <div key="portal-admin-erp" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-view-enter">
         <AdminDashboard
+          key={adminSession.userId || adminSession.email || adminSession.userRole}
           initialStaffSession={adminSession}
           onCloseToStorefront={handleExitToStorefront}
           onLogout={handleAdminLogout}

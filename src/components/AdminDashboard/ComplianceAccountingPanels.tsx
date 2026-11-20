@@ -116,9 +116,13 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
   const loadRmaRtvData = async () => {
     try {
       const [rmas, rtvs, sources] = await Promise.all([
-        apiClient.getComplianceRmaList(selectedStore),
-        apiClient.getComplianceRtvList(selectedStore),
-        apiClient.getComplianceRmaSources(),
+        apiClient.getComplianceRmaList(selectedStore).catch(() => [] as CustomerRmaRecord[]),
+        apiClient.getComplianceRtvList(selectedStore).catch(() => [] as VendorRtvDebitNote[]),
+        apiClient.getComplianceRmaSources().catch(() => ({
+          b2bOrders: [],
+          b2cOrders: [],
+          posReceipts: [],
+        })),
       ]);
       setRmaList(rmas);
       setRtvList(rtvs);
@@ -140,8 +144,11 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
     setIsLoadingCoretax(true);
     try {
       const [data, pphRes] = await Promise.all([
-        apiClient.getCoretaxExport(),
-        apiClient.getPphWithholdings(),
+        apiClient.getCoretaxExport().catch(() => null),
+        apiClient.getPphWithholdings().catch(() => ({
+          records: [] as PphWithholdingRecord[],
+          summary: { totalPph22IDR: 0, totalPph23IDR: 0, totalWithheldIDR: 0 },
+        })),
       ]);
       setCoretaxData(data);
       setPphRecords(pphRes.records || []);
