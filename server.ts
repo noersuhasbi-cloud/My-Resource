@@ -5160,13 +5160,38 @@ function evaluateSystemUserModulePermission(
     if (isRead) {
       return canAR ? { allowed: true } : deny('accounting', 'view');
     }
-    if (urlPath.endsWith('/clear') || urlPath.endsWith('/bounce') || urlPath.includes('settlement-reconcile')) {
+    if (urlPath.includes('settlement-reconcile')) {
       return mp.accounting.view === true && mp.accounting.canApprovePayments === true
         ? { allowed: true }
         : deny(
             'accounting',
             'approve',
-            `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [APPROVE SETTLEMENT / GIRO] pada Finance.`
+            `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [APPROVE SETTLEMENT] pada Finance.`
+          );
+    }
+    if (urlPath.endsWith('/clear') || urlPath.endsWith('/bounce')) {
+      const giroIdMatch = urlPath.match(/^\/b2b\/giro\/([^/]+)\/(clear|bounce)$/);
+      const targetGiro = giroIdMatch
+        ? giroRecordsList.find((g) => g.id === decodeURIComponent(giroIdMatch[1]))
+        : undefined;
+      const isOutgoingGiro = targetGiro?.direction === 'OUTGOING' || targetGiro?.settlementCoaCode === '2030';
+      if (isOutgoingGiro) {
+        return mp.accounting.view === true && mp.accounting.canApprovePayments === true
+          ? { allowed: true }
+          : deny(
+              'accounting',
+              'approve',
+              `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [APPROVE GIRO KELUAR] pada Finance.`
+            );
+      }
+      // Incoming AR Bilyet Giro Masuk clearing is authorized for AR Staff & Finance approvers
+      return (canAR && (mp.accounting.edit === true || mp.accounting.approve === true)) ||
+        (mp.accounting.view === true && mp.accounting.canApprovePayments === true)
+        ? { allowed: true }
+        : deny(
+            'accounting',
+            'approve',
+            `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [CLEAR GIRO MASUK] pada Account Receivable.`
           );
     }
     return canAR && (mp.accounting.create === true || mp.accounting.edit === true)
@@ -5223,11 +5248,23 @@ function evaluateSystemUserModulePermission(
       : deny('quotations', 'create');
   }
 
-  // 12. CRM & Loyalty 360 / Promotions / B2B Customers (strictly mp.crm === true)
+  // 12A. B2B Customer Accounts (accessible by CRM OR Finance AR roles)
+  if (urlPath.startsWith('/b2b/customers')) {
+    const canAR = mp.accounting.view === true && mp.accounting.canAccessAR === true;
+    if (isRead) {
+      return mp.crm.view === true || canAR ? { allowed: true } : deny('crm', 'view');
+    }
+    return mp.crm.create === true ||
+      mp.crm.edit === true ||
+      (canAR && (mp.accounting.edit === true || mp.accounting.approve === true))
+      ? { allowed: true }
+      : deny('crm', 'edit');
+  }
+
+  // 12B. CRM & Loyalty 360 / Promotions (strictly mp.crm === true)
   if (
     urlPath.startsWith('/admin/crm/') ||
     urlPath === '/admin/crm' ||
-    urlPath.startsWith('/b2b/customers') ||
     ((urlPath === '/admin/promotions' || urlPath.startsWith('/admin/promotions/')) &&
       urlPath !== '/admin/promotions/evaluate')
   ) {
@@ -5320,7 +5357,9 @@ function evaluateSystemUserModulePermission(
       urlPath.endsWith('/apply') ||
       (urlPath.includes('/procurement/orders/') &&
         urlPath.endsWith('/status') &&
-        ['Approved', 'Sent', 'Ordered'].includes(String(body?.status || '')))
+        ['approved', 'sent', 'ordered', 'in transit', 'completed', 'cancelled', 'rejected'].includes(
+          String(body?.status || '').trim().toLowerCase()
+        ))
     ) {
       return mp.procurement.approve === true ? { allowed: true } : deny('procurement', 'approve');
     }
@@ -14651,16 +14690,19 @@ async function startServer() {
         }
       }
 
+      let autoAppliedMdCandidate = false;
       if (
         !dynBatch &&
         !isScaleWeightedLine &&
         !item.isManualPriceOverride &&
+        !(Number(item.discount) > 0) &&
         markdownUnitPrice > 0 &&
         markdownUnitPrice < effectiveUnitPrice &&
         rawUnitPrice >= catalogBasePrice - 1
       ) {
         effectiveUnitPrice = markdownUnitPrice;
         appliedWholesaleTierLabel = undefined;
+        autoAppliedMdCandidate = true;
       }
 
       const isGimmickLine = Boolean(item.isPromoGimmick || inv?.isPromoGimmick);
@@ -14679,11 +14721,12 @@ async function startServer() {
         : effectiveUnitPrice !== rawUnitPrice || !item.lineTotal
         ? Math.round(effectiveUnitPrice * qty)
         : Math.round(Number(item.lineTotal));
+      // Only actual marked-down clearance lots or system auto-applied FEFO markdown qualify for below-cost exemption (never manual cashier price cuts or discounts)
       const isClearanceMarkdown = Boolean(
         dynBatch ||
+          autoAppliedMdCandidate ||
           nearestBatch?.markdownStatus === 'Marked Down' ||
           (nearestBatch?.markdownDiscountPercent || 0) > 0 ||
-          mdCandidate ||
           item?.isDynamicDiscountSku ||
           item?.markdownStatus === 'Marked Down'
       );
@@ -14802,23 +14845,23 @@ async function startServer() {
     });
 
     let marginComplianceStatus: 'NORMAL' | 'SUPERVISOR_OVERRIDE' | 'CLEARANCE_BELOW_COST' = 'NORMAL';
+    if (supervisorMarginOverride && String(supervisorPin || '').trim() !== '1234') {
+      return res.status(403).json({
+        success: false,
+        code: 'INVALID_SUPERVISOR_PIN',
+        requiresSupervisorPin: true,
+        error: 'PIN Supervisor tidak valid. Otorisasi override margin ditolak.',
+      });
+    }
     if (marginViolations.length > 0) {
       if (!supervisorMarginOverride) {
-        return res.status(400).json({
+        return res.status(403).json({
           success: false,
           code: 'MARGIN_FLOOR_VIOLATION',
           requiresSupervisorPin: true,
           minMarginFloorPct,
           violations: marginViolations,
           error: `Proteksi Margin Aktif: Harga jual bersih di bawah batas minimum HPP + ${minMarginFloorPct}%. Masukkan PIN Supervisor untuk melanjutkan.`,
-        });
-      }
-      if (String(supervisorPin || '').trim() !== '1234') {
-        return res.status(403).json({
-          success: false,
-          code: 'INVALID_SUPERVISOR_PIN',
-          requiresSupervisorPin: true,
-          error: 'PIN Supervisor tidak valid. Otorisasi override margin ditolak.',
         });
       }
       marginComplianceStatus = 'SUPERVISOR_OVERRIDE';

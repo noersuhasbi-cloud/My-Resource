@@ -193,22 +193,35 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
     }
   };
 
+  const canAccessAR =
+    !activeStaffSession ||
+    activeStaffSession.roleCode === 'SUPER_ADMIN' ||
+    !activeStaffSession.modulePermissions ||
+    (activeStaffSession.modulePermissions.accounting?.view === true &&
+      activeStaffSession.modulePermissions.accounting?.canAccessAR === true);
+
   const loadB2bAccountingData = async () => {
+    if (!canAccessAR) {
+      setB2bCustomers([]);
+      setGiroRecords([]);
+      return;
+    }
     try {
       const [custs, giros] = await Promise.all([
-        apiClient.getB2BCustomers(),
-        apiClient.getGiroRecords(),
+        apiClient.getB2BCustomers().catch(() => [] as B2BCustomer[]),
+        apiClient.getGiroRecords().catch(() => [] as GiroPaymentRecord[]),
       ]);
-      setB2bCustomers(custs);
-      setGiroRecords(giros);
-    } catch (err) {
-      console.error('Failed to load B2B accounting data:', err);
+      setB2bCustomers(Array.isArray(custs) ? custs : []);
+      setGiroRecords(Array.isArray(giros) ? giros : []);
+    } catch {
+      setB2bCustomers([]);
+      setGiroRecords([]);
     }
   };
 
   useEffect(() => {
-    loadB2bAccountingData();
-  }, []);
+    void loadB2bAccountingData();
+  }, [canAccessAR]);
 
   const loadExecSummary = React.useCallback(async () => {
     setIsLoadingExecSummary(true);

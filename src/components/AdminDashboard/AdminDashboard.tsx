@@ -116,6 +116,7 @@ import {
   getDefaultTabForSession,
   getDefaultAccountingSubTabForSession,
   isAccountingSubTabAllowed,
+  hasModuleAccess,
   canSessionViewValuation,
   isRoleTabAllowed,
 } from '../../utils/rbac';
@@ -342,11 +343,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       apiClient.setOperatorContext(effectiveSession);
     }
     const effectiveRole = effectiveSession ? normalizeEnterpriseRole(effectiveSession.userRole) : 'super_admin';
-    const allowFinancialReads =
-      effectiveRole === 'store_manager' ||
-      effectiveRole === 'admin' ||
-      effectiveRole === 'coo' ||
-      effectiveRole === 'super_admin';
+    const hasMod = (key: Parameters<typeof hasModuleAccess>[1]) =>
+      !effectiveSession || hasModuleAccess(effectiveSession, key, 'view') === true;
+    const allowAccountingReads = effectiveSession?.modulePermissions
+      ? effectiveSession.roleCode === 'SUPER_ADMIN' || effectiveSession.modulePermissions.accounting?.view === true
+      : effectiveRole === 'store_manager' ||
+        effectiveRole === 'admin' ||
+        effectiveRole === 'coo' ||
+        effectiveRole === 'super_admin';
+    const allowOmzetReads = hasMod('dashboard') || hasMod('analytics') || allowAccountingReads;
+    const allowAuditReads = hasMod('fraudRadar') || hasMod('settings');
+    const allowInventoryReads = hasMod('inventory') || hasMod('pos');
+    const allowFefoReads = hasMod('fefoBatches') || hasMod('inventory');
+    const allowProcurementReads =
+      hasMod('procurement') ||
+      Boolean(effectiveSession?.modulePermissions?.accounting?.view && effectiveSession?.modulePermissions?.accounting?.canAccessAP);
+    const allowVendorBillReads =
+      allowAccountingReads &&
+      (!effectiveSession?.modulePermissions ||
+        effectiveSession.roleCode === 'SUPER_ADMIN' ||
+        effectiveSession.modulePermissions.accounting?.canAccessAP === true)
+        ? true
+        : Boolean(effectiveSession?.modulePermissions?.procurement?.approve === true);
+    const allowQcReads = hasMod('qualityControl') || hasMod('inventory');
+    const allowTransferReads = hasMod('warehouseTransfers');
+    const allowPickerReads = hasMod('fulfillment');
+    const allowWasteReads = hasMod('wasteShrinkage');
     const targetFinStore =
       effectiveSession && isBranchScopedRole(effectiveSession.userRole)
         ? effectiveSession.assignedBranchId ||
@@ -385,32 +407,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         enterpriseSettingsRes,
         notifRes,
       ] = await Promise.all([
-        allowFinancialReads ? apiClient.getOmzetAnalytics().catch(() => null) : Promise.resolve(null),
+        allowOmzetReads ? apiClient.getOmzetAnalytics().catch(() => null) : Promise.resolve(null),
         apiClient.getStoreStatus().catch(() => null),
         apiClient.getStoreOutlets().catch(() => []),
-        apiClient.getInventory().catch(() => ({ items: [], metrics: { totalStockCount: 0, totalValuationWAC: 0, lowStockCount: 0, totalSkus: 0 } })),
-        apiClient.getInventoryMatrix().catch(() => ({ warehouseZones: [], storeInventoryTiers: [], outlets: [] })),
-        apiClient.getPurchaseRequests().catch(() => []),
-        apiClient.getPurchaseOrders().catch(() => []),
-        apiClient.getGoodsReceipts().catch(() => []),
-        apiClient.getChartOfAccounts().catch(() => []),
-        allowFinancialReads ? apiClient.getGeneralLedger(targetFinStore).catch(() => []) : Promise.resolve([]),
-        allowFinancialReads ? apiClient.getPnLReport(targetFinStore).catch(() => null) : Promise.resolve(null),
-        allowFinancialReads ? apiClient.getBalanceSheet(targetFinStore).catch(() => null) : Promise.resolve(null),
-        allowFinancialReads ? apiClient.getCashFlow(targetFinStore).catch(() => null) : Promise.resolve(null),
-        allowFinancialReads ? apiClient.getAuditTrail().catch(() => []) : Promise.resolve([]),
+        allowInventoryReads
+          ? apiClient.getInventory().catch(() => ({ items: [], metrics: { totalStockCount: 0, totalValuationWAC: 0, lowStockCount: 0, totalSkus: 0 } }))
+          : Promise.resolve({ items: [], metrics: { totalStockCount: 0, totalValuationWAC: 0, lowStockCount: 0, totalSkus: 0 } }),
+        allowInventoryReads
+          ? apiClient.getInventoryMatrix().catch(() => ({ warehouseZones: [], storeInventoryTiers: [], outlets: [] }))
+          : Promise.resolve({ warehouseZones: [], storeInventoryTiers: [], outlets: [] }),
+        allowProcurementReads ? apiClient.getPurchaseRequests().catch(() => []) : Promise.resolve([]),
+        allowProcurementReads ? apiClient.getPurchaseOrders().catch(() => []) : Promise.resolve([]),
+        allowProcurementReads || allowInventoryReads ? apiClient.getGoodsReceipts().catch(() => []) : Promise.resolve([]),
+        allowAccountingReads ? apiClient.getChartOfAccounts().catch(() => []) : Promise.resolve([]),
+        allowAccountingReads ? apiClient.getGeneralLedger(targetFinStore).catch(() => []) : Promise.resolve([]),
+        allowAccountingReads ? apiClient.getPnLReport(targetFinStore).catch(() => null) : Promise.resolve(null),
+        allowAccountingReads ? apiClient.getBalanceSheet(targetFinStore).catch(() => null) : Promise.resolve(null),
+        allowAccountingReads ? apiClient.getCashFlow(targetFinStore).catch(() => null) : Promise.resolve(null),
+        allowAuditReads ? apiClient.getAuditTrail().catch(() => []) : Promise.resolve([]),
         apiClient.getRbacSession().catch(() => null),
-        apiClient.getClimateThresholds().catch(() => []),
-        apiClient.getInventoryBatches().catch(() => []),
-        apiClient.getWarehouseBins().catch(() => []),
-        apiClient.getQCInspections().catch(() => []),
-        apiClient.getStockTransfers().catch(() => []),
-        apiClient.getPickerOrders().catch(() => []),
+        allowInventoryReads ? apiClient.getClimateThresholds().catch(() => []) : Promise.resolve([]),
+        allowFefoReads ? apiClient.getInventoryBatches().catch(() => []) : Promise.resolve([]),
+        allowInventoryReads ? apiClient.getWarehouseBins().catch(() => []) : Promise.resolve([]),
+        allowQcReads ? apiClient.getQCInspections().catch(() => []) : Promise.resolve([]),
+        allowTransferReads ? apiClient.getStockTransfers().catch(() => []) : Promise.resolve([]),
+        allowPickerReads ? apiClient.getPickerOrders().catch(() => []) : Promise.resolve([]),
         apiClient.getB2BOrders().catch(() => []),
         apiClient.getB2BProducts().catch(() => []),
-        apiClient.getWasteRecords().catch(() => ({ records: [] })),
-        apiClient.getRemovalStrategies().catch(() => null),
-        apiClient.getVendorBills().catch(() => []),
+        allowWasteReads ? apiClient.getWasteRecords().catch(() => ({ records: [] })) : Promise.resolve({ records: [] }),
+        allowInventoryReads ? apiClient.getRemovalStrategies().catch(() => null) : Promise.resolve(null),
+        allowVendorBillReads ? apiClient.getVendorBills().catch(() => []) : Promise.resolve([]),
         apiClient.getEnterpriseSettings().catch(() => null),
         apiClient.getAdminNotifications().catch(() => ({ notifications: [], unreadCount: 0 })),
       ]);

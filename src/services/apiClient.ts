@@ -250,13 +250,17 @@ async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<R
         const bodyText = await res.clone().text().catch(() => '');
         const trimmed = bodyText.trim();
         const looksLikeHtml = contentType.includes('text/html') || trimmed.startsWith('<');
+        const isAuthDenyStatus = res.status === 401 || res.status === 403;
 
-        if ((isGatewayRetryable || looksLikeHtml) && attempt < retryDelays.length) {
+        if ((isGatewayRetryable || (looksLikeHtml && !isAuthDenyStatus)) && attempt < retryDelays.length) {
           await sleep(retryDelays[attempt]);
           continue;
         }
 
         if (looksLikeHtml) {
+          if (isAuthDenyStatus) {
+            return res;
+          }
           const isWarmup = trimmed.includes('Starting Server') || isGatewayRetryable;
           throw new Error(
             isWarmup
@@ -2607,6 +2611,9 @@ export const apiClient = {
   // -------------------------------------------------------------
   async getB2BCustomers(): Promise<B2BCustomer[]> {
     const res = await fetchApi('/api/b2b/customers');
+    if (res.status === 401 || res.status === 403) {
+      return [];
+    }
     if (!res.ok) {
       const { INITIAL_B2B_CUSTOMERS } = await import('../data/b2bWholesaleData.ts');
       return INITIAL_B2B_CUSTOMERS;
