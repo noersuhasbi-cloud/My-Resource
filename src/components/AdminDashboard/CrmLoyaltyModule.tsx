@@ -832,7 +832,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 CRM, Loyalty &amp; Customer 360°
               </h2>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
-                Odoo Pipeline + Salesforce 360°
+                GroceMatrix™ Pipeline &amp; Customer 360°
               </span>
             </div>
             <p className={`text-xs mt-0.5 ${textMuted}`}>
@@ -1021,7 +1021,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
 
       <div key={subTab} className="gm-tab-enter">
       {/* ============================================================ */}
-      {/* SUB-TAB 1: B2B DEAL PIPELINE (ODOO KANBAN + LIST)            */}
+      {/* SUB-TAB 1: B2B DEAL PIPELINE (GROCEMATRIX™ KANBAN + LIST)     */}
       {/* ============================================================ */}
       {subTab === 'pipeline' && (
         <div className="space-y-3">

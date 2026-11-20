@@ -27,10 +27,10 @@ import { getBpjphExpiryInfo } from '../../utils/indonesianCompliance';
 import { canSessionViewValuation, normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   formatMultiUomStock,
-  getOdooSkuProfile,
+  getEnterpriseSkuProfile,
   resolveEffectiveRemovalStrategy,
   resolveLotAndFefoForTier,
-} from '../../utils/inventoryOdooHelper';
+} from '../../utils/inventorySkuHelper';
 import {
   ArrowRightLeft,
   Barcode,
@@ -53,21 +53,19 @@ import {
   Tag,
   Trash2,
   Truck,
-  Upload,
   Warehouse,
   X,
   Scissors,
   Zap,
 } from 'lucide-react';
 import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
-import { SkuImportModal } from './SkuImportModal';
 import { WarehouseRackSetupPanel } from './WarehouseRackSetupPanel';
 import { RackBlindOpnamePanel } from './RackBlindOpnamePanel';
 import { RepackBundlePanel } from './RepackBundlePanel';
 import { FefoHeatmapRackVisualizer } from './FefoHeatmapRackVisualizer';
 import { FlashSaleClearanceModal } from './FlashSaleClearanceModal';
 
-interface OdooInventoryViewProps {
+interface EnterpriseInventoryViewProps {
   theme: 'light' | 'dark';
   activeStaffSession?: StaffShiftSession | null;
   selectedOutletFilter: string;
@@ -99,7 +97,7 @@ interface OdooInventoryViewProps {
   renderStocktakeImport?: () => React.ReactNode;
 }
 
-type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'fefo_heatmap' | 'blind_opname' | 'stocktake_import' | 'repack_bundle' | 'returnables';
+type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'fefo_heatmap' | 'stocktake_opname' | 'repack_bundle' | 'returnables';
 type ChannelFilter = 'ALL' | 'B2C' | 'B2B' | 'BOTH';
 type HubScope = 'ALL' | 'CDC' | 'DARK_STORE' | 'RETAIL_FRONTS';
 
@@ -162,7 +160,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   household_hygiene: 'B2B Household & Hygiene',
 };
 
-export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
+export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = ({
   theme,
   activeStaffSession,
   selectedOutletFilter,
@@ -208,7 +206,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
   const [includeB2BCatalogRows, setIncludeB2BCatalogRows] = useState<boolean>(true);
   const [showStrategyModal, setShowStrategyModal] = useState<boolean>(false);
   const [showBarcodeLabelModal, setShowBarcodeLabelModal] = useState<boolean>(false);
-  const [showSkuImportModal, setShowSkuImportModal] = useState<boolean>(false);
+  const [opnameWorkspaceMode, setOpnameWorkspaceMode] = useState<'standard_import' | 'rack_blind'>('standard_import');
   const [savingStrategy, setSavingStrategy] = useState<boolean>(false);
   const [mediaInspector, setMediaInspector] = useState<MediaInspectorTarget | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -375,7 +373,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
 
     return combined
       .map((row) => {
-        const profile = getOdooSkuProfile(row.sku, row.category, row.unit, row.image);
+        const profile = getEnterpriseSkuProfile(row.sku, row.category, row.unit, row.image);
         const strategy = resolveEffectiveRemovalStrategy(row.sku, row.category, removalStrategies);
         const lotInfo = resolveLotAndFefoForTier(
           row.sku,
@@ -416,7 +414,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
       });
   }, [filteredTiers, wholesaleQuantRows, removalStrategies, batches, warehouseBins, channelFilter, strategyFilter]);
 
-  // Compute live operational counts per Warehouse Hub for Odoo Kanban Cards
+  // Compute live operational counts per Warehouse Hub for GroceMatrix™ Kanban Cards
   const hubKanbanCards = useMemo(() => {
     const visibleHubs =
       hubFilter === 'ALL' ? HUB_DEFINITIONS : HUB_DEFINITIONS.filter((h) => h.id === hubFilter);
@@ -758,14 +756,14 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
 
   return (
     <div className="space-y-5 text-slate-900 dark:text-slate-100">
-      {/* Odoo Inventory Operations Command Header + View Switcher (3-Row Stacked Hierarchy) */}
+      {/* GroceMatrix™ Inventory Operations Command Header + View Switcher (3-Row Stacked Hierarchy) */}
       <div className={`${cardClass} p-4 sm:p-5 space-y-3.5`}>
         {/* ROW 1: Full-width Deep Forest Green Header Banner (Clean single-line desktop title, zero collision) */}
         <div className="w-full rounded-xl bg-[#164E29] dark:bg-emerald-950/80 border border-[#164E29] dark:border-emerald-800/50 text-white dark:text-slate-100 px-5 py-4 shadow-sm">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-emerald-100 dark:text-emerald-300">
               <span className="font-bold uppercase tracking-wider text-white dark:text-emerald-400">
-                Odoo Inventory Standard
+                GROCEMATRIX™ INVENTORY ENGINE
               </span>
               <span aria-hidden="true" className="opacity-60">·</span>
               <span>Multi-Warehouse Operations</span>
@@ -780,13 +778,13 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
           </div>
         </div>
 
-        {/* ROW 2: Dedicated White/Dark Card Container for Navigation Tabs */}
+        {/* ROW 2: Dedicated White/Dark Card Container for Navigation Tabs (Single Crisp 7-Tab Row) */}
         <div
           className="w-full rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] shadow-xs p-1.5"
           role="tablist"
           aria-label="Inventory view switcher"
         >
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap lg:flex-nowrap items-center gap-1 overflow-x-auto">
             <button
               type="button"
               role="tab"
@@ -840,29 +838,15 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={viewMode === 'blind_opname'}
-                  onClick={() => setViewMode('blind_opname')}
+                  aria-selected={viewMode === 'stocktake_opname'}
+                  onClick={() => setViewMode('stocktake_opname')}
                   className={`${tabButtonBase} ${
-                    viewMode === 'blind_opname' ? tabButtonActive : tabButtonInactive
+                    viewMode === 'stocktake_opname' ? tabButtonActive : tabButtonInactive
                   }`}
                 >
                   <ClipboardList className="w-3.5 h-3.5" />
-                  Rack Blind Opname
+                  Stocktake &amp; Opname
                 </button>
-                {renderStocktakeImport && (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={viewMode === 'stocktake_import'}
-                    onClick={() => setViewMode('stocktake_import')}
-                    className={`${tabButtonBase} ${
-                      viewMode === 'stocktake_import' ? tabButtonActive : tabButtonInactive
-                    }`}
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    Stocktake &amp; Import
-                  </button>
-                )}
                 <button
                   type="button"
                   role="tab"
@@ -895,17 +879,6 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         {/* ROW 3: Secondary Action Buttons & High-Intent Flash Sale Trigger */}
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            {canManageWarehouseTopology && (
-              <button
-                type="button"
-                onClick={() => setShowSkuImportModal(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
-              >
-                <Upload className="w-3.5 h-3.5 text-[#164E29] dark:text-emerald-400" />
-                Import SKU (CSV)
-              </button>
-            )}
-
             <button
               type="button"
               onClick={() => setShowStrategyModal(true)}
@@ -1004,7 +977,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
 
       <div key={viewMode} className="gm-tab-enter">
       {/* ===================================================================== */}
-      {/* VIEW 1: ODOO-STYLE KANBAN OPERATIONS DASHBOARD */}
+      {/* VIEW 1: GROCEMATRIX™ KANBAN OPERATIONS DASHBOARD */}
       {/* ===================================================================== */}
       {viewMode === 'kanban' && (
         <div className="space-y-5">
@@ -1084,7 +1057,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
                 </div>
               </div>
 
-              {/* 6 Odoo Operation Cards Grid */}
+              {/* 6 GroceMatrix™ Operation Cards Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {operations.map((op) => {
                   const Icon = op.icon;
@@ -1276,7 +1249,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             </div>
           </div>
 
-          {/* Odoo Stock Quants & Lot Ledger Table */}
+          {/* GroceMatrix™ Stock Quants & Lot Ledger Table */}
           <div className={`${cardClass} overflow-hidden shadow-xs`}>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -1671,21 +1644,54 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
       )}
 
       {/* ===================================================================== */}
-      {/* VIEW 4: RACK-LEVEL BLIND STOCK OPNAME (CYCLE COUNT) */}
+      {/* VIEW 4: UNIFIED STOCKTAKE, BLIND OPNAME & BULK CSV IMPORT */}
       {/* ===================================================================== */}
-      {viewMode === 'blind_opname' && canManageWarehouseTopology && (
-        <RackBlindOpnamePanel
-          theme={theme}
-          activeStaffSession={activeStaffSession}
-          storeOutlets={storeOutlets}
-          selectedOutletFilter={selectedOutletFilter}
-          inventory={inventory}
-          batches={batches}
-          onRefreshAll={async () => {
-            if (onRefreshData) await onRefreshData();
-          }}
-          onShowToast={onShowToast}
-        />
+      {viewMode === 'stocktake_opname' && canManageWarehouseTopology && (
+        <div className="space-y-4">
+          {renderStocktakeImport && (
+            <div className={`${cardClass} p-2 flex flex-wrap items-center justify-between gap-2`}>
+              <div className="inline-flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setOpnameWorkspaceMode('standard_import')}
+                  className={`${tabButtonBase} ${
+                    opnameWorkspaceMode === 'standard_import' ? tabButtonActive : tabButtonInactive
+                  }`}
+                >
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  Standard Reconciliation, Blind Count &amp; Bulk CSV Import
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpnameWorkspaceMode('rack_blind')}
+                  className={`${tabButtonBase} ${
+                    opnameWorkspaceMode === 'rack_blind' ? tabButtonActive : tabButtonInactive
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  Rack-Level Blind Opname (Per-Rack)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {renderStocktakeImport && opnameWorkspaceMode === 'standard_import' ? (
+            renderStocktakeImport()
+          ) : (
+            <RackBlindOpnamePanel
+              theme={theme}
+              activeStaffSession={activeStaffSession}
+              storeOutlets={storeOutlets}
+              selectedOutletFilter={selectedOutletFilter}
+              inventory={inventory}
+              batches={batches}
+              onRefreshAll={async () => {
+                if (onRefreshData) await onRefreshData();
+              }}
+              onShowToast={onShowToast}
+            />
+          )}
+        </div>
       )}
 
       {/* ===================================================================== */}
@@ -1995,11 +2001,6 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
         </div>
       )}
 
-      {viewMode === 'stocktake_import' && renderStocktakeImport && (
-        <div className="gm-tab-enter">
-          {renderStocktakeImport()}
-        </div>
-      )}
       </div>
 
       {/* ===================================================================== */}
@@ -2012,7 +2013,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             <div className={`flex items-center justify-between border-b pb-3 ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
               <div>
                 <h3 className={`text-base font-bold ${textTitle}`}>
-                  Odoo Removal Strategy Rules (FEFO vs. FIFO)
+                  GroceMatrix™ Removal Strategy Rules (FEFO vs. FIFO)
                 </h3>
                 <p className={`text-xs ${textMuted}`}>
                   Controls batch picking order across POS Checkout, B2C Picker, B2B Wholesale Dispatch, and FEFO Allocator.
@@ -2097,7 +2098,7 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
       {/* MODAL 2: B2B vs. B2C MEDIA, PACKAGING & MULTI-UOM INSPECTOR */}
       {/* ===================================================================== */}
       {mediaInspector && (() => {
-        const profile = getOdooSkuProfile(
+        const profile = getEnterpriseSkuProfile(
           mediaInspector.sku,
           mediaInspector.category,
           mediaInspector.unit
@@ -2297,19 +2298,6 @@ export const OdooInventoryView: React.FC<OdooInventoryViewProps> = ({
             bpjphCertNumber: it.bpjphCertNumber,
           };
         })}
-        onShowToast={onShowToast}
-      />
-
-      {/* Additive Bulk SKU & Initial Batch CSV Importer */}
-      <SkuImportModal
-        theme={theme}
-        isOpen={showSkuImportModal}
-        onClose={() => setShowSkuImportModal(false)}
-        activeStaffSession={activeStaffSession}
-        storeOutlets={storeOutlets}
-        onImported={async () => {
-          if (onRefreshData) await onRefreshData();
-        }}
         onShowToast={onShowToast}
       />
 

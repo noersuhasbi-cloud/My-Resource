@@ -104,7 +104,7 @@ import { LogisticsDocsModal } from './LogisticsDocsModal';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { GroceryReportsModule } from './GroceryReportsModule';
 import { SettingsModule } from './SettingsModule';
-import { OdooInventoryView } from './OdooInventoryView';
+import { EnterpriseInventoryView } from './EnterpriseInventoryView';
 import { QuotationsModule } from './QuotationsModule';
 import { CrmLoyaltyModule } from './CrmLoyaltyModule';
 import { NotificationCenterPopover } from './NotificationCenterPopover';
@@ -1916,8 +1916,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            {/* Odoo-Standard Inventory Operations (Kanban + Granular Stock & Lot List + B2B/B2C Split + FEFO/FIFO) */}
-            <OdooInventoryView
+            {/* GroceMatrix™ Enterprise Inventory Operations (Kanban + Granular Stock & Lot List + B2B/B2C Split + FEFO/FIFO) */}
+            <EnterpriseInventoryView
               theme={theme}
               activeStaffSession={activeStaffSession}
               selectedOutletFilter={selectedOutletFilter === 'CONSOLIDATED' ? 'ALL' : selectedOutletFilter}

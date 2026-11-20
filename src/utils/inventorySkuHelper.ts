@@ -21,7 +21,7 @@ export interface UoMConversionMeta {
   baseUnitLabel: string;
 }
 
-export interface OdooSkuProfile {
+export interface EnterpriseSkuProfile {
   sku: string;
   salesChannel: SalesChannelScope;
   b2cImageUrl: string;
@@ -73,7 +73,7 @@ export function resolveEffectiveRemovalStrategy(
   return getDefaultRemovalStrategy(category, sku);
 }
 
-const SKU_PROFILES: Record<string, Partial<OdooSkuProfile>> = {
+const SKU_PROFILES: Record<string, Partial<EnterpriseSkuProfile>> = {
   'SKU-PRD-001': {
     salesChannel: 'BOTH',
     b2cImageUrl: B2C_PRODUCE_IMG,
@@ -323,12 +323,12 @@ const SKU_PROFILES: Record<string, Partial<OdooSkuProfile>> = {
   },
 };
 
-export function getOdooSkuProfile(
+export function getEnterpriseSkuProfile(
   sku: string,
   category?: string,
   unit?: string,
   fallbackImage?: string
-): OdooSkuProfile {
+): EnterpriseSkuProfile {
   const override = SKU_PROFILES[sku] || {};
   const perishable = isPerishableCategory(category);
   const defaultB2C =

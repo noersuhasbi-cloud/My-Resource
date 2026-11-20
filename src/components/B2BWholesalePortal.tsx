@@ -17,7 +17,7 @@ import {
   inferDefaultTaxCategory,
   resolveWholesaleTierPrice,
 } from '../utils/indonesianCompliance';
-import { getOdooSkuProfile } from '../utils/inventoryOdooHelper';
+import { getEnterpriseSkuProfile } from '../utils/inventorySkuHelper';
 import { apiClient } from '../services/apiClient';
 import { usePrint } from '../context/PrintContext';
 import {
@@ -685,8 +685,8 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                   Math.round(currentSel.quantity * activeTier.multiplierToBase * 10) / 10;
                 const calculatedTotal = Math.round(currentSel.quantity * resolvedCardPrice.unitPriceIDR);
 
-                const odooProfile = getOdooSkuProfile(prod.sku, prod.category, prod.baseUnit, prod.image);
-                const wholesaleImg = prod.b2bImageUrl || odooProfile.b2bImageUrl || prod.image;
+                const skuProfile = getEnterpriseSkuProfile(prod.sku, prod.category, prod.baseUnit, prod.image);
+                const wholesaleImg = prod.b2bImageUrl || skuProfile.b2bImageUrl || prod.image;
                 const imgFailed = failedImages[prod.id];
 
                 return (
@@ -742,8 +742,8 @@ export const B2BWholesalePortal: React.FC<B2BWholesalePortalProps> = ({
                             {prod.description}
                           </p>
                           <div className="mt-2 pt-2 border-t border-stone-100 dark:border-slate-800/80 flex items-center justify-between gap-2 text-[10px] font-mono text-stone-600 dark:text-slate-400">
-                            <span className="truncate">{prod.wholesalePackagingSpec || odooProfile.wholesalePackagingSpec}</span>
-                            <span className="shrink-0 font-bold">GTIN {prod.outerBoxBarcode || odooProfile.outerBoxBarcode}</span>
+                            <span className="truncate">{prod.wholesalePackagingSpec || skuProfile.wholesalePackagingSpec}</span>
+                            <span className="shrink-0 font-bold">GTIN {prod.outerBoxBarcode || skuProfile.outerBoxBarcode}</span>
                           </div>
                         </div>
 

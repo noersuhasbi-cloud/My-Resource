@@ -243,7 +243,7 @@ export interface StoreInventoryStock {
   supplierName: string;
   lastRestockedAt: string;
   updatedAt: string;
-  // Optional Odoo Inventory & B2B/B2C Differentiation fields
+  // Optional GroceMatrix™ Inventory & B2B/B2C Differentiation fields
   binLocation?: string;
   rackBinCode?: string;
   lotNumber?: string;
@@ -2579,7 +2579,7 @@ export interface B2BWholesaleOrder {
 }
 
 // =============================================================
-// ODOO-STANDARD INVENTORY REMOVAL STRATEGY CONFIG
+// GROCEMATRIX™ INVENTORY REMOVAL STRATEGY CONFIG
 // =============================================================
 export type RemovalStrategyType = 'FEFO' | 'FIFO';
 export type SalesChannelScope = 'B2C' | 'B2B' | 'BOTH';
