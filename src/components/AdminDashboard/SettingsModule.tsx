@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import * as XLSX from 'xlsx';
 import type {
   ChartOfAccount,
   CoaMappingConfig,
   PosCheckoutConfig,
   PosRoundingRule,
   BulkInventoryImportRow,
+  InventoryImportDraft,
+  InventoryImportDraftRow,
   StockOpnameSession,
   StockOpnameItem,
   StockTransferRecord,
@@ -327,10 +330,20 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [opnameNotes, setOpnameNotes] = useState<Record<string, string>>({});
   const [opnameSessions, setOpnameSessions] = useState<StockOpnameSession[]>([]);
 
-  // 4. Bulk Import State
+  // 4. Bulk Import Draft Staging State (Rack, Lot & Serial Number SN)
   const [csvText, setCsvText] = useState<string>('');
   const [parsedImportRows, setParsedImportRows] = useState<BulkInventoryImportRow[]>([]);
   const [importTargetStoreId, setImportTargetStoreId] = useState<string>('store-jkt-senopati');
+  const bulkImportFileInputRef = useRef<HTMLInputElement>(null);
+  const [importDraftsList, setImportDraftsList] = useState<InventoryImportDraft[]>([]);
+  const [activeImportDraft, setActiveImportDraft] = useState<InventoryImportDraft | null>(null);
+  const [draftEditableRows, setDraftEditableRows] = useState<InventoryImportDraftRow[]>([]);
+  const [draftSnTextMap, setDraftSnTextMap] = useState<Record<string, string>>({});
+  const [isStagingDraft, setIsStagingDraft] = useState<boolean>(false);
+  const [isSavingDraft, setIsSavingDraft] = useState<boolean>(false);
+  const [isApplyingDraft, setIsApplyingDraft] = useState<boolean>(false);
+  const [isDiscardingDraft, setIsDiscardingDraft] = useState<boolean>(false);
+  const [lastImportFilename, setLastImportFilename] = useState<string>('');
 
   // 5. Stock Transfer State
   const [transferRecords, setTransferRecords] = useState<StockTransferRecord[]>([]);
@@ -963,86 +976,417 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     }
   };
 
-  // Handle Parse CSV for Bulk Import
+  const syncActiveDraftState = (draft: InventoryImportDraft | null) => {
+    setActiveImportDraft(draft);
+    if (!draft) {
+      setDraftEditableRows([]);
+      setDraftSnTextMap({});
+      return;
+    }
+    setDraftEditableRows(draft.rows || []);
+    const snMap: Record<string, string> = {};
+    (draft.rows || []).forEach((r) => {
+      snMap[r.rowId] = Array.isArray(r.serialNumbers) ? r.serialNumbers.join(', ') : '';
+    });
+    setDraftSnTextMap(snMap);
+  };
+
+  const loadImportDrafts = async () => {
+    try {
+      const res = await apiClient.getInventoryImportDrafts();
+      const drafts = res.drafts || [];
+      setImportDraftsList(drafts);
+      if (!activeImportDraft) {
+        const pending = drafts.find((d) => d.status === 'DRAFT') || null;
+        if (pending) syncActiveDraftState(pending);
+      }
+    } catch {
+      // silent if read restricted
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === 'import_opname' && opnameSubTab === 'bulk_import') {
+      void loadImportDrafts();
+    }
+  }, [activeSubTab, opnameSubTab]);
+
+  const inferSmartExpiryDate = (category: string): string => {
+    const cat = String(category || '').toLowerCase();
+    const days =
+      cat.includes('produce') || cat.includes('bakery') || cat.includes('fresh')
+        ? 14
+        : cat.includes('dairy') || cat.includes('egg') || cat.includes('meat') || cat.includes('seafood')
+        ? 30
+        : 180;
+    return new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
+  };
+
+  const parseCsvLineQuoted = (line: string): string[] => {
+    const out: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        out.push(cur.trim());
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur.trim());
+    return out;
+  };
+
+  const parseTabularRowsToDraftInput = (matrix: string[][]): Partial<InventoryImportDraftRow>[] => {
+    if (matrix.length < 2) return [];
+    const headers = matrix[0].map((h) => String(h || '').trim().toLowerCase());
+    const findCol = (patterns: string[], fallbackIdx: number): number => {
+      const idx = headers.findIndex((h) => patterns.some((p) => h.includes(p)));
+      return idx >= 0 ? idx : fallbackIdx;
+    };
+
+    const skuIdx = findCol(['sku', 'kode'], 0);
+    const nameIdx = findCol(['product', 'nama', 'name'], 1);
+    const catIdx = findCol(['cat', 'kategori'], 2);
+    const stockIdx = findCol(['stock', 'qty', 'stok', 'jumlah'], 3);
+    const costIdx = findCol(['cost', 'hpp', 'beli'], 4);
+    const priceIdx = findCol(['sell', 'jual', 'price', 'harga'], 5);
+    const minIdx = findCol(['min', 'thresh'], 6);
+    const unitIdx = findCol(['unit', 'uom', 'satuan'], 7);
+    const supIdx = findCol(['supp', 'vendor', 'pemasok'], 8);
+    const rackIdx = findCol(['rack', 'bin', 'rak', 'lokasi'], 9);
+    const lotIdx = findCol(['lot', 'batch'], 10);
+    const expIdx = findCol(['exp', 'kadaluarsa', 'ed'], 11);
+    const snIdx = findCol(['serial', 'sn'], 12);
+
+    const todayStamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    const parsed: Partial<InventoryImportDraftRow>[] = [];
+
+    for (let i = 1; i < matrix.length; i++) {
+      const cells = matrix[i];
+      if (!cells || cells.every((c) => !String(c || '').trim())) continue;
+      const getVal = (idx: number) => (idx >= 0 && idx < cells.length ? String(cells[idx] ?? '').trim() : '');
+      const sku = getVal(skuIdx).toUpperCase();
+      if (!sku) continue;
+      const seq = String(parsed.length + 1).padStart(2, '0');
+      const category = getVal(catIdx) || 'produce';
+      const unitCost = Math.round(Number(getVal(costIdx).replace(/[^0-9.-]/g, '')) || 0);
+      const rawPrice = getVal(priceIdx).replace(/[^0-9.-]/g, '');
+      const sellingPrice = rawPrice ? Math.round(Number(rawPrice)) : Math.round(Math.max(0, unitCost) * 1.4);
+      const physicalStock = Number(getVal(stockIdx).replace(/[^0-9.-]/g, '')) || 0;
+      const minimumThreshold = Math.round(Number(getVal(minIdx).replace(/[^0-9.-]/g, '')) || 10);
+      const rawSn = getVal(snIdx);
+      const serialNumbers = rawSn
+        ? Array.from(new Set(rawSn.split(/[;,|]+/).map((s) => s.trim()).filter(Boolean)))
+        : [];
+
+      parsed.push({
+        sku,
+        productName: getVal(nameIdx) || `Product ${sku}`,
+        category,
+        physicalStock,
+        unitCost,
+        sellingPrice,
+        minimumThreshold,
+        unit: getVal(unitIdx) || 'pack',
+        supplierName: getVal(supIdx) || 'Local Farm Coop',
+        rackLocation: (getVal(rackIdx) || 'RACK-GEN-01').toUpperCase(),
+        lotNumber: getVal(lotIdx) || `LOT-IMP-${todayStamp}-${seq}`,
+        expiryDate: getVal(expIdx) || inferSmartExpiryDate(category),
+        serialNumbers,
+      });
+    }
+    return parsed;
+  };
+
+  const stageRowsAsServerDraft = async (
+    rowsToStage: Partial<InventoryImportDraftRow>[],
+    sourceFilename?: string,
+    targetStoreOverride?: string
+  ) => {
+    if (rowsToStage.length === 0) {
+      onShowToast('No Valid Rows', 'Enter or upload at least 1 valid inventory row to stage a draft.');
+      return;
+    }
+    setIsStagingDraft(true);
+    try {
+      const res = await apiClient.createInventoryImportDraft({
+        storeId: targetStoreOverride || importTargetStoreId,
+        sourceFilename,
+        rows: rowsToStage,
+      });
+      if (res.success && res.draft) {
+        syncActiveDraftState(res.draft);
+        setImportDraftsList((prev) => [res.draft, ...prev.filter((d) => d.id !== res.draft.id)]);
+        onShowToast('Import Draft Staged', res.message);
+      }
+    } catch (err: any) {
+      onShowToast('Draft Staging Failed', err.message || 'Could not create import draft');
+    } finally {
+      setIsStagingDraft(false);
+    }
+  };
+
+  // Handle Parse CSV for Bulk Import (updates local preview; staging happens via Draft endpoint)
   const handleParseCsv = (rawText: string) => {
     setCsvText(rawText);
-    const lines = rawText.trim().split('\n');
+    const lines = rawText
+      .replace(/\r\n/g, '\n')
+      .trim()
+      .split('\n')
+      .filter((l) => l.trim().length > 0);
     if (lines.length < 2) {
       setParsedImportRows([]);
       return;
     }
 
-    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
-    const rows: BulkInventoryImportRow[] = [];
-
+    const matrix = lines.map(parseCsvLineQuoted);
+    const draftInput = parseTabularRowsToDraftInput(matrix);
     const store = storeOutlets.find((s) => s.storeId === importTargetStoreId);
     const defaultStoreName = store?.storeName || 'Senopati Flagship';
 
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split(',').map((p) => p.trim());
-      if (parts.length < 3 || !parts[0]) continue;
+    const preview: BulkInventoryImportRow[] = draftInput.map((d) => ({
+      sku: d.sku || '',
+      productName: d.productName || '',
+      category: d.category || 'produce',
+      storeId: importTargetStoreId,
+      storeName: defaultStoreName,
+      warehouseZoneId: store?.activeWarehouses[0] || 'WH-JKT-SEN-AMB',
+      storageType:
+        d.category === 'produce' || d.category === 'dairy_eggs'
+          ? 'cold_chilled'
+          : d.category === 'meat_seafood'
+          ? 'freezer'
+          : 'ambient',
+      physicalStock: d.physicalStock || 0,
+      unitCost: d.unitCost || 0,
+      sellingPrice: d.sellingPrice || 0,
+      minimumThreshold: d.minimumThreshold || 10,
+      unit: d.unit || 'pack',
+      supplierName: d.supplierName || 'Local Farm Coop',
+      rackLocation: d.rackLocation,
+      lotNumber: d.lotNumber,
+      expiryDate: d.expiryDate,
+      serialNumbers: d.serialNumbers,
+    }));
 
-      const sku = parts[0];
-      const name = parts[1] || `Product ${sku}`;
-      const category = parts[2] || 'produce';
-      const stock = Number(parts[3]) || 50;
-      const cost = Number(parts[4]) || 12000;
-      const price = Number(parts[5]) || Math.round(cost * 1.5);
-      const minThresh = Number(parts[6]) || 10;
-      const unit = parts[7] || 'pack';
-      const supplier = parts[8] || 'Local Farm Coop';
+    setParsedImportRows(preview);
+  };
 
-      rows.push({
-        sku,
-        productName: name,
-        category,
-        storeId: importTargetStoreId,
-        storeName: defaultStoreName,
-        warehouseZoneId: store?.activeWarehouses[0] || 'WH-JKT-SEN-AMB',
-        storageType: category === 'produce' || category === 'dairy_eggs' ? 'cold_chilled' : category === 'meat_seafood' ? 'freezer' : 'ambient',
-        physicalStock: stock,
-        unitCost: cost,
-        sellingPrice: price,
-        minimumThreshold: minThresh,
-        unit,
-        supplierName: supplier,
-      });
+  const handleBulkImportFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLastImportFilename(file.name);
+    try {
+      const lowerName = file.name.toLowerCase();
+      let matrix: string[][] = [];
+      if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const firstSheet = wb.SheetNames[0];
+        if (!firstSheet) throw new Error('Excel workbook contains no sheets.');
+        const aoa = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[firstSheet], { header: 1, raw: false });
+        matrix = aoa.map((row) => (Array.isArray(row) ? row.map((c) => String(c ?? '').trim()) : []));
+        const csvPreview = matrix.map((r) => r.join(',')).join('\n');
+        setCsvText(csvPreview);
+      } else {
+        const text = await file.text();
+        setCsvText(text);
+        matrix = text
+          .replace(/\r\n/g, '\n')
+          .trim()
+          .split('\n')
+          .filter((l) => l.trim().length > 0)
+          .map(parseCsvLineQuoted);
+      }
+
+      const draftRows = parseTabularRowsToDraftInput(matrix);
+      if (draftRows.length === 0) {
+        onShowToast('Empty File', 'No valid data rows found in the uploaded file.');
+        return;
+      }
+      await stageRowsAsServerDraft(draftRows, file.name);
+    } catch (err: any) {
+      onShowToast('File Parse Error', err.message || 'Failed to read .CSV / .XLSX file');
+    } finally {
+      if (bulkImportFileInputRef.current) bulkImportFileInputRef.current.value = '';
     }
-
-    setParsedImportRows(rows);
   };
 
-  // Sample CSV generator
-  const handleLoadSampleCsv = () => {
-    const sample = `SKU,Product Name,Category,Physical Stock,Unit Cost (IDR),Selling Price (IDR),Min Threshold,Unit,Supplier
-SKU-PRD-001,Organic Hydroponic Butterhead Lettuce,produce,65,11000,18500,20,250g head,Kebun Lembang Eco
-SKU-PRD-002,Heirloom Vine-Ripened Sweet Tomatoes,produce,30,14500,24000,15,500g pack,Ciwidey Farmers
-SKU-DAI-001,Pastured Free-Range Omega-3 Eggs,dairy_eggs,45,22000,34000,20,10-pack tray,Bogor Pastures
-SKU-MEA-001,Grass-Fed Angus Ribeye Steak,meat_seafood,18,78000,125000,10,250g cut,Santosa Prime Butchery
-SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,Heritage Woodfire Oven`;
+  // Sample CSV generator (stages directly as a safe DRAFT for inline review)
+  const handleLoadSampleCsv = async () => {
+    const todayStamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    const expFresh = inferSmartExpiryDate('produce');
+    const expCold = inferSmartExpiryDate('dairy_eggs');
+    const sample = `SKU,Product Name,Category,Physical Stock,Unit Cost (IDR),Selling Price (IDR),Min Threshold,Unit,Supplier,Rack Location,Lot Number,Expiry Date,Serial Numbers (SN)
+SKU-PRD-001,Organic Hydroponic Butterhead Lettuce,produce,65,11000,18500,20,250g head,Kebun Lembang Eco,CHILL-A1,LOT-IMP-${todayStamp}-01,${expFresh},
+SKU-PRD-002,Heirloom Vine-Ripened Sweet Tomatoes,produce,30,14500,24000,15,500g pack,Ciwidey Farmers,CHILL-A2,LOT-IMP-${todayStamp}-02,${expFresh},
+SKU-DAI-001,Pastured Free-Range Omega-3 Eggs,dairy_eggs,45,22000,34000,20,10-pack tray,Bogor Pastures,CHILL-B1,LOT-IMP-${todayStamp}-03,${expCold},
+SKU-MEA-001,Grass-Fed Angus Ribeye Steak,meat_seafood,18,78000,125000,10,250g cut,Santosa Prime Butchery,FREEZ-C1,LOT-IMP-${todayStamp}-04,${expCold},SN-RIB-001;SN-RIB-002
+SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,Heritage Woodfire Oven,AMB-D1,LOT-IMP-${todayStamp}-05,${expFresh},`;
 
+    setLastImportFilename('sample_inventory_matrix.csv');
     handleParseCsv(sample);
+    const matrix = sample
+      .trim()
+      .split('\n')
+      .map(parseCsvLineQuoted);
+    await stageRowsAsServerDraft(parseTabularRowsToDraftInput(matrix), 'sample_inventory_matrix.csv');
   };
 
-  // Commit Bulk Import
-  const handleCommitBulkImport = async () => {
-    if (parsedImportRows.length === 0) {
-      onShowToast('Empty Import', 'Please enter or upload valid CSV rows first.');
+  const handleStagePastedCsvAsDraft = async () => {
+    const lines = csvText
+      .replace(/\r\n/g, '\n')
+      .trim()
+      .split('\n')
+      .filter((l) => l.trim().length > 0);
+    if (lines.length < 2) {
+      onShowToast('Invalid CSV', 'Paste a header row plus at least 1 data row first.');
+      return;
+    }
+    const matrix = lines.map(parseCsvLineQuoted);
+    await stageRowsAsServerDraft(parseTabularRowsToDraftInput(matrix), lastImportFilename || 'pasted_csv_import.csv');
+  };
+
+  const revalidateDraftRowLocal = (row: InventoryImportDraftRow): InventoryImportDraftRow => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const errors: string[] = [];
+    if (!row.sku.trim()) errors.push('SKU required');
+    if (!row.productName.trim()) errors.push('Product Name required');
+    if (!Number.isFinite(row.physicalStock) || row.physicalStock <= 0) errors.push('Qty > 0');
+    if (!Number.isFinite(row.unitCost) || row.unitCost <= 0) errors.push('Cost > 0');
+    if (!Number.isFinite(row.sellingPrice) || row.sellingPrice < 0) errors.push('Price >= 0');
+    if (!row.rackLocation.trim()) errors.push('Rack required');
+    if (!row.lotNumber.trim()) errors.push('Lot required');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.expiryDate)) {
+      errors.push('Expiry YYYY-MM-DD');
+    } else if (row.expiryDate < todayStr) {
+      errors.push('Expired date');
+    }
+    const existsInStore = inventoryTiers.some(
+      (t) => t.sku === row.sku.trim().toUpperCase() && t.storeId === (activeImportDraft?.storeId || importTargetStoreId)
+    );
+    return {
+      ...row,
+      status: errors.length > 0 ? 'VALIDATION_ERROR' : existsInStore ? 'RESTOCK' : 'NEW_SKU',
+      validationError: errors.length > 0 ? errors.join('; ') : undefined,
+    };
+  };
+
+  const handleDraftRowFieldChange = <K extends keyof InventoryImportDraftRow>(
+    rowId: string,
+    field: K,
+    value: InventoryImportDraftRow[K]
+  ) => {
+    setDraftEditableRows((prev) =>
+      prev.map((row) => {
+        if (row.rowId !== rowId) return row;
+        const updated = { ...row, [field]: value };
+        return revalidateDraftRowLocal(updated);
+      })
+    );
+  };
+
+  const handleDraftSnChange = (rowId: string, rawText: string) => {
+    setDraftSnTextMap((prev) => ({ ...prev, [rowId]: rawText }));
+    const parsedSns = Array.from(
+      new Set(
+        rawText
+          .split(/[;,|\n]+/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    );
+    handleDraftRowFieldChange(rowId, 'serialNumbers', parsedSns);
+  };
+
+  const handleRemoveDraftRow = (rowId: string) => {
+    setDraftEditableRows((prev) => prev.filter((r) => r.rowId !== rowId));
+  };
+
+  const handleSaveDraftEdits = async () => {
+    if (!activeImportDraft || activeImportDraft.status !== 'DRAFT') return;
+    setIsSavingDraft(true);
+    try {
+      const res = await apiClient.updateInventoryImportDraft(activeImportDraft.id, {
+        storeId: importTargetStoreId,
+        rows: draftEditableRows,
+      });
+      if (res.success && res.draft) {
+        syncActiveDraftState(res.draft);
+        setImportDraftsList((prev) => prev.map((d) => (d.id === res.draft.id ? res.draft : d)));
+        onShowToast('Draft Saved', res.message);
+      }
+    } catch (err: any) {
+      onShowToast('Save Draft Failed', err.message || 'Could not update draft');
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
+  const handleDiscardImportDraft = async () => {
+    if (!activeImportDraft || activeImportDraft.status !== 'DRAFT') return;
+    setIsDiscardingDraft(true);
+    try {
+      const res = await apiClient.discardInventoryImportDraft(activeImportDraft.id);
+      if (res.success) {
+        setImportDraftsList((prev) => prev.map((d) => (d.id === res.draft.id ? res.draft : d)));
+        syncActiveDraftState(null);
+        setCsvText('');
+        setParsedImportRows([]);
+        onShowToast('Draft Discarded', res.message);
+      }
+    } catch (err: any) {
+      onShowToast('Discard Failed', err.message || 'Could not discard draft');
+    } finally {
+      setIsDiscardingDraft(false);
+    }
+  };
+
+  const handleApplyImportDraft = async () => {
+    if (!activeImportDraft || activeImportDraft.status !== 'DRAFT' || isApplyingDraft) return;
+    const errorRows = draftEditableRows.filter((r) => r.status === 'VALIDATION_ERROR');
+    if (draftEditableRows.length === 0) {
+      onShowToast('Empty Draft', 'Draft must contain at least 1 valid row before applying.');
+      return;
+    }
+    if (errorRows.length > 0) {
+      onShowToast('Validation Errors Present', `Resolve or remove ${errorRows.length} invalid row(s) before applying.`);
       return;
     }
 
+    setIsApplyingDraft(true);
     setIsImporting(true);
     try {
-      const res = await apiClient.bulkImportInventory(parsedImportRows);
-      if (res.success) {
-        onShowToast('Bulk Import Successful', res.message);
+      // Persist latest target store if changed before atomic apply
+      if (importTargetStoreId !== activeImportDraft.storeId) {
+        await apiClient.updateInventoryImportDraft(activeImportDraft.id, {
+          storeId: importTargetStoreId,
+          rows: draftEditableRows,
+        });
+      }
+      const res = await apiClient.applyInventoryImportDraft(activeImportDraft.id, draftEditableRows);
+      if (res.success && res.draft) {
+        setImportDraftsList((prev) => prev.map((d) => (d.id === res.draft.id ? res.draft : d)));
+        syncActiveDraftState(null);
         setCsvText('');
         setParsedImportRows([]);
+        onShowToast('Draft Applied to Live Inventory', res.message);
         if (onRefreshData) onRefreshData();
       }
     } catch (err: any) {
-      onShowToast('Import Failed', err.message || 'Failed to commit bulk import');
+      onShowToast('Apply Draft Failed', err.message || 'Failed to apply draft to live inventory');
     } finally {
+      setIsApplyingDraft(false);
       setIsImporting(false);
     }
   };
@@ -5688,7 +6032,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             </div>
           )}
 
-          {/* 3B: BULK INVENTORY IMPORT (CSV / EXCEL FORMAT) */}
+          {/* 3B: DRAFT-FIRST BULK INVENTORY IMPORT (CSV / EXCEL -> REVIEW & EDIT -> APPLY) */}
           {opnameSubTab === 'bulk_import' && (
             <div className="space-y-6">
               <div className={`${cardClass} p-5 sm:p-6 space-y-5`}>
@@ -5699,14 +6043,32 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       Bulk Inventory &amp; Stock Matrix Import
                     </h3>
                     <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
-                      Paste or upload comma-separated inventory records (CSV) to update store warehouse tiers simultaneously without cross-location bleed.
+                      Upload .CSV / .XLSX or paste rows to stage a safe DRAFT batch. Review and edit Rack, Qty, Lot, Expiry &amp; Serial Numbers (SN) before applying to live stock &amp; COA #1040.
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={bulkImportFileInputRef}
+                      type="file"
+                      accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                      onChange={handleBulkImportFileUpload}
+                      className="hidden"
+                    />
                     <button
+                      type="button"
+                      onClick={() => bulkImportFileInputRef.current?.click()}
+                      disabled={isStagingDraft || !canMutateStock}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload File (.CSV / .XLSX)</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleLoadSampleCsv}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      disabled={isStagingDraft}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer disabled:opacity-50 ${
                         isLight
                           ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                           : 'bg-slate-900/90 border-slate-800/80 text-slate-300 hover:bg-slate-800'
@@ -5719,82 +6081,350 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </div>
 
                 {/* Outlet Target Selector */}
-                <div className="flex items-center gap-3">
-                  <label className={labelClass}>Assign Target Receiving Outlet:</label>
-                  <select
-                    value={importTargetStoreId}
-                    onChange={(e) => {
-                      setImportTargetStoreId(e.target.value);
-                      if (csvText) handleParseCsv(csvText);
-                    }}
-                    className={`px-3 py-1.5 text-xs rounded-xl font-bold ${inputClass}`}
-                  >
-                    {storeOutlets.map((st) => (
-                      <option key={st.storeId} value={st.storeId}>
-                        {st.storeName} ({st.city})
-                      </option>
-                    ))}
-                  </select>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className={labelClass}>Assign Target Receiving Outlet:</label>
+                    <select
+                      value={importTargetStoreId}
+                      onChange={(e) => {
+                        setImportTargetStoreId(e.target.value);
+                        if (csvText) handleParseCsv(csvText);
+                      }}
+                      className={`px-3 py-1.5 text-xs rounded-xl font-bold ${inputClass}`}
+                    >
+                      {storeOutlets.map((st) => (
+                        <option key={st.storeId} value={st.storeId}>
+                          {st.storeName} ({st.city})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {importDraftsList.some((d) => d.status === 'DRAFT') && (
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-semibold ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+                        Staged Drafts:
+                      </span>
+                      <select
+                        value={activeImportDraft?.id || ''}
+                        onChange={(e) => {
+                          const found = importDraftsList.find((d) => d.id === e.target.value) || null;
+                          syncActiveDraftState(found);
+                          if (found) setImportTargetStoreId(found.storeId);
+                        }}
+                        className={`px-2.5 py-1 text-xs rounded-lg font-mono ${inputClass}`}
+                      >
+                        <option value="">-- Select Draft --</option>
+                        {importDraftsList
+                          .filter((d) => d.status === 'DRAFT')
+                          .map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.id} ({d.summary.totalRows} rows · {d.storeName})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                {/* CSV Textarea */}
-                <div>
-                  <label className={labelClass}>Paste CSV Content (Format: SKU, Product Name, Category, Stock, Unit Cost, Selling Price, Min Threshold, Unit, Supplier)</label>
+                {/* CSV Paste Textarea */}
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className={labelClass}>
+                      Paste CSV Content (Columns: SKU, Product Name, Category, Stock, Unit Cost, Selling Price, Min Threshold, Unit, Supplier, Rack Location, Lot Number, Expiry Date, Serial Numbers)
+                    </label>
+                    {parsedImportRows.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleStagePastedCsvAsDraft}
+                        disabled={isStagingDraft || !canMutateStock}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        {isStagingDraft ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FileCheck2 className="w-3.5 h-3.5" />}
+                        <span>Stage {parsedImportRows.length} Row(s) as Draft</span>
+                      </button>
+                    )}
+                  </div>
                   <textarea
-                    rows={6}
+                    rows={5}
                     value={csvText}
                     onChange={(e) => handleParseCsv(e.target.value)}
-                    placeholder="SKU,Product Name,Category,Physical Stock,Unit Cost,Selling Price,Min Threshold,Unit,Supplier&#10;SKU-PRD-001,Organic Lettuce,produce,50,11000,18500,20,head,Kebun Lembang"
+                    placeholder="SKU,Product Name,Category,Physical Stock,Unit Cost,Selling Price,Min Threshold,Unit,Supplier,Rack Location,Lot Number,Expiry Date,Serial Numbers (SN)&#10;SKU-PRD-001,Organic Lettuce,produce,50,11000,18500,20,head,Kebun Lembang,CHILL-A1,LOT-IMP-20261120-01,2026-12-04,SN-001;SN-002"
                     className={`w-full font-mono text-xs p-3 rounded-xl ${inputClass}`}
                   />
                 </div>
 
-                {/* Parsed Preview Table */}
-                {parsedImportRows.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className={`text-xs font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
-                        Parsed Preview ({parsedImportRows.length} SKUs ready for import)
-                      </span>
-                      <button
-                        onClick={handleCommitBulkImport}
-                        disabled={isImporting || !canMutateStock}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {isImporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                        <span>{canMutateStock ? 'Commit Bulk Import to Warehouse' : 'Read-Only Mode'}</span>
-                      </button>
-                    </div>
+                {/* DRAFT STAGING & INLINE REVIEW TABLE */}
+                {activeImportDraft && activeImportDraft.status === 'DRAFT' && (() => {
+                  const newCount = draftEditableRows.filter((r) => r.status === 'NEW_SKU').length;
+                  const restockCount = draftEditableRows.filter((r) => r.status === 'RESTOCK').length;
+                  const errorCount = draftEditableRows.filter((r) => r.status === 'VALIDATION_ERROR').length;
+                  const totalUnits = draftEditableRows.reduce((s, r) => s + Math.max(0, Number(r.physicalStock) || 0), 0);
+                  const totalValIDR = draftEditableRows.reduce(
+                    (s, r) => s + (r.status === 'VALIDATION_ERROR' ? 0 : Math.round((Number(r.physicalStock) || 0) * (Number(r.unitCost) || 0))),
+                    0
+                  );
 
-                    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
-                      <table className="w-full text-left text-xs font-mono">
-                        <thead className={`border-b text-[10px] uppercase font-bold ${
-                          isLight ? 'bg-gray-50 text-gray-500' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
-                        }`}>
-                          <tr>
-                            <th className="py-2.5 px-3">SKU</th>
-                            <th className="py-2.5 px-3">Product Name</th>
-                            <th className="py-2.5 px-3">Category</th>
-                            <th className="py-2.5 px-3 text-center">Stock Units</th>
-                            <th className="py-2.5 px-3 text-right">Unit Cost</th>
-                            <th className="py-2.5 px-3 text-right">Selling Price</th>
-                            <th className="py-2.5 px-3 text-center">Min Threshold</th>
-                          </tr>
-                        </thead>
-                        <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
-                          {parsedImportRows.map((r, i) => (
-                            <tr key={i} className={isLight ? 'hover:bg-gray-50' : 'hover:bg-slate-900/60'}>
-                              <td className="py-2 px-3 font-bold text-[#0F4C3A] dark:text-emerald-400">{r.sku}</td>
-                              <td className="py-2 px-3">{r.productName}</td>
-                              <td className="py-2 px-3 text-slate-600 dark:text-slate-300">{r.category}</td>
-                              <td className="py-2 px-3 text-center font-bold">{r.physicalStock} {r.unit}</td>
-                              <td className="py-2 px-3 text-right">{formatIDR(r.unitCost)}</td>
-                              <td className="py-2 px-3 text-right">{formatIDR(r.sellingPrice)}</td>
-                              <td className="py-2 px-3 text-center text-amber-600">{r.minimumThreshold}</td>
+                  return (
+                    <div className="space-y-3 pt-2 border-t border-gray-200 dark:border-slate-800/80">
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            DRAFT STAGING
+                          </span>
+                          <span className={`text-xs font-mono font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                            {activeImportDraft.id}
+                          </span>
+                          {activeImportDraft.sourceFilename && (
+                            <span className={`text-[11px] font-mono ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+                              ({activeImportDraft.sourceFilename})
+                            </span>
+                          )}
+                          <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                            {newCount} New SKU
+                          </span>
+                          <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-400">
+                            {restockCount} Restock
+                          </span>
+                          {errorCount > 0 && (
+                            <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                              {errorCount} Error(s)
+                            </span>
+                          )}
+                          <span className={`text-[11px] font-mono ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
+                            · {totalUnits.toLocaleString('id-ID')} units · Est. COA #1040: {formatIDR(totalValIDR)}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleSaveDraftEdits}
+                            disabled={isSavingDraft || isApplyingDraft || !canMutateStock}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all disabled:opacity-50 cursor-pointer ${
+                              isLight
+                                ? 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                                : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
+                            }`}
+                          >
+                            {isSavingDraft ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                            <span>Save Draft</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleDiscardImportDraft}
+                            disabled={isDiscardingDraft || isApplyingDraft}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all disabled:opacity-50 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Discard Draft</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleApplyImportDraft}
+                            disabled={
+                              isApplyingDraft ||
+                              isImporting ||
+                              !canMutateStock ||
+                              errorCount > 0 ||
+                              draftEditableRows.length === 0
+                            }
+                            className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                          >
+                            {isApplyingDraft ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                            <span>{canMutateStock ? 'Apply Draft to Live Inventory' : 'Read-Only Mode'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
+                        <table className="w-full text-left text-xs">
+                          <thead className={`border-b text-[10px] uppercase font-bold ${
+                            isLight ? 'bg-gray-50 text-gray-500' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
+                          }`}>
+                            <tr>
+                              <th className="py-2.5 px-2.5">Status</th>
+                              <th className="py-2.5 px-2.5">SKU &amp; Product</th>
+                              <th className="py-2.5 px-2.5">Rack / Bin</th>
+                              <th className="py-2.5 px-2.5">Qty</th>
+                              <th className="py-2.5 px-2.5">Lot / Batch</th>
+                              <th className="py-2.5 px-2.5">Expiry Date</th>
+                              <th className="py-2.5 px-2.5">Serial Numbers (SN)</th>
+                              <th className="py-2.5 px-2.5">Unit Cost</th>
+                              <th className="py-2.5 px-2.5">Selling Price</th>
+                              <th className="py-2.5 px-2.5 text-center">Del</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
+                            {draftEditableRows.map((row) => (
+                              <tr
+                                key={row.rowId}
+                                className={
+                                  row.status === 'VALIDATION_ERROR'
+                                    ? 'bg-rose-50/60 dark:bg-rose-950/20'
+                                    : isLight
+                                    ? 'hover:bg-gray-50'
+                                    : 'hover:bg-slate-900/60'
+                                }
+                              >
+                                <td className="py-2 px-2.5 align-top whitespace-nowrap">
+                                  <span
+                                    className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                                      row.status === 'NEW_SKU'
+                                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                        : row.status === 'RESTOCK'
+                                        ? 'bg-blue-500/15 text-blue-700 dark:text-blue-400'
+                                        : 'bg-rose-500/15 text-rose-700 dark:text-rose-400'
+                                    }`}
+                                  >
+                                    {row.status === 'NEW_SKU'
+                                      ? 'NEW SKU'
+                                      : row.status === 'RESTOCK'
+                                      ? 'RESTOCK'
+                                      : 'VALIDATION ERROR'}
+                                  </span>
+                                  {row.validationError && (
+                                    <div className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 max-w-[140px] leading-tight">
+                                      {row.validationError}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-2 px-2.5 align-top min-w-[170px]">
+                                  <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">{row.sku}</div>
+                                  <div className={`text-[11px] font-medium truncate max-w-[190px] ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
+                                    {row.productName}
+                                  </div>
+                                  <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+                                    {row.category} · {row.unit}
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2 align-top">
+                                  <input
+                                    type="text"
+                                    value={row.rackLocation}
+                                    onChange={(e) =>
+                                      handleDraftRowFieldChange(row.rowId, 'rackLocation', e.target.value.toUpperCase())
+                                    }
+                                    className={`w-24 px-2 py-1 text-[11px] font-mono rounded-lg ${inputClass}`}
+                                    placeholder="RACK-GEN-01"
+                                  />
+                                </td>
+                                <td className="py-2 px-2 align-top">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    step="1"
+                                    value={row.physicalStock}
+                                    onChange={(e) =>
+                                      handleDraftRowFieldChange(row.rowId, 'physicalStock', Number(e.target.value))
+                                    }
+                                    className={`w-16 px-2 py-1 text-[11px] font-mono text-right rounded-lg ${inputClass}`}
+                                  />
+                                </td>
+                                <td className="py-2 px-2 align-top">
+                                  <input
+                                    type="text"
+                                    value={row.lotNumber}
+                                    onChange={(e) =>
+                                      handleDraftRowFieldChange(row.rowId, 'lotNumber', e.target.value)
+                                    }
+                                    className={`w-36 px-2 py-1 text-[11px] font-mono rounded-lg ${inputClass}`}
+                                  />
+                                </td>
+                                <td className="py-2 px-2 align-top">
+                                  <input
+                                    type="date"
+                                    value={row.expiryDate}
+                                    onChange={(e) =>
+                                      handleDraftRowFieldChange(row.rowId, 'expiryDate', e.target.value)
+                                    }
+                                    className={`w-32 px-2 py-1 text-[11px] font-mono rounded-lg ${inputClass}`}
+                                  />
+                                </td>
+                                <td className="py-2 px-2 align-top">
+                                  <input
+                                    type="text"
+                                    value={draftSnTextMap[row.rowId] ?? row.serialNumbers.join(', ')}
+                                    onChange={(e) => handleDraftSnChange(row.rowId, e.target.value)}
+                                    placeholder="Optional: SN-01, SN-02"
+                                    className={`w-36 px-2 py-1 text-[11px] font-mono rounded-lg ${inputClass}`}
+                                  />
+                                </td>
+                                <td className="py-2 px-2 align-top">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={500}
+                                    value={row.unitCost}
+                                    onChange={(e) =>
+                                      handleDraftRowFieldChange(row.rowId, 'unitCost', Math.round(Number(e.target.value) || 0))
+                                    }
+                                    className={`w-24 px-2 py-1 text-[11px] font-mono text-right rounded-lg ${inputClass}`}
+                                  />
+                                </td>
+                                <td className="py-2 px-2 align-top">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={500}
+                                    value={row.sellingPrice}
+                                    onChange={(e) =>
+                                      handleDraftRowFieldChange(row.rowId, 'sellingPrice', Math.round(Number(e.target.value) || 0))
+                                    }
+                                    className={`w-24 px-2 py-1 text-[11px] font-mono text-right rounded-lg ${inputClass}`}
+                                  />
+                                </td>
+                                <td className="py-2 px-2 align-top text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveDraftRow(row.rowId)}
+                                    title="Remove row from draft"
+                                    className="p-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Recent Applied Drafts History */}
+                {importDraftsList.some((d) => d.status === 'APPLIED') && (
+                  <div className="pt-3 border-t border-gray-100 dark:border-slate-800/80 space-y-2">
+                    <div className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+                      Recently Applied Import Batches
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {importDraftsList
+                        .filter((d) => d.status === 'APPLIED')
+                        .slice(0, 4)
+                        .map((d) => (
+                          <div
+                            key={d.id}
+                            className={`px-3 py-2 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                              isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="font-mono font-bold text-[#0F4C3A] dark:text-emerald-400 truncate">
+                                {d.id} · {d.storeName}
+                              </div>
+                              <div className={`text-[11px] ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
+                                {d.summary.totalRows} rows · {d.appliedMeta?.createdBatchesCount ?? d.summary.totalRows} lots · {formatIDR(d.appliedMeta?.totalValuationIDR ?? d.summary.totalValuationIDR)}
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shrink-0">
+                              APPLIED
+                            </span>
+                          </div>
+                        ))}
                     </div>
                   </div>
                 )}

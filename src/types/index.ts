@@ -248,6 +248,7 @@ export interface StoreInventoryStock {
   rackBinCode?: string;
   lotNumber?: string;
   expiryDate?: string;
+  serialNumbers?: string[];
   removalStrategy?: 'FEFO' | 'FIFO';
   rotationStrategy?: 'FEFO' | 'FIFO';
   salesChannel?: 'B2C' | 'B2B' | 'BOTH';
@@ -315,6 +316,7 @@ export interface InventoryItem {
   b2cImageUrl?: string;
   b2bImageUrl?: string;
   binLocation?: string;
+  serialNumbers?: string[];
   retailPackagingSpec?: string;
   wholesalePackagingSpec?: string;
   outerBoxBarcode?: string;
@@ -546,6 +548,7 @@ export interface InventoryBatch {
   consignmentCommissionPercent?: number;
   consignmentCostIDR?: number;
   reservedQuantity?: number;
+  serialNumbers?: string[];
 }
 
 export interface FEFOAllocationTrace {
@@ -1537,6 +1540,63 @@ export interface BulkInventoryImportRow {
   supplierName?: string;
   stock?: number;
   costPrice?: number;
+  rackLocation?: string;
+  lotNumber?: string;
+  expiryDate?: string;
+  serialNumbers?: string[];
+}
+
+export type InventoryImportDraftRowStatus = 'NEW_SKU' | 'RESTOCK' | 'VALIDATION_ERROR';
+
+export interface InventoryImportDraftRow {
+  rowId: string;
+  sku: string;
+  productName: string;
+  category: string;
+  physicalStock: number;
+  unitCost: number;
+  sellingPrice: number;
+  minimumThreshold: number;
+  unit: string;
+  supplierName: string;
+  rackLocation: string;
+  lotNumber: string;
+  expiryDate: string; // YYYY-MM-DD
+  serialNumbers: string[];
+  status: InventoryImportDraftRowStatus;
+  validationError?: string;
+}
+
+export type InventoryImportDraftStatus = 'DRAFT' | 'APPLIED' | 'DISCARDED';
+
+export interface InventoryImportDraft {
+  id: string;
+  storeId: string;
+  storeName: string;
+  sourceFilename?: string;
+  status: InventoryImportDraftStatus;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  appliedAt?: string;
+  appliedBy?: string;
+  rows: InventoryImportDraftRow[];
+  summary: {
+    totalRows: number;
+    newSkuCount: number;
+    restockCount: number;
+    errorCount: number;
+    totalUnits: number;
+    totalValuationIDR: number;
+  };
+  appliedMeta?: {
+    createdSkusCount: number;
+    updatedSkusCount: number;
+    createdRacksCount: number;
+    createdBatchesCount: number;
+    glVoucherIds: string[];
+    totalValuationIDR: number;
+  };
 }
 
 export interface StockOpnameItem {

@@ -40,6 +40,8 @@ import type {
   CoaMappingConfig,
   PosCheckoutConfig,
   BulkInventoryImportRow,
+  InventoryImportDraft,
+  InventoryImportDraftRow,
   StockOpnameSession,
   StockTransferRecord,
   ApprovalTierRule,
@@ -1495,6 +1497,82 @@ export const apiClient = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Bulk inventory import failed');
+    }
+    return res.json();
+  },
+
+  async getInventoryImportDrafts(storeId?: string): Promise<{ drafts: InventoryImportDraft[] }> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const qs = params.toString();
+    const res = await fetchApi(`/api/admin/inventory/import-drafts${qs ? `?${qs}` : ''}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to load inventory import drafts');
+    }
+    return res.json();
+  },
+
+  async createInventoryImportDraft(payload: {
+    storeId: string;
+    sourceFilename?: string;
+    rows: Partial<InventoryImportDraftRow>[];
+  }): Promise<{ success: boolean; draft: InventoryImportDraft; message: string }> {
+    const res = await fetchApi('/api/admin/inventory/import-drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to stage inventory import draft');
+    }
+    return res.json();
+  },
+
+  async updateInventoryImportDraft(
+    id: string,
+    payload: { storeId?: string; rows: Partial<InventoryImportDraftRow>[] }
+  ): Promise<{ success: boolean; draft: InventoryImportDraft; message: string }> {
+    const res = await fetchApi(`/api/admin/inventory/import-drafts/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update inventory import draft');
+    }
+    return res.json();
+  },
+
+  async discardInventoryImportDraft(id: string): Promise<{
+    success: boolean;
+    draft: InventoryImportDraft;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/inventory/import-drafts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to discard inventory import draft');
+    }
+    return res.json();
+  },
+
+  async applyInventoryImportDraft(
+    id: string,
+    rows?: Partial<InventoryImportDraftRow>[]
+  ): Promise<{ success: boolean; draft: InventoryImportDraft; message: string }> {
+    const res = await fetchApi(`/api/admin/inventory/import-drafts/${encodeURIComponent(id)}/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rows ? { rows } : {}),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to apply inventory import draft');
     }
     return res.json();
   },

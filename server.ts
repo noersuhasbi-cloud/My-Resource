@@ -109,6 +109,9 @@ import type {
   ApprovalTierRule,
   ApprovalRequest,
   BulkInventoryImportRow,
+  InventoryImportDraft,
+  InventoryImportDraftRow,
+  InventoryImportDraftRowStatus,
   SuratJalanDocument,
   DeliveryOrderDocument,
   ShipmentQuotaTracking,
@@ -636,6 +639,7 @@ function createInitialWarehouseRacks(): WarehouseRackConfig[] {
 
 let warehouseRacks: WarehouseRackConfig[] = createInitialWarehouseRacks();
 let rackStocktakeSubmissions: RackStocktakePendingSubmission[] = [];
+let inventoryImportDrafts: InventoryImportDraft[] = [];
 let consignmentLedger: ConsignmentLedgerEntry[] = [];
 let safeDropsList: SafeDropRecord[] = [];
 let recallEventsList: Array<{
@@ -7358,6 +7362,7 @@ function captureServerState() {
     communicationLogs,
     warehouseRacks,
     rackStocktakeSubmissions,
+    inventoryImportDrafts,
     consignmentLedger,
     safeDropsList,
     recallEventsList,
@@ -7479,6 +7484,7 @@ function applyServerState(snap: any) {
   } else {
     rackStocktakeSubmissions = [];
   }
+  inventoryImportDrafts = Array.isArray(snap.inventoryImportDrafts) ? snap.inventoryImportDrafts : [];
   consignmentLedger = Array.isArray(snap.consignmentLedger) ? snap.consignmentLedger : [];
   safeDropsList = Array.isArray(snap.safeDropsList) ? snap.safeDropsList : [];
   recallEventsList = Array.isArray(snap.recallEventsList) ? snap.recallEventsList : [];
@@ -7662,6 +7668,7 @@ async function resetDemoStateToBaseline() {
     inventoryBatches = createInitialBatches();
     warehouseRacks = createInitialWarehouseRacks();
     rackStocktakeSubmissions = [];
+    inventoryImportDrafts = [];
     consignmentLedger = [];
     safeDropsList = [];
     recallEventsList = [];
@@ -7749,6 +7756,7 @@ async function initializeCleanProductionStore(req?: Request) {
     blindOpnameSheetsList = [];
     stockOpnameSessions = [];
     rackStocktakeSubmissions = [];
+    inventoryImportDrafts = [];
     stockTransfersList = [];
     recallEventsList = [];
     returnableContainersList = [];
@@ -26677,6 +26685,590 @@ async function startServer() {
       totalOpeningValuationIDR,
       glVoucherIds,
       message: `Imported ${validatedRows.length} SKU/Batch rows (${totalImportedQty} units, Rp ${totalOpeningValuationIDR.toLocaleString('id-ID')}).`,
+    });
+  });
+
+  // =============================================================
+  // DRAFT-FIRST BULK INVENTORY IMPORT STAGING (RACK, LOT & SN)
+  // =============================================================
+  function inferDefaultExpiryForCategory(category: string, baseMs: number): string {
+    const cat = String(category || '').toLowerCase();
+    const daysToAdd =
+      cat.includes('produce') || cat.includes('bakery') || cat.includes('fresh')
+        ? 14
+        : cat.includes('dairy') || cat.includes('egg') || cat.includes('meat') || cat.includes('seafood')
+        ? 30
+        : 180;
+    return new Date(baseMs + daysToAdd * 86400000).toISOString().split('T')[0];
+  }
+
+  function parseSerialNumbersInput(input: unknown): string[] {
+    if (Array.isArray(input)) {
+      return Array.from(
+        new Set(
+          input
+            .map((v) => String(v ?? '').trim())
+            .filter(Boolean)
+        )
+      );
+    }
+    if (typeof input === 'string') {
+      return Array.from(
+        new Set(
+          input
+            .split(/[;,|\n]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        )
+      );
+    }
+    return [];
+  }
+
+  function normalizeInventoryDraftRows(
+    rawRows: any[],
+    storeId: string
+  ): { rows: InventoryImportDraftRow[]; summary: InventoryImportDraft['summary'] } {
+    const nowMs = Date.now();
+    const todayStr = new Date(nowMs).toISOString().split('T')[0];
+    const dateStamp = todayStr.replace(/-/g, '');
+
+    const normalized: InventoryImportDraftRow[] = rawRows.map((raw, idx) => {
+      const seq = String(idx + 1).padStart(2, '0');
+      const sku = String(raw?.sku ?? '').trim().toUpperCase();
+      const productName = String(raw?.productName ?? raw?.product_name ?? '').trim();
+      const category = String(raw?.category ?? 'produce').trim() || 'produce';
+      const physicalStock = Number(raw?.physicalStock ?? raw?.stock ?? raw?.qty ?? 0);
+      const unitCost = Math.round(Number(raw?.unitCost ?? raw?.costPrice ?? 0));
+      const sellingPrice = Math.round(
+        raw?.sellingPrice !== undefined && raw?.sellingPrice !== '' && raw?.sellingPrice !== null
+          ? Number(raw.sellingPrice)
+          : Math.round(Math.max(0, unitCost) * 1.4)
+      );
+      const minimumThreshold = Math.max(0, Math.round(Number(raw?.minimumThreshold ?? raw?.minThreshold ?? 10) || 10));
+      const unit = String(raw?.unit ?? raw?.uom ?? 'pcs').trim() || 'pcs';
+      const supplierName = String(raw?.supplierName ?? raw?.supplier ?? 'Opening Balance / Bulk Import').trim() || 'Opening Balance / Bulk Import';
+      const rawRack = String(raw?.rackLocation ?? raw?.rackBinCode ?? raw?.rack_bin_code ?? '').trim().toUpperCase();
+      const rackLocation = rawRack || 'RACK-GEN-01';
+      const rawLot = String(raw?.lotNumber ?? raw?.batchLotNo ?? raw?.batch_lot_no ?? '').trim();
+      const lotNumber = rawLot || `LOT-IMP-${dateStamp}-${seq}`;
+      const rawExpiry = String(raw?.expiryDate ?? raw?.expiry_date ?? '').trim();
+      const expiryDate = rawExpiry || inferDefaultExpiryForCategory(category, nowMs);
+      const serialNumbers = parseSerialNumbersInput(raw?.serialNumbers ?? raw?.serial_numbers ?? raw?.sn);
+
+      const errors: string[] = [];
+      if (!sku) errors.push('SKU required');
+      if (!productName) errors.push('Product Name required');
+      if (!Number.isFinite(physicalStock) || physicalStock <= 0) errors.push('Qty must be > 0');
+      if (!Number.isFinite(unitCost) || unitCost <= 0) errors.push('Unit Cost must be > 0');
+      if (!Number.isFinite(sellingPrice) || sellingPrice < 0) errors.push('Selling Price must be >= 0');
+      if (!rackLocation) errors.push('Rack Location required');
+      if (!lotNumber) errors.push('Lot Number required');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(expiryDate) || Number.isNaN(Date.parse(`${expiryDate}T23:59:59.000Z`))) {
+        errors.push('Expiry Date must be YYYY-MM-DD');
+      } else if (expiryDate < todayStr) {
+        errors.push(`Expiry Date ${expiryDate} is expired`);
+      }
+
+      const existingMatch =
+        sku &&
+        (storeInventoryTiers.some((t) => t.sku === sku && t.storeId === storeId) ||
+          inventoryList.some((i) => i.sku === sku));
+
+      const status: InventoryImportDraftRowStatus =
+        errors.length > 0 ? 'VALIDATION_ERROR' : existingMatch ? 'RESTOCK' : 'NEW_SKU';
+
+      return {
+        rowId: String(raw?.rowId || `DRF-ROW-${nowMs.toString().slice(-5)}-${idx + 1}`),
+        sku,
+        productName,
+        category,
+        physicalStock: Number.isFinite(physicalStock) ? Number(physicalStock.toFixed(2)) : 0,
+        unitCost: Number.isFinite(unitCost) ? unitCost : 0,
+        sellingPrice: Number.isFinite(sellingPrice) ? sellingPrice : 0,
+        minimumThreshold,
+        unit,
+        supplierName,
+        rackLocation,
+        lotNumber,
+        expiryDate,
+        serialNumbers,
+        status,
+        validationError: errors.length > 0 ? errors.join('; ') : undefined,
+      };
+    });
+
+    const summary: InventoryImportDraft['summary'] = {
+      totalRows: normalized.length,
+      newSkuCount: normalized.filter((r) => r.status === 'NEW_SKU').length,
+      restockCount: normalized.filter((r) => r.status === 'RESTOCK').length,
+      errorCount: normalized.filter((r) => r.status === 'VALIDATION_ERROR').length,
+      totalUnits: Number(normalized.reduce((acc, r) => acc + Math.max(0, r.physicalStock), 0).toFixed(2)),
+      totalValuationIDR: normalized.reduce(
+        (acc, r) => acc + (r.status === 'VALIDATION_ERROR' ? 0 : Math.round(r.physicalStock * r.unitCost)),
+        0
+      ),
+    };
+
+    return { rows: normalized, summary };
+  }
+
+  app.get('/api/admin/inventory/import-drafts', (req: Request, res: Response) => {
+    const { storeId } = req.query as { storeId?: string };
+    const scope = resolveRequestBranchScope(req);
+    let list = [...inventoryImportDrafts];
+    if (scope.isBranchScoped && scope.storeId !== 'ALL' && scope.storeId !== 'CONSOLIDATED') {
+      list = list.filter((d) => d.storeId === scope.storeId);
+    } else if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
+      list = list.filter((d) => d.storeId === storeId);
+    }
+    res.json({ drafts: list });
+  });
+
+  app.post('/api/admin/inventory/import-drafts', (req: Request, res: Response) => {
+    const { storeId, sourceFilename, rows = [] } = (req.body || {}) as {
+      storeId?: string;
+      sourceFilename?: string;
+      rows?: any[];
+    };
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'At least 1 parsed row is required to create an import draft.' });
+    }
+
+    const outlet = resolveOutletFromCodeOrId(storeId || 'store-jkt-senopati') || storeSchedules[0];
+    if (!outlet) {
+      return res.status(400).json({ error: 'Target receiving outlet could not be resolved.' });
+    }
+
+    const scope = resolveRequestBranchScope(req);
+    if (
+      scope.isBranchScoped &&
+      scope.storeId !== 'ALL' &&
+      scope.storeId !== 'CONSOLIDATED' &&
+      outlet.storeId !== scope.storeId
+    ) {
+      return res.status(403).json({
+        error: `Branch-scoped operator locked to '${scope.storeId}' cannot stage import drafts for '${outlet.storeId}'.`,
+      });
+    }
+
+    const actorName = getEffectiveOperatorName(req);
+    const timestamp = new Date().toISOString();
+    const { rows: normalizedRows, summary } = normalizeInventoryDraftRows(rows, outlet.storeId);
+
+    const draft: InventoryImportDraft = {
+      id: `IMP-DRF-${Date.now().toString().slice(-6)}-${(inventoryImportDrafts.length + 1).toString().padStart(2, '0')}`,
+      storeId: outlet.storeId,
+      storeName: outlet.storeName,
+      sourceFilename: sourceFilename ? String(sourceFilename).trim() : undefined,
+      status: 'DRAFT',
+      createdAt: timestamp,
+      createdBy: actorName,
+      updatedAt: timestamp,
+      rows: normalizedRows,
+      summary,
+    };
+
+    inventoryImportDrafts.unshift(draft);
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      draft,
+      message: `Draft ${draft.id} staged with ${summary.totalRows} row(s) (${summary.newSkuCount} new, ${summary.restockCount} restock, ${summary.errorCount} error). Live inventory untouched.`,
+    });
+  });
+
+  app.put('/api/admin/inventory/import-drafts/:id', (req: Request, res: Response) => {
+    const draft = inventoryImportDrafts.find((d) => d.id === req.params.id);
+    if (!draft) {
+      return res.status(404).json({ error: `Import draft '${req.params.id}' not found.` });
+    }
+    if (draft.status !== 'DRAFT') {
+      return res.status(400).json({ error: `Draft '${draft.id}' is already ${draft.status} and cannot be edited.` });
+    }
+
+    const scope = resolveRequestBranchScope(req);
+    if (
+      scope.isBranchScoped &&
+      scope.storeId !== 'ALL' &&
+      scope.storeId !== 'CONSOLIDATED' &&
+      draft.storeId !== scope.storeId
+    ) {
+      return res.status(403).json({
+        error: `Branch-scoped operator locked to '${scope.storeId}' cannot modify draft for '${draft.storeId}'.`,
+      });
+    }
+
+    const { rows, storeId } = (req.body || {}) as { rows?: any[]; storeId?: string };
+    if (storeId && storeId !== draft.storeId) {
+      const nextOutlet = resolveOutletFromCodeOrId(storeId);
+      if (nextOutlet) {
+        draft.storeId = nextOutlet.storeId;
+        draft.storeName = nextOutlet.storeName;
+      }
+    }
+    if (Array.isArray(rows)) {
+      const { rows: normalizedRows, summary } = normalizeInventoryDraftRows(rows, draft.storeId);
+      draft.rows = normalizedRows;
+      draft.summary = summary;
+    }
+    draft.updatedAt = new Date().toISOString();
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      draft,
+      message: `Draft ${draft.id} updated (${draft.summary.totalRows} rows, ${draft.summary.errorCount} validation error(s)).`,
+    });
+  });
+
+  app.delete('/api/admin/inventory/import-drafts/:id', (req: Request, res: Response) => {
+    const draft = inventoryImportDrafts.find((d) => d.id === req.params.id);
+    if (!draft) {
+      return res.status(404).json({ error: `Import draft '${req.params.id}' not found.` });
+    }
+    if (draft.status === 'APPLIED') {
+      return res.status(400).json({ error: `Applied draft '${draft.id}' cannot be discarded.` });
+    }
+    draft.status = 'DISCARDED';
+    draft.updatedAt = new Date().toISOString();
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      draft,
+      message: `Draft ${draft.id} discarded cleanly.`,
+    });
+  });
+
+  app.post('/api/admin/inventory/import-drafts/:id/apply', (req: Request, res: Response) => {
+    const draft = inventoryImportDrafts.find((d) => d.id === req.params.id);
+    if (!draft) {
+      return res.status(404).json({ error: `Import draft '${req.params.id}' not found.` });
+    }
+    if (draft.status !== 'DRAFT') {
+      return res.status(409).json({
+        error: `Draft '${draft.id}' has status '${draft.status}' and cannot be applied again.`,
+      });
+    }
+
+    const scope = resolveRequestBranchScope(req);
+    if (
+      scope.isBranchScoped &&
+      scope.storeId !== 'ALL' &&
+      scope.storeId !== 'CONSOLIDATED' &&
+      draft.storeId !== scope.storeId
+    ) {
+      return res.status(403).json({
+        error: `Branch-scoped operator locked to '${scope.storeId}' cannot apply draft for '${draft.storeId}'.`,
+      });
+    }
+
+    const incomingRows = Array.isArray(req.body?.rows) ? req.body.rows : draft.rows;
+    const { rows: validatedRows, summary } = normalizeInventoryDraftRows(incomingRows, draft.storeId);
+    draft.rows = validatedRows;
+    draft.summary = summary;
+
+    if (validatedRows.length === 0) {
+      return res.status(400).json({ error: 'Draft contains 0 rows and cannot be applied.' });
+    }
+    if (summary.errorCount > 0) {
+      return res.status(400).json({
+        error: `Draft has ${summary.errorCount} validation error(s). Resolve or remove invalid rows before applying.`,
+        draft,
+      });
+    }
+
+    const outlet = resolveOutletFromCodeOrId(draft.storeId) || {
+      storeId: draft.storeId,
+      storeName: draft.storeName,
+      city: 'Jakarta',
+      activeWarehouses: ['WH-JKT-SEN-AMB'],
+    } as StoreOutletSchedule;
+
+    const actorName = getEffectiveOperatorName(req);
+    const nowMs = Date.now();
+    const timestamp = new Date(nowMs).toISOString();
+
+    let createdSkusCount = 0;
+    let updatedSkusCount = 0;
+    let createdRacksCount = 0;
+    let createdBatchesCount = 0;
+    let totalImportedQty = 0;
+    let totalValuationIDR = 0;
+
+    validatedRows.forEach((row, idx) => {
+      const catLower = row.category.toLowerCase();
+      const rotationStrategy: RemovalStrategyType =
+        catLower.includes('produce') ||
+        catLower.includes('dairy') ||
+        catLower.includes('meat') ||
+        catLower.includes('seafood') ||
+        catLower.includes('bakery') ||
+        catLower.includes('fresh')
+          ? 'FEFO'
+          : 'FIFO';
+
+      // 1. Ensure or auto-provision Warehouse Rack / Bin
+      let rack = warehouseRacks.find(
+        (r) => r.storeId === outlet.storeId && r.rackBinCode === row.rackLocation
+      );
+      if (!rack) {
+        const inferredZone = inferRackZoneFromCodeOrCategory(row.rackLocation, row.category);
+        rack = {
+          id: `RACK-${Date.now().toString().slice(-5)}-${warehouseRacks.length + 1}`,
+          rackBinCode: row.rackLocation,
+          storeId: outlet.storeId,
+          storeName: outlet.storeName,
+          storageZone: inferredZone,
+          rotationPolicy: rotationStrategy === 'FIFO' ? 'STRICT_FIFO' : 'STRICT_FEFO',
+          maxCapacity: Math.max(500, Math.ceil(row.physicalStock * 2)),
+          currentOccupancy: 0,
+          assignedSkus: [row.sku],
+          notes: `Auto-provisioned via Bulk Draft Import (${draft.id}) by ${actorName}`,
+          updatedAt: timestamp,
+          updatedBy: actorName,
+        };
+        warehouseRacks.push(rack);
+        createdRacksCount += 1;
+      } else if (!rack.assignedSkus.includes(row.sku)) {
+        rack.assignedSkus.push(row.sku);
+      }
+
+      const storageType = mapRackZoneToStorageType(rack.storageZone);
+      const warehouseZoneId = inferWarehouseZoneId(outlet.storeId, rack.storageZone);
+      const expTs = Date.parse(`${row.expiryDate}T23:59:59.000Z`);
+      const expiryDateIso = new Date(expTs).toISOString();
+      const daysUntilExpiry = Math.max(0, Math.ceil((expTs - nowMs) / 86400000));
+
+      // 2. Upsert inventoryList + recalculate integer Moving Average Cost (WAC)
+      let inv = inventoryList.find((i) => i.sku === row.sku);
+      let resolvedWac = row.unitCost;
+      if (inv) {
+        const oldQty = Math.max(0, Number(inv.currentStock || 0));
+        const oldCost = Math.round(Number(inv.unitCost || row.unitCost));
+        resolvedWac =
+          oldQty + row.physicalStock > 0
+            ? Math.round((oldQty * oldCost + row.physicalStock * row.unitCost) / (oldQty + row.physicalStock))
+            : row.unitCost;
+        inv.currentStock = Number((oldQty + row.physicalStock).toFixed(2));
+        inv.stockLevel = inv.currentStock;
+        inv.unitCost = resolvedWac;
+        inv.wacUnitCost = resolvedWac;
+        if (row.sellingPrice > 0) inv.sellingPrice = row.sellingPrice;
+        inv.minimumThreshold = row.minimumThreshold;
+        inv.binLocation = row.rackLocation;
+        inv.removalStrategy = rotationStrategy;
+        inv.lastRestockedAt = timestamp;
+        if (row.serialNumbers.length > 0) {
+          inv.serialNumbers = Array.from(new Set([...(inv.serialNumbers || []), ...row.serialNumbers]));
+        }
+        updatedSkusCount += 1;
+      } else {
+        inv = {
+          sku: row.sku,
+          productId: `PROD-${row.sku}`,
+          productName: row.productName,
+          name: row.productName,
+          category: row.category,
+          currentStock: row.physicalStock,
+          stockLevel: row.physicalStock,
+          minimumThreshold: row.minimumThreshold,
+          unitCost: row.unitCost,
+          wacUnitCost: row.unitCost,
+          sellingPrice: row.sellingPrice,
+          unit: row.unit,
+          supplierId: 'SUP-DRAFT-IMPORT',
+          supplierName: row.supplierName,
+          lastRestockedAt: timestamp,
+          incomingStock: 0,
+          outgoingStock: 0,
+          reorderQuantity: Math.max(20, Math.round(row.physicalStock * 0.5)),
+          valuationMethod: 'Weighted Average',
+          storageType,
+          removalStrategy: rotationStrategy,
+          binLocation: row.rackLocation,
+          salesChannel: 'BOTH',
+          serialNumbers: row.serialNumbers.length > 0 ? [...row.serialNumbers] : undefined,
+        };
+        inventoryList.push(inv);
+        createdSkusCount += 1;
+      }
+
+      // 3. Upsert StoreInventoryStock tier for target outlet
+      let tier = storeInventoryTiers.find((t) => t.sku === row.sku && t.storeId === outlet.storeId);
+      if (tier) {
+        tier.physicalStock = Number((tier.physicalStock + row.physicalStock).toFixed(2));
+        tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+        tier.unitCost = resolvedWac;
+        if (row.sellingPrice > 0) tier.sellingPrice = row.sellingPrice;
+        tier.minimumThreshold = row.minimumThreshold;
+        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+        tier.rackBinCode = row.rackLocation;
+        tier.binLocation = row.rackLocation;
+        tier.lotNumber = row.lotNumber;
+        tier.expiryDate = expiryDateIso;
+        tier.removalStrategy = rotationStrategy;
+        tier.rotationStrategy = rotationStrategy;
+        tier.storageType = storageType;
+        tier.warehouseZoneId = warehouseZoneId;
+        tier.supplierName = row.supplierName;
+        tier.lastRestockedAt = timestamp;
+        tier.updatedAt = timestamp;
+        if (row.serialNumbers.length > 0) {
+          tier.serialNumbers = Array.from(new Set([...(tier.serialNumbers || []), ...row.serialNumbers]));
+        }
+      } else {
+        tier = {
+          id: `TIER-${outlet.storeId.slice(-3).toUpperCase()}-${row.sku}`,
+          sku: row.sku,
+          productId: inv.productId,
+          productName: row.productName,
+          category: row.category,
+          storeId: outlet.storeId,
+          storeName: outlet.storeName,
+          warehouseZoneId,
+          storageType,
+          physicalStock: row.physicalStock,
+          availableStock: row.physicalStock,
+          reservedStock: 0,
+          incomingStock: 0,
+          minimumThreshold: row.minimumThreshold,
+          safetyStockBuffer: Math.max(2, Math.round(row.physicalStock * 0.1)),
+          maxCapacity: Math.max(200, Math.round(row.physicalStock * 3)),
+          reorderQuantity: inv.reorderQuantity,
+          unitCost: resolvedWac,
+          sellingPrice: row.sellingPrice,
+          totalValuation: Math.round(row.physicalStock * resolvedWac),
+          unit: row.unit,
+          supplierId: inv.supplierId,
+          supplierName: row.supplierName,
+          lastRestockedAt: timestamp,
+          updatedAt: timestamp,
+          binLocation: row.rackLocation,
+          rackBinCode: row.rackLocation,
+          lotNumber: row.lotNumber,
+          expiryDate: expiryDateIso,
+          serialNumbers: row.serialNumbers.length > 0 ? [...row.serialNumbers] : undefined,
+          removalStrategy: rotationStrategy,
+          rotationStrategy,
+          salesChannel: 'BOTH',
+        };
+        storeInventoryTiers.push(tier);
+      }
+
+      // 4. Create active FEFO/FIFO InventoryBatch with Rack, Lot & Serial Numbers (SN)
+      const batchStatus =
+        daysUntilExpiry <= 1 ? 'critical' : daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh';
+      const newBatch: InventoryBatch = {
+        batchId: `BAT-DRF-${Date.now().toString().slice(-5)}-${idx + 1}-${inventoryBatches.length + 1}`,
+        sku: row.sku,
+        productName: row.productName,
+        storeId: outlet.storeId,
+        storeName: outlet.storeName,
+        warehouseZoneId,
+        lotNumber: row.lotNumber,
+        initialQuantity: row.physicalStock,
+        currentStock: row.physicalStock,
+        unitCost: row.unitCost,
+        sellingPrice: row.sellingPrice,
+        receivedDate: timestamp,
+        expiryDate: expiryDateIso,
+        daysUntilExpiry,
+        status: batchStatus,
+        storageZone: storageType,
+        supplierName: row.supplierName,
+        rackBinCode: row.rackLocation,
+        rotationStrategy,
+        serialNumbers: row.serialNumbers.length > 0 ? [...row.serialNumbers] : undefined,
+        notes:
+          row.serialNumbers.length > 0
+            ? `Applied from Draft ${draft.id} into ${row.rackLocation} | SN: ${row.serialNumbers.join(', ')}`
+            : `Applied from Draft ${draft.id} into ${row.rackLocation}`,
+      };
+      inventoryBatches.push(newBatch);
+      createdBatchesCount += 1;
+
+      totalImportedQty += row.physicalStock;
+      totalValuationIDR += Math.round(row.physicalStock * row.unitCost);
+    });
+
+    // 5. Post balanced integer IDR Journal Entry (DR 1040 Merchandise Inventory / CR 3010 Opening Balance Equity)
+    const glVoucherIds: string[] = [];
+    if (totalValuationIDR > 0) {
+      ensureRegulatoryCoaAccounts();
+      const g1 = `GLE-DRF-${Date.now().toString().slice(-5)}-1`;
+      const g2 = `GLE-DRF-${Date.now().toString().slice(-5)}-2`;
+      glVoucherIds.push(g1, g2);
+      commitBalancedGlBatch(
+        [
+          {
+            id: g1,
+            timestamp,
+            storeId: outlet.storeId,
+            storeName: outlet.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: totalValuationIDR,
+            credit: 0,
+            referenceType: 'INVENTORY_ADJUSTMENT',
+            referenceId: draft.id,
+            description: `Draft Bulk Import Applied (${draft.id}: ${validatedRows.length} rows, ${totalImportedQty} units) by ${actorName}`,
+          },
+          {
+            id: g2,
+            timestamp,
+            storeId: outlet.storeId,
+            storeName: outlet.storeName,
+            accountCode: '3010',
+            accountName: 'Opening Balance & Paid-In Capital Equity',
+            category: 'Equity',
+            debit: 0,
+            credit: totalValuationIDR,
+            referenceType: 'INVENTORY_ADJUSTMENT',
+            referenceId: draft.id,
+            description: `Opening Balance Equity offset for Draft Bulk Import ${draft.id}`,
+          },
+        ],
+        true
+      );
+    }
+
+    syncWarehouseRackOccupancy();
+
+    // 6. Mark draft as APPLIED and log immutable audit trail entry
+    draft.status = 'APPLIED';
+    draft.appliedAt = timestamp;
+    draft.appliedBy = actorName;
+    draft.updatedAt = timestamp;
+    draft.appliedMeta = {
+      createdSkusCount,
+      updatedSkusCount,
+      createdRacksCount,
+      createdBatchesCount,
+      glVoucherIds,
+      totalValuationIDR,
+    };
+
+    appendAuditTrailLog({
+      req,
+      actorName,
+      branchScope: outlet.storeId,
+      module: 'INVENTORY',
+      action: 'BULK_IMPORT_DRAFT_APPLIED',
+      referenceId: draft.id,
+      summary: `Applied Draft ${draft.id} to ${outlet.storeName}: ${validatedRows.length} rows (${createdSkusCount} new, ${updatedSkusCount} restocked, ${createdBatchesCount} lots, ${createdRacksCount} new racks, Rp ${totalValuationIDR.toLocaleString('id-ID')} posted to COA #1040/#3010).`,
+    });
+
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      draft,
+      message: `Draft ${draft.id} applied to ${outlet.storeName}: ${validatedRows.length} SKU row(s), ${createdBatchesCount} active batch lot(s), Rp ${totalValuationIDR.toLocaleString('id-ID')} posted to COA #1040 / #3010.`,
     });
   });
 
