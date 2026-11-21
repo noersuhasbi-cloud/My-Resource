@@ -1141,6 +1141,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
     }
   };
 
+  const onShowToastRef = useRef(onShowToast);
+  onShowToastRef.current = onShowToast;
+  const onInventoryUpdatedRef = useRef(onInventoryUpdated);
+  onInventoryUpdatedRef.current = onInventoryUpdated;
+  const offlineAutoSyncPausedRef = useRef<boolean>(false);
+
   const syncOfflineQueue = useCallback(async () => {
     if (isSyncingOfflineQueue || offlineQueue.length === 0) return;
     setIsSyncingOfflineQueue(true);
@@ -1172,27 +1178,29 @@ export const PosModule: React.FC<PosModuleProps> = ({
       }
     }
 
+    offlineAutoSyncPausedRef.current = remaining.length > 0 && !abortDueToNetwork;
     persistOfflineQueue(remaining);
     setIsSyncingOfflineQueue(false);
 
     if (syncedCount > 0) {
-      onShowToast(
+      onShowToastRef.current(
         'Offline Queue Synced',
         `${syncedCount} struk offline berhasil disinkronkan ke server & GL (${remaining.length} tersisa).`
       );
       loadProducts();
       loadHistory();
       loadShiftState();
-      if (onInventoryUpdated) {
-        onInventoryUpdated();
+      if (onInventoryUpdatedRef.current) {
+        onInventoryUpdatedRef.current();
       }
     } else if (abortDueToNetwork) {
-      onShowToast('Sync Pending', 'Koneksi server masih terputus. Struk tetap aman di Offline Queue.');
+      onShowToastRef.current('Sync Pending', 'Koneksi server masih terputus. Struk tetap aman di Offline Queue.');
     }
-  }, [isSyncingOfflineQueue, offlineQueue, persistOfflineQueue, onShowToast, onInventoryUpdated]);
+  }, [isSyncingOfflineQueue, offlineQueue, persistOfflineQueue]);
 
   useEffect(() => {
     const handleOnline = () => {
+      offlineAutoSyncPausedRef.current = false;
       setIsOnline(true);
     };
     const handleOffline = () => {
@@ -1207,7 +1215,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
   }, []);
 
   useEffect(() => {
-    if (isOnline && offlineQueue.length > 0 && !isSyncingOfflineQueue) {
+    if (offlineQueue.length === 0) {
+      offlineAutoSyncPausedRef.current = false;
+      return;
+    }
+    if (isOnline && !isSyncingOfflineQueue && !offlineAutoSyncPausedRef.current) {
       syncOfflineQueue();
     }
   }, [isOnline, offlineQueue.length, isSyncingOfflineQueue, syncOfflineQueue]);

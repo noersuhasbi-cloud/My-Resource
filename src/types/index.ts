@@ -4147,7 +4147,22 @@ export type TrialLifecycleStatus =
 
 export type GovernanceMode = 'TRIAL' | 'DEMO' | 'PRODUCTION';
 
+export type EnterpriseLicenseMode = 'ENTERPRISE_PRODUCTION' | 'ACTIVE_TRIAL';
+
 export type TrialManualStatusOverride = 'AUTO' | TrialLifecycleStatus;
+
+export interface GovernanceRbacSummary {
+  totalRoles: number;
+  restrictedSubRolesCount: number;
+  unrestrictedSubRolesCount: number;
+  restrictedModulesCount: number;
+  restrictedModuleSlotsCount: number;
+  totalModuleRestrictionRules: number;
+  restrictedAccountingFlagsCount: number;
+  restrictedSubRoleCodes: DivisionRoleCode[];
+  restrictedModuleKeys: ModulePermissionKey[];
+  computedFrom: 'SYSTEM_USERS_RBAC';
+}
 
 export interface TrialAccountingSubAccess {
   ar: boolean;
@@ -4158,6 +4173,7 @@ export interface TrialAccountingSubAccess {
 
 export interface TrialGovernanceConfig {
   mode: GovernanceMode;
+  licenseMode?: EnterpriseLicenseMode;
   enforceRestrictions: boolean;
   startDateIso: string; // YYYY-MM-DD
   durationDays: number;
@@ -4181,8 +4197,10 @@ export interface TrialGovernanceConfig {
 
 export interface TrialGovernanceStatusSnapshot {
   config: TrialGovernanceConfig;
+  licenseMode?: EnterpriseLicenseMode;
   effectiveStatus: TrialLifecycleStatus;
   serverTimestampIso: string;
+  serverTimestampWib?: string;
   expiresAtIso: string;
   graceEndsAtIso: string;
   daysRemaining: number;
@@ -4191,6 +4209,7 @@ export interface TrialGovernanceStatusSnapshot {
   isExpiringSoon: boolean;
   isInGraceWindow: boolean;
   statusMessage: string;
+  rbacSummary?: GovernanceRbacSummary;
 }
 
 export type ImportExportErrorType =

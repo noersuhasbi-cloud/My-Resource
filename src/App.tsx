@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { HeritageStory } from './components/HeritageStory';
@@ -85,20 +85,25 @@ export default function App() {
         const saved = localStorage.getItem('grocemart_admin_session');
         if (saved) {
           try {
-            setAdminSession(JSON.parse(saved));
+            const parsed = JSON.parse(saved);
+            setAdminSession((prev) =>
+              prev && parsed && prev.userId === parsed.userId && prev.userRole === parsed.userRole && prev.assignedBranchId === parsed.assignedBranchId
+                ? prev
+                : parsed
+            );
           } catch {}
-          setPortalView('admin_erp');
+          setPortalView((prev) => (prev === 'admin_erp' ? prev : 'admin_erp'));
         } else {
-          setPortalView('admin_login');
+          setPortalView((prev) => (prev === 'admin_login' ? prev : 'admin_login'));
         }
       } else if (hash === '#admin-login') {
-        setPortalView('admin_login');
+        setPortalView((prev) => (prev === 'admin_login' ? prev : 'admin_login'));
       } else if (hash === '#b2b' || hash === '#wholesale') {
-        setPortalView('customer');
-        setStorefrontMode('b2b');
+        setPortalView((prev) => (prev === 'customer' ? prev : 'customer'));
+        setStorefrontMode((prev) => (prev === 'b2b' ? prev : 'b2b'));
       } else if (!hash || hash === '#storefront' || hash === '#home') {
-        setPortalView('customer');
-        setStorefrontMode('b2c');
+        setPortalView((prev) => (prev === 'customer' ? prev : 'customer'));
+        setStorefrontMode((prev) => (prev === 'b2c' ? prev : 'b2c'));
       }
     };
 
@@ -142,17 +147,17 @@ export default function App() {
   // 1. Toast notifications state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const showToast = (title: string, message?: string, image?: string) => {
+  const showToast = useCallback((title: string, message?: string, image?: string) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     setToasts((prev) => [...prev, { id, title, message, image }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3500);
-  };
+  }, []);
 
-  const dismissToast = (id: string) => {
+  const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, []);
 
   // 1. Cart state with localStorage
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
@@ -208,15 +213,16 @@ export default function App() {
   }, []);
 
   // Listen to Firestore real-time orders if user has Firebase UID
+  const customerAccountId = customerAccount?.id;
   useEffect(() => {
-    if (!customerAccount || !auth.currentUser) return;
+    if (!customerAccountId || !auth.currentUser) return;
     const unsubOrders = subscribeToUserOrders(auth.currentUser.uid, (firestoreOrders) => {
       if (firestoreOrders.length > 0) {
         setOrders(firestoreOrders);
       }
     });
     return () => unsubOrders();
-  }, [customerAccount]);
+  }, [customerAccountId]);
 
   // 4. Modals & Drawers state
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);

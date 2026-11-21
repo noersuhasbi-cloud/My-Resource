@@ -35,7 +35,7 @@ button, input, select, textarea {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -51,7 +51,7 @@ button, input, select, textarea {
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: none;
   }
 }
 
@@ -69,13 +69,12 @@ button, input, select, textarea {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
 .gm-view-enter {
-  animation: gmViewEnter 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  will-change: opacity, transform;
+  animation: gmViewEnter 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes gmTabEnter {
@@ -85,13 +84,12 @@ button, input, select, textarea {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
 .gm-tab-enter {
-  animation: gmTabEnter 160ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  will-change: opacity, transform;
+  animation: gmTabEnter 160ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes gmBackdropFade {
@@ -104,7 +102,7 @@ button, input, select, textarea {
 }
 
 .gm-backdrop-fade {
-  animation: gmBackdropFade 160ms ease-out both;
+  animation: gmBackdropFade 160ms ease-out forwards;
 }
 
 @keyframes gmModalPop {
@@ -114,13 +112,12 @@ button, input, select, textarea {
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
 .gm-modal-pop {
-  animation: gmModalPop 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  will-change: opacity, transform;
+  animation: gmModalPop 190ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes gmDrawerSlideRight {
@@ -130,13 +127,12 @@ button, input, select, textarea {
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: none;
   }
 }
 
 .gm-drawer-right {
-  animation: gmDrawerSlideRight 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  will-change: opacity, transform;
+  animation: gmDrawerSlideRight 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes gmToastEnter {
@@ -146,13 +142,12 @@ button, input, select, textarea {
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
 .gm-toast-enter {
-  animation: gmToastEnter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  will-change: opacity, transform;
+  animation: gmToastEnter 180ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 /* Tactile Sidebar, Sub-Tab & Interactive Button Micro-Feedback */

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Shield,
   ShieldAlert,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type {
   DivisionRoleCode,
+  EnterpriseLicenseMode,
   GovernanceMode,
   ImportExportDiagnosticReport,
   ModulePermissionKey,
@@ -31,6 +32,7 @@ import {
   SUB_ROLE_GOVERNANCE_GROUPS,
   MODULE_GOVERNANCE_OPTIONS,
   addDaysToYmd,
+  formatWibTimestamp,
 } from '../../utils/trialGovernance';
 
 interface TrialGovernancePanelProps {
@@ -77,8 +79,16 @@ export const TrialGovernancePanel: React.FC<TrialGovernancePanelProps> = ({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isRefreshingDiag, setIsRefreshingDiag] = useState<boolean>(false);
 
+  const onGovernanceUpdatedRef = useRef(onGovernanceUpdated);
+  onGovernanceUpdatedRef.current = onGovernanceUpdated;
+  const onShowToastRef = useRef(onShowToast);
+  onShowToastRef.current = onShowToast;
+  const hasLoadedOnceRef = useRef(false);
+
   const loadGovernanceAndDiagnostics = useCallback(async () => {
-    setIsLoading(true);
+    if (!hasLoadedOnceRef.current) {
+      setIsLoading(true);
+    }
     try {
       const [govRes, diagRes] = await Promise.all([
         apiClient.getTrialGovernance(),
@@ -87,22 +97,34 @@ export const TrialGovernancePanel: React.FC<TrialGovernancePanelProps> = ({
       if (govRes?.governance) {
         setSnapshot(govRes.governance);
         setDraftConfig(govRes.governance.config);
-        onGovernanceUpdated?.(govRes.governance);
+        onGovernanceUpdatedRef.current?.(govRes.governance);
       }
       if (Array.isArray(diagRes?.reports)) {
         setDiagnostics(diagRes.reports);
       }
+      hasLoadedOnceRef.current = true;
     } catch (err: any) {
-      onShowToast('Governance Load Error', err?.message || 'Could not load Trial & Demo Governance settings.');
+      onShowToastRef.current(
+        'Governance Load Error',
+        err?.message || 'Could not load Trial & Demo Governance settings.'
+      );
     } finally {
       setIsLoading(false);
     }
-  }, [onGovernanceUpdated, onShowToast]);
+  }, []);
 
   const refreshDiagnosticsOnly = useCallback(async () => {
     setIsRefreshingDiag(true);
     try {
-      const diagRes = await apiClient.getImportExportDiagnostics();
+      const [govRes, diagRes] = await Promise.all([
+        apiClient.getTrialGovernance(),
+        apiClient.getImportExportDiagnostics(),
+      ]);
+      if (govRes?.governance) {
+        setSnapshot(govRes.governance);
+        setDraftConfig(govRes.governance.config);
+        onGovernanceUpdatedRef.current?.(govRes.governance);
+      }
       if (Array.isArray(diagRes?.reports)) {
         setDiagnostics(diagRes.reports);
       }
@@ -147,6 +169,22 @@ export const TrialGovernancePanel: React.FC<TrialGovernancePanelProps> = ({
         const start = key === 'startDateIso' ? String(value) : prev.startDateIso;
         const dur = key === 'durationDays' ? Number(value) : prev.durationDays;
         next.expirationDateIso = addDaysToYmd(start, Number.isFinite(dur) ? dur : 30);
+      } else if (key === 'licenseMode') {
+        const lm = value as EnterpriseLicenseMode;
+        next.licenseMode = lm;
+        if (lm === 'ENTERPRISE_PRODUCTION') {
+          next.mode = 'PRODUCTION';
+          if (prev.manualStatusOverride === 'LOCKED_EXPIRED') {
+            next.manualStatusOverride = 'AUTO';
+          }
+        } else {
+          if (prev.mode === 'PRODUCTION') {
+            next.mode = 'TRIAL';
+          }
+        }
+      } else if (key === 'mode') {
+        const m = value as GovernanceMode;
+        next.licenseMode = m === 'PRODUCTION' ? 'ENTERPRISE_PRODUCTION' : 'ACTIVE_TRIAL';
       }
       return next;
     });
@@ -217,12 +255,39 @@ export const TrialGovernancePanel: React.FC<TrialGovernancePanelProps> = ({
     );
   }
 
-  const disabledSubRoleCount = Object.entries(draftConfig.subRoleAccess || {}).filter(
+  const savedSubRoleOverlayOff = Object.entries(snapshot.config.subRoleAccess || {}).filter(
     ([code, allowed]) => code !== 'SUPER_ADMIN' && allowed === false
   ).length;
-  const disabledModuleCount = Object.entries(draftConfig.moduleAccess || {}).filter(
+  const draftSubRoleOverlayOff = Object.entries(draftConfig.subRoleAccess || {}).filter(
+    ([code, allowed]) => code !== 'SUPER_ADMIN' && allowed === false
+  ).length;
+  const disabledSubRoleCount = Math.max(
+    draftSubRoleOverlayOff,
+    (snapshot.rbacSummary?.restrictedSubRolesCount ?? savedSubRoleOverlayOff) +
+      (draftSubRoleOverlayOff - savedSubRoleOverlayOff)
+  );
+
+  const savedModuleOverlayOff = Object.entries(snapshot.config.moduleAccess || {}).filter(
     ([, allowed]) => allowed === false
   ).length;
+  const draftModuleOverlayOff = Object.entries(draftConfig.moduleAccess || {}).filter(
+    ([, allowed]) => allowed === false
+  ).length;
+  const disabledModuleCount = Math.max(
+    draftModuleOverlayOff,
+    (snapshot.rbacSummary?.restrictedModulesCount ?? savedModuleOverlayOff) +
+      (draftModuleOverlayOff - savedModuleOverlayOff)
+  );
+
+  const activeLicenseMode: EnterpriseLicenseMode =
+    draftConfig.licenseMode === 'ENTERPRISE_PRODUCTION' || draftConfig.mode === 'PRODUCTION'
+      ? 'ENTERPRISE_PRODUCTION'
+      : 'ACTIVE_TRIAL';
+
+  const parsedServerNowMs = Date.parse(snapshot.serverTimestampIso);
+  const serverWibLabel =
+    snapshot.serverTimestampWib ||
+    formatWibTimestamp(Number.isFinite(parsedServerNowMs) ? parsedServerNowMs : Date.now());
 
   return (
     <div className={`${cardClass} p-5 sm:p-6 space-y-5 lg:col-span-2`}>
@@ -292,14 +357,18 @@ export const TrialGovernancePanel: React.FC<TrialGovernancePanelProps> = ({
           <div>
             <p className="font-semibold">{snapshot.statusMessage}</p>
             <p className="text-[11px] opacity-80 mt-0.5 font-mono">
-              Server Clock (UTC): {snapshot.serverTimestampIso.replace('T', ' ').slice(0, 19)} | Expires:{' '}
-              {snapshot.expiresAtIso.slice(0, 10)} | Restricted Sub-Roles: {disabledSubRoleCount} | Restricted Modules:{' '}
-              {disabledModuleCount}
+              Server Clock (UTC): {snapshot.serverTimestampIso.replace('T', ' ').slice(0, 19)} | WIB (UTC+7):{' '}
+              {serverWibLabel} | Expires: {snapshot.expiresAtIso.slice(0, 10)} | Restricted Sub-Roles:{' '}
+              {disabledSubRoleCount} | Restricted Modules: {disabledModuleCount}
             </p>
           </div>
         </div>
         <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700 shrink-0">
-          {snapshot.isOperationalLocked ? 'Locked (Data Preserved)' : `${snapshot.daysRemaining}d remaining`}
+          {snapshot.isOperationalLocked
+            ? 'Locked (Data Preserved)'
+            : activeLicenseMode === 'ENTERPRISE_PRODUCTION'
+            ? 'Enterprise Production'
+            : `${snapshot.daysRemaining}d remaining`}
         </span>
       </div>
 
@@ -325,6 +394,19 @@ export const TrialGovernancePanel: React.FC<TrialGovernancePanelProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>License Mode</label>
+              <select
+                disabled={!isSuperAdmin}
+                value={activeLicenseMode}
+                onChange={(e) => updateField('licenseMode', e.target.value as EnterpriseLicenseMode)}
+                className={inputClass}
+              >
+                <option value="ACTIVE_TRIAL">ACTIVE_TRIAL (30/31-Day Evaluation)</option>
+                <option value="ENTERPRISE_PRODUCTION">ENTERPRISE_PRODUCTION (No Trial Lockout)</option>
+              </select>
+            </div>
+
             <div>
               <label className={labelClass}>Workspace Governance Mode</label>
               <select

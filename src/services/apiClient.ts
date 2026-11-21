@@ -3470,6 +3470,7 @@ export const apiClient = {
     success: boolean;
     timestamp: string;
     isCleanProductionMode: boolean;
+    trialGovernance?: TrialGovernanceStatusSnapshot;
     stats: {
       coa1040BalanceIDR: number;
       glEntries: number;

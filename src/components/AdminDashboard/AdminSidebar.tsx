@@ -1291,7 +1291,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       {/* Mobile Off-Canvas Sidebar Drawer */}
       <div
         className={`lg:hidden print:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] transition-transform duration-300 ease-in-out shadow-2xl ${
-          isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+          isMobileOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'
         } ${
           isLight ? 'bg-white border-r border-slate-200' : 'bg-[#12141C] border-r border-slate-800/80'
         }`}

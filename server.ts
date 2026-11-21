@@ -53,6 +53,7 @@ import {
   createDefaultTrialGovernanceConfig,
   normalizeTrialGovernanceConfig,
   evaluateTrialGovernanceSnapshot,
+  computeRbacGovernanceSummary,
   isSubRoleAllowedByGovernance,
   isModuleAllowedByGovernance,
   isAccountingAreaAllowedByGovernance,
@@ -2307,14 +2308,14 @@ function applyBlindOpnameApproval(sheet: BlindOpnameSheet, approverName: string)
     const unitCost = line.unitCostIDR ?? tier?.unitCost ?? 15000;
     const financialVar = Math.round(variance * unitCost);
 
+    const inv = inventoryList.find((i) => i.sku === line.sku);
     if (tier && variance !== 0) {
       tier.physicalStock = Math.max(0, counted);
       tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
       tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
-      tier.totalValuation = Math.round(tier.physicalStock * (tier.unitCost || unitCost));
+      tier.totalValuation = inv?.isConsignment ? 0 : Math.round(tier.physicalStock * (tier.unitCost || unitCost));
       tier.updatedAt = timestamp;
     }
-    const inv = inventoryList.find((i) => i.sku === line.sku);
     if (inv && variance !== 0) {
       inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) + variance).toFixed(2)));
     }
@@ -5050,6 +5051,11 @@ const revokedAuthTokens = new Set<string>();
 let trialGovernanceConfig: TrialGovernanceConfig = createDefaultTrialGovernanceConfig();
 let importExportDiagnosticsLog: ImportExportDiagnosticReport[] = [];
 
+function buildServerTrialGovernanceSnapshot(nowMs: number = Date.now()): TrialGovernanceStatusSnapshot {
+  const rbacSummary = computeRbacGovernanceSummary(systemUsers, trialGovernanceConfig);
+  return evaluateTrialGovernanceSnapshot(trialGovernanceConfig, nowMs, rbacSummary);
+}
+
 function recordImportExportDiagnostic(report: ImportExportDiagnosticReport): ImportExportDiagnosticReport {
   importExportDiagnosticsLog.unshift(report);
   if (importExportDiagnosticsLog.length > 50) {
@@ -5069,7 +5075,7 @@ function evaluateRouteGovernancePolicy(
   snapshot: TrialGovernanceStatusSnapshot;
 } {
   const nowMs = Date.now(); // Authoritative server-side clock (ignores client headers)
-  const snapshot = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, nowMs);
+  const snapshot = buildServerTrialGovernanceSnapshot(nowMs);
 
   // Super Admin always retains governance & recovery access
   if (user.roleCode === 'SUPER_ADMIN') {
@@ -5077,7 +5083,10 @@ function evaluateRouteGovernancePolicy(
   }
 
   // Always allow authenticated users to read trial governance status so UI banners/locks reflect server truth
-  if (urlPath === '/admin/settings/trial-governance' && method === 'GET') {
+  if (
+    (urlPath === '/admin/settings/trial-governance' || urlPath === '/admin/settings/governance') &&
+    method === 'GET'
+  ) {
     return { allowed: true, snapshot };
   }
 
@@ -5100,7 +5109,10 @@ function evaluateRouteGovernancePolicy(
   }
 
   const cfg = snapshot.config;
-  if (!cfg.enforceRestrictions || (cfg.mode === 'PRODUCTION' && cfg.manualStatusOverride === 'AUTO')) {
+  if (
+    !cfg.enforceRestrictions ||
+    ((cfg.mode === 'PRODUCTION' || cfg.licenseMode === 'ENTERPRISE_PRODUCTION') && cfg.manualStatusOverride === 'AUTO')
+  ) {
     return { allowed: true, snapshot };
   }
 
@@ -5439,6 +5451,7 @@ function evaluateSystemUserModulePermission(
     urlPath === '/admin/system/init-production' ||
     urlPath === '/admin/rbac/switch-session' ||
     (urlPath === '/admin/settings/trial-governance' && method !== 'GET') ||
+    (urlPath === '/admin/settings/governance' && method !== 'GET') ||
     (urlPath === '/admin/settings/operator-assignments' && method !== 'GET') ||
     ((urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) && method !== 'GET') ||
     ((urlPath === '/admin/settings/outlets' || urlPath.startsWith('/admin/settings/outlets/')) && method !== 'GET') ||
@@ -5447,7 +5460,7 @@ function evaluateSystemUserModulePermission(
   ) {
     return deny('settings', 'approve');
   }
-  if (urlPath === '/admin/settings/trial-governance' && isRead) {
+  if ((urlPath === '/admin/settings/trial-governance' || urlPath === '/admin/settings/governance') && isRead) {
     return { allowed: true };
   }
   if (urlPath === '/admin/settings/import-export-diagnostics') {
@@ -8102,6 +8115,7 @@ async function resetDemoStateToBaseline() {
     syncAllBatchesExpiryStatus(Date.now());
     syncWarehouseRackOccupancy();
     systemUsers = createInitialSystemUsers();
+    trialGovernanceConfig = createDefaultTrialGovernanceConfig(Date.now());
     activeAuthTokens.clear();
     currentActiveStaffSession = AVAILABLE_STAFF_USERS[6];
     enterpriseNotificationsList = [];
@@ -8227,6 +8241,18 @@ async function initializeCleanProductionStore(req?: Request) {
     syncAssignmentsOntoProfiles();
 
     isCleanProductionMode = true;
+    const prodNowMs = Date.now();
+    trialGovernanceConfig = normalizeTrialGovernanceConfig(
+      {
+        licenseMode: 'ENTERPRISE_PRODUCTION',
+        mode: 'PRODUCTION',
+        manualStatusOverride: 'AUTO',
+        updatedAt: new Date(prodNowMs).toISOString(),
+        updatedBy: req ? (resolveSystemUserForRequest(req)?.fullName || currentActiveStaffSession.userName) : 'Clean Production Initializer',
+      },
+      trialGovernanceConfig,
+      prodNowMs
+    );
     syncWarehouseRackOccupancy();
 
     auditTrailLogs = [];
@@ -8236,7 +8262,7 @@ async function initializeCleanProductionStore(req?: Request) {
       module: 'SECURITY',
       action: 'SYSTEM_PRODUCTION_INITIALIZED',
       referenceId: 'INIT-PROD',
-      summary: `Initialized Clean Production Store Mode (COA #1040 = Rp 0, GL = 0 entries, ${chartOfAccounts.length} Indonesian COA accounts & RBAC roles preserved).`,
+      summary: `Initialized Clean Production Store Mode (COA #1040 = Rp 0, GL = 0 entries, ${chartOfAccounts.length} Indonesian COA accounts & RBAC roles preserved, License: ENTERPRISE_PRODUCTION).`,
     });
 
     await flushSnapshotAtomic(true);
@@ -8527,8 +8553,11 @@ async function startServer() {
     // Check scoped rules for /api/admin/*, /api/pos/*, and /api/b2b/giro* (Legacy 7-Role compatibility)
     if (urlPath.startsWith('/admin/') || urlPath.startsWith('/pos/') || urlPath.startsWith('/b2b/giro')) {
       // Trial expiration lock check for legacy sessions (Super Admin exempt for recovery)
-      if (effectiveRole !== 'super_admin' && !(urlPath === '/admin/settings/trial-governance' && method === 'GET')) {
-        const legacyGovSnap = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, Date.now());
+      if (
+        effectiveRole !== 'super_admin' &&
+        !((urlPath === '/admin/settings/trial-governance' || urlPath === '/admin/settings/governance') && method === 'GET')
+      ) {
+        const legacyGovSnap = buildServerTrialGovernanceSnapshot(Date.now());
         if (legacyGovSnap.isOperationalLocked) {
           return res.status(403).json({
             success: false,
@@ -8565,6 +8594,7 @@ async function startServer() {
         urlPath === '/admin/system/init-production' ||
         urlPath === '/admin/rbac/switch-session' ||
         (urlPath === '/admin/settings/trial-governance' && method !== 'GET') ||
+        (urlPath === '/admin/settings/governance' && method !== 'GET') ||
         (urlPath === '/admin/settings/operator-assignments' && method === 'POST') ||
         ((urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) && method !== 'GET') ||
         ((urlPath === '/admin/settings/outlets' || urlPath.startsWith('/admin/settings/outlets/')) && method !== 'GET') ||
@@ -8950,12 +8980,12 @@ async function startServer() {
   // =============================================================
   // TRIAL / DEMO GOVERNANCE & IMPORT/EXPORT DIAGNOSTICS APIS (ADDITIVE)
   // =============================================================
-  app.get('/api/admin/settings/trial-governance', (_req: Request, res: Response) => {
-    const governance = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, Date.now());
+  const handleGetTrialGovernance = (_req: Request, res: Response) => {
+    const governance = buildServerTrialGovernanceSnapshot(Date.now());
     res.json({ success: true, governance });
-  });
+  };
 
-  app.put('/api/admin/settings/trial-governance', (req: Request, res: Response) => {
+  const handleUpdateTrialGovernance = (req: Request, res: Response) => {
     const callerSystemUser = resolveSystemUserForRequest(req);
     const callerRoleHeader = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim().toLowerCase() : '';
     const isOwner =
@@ -8974,6 +9004,7 @@ async function startServer() {
     const nowMs = Date.now();
     const actorName = getEffectiveOperatorName(req);
 
+    // Strictly update governance policy config without ever mutating or resetting custom systemUsers RBAC permissions
     trialGovernanceConfig = normalizeTrialGovernanceConfig(
       {
         ...patch,
@@ -8984,7 +9015,7 @@ async function startServer() {
       nowMs
     );
 
-    const governance = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, nowMs);
+    const governance = buildServerTrialGovernanceSnapshot(nowMs);
 
     appendAuditTrailLog({
       req,
@@ -8992,7 +9023,7 @@ async function startServer() {
       module: 'SECURITY',
       action: 'TRIAL_GOVERNANCE_UPDATED',
       referenceId: `GOV-${nowMs.toString().slice(-6)}`,
-      summary: `Updated Trial/Demo Governance: mode=${governance.config.mode}, status=${governance.effectiveStatus}, expires=${governance.config.expirationDateIso}, locked=${governance.isOperationalLocked}.`,
+      summary: `Updated Trial/Demo Governance: licenseMode=${governance.licenseMode}, mode=${governance.config.mode}, status=${governance.effectiveStatus}, expires=${governance.config.expirationDateIso}, locked=${governance.isOperationalLocked}.`,
     });
 
     scheduleStateSave();
@@ -9000,9 +9031,13 @@ async function startServer() {
     res.json({
       success: true,
       governance,
-      message: `Trial & Demo Governance policy saved cleanly (Effective Status: ${governance.effectiveStatus}).`,
+      message: `Trial & Demo Governance policy saved cleanly (License: ${governance.licenseMode}, Effective Status: ${governance.effectiveStatus}).`,
     });
-  });
+  };
+
+  app.get(['/api/admin/settings/trial-governance', '/api/admin/settings/governance'], handleGetTrialGovernance);
+  app.put(['/api/admin/settings/trial-governance', '/api/admin/settings/governance'], handleUpdateTrialGovernance);
+  app.post(['/api/admin/settings/trial-governance', '/api/admin/settings/governance'], handleUpdateTrialGovernance);
 
   app.get('/api/admin/settings/import-export-diagnostics', (_req: Request, res: Response) => {
     res.json({
@@ -9141,10 +9176,12 @@ async function startServer() {
   app.post('/api/admin/system/init-production', async (req: Request, res: Response) => {
     await initializeCleanProductionStore(req);
     const coa1040Balance = chartOfAccounts.find((c) => c.accountCode === '1040')?.balance ?? 0;
+    const trialGovernance = buildServerTrialGovernanceSnapshot(Date.now());
     res.json({
       success: true,
       timestamp: new Date().toISOString(),
       isCleanProductionMode,
+      trialGovernance,
       stats: {
         coa1040BalanceIDR: coa1040Balance,
         glEntries: generalLedger.length,
@@ -9153,7 +9190,7 @@ async function startServer() {
         rbacUsersPreserved: Object.keys(operatorBranchAssignments).length,
       },
       message:
-        'Clean Production Store initialized: dummy transactions, GL entries, and demo batches cleared while preserving Indonesian COA, ERP settings, and RBAC roles.',
+        'Clean Production Store initialized: dummy transactions, GL entries, and demo batches cleared while preserving Indonesian COA, ERP settings, and RBAC roles (ENTERPRISE_PRODUCTION active).',
     });
   });
 
@@ -12177,6 +12214,9 @@ async function startServer() {
 
         // 2. Release reservedStock / batch reservedQuantity & deduct physical onHand via FEFO/FIFO
         let totalCogsIDR = 0;
+        let totalOwnedCogsIDR = 0;
+        let totalConsignmentPayableIDR = 0;
+        const pendingConsignmentEntries: ConsignmentLedgerEntry[] = [];
         const deductedItemsTrace: Array<{
           sku: string;
           qty: number;
@@ -12255,20 +12295,53 @@ async function startServer() {
             invItem.outgoingStock = (invItem.outgoingStock || 0) + finalDeductQty;
           }
 
+          const isConsignmentLine = Boolean(invItem?.isConsignment || tier?.isConsignment);
           const lineCogsIDR =
             batchResult.allocations.length > 0
               ? roundIDR(batchResult.totalCogs)
               : roundIDR(finalDeductQty * fallbackCost);
           totalCogsIDR = roundIDR(totalCogsIDR + lineCogsIDR);
 
+          const primaryLot =
+            batchResult.allocations[0]?.lotNumber ||
+            item.reservedAllocations?.[0]?.lotNumber ||
+            `BAT-${order.orderId.slice(-4)}`;
+
+          if (isConsignmentLine && finalDeductQty > 0) {
+            const lineTotal = roundIDR(item.finalPrice);
+            const commPct = Number(invItem?.consignmentCommissionPercent ?? 20);
+            const storeMarginIDR = Math.round(lineTotal * (commPct / 100));
+            const payableToVendorIDR = Math.max(0, lineTotal - storeMarginIDR);
+            totalConsignmentPayableIDR = roundIDR(totalConsignmentPayableIDR + payableToVendorIDR);
+            pendingConsignmentEntries.push({
+              id: `CSG-FUL-${Date.now().toString().slice(-6)}-${pendingConsignmentEntries.length + 1}`,
+              timestamp: nowIso,
+              storeId: order.storeId,
+              storeName: order.storeName,
+              channel: order.crmAccountId && order.paymentStatus !== 'paid' ? 'B2B' : 'POS',
+              referenceId: order.orderId,
+              sku: item.sku,
+              productName: item.productName,
+              supplierName: invItem?.consignmentSupplier || invItem?.supplierName || 'Consignment UMKM Partner',
+              lotNumber: primaryLot,
+              quantitySold: finalDeductQty,
+              sellingPriceIDR: Math.round(lineTotal / Math.max(1, finalDeductQty)),
+              grossSalesIDR: lineTotal,
+              commissionPercent: commPct,
+              storeMarginIDR,
+              payableToVendorIDR,
+              status: 'UNSETTLED',
+              glVoucherIds: [],
+            });
+          } else {
+            totalOwnedCogsIDR = roundIDR(totalOwnedCogsIDR + lineCogsIDR);
+          }
+
           deductedItemsTrace.push({
             sku: item.sku,
             qty: finalDeductQty,
             cogsIDR: lineCogsIDR,
-            lotNumber:
-              batchResult.allocations[0]?.lotNumber ||
-              item.reservedAllocations?.[0]?.lotNumber ||
-              `BAT-${order.orderId.slice(-4)}`,
+            lotNumber: primaryLot,
           });
         }
 
@@ -12436,7 +12509,7 @@ async function startServer() {
         commitBalancedGlBatch(revBatch, true);
         revBatch.forEach((e) => glJournalIds.push(e.id));
 
-        if (totalCogsIDR > 0) {
+        if (totalOwnedCogsIDR > 0) {
           const cogsBatch: GeneralLedgerEntry[] = [
             {
               id: `GLE-FUL-${seq}-COGS`,
@@ -12446,7 +12519,7 @@ async function startServer() {
               accountCode: '5010',
               accountName: 'Cost of Goods Sold (COGS) - FIFO / WAC',
               category: 'Expense',
-              debit: totalCogsIDR,
+              debit: totalOwnedCogsIDR,
               credit: 0,
               referenceType: 'QRIS_SALE',
               referenceId: order.orderId,
@@ -12461,7 +12534,7 @@ async function startServer() {
               accountName: 'Merchandise Inventory Asset',
               category: 'Asset',
               debit: 0,
-              credit: totalCogsIDR,
+              credit: totalOwnedCogsIDR,
               referenceType: 'QRIS_SALE',
               referenceId: order.orderId,
               description: `Physical inventory asset deduction on fulfillment #${order.orderId}`,
@@ -12469,6 +12542,46 @@ async function startServer() {
           ];
           commitBalancedGlBatch(cogsBatch, true);
           cogsBatch.forEach((e) => glJournalIds.push(e.id));
+        }
+
+        if (totalConsignmentPayableIDR > 0) {
+          ensureRegulatoryCoaAccounts();
+          const csgCoaBatch: GeneralLedgerEntry[] = [
+            {
+              id: `GLE-FUL-${seq}-CSG-COGS`,
+              timestamp: nowIso,
+              storeId: order.storeId,
+              storeName: order.storeName,
+              accountCode: '5010',
+              accountName: 'Cost of Goods Sold (COGS) — Consignment Payout',
+              category: 'Expense',
+              debit: totalConsignmentPayableIDR,
+              credit: 0,
+              referenceType: 'CONSIGNMENT_SALE',
+              referenceId: order.orderId,
+              description: `Consignment Titip Jual payout COGS on fulfillment #${order.orderId}`,
+            },
+            {
+              id: `GLE-FUL-${seq}-CSG-2015`,
+              timestamp: nowIso,
+              storeId: order.storeId,
+              storeName: order.storeName,
+              accountCode: '2015',
+              accountName: 'Consignment Payable — Titip Jual UMKM',
+              category: 'Liability',
+              debit: 0,
+              credit: totalConsignmentPayableIDR,
+              referenceType: 'CONSIGNMENT_SALE',
+              referenceId: order.orderId,
+              description: `Consignment Payable accrued on fulfillment #${order.orderId}`,
+            },
+          ];
+          commitBalancedGlBatch(csgCoaBatch, true);
+          csgCoaBatch.forEach((e) => glJournalIds.push(e.id));
+          pendingConsignmentEntries.forEach((ce) => {
+            ce.glVoucherIds = csgCoaBatch.map((e) => e.id);
+            consignmentLedger.unshift(ce);
+          });
         }
 
         // 5. CRM Loyalty Points Accrual
@@ -14573,14 +14686,16 @@ async function startServer() {
   // =============================================================
   // Public lightweight listing of demo accounts for Login Gate Quick-Fill (never exposes passwords)
   app.get('/api/auth/demo-accounts', (_req: Request, res: Response) => {
-    const governance = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, Date.now());
+    const governance = buildServerTrialGovernanceSnapshot(Date.now());
+    const isProdLic =
+      trialGovernanceConfig.mode === 'PRODUCTION' || trialGovernanceConfig.licenseMode === 'ENTERPRISE_PRODUCTION';
     const quickFillEnabled =
       !trialGovernanceConfig.enforceRestrictions ||
-      trialGovernanceConfig.mode === 'PRODUCTION' ||
+      isProdLic ||
       trialGovernanceConfig.allowDemoQuickFill;
     const allowLegacyQuickIds =
       !trialGovernanceConfig.enforceRestrictions ||
-      trialGovernanceConfig.mode === 'PRODUCTION' ||
+      isProdLic ||
       trialGovernanceConfig.allowLegacyQuickIds;
 
     if (!quickFillEnabled) {
@@ -14622,7 +14737,7 @@ async function startServer() {
     syncAssignmentsOntoProfiles();
     const { email, userId, username, password, pin, shiftName } = req.body || {};
     const nowMs = Date.now();
-    const governance = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, nowMs);
+    const governance = buildServerTrialGovernanceSnapshot(nowMs);
 
     const rawIdentifier =
       (typeof email === 'string' && email.trim()) ||
@@ -14769,7 +14884,8 @@ async function startServer() {
     if (
       target.userRole !== 'super_admin' &&
       trialGovernanceConfig.enforceRestrictions &&
-      trialGovernanceConfig.mode !== 'PRODUCTION'
+      trialGovernanceConfig.mode !== 'PRODUCTION' &&
+      trialGovernanceConfig.licenseMode !== 'ENTERPRISE_PRODUCTION'
     ) {
       if (!trialGovernanceConfig.allowLegacyQuickIds) {
         return res.status(403).json({
@@ -22038,6 +22154,7 @@ async function startServer() {
         let totalPpnReturnIDR = 0;
         let totalPb1ReturnIDR = 0;
         let totalRestockCogsIDR = 0;
+        let totalRestockConsignmentPayableIDR = 0;
         let totalDamagedLossIDR = 0;
         const normalizedReturnedLines: EpodReturnLine[] = [];
 
@@ -22222,7 +22339,13 @@ async function startServer() {
                   notes: `Good-condition e-POD partial return restocked from ${sj.documentNumber}`,
                 });
               }
-              totalRestockCogsIDR += roundIDR(retQty * unitCostIDR);
+              if (invItem?.isConsignment) {
+                const commPct = Number(invItem.consignmentCommissionPercent ?? 20);
+                const retPayableIDR = Math.max(0, roundIDR(lineGrossIDR - Math.round(lineGrossIDR * (commPct / 100))));
+                totalRestockConsignmentPayableIDR += retPayableIDR;
+              } else {
+                totalRestockCogsIDR += roundIDR(retQty * unitCostIDR);
+              }
             } else {
               // DAMAGED_QUARANTINE -> locked quarantined batch + Waste & Shrinkage record
               const qrnBatchId = `BAT-QRN-${Date.now().toString().slice(-5)}-${normalizedReturnedLines.length + 1}`;
@@ -22407,6 +22530,42 @@ async function startServer() {
             ];
             commitBalancedGlBatch(restockBatch, true);
             restockBatch.forEach((e) => glEntryIds.push(e.id));
+          }
+
+          if (totalRestockConsignmentPayableIDR > 0) {
+            ensureRegulatoryCoaAccounts();
+            const csgRestockBatch: GeneralLedgerEntry[] = [
+              {
+                id: `GLE-EPOD-${glSeq}-CSG-2015`,
+                timestamp: deliveredAt,
+                storeId: sj.senderStoreId,
+                storeName: sj.senderStoreName,
+                accountCode: '2015',
+                accountName: 'Consignment Payable — Titip Jual UMKM',
+                category: 'Liability',
+                debit: totalRestockConsignmentPayableIDR,
+                credit: 0,
+                referenceType: 'CONSIGNMENT_SALE',
+                referenceId: creditMemoNumber,
+                description: `Consignment payable reversed on good-condition e-POD return (${creditMemoNumber})`,
+              },
+              {
+                id: `GLE-EPOD-${glSeq}-CSG-COGS`,
+                timestamp: deliveredAt,
+                storeId: sj.senderStoreId,
+                storeName: sj.senderStoreName,
+                accountCode: '5010',
+                accountName: 'Cost of Goods Sold (COGS) — Consignment Payout',
+                category: 'Expense',
+                debit: 0,
+                credit: totalRestockConsignmentPayableIDR,
+                referenceType: 'CONSIGNMENT_SALE',
+                referenceId: creditMemoNumber,
+                description: `Consignment COGS reversed on good-condition e-POD return (${creditMemoNumber})`,
+              },
+            ];
+            commitBalancedGlBatch(csgRestockBatch, true);
+            csgRestockBatch.forEach((e) => glEntryIds.push(e.id));
           }
 
           if (totalDamagedLossIDR > 0) {
@@ -25397,6 +25556,9 @@ async function startServer() {
 
     const sheet = blindOpnameSheetsList.find((s) => s.id === id);
     if (!sheet) return res.status(404).json({ error: `Blind count sheet ${id} not found` });
+    if (sheet.status === 'APPROVED') {
+      return res.status(400).json({ error: `Blind count sheet ${sheet.sheetNumber} is already approved.` });
+    }
 
     const reqItem = approvalQueueList.find(
       (q) => q.id === sheet.approvalRequestId || q.documentId === sheet.id
@@ -25542,10 +25704,15 @@ async function startServer() {
     }
 
     const timestamp = new Date().toISOString();
-    const countedCashIDR = (denominations || []).reduce(
-      (sum, d) => sum + (Number(d.denomination) || 0) * (Number(d.count) || 0),
-      0
-    );
+    const hasDenominations = Array.isArray(denominations) && denominations.length > 0;
+    const explicitCountedRaw = req.body.countedCashIDR ?? req.body.countedDrawerCashIDR;
+    const countedCashIDR =
+      !hasDenominations && explicitCountedRaw !== undefined && explicitCountedRaw !== null && Number.isFinite(Number(explicitCountedRaw))
+        ? Math.max(0, roundIDR(Number(explicitCountedRaw)))
+        : (denominations || []).reduce(
+            (sum, d) => sum + (Number(d.denomination) || 0) * (Number(d.count) || 0),
+            0
+          );
     const cashVarianceIDR = countedCashIDR - shift.expectedTotalCashInDrawerIDR;
     const qrisVarianceIDR = Number(countedQrisBatchIDR || 0) - shift.expectedQrisSalesIDR;
     const edcVarianceIDR = Number(countedEdcBatchIDR || 0) - shift.expectedEdcSalesIDR;
@@ -27525,7 +27692,9 @@ async function startServer() {
     }
 
     const rowCap =
-      trialGovernanceConfig.enforceRestrictions && trialGovernanceConfig.mode !== 'PRODUCTION'
+      trialGovernanceConfig.enforceRestrictions &&
+      trialGovernanceConfig.mode !== 'PRODUCTION' &&
+      trialGovernanceConfig.licenseMode !== 'ENTERPRISE_PRODUCTION'
         ? trialGovernanceConfig.maxTrialImportRows
         : undefined;
     if (rowCap && rows.length > rowCap) {
@@ -28110,7 +28279,9 @@ async function startServer() {
     }
 
     const rowCap =
-      trialGovernanceConfig.enforceRestrictions && trialGovernanceConfig.mode !== 'PRODUCTION'
+      trialGovernanceConfig.enforceRestrictions &&
+      trialGovernanceConfig.mode !== 'PRODUCTION' &&
+      trialGovernanceConfig.licenseMode !== 'ENTERPRISE_PRODUCTION'
         ? trialGovernanceConfig.maxTrialImportRows
         : undefined;
     if (rowCap && rows.length > rowCap) {
@@ -29741,6 +29912,7 @@ async function startServer() {
     const bundleSku = String(body.bundleSku || '').trim();
     const bundleName = String(body.bundleName || '').trim();
     const bundleQty = Number(body.bundleQty);
+    const packagingFeeIDR = Math.max(0, roundIDR(Number(body.packagingFeeIDR) || 0));
     const components = Array.isArray(body.components) ? body.components : [];
 
     if (!bundleSku || !bundleName || !Number.isFinite(bundleQty) || bundleQty <= 0 || components.length < 2) {
@@ -29795,7 +29967,7 @@ async function startServer() {
         compTier.physicalStock = Math.max(0, Number((compTier.physicalStock - reqTotal).toFixed(2)));
         compTier.reservedStock = Math.min(compTier.reservedStock, compTier.physicalStock);
         compTier.availableStock = Math.max(0, Number((compTier.physicalStock - compTier.reservedStock).toFixed(2)));
-        compTier.totalValuation = Math.round(compTier.physicalStock * compTier.unitCost);
+        compTier.totalValuation = compInv?.isConsignment ? 0 : Math.round(compTier.physicalStock * compTier.unitCost);
         compTier.updatedAt = timestamp;
       }
       if (compInv) {
@@ -29821,7 +29993,8 @@ async function startServer() {
       });
     }
 
-    const bundleUnitCostIDR = Math.round(totalComponentCogsIDR / bundleQty);
+    const totalNewBundleInventoryCostIDR = totalComponentCogsIDR + packagingFeeIDR;
+    const bundleUnitCostIDR = Math.round(totalNewBundleInventoryCostIDR / bundleQty);
     const bundleSellingPrice =
       Number(body.bundleSellingPriceIDR) > 0
         ? roundIDR(Number(body.bundleSellingPriceIDR))
@@ -29973,6 +30146,20 @@ async function startServer() {
     };
     inventoryBatches.unshift(producedBatch);
 
+    if (!skuTaxRulesList.some((r) => r.sku === bundleSku)) {
+      const taxCat = inferDefaultTaxCategory(bundleInv.category, bundleName);
+      skuTaxRulesList.push({
+        sku: bundleSku,
+        productName: bundleName,
+        category: bundleInv.category,
+        taxCategory: taxCat,
+        taxRatePercent: getTaxRateForCategory(taxCat, 11),
+        b2cTaxInclusive: true,
+        b2bTaxExclusive: true,
+        updatedAt: timestamp,
+      });
+    }
+
     const gBundleDebit = `GLE-BND-${Date.now().toString().slice(-6)}-DR`;
     glVoucherIds.unshift(gBundleDebit);
     glEntries.unshift({
@@ -29983,12 +30170,30 @@ async function startServer() {
       accountCode: '1040',
       accountName: `Merchandise Inventory Asset (Bundle ${bundleSku})`,
       category: 'Asset',
-      debit: totalComponentCogsIDR,
+      debit: totalNewBundleInventoryCostIDR,
       credit: 0,
       referenceType: 'REPACK_BUNDLE',
       referenceId: lotNumber,
       description: `Bundle assembled: ${bundleQty}x ${bundleSku} (earliest component expiry ${earliestExpiryIso.slice(0, 10)}) by ${actorName}`,
     });
+    if (packagingFeeIDR > 0) {
+      const gPkg = `GLE-BND-${Date.now().toString().slice(-6)}-PKG`;
+      glVoucherIds.push(gPkg);
+      glEntries.push({
+        id: gPkg,
+        timestamp,
+        storeId: outlet.storeId,
+        storeName: outlet.storeName,
+        accountCode: '1010',
+        accountName: 'Cash / Packaging Supplies Clearing',
+        category: 'Asset',
+        debit: 0,
+        credit: packagingFeeIDR,
+        referenceType: 'REPACK_BUNDLE',
+        referenceId: lotNumber,
+        description: `Packaging materials absorbed for bundle ${lotNumber}`,
+      });
+    }
     commitBalancedGlBatch(glEntries, true);
 
     syncWarehouseRackOccupancy();

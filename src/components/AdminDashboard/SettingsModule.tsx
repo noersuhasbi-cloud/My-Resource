@@ -206,12 +206,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   );
 
   useEffect(() => {
-    if (standaloneMode) {
-      setActiveSubTab(standaloneMode);
-    } else if (initialSubTab) {
-      setActiveSubTab(initialSubTab);
+    const nextTab = standaloneMode || initialSubTab;
+    if (nextTab && nextTab !== activeSubTab) {
+      setActiveSubTab(nextTab);
     }
-  }, [standaloneMode, initialSubTab]);
+  }, [standaloneMode, initialSubTab, activeSubTab]);
 
   useEffect(() => {
     if (!standaloneMode && (activeSubTab === 'transfer' || activeSubTab === 'import_opname')) {
@@ -382,8 +381,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
   useEffect(() => {
     if (isBranchScoped && lockedBranchId) {
-      setOpnameStoreId(lockedBranchId);
-      setImportTargetStoreId(lockedBranchId);
+      setOpnameStoreId((prev) => (prev === lockedBranchId ? prev : lockedBranchId));
+      setImportTargetStoreId((prev) => (prev === lockedBranchId ? prev : lockedBranchId));
     }
   }, [isBranchScoped, lockedBranchId]);
   const bulkImportFileInputRef = useRef<HTMLInputElement>(null);
@@ -633,6 +632,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         }
         const res = await apiClient.updateSystemUser(editingSystemUser.id, patch);
         setSystemUsersList(res.users || []);
+        setDiagnosticRefreshKey((k) => k + 1);
+        apiClient.getTrialGovernance().then((g) => g?.governance && onTrialGovernanceUpdated?.(g.governance)).catch(() => {});
         onShowToast('Akun User Diperbarui', res.message);
       } else {
         const res = await apiClient.createSystemUser({
@@ -648,6 +649,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           modulePermissions: getDefaultModulePermissions(userFormRoleCode),
         });
         setSystemUsersList(res.users || []);
+        setDiagnosticRefreshKey((k) => k + 1);
+        apiClient.getTrialGovernance().then((g) => g?.governance && onTrialGovernanceUpdated?.(g.governance)).catch(() => {});
         onShowToast('Akun User Ditambahkan', res.message);
       }
       setIsUserModalOpen(false);
@@ -822,6 +825,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         modulePermissions: permDraft,
       });
       setSystemUsersList(res.users || []);
+      setDiagnosticRefreshKey((k) => k + 1);
+      apiClient.getTrialGovernance().then((g) => g?.governance && onTrialGovernanceUpdated?.(g.governance)).catch(() => {});
       onShowToast('Hak Akses Modul Disimpan', `Matriks izin ${permModalUser.fullName} berhasil diperbarui.`);
       setPermModalUser(null);
       setPermDraft(null);
@@ -3390,6 +3395,8 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                                 setIsInitializingProduction(true);
                                 try {
                                   const res = await apiClient.initProductionStore();
+                                  setDiagnosticRefreshKey((k) => k + 1);
+                                  apiClient.getTrialGovernance().then((g) => g?.governance && onTrialGovernanceUpdated?.(g.governance)).catch(() => {});
                                   onShowToast('Clean Production Store Ready', res.message);
                                   onRefreshData?.();
                                 } catch (err: any) {
@@ -3401,6 +3408,8 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                                 setIsResettingDemo(true);
                                 try {
                                   const res = await apiClient.resetDemoData();
+                                  setDiagnosticRefreshKey((k) => k + 1);
+                                  apiClient.getTrialGovernance().then((g) => g?.governance && onTrialGovernanceUpdated?.(g.governance)).catch(() => {});
                                   onShowToast('Demo Data Restored', res.message);
                                   onRefreshData?.();
                                 } catch (err: any) {

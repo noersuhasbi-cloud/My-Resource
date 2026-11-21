@@ -95,6 +95,9 @@ export const FefoHeatmapRackVisualizer: React.FC<FefoHeatmapRackVisualizerProps>
     }
   }, [propRacks]);
 
+  const onShowToastRef = useRef(onShowToast);
+  onShowToastRef.current = onShowToast;
+
   const loadVisualizerData = React.useCallback(async () => {
     setIsLoading(true);
     try {
@@ -109,14 +112,14 @@ export const FefoHeatmapRackVisualizer: React.FC<FefoHeatmapRackVisualizerProps>
       setLocalRacks(rackRes.racks || []);
       setLocalBatches(batchRes || []);
     } catch (err: unknown) {
-      onShowToast(
+      onShowToastRef.current(
         'FEFO Visualizer Error',
         err instanceof Error ? err.message : 'Gagal memuat peta rak FEFO.'
       );
     } finally {
       setIsLoading(false);
     }
-  }, [selectedStore, onShowToast]);
+  }, [selectedStore]);
 
   useEffect(() => {
     void loadVisualizerData();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useDarkMode } from '../../context/DarkModeContext';
 import { usePrint } from '../../context/PrintContext';
@@ -215,41 +215,94 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Additive Trial / Demo Governance snapshot (server-authoritative clock)
   const [trialGovernance, setTrialGovernance] = useState<TrialGovernanceStatusSnapshot | null>(null);
 
+  const handleTrialGovernanceUpdated = useCallback((snap: TrialGovernanceStatusSnapshot) => {
+    setTrialGovernance((prev) => {
+      if (
+        prev &&
+        prev.effectiveStatus === snap.effectiveStatus &&
+        prev.isOperationalLocked === snap.isOperationalLocked &&
+        prev.isExpiringSoon === snap.isExpiringSoon &&
+        prev.daysRemaining === snap.daysRemaining &&
+        prev.expiresAtIso === snap.expiresAtIso &&
+        prev.rbacSummary?.restrictedSubRolesCount === snap.rbacSummary?.restrictedSubRolesCount &&
+        prev.rbacSummary?.restrictedModulesCount === snap.rbacSummary?.restrictedModulesCount &&
+        JSON.stringify(prev.config) === JSON.stringify(snap.config)
+      ) {
+        return prev;
+      }
+      return snap;
+    });
+  }, []);
+
   useEffect(() => {
     let active = true;
     apiClient
       .getTrialGovernance()
       .then((res) => {
-        if (active && res?.governance) setTrialGovernance(res.governance);
+        if (active && res?.governance) handleTrialGovernanceUpdated(res.governance);
       })
       .catch(() => {});
     return () => {
       active = false;
     };
-  }, [activeStaffSession?.userId]);
+  }, [activeStaffSession?.userId, handleTrialGovernanceUpdated]);
 
-  // Synchronize API operator context, activeTab guard & branch scope whenever activeStaffSession updates
+  // Synchronize API operator context & strictly guard activeTab/subTab redirects
   useEffect(() => {
     apiClient.setOperatorContext(activeStaffSession);
+  }, [activeStaffSession]);
+
+  useEffect(() => {
     if (!activeStaffSession) return;
 
     if (!isDashboardTabAllowed(activeStaffSession, activeTab, trialGovernance)) {
-      setActiveTab(getDefaultTabForSession(activeStaffSession));
+      const preferredDefault = getDefaultTabForSession(activeStaffSession);
+      const fallbackCandidates: AdminDashboardTab[] = [
+        preferredDefault,
+        'overview',
+        'pos',
+        'inventory',
+        'fefo',
+        'waste',
+        'picker',
+        'transfers',
+        'logistics',
+        'procurement',
+        'qc',
+        'crm',
+        'quotations',
+        'operations',
+        'accounting',
+        'approvals',
+        'reports',
+        'audit',
+        'settings',
+      ];
+      const nextAllowedTab = fallbackCandidates.find((tab) =>
+        isDashboardTabAllowed(activeStaffSession, tab, trialGovernance)
+      );
+      if (nextAllowedTab && nextAllowedTab !== activeTab) {
+        setActiveTab(nextAllowedTab);
+      }
     }
 
     if (!isAccountingSubTabAllowed(activeStaffSession, accountingDeepSubTab)) {
-      setAccountingDeepSubTab(getDefaultAccountingSubTabForSession(activeStaffSession));
-    }
-
-    const isScoped = isSessionBranchScoped(activeStaffSession);
-
-    if (isScoped) {
-      const assigned = getSessionAssignedBranchId(activeStaffSession) || 'store-jkt-senopati';
-      setSelectedGlobalStore(assigned);
-      setSelectedOutletFilter(assigned);
-      setSelectedFinanceStore(assigned);
+      const nextSubTab = getDefaultAccountingSubTabForSession(activeStaffSession);
+      if (nextSubTab !== accountingDeepSubTab) {
+        setAccountingDeepSubTab(nextSubTab);
+      }
     }
   }, [activeStaffSession, activeTab, accountingDeepSubTab, trialGovernance]);
+
+  useEffect(() => {
+    if (!activeStaffSession) return;
+    if (isSessionBranchScoped(activeStaffSession)) {
+      const assigned = getSessionAssignedBranchId(activeStaffSession) || 'store-jkt-senopati';
+      setSelectedGlobalStore((prev) => (prev === assigned ? prev : assigned));
+      setSelectedOutletFilter((prev) => (prev === assigned ? prev : assigned));
+      setSelectedFinanceStore((prev) => (prev === assigned ? prev : assigned));
+    }
+  }, [activeStaffSession]);
 
   // Loading & refresh
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -341,9 +394,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [auditRecords, setAuditRecords] = useState<TransactionAuditRecord[]>([]);
   const [glSearch, setGlSearch] = useState<string>('');
 
+  const activeStaffSessionRef = useRef(activeStaffSession);
+  activeStaffSessionRef.current = activeStaffSession;
+  const selectedFinanceStoreRef = useRef(selectedFinanceStore);
+  selectedFinanceStoreRef.current = selectedFinanceStore;
+  const onShowToastRef = useRef(onShowToast);
+  onShowToastRef.current = onShowToast;
+  const onLogoutRef = useRef(onLogout);
+  onLogoutRef.current = onLogout;
+
   // Load all backend data
-  const refreshAllData = async (overrideSession?: StaffShiftSession | null) => {
-    const effectiveSession = overrideSession !== undefined ? overrideSession : activeStaffSession;
+  const refreshAllData = useCallback(async (overrideSession?: StaffShiftSession | null) => {
+    const currentSession = activeStaffSessionRef.current;
+    const effectiveSession = overrideSession !== undefined ? overrideSession : currentSession;
     if (effectiveSession) {
       apiClient.setOperatorContext(effectiveSession);
     }
@@ -387,7 +450,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       effectiveSession && isBranchScopedRole(effectiveSession.userRole)
         ? effectiveSession.assignedBranchId ||
           (effectiveSession.storeId !== 'ALL' ? effectiveSession.storeId : 'store-jkt-senopati')
-        : selectedFinanceStore;
+        : selectedFinanceStoreRef.current;
 
     setIsLoading(true);
     try {
@@ -467,16 +530,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               localStorage.removeItem('grocemart_admin_session');
             } catch {}
             apiClient.setOperatorContext(null);
-            onShowToast(
+            onShowToastRef.current(
               'Account Suspended',
               `${matchedProfile.userName}'s operator access was suspended by Super Admin.`
             );
-            onLogout?.();
+            onLogoutRef.current?.();
             return;
           }
 
           const hasAssignmentChanged =
-            !activeStaffSession ||
+            !activeStaffSessionRef.current ||
             matchedProfile.userRole !== currentTarget.userRole ||
             matchedProfile.storeId !== currentTarget.storeId ||
             matchedProfile.assignedBranchId !== currentTarget.assignedBranchId ||
@@ -496,7 +559,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               }
             } catch {}
           }
-        } else if (!initialStaffSession && !overrideSession && !activeStaffSession && rbacRes.currentSession) {
+        } else if (!initialStaffSession && !overrideSession && !activeStaffSessionRef.current && rbacRes.currentSession) {
           setActiveStaffSession(rbacRes.currentSession);
           apiClient.setOperatorContext(rbacRes.currentSession);
         }
@@ -551,7 +614,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [initialStaffSession]);
+
+  const handleRefreshData = useCallback(() => {
+    void refreshAllData();
+  }, [refreshAllData]);
 
   useEffect(() => {
     refreshAllData(initialStaffSession || activeStaffSession);
@@ -2027,7 +2094,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 setAdjustQty(0);
               }}
               onEditTier={(tier) => setEditingTier(tier)}
-              onRefreshData={() => refreshAllData()}
+              onRefreshData={handleRefreshData}
               onShowToast={onShowToast}
               renderStocktakeImport={() => (
                 <SettingsModule
@@ -2039,7 +2106,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   inventoryTiers={inventoryTiers}
                   initialSubTab="import_opname"
                   standaloneMode="import_opname"
-                  onRefreshData={() => refreshAllData()}
+                  onRefreshData={handleRefreshData}
                   onShowToast={onShowToast}
                 />
               )}
@@ -2241,7 +2308,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             goodsReceipts={goodsReceipts}
             vendorBills={vendorBills}
             storeOutlets={storeOutlets}
-            onRefreshData={() => refreshAllData()}
+            onRefreshData={handleRefreshData}
             onShowToast={onShowToast}
           />
         )}
@@ -2254,7 +2321,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             inventory={inventory}
             enterpriseSettings={enterpriseSettings}
-            onRefreshData={() => refreshAllData()}
+            onRefreshData={handleRefreshData}
             onShowToast={onShowToast}
           />
         )}
@@ -2270,7 +2337,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             activeStaffSession={activeStaffSession}
             onShowToast={onShowToast}
             onNavigateToQuotations={() => setActiveTab('quotations')}
-            onRefreshData={() => refreshAllData()}
+            onRefreshData={handleRefreshData}
           />
         )}
 
@@ -2296,7 +2363,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             purchaseOrders={purchaseOrders}
             goodsReceipts={goodsReceipts}
             enterpriseSettings={enterpriseSettings}
-            onRefreshData={() => refreshAllData()}
+            onRefreshData={handleRefreshData}
             onShowToast={onShowToast}
             activeSubTab={accountingDeepSubTab}
             onSubTabChange={(sub) => setAccountingDeepSubTab(sub)}
@@ -2510,7 +2577,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             inventoryTiers={inventoryTiers}
             initialSubTab="transfer"
             standaloneMode="transfer"
-            onRefreshData={() => refreshAllData()}
+            onRefreshData={handleRefreshData}
             onShowToast={onShowToast}
           />
         )}
@@ -2523,7 +2590,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             theme={theme}
             activeStaffSession={activeStaffSession}
             selectedStore={selectedGlobalStore}
-            onRefreshData={() => refreshAllData()}
+            onRefreshData={handleRefreshData}
             onShowToast={onShowToast}
           />
         )}
@@ -2550,7 +2617,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             storeOutlets={storeOutlets}
             warehouseZones={warehouseZones}
             inventoryTiers={inventoryTiers}
-            onRefreshData={() => refreshAllData()}
+            onRefreshData={handleRefreshData}
             onOperatorAssignmentsUpdated={(res) => {
               setActiveStaffSession(res.currentSession);
               apiClient.setOperatorContext(res.currentSession);
@@ -2575,7 +2642,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               setActiveTab('accounting');
             }}
             onNavigateToQuotations={() => setActiveTab('quotations')}
-            onTrialGovernanceUpdated={(snap) => setTrialGovernance(snap)}
+            onTrialGovernanceUpdated={handleTrialGovernanceUpdated}
           />
         )}
           </div>

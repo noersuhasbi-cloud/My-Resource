@@ -1,14 +1,17 @@
 import type {
   DivisionRoleCode,
+  EnterpriseLicenseMode,
+  GovernanceMode,
+  GovernanceRbacSummary,
   ModulePermissionKey,
+  SystemUserAccount,
   TrialAccountingSubAccess,
   TrialGovernanceConfig,
   TrialGovernanceStatusSnapshot,
   TrialLifecycleStatus,
   TrialManualStatusOverride,
-  GovernanceMode,
 } from '../types/index.ts';
-import { DIVISION_ROLE_CODES, MODULE_PERMISSION_KEYS } from './rbac.ts';
+import { DIVISION_ROLE_CODES, DIVISION_ROLE_PRESETS, MODULE_PERMISSION_KEYS } from './rbac.ts';
 
 export const TRIAL_LIFECYCLE_STATUSES: TrialLifecycleStatus[] = [
   'ACTIVE_TRIAL',
@@ -19,6 +22,8 @@ export const TRIAL_LIFECYCLE_STATUSES: TrialLifecycleStatus[] = [
 ];
 
 export const GOVERNANCE_MODES: GovernanceMode[] = ['TRIAL', 'DEMO', 'PRODUCTION'];
+
+export const ENTERPRISE_LICENSE_MODES: EnterpriseLicenseMode[] = ['ENTERPRISE_PRODUCTION', 'ACTIVE_TRIAL'];
 
 export interface SubRoleGovernanceOption {
   roleCode: DivisionRoleCode;
@@ -162,6 +167,157 @@ export function formatIsoDateYmd(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+export function formatWibTimestamp(ms: number): string {
+  const wibDate = new Date(ms + 7 * 60 * 60 * 1000);
+  return `${wibDate.toISOString().replace('T', ' ').slice(0, 19)} WIB`;
+}
+
+export function computeRbacGovernanceSummary(
+  systemUsers: SystemUserAccount[] = [],
+  governanceConfig?: TrialGovernanceConfig | null
+): GovernanceRbacSummary {
+  const activeUsers = systemUsers.filter((u) => u && u.isActive !== false);
+  const sourceUsers = activeUsers.length > 0 ? activeUsers : systemUsers;
+
+  const roleCodesSet = new Set<DivisionRoleCode>();
+  DIVISION_ROLE_CODES.forEach((code) => roleCodesSet.add(code));
+  sourceUsers.forEach((u) => {
+    if (u?.roleCode) roleCodesSet.add(u.roleCode);
+  });
+
+  const restrictedSubRoleCodes: DivisionRoleCode[] = [];
+  const restrictedModuleKeysSet = new Set<ModulePermissionKey>();
+  let totalModuleRestrictionRules = 0;
+  let restrictedAccountingFlagsCount = 0;
+
+  const cfgEnforces = governanceConfig?.enforceRestrictions !== false;
+  const isProdMode =
+    governanceConfig?.licenseMode === 'ENTERPRISE_PRODUCTION' ||
+    (governanceConfig?.mode === 'PRODUCTION' && governanceConfig?.manualStatusOverride === 'AUTO');
+  const overlayApplies = cfgEnforces && !isProdMode;
+
+  roleCodesSet.forEach((roleCode) => {
+    if (roleCode === 'SUPER_ADMIN') return;
+
+    const usersForRole = sourceUsers.filter((u) => u.roleCode === roleCode);
+    const presetPerms = DIVISION_ROLE_PRESETS[roleCode]?.permissions;
+    const isRoleOverlayDisabled = overlayApplies && governanceConfig?.subRoleAccess?.[roleCode] === false;
+
+    let roleHasRestriction = isRoleOverlayDisabled;
+
+    if (usersForRole.length === 0) {
+      // Fallback to canonical preset if no active account currently assigned to this division role
+      MODULE_PERMISSION_KEYS.forEach((modKey) => {
+        const p = presetPerms?.[modKey];
+        const isModOverlayDisabled = overlayApplies && governanceConfig?.moduleAccess?.[modKey] === false;
+        const isFullPerm =
+          !isRoleOverlayDisabled &&
+          !isModOverlayDisabled &&
+          p?.view === true &&
+          p?.create === true &&
+          p?.edit === true &&
+          p?.approve === true &&
+          p?.export === true;
+        if (!isFullPerm) {
+          roleHasRestriction = true;
+          restrictedModuleKeysSet.add(modKey);
+          totalModuleRestrictionRules += 1;
+        }
+      });
+
+      const acct = presetPerms?.accounting;
+      const acctFlags = [
+        acct?.canAccessAR === true && !(overlayApplies && governanceConfig?.accountingSubAccess?.ar === false),
+        acct?.canAccessAP === true && !(overlayApplies && governanceConfig?.accountingSubAccess?.ap === false),
+        acct?.canAccessGLTax === true && !(overlayApplies && governanceConfig?.accountingSubAccess?.glTax === false),
+        acct?.canApprovePayments === true &&
+          !(overlayApplies && governanceConfig?.accountingSubAccess?.financeApproval === false),
+        acct?.canLockPeriod === true,
+      ];
+      acctFlags.forEach((allowed) => {
+        if (!allowed || isRoleOverlayDisabled) {
+          roleHasRestriction = true;
+          restrictedAccountingFlagsCount += 1;
+        }
+      });
+    } else {
+      MODULE_PERMISSION_KEYS.forEach((modKey) => {
+        const isModOverlayDisabled = overlayApplies && governanceConfig?.moduleAccess?.[modKey] === false;
+        const anyUserRestricted = usersForRole.some((u) => {
+          const p = u.modulePermissions?.[modKey] || presetPerms?.[modKey];
+          return (
+            isRoleOverlayDisabled ||
+            isModOverlayDisabled ||
+            !p ||
+            p.view !== true ||
+            p.create !== true ||
+            p.edit !== true ||
+            p.approve !== true ||
+            p.export !== true
+          );
+        });
+        if (anyUserRestricted) {
+          roleHasRestriction = true;
+          restrictedModuleKeysSet.add(modKey);
+          totalModuleRestrictionRules += 1;
+        }
+      });
+
+      const accountingFlagKeys = [
+        'canAccessAR',
+        'canAccessAP',
+        'canAccessGLTax',
+        'canApprovePayments',
+        'canLockPeriod',
+      ] as const;
+
+      accountingFlagKeys.forEach((flagKey) => {
+        const overlayFlagDisabled =
+          overlayApplies &&
+          ((flagKey === 'canAccessAR' && governanceConfig?.accountingSubAccess?.ar === false) ||
+            (flagKey === 'canAccessAP' && governanceConfig?.accountingSubAccess?.ap === false) ||
+            (flagKey === 'canAccessGLTax' && governanceConfig?.accountingSubAccess?.glTax === false) ||
+            (flagKey === 'canApprovePayments' && governanceConfig?.accountingSubAccess?.financeApproval === false));
+
+        const anyUserFlagRestricted = usersForRole.some((u) => {
+          const acct = u.modulePermissions?.accounting || presetPerms?.accounting;
+          return isRoleOverlayDisabled || overlayFlagDisabled || acct?.[flagKey] !== true;
+        });
+        if (anyUserFlagRestricted) {
+          roleHasRestriction = true;
+          restrictedAccountingFlagsCount += 1;
+        }
+      });
+
+      if (usersForRole.some((u) => u.hideFinancialCost === true || u.viewCost === false)) {
+        roleHasRestriction = true;
+      }
+    }
+
+    if (roleHasRestriction) {
+      restrictedSubRoleCodes.push(roleCode);
+    }
+  });
+
+  const totalRoles = roleCodesSet.size;
+  const restrictedSubRolesCount = restrictedSubRoleCodes.length;
+  const unrestrictedSubRolesCount = Math.max(0, totalRoles - restrictedSubRolesCount);
+  const restrictedModuleKeys = Array.from(restrictedModuleKeysSet);
+
+  return {
+    totalRoles,
+    restrictedSubRolesCount,
+    unrestrictedSubRolesCount,
+    restrictedModulesCount: totalModuleRestrictionRules,
+    restrictedModuleSlotsCount: restrictedModuleKeys.length,
+    totalModuleRestrictionRules,
+    restrictedAccountingFlagsCount,
+    restrictedSubRoleCodes,
+    restrictedModuleKeys,
+    computedFrom: 'SYSTEM_USERS_RBAC',
+  };
+}
+
 export function addDaysToYmd(startYmd: string, days: number): string {
   const parsed = Date.parse(`${startYmd.slice(0, 10)}T00:00:00.000Z`);
   const baseMs = Number.isFinite(parsed) ? parsed : Date.now();
@@ -199,6 +355,7 @@ export function createDefaultTrialGovernanceConfig(nowMs: number = Date.now()): 
 
   return {
     mode: 'TRIAL',
+    licenseMode: 'ACTIVE_TRIAL',
     enforceRestrictions: true,
     startDateIso,
     durationDays,
@@ -234,16 +391,49 @@ export function normalizeTrialGovernanceConfig(
   const base = existing || createDefaultTrialGovernanceConfig(nowMs);
   if (!raw || typeof raw !== 'object') return base;
 
-  const mode: GovernanceMode = GOVERNANCE_MODES.includes(raw.mode as GovernanceMode)
+  const baseLicenseMode: EnterpriseLicenseMode =
+    base.licenseMode === 'ENTERPRISE_PRODUCTION' || base.mode === 'PRODUCTION'
+      ? 'ENTERPRISE_PRODUCTION'
+      : 'ACTIVE_TRIAL';
+
+  let mode: GovernanceMode = GOVERNANCE_MODES.includes(raw.mode as GovernanceMode)
     ? (raw.mode as GovernanceMode)
     : base.mode;
 
+  let licenseMode: EnterpriseLicenseMode = ENTERPRISE_LICENSE_MODES.includes(raw.licenseMode as EnterpriseLicenseMode)
+    ? (raw.licenseMode as EnterpriseLicenseMode)
+    : baseLicenseMode;
+
+  const explicitLicenseChanged =
+    ENTERPRISE_LICENSE_MODES.includes(raw.licenseMode as EnterpriseLicenseMode) && raw.licenseMode !== baseLicenseMode;
+  const explicitModeChanged = GOVERNANCE_MODES.includes(raw.mode as GovernanceMode) && raw.mode !== base.mode;
+
+  if (explicitLicenseChanged && !explicitModeChanged) {
+    mode = licenseMode === 'ENTERPRISE_PRODUCTION' ? 'PRODUCTION' : base.mode === 'DEMO' ? 'DEMO' : 'TRIAL';
+  } else if (explicitModeChanged && !explicitLicenseChanged) {
+    licenseMode = mode === 'PRODUCTION' ? 'ENTERPRISE_PRODUCTION' : 'ACTIVE_TRIAL';
+  } else if (raw.licenseMode === 'ENTERPRISE_PRODUCTION' && raw.mode === undefined) {
+    mode = 'PRODUCTION';
+  } else if (raw.licenseMode === 'ACTIVE_TRIAL' && raw.mode === undefined && mode === 'PRODUCTION') {
+    mode = 'TRIAL';
+  } else if (raw.mode === 'PRODUCTION' && raw.licenseMode === undefined) {
+    licenseMode = 'ENTERPRISE_PRODUCTION';
+  }
+
   const validOverrides: TrialManualStatusOverride[] = ['AUTO', ...TRIAL_LIFECYCLE_STATUSES];
-  const manualStatusOverride: TrialManualStatusOverride = validOverrides.includes(
+  let manualStatusOverride: TrialManualStatusOverride = validOverrides.includes(
     raw.manualStatusOverride as TrialManualStatusOverride
   )
     ? (raw.manualStatusOverride as TrialManualStatusOverride)
     : base.manualStatusOverride;
+
+  if (
+    licenseMode === 'ENTERPRISE_PRODUCTION' &&
+    raw.manualStatusOverride === undefined &&
+    base.manualStatusOverride === 'LOCKED_EXPIRED'
+  ) {
+    manualStatusOverride = 'AUTO';
+  }
 
   const startDateIso =
     typeof raw.startDateIso === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw.startDateIso.trim())
@@ -320,6 +510,7 @@ export function normalizeTrialGovernanceConfig(
 
   return {
     mode,
+    licenseMode,
     enforceRestrictions:
       typeof raw.enforceRestrictions === 'boolean' ? raw.enforceRestrictions : base.enforceRestrictions,
     startDateIso,
@@ -354,7 +545,8 @@ export function normalizeTrialGovernanceConfig(
 
 export function evaluateTrialGovernanceSnapshot(
   config: TrialGovernanceConfig,
-  serverNowMs: number = Date.now()
+  serverNowMs: number = Date.now(),
+  rbacSummary?: GovernanceRbacSummary
 ): TrialGovernanceStatusSnapshot {
   const expiresAtMs = parseExpirationEndMs(config.expirationDateIso, config.startDateIso, config.durationDays);
   const graceEndsAtMs = expiresAtMs + Math.max(0, config.graceHours) * 60 * 60 * 1000;
@@ -365,11 +557,16 @@ export function evaluateTrialGovernanceSnapshot(
   const daysRemaining = Math.ceil(remainingWithGraceMs / (24 * 60 * 60 * 1000));
   const isInGraceWindow = remainingMs < 0 && remainingWithGraceMs >= 0 && config.graceHours > 0;
 
+  const resolvedLicenseMode: EnterpriseLicenseMode =
+    config.licenseMode === 'ENTERPRISE_PRODUCTION' || config.mode === 'PRODUCTION'
+      ? 'ENTERPRISE_PRODUCTION'
+      : 'ACTIVE_TRIAL';
+
   let effectiveStatus: TrialLifecycleStatus;
-  if (config.manualStatusOverride && config.manualStatusOverride !== 'AUTO') {
+  if (resolvedLicenseMode === 'ENTERPRISE_PRODUCTION') {
+    effectiveStatus = config.manualStatusOverride === 'SUSPENDED' ? 'SUSPENDED' : 'CONVERTED_PAID';
+  } else if (config.manualStatusOverride && config.manualStatusOverride !== 'AUTO') {
     effectiveStatus = config.manualStatusOverride;
-  } else if (config.mode === 'PRODUCTION') {
-    effectiveStatus = 'CONVERTED_PAID';
   } else if (remainingWithGraceMs < 0) {
     effectiveStatus = 'LOCKED_EXPIRED';
   } else if (isInGraceWindow || daysRemaining <= Math.max(0, config.warningWindowDays)) {
@@ -385,7 +582,8 @@ export function evaluateTrialGovernanceSnapshot(
   let statusMessage = '';
   switch (effectiveStatus) {
     case 'CONVERTED_PAID':
-      statusMessage = 'Enterprise License Active (Converted Paid / Production Mode). No trial expiration lock.';
+      statusMessage =
+        'Enterprise License Active (ENTERPRISE_PRODUCTION Mode). 31-day trial expiration lockout disabled.';
       break;
     case 'SUSPENDED':
       statusMessage =
@@ -401,14 +599,19 @@ export function evaluateTrialGovernanceSnapshot(
         : `Trial period is expiring soon (${Math.max(0, daysRemaining)} day(s) remaining until ${new Date(expiresAtMs).toISOString().slice(0, 10)}).`;
       break;
     default:
-      statusMessage = `Active ${config.mode} access — ${Math.max(0, daysRemaining)} day(s) remaining (expires ${new Date(expiresAtMs).toISOString().slice(0, 10)}).`;
+      statusMessage = `Active ${config.mode} (${resolvedLicenseMode}) access — ${Math.max(0, daysRemaining)} day(s) remaining (expires ${new Date(expiresAtMs).toISOString().slice(0, 10)}).`;
       break;
   }
 
+  const normalizedConfig: TrialGovernanceConfig =
+    config.licenseMode === resolvedLicenseMode ? config : { ...config, licenseMode: resolvedLicenseMode };
+
   return {
-    config,
+    config: normalizedConfig,
+    licenseMode: resolvedLicenseMode,
     effectiveStatus,
     serverTimestampIso: new Date(serverNowMs).toISOString(),
+    serverTimestampWib: formatWibTimestamp(serverNowMs),
     expiresAtIso: new Date(expiresAtMs).toISOString(),
     graceEndsAtIso: new Date(graceEndsAtMs).toISOString(),
     daysRemaining: Math.max(0, daysRemaining),
@@ -417,6 +620,7 @@ export function evaluateTrialGovernanceSnapshot(
     isExpiringSoon,
     isInGraceWindow,
     statusMessage,
+    ...(rbacSummary ? { rbacSummary } : {}),
   };
 }
 
@@ -427,7 +631,9 @@ export function isSubRoleAllowedByGovernance(
   if (!governance || !roleCode || roleCode === 'SUPER_ADMIN') return true;
   const cfg = 'config' in governance ? governance.config : governance;
   if (!cfg.enforceRestrictions) return true;
-  if (cfg.mode === 'PRODUCTION' && cfg.manualStatusOverride === 'AUTO') return true;
+  if ((cfg.mode === 'PRODUCTION' || cfg.licenseMode === 'ENTERPRISE_PRODUCTION') && cfg.manualStatusOverride === 'AUTO') {
+    return true;
+  }
   return cfg.subRoleAccess?.[roleCode] !== false;
 }
 
@@ -439,7 +645,9 @@ export function isModuleAllowedByGovernance(
   if (!governance || roleCode === 'SUPER_ADMIN') return true;
   const cfg = 'config' in governance ? governance.config : governance;
   if (!cfg.enforceRestrictions) return true;
-  if (cfg.mode === 'PRODUCTION' && cfg.manualStatusOverride === 'AUTO') return true;
+  if ((cfg.mode === 'PRODUCTION' || cfg.licenseMode === 'ENTERPRISE_PRODUCTION') && cfg.manualStatusOverride === 'AUTO') {
+    return true;
+  }
   return cfg.moduleAccess?.[moduleKey] !== false;
 }
 
@@ -451,7 +659,9 @@ export function isAccountingAreaAllowedByGovernance(
   if (!governance || roleCode === 'SUPER_ADMIN') return true;
   const cfg = 'config' in governance ? governance.config : governance;
   if (!cfg.enforceRestrictions) return true;
-  if (cfg.mode === 'PRODUCTION' && cfg.manualStatusOverride === 'AUTO') return true;
+  if ((cfg.mode === 'PRODUCTION' || cfg.licenseMode === 'ENTERPRISE_PRODUCTION') && cfg.manualStatusOverride === 'AUTO') {
+    return true;
+  }
   if (cfg.moduleAccess?.accounting === false) return false;
   return cfg.accountingSubAccess?.[area] !== false;
 }
