@@ -583,6 +583,40 @@ export function isBranchScopedRole(role?: UserRole | string | null): boolean {
   return canonical === 'cashier' || canonical === 'warehouse' || canonical === 'store_manager';
 }
 
+export function getSessionAssignedBranchId(session?: StaffShiftSession | null): string {
+  if (!session) return 'ALL';
+  if (session.roleCode === 'SUPER_ADMIN') return 'ALL';
+  const raw = session.branchId || session.assignedBranchId || session.storeId;
+  if (raw && raw !== 'ALL' && raw !== 'CONSOLIDATED') {
+    return raw;
+  }
+  if (session.roleCode) {
+    const preset = DIVISION_ROLE_PRESETS[session.roleCode];
+    if (preset && preset.defaultBranchId && preset.defaultBranchId !== 'ALL') {
+      return preset.defaultBranchId;
+    }
+  }
+  if (isBranchScopedRole(session.userRole)) {
+    return 'store-jkt-senopati';
+  }
+  return 'ALL';
+}
+
+export function isSessionBranchScoped(session?: StaffShiftSession | null): boolean {
+  if (!session) return false;
+  if (session.roleCode === 'SUPER_ADMIN') return false;
+  const raw = session.branchId || session.assignedBranchId || session.storeId;
+  if (raw && raw !== 'ALL' && raw !== 'CONSOLIDATED') {
+    return true;
+  }
+  if (session.isBranchScoped === true) return true;
+  // For 14-division system users explicitly assigned to ALL (e.g. WAREHOUSE_HEAD), do not force single-branch lock
+  if (session.roleCode && (raw === 'ALL' || raw === 'CONSOLIDATED')) {
+    return false;
+  }
+  return isBranchScopedRole(session.userRole);
+}
+
 const ROLE_ALLOWED_TABS: Record<CanonicalEnterpriseRole, AdminDashboardTab[]> = {
   cashier: ['pos'],
   warehouse: ['inventory', 'fefo', 'picker', 'procurement', 'qc', 'logistics', 'transfers'],

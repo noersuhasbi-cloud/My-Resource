@@ -1,6 +1,7 @@
 import type {
   StoreOperationalStatus,
   StoreOutletSchedule,
+  OutletType,
   WarehouseZone,
   StoreInventoryStock,
   InventoryItem,
@@ -184,9 +185,10 @@ export function setApiOperatorContext(
     session.authToken ||
     activeOperatorContext?.authToken ||
     (typeof window !== 'undefined' ? (() => { try { return localStorage.getItem('grocemart_auth_token') || undefined; } catch { return undefined; } })() : undefined);
+  const resolvedStoreId = (session as any).branchId || session.storeId;
   activeOperatorContext = {
     userRole: session.userRole,
-    storeId: session.storeId,
+    storeId: resolvedStoreId,
     userId: session.userId,
     authToken: existingToken,
   };
@@ -3153,8 +3155,94 @@ export const apiClient = {
   },
 
   // -------------------------------------------------------------
-  // MULTI-BRANCH NETWORK MONITOR & SYSTEM RESET APIS
+  // EDITABLE OUTLET / BRANCH PROFILES & QUOTA + MULTI-BRANCH MONITOR
   // -------------------------------------------------------------
+  async getAdminOutlets(): Promise<{
+    success: boolean;
+    outlets: StoreOutletSchedule[];
+    quota: { activeOutlets: number; maxAllowedOutlets: number; remainingSlots: number };
+    branchOptions: Array<{ storeId: string; storeName: string; hubType: string }>;
+  }> {
+    const res = await fetchApi('/api/admin/settings/outlets');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load outlet profiles');
+    }
+    return data;
+  },
+
+  async createAdminOutlet(payload: {
+    branchCode: string;
+    name: string;
+    outletType: OutletType;
+    address: string;
+    city: string;
+    district?: string;
+    phone: string;
+    receiptHeaderNote?: string;
+    targetDailyOmzetIDR?: number;
+    openTime?: string;
+    closeTime?: string;
+    timezone?: 'WIB' | 'WITA' | 'WIT';
+    isActive?: boolean;
+  }): Promise<{
+    success: boolean;
+    outlet: StoreOutletSchedule;
+    outlets: StoreOutletSchedule[];
+    quota: { activeOutlets: number; maxAllowedOutlets: number; remainingSlots: number };
+    branchOptions: Array<{ storeId: string; storeName: string; hubType: string }>;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/settings/outlets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Gagal membuat profil outlet baru');
+    }
+    return data;
+  },
+
+  async updateAdminOutlet(
+    id: string,
+    patch: Partial<{
+      branchCode: string;
+      name: string;
+      storeName: string;
+      outletType: OutletType;
+      address: string;
+      city: string;
+      district: string;
+      phone: string;
+      receiptHeaderNote: string;
+      targetDailyOmzetIDR: number;
+      openTime: string;
+      closeTime: string;
+      timezone: 'WIB' | 'WITA' | 'WIT';
+      isActive: boolean;
+    }>
+  ): Promise<{
+    success: boolean;
+    outlet: StoreOutletSchedule;
+    outlets: StoreOutletSchedule[];
+    quota: { activeOutlets: number; maxAllowedOutlets: number; remainingSlots: number };
+    branchOptions: Array<{ storeId: string; storeName: string; hubType: string }>;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/settings/outlets/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Gagal memperbarui profil outlet');
+    }
+    return data;
+  },
+
   async getBranchMonitor(): Promise<BranchMonitorResponse> {
     const res = await fetchApi('/api/admin/settings/branch-monitor');
     if (!res.ok) {

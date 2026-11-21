@@ -17,7 +17,11 @@ import type {
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
-import { canSessionViewValuation, isBranchScopedRole } from '../../utils/rbac';
+import {
+  canSessionViewValuation,
+  isSessionBranchScoped,
+  getSessionAssignedBranchId,
+} from '../../utils/rbac';
 
 interface SkuImportModalProps {
   theme: 'light' | 'dark';
@@ -120,13 +124,8 @@ export const SkuImportModal: React.FC<SkuImportModalProps> = ({
 }) => {
   const isLight = theme === 'light';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
-  const branchScoped = isBranchScopedRole(activeStaffSession?.userRole);
-  const lockedBranchId =
-    branchScoped && activeStaffSession?.assignedBranchId && activeStaffSession.assignedBranchId !== 'ALL'
-      ? activeStaffSession.assignedBranchId
-      : branchScoped && activeStaffSession?.storeId && activeStaffSession.storeId !== 'ALL'
-      ? activeStaffSession.storeId
-      : null;
+  const branchScoped = isSessionBranchScoped(activeStaffSession);
+  const lockedBranchId = branchScoped ? getSessionAssignedBranchId(activeStaffSession) : null;
 
   const [csvText, setCsvText] = useState<string>('');
   const [postOpeningGl, setPostOpeningGl] = useState<boolean>(true);

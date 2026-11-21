@@ -4,8 +4,10 @@ import type {
   StoreInventoryStock,
   StockOpnameSession,
   StockOpnameItem,
+  StaffShiftSession,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient.ts';
+import { isSessionBranchScoped, getSessionAssignedBranchId } from '../../utils/rbac.ts';
 import {
   FileCheck2,
   Boxes,
@@ -32,6 +34,7 @@ interface StockOpnameViewProps {
   storeOutlets: StoreOutletSchedule[];
   inventoryTiers: StoreInventoryStock[];
   initialStoreId?: string;
+  activeStaffSession?: StaffShiftSession | null;
   onRefreshData?: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -41,10 +44,13 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
   storeOutlets,
   inventoryTiers,
   initialStoreId,
+  activeStaffSession,
   onRefreshData,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
+  const isBranchScoped = isSessionBranchScoped(activeStaffSession);
+  const lockedBranchId = getSessionAssignedBranchId(activeStaffSession);
 
   // Base card and UI styling
   const cardClass = isLight ? 'bg-white border-gray-200' : 'bg-[#12141C] border-slate-800/80 text-slate-100';
@@ -57,6 +63,9 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
 
   // Selected warehouse / store for physical stock audit
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(() => {
+    if (isBranchScoped && lockedBranchId) {
+      return lockedBranchId;
+    }
     if (initialStoreId && initialStoreId !== 'ALL' && initialStoreId !== 'CONSOLIDATED') {
       return initialStoreId;
     }
@@ -334,18 +343,24 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
                 Warehouse / Store:
               </span>
               <select
-                value={selectedWarehouseId}
+                disabled={isBranchScoped}
+                value={isBranchScoped && lockedBranchId ? lockedBranchId : selectedWarehouseId}
                 onChange={(e) => {
+                  if (isBranchScoped) return;
                   setSelectedWarehouseId(e.target.value);
                   setPhysicalCounts({});
                 }}
-                className={`px-3 py-1 text-xs rounded-lg font-bold border ${inputClass}`}
+                className={`px-3 py-1 text-xs rounded-lg font-bold border ${inputClass} ${
+                  isBranchScoped ? 'opacity-75 cursor-not-allowed' : ''
+                }`}
               >
-                {storeOutlets.map((st) => (
-                  <option key={st.storeId} value={st.storeId}>
-                    {st.storeName} ({st.city})
-                  </option>
-                ))}
+                {storeOutlets
+                  .filter((st) => !isBranchScoped || !lockedBranchId || st.storeId === lockedBranchId)
+                  .map((st) => (
+                    <option key={st.storeId} value={st.storeId}>
+                      {st.storeName} ({st.city})
+                    </option>
+                  ))}
               </select>
             </div>
           </div>

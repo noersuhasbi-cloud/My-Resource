@@ -112,6 +112,8 @@ import { ExecutiveStockTicker } from './ExecutiveStockTicker';
 import {
   normalizeEnterpriseRole,
   isBranchScopedRole,
+  getSessionAssignedBranchId,
+  isSessionBranchScoped,
   getDefaultTabForRole,
   getDefaultTabForSession,
   getDefaultAccountingSubTabForSession,
@@ -140,13 +142,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const isLight = theme === 'light';
 
-  const initialLockedBranch =
-    initialStaffSession && isBranchScopedRole(initialStaffSession.userRole)
-      ? initialStaffSession.assignedBranchId ||
-        (initialStaffSession.storeId && initialStaffSession.storeId !== 'ALL'
-          ? initialStaffSession.storeId
-          : 'store-jkt-senopati')
-      : null;
+  const initialLockedBranch = isSessionBranchScoped(initialStaffSession)
+    ? getSessionAssignedBranchId(initialStaffSession) || 'store-jkt-senopati'
+    : null;
 
   // Global Store Outlet Filter Selector
   const [selectedGlobalStore, setSelectedGlobalStore] = useState<string>(
@@ -187,15 +185,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     initialStaffSession || null
   );
 
-  const isCurrentRoleBranchScoped = isBranchScopedRole(activeStaffSession?.userRole);
+  const isCurrentRoleBranchScoped = isSessionBranchScoped(activeStaffSession);
   const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
   const canMutateOperations = ['store_manager', 'coo', 'super_admin'].includes(canonicalRole);
   const canMutateClimateThresholds = ['warehouse', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
   const lockedBranchId =
-    activeStaffSession?.assignedBranchId ||
-    (activeStaffSession?.storeId && activeStaffSession.storeId !== 'ALL'
-      ? activeStaffSession.storeId
-      : 'store-jkt-senopati');
+    getSessionAssignedBranchId(activeStaffSession) || 'store-jkt-senopati';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
   const canViewFinancialModules = (() => {
     if (!activeStaffSession) return true;
@@ -229,17 +224,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAccountingDeepSubTab(getDefaultAccountingSubTabForSession(activeStaffSession));
     }
 
-    const isScoped =
-      activeStaffSession.modulePermissions !== undefined
-        ? Boolean(activeStaffSession.isBranchScoped)
-        : isBranchScopedRole(activeStaffSession.userRole);
+    const isScoped = isSessionBranchScoped(activeStaffSession);
 
     if (isScoped) {
-      const assigned =
-        activeStaffSession.assignedBranchId ||
-        (activeStaffSession.storeId && activeStaffSession.storeId !== 'ALL'
-          ? activeStaffSession.storeId
-          : 'store-jkt-senopati');
+      const assigned = getSessionAssignedBranchId(activeStaffSession) || 'store-jkt-senopati';
       setSelectedGlobalStore(assigned);
       setSelectedOutletFilter(assigned);
       setSelectedFinanceStore(assigned);
@@ -1005,12 +993,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   {!isCurrentRoleBranchScoped && (
                     <option value="CONSOLIDATED">All Outlets (Consolidated Network)</option>
                   )}
-                  <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
-                  <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
-                  <option value="store-jkt-menteng">Menteng Heritage (Jakarta)</option>
-                  <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
-                  <option value="store-sby-gubeng">Gubeng Central Hub (Surabaya)</option>
-                  <option value="store-bali-canggu">Batu Bolong Organic (Bali)</option>
+                  {storeOutlets.length > 0 ? (
+                    storeOutlets
+                      .filter((st) => st.isActive !== false || st.storeId === lockedBranchId)
+                      .map((st) => (
+                        <option key={st.storeId} value={st.storeId}>
+                          {st.storeName} ({st.city})
+                        </option>
+                      ))
+                  ) : (
+                    <>
+                      <option value="store-jkt-senopati">Senopati Flagship (Jakarta)</option>
+                      <option value="store-jkt-pik">PIK 2 The Avenue (Jakarta)</option>
+                      <option value="store-jkt-menteng">Menteng Heritage (Jakarta)</option>
+                      <option value="store-bdg-dago">Dago Green Market (Bandung)</option>
+                      <option value="store-sby-gubeng">Gubeng Central Hub (Surabaya)</option>
+                      <option value="store-bali-canggu">Batu Bolong Organic (Bali)</option>
+                    </>
+                  )}
                   <option value="WH-CDC-01">Central Distribution Center (WH-CDC-01)</option>
                 </select>
                 {isCurrentRoleBranchScoped && (

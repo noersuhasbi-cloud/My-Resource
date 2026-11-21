@@ -24,7 +24,12 @@ import type { AdminDashboardTab } from './AdminSidebar';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import { getBpjphExpiryInfo } from '../../utils/indonesianCompliance';
-import { canSessionViewValuation, normalizeEnterpriseRole } from '../../utils/rbac';
+import {
+  canSessionViewValuation,
+  normalizeEnterpriseRole,
+  isSessionBranchScoped,
+  getSessionAssignedBranchId,
+} from '../../utils/rbac';
 import {
   formatMultiUomStock,
   getEnterpriseSkuProfile,
@@ -194,6 +199,8 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   const isLight = theme === 'light';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
   const canonicalRole = activeStaffSession ? normalizeEnterpriseRole(activeStaffSession.userRole) : 'super_admin';
+  const isBranchScoped = isSessionBranchScoped(activeStaffSession);
+  const lockedBranchId = getSessionAssignedBranchId(activeStaffSession) || 'store-jkt-senopati';
   const canManageWarehouseTopology =
     canonicalRole === 'warehouse' ||
     canonicalRole === 'store_manager' ||
@@ -1169,17 +1176,25 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
           <div className={`${cardClass} p-4 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3`}>
             <div className="flex flex-wrap items-center gap-2">
               <select
-                value={selectedOutletFilter}
-                onChange={(e) => onOutletFilterChange(e.target.value)}
-                className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+                disabled={isBranchScoped}
+                value={isBranchScoped ? lockedBranchId : selectedOutletFilter}
+                onChange={(e) => {
+                  if (isBranchScoped) return;
+                  onOutletFilterChange(e.target.value);
+                }}
+                className={`px-3 py-1.5 text-xs rounded-xl ${inputClass} ${
+                  isBranchScoped ? 'opacity-75 cursor-not-allowed' : ''
+                }`}
               >
-                <option value="ALL">All Store Outlets</option>
+                {!isBranchScoped && <option value="ALL">All Store Outlets</option>}
                 {storeOutlets && storeOutlets.length > 0 ? (
-                  storeOutlets.map((st) => (
-                    <option key={st.storeId} value={st.storeId}>
-                      {st.storeName} ({st.city})
-                    </option>
-                  ))
+                  storeOutlets
+                    .filter((st) => !isBranchScoped || st.storeId === lockedBranchId)
+                    .map((st) => (
+                      <option key={st.storeId} value={st.storeId}>
+                        {st.storeName} ({st.city})
+                      </option>
+                    ))
                 ) : (
                   <>
                     <option value="store-jkt-senopati">Senopati Flagship / CDC (Jakarta)</option>

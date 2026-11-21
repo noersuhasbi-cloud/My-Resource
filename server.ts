@@ -58,6 +58,7 @@ import type {
   TransactionAuditRecord,
   StoreOperationalStatus,
   StoreOutletSchedule,
+  OutletType,
   WarehouseZone,
   StoreInventoryStock,
   GoodsReceiptRecord,
@@ -356,10 +357,12 @@ function mergeErpSettings(raw?: Partial<ErpConfigurationSettings> | null): ErpCo
   const base = INITIAL_ERP_SETTINGS;
   const src = raw || {};
   const rawMarginFloor = Number(src.minMarginFloorPct);
+  const rawMaxOutlets = Number(src.maxAllowedOutlets);
   return {
     ...base,
     ...src,
     minMarginFloorPct: Number.isFinite(rawMarginFloor) ? Math.max(0, Math.min(50, rawMarginFloor)) : (base.minMarginFloorPct ?? 2.0),
+    maxAllowedOutlets: Number.isFinite(rawMaxOutlets) ? Math.max(1, Math.min(500, Math.round(rawMaxOutlets))) : (base.maxAllowedOutlets ?? 10),
     ojolChannelRates: {
       grabMart: { ...base.ojolChannelRates.grabMart, ...(src.ojolChannelRates?.grabMart || {}) },
       goMart: { ...base.ojolChannelRates.goMart, ...(src.ojolChannelRates?.goMart || {}) },
@@ -4030,6 +4033,84 @@ const BRANCH_ASSIGNMENT_OPTIONS: { storeId: string; storeName: string; hubType: 
   { storeId: 'ALL', storeName: 'All Outlets (Consolidated)', hubType: 'Multi-Branch Network' },
 ];
 
+function deriveDefaultOutletType(st: StoreOutletSchedule): OutletType {
+  if (st.outletType) return st.outletType;
+  if (st.storeId === 'store-jkt-pik') return 'DARK_STORE';
+  if (st.storeId === 'store-jkt-senopati' || st.storeId === 'store-sby-gubeng') return 'CENTRAL_HUB';
+  return 'FLAGSHIP_STORE';
+}
+
+function mapOutletTypeToHubType(outletType: OutletType): BranchMonitorHubSummary['hubType'] {
+  switch (outletType) {
+    case 'DARK_STORE':
+      return 'Dark Store';
+    case 'CENTRAL_HUB':
+      return 'Central CDC';
+    case 'EXPRESS_MART':
+      return 'Express Mart';
+    default:
+      return 'Retail Flagship';
+  }
+}
+
+function deriveDefaultBranchCode(st: StoreOutletSchedule, idx: number): string {
+  if (st.branchCode && st.branchCode.trim()) return st.branchCode.trim().toUpperCase();
+  return `BR-${(st.city || 'IDN').slice(0, 3).toUpperCase()}-${String(idx + 1).padStart(2, '0')}`;
+}
+
+function enrichOutletSchedule(st: StoreOutletSchedule, idx: number): StoreOutletSchedule {
+  const outletType = deriveDefaultOutletType(st);
+  const name = (st.name || st.storeName || st.storeId).trim();
+  const branchCode = deriveDefaultBranchCode(st, idx);
+  const phone = st.phone || st.contactPhone || '+62 21 5550100';
+  return {
+    ...st,
+    id: st.id || st.storeId,
+    branchCode,
+    name,
+    storeName: st.storeName || name,
+    outletType,
+    address: st.address || `${st.district || 'Central'}, ${st.city || 'Indonesia'}`,
+    phone,
+    contactPhone: st.contactPhone || phone,
+    receiptHeaderNote: st.receiptHeaderNote ?? 'Terima kasih telah berbelanja di GroceMart Indonesia!',
+    targetDailyOmzetIDR:
+      typeof st.targetDailyOmzetIDR === 'number' && Number.isFinite(st.targetDailyOmzetIDR)
+        ? Math.max(0, roundIDR(st.targetDailyOmzetIDR))
+        : 35000000,
+    isActive: st.isActive !== false,
+  };
+}
+
+function getDynamicBranchOptions(): { storeId: string; storeName: string; hubType: string }[] {
+  return [
+    ...storeSchedules.map((s, idx) => {
+      const enriched = enrichOutletSchedule(s, idx);
+      return {
+        storeId: enriched.storeId,
+        storeName: enriched.storeName,
+        hubType: mapOutletTypeToHubType(enriched.outletType || 'FLAGSHIP_STORE'),
+      };
+    }),
+    { storeId: 'WH-CDC-01', storeName: 'Central Distribution Center (WH-CDC-01)', hubType: 'Central CDC' },
+    { storeId: 'ALL', storeName: 'All Outlets (Consolidated)', hubType: 'Multi-Branch Network' },
+  ];
+}
+
+function getOutletQuotaSummary(): {
+  activeOutlets: number;
+  maxAllowedOutlets: number;
+  remainingSlots: number;
+} {
+  const maxAllowedOutlets = Math.max(1, Number(getErpSettings().maxAllowedOutlets ?? 10));
+  const activeOutlets = storeSchedules.filter((s) => s.isActive !== false).length;
+  return {
+    activeOutlets,
+    maxAllowedOutlets,
+    remainingSlots: Math.max(0, maxAllowedOutlets - activeOutlets),
+  };
+}
+
 interface OperatorAssignmentEntry {
   userRole?: CanonicalServerRole;
   storeId: string;
@@ -4632,10 +4713,10 @@ function resolveBranchNameById(branchId: string): string {
   if (!branchId || branchId === 'ALL' || branchId === 'CONSOLIDATED') {
     return 'All Outlets (Consolidated)';
   }
-  const foundOpt = BRANCH_ASSIGNMENT_OPTIONS.find((b) => b.storeId === branchId);
-  if (foundOpt) return foundOpt.storeName;
-  const foundSched = storeSchedules.find((s) => s.storeId === branchId);
+  const foundSched = storeSchedules.find((s) => s.storeId === branchId || s.id === branchId || s.branchCode === branchId);
   if (foundSched) return foundSched.storeName;
+  const foundOpt = getDynamicBranchOptions().find((b) => b.storeId === branchId);
+  if (foundOpt) return foundOpt.storeName;
   return branchId;
 }
 
@@ -4928,6 +5009,7 @@ function buildSessionFromSystemUser(
     defaultLandingTab,
     modulePermissions: mp,
     storeId: user.branchId || 'ALL',
+    branchId: user.branchId || 'ALL',
     assignedBranchId: user.branchId || 'ALL',
     isBranchScoped: branchScoped,
     storeName: resolveBranchNameById(user.branchId),
@@ -5049,7 +5131,7 @@ function evaluateSystemUserModulePermission(
       `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [${action.toUpperCase()}] pada modul ${MODULE_DISPLAY_LABELS[moduleKey]}.`,
   });
 
-  // 1. Strictly Super Admin Only endpoints (System lifecycle & User/Permission mutations)
+  // 1. Strictly Super Admin Only endpoints (System lifecycle & User/Permission/Outlet mutations)
   if (
     urlPath === '/admin/system/reset-demo-data' ||
     urlPath === '/admin/reset-demo-data' ||
@@ -5059,15 +5141,19 @@ function evaluateSystemUserModulePermission(
     urlPath === '/admin/rbac/switch-session' ||
     (urlPath === '/admin/settings/operator-assignments' && method !== 'GET') ||
     ((urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) && method !== 'GET') ||
+    ((urlPath === '/admin/settings/outlets' || urlPath.startsWith('/admin/settings/outlets/')) && method !== 'GET') ||
     (urlPath.startsWith('/admin/settings/coa-account') && method === 'DELETE') ||
     (urlPath === '/admin/compliance/sku-tax-rules' && method === 'PUT')
   ) {
     return deny('settings', 'approve');
   }
 
-  // 2. Settings Users Read (strictly settings.view === true) & Branch Monitor Read
+  // 2. Settings Users Read (strictly settings.view === true), Outlets Read & Branch Monitor Read
   if (urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) {
     return mp.settings.view === true ? { allowed: true } : deny('settings', 'view');
+  }
+  if (urlPath === '/admin/settings/outlets' || urlPath.startsWith('/admin/settings/outlets/')) {
+    return mp.settings.view === true || mp.outlets.view === true ? { allowed: true } : deny('settings', 'view');
   }
   if (
     urlPath === '/admin/settings/branch-monitor' ||
@@ -5080,6 +5166,13 @@ function evaluateSystemUserModulePermission(
   // 3. Period Lock & ERP Config Update
   if (urlPath === '/admin/settings/config') {
     if (isRead) return { allowed: true };
+    if (body && (body.maxAllowedOutlets !== undefined || body?.erpSettings?.maxAllowedOutlets !== undefined)) {
+      return deny(
+        'settings',
+        'approve',
+        'Akses Ditolak: Hanya Super Admin yang dapat mengubah kuota maksimal outlet (Max Allowed Outlets).'
+      );
+    }
     if (body && body.accountingPeriodLockDate !== undefined) {
       if (
         (mp.accounting.view === true && mp.accounting.canLockPeriod === true) ||
@@ -7390,7 +7483,9 @@ function applyServerState(snap: any) {
   if (!snap || typeof snap !== 'object') return;
   isCleanProductionMode = Boolean(snap.isCleanProductionMode);
   if (snap.storeStatus) storeStatus = snap.storeStatus;
-  if (Array.isArray(snap.storeSchedules)) storeSchedules = snap.storeSchedules;
+  if (Array.isArray(snap.storeSchedules)) {
+    storeSchedules = snap.storeSchedules.map((st: StoreOutletSchedule, idx: number) => enrichOutletSchedule(st, idx));
+  }
   if (Array.isArray(snap.warehouseZones)) warehouseZones = snap.warehouseZones;
   if (Array.isArray(snap.storeInventoryTiers)) storeInventoryTiers = snap.storeInventoryTiers;
   if (Array.isArray(snap.inventoryList)) inventoryList = snap.inventoryList;
@@ -7695,6 +7790,7 @@ async function resetDemoStateToBaseline() {
     syncWarehouseRackOccupancy();
     systemUsers = createInitialSystemUsers();
     activeAuthTokens.clear();
+    currentActiveStaffSession = AVAILABLE_STAFF_USERS[6];
     enterpriseNotificationsList = [];
     seedBaselineEnterpriseNotifications();
     if (fs.existsSync(STATE_SNAPSHOT_TMP_PATH)) {
@@ -7950,8 +8046,8 @@ async function startServer() {
       : resolvedSessionRole;
 
     const effectiveBranch =
-      rawHeaderBranch ||
       assignedAssignment?.storeId ||
+      rawHeaderBranch ||
       currentActiveStaffSession.assignedBranchId ||
       currentActiveStaffSession.storeId ||
       'ALL';
@@ -8096,6 +8192,7 @@ async function startServer() {
         urlPath === '/admin/rbac/switch-session' ||
         (urlPath === '/admin/settings/operator-assignments' && method === 'POST') ||
         ((urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) && method !== 'GET') ||
+        ((urlPath === '/admin/settings/outlets' || urlPath.startsWith('/admin/settings/outlets/')) && method !== 'GET') ||
         (urlPath.startsWith('/admin/settings/coa-account') && method === 'DELETE') ||
         (urlPath === '/admin/compliance/sku-tax-rules' && method === 'PUT')
       ) {
@@ -9480,8 +9577,10 @@ async function startServer() {
   });
 
   // Outlets operational schedules
-  app.get('/api/admin/store-outlets', (_req: Request, res: Response) => {
-    res.json(storeSchedules);
+  app.get('/api/admin/store-outlets', (req: Request, res: Response) => {
+    const activeOnly = String(req.query?.activeOnly || '').toLowerCase() === 'true';
+    const enriched = storeSchedules.map((st, idx) => enrichOutletSchedule(st, idx));
+    res.json(activeOnly ? enriched.filter((o) => o.isActive !== false) : enriched);
   });
 
   app.put('/api/admin/store-outlets/:storeId', (req: Request, res: Response) => {
@@ -9639,12 +9738,28 @@ async function startServer() {
   app.get('/api/admin/inventory/matrix', (req: Request, res: Response) => {
     syncAllBatchesExpiryStatus(Date.now());
     const hideCost = shouldHideFinancialCostForRequest(req);
+    const scope = resolveRequestBranchScope(req);
+    const queryStoreId = typeof req.query?.storeId === 'string' ? req.query.storeId.trim() : '';
+    const effectiveFilterStoreId = scope.isBranchScoped
+      ? scope.storeId
+      : queryStoreId && queryStoreId !== 'ALL' && queryStoreId !== 'CONSOLIDATED'
+      ? queryStoreId
+      : null;
+
+    const scopedZones = effectiveFilterStoreId
+      ? warehouseZones.filter((z) => z.storeId === effectiveFilterStoreId)
+      : warehouseZones;
+    const scopedTiers = effectiveFilterStoreId
+      ? storeInventoryTiers.filter((t) => t.storeId === effectiveFilterStoreId)
+      : storeInventoryTiers;
+    const enrichedOutlets = storeSchedules.map((st, idx) => enrichOutletSchedule(st, idx));
+
     res.json({
-      warehouseZones,
+      warehouseZones: scopedZones,
       storeInventoryTiers: hideCost
-        ? storeInventoryTiers.map((t) => ({ ...t, unitCost: 0, costMasked: true }))
-        : storeInventoryTiers,
-      outlets: storeSchedules,
+        ? scopedTiers.map((t) => ({ ...t, unitCost: 0, costMasked: true }))
+        : scopedTiers,
+      outlets: enrichedOutlets,
     });
   });
 
@@ -9816,9 +9931,11 @@ async function startServer() {
     const { storeId, sku, status } = req.query;
     syncAllBatchesExpiryStatus(Date.now());
     let list = [...inventoryBatches];
+    const scope = resolveRequestBranchScope(req);
+    const effectiveStoreId = scope.isBranchScoped ? scope.storeId : storeId;
 
-    if (storeId && storeId !== 'ALL') {
-      list = list.filter((b) => b.storeId === storeId);
+    if (effectiveStoreId && effectiveStoreId !== 'ALL' && effectiveStoreId !== 'CONSOLIDATED') {
+      list = list.filter((b) => b.storeId === effectiveStoreId);
     }
     if (sku) {
       list = list.filter((b) => b.sku === sku);
@@ -10192,9 +10309,11 @@ async function startServer() {
   // -------------------------------------------------------------
   app.get('/api/admin/picker/orders', (req: Request, res: Response) => {
     const { storeId, pickerStatus } = req.query;
+    const scope = resolveRequestBranchScope(req);
+    const effectiveStoreId = scope.isBranchScoped ? scope.storeId : storeId;
     let list = pickerOrders;
-    if (storeId && storeId !== 'ALL') {
-      list = list.filter((o) => o.storeId === storeId);
+    if (effectiveStoreId && effectiveStoreId !== 'ALL' && effectiveStoreId !== 'CONSOLIDATED') {
+      list = list.filter((o) => o.storeId === effectiveStoreId);
     }
     if (pickerStatus && pickerStatus !== 'ALL') {
       list = list.filter((o) => o.pickerStatus === pickerStatus);
@@ -10787,9 +10906,11 @@ async function startServer() {
   // -------------------------------------------------------------
   app.get('/api/admin/fulfillment/orders', (req: Request, res: Response) => {
     const { storeId, status } = req.query as { storeId?: string; status?: string };
+    const scope = resolveRequestBranchScope(req);
+    const effectiveStoreId = scope.isBranchScoped ? scope.storeId : storeId;
     let list = [...pickerOrders];
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      list = list.filter((o) => o.storeId === storeId);
+    if (effectiveStoreId && effectiveStoreId !== 'ALL' && effectiveStoreId !== 'CONSOLIDATED') {
+      list = list.filter((o) => o.storeId === effectiveStoreId);
     }
     if (status && status !== 'ALL') {
       list = list.filter(
@@ -14326,7 +14447,9 @@ async function startServer() {
   // multi-currency tender, and audit logging.
   // =============================================================
   app.get('/api/pos/products', (req: Request, res: Response) => {
-    const { storeId = 'store-jkt-senopati', search = '', category = 'ALL' } = req.query;
+    const { storeId: queryStoreId = 'store-jkt-senopati', search = '', category = 'ALL' } = req.query;
+    const scope = resolveRequestBranchScope(req);
+    const storeId = scope.isBranchScoped ? scope.storeId : queryStoreId;
     const cleanSearch = String(search).toLowerCase().trim();
     const cleanCategory = String(category).toLowerCase().trim();
     const nowMs = Date.now();
@@ -15560,8 +15683,10 @@ async function startServer() {
 
   app.get('/api/pos/history', (req: Request, res: Response) => {
     const { storeId } = req.query;
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      return res.json(posTransactionsHistory.filter((r) => r.storeId === storeId));
+    const scope = resolveRequestBranchScope(req);
+    const effectiveStoreId = scope.isBranchScoped ? scope.storeId : storeId;
+    if (effectiveStoreId && effectiveStoreId !== 'ALL' && effectiveStoreId !== 'CONSOLIDATED') {
+      return res.json(posTransactionsHistory.filter((r) => r.storeId === effectiveStoreId));
     }
     res.json(posTransactionsHistory);
   });
@@ -15738,6 +15863,29 @@ async function startServer() {
     }
     mergedErp.minMarginFloorPct = Number(normalizedMarginFloor.toFixed(2));
 
+    if (patch.maxAllowedOutlets !== undefined) {
+      if (!isCallerSuperAdminForUserMgmt(req)) {
+        return res.status(403).json({
+          success: false,
+          code: 'RBAC_FORBIDDEN',
+          error: 'Only Super Admin can change Max Allowed Outlets quota.',
+        });
+      }
+      const nextQuota = Math.round(Number(patch.maxAllowedOutlets));
+      const activeCount = storeSchedules.filter((s) => s.isActive !== false).length;
+      if (!Number.isFinite(nextQuota) || nextQuota < 1 || nextQuota > 500) {
+        return res.status(400).json({ error: 'maxAllowedOutlets must be an integer between 1 and 500.' });
+      }
+      if (nextQuota < activeCount) {
+        return res.status(400).json({
+          success: false,
+          code: 'QUOTA_BELOW_ACTIVE_OUTLETS',
+          error: `Max Allowed Outlets (${nextQuota}) cannot be lower than currently active outlets (${activeCount}). Deactivate unused outlets first.`,
+        });
+      }
+      mergedErp.maxAllowedOutlets = nextQuota;
+    }
+
     enterpriseSettings = {
       ...enterpriseSettings,
       threeWayMatching: {
@@ -15825,9 +15973,307 @@ async function startServer() {
     });
   });
 
+  // --- 1A2. EDITABLE OUTLET / BRANCH PROFILES & QUOTA MANAGEMENT (SUPER ADMIN) ---
+  app.get('/api/admin/settings/outlets', (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      outlets: storeSchedules.map((st, idx) => enrichOutletSchedule(st, idx)),
+      quota: getOutletQuotaSummary(),
+      branchOptions: getDynamicBranchOptions(),
+    });
+  });
+
+  app.post('/api/admin/settings/outlets', (req: Request, res: Response) => {
+    if (!isCallerSuperAdminForUserMgmt(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat membuat cabang atau outlet baru.',
+      });
+    }
+
+    const body = (req.body || {}) as Partial<StoreOutletSchedule> & { name?: string };
+    const cleanName = String(body.name || body.storeName || '').trim();
+    const cleanCode = String(body.branchCode || '').trim().toUpperCase();
+    const cleanCity = String(body.city || 'Jakarta').trim();
+    const cleanDistrict = String(body.district || 'Central').trim();
+    const cleanAddress = String(body.address || `${cleanDistrict}, ${cleanCity}`).trim();
+    const cleanPhone = String(body.phone || body.contactPhone || '+62 21 5550199').trim();
+    const validTypes: OutletType[] = ['FLAGSHIP_STORE', 'DARK_STORE', 'CENTRAL_HUB', 'EXPRESS_MART'];
+    const outletType: OutletType = validTypes.includes(body.outletType as OutletType)
+      ? (body.outletType as OutletType)
+      : 'FLAGSHIP_STORE';
+    const nextIsActive = body.isActive !== false;
+
+    if (!cleanName) {
+      return res.status(400).json({ success: false, error: 'Nama Outlet / Cabang wajib diisi.' });
+    }
+    if (!cleanCode) {
+      return res.status(400).json({ success: false, error: 'Kode Cabang (branchCode) wajib diisi.' });
+    }
+    if (storeSchedules.some((s, idx) => deriveDefaultBranchCode(s, idx).toUpperCase() === cleanCode)) {
+      return res.status(400).json({
+        success: false,
+        code: 'DUPLICATE_BRANCH_CODE',
+        error: `Kode Cabang '${cleanCode}' sudah digunakan oleh outlet lain.`,
+      });
+    }
+
+    const quota = getOutletQuotaSummary();
+    if (nextIsActive && quota.activeOutlets >= quota.maxAllowedOutlets) {
+      return res.status(400).json({
+        success: false,
+        code: 'OUTLET_QUOTA_EXCEEDED',
+        activeOutlets: quota.activeOutlets,
+        maxAllowedOutlets: quota.maxAllowedOutlets,
+        error: `Kuota Outlet Penuh: Saat ini sudah ada ${quota.activeOutlets} outlet aktif dari batas maksimal ${quota.maxAllowedOutlets} outlet. Naikkan Max Allowed Outlets di Enterprise SaaS Config terlebih dahulu.`,
+      });
+    }
+
+    const baseSlug = `store-${cleanCode.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+    let storeId = baseSlug || `store-branch-${Date.now().toString().slice(-5)}`;
+    while (storeSchedules.some((s) => s.storeId === storeId)) {
+      storeId = `${baseSlug}-${Date.now().toString().slice(-4)}`;
+    }
+
+    const nowIso = new Date().toISOString();
+    const codeSuffix = cleanCode.replace(/[^A-Z0-9]/g, '').slice(0, 6) || String(storeSchedules.length + 1);
+    const coldZoneId = `WH-${codeSuffix}-COLD`;
+    const ambZoneId = `WH-${codeSuffix}-AMB`;
+    const newOutlet: StoreOutletSchedule = enrichOutletSchedule(
+      {
+        id: storeId,
+        storeId,
+        branchCode: cleanCode,
+        name: cleanName,
+        storeName: cleanName,
+        outletType,
+        address: cleanAddress,
+        city: cleanCity,
+        district: cleanDistrict,
+        phone: cleanPhone,
+        contactPhone: cleanPhone,
+        receiptHeaderNote: String(body.receiptHeaderNote ?? 'Terima kasih telah berbelanja di GroceMart Indonesia!').trim(),
+        targetDailyOmzetIDR: Math.max(0, roundIDR(Number(body.targetDailyOmzetIDR ?? 35000000) || 0)),
+        isActive: nextIsActive,
+        openTime: String(body.openTime || '07:00').trim(),
+        closeTime: String(body.closeTime || '22:00').trim(),
+        timezone: (['WIB', 'WITA', 'WIT'].includes(String(body.timezone)) ? body.timezone : 'WIB') as 'WIB' | 'WITA' | 'WIT',
+        daysOpen: String(body.daysOpen || 'Mon - Sun').trim(),
+        isEmergencyClosed: false,
+        isHolidayMode: false,
+        allowCatalogBrowsingWhenClosed: true,
+        activeWarehouses: [coldZoneId, ambZoneId],
+        updatedAt: nowIso,
+      },
+      storeSchedules.length
+    );
+
+    storeSchedules.push(newOutlet);
+
+    // Provision default ambient & cold-chilled warehouse zones for the new outlet
+    const operatorInCharge = getEffectiveOperatorName(req) || 'Branch Manager';
+    warehouseZones.push(
+      {
+        id: coldZoneId,
+        name: `${cleanName} Cold Chiller`,
+        storeId: newOutlet.storeId,
+        type: 'cold_chilled',
+        temperatureTarget: '4°C',
+        capacityCubicMeters: 180,
+        currentOccupancyPercent: 0,
+        managerInCharge: operatorInCharge,
+      },
+      {
+        id: ambZoneId,
+        name: `${cleanName} Ambient Dry`,
+        storeId: newOutlet.storeId,
+        type: 'ambient',
+        temperatureTarget: '22°C',
+        capacityCubicMeters: 420,
+        currentOccupancyPercent: 0,
+        managerInCharge: operatorInCharge,
+      }
+    );
+
+    appendAuditTrailLog({
+      req,
+      actorName: getEffectiveOperatorName(req),
+      actorRole: 'super_admin',
+      branchScope: newOutlet.storeId,
+      module: 'SECURITY',
+      action: 'OUTLET_PROFILE_CREATED',
+      referenceId: newOutlet.storeId,
+      summary: `Created outlet ${newOutlet.storeName} [${newOutlet.branchCode}] (${newOutlet.outletType}, Target Rp ${(newOutlet.targetDailyOmzetIDR || 0).toLocaleString('id-ID')}/day).`,
+    });
+    scheduleStateSave();
+
+    return res.status(201).json({
+      success: true,
+      outlet: newOutlet,
+      outlets: storeSchedules.map((st, idx) => enrichOutletSchedule(st, idx)),
+      quota: getOutletQuotaSummary(),
+      branchOptions: getDynamicBranchOptions(),
+      message: `Outlet '${newOutlet.storeName}' (${newOutlet.branchCode}) berhasil ditambahkan.`,
+    });
+  });
+
+  app.patch('/api/admin/settings/outlets/:id', (req: Request, res: Response) => {
+    if (!isCallerSuperAdminForUserMgmt(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat mengubah profil outlet.',
+      });
+    }
+
+    const targetId = String(req.params.id || '').trim();
+    const idx = storeSchedules.findIndex((s) => s.storeId === targetId || s.id === targetId);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: `Outlet '${targetId}' tidak ditemukan.` });
+    }
+
+    const existing = enrichOutletSchedule(storeSchedules[idx], idx);
+    const body = (req.body || {}) as Partial<StoreOutletSchedule> & { name?: string };
+
+    // Block deactivation if an OPEN POS shift exists on this outlet
+    if (body.isActive === false && existing.isActive !== false) {
+      const openShift = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === existing.storeId);
+      if (openShift) {
+        return res.status(409).json({
+          success: false,
+          code: 'ACTIVE_POS_SHIFT_OPEN',
+          shiftId: openShift.id,
+          error: `Tidak dapat menonaktifkan '${existing.storeName}': Shift POS kasir #${openShift.id} (${openShift.cashierName}) masih berstatus OPEN.`,
+        });
+      }
+    }
+
+    // Enforce quota on reactivation
+    if (body.isActive === true && existing.isActive === false) {
+      const quota = getOutletQuotaSummary();
+      if (quota.activeOutlets >= quota.maxAllowedOutlets) {
+        return res.status(400).json({
+          success: false,
+          code: 'OUTLET_QUOTA_EXCEEDED',
+          error: `Kuota Outlet Penuh (${quota.activeOutlets}/${quota.maxAllowedOutlets}): Tidak dapat mengaktifkan ulang '${existing.storeName}'.`,
+        });
+      }
+    }
+
+    if (body.branchCode !== undefined) {
+      const nextCode = String(body.branchCode).trim().toUpperCase();
+      if (!nextCode) {
+        return res.status(400).json({ success: false, error: 'branchCode tidak boleh kosong.' });
+      }
+      const dupCode = storeSchedules.some(
+        (s, sIdx) => sIdx !== idx && deriveDefaultBranchCode(s, sIdx).toUpperCase() === nextCode
+      );
+      if (dupCode) {
+        return res.status(400).json({
+          success: false,
+          code: 'DUPLICATE_BRANCH_CODE',
+          error: `Kode Cabang '${nextCode}' sudah digunakan oleh outlet lain.`,
+        });
+      }
+      existing.branchCode = nextCode;
+    }
+
+    const incomingName = body.name !== undefined ? body.name : body.storeName;
+    if (incomingName !== undefined) {
+      const cleanName = String(incomingName).trim();
+      if (!cleanName) {
+        return res.status(400).json({ success: false, error: 'Nama Outlet tidak boleh kosong.' });
+      }
+      existing.name = cleanName;
+      existing.storeName = cleanName;
+    }
+
+    const validTypes: OutletType[] = ['FLAGSHIP_STORE', 'DARK_STORE', 'CENTRAL_HUB', 'EXPRESS_MART'];
+    if (body.outletType !== undefined && validTypes.includes(body.outletType)) {
+      existing.outletType = body.outletType;
+    }
+    if (body.address !== undefined) existing.address = String(body.address).trim();
+    if (body.city !== undefined) existing.city = String(body.city).trim() || existing.city;
+    if (body.district !== undefined) existing.district = String(body.district).trim() || existing.district;
+    const incomingPhone = body.phone !== undefined ? body.phone : body.contactPhone;
+    if (incomingPhone !== undefined) {
+      const cleanPhone = String(incomingPhone).trim();
+      existing.phone = cleanPhone;
+      existing.contactPhone = cleanPhone;
+    }
+    if (body.receiptHeaderNote !== undefined) existing.receiptHeaderNote = String(body.receiptHeaderNote).trim();
+    if (body.targetDailyOmzetIDR !== undefined) {
+      const targetVal = roundIDR(Number(body.targetDailyOmzetIDR));
+      if (!Number.isFinite(targetVal) || targetVal < 0) {
+        return res.status(400).json({ success: false, error: 'targetDailyOmzetIDR harus angka >= 0.' });
+      }
+      existing.targetDailyOmzetIDR = targetVal;
+    }
+    if (body.openTime !== undefined) existing.openTime = String(body.openTime).trim();
+    if (body.closeTime !== undefined) existing.closeTime = String(body.closeTime).trim();
+    if (body.timezone !== undefined && ['WIB', 'WITA', 'WIT'].includes(String(body.timezone))) {
+      existing.timezone = body.timezone as 'WIB' | 'WITA' | 'WIT';
+    }
+    if (body.daysOpen !== undefined) existing.daysOpen = String(body.daysOpen).trim();
+    if (body.isActive !== undefined) existing.isActive = Boolean(body.isActive);
+    if (body.isEmergencyClosed !== undefined) existing.isEmergencyClosed = Boolean(body.isEmergencyClosed);
+    if (body.closureReason !== undefined) existing.closureReason = body.closureReason;
+    if (body.isHolidayMode !== undefined) existing.isHolidayMode = Boolean(body.isHolidayMode);
+    if (body.holidayNotice !== undefined) existing.holidayNotice = body.holidayNotice;
+    existing.updatedAt = new Date().toISOString();
+
+    storeSchedules[idx] = existing;
+
+    // Synchronize renamed storeName across dependent entities
+    storeInventoryTiers.forEach((t) => {
+      if (t.storeId === existing.storeId) {
+        t.storeName = existing.storeName;
+      }
+    });
+    systemUsers.forEach((u) => {
+      if (u.branchId === existing.storeId) {
+        u.branchName = existing.storeName;
+      }
+    });
+    Object.values(operatorBranchAssignments).forEach((entry) => {
+      if (entry.storeId === existing.storeId) {
+        entry.storeName = existing.storeName;
+      }
+    });
+    syncAssignmentsOntoProfiles();
+
+    appendAuditTrailLog({
+      req,
+      actorName: getEffectiveOperatorName(req),
+      actorRole: 'super_admin',
+      branchScope: existing.storeId,
+      module: 'SECURITY',
+      action: 'OUTLET_PROFILE_UPDATED',
+      referenceId: existing.storeId,
+      summary: `Updated outlet profile ${existing.storeName} [${existing.branchCode}] (Type: ${existing.outletType}, Target: Rp ${(existing.targetDailyOmzetIDR || 0).toLocaleString('id-ID')}/day, Active: ${existing.isActive !== false}).`,
+    });
+    scheduleStateSave();
+
+    return res.json({
+      success: true,
+      outlet: existing,
+      outlets: storeSchedules.map((st, sIdx) => enrichOutletSchedule(st, sIdx)),
+      quota: getOutletQuotaSummary(),
+      branchOptions: getDynamicBranchOptions(),
+      message: `Profil outlet '${existing.storeName}' berhasil disimpan.`,
+    });
+  });
+
   // --- 1B. MULTI-BRANCH MONITOR (CABANG, OMZET & BARANG DATANG) + OPERATOR ASSIGNMENTS ---
-  app.get('/api/admin/settings/branch-monitor', (_req: Request, res: Response) => {
-    const branches: BranchMonitorHubSummary[] = storeSchedules.map((st, idx) => {
+  app.get('/api/admin/settings/branch-monitor', (req: Request, res: Response) => {
+    const scope = resolveRequestBranchScope(req);
+    const enrichedSchedules = storeSchedules.map((st, idx) => enrichOutletSchedule(st, idx));
+    const scopedSchedules = scope.isBranchScoped
+      ? enrichedSchedules.filter((st) => st.storeId === scope.storeId)
+      : enrichedSchedules;
+
+    const branches: BranchMonitorHubSummary[] = scopedSchedules.map((st, idx) => {
       const storeTiers = storeInventoryTiers.filter((t) => t.storeId === st.storeId);
       const stockValuationIDR = storeTiers.reduce(
         (sum, t) => sum + Math.round((t.physicalStock || 0) * (t.unitCost || 0)),
@@ -15863,18 +16309,17 @@ async function startServer() {
         (tr) => tr.destinationStoreId === st.storeId && tr.status === 'in_transit'
       ).length;
 
-      const branchCode = `BR-${st.city.slice(0, 3).toUpperCase()}-${String(idx + 1).padStart(2, '0')}`;
-      const hubType: BranchMonitorHubSummary['hubType'] =
-        st.storeId === 'store-jkt-pik'
-          ? 'Dark Store'
-          : st.storeId === 'store-jkt-senopati'
-          ? 'Central CDC'
-          : 'Retail Flagship';
-      const status: BranchMonitorHubSummary['status'] = st.isEmergencyClosed
-        ? 'Emergency Closed'
-        : st.isHolidayMode
-        ? 'Holiday Mode'
-        : 'Open';
+      const branchCode = st.branchCode || deriveDefaultBranchCode(st, idx);
+      const outletType = st.outletType || deriveDefaultOutletType(st);
+      const hubType: BranchMonitorHubSummary['hubType'] = mapOutletTypeToHubType(outletType);
+      const status: BranchMonitorHubSummary['status'] =
+        st.isActive === false
+          ? 'Inactive'
+          : st.isEmergencyClosed
+          ? 'Emergency Closed'
+          : st.isHolidayMode
+          ? 'Holiday Mode'
+          : 'Open';
 
       return {
         storeId: st.storeId,
@@ -15883,6 +16328,15 @@ async function startServer() {
         city: st.city,
         district: st.district,
         hubType,
+        outletType,
+        address: st.address,
+        phone: st.phone || st.contactPhone,
+        receiptHeaderNote: st.receiptHeaderNote,
+        targetDailyOmzetIDR: st.targetDailyOmzetIDR,
+        isActive: st.isActive !== false,
+        openTime: st.openTime,
+        closeTime: st.closeTime,
+        timezone: st.timezone,
         status,
         isEmergencyClosed: !!st.isEmergencyClosed,
         orderCount,
@@ -15898,7 +16352,12 @@ async function startServer() {
     });
 
     const openPurchaseOrders: BranchMonitorIncomingPO[] = purchaseOrders
-      .filter((po) => po.status !== 'Completed' && po.status !== 'Cancelled')
+      .filter(
+        (po) =>
+          po.status !== 'Completed' &&
+          po.status !== 'Cancelled' &&
+          (!scope.isBranchScoped || po.storeId === scope.storeId)
+      )
       .map((po) => {
         const expectedUnitsQty = po.items.reduce((s, it) => s + (it.orderedQuantity || 0), 0);
         const receivedUnitsQty = po.items.reduce((s, it) => s + (it.receivedQuantity || 0), 0);
@@ -15927,7 +16386,11 @@ async function startServer() {
       });
 
     const inTransitTransfers: BranchMonitorInTransitTransfer[] = stockTransfersList
-      .filter((tr) => tr.status === 'in_transit')
+      .filter(
+        (tr) =>
+          tr.status === 'in_transit' &&
+          (!scope.isBranchScoped || tr.destinationStoreId === scope.storeId || tr.sourceStoreId === scope.storeId)
+      )
       .map((tr) => ({
         transferId: tr.id,
         sku: tr.sku,
@@ -15955,6 +16418,7 @@ async function startServer() {
         openPoCount: openPurchaseOrders.length,
         inTransitCount: inTransitTransfers.length,
       },
+      quota: getOutletQuotaSummary(),
       branches,
       openPurchaseOrders,
       inTransitTransfers,
@@ -16218,7 +16682,7 @@ async function startServer() {
     });
     res.json({
       assignments,
-      branchOptions: BRANCH_ASSIGNMENT_OPTIONS,
+      branchOptions: getDynamicBranchOptions(),
     });
   });
 
@@ -16281,7 +16745,7 @@ async function startServer() {
       nextStoreId = 'store-jkt-senopati';
     }
 
-    const option = BRANCH_ASSIGNMENT_OPTIONS.find((opt) => opt.storeId === nextStoreId);
+    const option = getDynamicBranchOptions().find((opt) => opt.storeId === nextStoreId);
     if (!option) {
       return res.status(400).json({ error: `Invalid target branch/hub '${nextStoreId}'.` });
     }
@@ -16407,7 +16871,7 @@ async function startServer() {
       users: systemUsers.map(sanitizeSystemUserForClient),
       rolePresets: DIVISION_ROLE_CODES.map((code) => DIVISION_ROLE_PRESETS[code]),
       moduleMetadata: MODULE_PERMISSION_META,
-      branchOptions: BRANCH_ASSIGNMENT_OPTIONS,
+      branchOptions: getDynamicBranchOptions(),
     });
   });
 
@@ -17007,7 +17471,15 @@ async function startServer() {
     res.json(pwpRulesList);
   });
 
-  app.get('/api/b2b/orders', (_req: Request, res: Response) => {
+  app.get('/api/b2b/orders', (req: Request, res: Response) => {
+    const scope = resolveRequestBranchScope(req);
+    if (scope.isBranchScoped) {
+      return res.json(
+        b2bOrdersList.filter(
+          (o) => ((o as unknown as { storeId?: string }).storeId || 'store-jkt-senopati') === scope.storeId
+        )
+      );
+    }
     res.json(b2bOrdersList);
   });
 
@@ -24275,28 +24747,42 @@ async function startServer() {
   // --- MODULE 4: POS CASHIER SHIFT & BLIND Z-REPORT RECONCILIATION ---
   app.get('/api/pos/shifts/active', (req: Request, res: Response) => {
     const { storeId = 'store-jkt-senopati' } = req.query as { storeId?: string };
-    const effectiveStore = storeId === 'CONSOLIDATED' ? 'store-jkt-senopati' : storeId;
+    const scope = resolveRequestBranchScope(req);
+    const effectiveStore = scope.isBranchScoped
+      ? scope.storeId
+      : storeId === 'CONSOLIDATED'
+      ? 'store-jkt-senopati'
+      : storeId;
     const active = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === effectiveStore) || null;
     res.json({ activeShift: active });
   });
 
   app.get('/api/pos/shifts/history', (req: Request, res: Response) => {
     const { storeId } = req.query as { storeId?: string };
+    const scope = resolveRequestBranchScope(req);
+    const effectiveStore = scope.isBranchScoped ? scope.storeId : storeId;
     let list = [...posShiftsList];
-    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') {
-      list = list.filter((s) => s.storeId === storeId);
+    if (effectiveStore && effectiveStore !== 'ALL' && effectiveStore !== 'CONSOLIDATED') {
+      list = list.filter((s) => s.storeId === effectiveStore);
     }
     res.json(list);
   });
 
   app.post('/api/pos/shifts/open', (req: Request, res: Response) => {
+    const scope = resolveRequestBranchScope(req);
     const {
-      storeId = 'store-jkt-senopati',
-      storeName = 'GroceMart Senopati Flagship',
+      storeId: rawStoreId,
+      storeName: rawStoreName,
       registerId = 'REG-04',
       openingFloatIDR = 500000,
       cashierName,
     } = req.body;
+    const storeId = rawStoreId || (scope.isBranchScoped ? scope.storeId : 'store-jkt-senopati');
+    const shiftBranchViolation = checkBranchIsolationViolation(req, storeId);
+    if (shiftBranchViolation) {
+      return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: shiftBranchViolation });
+    }
+    const storeName = rawStoreName || resolveBranchNameById(storeId);
 
     const existing = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
     if (existing) {
@@ -24358,6 +24844,10 @@ async function startServer() {
 
     if (!shift) {
       return res.status(404).json({ error: 'No open POS register shift found to close.' });
+    }
+    const closeBranchViolation = checkBranchIsolationViolation(req, shift.storeId);
+    if (closeBranchViolation) {
+      return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: closeBranchViolation });
     }
 
     const timestamp = new Date().toISOString();
@@ -24845,8 +25335,8 @@ async function startServer() {
         : undefined;
     const assignedAssignment = rawHeaderOpId ? operatorBranchAssignments[rawHeaderOpId] : undefined;
     return (
-      rawHeaderBranch ||
       assignedAssignment?.storeId ||
+      rawHeaderBranch ||
       currentActiveStaffSession.assignedBranchId ||
       currentActiveStaffSession.storeId ||
       'ALL'
@@ -24854,19 +25344,19 @@ async function startServer() {
   }
 
   function checkBranchIsolationViolation(req: Request, targetStoreId?: string): string | null {
-    const effectiveRole = getEffectiveRequestRole(req);
-    const effectiveBranch = getEffectiveOperatorBranch(req);
+    const scope = resolveRequestBranchScope(req);
     if (
-      isBranchScopedServerRole(effectiveRole) &&
-      effectiveBranch !== 'ALL' &&
-      effectiveBranch !== 'CONSOLIDATED' &&
-      effectiveBranch !== 'WH-CDC-01' &&
+      scope.isBranchScoped &&
+      scope.storeId !== 'ALL' &&
+      scope.storeId !== 'CONSOLIDATED' &&
+      scope.storeId !== 'WH-CDC-01' &&
       targetStoreId &&
       targetStoreId !== 'ALL' &&
       targetStoreId !== 'CONSOLIDATED' &&
-      targetStoreId !== effectiveBranch
+      targetStoreId !== scope.storeId
     ) {
-      return `Branch Isolation Violation (403): Operator (${effectiveRole}) assigned to '${effectiveBranch}' cannot mutate data for '${targetStoreId}'.`;
+      const effectiveRole = getEffectiveRequestRole(req);
+      return `Branch Isolation Violation (403): Operator (${effectiveRole}) assigned to '${scope.storeId}' cannot mutate data for '${targetStoreId}'.`;
     }
     return null;
   }
@@ -25808,8 +26298,19 @@ async function startServer() {
   // WAREHOUSE RACK TOPOLOGY, BULK CSV SKU/BATCH IMPORT & RACK BLIND OPNAME
   // =============================================================
   function resolveRequestBranchScope(req: Request): { isBranchScoped: boolean; storeId: string } {
+    const resolvedSys = resolveSystemUserForRequest(req);
+    if (resolvedSys) {
+      if (resolvedSys.roleCode === 'SUPER_ADMIN') {
+        return { isBranchScoped: false, storeId: 'ALL' };
+      }
+      const sysBranch = String(resolvedSys.branchId || 'ALL').trim() || 'ALL';
+      if (sysBranch !== 'ALL' && sysBranch !== 'CONSOLIDATED' && sysBranch !== 'WH-CDC-01') {
+        return { isBranchScoped: true, storeId: sysBranch };
+      }
+      return { isBranchScoped: false, storeId: sysBranch };
+    }
+
     const role = getEffectiveRequestRole(req);
-    const isBranchScoped = role === 'cashier' || role === 'warehouse' || role === 'store_manager';
     const rawHeaderBranch =
       typeof req.headers['x-operator-branch'] === 'string'
         ? req.headers['x-operator-branch'].trim()
@@ -25819,20 +26320,34 @@ async function startServer() {
         ? req.headers['x-operator-id'].trim()
         : undefined;
     const assigned = rawHeaderOpId ? operatorBranchAssignments[rawHeaderOpId] : undefined;
-    const storeId =
-      rawHeaderBranch ||
+    const effectiveBranch =
       assigned?.storeId ||
+      rawHeaderBranch ||
       currentActiveStaffSession.assignedBranchId ||
       currentActiveStaffSession.storeId ||
-      'store-jkt-senopati';
-    return { isBranchScoped, storeId };
+      'ALL';
+    const isSpecificBranch =
+      effectiveBranch !== 'ALL' &&
+      effectiveBranch !== 'CONSOLIDATED' &&
+      effectiveBranch !== 'WH-CDC-01';
+    const isBranchScoped =
+      role !== 'super_admin' &&
+      (isSpecificBranch || role === 'cashier' || role === 'warehouse' || role === 'store_manager');
+    return {
+      isBranchScoped,
+      storeId: isBranchScoped ? (isSpecificBranch ? effectiveBranch : 'store-jkt-senopati') : effectiveBranch,
+    };
   }
 
   function resolveOutletFromCodeOrId(outletCodeOrId: string): StoreOutletSchedule | undefined {
     const raw = String(outletCodeOrId || '').trim();
     if (!raw) return undefined;
     const upper = raw.toUpperCase();
-    const direct = storeSchedules.find((s) => s.storeId.toLowerCase() === raw.toLowerCase());
+    const direct = storeSchedules.find(
+      (s, idx) =>
+        s.storeId.toLowerCase() === raw.toLowerCase() ||
+        deriveDefaultBranchCode(s, idx).toUpperCase() === upper
+    );
     if (direct) return direct;
     const aliasMap: Record<string, string> = {
       SEN: 'store-jkt-senopati',

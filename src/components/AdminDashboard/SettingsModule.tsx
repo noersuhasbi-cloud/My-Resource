@@ -37,6 +37,8 @@ import type {
   ModulePermissionsMap,
   SystemUserAccount,
   ErpConfigurationSettings,
+  OutletType,
+  BranchMonitorHubSummary,
 } from '../../types/index.ts';
 import {
   INITIAL_ENTERPRISE_SETTINGS,
@@ -52,6 +54,8 @@ import {
   normalizeEnterpriseRole,
   getRoleDisplayLabel,
   isBranchScopedRole,
+  isSessionBranchScoped,
+  getSessionAssignedBranchId,
   DIVISION_ROLE_CODES,
   DIVISION_ROLE_PRESETS,
   MODULE_PERMISSION_META,
@@ -183,6 +187,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const canManagePromotions = isSuperAdmin || isCoo || currentRole === 'store_manager';
   const canMutateStock = isSuperAdmin || isCoo || currentRole === 'warehouse' || currentRole === 'store_manager';
   const isReadOnlyPolicyRole = isAdminRole;
+  const isBranchScoped = isSessionBranchScoped(activeStaffSession);
+  const lockedBranchId = getSessionAssignedBranchId(activeStaffSession) || 'store-jkt-senopati';
 
   // Active Sub-Tab
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>(
@@ -269,6 +275,26 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [savingAssignmentUserId, setSavingAssignmentUserId] = useState<string | null>(null);
   const [operatorPinDrafts, setOperatorPinDrafts] = useState<Record<string, string>>({});
 
+  // Outlet Profile Create / Edit Modal State
+  const [isOutletModalOpen, setIsOutletModalOpen] = useState<boolean>(false);
+  const [editingOutletProfile, setEditingOutletProfile] = useState<BranchMonitorHubSummary | null>(null);
+  const [outletFormBranchCode, setOutletFormBranchCode] = useState<string>('');
+  const [outletFormName, setOutletFormName] = useState<string>('');
+  const [outletFormType, setOutletFormType] = useState<OutletType>('FLAGSHIP_STORE');
+  const [outletFormCity, setOutletFormCity] = useState<string>('Jakarta');
+  const [outletFormDistrict, setOutletFormDistrict] = useState<string>('Central');
+  const [outletFormAddress, setOutletFormAddress] = useState<string>('');
+  const [outletFormPhone, setOutletFormPhone] = useState<string>('+62 21 5550199');
+  const [outletFormTargetOmzetIDR, setOutletFormTargetOmzetIDR] = useState<number>(35000000);
+  const [outletFormReceiptNote, setOutletFormReceiptNote] = useState<string>(
+    'Terima kasih telah berbelanja di GroceMart Indonesia!'
+  );
+  const [outletFormOpenTime, setOutletFormOpenTime] = useState<string>('07:00');
+  const [outletFormCloseTime, setOutletFormCloseTime] = useState<string>('22:00');
+  const [outletFormTimezone, setOutletFormTimezone] = useState<'WIB' | 'WITA' | 'WIT'>('WIB');
+  const [outletFormIsActive, setOutletFormIsActive] = useState<boolean>(true);
+  const [isSavingOutletProfile, setIsSavingOutletProfile] = useState<boolean>(false);
+
   // 1. COA Management & Mapping State
   const [coaViewMode, setCoaViewMode] = useState<'directory' | 'mapping'>('directory');
   const [isAddingCoa, setIsAddingCoa] = useState<boolean>(false);
@@ -320,7 +346,9 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   });
 
   // 3. Stock Opname State
-  const [opnameStoreId, setOpnameStoreId] = useState<string>('store-jkt-senopati');
+  const [opnameStoreId, setOpnameStoreId] = useState<string>(
+    isBranchScoped ? lockedBranchId : 'store-jkt-senopati'
+  );
   const [opnameCategoryFilter, setOpnameCategoryFilter] = useState<string>('ALL');
   const [opnameZoneFilter, setOpnameZoneFilter] = useState<string>('ALL');
   const [opnameSearch, setOpnameSearch] = useState<string>('');
@@ -333,7 +361,16 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   // 4. Bulk Import Draft Staging State (Rack, Lot & Serial Number SN)
   const [csvText, setCsvText] = useState<string>('');
   const [parsedImportRows, setParsedImportRows] = useState<BulkInventoryImportRow[]>([]);
-  const [importTargetStoreId, setImportTargetStoreId] = useState<string>('store-jkt-senopati');
+  const [importTargetStoreId, setImportTargetStoreId] = useState<string>(
+    isBranchScoped ? lockedBranchId : 'store-jkt-senopati'
+  );
+
+  useEffect(() => {
+    if (isBranchScoped && lockedBranchId) {
+      setOpnameStoreId(lockedBranchId);
+      setImportTargetStoreId(lockedBranchId);
+    }
+  }, [isBranchScoped, lockedBranchId]);
   const bulkImportFileInputRef = useRef<HTMLInputElement>(null);
   const [importDraftsList, setImportDraftsList] = useState<InventoryImportDraft[]>([]);
   const [activeImportDraft, setActiveImportDraft] = useState<InventoryImportDraft | null>(null);
@@ -605,6 +642,115 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       onShowToast('Gagal Menyimpan User', msg);
     } finally {
       setIsSavingSystemUser(false);
+    }
+  };
+
+  const openCreateOutletModal = () => {
+    setEditingOutletProfile(null);
+    setOutletFormBranchCode('');
+    setOutletFormName('');
+    setOutletFormType('FLAGSHIP_STORE');
+    setOutletFormCity('Jakarta');
+    setOutletFormDistrict('Central');
+    setOutletFormAddress('');
+    setOutletFormPhone('+62 21 5550199');
+    setOutletFormTargetOmzetIDR(35000000);
+    setOutletFormReceiptNote('Terima kasih telah berbelanja di GroceMart Indonesia!');
+    setOutletFormOpenTime('07:00');
+    setOutletFormCloseTime('22:00');
+    setOutletFormTimezone('WIB');
+    setOutletFormIsActive(true);
+    setIsOutletModalOpen(true);
+  };
+
+  const openEditOutletModal = (branch: BranchMonitorHubSummary) => {
+    const matchedSched = storeOutlets.find((s) => s.storeId === branch.storeId);
+    setEditingOutletProfile(branch);
+    setOutletFormBranchCode(branch.branchCode || matchedSched?.branchCode || '');
+    setOutletFormName(branch.storeName || matchedSched?.name || '');
+    setOutletFormType(
+      branch.outletType ||
+        matchedSched?.outletType ||
+        (branch.hubType === 'Dark Store'
+          ? 'DARK_STORE'
+          : branch.hubType === 'Central CDC'
+          ? 'CENTRAL_HUB'
+          : branch.hubType === 'Express Mart'
+          ? 'EXPRESS_MART'
+          : 'FLAGSHIP_STORE')
+    );
+    setOutletFormCity(branch.city || matchedSched?.city || 'Jakarta');
+    setOutletFormDistrict(branch.district || matchedSched?.district || 'Central');
+    setOutletFormAddress(branch.address || matchedSched?.address || '');
+    setOutletFormPhone(branch.phone || matchedSched?.phone || matchedSched?.contactPhone || '+62 21 5550199');
+    setOutletFormTargetOmzetIDR(
+      branch.targetDailyOmzetIDR ?? matchedSched?.targetDailyOmzetIDR ?? 35000000
+    );
+    setOutletFormReceiptNote(
+      branch.receiptHeaderNote ??
+        matchedSched?.receiptHeaderNote ??
+        'Terima kasih telah berbelanja di GroceMart Indonesia!'
+    );
+    setOutletFormOpenTime(branch.openTime || matchedSched?.openTime || '07:00');
+    setOutletFormCloseTime(branch.closeTime || matchedSched?.closeTime || '22:00');
+    setOutletFormTimezone(
+      (branch.timezone || matchedSched?.timezone || 'WIB') as 'WIB' | 'WITA' | 'WIT'
+    );
+    setOutletFormIsActive(branch.isActive !== false && matchedSched?.isActive !== false);
+    setIsOutletModalOpen(true);
+  };
+
+  const handleSaveOutletProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isSuperAdmin) return;
+    setIsSavingOutletProfile(true);
+    try {
+      if (editingOutletProfile) {
+        const res = await apiClient.updateAdminOutlet(editingOutletProfile.storeId, {
+          branchCode: outletFormBranchCode.trim().toUpperCase(),
+          name: outletFormName.trim(),
+          outletType: outletFormType,
+          city: outletFormCity.trim(),
+          district: outletFormDistrict.trim(),
+          address: outletFormAddress.trim(),
+          phone: outletFormPhone.trim(),
+          targetDailyOmzetIDR: Math.max(0, Math.round(Number(outletFormTargetOmzetIDR) || 0)),
+          receiptHeaderNote: outletFormReceiptNote.trim(),
+          openTime: outletFormOpenTime.trim(),
+          closeTime: outletFormCloseTime.trim(),
+          timezone: outletFormTimezone,
+          isActive: outletFormIsActive,
+        });
+        if (res.branchOptions?.length) setBranchAssignmentOptions(res.branchOptions);
+        onShowToast('Profil Outlet Diperbarui', res.message);
+      } else {
+        const res = await apiClient.createAdminOutlet({
+          branchCode: outletFormBranchCode.trim().toUpperCase(),
+          name: outletFormName.trim(),
+          outletType: outletFormType,
+          city: outletFormCity.trim(),
+          district: outletFormDistrict.trim(),
+          address: outletFormAddress.trim() || `${outletFormDistrict.trim()}, ${outletFormCity.trim()}`,
+          phone: outletFormPhone.trim(),
+          targetDailyOmzetIDR: Math.max(0, Math.round(Number(outletFormTargetOmzetIDR) || 0)),
+          receiptHeaderNote: outletFormReceiptNote.trim(),
+          openTime: outletFormOpenTime.trim(),
+          closeTime: outletFormCloseTime.trim(),
+          timezone: outletFormTimezone,
+          isActive: outletFormIsActive,
+        });
+        if (res.branchOptions?.length) setBranchAssignmentOptions(res.branchOptions);
+        onShowToast('Outlet Baru Ditambahkan', res.message);
+      }
+      setIsOutletModalOpen(false);
+      setEditingOutletProfile(null);
+      await loadBranchMonitorData();
+      onRefreshData?.();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Gagal Menyimpan Outlet', msg);
+    } finally {
+      setIsSavingOutletProfile(false);
     }
   };
 
@@ -2903,7 +3049,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <div>
                         <label className={labelClass}>GOLD Tier Threshold (IDR)</label>
                         <input
@@ -2933,6 +3079,25 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             setErpConfigDraft((p) => ({
                               ...p,
                               platinumTierThresholdIDR: Math.max(0, Number(e.target.value) || 0),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Max Allowed Outlets (Quota)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="500"
+                          disabled={!isSuperAdmin}
+                          title={!isSuperAdmin ? 'Hanya Super Admin yang dapat mengubah kuota outlet' : 'Batas maksimal outlet aktif'}
+                          value={erpConfigDraft.maxAllowedOutlets ?? 10}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              maxAllowedOutlets: Math.max(1, Math.min(500, Math.round(Number(e.target.value) || 1))),
                             }))
                           }
                           className={`${inputClass} border font-mono`}
@@ -3162,19 +3327,44 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={loadBranchMonitorData}
-                disabled={isLoadingMonitor}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer self-start sm:self-auto ${
-                  isLight
-                    ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMonitor ? 'animate-spin' : ''}`} />
-                <span>Refresh Monitor</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/25 whitespace-nowrap">
+                  Aktif: {branchMonitorData?.quota?.activeOutlets ?? storeOutlets.filter((s) => s.isActive !== false).length} / {branchMonitorData?.quota?.maxAllowedOutlets ?? erpConfigDraft.maxAllowedOutlets ?? 10} Kuota Outlet
+                </span>
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    disabled={
+                      (branchMonitorData?.quota?.activeOutlets ?? storeOutlets.filter((s) => s.isActive !== false).length) >=
+                      (branchMonitorData?.quota?.maxAllowedOutlets ?? erpConfigDraft.maxAllowedOutlets ?? 10)
+                    }
+                    onClick={openCreateOutletModal}
+                    title={
+                      (branchMonitorData?.quota?.activeOutlets ?? storeOutlets.filter((s) => s.isActive !== false).length) >=
+                      (branchMonitorData?.quota?.maxAllowedOutlets ?? erpConfigDraft.maxAllowedOutlets ?? 10)
+                        ? 'Kuota outlet penuh — naikkan Max Allowed Outlets di Enterprise SaaS Config'
+                        : 'Tambah cabang / outlet baru'
+                    }
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Tambah Outlet</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={loadBranchMonitorData}
+                  disabled={isLoadingMonitor}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                    isLight
+                      ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      : 'bg-slate-900/90 border-slate-800/80 text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMonitor ? 'animate-spin' : ''}`} />
+                  <span>Refresh Monitor</span>
+                </button>
+              </div>
             </div>
 
             {/* 4 Network KPI Cards */}
@@ -3244,6 +3434,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     <th className="py-3 px-3 text-right">Live Omzet (IDR)</th>
                     <th className="py-3 px-3 text-right">Stock Valuation</th>
                     <th className="py-3 px-3 text-center">Incoming</th>
+                    {isSuperAdmin && <th className="py-3 px-3 text-right">Profil</th>}
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
@@ -3258,6 +3449,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         </div>
                         <div className={`text-[11px] mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                           {branch.district}, {branch.city}
+                          {branch.targetDailyOmzetIDR ? ` · Target ${formatIDR(branch.targetDailyOmzetIDR)}/hari` : ''}
                         </div>
                       </td>
                       <td className="py-3 px-3">
@@ -3300,6 +3492,22 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         <span className="mx-1 text-slate-400">·</span>
                         <span className="text-sky-600 dark:text-sky-400 font-bold">{branch.inTransitTransferCount} Trf</span>
                       </td>
+                      {isSuperAdmin && (
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => openEditOutletModal(branch)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                              isLight
+                                ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                                : 'bg-[#090A0F] border-slate-700 text-slate-200 hover:bg-slate-800'
+                            }`}
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            <span>Edit Profil Outlet</span>
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {(!branchMonitorData || branchMonitorData.branches.length === 0) && (
@@ -4200,6 +4408,214 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>,
+              document.body
+            )}
+
+          {/* Modal 3: Create / Edit Outlet Profile (Super Admin) */}
+          {isOutletModalOpen &&
+            createPortal(
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+                <div
+                  className={`w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${
+                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800 text-slate-100'
+                  }`}
+                >
+                  <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                        <span>
+                          {editingOutletProfile
+                            ? `Edit Profil Outlet — ${editingOutletProfile.storeName}`
+                            : 'Tambah Cabang / Outlet Baru'}
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Kelola identitas cabang, alamat struk POS, tipe hub, target omzet harian, serta status aktif operasional.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsOutletModalOpen(false)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveOutletProfile} className="p-5 space-y-4 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className={labelClass}>Kode Cabang *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="JKT-KMG-01"
+                          value={outletFormBranchCode}
+                          onChange={(e) => setOutletFormBranchCode(e.target.value.toUpperCase())}
+                          className={`${inputClass} border font-mono uppercase`}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className={labelClass}>Nama Outlet *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="GroceMart Kemang Raya"
+                          value={outletFormName}
+                          onChange={(e) => setOutletFormName(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className={labelClass}>Tipe Outlet</label>
+                        <select
+                          value={outletFormType}
+                          onChange={(e) => setOutletFormType(e.target.value as OutletType)}
+                          className={`${inputClass} border`}
+                        >
+                          <option value="FLAGSHIP_STORE">Flagship Store</option>
+                          <option value="DARK_STORE">Dark Store</option>
+                          <option value="CENTRAL_HUB">Central Hub / CDC</option>
+                          <option value="EXPRESS_MART">Express Mart</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Kota *</label>
+                        <input
+                          type="text"
+                          required
+                          value={outletFormCity}
+                          onChange={(e) => setOutletFormCity(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Kecamatan / Area</label>
+                        <input
+                          type="text"
+                          value={outletFormDistrict}
+                          onChange={(e) => setOutletFormDistrict(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Nomor Telepon Outlet</label>
+                        <input
+                          type="text"
+                          value={outletFormPhone}
+                          onChange={(e) => setOutletFormPhone(e.target.value)}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Target Omzet Harian (IDR)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="500000"
+                          value={outletFormTargetOmzetIDR}
+                          onChange={(e) => setOutletFormTargetOmzetIDR(Math.max(0, Number(e.target.value) || 0))}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Alamat Lengkap (Struk POS &amp; Surat Jalan)</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Jl. Kemang Raya No. 45, Jakarta Selatan"
+                        value={outletFormAddress}
+                        onChange={(e) => setOutletFormAddress(e.target.value)}
+                        className={`${inputClass} border`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Catatan Header / Footer Struk POS</label>
+                      <input
+                        type="text"
+                        value={outletFormReceiptNote}
+                        onChange={(e) => setOutletFormReceiptNote(e.target.value)}
+                        className={`${inputClass} border`}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className={labelClass}>Jam Buka</label>
+                        <input
+                          type="text"
+                          value={outletFormOpenTime}
+                          onChange={(e) => setOutletFormOpenTime(e.target.value)}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Jam Tutup</label>
+                        <input
+                          type="text"
+                          value={outletFormCloseTime}
+                          onChange={(e) => setOutletFormCloseTime(e.target.value)}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Zona Waktu</label>
+                        <select
+                          value={outletFormTimezone}
+                          onChange={(e) => setOutletFormTimezone(e.target.value as 'WIB' | 'WITA' | 'WIT')}
+                          className={`${inputClass} border`}
+                        >
+                          <option value="WIB">WIB</option>
+                          <option value="WITA">WITA</option>
+                          <option value="WIT">WIT</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs font-semibold pt-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={outletFormIsActive}
+                        onChange={(e) => setOutletFormIsActive(e.target.checked)}
+                        className="w-4 h-4 rounded text-[#0F4C3A]"
+                      />
+                      <span>Outlet Aktif Beroperasi (Diblokir otomatis jika masih ada Shift POS OPEN)</span>
+                    </label>
+
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setIsOutletModalOpen(false)}
+                        className={`px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                            : 'bg-[#090A0F] border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingOutletProfile}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>{isSavingOutletProfile ? 'Menyimpan...' : 'Simpan Profil Outlet'}</span>
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>,
               document.body
@@ -5619,15 +6035,23 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       Target Outlet:
                     </span>
                     <select
-                      value={opnameStoreId}
-                      onChange={(e) => setOpnameStoreId(e.target.value)}
-                      className={`px-3 py-1.5 text-xs rounded-xl font-bold ${inputClass}`}
+                      disabled={isBranchScoped}
+                      value={isBranchScoped ? lockedBranchId : opnameStoreId}
+                      onChange={(e) => {
+                        if (isBranchScoped) return;
+                        setOpnameStoreId(e.target.value);
+                      }}
+                      className={`px-3 py-1.5 text-xs rounded-xl font-bold ${inputClass} ${
+                        isBranchScoped ? 'opacity-75 cursor-not-allowed' : ''
+                      }`}
                     >
-                      {storeOutlets.map((st) => (
-                        <option key={st.storeId} value={st.storeId}>
-                          {st.storeName} ({st.city})
-                        </option>
-                      ))}
+                      {storeOutlets
+                        .filter((st) => !isBranchScoped || st.storeId === lockedBranchId)
+                        .map((st) => (
+                          <option key={st.storeId} value={st.storeId}>
+                            {st.storeName} ({st.city})
+                          </option>
+                        ))}
                     </select>
                   </div>
                 )}
@@ -5661,15 +6085,23 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       Select Store:
                     </span>
                     <select
-                      value={opnameStoreId}
-                      onChange={(e) => setOpnameStoreId(e.target.value)}
-                      className={`px-3 py-1.5 text-xs rounded-xl font-bold ${inputClass}`}
+                      disabled={isBranchScoped}
+                      value={isBranchScoped ? lockedBranchId : opnameStoreId}
+                      onChange={(e) => {
+                        if (isBranchScoped) return;
+                        setOpnameStoreId(e.target.value);
+                      }}
+                      className={`px-3 py-1.5 text-xs rounded-xl font-bold ${inputClass} ${
+                        isBranchScoped ? 'opacity-75 cursor-not-allowed' : ''
+                      }`}
                     >
-                      {storeOutlets.map((st) => (
-                        <option key={st.storeId} value={st.storeId}>
-                          {st.storeName} ({st.city})
-                        </option>
-                      ))}
+                      {storeOutlets
+                        .filter((st) => !isBranchScoped || st.storeId === lockedBranchId)
+                        .map((st) => (
+                          <option key={st.storeId} value={st.storeId}>
+                            {st.storeName} ({st.city})
+                          </option>
+                        ))}
                     </select>
                   </div>
                 </div>
@@ -6085,18 +6517,24 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <div className="flex flex-wrap items-center gap-3">
                     <label className={labelClass}>Assign Target Receiving Outlet:</label>
                     <select
-                      value={importTargetStoreId}
+                      disabled={isBranchScoped}
+                      value={isBranchScoped ? lockedBranchId : importTargetStoreId}
                       onChange={(e) => {
+                        if (isBranchScoped) return;
                         setImportTargetStoreId(e.target.value);
                         if (csvText) handleParseCsv(csvText);
                       }}
-                      className={`px-3 py-1.5 text-xs rounded-xl font-bold ${inputClass}`}
+                      className={`px-3 py-1.5 text-xs rounded-xl font-bold ${inputClass} ${
+                        isBranchScoped ? 'opacity-75 cursor-not-allowed' : ''
+                      }`}
                     >
-                      {storeOutlets.map((st) => (
-                        <option key={st.storeId} value={st.storeId}>
-                          {st.storeName} ({st.city})
-                        </option>
-                      ))}
+                      {storeOutlets
+                        .filter((st) => !isBranchScoped || st.storeId === lockedBranchId)
+                        .map((st) => (
+                          <option key={st.storeId} value={st.storeId}>
+                            {st.storeName} ({st.city})
+                          </option>
+                        ))}
                     </select>
                   </div>
 

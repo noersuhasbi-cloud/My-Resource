@@ -1393,6 +1393,8 @@ export const PosModule: React.FC<PosModuleProps> = ({
     return cat.replace('_', ' ').toUpperCase();
   };
   const getOutletAddress = (storeId?: string, storeName?: string) => {
+    const matched = storeOutlets.find((s) => s.storeId === storeId || s.storeName === storeName);
+    if (matched?.address) return matched.address;
     const key = `${storeId || ''} ${storeName || ''}`.toLowerCase();
     if (key.includes('pik')) return 'Pantai Indah Kapuk Blvd, Jakarta Utara 14470';
     if (key.includes('menteng')) return 'Jl. HOS. Cokroaminoto No. 78, Jakarta Pusat 10310';
@@ -2714,6 +2716,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   {completedReceipt.storeName}
                   <br />
                   {getOutletAddress(completedReceipt.storeId, completedReceipt.storeName)}
+                  {storeOutlets.find((s) => s.storeId === completedReceipt.storeId)?.receiptHeaderNote ? (
+                    <>
+                      <br />
+                      <span className="italic text-[9px] text-zinc-400">
+                        {storeOutlets.find((s) => s.storeId === completedReceipt.storeId)?.receiptHeaderNote}
+                      </span>
+                    </>
+                  ) : null}
                 </p>
               </div>
 

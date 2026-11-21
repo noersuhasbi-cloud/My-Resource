@@ -167,10 +167,17 @@ export interface StoreOperationalStatus {
   updatedAt: string;
 }
 
+export type OutletType = 'FLAGSHIP_STORE' | 'DARK_STORE' | 'CENTRAL_HUB' | 'EXPRESS_MART';
+
 export interface StoreOutletSchedule {
+  id?: string;
   storeId: string;
+  branchCode?: string;
   storeName: string;
-  city: 'Jakarta' | 'Bandung' | 'Surabaya' | 'Bali' | 'Yogyakarta' | 'Medan';
+  name?: string;
+  outletType?: OutletType;
+  address?: string;
+  city: 'Jakarta' | 'Bandung' | 'Surabaya' | 'Bali' | 'Yogyakarta' | 'Medan' | string;
   district: string;
   timezone: 'WIB' | 'WITA' | 'WIT';
   openTime: string; // e.g. "07:00"
@@ -183,6 +190,10 @@ export interface StoreOutletSchedule {
   allowCatalogBrowsingWhenClosed: boolean;
   activeWarehouses: string[];
   contactPhone: string;
+  phone?: string;
+  receiptHeaderNote?: string;
+  targetDailyOmzetIDR?: number;
+  isActive?: boolean;
   updatedAt: string;
 }
 
@@ -1191,8 +1202,9 @@ export interface StaffShiftSession {
   defaultLandingTab?: string;
   modulePermissions?: ModulePermissionsMap;
   storeId: string; // Assigned physical store/hub or 'ALL' for multi-branch roles
+  branchId?: string; // Canonical branchId mirror for branch-scoped checks
   assignedBranchId?: string; // Explicit branch/hub ID mirror for branch-scoped locks
-  isBranchScoped?: boolean; // True for cashier, warehouse, store_manager
+  isBranchScoped?: boolean; // True when bound to a specific branch/outlet
   storeName: string;
   activeShiftId: string; // e.g. SHIFT-JKT-MORNING-01
   shiftName: 'Morning Shift' | 'Afternoon Shift' | 'Night Shift';
@@ -2356,6 +2368,7 @@ export interface ErpConfigurationSettings {
   platinumTierThresholdIDR: number;
   accountingLockBeforeDate: string; // Optional YYYY-MM-DD preventing backdated GL mutations
   minMarginFloorPct?: number; // Dynamic Margin Floor above WAC unitCost (default 2.0%)
+  maxAllowedOutlets?: number; // Maximum active outlets allowed under SaaS quota (default 10)
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -2869,8 +2882,17 @@ export interface BranchMonitorHubSummary {
   storeName: string;
   city: string;
   district: string;
-  hubType: 'Retail Flagship' | 'Dark Store' | 'Central CDC';
-  status: 'Open' | 'Active' | 'Emergency Closed' | 'Holiday Mode';
+  hubType: 'Retail Flagship' | 'Dark Store' | 'Central CDC' | 'Express Mart';
+  outletType?: OutletType;
+  address?: string;
+  phone?: string;
+  receiptHeaderNote?: string;
+  targetDailyOmzetIDR?: number;
+  isActive?: boolean;
+  openTime?: string;
+  closeTime?: string;
+  timezone?: 'WIB' | 'WITA' | 'WIT';
+  status: 'Open' | 'Active' | 'Emergency Closed' | 'Holiday Mode' | 'Inactive';
   isEmergencyClosed: boolean;
   orderCount: number;
   liveOmzetIDR: number;
@@ -2915,6 +2937,11 @@ export interface BranchMonitorInTransitTransfer {
 
 export interface BranchMonitorResponse {
   generatedAt: string;
+  quota?: {
+    activeOutlets: number;
+    maxAllowedOutlets: number;
+    remainingSlots: number;
+  };
   totals: {
     totalBranches: number;
     openBranches: number;
