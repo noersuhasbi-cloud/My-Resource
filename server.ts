@@ -5916,6 +5916,11 @@ function evaluateSystemUserModulePermission(
     urlPath.startsWith('/admin/scalability/climate-thresholds')
   ) {
     if (isRead) {
+      if (urlPath === '/admin/markdown-rules' || urlPath.startsWith('/admin/markdown-rules/')) {
+        return mp.inventory.view === true || mp.fefoBatches.view === true || mp.qualityControl.view === true
+          ? { allowed: true }
+          : deny('fefoBatches', 'view');
+      }
       return mp.inventory.view === true ? { allowed: true } : deny('inventory', 'view');
     }
     if (urlPath === '/admin/inventory/adjust') {
@@ -8524,12 +8529,26 @@ async function startServer() {
       return next();
     }
 
+    const hasExplicitOperatorAuth = Boolean(
+      req.headers['authorization'] ||
+        req.headers['x-operator-id'] ||
+        req.headers['x-user-id'] ||
+        req.headers['x-operator-role'] ||
+        req.headers['x-role-code']
+    );
+    const isPublicB2bPortalCall =
+      urlPath.startsWith('/b2b/') &&
+      !urlPath.endsWith('/clear') &&
+      !urlPath.endsWith('/bounce') &&
+      !hasExplicitOperatorAuth;
+
     // Configurable 14-Division Granular Module Permissions Enforcement (SystemUserAccount)
     if (
-      urlPath.startsWith('/admin/') ||
-      urlPath.startsWith('/pos/') ||
-      urlPath.startsWith('/b2b/') ||
-      urlPath === '/inventory/fefo-allocate'
+      !isPublicB2bPortalCall &&
+      (urlPath.startsWith('/admin/') ||
+        urlPath.startsWith('/pos/') ||
+        urlPath.startsWith('/b2b/') ||
+        urlPath === '/inventory/fefo-allocate')
     ) {
       const authHeaderRaw = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
       if (authHeaderRaw.toLowerCase().startsWith('bearer ')) {
@@ -8644,7 +8663,10 @@ async function startServer() {
     }
 
     // Check scoped rules for /api/admin/*, /api/pos/*, and /api/b2b/giro* (Legacy 7-Role compatibility)
-    if (urlPath.startsWith('/admin/') || urlPath.startsWith('/pos/') || urlPath.startsWith('/b2b/giro')) {
+    if (
+      !isPublicB2bPortalCall &&
+      (urlPath.startsWith('/admin/') || urlPath.startsWith('/pos/') || urlPath.startsWith('/b2b/giro'))
+    ) {
       // Trial expiration lock check for legacy sessions (Super Admin exempt for recovery)
       if (
         effectiveRole !== 'super_admin' &&
@@ -10295,7 +10317,9 @@ async function startServer() {
 
     inventoryList.forEach((item) => {
       totalStockCount += item.currentStock;
-      totalValuationWAC += Math.round(item.currentStock * item.unitCost);
+      if (!item.isConsignment) {
+        totalValuationWAC += Math.round(item.currentStock * item.unitCost);
+      }
       if (item.currentStock <= item.minimumThreshold) {
         lowStockCount++;
       }
@@ -10724,6 +10748,12 @@ async function startServer() {
     const totalShrinkageCost = roundIDR(qty * unitCost);
     const tier = storeInventoryTiers.find((t) => t.sku === sku && t.storeId === storeId);
 
+    if (item.isConsignment || tier?.isConsignment) {
+      return res.status(400).json({
+        error: `Consignment (Titip Jual UMKM) SKU ${sku} is vendor-owned. Record returns via Consignment RTV instead of Owned Inventory Waste Write-off.`,
+      });
+    }
+
     const targetBatch = batchId
       ? inventoryBatches.find((b) => b.batchId === batchId)
       : inventoryBatches.find(
@@ -10754,6 +10784,12 @@ async function startServer() {
       excessQty = Math.max(0, Number((qty - immediateQty).toFixed(2)));
     }
 
+    if (tier && immediateQty > 0 && immediateQty > tier.physicalStock) {
+      return res.status(409).json({
+        error: `Insufficient physical stock for ${sku} at ${storeName}: requested ${immediateQty}, available ${tier.physicalStock}.`,
+      });
+    }
+
     if (tier && immediateQty > 0 && tier.physicalStock - immediateQty < (tier.reservedStock || 0)) {
       return res.status(409).json({
         error: `Cannot write off ${immediateQty} units of ${sku}: ${tier.reservedStock} units currently reserved for active orders.`,
@@ -10767,7 +10803,7 @@ async function startServer() {
         tier.physicalStock = Math.max(0, Number((tier.physicalStock - immediateQty).toFixed(2)));
         tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
         tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
-        tier.totalValuation = Math.round(tier.physicalStock * tier.unitCost);
+        tier.totalValuation = item.isConsignment || tier.isConsignment ? 0 : Math.round(tier.physicalStock * tier.unitCost);
         tier.updatedAt = new Date().toISOString();
       }
       if (targetBatch) {
@@ -15066,9 +15102,17 @@ async function startServer() {
       },
     });
 
+    const legacyTtlMinutes = Math.max(5, trialGovernanceConfig.demoSessionTimeoutMinutes || 120);
+    const legacyToken = `erp-session-jwt-${nowMs}-${Math.random().toString(36).slice(2, 6)}-${target.userId}`;
+    activeAuthTokens.set(legacyToken, {
+      userId: target.userId,
+      issuedAtMs: nowMs,
+      expiresAtMs: nowMs + legacyTtlMinutes * 60 * 1000,
+    });
+
     return res.json({
       success: true,
-      token: `erp-session-jwt-${nowMs}-${target.userId}`,
+      token: legacyToken,
       trialGovernance: governance,
       session: currentActiveStaffSession,
       availableProfiles: AVAILABLE_STAFF_USERS,
@@ -15080,6 +15124,21 @@ async function startServer() {
   app.post('/api/admin/auth/login', handleEnterpriseAuthLogin);
 
   app.post('/api/admin/auth/logout', (req: Request, res: Response) => {
+    const authHeaderRaw = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
+    const bearerTok = authHeaderRaw.toLowerCase().startsWith('bearer ')
+      ? authHeaderRaw.slice(7).trim()
+      : typeof req.body?.token === 'string'
+      ? req.body.token.trim()
+      : '';
+    if (bearerTok) {
+      activeAuthTokens.delete(bearerTok);
+      revokedAuthTokens.add(bearerTok);
+      if (revokedAuthTokens.size > 500) {
+        const oldest = revokedAuthTokens.values().next().value;
+        if (oldest) revokedAuthTokens.delete(oldest);
+      }
+    }
+
     const callerId = getEffectiveOperatorId(req);
     const callerProfile = AVAILABLE_STAFF_USERS.find((u) => u.userId === callerId) || currentActiveStaffSession;
     securityAuditTrail.unshift({
@@ -15093,7 +15152,7 @@ async function startServer() {
       storeId: callerProfile.storeId,
       shiftId: callerProfile.activeShiftId,
       status: 'AUTHORIZED_EXECUTED',
-      metadata: { reason: 'User initiated ERP session lock / sign out' },
+      metadata: { reason: 'User initiated ERP session lock / sign out', tokenRevoked: Boolean(bearerTok) },
     });
 
     res.json({ success: true, message: 'ERP session locked and logged out.' });
@@ -16013,6 +16072,13 @@ async function startServer() {
       if (splitSum !== resolvedTotal) {
         return res.status(400).json({
           error: `Split Payment total mismatch: sum of legs (Rp ${splitSum.toLocaleString('id-ID')}) must equal exact invoice total (Rp ${resolvedTotal.toLocaleString('id-ID')}).`,
+        });
+      }
+    } else if (paymentMethod === 'cash' && cashTendered !== undefined && cashTendered !== null) {
+      const tenderedIDR = roundIDR(Number(cashTendered) || 0);
+      if (tenderedIDR < resolvedTotal) {
+        return res.status(400).json({
+          error: `Insufficient cash tendered: received Rp ${tenderedIDR.toLocaleString('id-ID')}, invoice total is Rp ${resolvedTotal.toLocaleString('id-ID')}.`,
         });
       }
     }
@@ -29887,17 +29953,22 @@ async function startServer() {
         });
       }
 
+      const sourceInv = inventoryList.find((i) => i.sku === sourceSku);
+      const sourceTier = storeInventoryTiers.find(
+        (t) => t.sku === sourceSku && t.storeId === outlet.storeId
+      );
+      if (sourceInv?.isConsignment || sourceTier?.isConsignment) {
+        return res.status(400).json({
+          error: `Consignment (Titip Jual UMKM) SKU ${sourceSku} is vendor-owned until sold and cannot be repacked into owned inventory.`,
+        });
+      }
+
       const atpCheck = getSellableNonExpiredAtpStock(sourceSku, outlet.storeId);
       if (sourceQty > atpCheck.effectiveAtp) {
         return res.status(400).json({
           error: `Insufficient non-expired ATP stock for ${sourceSku} at ${outlet.storeName}: requested ${sourceQty}, available ${atpCheck.effectiveAtp}.`,
         });
       }
-
-      const sourceInv = inventoryList.find((i) => i.sku === sourceSku);
-      const sourceTier = storeInventoryTiers.find(
-        (t) => t.sku === sourceSku && t.storeId === outlet.storeId
-      );
       const fallbackCost = sourceTier?.unitCost || sourceInv?.wacUnitCost || sourceInv?.unitCost || 15000;
       const deduction = deductBatchesByStrategy(sourceSku, sourceQty, outlet.storeId, fallbackCost, atpCheck.hasBatchTracking);
       if (deduction.insufficientStock) {
@@ -30184,6 +30255,13 @@ async function startServer() {
       const perBundle = Number(comp.qtyPerBundle);
       if (!compSku || !Number.isFinite(perBundle) || perBundle <= 0) {
         return res.status(400).json({ error: `Invalid bundle component (${compSku || 'unknown'}).` });
+      }
+      const compInv = inventoryList.find((i) => i.sku === compSku);
+      const compTier = storeInventoryTiers.find((t) => t.sku === compSku && t.storeId === outlet.storeId);
+      if (compInv?.isConsignment || compTier?.isConsignment) {
+        return res.status(400).json({
+          error: `Consignment (Titip Jual UMKM) component ${compSku} is vendor-owned until sold and cannot be assembled into owned bundles.`,
+        });
       }
       const reqTotal = Number((perBundle * bundleQty).toFixed(2));
       const atpCheck = getSellableNonExpiredAtpStock(compSku, outlet.storeId);

@@ -431,7 +431,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         effectiveRole === 'coo' ||
         effectiveRole === 'super_admin';
     const allowOmzetReads = hasMod('dashboard') || hasMod('analytics') || allowAccountingReads;
-    const allowAuditReads = hasMod('fraudRadar') || hasMod('settings');
+    const allowAuditReads = allowAccountingReads;
     const allowInventoryReads = hasMod('inventory');
     const allowFefoReads = hasMod('fefoBatches') || hasMod('inventory');
     const allowB2bOrderReads =

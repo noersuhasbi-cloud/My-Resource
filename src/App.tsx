@@ -182,6 +182,30 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  useEffect(() => {
+    let lastRevokeHandledAt = 0;
+    const onSessionRevoked = (ev: Event) => {
+      const now = Date.now();
+      if (now - lastRevokeHandledAt < 1500) return;
+      lastRevokeHandledAt = now;
+      const customEv = ev as CustomEvent<{ message?: string }>;
+      apiClient.setOperatorContext(null);
+      setAdminSession(null);
+      try {
+        localStorage.removeItem('grocemart_admin_session');
+        localStorage.removeItem('grocemart_auth_token');
+      } catch {}
+      window.location.hash = '#admin-login';
+      setPortalView('admin_login');
+      showToast(
+        'Session Revoked / Expired',
+        customEv.detail?.message || 'Your session ended due to single-session policy or timeout. Please log in again.'
+      );
+    };
+    window.addEventListener('grocemart-session-revoked', onSessionRevoked);
+    return () => window.removeEventListener('grocemart-session-revoked', onSessionRevoked);
+  }, [showToast]);
+
   // 1. Cart state with localStorage
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {

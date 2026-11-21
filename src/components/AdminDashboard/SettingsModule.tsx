@@ -72,6 +72,7 @@ import {
   ACCOUNTING_SUB_FLAGS,
   getDefaultModulePermissions,
   isOwnerRoleCode,
+  hasModuleAccess,
 } from '../../utils/rbac';
 import {
   Settings,
@@ -449,6 +450,23 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const fetchAllSettings = async () => {
     setIsLoading(true);
     try {
+      const sess = activeStaffSession;
+      const canAccounting = !sess || hasModuleAccess(sess, 'accounting', 'view');
+      const canAccessAP =
+        !sess ||
+        isOwnerRoleCode(sess.roleCode) ||
+        (canAccounting && (!sess.modulePermissions || sess.modulePermissions.accounting?.canAccessAP === true));
+      const canInventory = !sess || hasModuleAccess(sess, 'inventory', 'view');
+      const canTransfers = !sess || hasModuleAccess(sess, 'warehouseTransfers', 'view');
+      const canApprovals = !sess || hasModuleAccess(sess, 'approvalMatrix', 'view');
+      const canCrm = !sess || hasModuleAccess(sess, 'crm', 'view');
+      const canProcurement = !sess || hasModuleAccess(sess, 'procurement', 'view') || canAccessAP;
+      const canVendorBills = canAccessAP || !sess || hasModuleAccess(sess, 'procurement', 'approve');
+      const canGoodsReceipts = canProcurement || canInventory;
+      const canMonitor =
+        !sess || hasModuleAccess(sess, 'settings', 'view') || hasModuleAccess(sess, 'dashboard', 'view');
+      const canSysUsers = !sess || hasModuleAccess(sess, 'settings', 'view');
+
       const [
         coaRes,
         posRes,
@@ -467,22 +485,22 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         monitorRes,
         sysUsersRes,
       ] = await Promise.all([
-        apiClient.getCoaMapping().catch(() => null),
+        canAccounting ? apiClient.getCoaMapping().catch(() => null) : Promise.resolve(null),
         apiClient.getPosConfig().catch(() => null),
-        apiClient.getStockOpnameSessions().catch(() => []),
-        apiClient.getStockTransfers().catch(() => []),
-        apiClient.getApprovalRules().catch(() => []),
-        apiClient.getApprovalQueue().catch(() => []),
-        apiClient.getPromotions().catch(() => []),
+        canInventory ? apiClient.getStockOpnameSessions().catch(() => []) : Promise.resolve([]),
+        canTransfers ? apiClient.getStockTransfers().catch(() => []) : Promise.resolve([]),
+        canApprovals ? apiClient.getApprovalRules().catch(() => []) : Promise.resolve([]),
+        canApprovals ? apiClient.getApprovalQueue().catch(() => []) : Promise.resolve([]),
+        canCrm ? apiClient.getPromotions().catch(() => []) : Promise.resolve([]),
         apiClient.getEnterpriseSettings().catch(() => INITIAL_ENTERPRISE_SETTINGS),
-        apiClient.getLandedCosts().catch(() => INITIAL_LANDED_COSTS),
-        apiClient.getWarehouseBins().catch(() => INITIAL_WAREHOUSE_BINS),
-        apiClient.getWarehouseRoutes().catch(() => INITIAL_WAREHOUSE_ROUTES),
-        apiClient.getVendorBills().catch(() => []),
-        apiClient.getPurchaseOrders().catch(() => []),
-        apiClient.getGoodsReceipts().catch(() => []),
-        canViewBranchMonitor ? apiClient.getBranchMonitor().catch(() => null) : Promise.resolve(null),
-        canViewBranchMonitor ? apiClient.getSystemUsers().catch(() => null) : Promise.resolve(null),
+        canProcurement ? apiClient.getLandedCosts().catch(() => INITIAL_LANDED_COSTS) : Promise.resolve([]),
+        canInventory ? apiClient.getWarehouseBins().catch(() => INITIAL_WAREHOUSE_BINS) : Promise.resolve([]),
+        canInventory ? apiClient.getWarehouseRoutes().catch(() => INITIAL_WAREHOUSE_ROUTES) : Promise.resolve([]),
+        canVendorBills ? apiClient.getVendorBills().catch(() => []) : Promise.resolve([]),
+        canProcurement ? apiClient.getPurchaseOrders().catch(() => []) : Promise.resolve([]),
+        canGoodsReceipts ? apiClient.getGoodsReceipts().catch(() => []) : Promise.resolve([]),
+        canViewBranchMonitor && canMonitor ? apiClient.getBranchMonitor().catch(() => null) : Promise.resolve(null),
+        canViewBranchMonitor && canSysUsers ? apiClient.getSystemUsers().catch(() => null) : Promise.resolve(null),
       ]);
 
       if (coaRes) setCoaConfig(coaRes);
@@ -564,7 +582,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   };
 
   useEffect(() => {
-    if (canViewBranchMonitor) {
+    const canSysUsers = !activeStaffSession || hasModuleAccess(activeStaffSession, 'settings', 'view');
+    if (canViewBranchMonitor && canSysUsers) {
       apiClient
         .getSystemUsers()
         .then((res) => {
@@ -574,7 +593,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         })
         .catch(() => {});
     }
-  }, [canViewBranchMonitor]);
+  }, [canViewBranchMonitor, activeStaffSession]);
 
   const openCreateSystemUserForm = () => {
     const defaultRole: DivisionRoleCode = 'POS_CASHIER';

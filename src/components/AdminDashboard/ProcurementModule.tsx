@@ -1305,7 +1305,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     const srm = getSrmRecord(sup.supplierName);
                     return (
                       <div
-                        key={sup.supplierId}
+                        key={sup.suggestedPoId || `${sup.supplierId}-${sup.supplierName}`}
                         className={`p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
                           isLight ? 'bg-white/80 border-gray-200' : 'bg-[#12141C] border-slate-800/80'
                         }`}

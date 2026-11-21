@@ -280,6 +280,27 @@ async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<R
         continue;
       }
 
+      if (res.status === 401 && typeof window !== 'undefined') {
+        const reqUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        if (!reqUrl.includes('/auth/login')) {
+          try {
+            const errBody = await res.clone().json().catch(() => null);
+            if (errBody?.code === 'SESSION_REVOKED_OR_EXPIRED') {
+              window.dispatchEvent(
+                new CustomEvent('grocemart-session-revoked', {
+                  detail: {
+                    code: errBody.code,
+                    message:
+                      errBody.error ||
+                      'Your session was revoked or expired. Please sign in again.',
+                  },
+                })
+              );
+            }
+          } catch {}
+        }
+      }
+
       return res;
     } catch (err) {
       lastError = err;
