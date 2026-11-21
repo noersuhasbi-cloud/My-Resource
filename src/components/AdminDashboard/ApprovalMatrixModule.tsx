@@ -8,7 +8,7 @@ import type {
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { apiClient } from '../../services/apiClient';
-import { normalizeEnterpriseRole } from '../../utils/rbac';
+import { hasModuleAccess, normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   FileCheck2,
   CheckCircle2,
@@ -48,7 +48,9 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
 }) => {
   const isLight = theme === 'light';
   const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
-  const canDecideAndEditRules = ['store_manager', 'coo', 'super_admin'].includes(canonicalRole);
+  const canDecideAndEditRules =
+    hasModuleAccess(activeStaffSession, 'approvalMatrix', 'approve') ||
+    ['store_manager', 'coo', 'super_admin'].includes(canonicalRole);
 
   // Sub-tabs: 'queue' | 'rules'
   const [subTab, setSubTab] = useState<'queue' | 'rules'>('queue');

@@ -170,10 +170,20 @@ import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groc
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-let activeOperatorContext: { userRole: string; storeId: string; userId: string; authToken?: string } | null = null;
+let activeOperatorContext: {
+  userRole: string;
+  roleCode?: string;
+  storeId: string;
+  userId: string;
+  authToken?: string;
+} | null = null;
 
 export function setApiOperatorContext(
-  session: (Pick<StaffShiftSession, 'userRole' | 'storeId' | 'userId'> & { authToken?: string }) | null
+  session: (Pick<StaffShiftSession, 'userRole' | 'storeId' | 'userId'> & {
+    roleCode?: string;
+    branchId?: string;
+    authToken?: string;
+  }) | null
 ) {
   if (!session) {
     activeOperatorContext = null;
@@ -188,9 +198,10 @@ export function setApiOperatorContext(
     session.authToken ||
     activeOperatorContext?.authToken ||
     (typeof window !== 'undefined' ? (() => { try { return localStorage.getItem('grocemart_auth_token') || undefined; } catch { return undefined; } })() : undefined);
-  const resolvedStoreId = (session as any).branchId || session.storeId;
+  const resolvedStoreId = session.branchId || session.storeId;
   activeOperatorContext = {
     userRole: session.userRole,
+    roleCode: session.roleCode,
     storeId: resolvedStoreId,
     userId: session.userId,
     authToken: existingToken,
@@ -202,7 +213,13 @@ export function setApiOperatorContext(
   }
 }
 
-export function getApiOperatorContext(): { userRole: string; storeId: string; userId: string; authToken?: string } | null {
+export function getApiOperatorContext(): {
+  userRole: string;
+  roleCode?: string;
+  storeId: string;
+  userId: string;
+  authToken?: string;
+} | null {
   if (activeOperatorContext) return activeOperatorContext;
   if (typeof window !== 'undefined') {
     try {
@@ -213,7 +230,8 @@ export function getApiOperatorContext(): { userRole: string; storeId: string; us
         if (parsed?.userRole) {
           activeOperatorContext = {
             userRole: parsed.userRole,
-            storeId: parsed.storeId || 'ALL',
+            roleCode: parsed.roleCode,
+            storeId: parsed.branchId || parsed.storeId || 'ALL',
             userId: parsed.userId || '',
             authToken: savedToken,
           };
@@ -232,9 +250,15 @@ async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<R
   const headers = new Headers(init?.headers || {});
   const opCtx = getApiOperatorContext();
   if (opCtx) {
+    const branchScope = opCtx.storeId || 'ALL';
     if (!headers.has('x-operator-role')) headers.set('x-operator-role', opCtx.userRole);
-    if (!headers.has('x-operator-branch')) headers.set('x-operator-branch', opCtx.storeId || 'ALL');
-    if (opCtx.userId && !headers.has('x-operator-id')) headers.set('x-operator-id', opCtx.userId);
+    if (!headers.has('x-operator-branch')) headers.set('x-operator-branch', branchScope);
+    if (!headers.has('x-branch-id')) headers.set('x-branch-id', branchScope);
+    if (opCtx.roleCode && !headers.has('x-role-code')) headers.set('x-role-code', opCtx.roleCode);
+    if (opCtx.userId) {
+      if (!headers.has('x-operator-id')) headers.set('x-operator-id', opCtx.userId);
+      if (!headers.has('x-user-id')) headers.set('x-user-id', opCtx.userId);
+    }
     if (opCtx.authToken && !headers.has('authorization')) {
       headers.set('authorization', `Bearer ${opCtx.authToken}`);
     }
@@ -535,8 +559,36 @@ export const apiClient = {
   async approvePurchaseRequest(id: string): Promise<{ success: boolean; purchaseRequest: PurchaseRequest; purchaseOrder: PurchaseOrder }> {
     const res = await fetchApi(`/api/admin/procurement/requests/${encodeURIComponent(id)}/approve`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
     });
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Failed to approve Purchase Request');
+    }
+    return data;
+  },
+
+  async approvePurchaseOrder(
+    id: string,
+    payload?: { comments?: string; reason?: string }
+  ): Promise<{
+    success: boolean;
+    alreadyApproved?: boolean;
+    purchaseOrder: PurchaseOrder;
+    syncedApprovalIds?: string[];
+    message?: string;
+  }> {
+    const res = await fetchApi(`/api/admin/procurement/purchase-orders/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Failed to approve Purchase Order');
+    }
+    return data;
   },
 
   async getPurchaseOrders(): Promise<PurchaseOrder[]> {

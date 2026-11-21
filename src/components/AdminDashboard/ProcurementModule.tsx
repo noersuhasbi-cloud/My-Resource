@@ -19,7 +19,7 @@ import type {
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
-import { canSessionViewValuation, normalizeEnterpriseRole } from '../../utils/rbac';
+import { canSessionViewValuation, hasModuleAccess, normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   Truck,
   Plus,
@@ -88,10 +88,14 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const isLight = theme === 'light';
   const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
   const canManagePrPo = ['purchasing', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
+  const canApprovePrPo =
+    hasModuleAccess(activeStaffSession, 'procurement', 'approve') ||
+    ['store_manager', 'coo', 'super_admin'].includes(canonicalRole);
   const canReceiveGR = ['warehouse', 'purchasing', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
   const canCreateVendorBill = ['purchasing', 'admin', 'coo', 'super_admin'].includes(canonicalRole);
   const isWarehouseRole = canonicalRole === 'warehouse';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
+  const [approvingPoId, setApprovingPoId] = useState<string | null>(null);
 
   // Modal States
   const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
@@ -626,7 +630,24 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         `Purchase Order ${res.purchaseOrder.id} generated with automated supplier routing.`
       );
     } catch (err) {
-      onShowToast('Approval Failed', String(err));
+      onShowToast('Approval Failed', err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleApprovePO = async (poId: string) => {
+    if (approvingPoId) return;
+    setApprovingPoId(poId);
+    try {
+      const res = await apiClient.approvePurchaseOrder(poId);
+      onRefreshData();
+      onShowToast(
+        'Purchase Order Approved',
+        res.message || `PO #${poId} approved and released for Goods Receipt.`
+      );
+    } catch (err) {
+      onShowToast('PO Approval Failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      setApprovingPoId(null);
     }
   };
 
@@ -1772,7 +1793,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {pr.status === 'pending' ? (
-                          canManagePrPo ? (
+                          canApprovePrPo ? (
                             <button
                               onClick={() => handleApprovePR(pr.id)}
                               className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs"
@@ -2000,6 +2021,16 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       <td className="py-3.5 px-4 text-right">
                         {po.status !== 'Completed' && po.status !== 'Cancelled' && po.status !== 'REJECTED' ? (
                           <div className="flex items-center justify-end gap-1.5">
+                            {canApprovePrPo && (po.status === 'PENDING_APPROVAL' || po.status === 'pending_approval' || po.status === 'Draft') && (
+                              <button
+                                type="button"
+                                disabled={approvingPoId === po.id}
+                                onClick={() => handleApprovePO(po.id)}
+                                className="px-3 py-1 bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-semibold text-xs rounded-lg transition-all shadow-xs disabled:opacity-60 cursor-pointer"
+                              >
+                                {approvingPoId === po.id ? 'Approving...' : 'Approve PO'}
+                              </button>
+                            )}
                             {canReceiveGR && po.status !== 'PENDING_APPROVAL' && po.status !== 'pending_approval' && (
                               <button
                                 onClick={() => openReceivingModal(po)}

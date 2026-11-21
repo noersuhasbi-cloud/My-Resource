@@ -347,24 +347,24 @@ let inventoryBatches: InventoryBatch[] = JSON.parse(JSON.stringify(INITIAL_BATCH
 let wasteRecords: WasteRecord[] = [
   {
     id: 'WST-2026-0018',
-    sku: 'SKU-DRY-002',
-    productName: 'Organic Greek Yogurt 500g',
-    storeId: 'store-jkt-pik',
-    storeName: 'GroceMart PIK 2 The Avenue',
-    warehouseZoneId: 'WH-JKT-PIK-COLD',
-    batchId: 'BAT-2026-077',
-    lotNumber: 'BAT-2026-077',
-    quantityScrapped: 45,
-    unit: 'tub',
-    unitCost: Math.round(3400000 / 45),
-    totalShrinkageCost: 3400000,
+    sku: 'SKU-PRD-001',
+    productName: 'Organic Hydroponic Butterhead Lettuce',
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
+    warehouseZoneId: 'WH-JKT-SEN-COLD',
+    batchId: 'BAT-2026-081',
+    lotNumber: 'LOT-LETT-2610-A',
+    quantityScrapped: 18,
+    unit: '250g head',
+    unitCost: 11000,
+    totalShrinkageCost: 198000,
     reason: 'chiller_temp_breach',
     actionTaken: 'safe_disposal',
     disposition: 'unsalvageable_scrap',
     reportedBy: 'Siti Rahma (Quality Inspector)',
     reportedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
     status: 'PENDING_APPROVAL',
-    notes: 'Cold-chain display shelf compressor temp excursion exceeding 4h.',
+    notes: 'Cold-chain display shelf compressor temp excursion exceeding 4h (Critical Lot BAT-2026-081).',
   },
   ...JSON.parse(JSON.stringify(INITIAL_WASTE_RECORDS)),
 ];
@@ -2302,6 +2302,13 @@ function applyBlindOpnameApproval(sheet: BlindOpnameSheet, approverName: string)
   const timestamp = new Date().toISOString();
   const glIds: string[] = [];
 
+  const computeOwnedMerchBatchVal = () =>
+    inventoryBatches
+      .filter((b) => (!b.itemClassification || b.itemClassification === 'MERCHANDISE') && !b.isConsignment)
+      .reduce((s, b) => s + Math.round((Number(b.currentStock) || 0) * (Number(b.unitCost) || 0)), 0);
+
+  const merchBatchValBefore = computeOwnedMerchBatchVal();
+
   const opnameSessionItems = sheet.items.map((line) => {
     const tier = storeInventoryTiers.find(
       (t) => t.sku === line.sku && (t.storeId === sheet.storeId || sheet.storeId === 'CONSOLIDATED')
@@ -2344,9 +2351,13 @@ function applyBlindOpnameApproval(sheet: BlindOpnameSheet, approverName: string)
     };
   });
 
-  if (sheet.netVarianceValueIDR !== 0) {
-    const absVal = Math.abs(sheet.netVarianceValueIDR);
-    const isShortage = sheet.netVarianceValueIDR < 0;
+  const merchBatchValAfter = computeOwnedMerchBatchVal();
+  const actualMerchBatchDelta = merchBatchValAfter - merchBatchValBefore;
+  const effectiveGlVariance = actualMerchBatchDelta !== 0 ? actualMerchBatchDelta : sheet.netVarianceValueIDR;
+
+  if (effectiveGlVariance !== 0) {
+    const absVal = Math.abs(effectiveGlVariance);
+    const isShortage = effectiveGlVariance < 0;
     const g1 = `GLE-OPN-${Date.now().toString().slice(-5)}-1`;
     const g2 = `GLE-OPN-${Date.now().toString().slice(-5)}-2`;
     glIds.push(g1, g2);
@@ -3495,18 +3506,18 @@ let approvalQueueList: ApprovalRequest[] = [
     documentTitle: 'Chilled Display Spoilage Scrap Authorization',
     requestedBy: 'Siti Rahma (Quality Inspector)',
     requestedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    amountIDR: 3400000,
-    storeId: 'store-jkt-pik',
-    storeName: 'GroceMart PIK 2 The Avenue',
+    amountIDR: 198000,
+    storeId: 'store-jkt-senopati',
+    storeName: 'GroceMart Senopati Flagship',
     currentTierLevel: 1,
     requiredTierLevel: 1,
     status: 'PENDING',
     history: [],
     payloadSummary: {
-      sku: 'SKU-DRY-002',
-      productName: 'Organic Greek Yogurt 500g',
-      quantity: 45,
-      reason: 'Cold-chain display shelf compressor temp excursion exceeding 4h',
+      sku: 'SKU-PRD-001',
+      productName: 'Organic Hydroponic Butterhead Lettuce',
+      quantity: 18,
+      reason: 'Cold-chain display shelf compressor temp excursion exceeding 4h (Lot BAT-2026-081)',
     },
   },
 ];
@@ -4257,21 +4268,37 @@ type CanonicalServerRole =
 function normalizeServerRoleStrict(role?: string | null): CanonicalServerRole | null {
   switch (role) {
     case 'cashier':
+    case 'POS_CASHIER':
       return 'cashier';
     case 'warehouse':
     case 'warehouse_picker':
     case 'receiving_clerk':
+    case 'WAREHOUSE_STAFF':
+    case 'WAREHOUSE_ADMIN':
+    case 'WAREHOUSE_HEAD':
+    case 'QC_INSPECTOR':
       return 'warehouse';
     case 'purchasing':
+    case 'PURCHASING_STAFF':
+    case 'PURCHASING_HEAD':
       return 'purchasing';
     case 'store_manager':
+    case 'STORE_MANAGER':
       return 'store_manager';
     case 'admin':
+    case 'AR_STAFF':
+    case 'AP_STAFF':
+    case 'ACCOUNTING_TAX':
+    case 'FINANCE_MANAGER':
       return 'admin';
     case 'coo':
     case 'executive':
+    case 'HEAD_ACCOUNTING':
       return 'coo';
     case 'super_admin':
+    case 'SUPER_ADMIN':
+    case 'PLATFORM_OWNER':
+    case 'CLIENT_OWNER':
       return 'super_admin';
     default:
       return null;
@@ -5452,8 +5479,13 @@ function resolveSystemUserForRequest(req: Request): SystemUserAccount | undefine
     (typeof req.headers['x-operator-role'] === 'string' && req.headers['x-operator-role'].trim()) ||
     '';
   if (rawRole) {
-    const asDivision = systemUsers.find((u) => u.roleCode === rawRole.toUpperCase());
+    const upperRole = rawRole.toUpperCase();
+    const asDivision = systemUsers.find((u) => u.roleCode === upperRole);
     if (asDivision) return asDivision;
+    if (upperRole === 'SUPER_ADMIN') {
+      const ownerUser = systemUsers.find((u) => isOwnerRoleCode(u.roleCode) && u.isActive);
+      if (ownerUser) return ownerUser;
+    }
     return undefined;
   }
   // 4. Current active session if logged in as a SystemUserAccount
@@ -5848,6 +5880,7 @@ function evaluateSystemUserModulePermission(
   if (
     urlPath.startsWith('/admin/procurement/requests') ||
     urlPath.startsWith('/admin/procurement/orders') ||
+    urlPath.startsWith('/admin/procurement/purchase-orders') ||
     urlPath === '/admin/procurement/demand-forecast/create-pr' ||
     urlPath === '/admin/replenishment/generate-po' ||
     urlPath.startsWith('/admin/procurement/debit-notes') ||
@@ -5867,8 +5900,9 @@ function evaluateSystemUserModulePermission(
     }
     if (
       urlPath.endsWith('/approve') ||
+      urlPath.endsWith('/reject') ||
       urlPath.endsWith('/apply') ||
-      (urlPath.includes('/procurement/orders/') &&
+      ((urlPath.includes('/procurement/orders/') || urlPath.includes('/procurement/purchase-orders/')) &&
         urlPath.endsWith('/status') &&
         ['approved', 'sent', 'ordered', 'in transit', 'completed', 'cancelled', 'rejected'].includes(
           String(body?.status || '').trim().toLowerCase()
@@ -8467,9 +8501,15 @@ async function startServer() {
     const method = req.method.toUpperCase();
 
     // Determine effective operator role & branch (strict validation — unknown roles never default to super_admin)
-    const rawHeaderRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : undefined;
-    const rawHeaderBranch = typeof req.headers['x-operator-branch'] === 'string' ? req.headers['x-operator-branch'].trim() : undefined;
-    const rawHeaderOpId = typeof req.headers['x-operator-id'] === 'string' ? req.headers['x-operator-id'].trim() : undefined;
+    const rawHeaderRole =
+      (typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : undefined) ||
+      (typeof req.headers['x-role-code'] === 'string' ? req.headers['x-role-code'].trim() : undefined);
+    const rawHeaderBranch =
+      (typeof req.headers['x-operator-branch'] === 'string' ? req.headers['x-operator-branch'].trim() : undefined) ||
+      (typeof req.headers['x-branch-id'] === 'string' ? req.headers['x-branch-id'].trim() : undefined);
+    const rawHeaderOpId =
+      (typeof req.headers['x-operator-id'] === 'string' ? req.headers['x-operator-id'].trim() : undefined) ||
+      (typeof req.headers['x-user-id'] === 'string' ? req.headers['x-user-id'].trim() : undefined);
 
     const assignedProfile = rawHeaderOpId ? AVAILABLE_STAFF_USERS.find((u) => u.userId === rawHeaderOpId) : undefined;
     const assignedAssignment = rawHeaderOpId ? operatorBranchAssignments[rawHeaderOpId] : undefined;
@@ -8746,10 +8786,10 @@ async function startServer() {
       // 4. Approval Matrix Rules & Decisions
       if (urlPath.startsWith('/admin/approvals/')) {
         if (method !== 'GET') {
-          const allowed: CanonicalServerRole[] = ['store_manager', 'coo', 'super_admin'];
+          const allowed: CanonicalServerRole[] = ['purchasing', 'warehouse', 'admin', 'store_manager', 'coo', 'super_admin'];
           if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
         } else {
-          const allowed: CanonicalServerRole[] = ['store_manager', 'admin', 'coo', 'super_admin'];
+          const allowed: CanonicalServerRole[] = ['purchasing', 'warehouse', 'store_manager', 'admin', 'coo', 'super_admin'];
           if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
         }
       }
@@ -8770,7 +8810,9 @@ async function startServer() {
           const allowed: CanonicalServerRole[] = ['purchasing', 'admin', 'coo', 'super_admin'];
           if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
         } else if (method !== 'GET') {
-          const allowed: CanonicalServerRole[] = ['admin', 'coo', 'super_admin'];
+          const allowed: CanonicalServerRole[] = urlPath.endsWith('/approve')
+            ? ['purchasing', 'admin', 'coo', 'super_admin']
+            : ['admin', 'coo', 'super_admin'];
           if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
         }
       }
@@ -8875,6 +8917,7 @@ async function startServer() {
       if (
         urlPath.startsWith('/admin/procurement/requests') ||
         urlPath.startsWith('/admin/procurement/orders') ||
+        urlPath.startsWith('/admin/procurement/purchase-orders') ||
         urlPath === '/admin/procurement/demand-forecast/create-pr' ||
         urlPath === '/admin/replenishment/generate-po' ||
         urlPath.startsWith('/admin/vendor-credit-notes') ||
@@ -10959,6 +11002,160 @@ async function startServer() {
     });
   });
 
+  app.post('/api/admin/waste/:id/approve', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { action = 'APPROVED', comments } = (req.body || {}) as {
+      action?: 'APPROVED' | 'REJECTED';
+      comments?: string;
+    };
+    const wasteRec = wasteRecords.find((w) => w.id === id);
+    if (!wasteRec) {
+      return res.status(404).json({ error: `Waste record '${id}' not found.` });
+    }
+    const actorName = getEffectiveOperatorName(req);
+    const actorRole = getEffectiveRequestRole(req);
+    const actorId = getEffectiveOperatorId(req);
+    const timestamp = new Date().toISOString();
+
+    if (action === 'REJECTED') {
+      if (wasteRec.status === 'APPROVED') {
+        return res.status(409).json({ error: `Waste record '${id}' is already APPROVED and posted to GL.` });
+      }
+      wasteRec.status = 'REJECTED';
+      wasteRec.approvedBy = actorName;
+      wasteRec.approvedAt = timestamp;
+      const syncedIds = syncApprovalQueueForDocument([wasteRec.id], 'REJECTED', actorName, actorRole, comments, actorId);
+      scheduleStateSave();
+      return res.json({ success: true, wasteRecord: wasteRec, syncedApprovalIds: syncedIds, message: `Waste record ${id} rejected.` });
+    }
+
+    if (wasteRec.status === 'APPROVED') {
+      const syncedIds = syncApprovalQueueForDocument([wasteRec.id], 'APPROVED', actorName, actorRole, comments, actorId);
+      return res.json({ success: true, alreadyApproved: true, wasteRecord: wasteRec, syncedApprovalIds: syncedIds, message: `Waste record ${id} is already approved.` });
+    }
+
+    const targetSku = wasteRec.sku;
+    const targetStore = wasteRec.storeId;
+    const qty = Math.max(0, Number(wasteRec.quantityScrapped) || 0);
+    const merchBatchBefore = inventoryBatches
+      .filter((b) => (!b.itemClassification || b.itemClassification === 'MERCHANDISE') && !b.isConsignment)
+      .reduce((s, b) => s + Math.round((Number(b.currentStock) || 0) * (Number(b.unitCost) || 0)), 0);
+    if (targetSku && qty > 0) {
+      let remainingToDeduct = qty;
+      if (wasteRec.batchId) {
+        const exactBatch = inventoryBatches.find((b) => b.batchId === wasteRec.batchId);
+        if (exactBatch && exactBatch.currentStock > 0) {
+          const take = Math.min(exactBatch.currentStock, remainingToDeduct);
+          exactBatch.currentStock = Math.max(0, Number((exactBatch.currentStock - take).toFixed(2)));
+          if (exactBatch.currentStock === 0) exactBatch.status = 'depleted';
+          remainingToDeduct = Math.max(0, Number((remainingToDeduct - take).toFixed(2)));
+        }
+      }
+      if (remainingToDeduct > 0) {
+        const candidateBatches = inventoryBatches
+          .filter(
+            (b) =>
+              b.sku === targetSku &&
+              (b.storeId === targetStore || targetStore === 'CONSOLIDATED') &&
+              b.currentStock > 0
+          )
+          .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+        for (const b of candidateBatches) {
+          if (remainingToDeduct <= 0) break;
+          const take = Math.min(b.currentStock, remainingToDeduct);
+          b.currentStock = Math.max(0, Number((b.currentStock - take).toFixed(2)));
+          if (b.currentStock === 0) b.status = 'depleted';
+          remainingToDeduct = Math.max(0, Number((remainingToDeduct - take).toFixed(2)));
+        }
+      }
+      const tier = storeInventoryTiers.find(
+        (t) => t.sku === targetSku && (t.storeId === targetStore || targetStore === 'CONSOLIDATED')
+      );
+      if (tier) {
+        tier.physicalStock = Math.max(0, Number((tier.physicalStock - qty).toFixed(2)));
+        tier.reservedStock = Math.min(tier.reservedStock, tier.physicalStock);
+        tier.availableStock = Math.max(0, Number((tier.physicalStock - tier.reservedStock).toFixed(2)));
+        tier.totalValuation = Math.round(tier.physicalStock * (tier.unitCost || 0));
+        tier.updatedAt = timestamp;
+      }
+      const inv = inventoryList.find((i) => i.sku === targetSku);
+      if (inv) {
+        inv.currentStock = Math.max(0, Number(((inv.currentStock || 0) - qty).toFixed(2)));
+        inv.stockLevel = inv.currentStock;
+      }
+    }
+    const merchBatchAfter = inventoryBatches
+      .filter((b) => (!b.itemClassification || b.itemClassification === 'MERCHANDISE') && !b.isConsignment)
+      .reduce((s, b) => s + Math.round((Number(b.currentStock) || 0) * (Number(b.unitCost) || 0)), 0);
+    const actualBatchDeductedIDR = Math.max(0, merchBatchBefore - merchBatchAfter);
+    const shrinkageIDR = actualBatchDeductedIDR > 0 ? actualBatchDeductedIDR : roundIDR(wasteRec.totalShrinkageCost || 0);
+    if (actualBatchDeductedIDR > 0) {
+      wasteRec.totalShrinkageCost = actualBatchDeductedIDR;
+    }
+    if (shrinkageIDR > 0 && !wasteRec.glEntryId) {
+      ensureRegulatoryCoaAccounts();
+      const tag = Date.now().toString().slice(-6);
+      const gle1 = `GLE-WST-${tag}-1`;
+      const gle2 = `GLE-WST-${tag}-2`;
+      commitBalancedGlBatch(
+        [
+          {
+            id: gle1,
+            timestamp,
+            storeId: targetStore,
+            storeName: wasteRec.storeName,
+            accountCode: '6030',
+            accountName: 'Inventory Shrinkage & Spoilage Expense',
+            category: 'Expense',
+            debit: shrinkageIDR,
+            credit: 0,
+            referenceType: 'WASTE_SHRINKAGE',
+            referenceId: wasteRec.id,
+            description: `Approved waste write-off (${wasteRec.id}): ${qty} units of ${wasteRec.productName} (${actorName})`,
+          },
+          {
+            id: gle2,
+            timestamp,
+            storeId: targetStore,
+            storeName: wasteRec.storeName,
+            accountCode: '1040',
+            accountName: 'Merchandise Inventory Asset',
+            category: 'Asset',
+            debit: 0,
+            credit: shrinkageIDR,
+            referenceType: 'WASTE_SHRINKAGE',
+            referenceId: wasteRec.id,
+            description: `Inventory asset write-off for approved waste ${wasteRec.id}`,
+          },
+        ],
+        true
+      );
+      wasteRec.glEntryId = gle1;
+    }
+
+    wasteRec.status = 'APPROVED';
+    wasteRec.approvedBy = actorName;
+    wasteRec.approvedAt = timestamp;
+    const syncedIds = syncApprovalQueueForDocument([wasteRec.id], 'APPROVED', actorName, actorRole, comments, actorId);
+    appendAuditTrailLog({
+      req,
+      actorName,
+      actorRole,
+      branchScope: targetStore,
+      module: 'INVENTORY',
+      action: 'WASTE_WRITE_OFF_APPROVED',
+      referenceId: wasteRec.id,
+      summary: `Approved waste write-off ${wasteRec.id} (${wasteRec.productName}, Rp ${shrinkageIDR.toLocaleString('id-ID')}).`,
+    });
+    scheduleStateSave();
+    res.json({
+      success: true,
+      wasteRecord: wasteRec,
+      syncedApprovalIds: syncedIds,
+      message: `Waste write-off ${wasteRec.id} approved and GL synchronized.`,
+    });
+  });
+
   // -------------------------------------------------------------
   // IN-STORE PICKER & PACKER APP WITH SUBSTITUTION ENGINE
   // -------------------------------------------------------------
@@ -13037,6 +13234,71 @@ async function startServer() {
     res.json({ success: true, purchaseRequest: newPR });
   });
 
+  function syncApprovalQueueForDocument(
+    docIds: Array<string | undefined | null>,
+    decision: 'APPROVED' | 'REJECTED',
+    actorName: string,
+    actorRole: CanonicalServerRole | string,
+    comments?: string,
+    actorId = 'USR-SYS'
+  ): string[] {
+    const cleanIds = new Set(docIds.filter((v): v is string => typeof v === 'string' && v.trim().length > 0));
+    if (cleanIds.size === 0) return [];
+    const syncedIds: string[] = [];
+    const timestamp = new Date().toISOString();
+    approvalQueueList.forEach((apr) => {
+      if (apr.status === 'PENDING' && (cleanIds.has(apr.documentId) || cleanIds.has(apr.id))) {
+        apr.currentTierLevel = apr.requiredTierLevel;
+        apr.status = decision;
+        apr.history.push({
+          tierLevel: apr.requiredTierLevel,
+          tierName: `Direct Module ${decision === 'APPROVED' ? 'Approval' : 'Rejection'}`,
+          approverId: actorId,
+          approverName: actorName,
+          approverRole: actorRole,
+          action: decision,
+          timestamp,
+          comments: comments || `Atomically synced via module ${decision.toLowerCase()} action by ${actorName}`,
+        });
+        markEnterpriseNotificationReadByDedupeKey(`APR_QUEUE:${apr.id}`);
+        syncedIds.push(apr.id);
+      }
+    });
+    return syncedIds;
+  }
+
+  function applyPurchaseOrderApprovalSideEffects(
+    po: PurchaseOrder,
+    actorName: string,
+    timestamp = new Date().toISOString()
+  ) {
+    const wasUnconfirmedPending =
+      po.status === 'PENDING_APPROVAL' || po.status === 'pending_approval' || po.status === 'Draft';
+    po.status = 'APPROVED';
+    po.updatedAt = timestamp;
+    (po as any).approvedBy = actorName;
+    (po as any).approvedAt = timestamp;
+    if (wasUnconfirmedPending && !(po as any).incomingStockApplied) {
+      po.items.forEach((poItem) => {
+        const orderQty = Math.max(0, Number(poItem.orderedQuantity) || 0);
+        if (orderQty <= 0) return;
+        const tier =
+          storeInventoryTiers.find(
+            (t) => t.sku === poItem.sku && (t.storeId === po.storeId || po.storeId === 'CONSOLIDATED')
+          ) || storeInventoryTiers.find((t) => t.sku === poItem.sku);
+        if (tier) {
+          tier.incomingStock = Number(((tier.incomingStock || 0) + orderQty).toFixed(2));
+          tier.updatedAt = timestamp;
+        }
+        const inv = inventoryList.find((i) => i.sku === poItem.sku);
+        if (inv) {
+          inv.incomingStock = Number(((inv.incomingStock || 0) + orderQty).toFixed(2));
+        }
+      });
+      (po as any).incomingStockApplied = true;
+    }
+  }
+
   app.post('/api/admin/procurement/requests/:id/approve', (req: Request, res: Response) => {
     const { id } = req.params;
     const pr = purchaseRequests.find((p) => p.id === id);
@@ -13084,6 +13346,7 @@ async function startServer() {
       paymentTerms: 'Net 30',
       goodsReceiptIds: [],
     };
+    (newPO as any).incomingStockApplied = true;
 
     pr.poId = poId;
     purchaseOrders.unshift(newPO);
@@ -13098,6 +13361,15 @@ async function startServer() {
       prTier.incomingStock += pr.suggestedQuantity;
     }
 
+    const syncedApprovalIds = syncApprovalQueueForDocument(
+      [pr.id],
+      'APPROVED',
+      getEffectiveOperatorName(req),
+      getEffectiveRequestRole(req),
+      `PR ${pr.id} approved and converted to PO ${newPO.id}`,
+      getEffectiveOperatorId(req)
+    );
+
     appendAuditTrailLog({
       req,
       branchScope: newPO.storeId,
@@ -13107,18 +13379,140 @@ async function startServer() {
       summary: `Approved PR ${pr.id} and generated PO ${newPO.id} to ${newPO.supplierName} (Rp ${newPO.totalCost.toLocaleString('id-ID')}).`,
     });
 
-    res.json({ success: true, purchaseRequest: pr, purchaseOrder: newPO });
+    scheduleStateSave();
+    res.json({ success: true, purchaseRequest: pr, purchaseOrder: newPO, syncedApprovalIds });
   });
 
-  app.get('/api/admin/procurement/orders', (_req: Request, res: Response) => {
+  app.get(['/api/admin/procurement/orders', '/api/admin/procurement/purchase-orders'], (_req: Request, res: Response) => {
     res.json(purchaseOrders);
   });
 
-  // Strict State Machine Guard: PO Status Transition & Force-Closure Validation
-  app.post('/api/admin/procurement/orders/:id/status', (req: Request, res: Response) => {
+  const handleApprovePurchaseOrder = (req: Request, res: Response) => {
+    const resolvedSys = resolveSystemUserForRequest(req);
+    const effectiveRole = getEffectiveRequestRole(req);
+    const mp = resolvedSys
+      ? normalizeModulePermissionsInput(resolvedSys.modulePermissions, resolvedSys.roleCode)
+      : null;
+
+    const isAuthorized = resolvedSys
+      ? isOwnerRoleCode(resolvedSys.roleCode) || mp?.procurement?.approve === true
+      : ['purchasing', 'store_manager', 'coo', 'super_admin'].includes(effectiveRole);
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        code: 'MODULE_PERMISSION_FORBIDDEN',
+        error: `Akses Ditolak: Peran Anda (${resolvedSys?.divisionLabel || effectiveRole}) tidak memiliki hak [APPROVE] pada Purchase Order.`,
+      });
+    }
+
     const { id } = req.params;
-    const { status, closureNotes } = req.body;
-    const po = purchaseOrders.find((p) => p.id === id);
+    const po = purchaseOrders.find((p) => p.id === id || p.poNumber === id);
+    if (!po) {
+      return res.status(404).json({ success: false, error: `Purchase Order '${id}' not found.` });
+    }
+
+    const body = (req.body || {}) as { comments?: string; reason?: string };
+    const actorName = getEffectiveOperatorName(req);
+    const actorId = getEffectiveOperatorId(req);
+    const commentText = body.comments || body.reason;
+    const timestamp = new Date().toISOString();
+
+    if (po.status === 'REJECTED' || po.status === 'Cancelled') {
+      return res.status(409).json({
+        success: false,
+        error: `Purchase Order #${po.id} has status '${po.status}' and cannot be approved.`,
+      });
+    }
+
+    if (
+      po.status === 'APPROVED' ||
+      po.status === 'Sent' ||
+      po.status === 'Partially Received' ||
+      po.status === 'Completed'
+    ) {
+      const syncedApprovalIds = syncApprovalQueueForDocument(
+        [po.id, po.poNumber],
+        'APPROVED',
+        actorName,
+        effectiveRole,
+        commentText || `Idempotent PO approval sync by ${actorName}`,
+        actorId
+      );
+      return res.json({
+        success: true,
+        alreadyApproved: true,
+        purchaseOrder: po,
+        syncedApprovalIds,
+        message: `Purchase Order #${po.id} is already approved (${po.status}).`,
+      });
+    }
+
+    applyPurchaseOrderApprovalSideEffects(po, actorName, timestamp);
+
+    const syncedApprovalIds = syncApprovalQueueForDocument(
+      [po.id, po.poNumber],
+      'APPROVED',
+      actorName,
+      effectiveRole,
+      commentText || `Approved directly in Procurement by ${actorName}`,
+      actorId
+    );
+
+    securityAuditTrail.unshift({
+      id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+      timestamp,
+      actionType: 'PURCHASE_ORDER_APPROVAL',
+      resourceId: po.id,
+      userId: actorId,
+      userName: actorName,
+      userRole: effectiveRole,
+      storeId: po.storeId,
+      shiftId: currentActiveStaffSession.activeShiftId,
+      status: 'AUTHORIZED_EXECUTED',
+      metadata: {
+        poId: po.id,
+        totalCost: po.totalCost,
+        syncedApprovalIds,
+      },
+    });
+
+    appendAuditTrailLog({
+      req,
+      actorName,
+      actorRole: effectiveRole,
+      branchScope: po.storeId,
+      module: 'PROCUREMENT',
+      action: 'PURCHASE_ORDER_APPROVED',
+      referenceId: po.id,
+      summary: `Approved Purchase Order ${po.id} (${po.supplierName}, Rp ${po.totalCost.toLocaleString('id-ID')})${
+        syncedApprovalIds.length > 0 ? ` — synced Approval Matrix [${syncedApprovalIds.join(', ')}]` : ''
+      }.`,
+    });
+
+    scheduleStateSave();
+    res.json({
+      success: true,
+      purchaseOrder: po,
+      syncedApprovalIds,
+      message: `Purchase Order #${po.id} approved and ready for Goods Receipt.${
+        syncedApprovalIds.length > 0 ? ` Approval Matrix synchronized.` : ''
+      }`,
+    });
+  };
+
+  app.post(
+    ['/api/admin/procurement/orders/:id/approve', '/api/admin/procurement/purchase-orders/:id/approve'],
+    handleApprovePurchaseOrder
+  );
+
+  // Strict State Machine Guard: PO Status Transition & Force-Closure Validation
+  app.post(
+    ['/api/admin/procurement/orders/:id/status', '/api/admin/procurement/purchase-orders/:id/status'],
+    (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { status, closureNotes } = req.body || {};
+    const po = purchaseOrders.find((p) => p.id === id || p.poNumber === id);
     if (!po) return res.status(404).json({ error: 'Purchase Order not found' });
 
     const totalRemaining = po.items.reduce((sum, item) => sum + item.remainingBackorder, 0);
@@ -13161,7 +13555,33 @@ async function startServer() {
       }
     }
 
-    po.status = status;
+    const normalizedNext = String(status || '').trim();
+    if (normalizedNext === 'APPROVED' || normalizedNext.toLowerCase() === 'approved') {
+      applyPurchaseOrderApprovalSideEffects(po, getEffectiveOperatorName(req));
+      syncApprovalQueueForDocument(
+        [po.id, po.poNumber],
+        'APPROVED',
+        getEffectiveOperatorName(req),
+        getEffectiveRequestRole(req),
+        closureNotes,
+        getEffectiveOperatorId(req)
+      );
+    } else if (normalizedNext === 'REJECTED' || normalizedNext === 'Cancelled') {
+      po.status = normalizedNext as PurchaseOrder['status'];
+      po.updatedAt = new Date().toISOString();
+      syncApprovalQueueForDocument(
+        [po.id, po.poNumber],
+        'REJECTED',
+        getEffectiveOperatorName(req),
+        getEffectiveRequestRole(req),
+        closureNotes || `PO status set to ${normalizedNext}`,
+        getEffectiveOperatorId(req)
+      );
+    } else {
+      po.status = status;
+      po.updatedAt = new Date().toISOString();
+    }
+    scheduleStateSave();
     res.json({ success: true, purchaseOrder: po });
   });
 
@@ -13213,6 +13633,19 @@ async function startServer() {
 
     const po = purchaseOrders.find((p) => p.id === poId);
     if (!po) return res.status(404).json({ error: 'Purchase Order not found' });
+
+    if (
+      po.status === 'PENDING_APPROVAL' ||
+      po.status === 'pending_approval' ||
+      po.status === 'REJECTED' ||
+      po.status === 'Cancelled'
+    ) {
+      return res.status(409).json({
+        success: false,
+        code: 'PO_NOT_APPROVED',
+        error: `Purchase Order #${po.id} has status '${po.status}' and must be approved before receiving Goods Receipt.`,
+      });
+    }
 
     const branchViolation = checkBranchIsolationViolation(req, po.storeId);
     if (branchViolation) {
@@ -20231,6 +20664,15 @@ async function startServer() {
 
     postVendorBillApprovalGL(bill, approverName);
 
+    const syncedApprovalIds = syncApprovalQueueForDocument(
+      [bill.id, bill.billNumber],
+      'APPROVED',
+      approverName,
+      getEffectiveRequestRole(req),
+      `Vendor Bill #${bill.billNumber} approved in Accounts Payable`,
+      getEffectiveOperatorId(req)
+    );
+
     appendAuditTrailLog({
       req,
       actorName: approverName,
@@ -20241,7 +20683,7 @@ async function startServer() {
       summary: `Approved Vendor Bill #${bill.billNumber} (${bill.supplierName}) for Rp ${bill.grandTotalIDR.toLocaleString('id-ID')}.`,
     });
 
-    res.json({ success: true, vendorBill: bill, message: `Vendor Bill #${id} approved.` });
+    res.json({ success: true, vendorBill: bill, syncedApprovalIds, message: `Vendor Bill #${id} approved.` });
   });
 
   app.post('/api/admin/procurement/vendor-bills/:id/pay', (req: Request, res: Response) => {
@@ -21410,10 +21852,26 @@ async function startServer() {
   });
 
   const handleApprovalDecision = (req: Request, res: Response) => {
+    const resolvedSys = resolveSystemUserForRequest(req);
     const effectiveRole = getEffectiveRequestRole(req);
-    if (!['store_manager', 'coo', 'super_admin'].includes(effectiveRole)) {
+    const mp = resolvedSys
+      ? normalizeModulePermissionsInput(resolvedSys.modulePermissions, resolvedSys.roleCode)
+      : null;
+
+    const hasSystemApproverRole = resolvedSys
+      ? isOwnerRoleCode(resolvedSys.roleCode) ||
+        mp?.approvalMatrix?.approve === true ||
+        mp?.procurement?.approve === true ||
+        mp?.inventory?.approve === true ||
+        mp?.wasteShrinkage?.approve === true ||
+        (mp?.accounting?.view === true && mp?.accounting?.canApprovePayments === true)
+      : ['store_manager', 'coo', 'super_admin'].includes(effectiveRole);
+
+    if (!hasSystemApproverRole) {
       return res.status(403).json({
-        error: 'Forbidden: Only Store Manager, COO, or Super Admin can approve or reject items.',
+        success: false,
+        code: 'MODULE_PERMISSION_FORBIDDEN',
+        error: `Forbidden: Role '${resolvedSys?.divisionLabel || effectiveRole}' is not authorized to approve or reject Approval Matrix items.`,
       });
     }
 
@@ -21569,7 +22027,12 @@ async function startServer() {
         }
       }
     } else {
-      const isExecutiveOverride = effectiveRole === 'coo' || effectiveRole === 'super_admin';
+      const isExecutiveOverride =
+        isOwnerRoleCode(resolvedSys?.roleCode) ||
+        effectiveRole === 'coo' ||
+        effectiveRole === 'super_admin' ||
+        ((reqItem.module === 'procurement_po' || reqItem.module === 'procurement_pr') &&
+          (resolvedSys?.roleCode === 'PURCHASING_HEAD' || mp?.procurement?.approve === true));
       if (!isExecutiveOverride && reqItem.currentTierLevel < reqItem.requiredTierLevel) {
         reqItem.currentTierLevel += 1;
       } else {
@@ -21738,24 +22201,7 @@ async function startServer() {
           }
 
           if (po.status !== 'APPROVED') {
-            po.status = 'APPROVED';
-            po.updatedAt = timestamp;
-            po.items.forEach((poItem) => {
-              const orderQty = Math.max(0, Number(poItem.orderedQuantity) || 0);
-              if (orderQty <= 0) return;
-              const tier =
-                storeInventoryTiers.find(
-                  (t) => t.sku === poItem.sku && (t.storeId === po!.storeId || po!.storeId === 'CONSOLIDATED')
-                ) || storeInventoryTiers.find((t) => t.sku === poItem.sku);
-              if (tier) {
-                tier.incomingStock = Number(((tier.incomingStock || 0) + orderQty).toFixed(2));
-                tier.updatedAt = timestamp;
-              }
-              const inv = inventoryList.find((i) => i.sku === poItem.sku);
-              if (inv) {
-                inv.incomingStock = Number(((inv.incomingStock || 0) + orderQty).toFixed(2));
-              }
-            });
+            applyPurchaseOrderApprovalSideEffects(po, actorName, timestamp);
           }
         } else if (reqItem.module === 'procurement_pr' || reqItem.documentId.startsWith('PR-')) {
           const pr = purchaseRequests.find((p) => p.id === reqItem.documentId);
@@ -21794,6 +22240,9 @@ async function startServer() {
             const targetSku = wasteRec.sku || reqItem.payloadSummary?.sku || '';
             const targetStore = wasteRec.storeId || reqItem.storeId;
             const qty = Math.max(0, Number(wasteRec.quantityScrapped || reqItem.payloadSummary?.quantity) || 0);
+            const merchBatchBefore = inventoryBatches
+              .filter((b) => (!b.itemClassification || b.itemClassification === 'MERCHANDISE') && !b.isConsignment)
+              .reduce((s, b) => s + Math.round((Number(b.currentStock) || 0) * (Number(b.unitCost) || 0)), 0);
 
             if (targetSku && qty > 0) {
               let remainingToDeduct = qty;
@@ -21842,7 +22291,14 @@ async function startServer() {
               }
             }
 
-            const shrinkageIDR = roundIDR(wasteRec.totalShrinkageCost || reqItem.amountIDR || 0);
+            const merchBatchAfter = inventoryBatches
+              .filter((b) => (!b.itemClassification || b.itemClassification === 'MERCHANDISE') && !b.isConsignment)
+              .reduce((s, b) => s + Math.round((Number(b.currentStock) || 0) * (Number(b.unitCost) || 0)), 0);
+            const actualBatchDeductedIDR = Math.max(0, merchBatchBefore - merchBatchAfter);
+            const shrinkageIDR = actualBatchDeductedIDR > 0 ? actualBatchDeductedIDR : roundIDR(wasteRec.totalShrinkageCost || reqItem.amountIDR || 0);
+            if (actualBatchDeductedIDR > 0) {
+              wasteRec.totalShrinkageCost = actualBatchDeductedIDR;
+            }
             if (shrinkageIDR > 0 && !wasteRec.glEntryId) {
               ensureRegulatoryCoaAccounts();
               const tag = Date.now().toString().slice(-6);
@@ -26457,13 +26913,13 @@ async function startServer() {
       return divisionRoleToCanonicalRole(resolvedSys.roleCode) as CanonicalServerRole;
     }
     const rawHeaderRole =
-      typeof req.headers['x-operator-role'] === 'string'
-        ? req.headers['x-operator-role'].trim()
-        : undefined;
+      (typeof req.headers['x-operator-role'] === 'string' && req.headers['x-operator-role'].trim()) ||
+      (typeof req.headers['x-role-code'] === 'string' && req.headers['x-role-code'].trim()) ||
+      undefined;
     const rawHeaderOpId =
-      typeof req.headers['x-operator-id'] === 'string'
-        ? req.headers['x-operator-id'].trim()
-        : undefined;
+      (typeof req.headers['x-operator-id'] === 'string' && req.headers['x-operator-id'].trim()) ||
+      (typeof req.headers['x-user-id'] === 'string' && req.headers['x-user-id'].trim()) ||
+      undefined;
     const assignedProfile = rawHeaderOpId
       ? AVAILABLE_STAFF_USERS.find((u) => u.userId === rawHeaderOpId)
       : undefined;
@@ -26481,9 +26937,9 @@ async function startServer() {
     const resolvedSys = resolveSystemUserForRequest(req);
     if (resolvedSys) return resolvedSys.fullName;
     const rawHeaderOpId =
-      typeof req.headers['x-operator-id'] === 'string'
-        ? req.headers['x-operator-id'].trim()
-        : undefined;
+      (typeof req.headers['x-operator-id'] === 'string' && req.headers['x-operator-id'].trim()) ||
+      (typeof req.headers['x-user-id'] === 'string' && req.headers['x-user-id'].trim()) ||
+      undefined;
     const assignedProfile = rawHeaderOpId
       ? AVAILABLE_STAFF_USERS.find((u) => u.userId === rawHeaderOpId)
       : undefined;
@@ -26494,9 +26950,9 @@ async function startServer() {
     const resolvedSys = resolveSystemUserForRequest(req);
     if (resolvedSys) return resolvedSys.id;
     const rawHeaderOpId =
-      typeof req.headers['x-operator-id'] === 'string'
-        ? req.headers['x-operator-id'].trim()
-        : undefined;
+      (typeof req.headers['x-operator-id'] === 'string' && req.headers['x-operator-id'].trim()) ||
+      (typeof req.headers['x-user-id'] === 'string' && req.headers['x-user-id'].trim()) ||
+      undefined;
     const assignedProfile = rawHeaderOpId
       ? AVAILABLE_STAFF_USERS.find((u) => u.userId === rawHeaderOpId)
       : undefined;
@@ -26507,13 +26963,13 @@ async function startServer() {
     const resolvedSys = resolveSystemUserForRequest(req);
     if (resolvedSys) return resolvedSys.branchId || 'ALL';
     const rawHeaderBranch =
-      typeof req.headers['x-operator-branch'] === 'string'
-        ? req.headers['x-operator-branch'].trim()
-        : undefined;
+      (typeof req.headers['x-operator-branch'] === 'string' && req.headers['x-operator-branch'].trim()) ||
+      (typeof req.headers['x-branch-id'] === 'string' && req.headers['x-branch-id'].trim()) ||
+      undefined;
     const rawHeaderOpId =
-      typeof req.headers['x-operator-id'] === 'string'
-        ? req.headers['x-operator-id'].trim()
-        : undefined;
+      (typeof req.headers['x-operator-id'] === 'string' && req.headers['x-operator-id'].trim()) ||
+      (typeof req.headers['x-user-id'] === 'string' && req.headers['x-user-id'].trim()) ||
+      undefined;
     const assignedAssignment = rawHeaderOpId ? operatorBranchAssignments[rawHeaderOpId] : undefined;
     return (
       assignedAssignment?.storeId ||
