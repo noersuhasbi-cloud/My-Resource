@@ -182,7 +182,7 @@ export const ApprovalMatrixModule: React.FC<ApprovalMatrixModuleProps> = ({
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Header & Sub-Nav */}
-      <div className={`${cardClass} p-5 sm:p-6 space-y-6`}>
+      <div className={`${cardClass} gm-hero-banner p-5 sm:p-6 space-y-6`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 flex items-center justify-center shadow-xs">

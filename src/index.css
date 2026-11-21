@@ -8,9 +8,37 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+:root {
+  --gm-canvas-bg: linear-gradient(145deg, #DCE4DF 0%, #D5DFD9 50%, #CED9D2 100%);
+  --gm-surface-card: linear-gradient(180deg, #EEF3F0 0%, #E6EDE8 100%);
+  --gm-surface-card-solid: #EAF0EC;
+  --gm-surface-chrome: rgba(231, 238, 234, 0.94);
+  --gm-surface-hero: linear-gradient(135deg, #D2E1D9 0%, #C5D7CD 100%);
+  --gm-surface-hero-kpi: #F1F5F3;
+  --gm-surface-muted: #E2EBE6;
+  --gm-surface-hover: #E7EEEA;
+  --gm-surface-input: #F2F6F4;
+  --gm-btn-primary: linear-gradient(180deg, #166534 0%, #114B27 100%);
+  --gm-btn-secondary: linear-gradient(180deg, #E7EEEA 0%, #DCE5DF 100%);
+  --gm-border-hairline: #C3D0C8;
+  --gm-border-chrome: #C1CEC6;
+  --gm-border-hero: #AEC3B7;
+  --gm-border-hero-kpi: #C3D1C9;
+  --gm-border-table: #C4D1C9;
+  --gm-border-input: #B8C7BE;
+  --gm-border-btn-primary: #0F3F21;
+  --gm-border-btn-secondary: #BCC9C1;
+  --gm-text-primary: #13221B;
+  --gm-text-secondary: #42544B;
+  --gm-text-muted: #5D7066;
+  --gm-text-btn-secondary: #1B2B23;
+  --gm-shadow-card: 0 3px 12px -2px rgba(16, 36, 26, 0.08);
+}
+
 html, body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   scroll-behavior: smooth;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -19,6 +47,12 @@ html, body {
 
 button, input, select, textarea {
   font-family: inherit;
+}
+
+.overflow-x-auto,
+[role="tablist"],
+aside nav {
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Tabular numbers for financial & inventory precision */
@@ -193,6 +227,197 @@ button:not(:disabled):active {
 
   button:not(:disabled):active {
     transform: none !important;
+  }
+
+  html.theme-transitioning body,
+  html.theme-transitioning .gm-surface,
+  html.theme-transitioning aside,
+  html.theme-transitioning header,
+  html.theme-transitioning main,
+  html.theme-transitioning table,
+  html.theme-transitioning thead,
+  html.theme-transitioning th,
+  html.theme-transitioning td,
+  html.theme-transitioning button,
+  html.theme-transitioning [class*="rounded-2xl"],
+  html.theme-transitioning [class*="rounded-xl"],
+  html.theme-transitioning [class*="rounded-lg"],
+  html.theme-transitioning input,
+  html.theme-transitioning select,
+  html.theme-transitioning textarea {
+    transition: none !important;
+  }
+}
+
+/* ========================================================================= */
+/* SMOKED SAGE-STONE UNIVERSAL DAYLIGHT THEME (LIGHT MODE ONLY)              */
+/* ========================================================================= */
+@media screen {
+  html:not(.dark),
+  html:not(.dark) body {
+    background-color: #D5DFD9;
+    background-image: var(--gm-canvas-bg);
+    background-attachment: fixed;
+    color: var(--gm-text-primary);
+  }
+
+  html:not(.dark) .gm-daylight-canvas,
+  html:not(.dark) .min-h-screen {
+    background-color: #D5DFD9;
+    background-image: var(--gm-canvas-bg);
+    color: var(--gm-text-primary);
+  }
+
+  /* Smoked-Pearl Chrome: Header, Executive Ticker, Sidebar & Mobile Drawer */
+  html:not(.dark) aside,
+  html:not(.dark) header,
+  html:not(.dark) .gm-chrome-surface,
+  html:not(.dark) [aria-label="Executive Stock Ticker"] {
+    background-color: var(--gm-surface-chrome) !important;
+    background-image: none !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-color: var(--gm-border-chrome) !important;
+  }
+
+  html:not(.dark) aside > div > div.border-b {
+    background-color: transparent !important;
+    border-color: var(--gm-border-chrome) !important;
+  }
+
+  /* Universal Smoked Alabaster Cards, Modals, Drawers & Popovers (Zero #FFFFFF Glare) */
+  html:not(.dark) .gm-surface-card,
+  html:not(.dark) :is(.bg-white, .bg-white\/95, .bg-white\/90, .bg-white\/85, .bg-white\/80, .bg-white\/70, .bg-\[\#FFFFFF\], .bg-\[\#ffffff\]):not(.rounded-full):not(button):not(input):not(select):not(textarea):not([class*="via-white"]):not(.gm-hero-banner):not(#printable-document-root):not(#printable-document-root *) {
+    background-color: var(--gm-surface-card-solid) !important;
+    background-image: var(--gm-surface-card) !important;
+    border-color: var(--gm-border-hairline) !important;
+  }
+
+  html:not(.dark) .gm-surface-card,
+  html:not(.dark) .rounded-2xl:is(.bg-white, .bg-white\/95, .bg-white\/90, .bg-white\/85, .bg-white\/80):not([class*="shadow-2xl"]):not([class*="via-white"]):not(.gm-hero-banner) {
+    box-shadow: var(--gm-shadow-card);
+  }
+
+  /* Unified Satin-Soft Sage-Emerald Hero Banners + Elevated Inner KPI Cards */
+  html:not(.dark) .gm-hero-banner,
+  html:not(.dark) [class*="from-emerald-50"][class*="via-white"],
+  html:not(.dark) [class*="from-rose-50"][class*="via-white"],
+  html:not(.dark) [class*="from-slate-50"][class*="via-white"] {
+    background-color: #C9D9D0 !important;
+    background-image: var(--gm-surface-hero) !important;
+    border-color: var(--gm-border-hero) !important;
+    box-shadow: var(--gm-shadow-card);
+  }
+
+  html:not(.dark) .gm-hero-banner :is(.rounded-xl, .rounded-2xl):is(.bg-white, .bg-white\/95, .bg-white\/90, .bg-white\/80, .bg-slate-50, .bg-slate-50\/80, .bg-gray-50, .bg-gray-50\/70, .bg-amber-50\/40):not(button):not(input):not(select):not(textarea):not(.rounded-full),
+  html:not(.dark) [class*="via-white"] :is(.rounded-xl, .rounded-2xl):is(.bg-white, .bg-white\/95, .bg-white\/90, .bg-white\/80, .bg-slate-50, .bg-gray-50):not(button):not(input):not(select):not(textarea):not(.rounded-full) {
+    background-color: var(--gm-surface-hero-kpi) !important;
+    background-image: none !important;
+    border-color: var(--gm-border-hero-kpi) !important;
+  }
+
+  /* Tables, Nested Sub-Panels, Inputs & Select Dropdowns */
+  html:not(.dark) thead,
+  html:not(.dark) thead th {
+    background-color: var(--gm-surface-muted) !important;
+    background-image: none !important;
+    border-color: var(--gm-border-table) !important;
+    color: var(--gm-text-secondary) !important;
+  }
+
+  html:not(.dark) tbody tr:hover {
+    background-color: var(--gm-surface-hover);
+  }
+
+  html:not(.dark) .gm-surface-muted,
+  html:not(.dark) :is(.bg-slate-50, .bg-slate-50\/90, .bg-slate-50\/80, .bg-slate-50\/70, .bg-gray-50, .bg-gray-50\/90, .bg-gray-50\/80, .bg-gray-50\/70, .bg-stone-50, .bg-slate-100\/70):not(.min-h-screen):not(button):not(tr):not([class*="via-white"]):not(.gm-hero-banner) {
+    background-color: var(--gm-surface-muted) !important;
+    background-image: none !important;
+    border-color: var(--gm-border-table) !important;
+  }
+
+  html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not(.bg-transparent),
+  html:not(.dark) select,
+  html:not(.dark) textarea {
+    background-color: var(--gm-surface-input) !important;
+    background-image: none !important;
+    border-color: var(--gm-border-input) !important;
+    color: var(--gm-text-primary) !important;
+  }
+
+  html:not(.dark) select option {
+    background-color: #EEF3F0;
+    color: #13221B;
+  }
+
+  html:not(.dark) input::placeholder,
+  html:not(.dark) textarea::placeholder {
+    color: var(--gm-text-muted);
+  }
+
+  /* Harmonized Primary & Secondary Button Gradients */
+  html:not(.dark) button:is(.bg-\[\#0F4C3A\], .bg-\[\#164E29\], .bg-emerald-700, .bg-emerald-600):not(:disabled) {
+    background-image: var(--gm-btn-primary) !important;
+    border-color: var(--gm-border-btn-primary) !important;
+    color: #F4F8F5 !important;
+  }
+
+  html:not(.dark) button:is(.bg-white, .bg-white\/95, .bg-white\/90, .bg-slate-50, .bg-slate-100, .bg-gray-50, .bg-gray-100):not([class*="text-rose-"]):not([class*="text-red-"]):not([class*="text-amber-"]):not(.rounded-full) {
+    background-color: #E2EAE5 !important;
+    background-image: var(--gm-btn-secondary) !important;
+    border-color: var(--gm-border-btn-secondary) !important;
+    color: var(--gm-text-btn-secondary) !important;
+  }
+
+  /* Hairline Dividers & Crisp Sage-Slate Typography */
+  html:not(.dark) .border-slate-200,
+  html:not(.dark) .border-gray-200,
+  html:not(.dark) .border-gray-200\/90,
+  html:not(.dark) .border-gray-200\/80,
+  html:not(.dark) .border-slate-100,
+  html:not(.dark) .border-gray-100 {
+    border-color: var(--gm-border-table);
+  }
+
+  html:not(.dark) .text-slate-900,
+  html:not(.dark) .text-gray-900,
+  html:not(.dark) .text-slate-800,
+  html:not(.dark) .text-gray-800 {
+    color: var(--gm-text-primary);
+  }
+
+  html:not(.dark) .text-slate-600,
+  html:not(.dark) .text-gray-600 {
+    color: var(--gm-text-secondary);
+  }
+
+  html:not(.dark) .text-slate-500,
+  html:not(.dark) .text-gray-500 {
+    color: var(--gm-text-muted);
+  }
+
+  /* Scoped 240ms Smooth Dark <-> Light Mode Transition (Zero Heavy Reflows) */
+  html.theme-transitioning body,
+  html.theme-transitioning .gm-surface,
+  html.theme-transitioning aside,
+  html.theme-transitioning header,
+  html.theme-transitioning main,
+  html.theme-transitioning table,
+  html.theme-transitioning thead,
+  html.theme-transitioning th,
+  html.theme-transitioning td,
+  html.theme-transitioning button,
+  html.theme-transitioning [class*="rounded-2xl"],
+  html.theme-transitioning [class*="rounded-xl"],
+  html.theme-transitioning [class*="rounded-lg"],
+  html.theme-transitioning input,
+  html.theme-transitioning select,
+  html.theme-transitioning textarea {
+    transition:
+      background-color 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1) !important;
   }
 }
 

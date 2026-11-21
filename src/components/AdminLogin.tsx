@@ -32,6 +32,7 @@ interface AdminLoginProps {
   onLoginSuccess: (session: StaffShiftSession) => void;
   onReturnToStorefront: () => void;
   onShowToast?: (title: string, message: string) => void;
+  enableB2BAndStorefrontPortal?: boolean;
 }
 
 // Fallback staff roster if backend request fails (all 7 canonical roles)
@@ -277,12 +278,13 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   onLoginSuccess,
   onReturnToStorefront,
   onShowToast,
+  enableB2BAndStorefrontPortal = false,
 }) => {
   const { theme, toggleDarkMode: toggleTheme } = useDarkMode();
 
   const isLight = theme === 'light';
 
-  const [activeTab, setActiveTab] = useState<'roster' | 'credentials'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'credentials'>('credentials');
   const [availableProfiles, setAvailableProfiles] = useState<StaffShiftSession[]>(FALLBACK_STAFF_ROSTER);
   const [demoAccounts, setDemoAccounts] = useState<DemoDivisionAccountOption[]>(FALLBACK_DIVISION_DEMO_ACCOUNTS);
   const [selectedDemoAccountId, setSelectedDemoAccountId] = useState<string>('SYS-USR-01');
@@ -458,18 +460,25 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   return (
     <div
       className={`${
-        theme === 'dark' ? 'dark bg-[#090A0F] text-slate-100' : 'bg-[#F8FAFC] text-gray-900'
-      } min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white relative overflow-hidden transition-colors duration-200`}
+        theme === 'dark' ? 'dark bg-[#090A0F] text-slate-100' : 'bg-[#EEF2F0] text-[#18221D] gm-daylight-canvas'
+      } min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white relative overflow-hidden gm-surface`}
     >
-      {/* Top Banner Navigation: Back to Storefront, Theme Switcher & Security Badge */}
-      <header className="border-b border-gray-200/90 dark:border-slate-800/80 bg-white/90 dark:bg-[#12141C]/90 backdrop-blur-md px-4 sm:px-8 py-3 flex items-center justify-between z-10">
-        <button
-          onClick={onReturnToStorefront}
-          className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 transition-colors cursor-pointer group px-3 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800/70"
-        >
-          <ArrowLeft className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 group-hover:-translate-x-1 transition-transform" />
-          <span>Exit to Customer Storefront</span>
-        </button>
+      {/* Top Banner Navigation: Back to Storefront (when portal enabled), Theme Switcher & Security Badge */}
+      <header className="border-b border-gray-200/90 dark:border-slate-800/80 bg-white/90 dark:bg-[#12141C]/90 backdrop-blur-md px-4 sm:px-8 py-3 flex items-center justify-between z-10 gm-chrome-surface">
+        {enableB2BAndStorefrontPortal ? (
+          <button
+            onClick={onReturnToStorefront}
+            className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 transition-colors cursor-pointer group px-3 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800/70"
+          >
+            <ArrowLeft className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 group-hover:-translate-x-1 transition-transform" />
+            <span>Exit to Customer Storefront</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">
+            <ShieldCheck className="w-4 h-4" />
+            <span>GroceMatrix™ Internal Enterprise Portal</span>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400 font-mono">
@@ -492,9 +501,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
       {/* Main Authentication Card */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 z-10">
-        <div className="w-full max-w-4xl bg-white dark:bg-[#12141C] border border-gray-200/90 dark:border-slate-800/80 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-2xl overflow-hidden transition-colors">
+        <div className="w-full max-w-4xl bg-white dark:bg-[#12141C] border border-gray-200/90 dark:border-slate-800/80 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-2xl overflow-hidden gm-surface-card">
           {/* Header Card Branding */}
-          <div className="p-6 sm:p-8 border-b border-gray-200 dark:border-slate-800/80 bg-gradient-to-r from-emerald-50/60 via-white to-gray-50/60 dark:from-[#12141C] dark:via-[#12141C] dark:to-emerald-950/60">
+          <div className="p-6 sm:p-8 border-b border-gray-200 dark:border-slate-800/80 bg-gradient-to-r from-emerald-50/60 via-white to-gray-50/60 dark:from-[#12141C] dark:via-[#12141C] dark:to-emerald-950/60 gm-hero-banner">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-12 h-12 rounded-xl bg-[#0F4C3A] text-white flex items-center justify-center font-extrabold text-xl shadow-md shadow-[#0F4C3A]/20">
@@ -697,19 +706,21 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                   </select>
                 </div>
 
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={onReturnToStorefront}
-                    className="w-1/2 sm:w-auto px-4 py-2.5 rounded-xl border border-gray-300 dark:border-slate-800/80 text-xs font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer text-center"
-                  >
-                    Cancel
-                  </button>
+                <div className={`flex items-center gap-3 w-full sm:w-auto ${enableB2BAndStorefrontPortal ? '' : 'sm:ml-auto'}`}>
+                  {enableB2BAndStorefrontPortal && (
+                    <button
+                      type="button"
+                      onClick={onReturnToStorefront}
+                      className="w-1/2 sm:w-auto px-4 py-2.5 rounded-xl border border-gray-300 dark:border-slate-800/80 text-xs font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer text-center"
+                    >
+                      Cancel
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleExecuteLogin()}
                     disabled={isAuthenticating}
-                    className="w-1/2 sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs sm:text-sm font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                    className={`${enableB2BAndStorefrontPortal ? 'w-1/2 sm:w-auto' : 'w-full sm:w-auto'} flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs sm:text-sm font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50`}
                   >
                     {isAuthenticating ? (
                       <>
@@ -862,14 +873,16 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               </div>
 
               {/* Submit Button */}
-              <div className="pt-4 border-t border-gray-200 dark:border-slate-800/80 flex items-center justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={onReturnToStorefront}
-                  className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-slate-800/80 text-xs font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
+              <div className={`pt-4 border-t border-gray-200 dark:border-slate-800/80 flex items-center ${enableB2BAndStorefrontPortal ? 'justify-between' : 'justify-end'} gap-4`}>
+                {enableB2BAndStorefrontPortal && (
+                  <button
+                    type="button"
+                    onClick={onReturnToStorefront}
+                    className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-slate-800/80 text-xs font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={isAuthenticating}

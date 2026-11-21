@@ -166,6 +166,7 @@ export interface StoreOperationalStatus {
   maintenanceReason?: string;
   allowCatalogBrowsing: boolean;
   updatedAt: string;
+  enableB2BAndStorefrontPortal?: boolean;
 }
 
 export type OutletType = 'FLAGSHIP_STORE' | 'DARK_STORE' | 'CENTRAL_HUB' | 'EXPRESS_MART';
@@ -2384,6 +2385,7 @@ export interface ErpConfigurationSettings {
   accountingLockBeforeDate: string; // Optional YYYY-MM-DD preventing backdated GL mutations
   minMarginFloorPct?: number; // Dynamic Margin Floor above WAC unitCost (default 2.0%)
   maxAllowedOutlets?: number; // Maximum active outlets allowed under SaaS quota (default 10)
+  enableB2BAndStorefrontPortal?: boolean; // Feature flag controlling Customer Storefront, B2B Portal & Quotations visibility (default false)
   updatedAt?: string;
   updatedBy?: string;
 }

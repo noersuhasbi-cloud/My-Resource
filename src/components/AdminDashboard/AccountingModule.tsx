@@ -366,7 +366,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
     <div className="space-y-6">
       {/* Top Banner / Store Segregation Control */}
       <div
-        className={`p-4 sm:p-6 rounded-2xl border transition-all ${
+        className={`p-4 sm:p-6 rounded-2xl border transition-all gm-hero-banner ${
           isLight
             ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
             : 'bg-[#12141C] border-slate-800/80'

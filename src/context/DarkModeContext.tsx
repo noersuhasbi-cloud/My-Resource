@@ -34,13 +34,42 @@ export const DarkModeContext = createContext<DarkModeContextValue | undefined>(u
 
 export const DarkModeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeMode>(getInitialTheme);
+  const transitionTimerRef = React.useRef<number | null>(null);
 
   const isDarkMode = theme === 'dark';
+
+  const triggerThemeTransition = useCallback(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    if (prefersReducedMotion) return;
+
+    const root = document.documentElement;
+    root.classList.add('theme-transitioning');
+    if (transitionTimerRef.current !== null) {
+      window.clearTimeout(transitionTimerRef.current);
+    }
+    transitionTimerRef.current = window.setTimeout(() => {
+      root.classList.remove('theme-transitioning');
+      transitionTimerRef.current = null;
+    }, 280);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (transitionTimerRef.current !== null && typeof window !== 'undefined') {
+        window.clearTimeout(transitionTimerRef.current);
+      }
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('theme-transitioning');
+      }
+    };
+  }, []);
 
   const applyThemeToDomAndStorage = useCallback((nextTheme: ThemeMode) => {
     const isDark = nextTheme === 'dark';
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', isDark);
+      document.documentElement.classList.toggle('light-theme', !isDark);
       document.documentElement.style.colorScheme = nextTheme;
     }
     try {
@@ -58,29 +87,40 @@ export const DarkModeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === DARK_MODE_STORAGE_KEY && event.newValue !== null) {
+        triggerThemeTransition();
         setThemeState(event.newValue === 'true' ? 'dark' : 'light');
       } else if (
         event.key === LEGACY_ADMIN_THEME_KEY &&
         (event.newValue === 'dark' || event.newValue === 'light')
       ) {
+        triggerThemeTransition();
         setThemeState(event.newValue);
       }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [triggerThemeTransition]);
 
-  const setTheme = useCallback((nextTheme: ThemeMode) => {
-    setThemeState(nextTheme);
-  }, []);
+  const setTheme = useCallback(
+    (nextTheme: ThemeMode) => {
+      triggerThemeTransition();
+      setThemeState(nextTheme);
+    },
+    [triggerThemeTransition]
+  );
 
-  const setDarkMode = useCallback((dark: boolean) => {
-    setThemeState(dark ? 'dark' : 'light');
-  }, []);
+  const setDarkMode = useCallback(
+    (dark: boolean) => {
+      triggerThemeTransition();
+      setThemeState(dark ? 'dark' : 'light');
+    },
+    [triggerThemeTransition]
+  );
 
   const toggleDarkMode = useCallback(() => {
+    triggerThemeTransition();
     setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  }, []);
+  }, [triggerThemeTransition]);
 
   return (
     <DarkModeContext.Provider

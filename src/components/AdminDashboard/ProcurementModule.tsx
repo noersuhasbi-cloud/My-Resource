@@ -845,7 +845,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     <div className="space-y-6">
       {/* Top Banner / Metrics Overview */}
       <div
-        className={`p-6 rounded-2xl border transition-all ${
+        className={`p-6 rounded-2xl border transition-all gm-hero-banner ${
           isLight
             ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
             : 'bg-emerald-950/80 border-emerald-800/50'

@@ -57,6 +57,8 @@ export default function App() {
     return null;
   });
 
+  const [enableB2BAndStorefrontPortal, setEnableB2BAndStorefrontPortal] = useState<boolean>(false);
+
   const [storefrontMode, setStorefrontMode] = useState<'b2c' | 'b2b'>(() => {
     try {
       const hash = window.location.hash;
@@ -69,20 +71,18 @@ export default function App() {
     try {
       const hash = window.location.hash;
       const saved = localStorage.getItem('grocemart_admin_session');
-      if (hash === '#admin' || hash === '#erp' || hash === '#staff' || hash === '#pos') {
-        return saved ? 'admin_erp' : 'admin_login';
-      }
       if (hash === '#admin-login') return 'admin_login';
+      return saved ? 'admin_erp' : 'admin_login';
     } catch {}
-    return 'customer';
+    return 'admin_login';
   });
 
-  // Keep portal view in sync with URL hash
+  // Keep portal view in sync with URL hash & feature flag
   useEffect(() => {
     const handleHashSync = () => {
       const hash = window.location.hash;
+      const saved = localStorage.getItem('grocemart_admin_session');
       if (hash === '#admin' || hash === '#erp' || hash === '#staff' || hash === '#pos') {
-        const saved = localStorage.getItem('grocemart_admin_session');
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
@@ -98,24 +98,28 @@ export default function App() {
         }
       } else if (hash === '#admin-login') {
         setPortalView((prev) => (prev === 'admin_login' ? prev : 'admin_login'));
-      } else if (hash === '#b2b' || hash === '#wholesale') {
+      } else if (enableB2BAndStorefrontPortal && (hash === '#b2b' || hash === '#wholesale')) {
         setPortalView((prev) => (prev === 'customer' ? prev : 'customer'));
         setStorefrontMode((prev) => (prev === 'b2b' ? prev : 'b2b'));
-      } else if (!hash || hash === '#storefront' || hash === '#home') {
+      } else if (enableB2BAndStorefrontPortal && (hash === '#storefront' || hash === '#home')) {
         setPortalView((prev) => (prev === 'customer' ? prev : 'customer'));
         setStorefrontMode((prev) => (prev === 'b2c' ? prev : 'b2c'));
+      } else if (!enableB2BAndStorefrontPortal) {
+        const targetView: PortalView = saved ? 'admin_erp' : 'admin_login';
+        setPortalView((prev) => (prev === targetView ? prev : targetView));
       }
     };
 
     window.addEventListener('hashchange', handleHashSync);
     return () => window.removeEventListener('hashchange', handleHashSync);
-  }, []);
+  }, [enableB2BAndStorefrontPortal]);
 
   const [storeStatus, setStoreStatus] = useState<StoreOperationalStatus | null>(null);
   const [syncedStoreLocations, setSyncedStoreLocations] = useState<StoreLocation[]>(STORE_LOCATIONS);
 
-  // Sync store operational status & per-outlet closures from backend
+  // Sync store operational status, portal flag & per-outlet closures from backend
   useEffect(() => {
+    let active = true;
     const LEGACY_TO_OUTLET: Record<string, string> = {
       'store-sby-dharmahusada': 'store-sby-gubeng',
       'store-bdg-riau': 'store-bdg-dago',
@@ -125,10 +129,25 @@ export default function App() {
       apiClient.getStoreStatus().catch(() => null),
       apiClient.getStoreOutlets().catch(() => []),
     ]).then(([statusRes, outletsRes]) => {
-      if (statusRes) setStoreStatus(statusRes);
+      if (!active) return;
+      if (statusRes) {
+        setStoreStatus((prev) => (JSON.stringify(prev) === JSON.stringify(statusRes) ? prev : statusRes));
+        const flagEnabled = Boolean(statusRes.enableB2BAndStorefrontPortal);
+        setEnableB2BAndStorefrontPortal((prev) => (prev === flagEnabled ? prev : flagEnabled));
+        if (flagEnabled) {
+          const hash = window.location.hash;
+          if (hash === '#b2b' || hash === '#wholesale') {
+            setStorefrontMode('b2b');
+            setPortalView('customer');
+          } else if (hash === '#storefront' || hash === '#home') {
+            setStorefrontMode('b2c');
+            setPortalView('customer');
+          }
+        }
+      }
       if (Array.isArray(outletsRes) && outletsRes.length > 0) {
-        setSyncedStoreLocations(
-          STORE_LOCATIONS.map((loc) => {
+        setSyncedStoreLocations((prev) => {
+          const next = STORE_LOCATIONS.map((loc) => {
             const mappedId = LEGACY_TO_OUTLET[loc.id] || loc.id;
             const live = outletsRes.find((o) => o.storeId === loc.id || o.storeId === mappedId);
             return live
@@ -138,10 +157,14 @@ export default function App() {
                   closureReason: live.closureReason,
                 }
               : loc;
-          })
-        );
+          });
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
       }
     });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // 1. Toast notifications state
@@ -247,14 +270,17 @@ export default function App() {
   });
   const [isB2bCartOpen, setIsB2bCartOpen] = useState<boolean>(false);
 
-  // Sync B2B Wholesale Initial Data from API
+  // Sync B2B Wholesale Initial Data only when B2B/Storefront portal is active
   useEffect(() => {
+    if (!enableB2BAndStorefrontPortal || portalView !== 'customer') return;
+    let active = true;
     Promise.all([
       apiClient.getB2BCustomers(),
       apiClient.getB2BOrders(),
       apiClient.getGiroRecords(),
     ])
       .then(([custs, ords, giros]) => {
+        if (!active) return;
         setB2bCustomers(custs);
         setB2bOrders(ords);
         setGiroRecords(giros);
@@ -262,7 +288,10 @@ export default function App() {
       .catch((err) => {
         console.warn('Initial B2B data fetch notice:', err);
       });
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [enableB2BAndStorefrontPortal, portalView]);
 
   // Persist B2B Cart
   useEffect(() => {
@@ -574,18 +603,20 @@ export default function App() {
   };
 
   const handleExitToStorefront = () => {
-    window.location.hash = '';
+    if (!enableB2BAndStorefrontPortal) return;
+    window.location.hash = '#storefront';
     setPortalView('customer');
   };
 
   // 1. DEDICATED ADMIN LOGIN SCREEN (AUTHENTICATION GATE)
-  if (portalView === 'admin_login') {
+  if (portalView === 'admin_login' || (!enableB2BAndStorefrontPortal && !adminSession)) {
     return (
-      <div key="portal-admin-login" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-view-enter">
+      <div key="portal-admin-login" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-surface gm-daylight-canvas gm-view-enter">
         <AdminLogin
           onLoginSuccess={handleAdminLoginSuccess}
           onReturnToStorefront={handleExitToStorefront}
           onShowToast={showToast}
+          enableB2BAndStorefrontPortal={enableB2BAndStorefrontPortal}
         />
         <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       </div>
@@ -593,15 +624,16 @@ export default function App() {
   }
 
   // 2. ADMIN ERP PORTAL (LOCKED BEHIND AUTHENTICATION GATE)
-  if (portalView === 'admin_erp') {
+  if (portalView === 'admin_erp' || !enableB2BAndStorefrontPortal) {
     // If not authenticated, force redirect to Login Gate
     if (!adminSession) {
       return (
-        <div key="portal-admin-gate" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-view-enter">
+        <div key="portal-admin-gate" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-surface gm-daylight-canvas gm-view-enter">
           <AdminLogin
             onLoginSuccess={handleAdminLoginSuccess}
             onReturnToStorefront={handleExitToStorefront}
             onShowToast={showToast}
+            enableB2BAndStorefrontPortal={enableB2BAndStorefrontPortal}
           />
           <ToastContainer toasts={toasts} onDismiss={dismissToast} />
         </div>
@@ -609,13 +641,18 @@ export default function App() {
     }
 
     return (
-      <div key="portal-admin-erp" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-view-enter">
+      <div key="portal-admin-erp" className="min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white gm-surface gm-daylight-canvas gm-view-enter">
         <AdminDashboard
           key={adminSession.userId || adminSession.email || adminSession.userRole}
           initialStaffSession={adminSession}
           onCloseToStorefront={handleExitToStorefront}
           onLogout={handleAdminLogout}
           onShowToast={showToast}
+          enableB2BAndStorefrontPortal={enableB2BAndStorefrontPortal}
+          onErpSettingsUpdated={(cfg) => {
+            const nextFlag = Boolean(cfg?.enableB2BAndStorefrontPortal);
+            setEnableB2BAndStorefrontPortal((prev) => (prev === nextFlag ? prev : nextFlag));
+          }}
         />
         <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       </div>
@@ -624,7 +661,7 @@ export default function App() {
 
   // 3. PUBLIC CUSTOMER STOREFRONT
   return (
-    <div key="portal-customer" className="min-h-screen bg-stone-50 dark:bg-[#090A0F] text-stone-900 dark:text-slate-100 flex flex-col font-sans selection:bg-emerald-800 selection:text-white transition-colors duration-200 gm-view-enter">
+    <div key="portal-customer" className="min-h-screen bg-stone-50 dark:bg-[#090A0F] text-stone-900 dark:text-slate-100 flex flex-col font-sans selection:bg-emerald-800 selection:text-white gm-surface gm-daylight-canvas gm-view-enter">
       {/* Top Navigation - Customer only, completely removed Admin HQ shortcut */}
       <Header
         cartItems={cartItems}

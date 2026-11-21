@@ -35,7 +35,7 @@ interface PosShiftModalProps {
   cashierName: string;
   activeShift: PosRegisterShiftSession | null;
   shiftHistory: PosRegisterShiftSession[];
-  onShiftUpdated: () => void;
+  onShiftUpdated: (shift?: PosRegisterShiftSession | null) => void;
   onShowToast: (title: string, message: string) => void;
 }
 
@@ -94,7 +94,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
       });
       onShowToast('Register Shift Opened', res.message);
       setFinalizedZReport(null);
-      onShiftUpdated();
+      onShiftUpdated(res.shift);
       onClose();
     } catch (err: any) {
       onShowToast('Open Shift Error', err.message || 'Failed to open shift');
@@ -126,7 +126,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
       });
       setFinalizedZReport(res.shift);
       onShowToast('Z-Report Finalized', res.message);
-      onShiftUpdated();
+      onShiftUpdated(null);
     } catch (err: any) {
       onShowToast('Close Shift Error', err.message || 'Failed to finalize Z-Report');
     } finally {

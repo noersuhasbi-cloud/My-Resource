@@ -116,13 +116,16 @@ interface AdminSidebarProps {
   onLogout?: () => void;
   activeStaffSession?: StaffShiftSession | null;
   trialGovernance?: TrialGovernanceStatusSnapshot | null;
+  enableB2BAndStorefrontPortal?: boolean;
 }
 
 export function isDashboardTabAllowed(
   session: StaffShiftSession | null | undefined,
   tab: AdminDashboardTab,
-  trialGovernance?: TrialGovernanceStatusSnapshot | null
+  trialGovernance?: TrialGovernanceStatusSnapshot | null,
+  enableB2BAndStorefrontPortal: boolean = false
 ): boolean {
+  if (tab === 'quotations' && !enableB2BAndStorefrontPortal) return false;
   if (!session) return true;
   const baseAllowed = session.modulePermissions
     ? isModulePermissionTabAllowed(session.modulePermissions, tab, session.roleCode)
@@ -160,9 +163,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onLogout,
   activeStaffSession,
   trialGovernance,
+  enableB2BAndStorefrontPortal = false,
 }) => {
   const isLight = theme === 'light';
-  const allow = (tab: AdminDashboardTab) => isDashboardTabAllowed(activeStaffSession, tab, trialGovernance);
+  const allow = (tab: AdminDashboardTab) =>
+    isDashboardTabAllowed(activeStaffSession, tab, trialGovernance, enableB2BAndStorefrontPortal);
   const allowAccountingSub = (sub: AccountingSubTab) => {
     if (!isAccountingSubTabAllowed(activeStaffSession, sub)) return false;
     if (trialGovernance && activeStaffSession?.roleCode && activeStaffSession.roleCode !== 'SUPER_ADMIN') {
@@ -173,9 +178,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     }
     return true;
   };
-  const canViewStorefront = activeStaffSession
-    ? hasModuleAccess(activeStaffSession, 'storefront', 'view') === true
-    : true;
+  const canViewStorefront =
+    Boolean(enableB2BAndStorefrontPortal) &&
+    (activeStaffSession ? hasModuleAccess(activeStaffSession, 'storefront', 'view') === true : true);
 
   const handleTabClick = (tab: AdminDashboardTab) => {
     onSelectTab(tab);
@@ -1268,11 +1273,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     <>
       {/* Desktop Persistent Sidebar (Collapsible: 64px icon rail vs 260px expanded) */}
       <aside
-        className={`hidden lg:block print:hidden fixed inset-y-0 left-0 z-40 transition-all duration-300 ease-in-out border-r ${
+        className={`hidden lg:block print:hidden fixed inset-y-0 left-0 z-40 transition-all duration-300 ease-in-out border-r gm-surface ${
           isCollapsed ? 'w-20' : 'w-64'
         } ${
           isLight
-            ? 'bg-white border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)]'
+            ? 'gm-chrome-surface border-slate-200 shadow-[4px_0_24px_rgba(15,35,24,0.04)]'
             : 'bg-[#12141C] border-slate-800/80'
         }`}
       >
@@ -1290,10 +1295,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
       {/* Mobile Off-Canvas Sidebar Drawer */}
       <div
-        className={`lg:hidden print:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] transition-transform duration-300 ease-in-out shadow-2xl ${
+        className={`lg:hidden print:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] transition-transform duration-300 ease-in-out shadow-2xl gm-surface ${
           isMobileOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'
         } ${
-          isLight ? 'bg-white border-r border-slate-200' : 'bg-[#12141C] border-r border-slate-800/80'
+          isLight ? 'gm-chrome-surface border-r border-slate-200' : 'bg-[#12141C] border-r border-slate-800/80'
         }`}
       >
         {sidebarContent}

@@ -821,7 +821,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
   return (
     <div className="space-y-5 font-sans">
       {/* Header Bar */}
-      <div className={`${cardClass} p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4`}>
+      <div className={`${cardClass} gm-hero-banner p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4`}>
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
             <HeartHandshake className="w-5 h-5" />

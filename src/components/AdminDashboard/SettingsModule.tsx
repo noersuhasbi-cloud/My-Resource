@@ -166,6 +166,7 @@ interface SettingsModuleProps {
   onNavigateToMargin?: () => void;
   onNavigateToQuotations?: () => void;
   onTrialGovernanceUpdated?: (snapshot: TrialGovernanceStatusSnapshot) => void;
+  onErpSettingsUpdated?: (erpSettings: ErpConfigurationSettings) => void;
 }
 
 export const SettingsModule: React.FC<SettingsModuleProps> = ({
@@ -185,6 +186,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   onNavigateToMargin,
   onNavigateToQuotations,
   onTrialGovernanceUpdated,
+  onErpSettingsUpdated,
 }) => {
   const isLight = theme === 'light';
   const currentRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
@@ -904,15 +906,17 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     try {
       const res = await apiClient.updateErpSettingsConfig(erpConfigDraft);
       if (res.success) {
-        setErpConfigDraft({
+        const nextErp: ErpConfigurationSettings = {
           ...INITIAL_ERP_SETTINGS,
           ...(res.config || res.erpSettings),
           ojolChannelRates: {
             ...INITIAL_ERP_SETTINGS.ojolChannelRates,
             ...((res.config || res.erpSettings)?.ojolChannelRates || {}),
           },
-        });
+        };
+        setErpConfigDraft(nextErp);
         if (res.settings) setEnterpriseSettings(res.settings);
+        onErpSettingsUpdated?.(nextErp);
         onShowToast('ERP Policy Parameters Saved', res.message || 'Dynamic tax, POS treasury, compliance, and period lock parameters updated.');
         onRefreshData?.();
       }
@@ -1869,7 +1873,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       )}
 
       {!standaloneMode && (
-      <div className={`${cardClass} p-5 sm:p-6`}>
+      <div className={`${cardClass} gm-hero-banner p-5 sm:p-6`}>
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 min-w-0">
           <div className="flex items-start gap-3.5 min-w-0 flex-1">
             <div className="p-3 rounded-xl bg-[#0F4C3A] text-white shadow-xs shrink-0">
@@ -3195,6 +3199,33 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     </div>
                   </div>
                 </div>
+
+                {/* Portal Feature Visibility Control */}
+                <div className={`${subCardClass} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold text-gray-900 dark:text-slate-100">
+                      B2B &amp; Customer Storefront Portal Visibility
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                      When disabled (default), app boots directly to Internal Staff ERP Login and hides Storefront View &amp; Quotations &amp; Pro Forma menus across all roles.
+                    </p>
+                  </div>
+                  <label className="inline-flex items-center gap-2.5 text-xs font-semibold text-gray-800 dark:text-slate-200 cursor-pointer shrink-0 select-none">
+                    <input
+                      type="checkbox"
+                      disabled={isReadOnlyPolicyRole}
+                      checked={erpConfigDraft.enableB2BAndStorefrontPortal === true}
+                      onChange={(e) =>
+                        setErpConfigDraft((p) => ({
+                          ...p,
+                          enableB2BAndStorefrontPortal: e.target.checked,
+                        }))
+                      }
+                      className="w-4 h-4 text-[#0F4C3A] rounded border-gray-300 dark:border-slate-700 disabled:opacity-50"
+                    />
+                    <span>Enable B2B &amp; Customer Storefront Portal</span>
+                  </label>
+                </div>
               </div>
             )}
 
@@ -3477,7 +3508,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       {activeSubTab === 'branch_monitor' && canViewBranchMonitor && (
         <div className="space-y-6 animate-fadeIn">
           {/* Header & Refresh Bar */}
-          <div className={`${cardClass} p-5 sm:p-6`}>
+          <div className={`${cardClass} gm-hero-banner p-5 sm:p-6`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800/80">
               <div>
                 <div className="flex items-center gap-2">

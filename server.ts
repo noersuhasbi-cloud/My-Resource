@@ -381,6 +381,7 @@ function mergeErpSettings(raw?: Partial<ErpConfigurationSettings> | null): ErpCo
     ...src,
     minMarginFloorPct: Number.isFinite(rawMarginFloor) ? Math.max(0, Math.min(50, rawMarginFloor)) : (base.minMarginFloorPct ?? 2.0),
     maxAllowedOutlets: Number.isFinite(rawMaxOutlets) ? Math.max(1, Math.min(500, Math.round(rawMaxOutlets))) : (base.maxAllowedOutlets ?? 10),
+    enableB2BAndStorefrontPortal: src.enableB2BAndStorefrontPortal === true,
     ojolChannelRates: {
       grabMart: { ...base.ojolChannelRates.grabMart, ...(src.ojolChannelRates?.grabMart || {}) },
       goMart: { ...base.ojolChannelRates.goMart, ...(src.ojolChannelRates?.goMart || {}) },
@@ -2713,6 +2714,13 @@ function getSellableNonExpiredAtpStock(sku: string, storeId: string = 'ALL'): {
   );
   const inv = inventoryList.find((i) => i.sku === sku);
   const wholesaleProd = wholesaleProductsList.find((p) => p.sku === sku);
+  const fallbackCatalogProd = !tier && !inv && !wholesaleProd
+    ? PRODUCTS.find(
+        (p) =>
+          p.id === sku ||
+          `SKU-${p.category.slice(0, 3).toUpperCase()}-${p.id.replace(/\D/g, '').padStart(3, '0')}` === sku
+      )
+    : undefined;
 
   const hasBatchTracking = matchingAll.some((b) => !b.batchId.startsWith('BAT-QRN-'));
   let stockCap = Infinity;
@@ -2722,6 +2730,8 @@ function getSellableNonExpiredAtpStock(sku: string, storeId: string = 'ALL'): {
     stockCap = Math.max(0, Number(inv.currentStock) || 0);
   } else if (wholesaleProd) {
     stockCap = Math.max(0, Number(wholesaleProd.currentStockBaseUnits) || 0);
+  } else if (fallbackCatalogProd) {
+    stockCap = Math.max(0, Number(fallbackCatalogProd.stock) || 24);
   }
 
   const effectiveAtp = hasBatchTracking
@@ -2733,6 +2743,18 @@ function getSellableNonExpiredAtpStock(sku: string, storeId: string = 'ALL'): {
     batchSellableQty,
     effectiveAtp,
   };
+}
+
+function resolvePosRetailStoreId(rawStoreId?: string | null): string {
+  const clean = String(rawStoreId || '').trim();
+  if (!clean || clean === 'ALL' || clean === 'CONSOLIDATED' || clean === 'WH-CDC-01') {
+    return 'store-jkt-senopati';
+  }
+  const matched = storeSchedules.find((s) => s.storeId === clean);
+  if (matched && matched.outletType === 'CENTRAL_HUB') {
+    return 'store-jkt-senopati';
+  }
+  return clean;
 }
 
 function syncBatchesForStockVariance(
@@ -10053,7 +10075,10 @@ async function startServer() {
   // STORE OPERATIONS & SCHEDULES MANAGEMENT ENDPOINTS
   // -------------------------------------------------------------
   app.get(['/api/admin/store-status', '/api/store-status', '/api/store/status'], (_req: Request, res: Response) => {
-    res.json(storeStatus);
+    res.json({
+      ...storeStatus,
+      enableB2BAndStorefrontPortal: getErpSettings().enableB2BAndStorefrontPortal === true,
+    });
   });
 
   app.post('/api/admin/store-status', (req: Request, res: Response) => {
@@ -14698,11 +14723,13 @@ async function startServer() {
       isProdLic ||
       trialGovernanceConfig.allowLegacyQuickIds;
 
+    const enableB2BAndStorefrontPortal = getErpSettings().enableB2BAndStorefrontPortal === true;
     if (!quickFillEnabled) {
       return res.json({
         success: true,
         quickFillEnabled: false,
         allowLegacyQuickIds,
+        enableB2BAndStorefrontPortal,
         governanceStatus: governance.effectiveStatus,
         isOperationalLocked: governance.isOperationalLocked,
         statusMessage: governance.statusMessage,
@@ -14725,6 +14752,7 @@ async function startServer() {
       success: true,
       quickFillEnabled: true,
       allowLegacyQuickIds,
+      enableB2BAndStorefrontPortal,
       governanceStatus: governance.effectiveStatus,
       isOperationalLocked: governance.isOperationalLocked,
       statusMessage: governance.statusMessage,
@@ -15204,7 +15232,7 @@ async function startServer() {
   app.get('/api/pos/products', (req: Request, res: Response) => {
     const { storeId: queryStoreId = 'store-jkt-senopati', search = '', category = 'ALL' } = req.query;
     const scope = resolveRequestBranchScope(req);
-    const storeId = scope.isBranchScoped ? scope.storeId : queryStoreId;
+    const storeId = resolvePosRetailStoreId(scope.isBranchScoped ? scope.storeId : String(queryStoreId || 'store-jkt-senopati'));
     const cleanSearch = String(search).toLowerCase().trim();
     const cleanCategory = String(category).toLowerCase().trim();
     const nowMs = Date.now();
@@ -15212,7 +15240,13 @@ async function startServer() {
 
     const posCatalog: POSProductItem[] = [];
     PRODUCTS.forEach((prod) => {
-      const inv = inventoryList.find((i) => i.productId === prod.id || i.productName.toLowerCase() === prod.name.toLowerCase());
+      const prodNameWords = prod.name.toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
+      const invByExactName = inventoryList.find((i) => i.productName.toLowerCase() === prod.name.toLowerCase());
+      const invById = inventoryList.find((i) => i.productId === prod.id);
+      const invIdMatchesName = Boolean(
+        invById && prodNameWords.some((w) => invById.productName.toLowerCase().includes(w))
+      );
+      const inv = invByExactName || (invIdMatchesName ? invById : undefined);
       const sku = inv?.sku || `SKU-${prod.category.slice(0, 3).toUpperCase()}-${prod.id.replace(/\D/g, '').padStart(3, '0')}`;
       // Hard Rule 1: Exclude FIXED_ASSET and CONSUMABLE from retail POS catalog
       if (resolveSkuClassification(sku, inv?.itemClassification ?? prod.itemClassification) !== 'MERCHANDISE') {
@@ -15432,8 +15466,8 @@ async function startServer() {
     const effectiveOperatorName = getEffectiveOperatorName(req);
 
     const {
-      storeId = 'store-jkt-senopati',
-      storeName = 'GroceMart Senopati Flagship',
+      storeId: rawPosStoreId = 'store-jkt-senopati',
+      storeName: rawPosStoreName,
       cashierId = effectiveOperatorId,
       cashierName = effectiveOperatorName,
       shiftId = currentActiveStaffSession.activeShiftId,
@@ -15458,6 +15492,11 @@ async function startServer() {
       supervisorPin,
       supervisorName,
     } = req.body as POSTransactionRequest;
+    const storeId = resolvePosRetailStoreId(rawPosStoreId);
+    const storeName =
+      rawPosStoreName && rawPosStoreId === storeId
+        ? rawPosStoreName
+        : resolveBranchNameById(storeId) || rawPosStoreName || 'GroceMart Senopati Flagship';
 
     const cleanIdempotencyKey = extractRequestIdempotencyKey(req) || (clientIdempotencyKey ? String(clientIdempotencyKey).trim() : '');
     const cachedPosResponse = getCachedIdempotencyPayload('pos', cleanIdempotencyKey);
@@ -15490,8 +15529,12 @@ async function startServer() {
       return res.status(400).json({ error: 'Cannot process POS checkout with an empty cart.' });
     }
 
-    // Role-Based Access Control Verification (request-header aware)
-    const isAuthorized = ['cashier', 'store_manager', 'coo', 'super_admin'].includes(effectiveRole);
+    // Role-Based Access Control Verification (request-header aware + SystemUser permission aware)
+    const resolvedPosSysUser = resolveSystemUserForRequest(req);
+    const isAuthorized =
+      ['cashier', 'store_manager', 'coo', 'super_admin', 'admin'].includes(effectiveRole) ||
+      resolvedPosSysUser?.modulePermissions?.pos?.create === true ||
+      resolvedPosSysUser?.modulePermissions?.pos?.edit === true;
     if (!isAuthorized) {
       return res.status(403).json({
         success: false,
@@ -15724,6 +15767,7 @@ async function startServer() {
       const isClearanceMarkdown = Boolean(
         dynBatch ||
           autoAppliedMdCandidate ||
+          (mdCandidate && effectiveUnitPrice >= mdCandidate.markdownPrice && !(Number(item.discount) > 0) && !item.isManualPriceOverride) ||
           nearestBatch?.markdownStatus === 'Marked Down' ||
           (nearestBatch?.markdownDiscountPercent || 0) > 0 ||
           item?.isDynamicDiscountSku ||
@@ -16479,8 +16523,9 @@ async function startServer() {
   app.get('/api/pos/history', (req: Request, res: Response) => {
     const { storeId } = req.query;
     const scope = resolveRequestBranchScope(req);
-    const effectiveStoreId = scope.isBranchScoped ? scope.storeId : storeId;
-    if (effectiveStoreId && effectiveStoreId !== 'ALL' && effectiveStoreId !== 'CONSOLIDATED') {
+    const rawStore = scope.isBranchScoped ? scope.storeId : String(storeId || '');
+    if (rawStore && rawStore !== 'ALL' && rawStore !== 'CONSOLIDATED') {
+      const effectiveStoreId = resolvePosRetailStoreId(rawStore);
       return res.json(posTransactionsHistory.filter((r) => r.storeId === effectiveStoreId));
     }
     res.json(posTransactionsHistory);
@@ -16657,6 +16702,7 @@ async function startServer() {
       return res.status(400).json({ error: 'minMarginFloorPct must be between 0% and 50%.' });
     }
     mergedErp.minMarginFloorPct = Number(normalizedMarginFloor.toFixed(2));
+    mergedErp.enableB2BAndStorefrontPortal = Boolean(mergedErp.enableB2BAndStorefrontPortal);
 
     if (patch.maxAllowedOutlets !== undefined) {
       if (!isCallerSuperAdminForUserMgmt(req)) {
@@ -16703,7 +16749,7 @@ async function startServer() {
       module: 'SECURITY',
       action: 'ERP_CONFIG_PARAMETERS_UPDATED',
       referenceId: 'ERP_SETTINGS_CONFIG',
-      summary: `Updated ERP Policy Config (PPN ${mergedErp.activeVatRatePct}%, PPh22 ${mergedErp.pph22RatePct}%, PPh23 ${mergedErp.pph23RatePct}%, QRIS MDR ${mergedErp.qrisMdrPct}%, Margin Floor ${mergedErp.minMarginFloorPct}%, Lock: ${mergedErp.accountingLockBeforeDate || 'None'}).`,
+      summary: `Updated ERP Policy Config (PPN ${mergedErp.activeVatRatePct}%, PPh22 ${mergedErp.pph22RatePct}%, PPh23 ${mergedErp.pph23RatePct}%, QRIS MDR ${mergedErp.qrisMdrPct}%, Margin Floor ${mergedErp.minMarginFloorPct}%, Portal=${mergedErp.enableB2BAndStorefrontPortal ? 'ON' : 'OFF'}, Lock: ${mergedErp.accountingLockBeforeDate || 'None'}).`,
     });
     scheduleStateSave();
 
@@ -25601,11 +25647,7 @@ async function startServer() {
   app.get('/api/pos/shifts/active', (req: Request, res: Response) => {
     const { storeId = 'store-jkt-senopati' } = req.query as { storeId?: string };
     const scope = resolveRequestBranchScope(req);
-    const effectiveStore = scope.isBranchScoped
-      ? scope.storeId
-      : storeId === 'CONSOLIDATED'
-      ? 'store-jkt-senopati'
-      : storeId;
+    const effectiveStore = resolvePosRetailStoreId(scope.isBranchScoped ? scope.storeId : storeId);
     const active = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === effectiveStore) || null;
     res.json({ activeShift: active });
   });
@@ -25613,9 +25655,10 @@ async function startServer() {
   app.get('/api/pos/shifts/history', (req: Request, res: Response) => {
     const { storeId } = req.query as { storeId?: string };
     const scope = resolveRequestBranchScope(req);
-    const effectiveStore = scope.isBranchScoped ? scope.storeId : storeId;
+    const rawStore = scope.isBranchScoped ? scope.storeId : storeId;
     let list = [...posShiftsList];
-    if (effectiveStore && effectiveStore !== 'ALL' && effectiveStore !== 'CONSOLIDATED') {
+    if (rawStore && rawStore !== 'ALL' && rawStore !== 'CONSOLIDATED') {
+      const effectiveStore = resolvePosRetailStoreId(rawStore);
       list = list.filter((s) => s.storeId === effectiveStore);
     }
     res.json(list);
@@ -25630,12 +25673,12 @@ async function startServer() {
       openingFloatIDR = 500000,
       cashierName,
     } = req.body;
-    const storeId = rawStoreId || (scope.isBranchScoped ? scope.storeId : 'store-jkt-senopati');
+    const storeId = resolvePosRetailStoreId(rawStoreId || (scope.isBranchScoped ? scope.storeId : 'store-jkt-senopati'));
     const shiftBranchViolation = checkBranchIsolationViolation(req, storeId);
     if (shiftBranchViolation) {
       return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: shiftBranchViolation });
     }
-    const storeName = rawStoreName || resolveBranchNameById(storeId);
+    const storeName = (rawStoreName && rawStoreId === storeId) ? rawStoreName : resolveBranchNameById(storeId);
 
     const existing = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
     if (existing) {
@@ -25667,6 +25710,7 @@ async function startServer() {
     };
 
     posShiftsList.unshift(newShift);
+    scheduleStateSave();
     res.json({
       success: true,
       shift: newShift,
@@ -25677,7 +25721,7 @@ async function startServer() {
   app.post('/api/pos/shifts/close', (req: Request, res: Response) => {
     const {
       shiftId,
-      storeId = 'store-jkt-senopati',
+      storeId: rawCloseStoreId = 'store-jkt-senopati',
       denominations = [],
       countedQrisBatchIDR = 0,
       countedEdcBatchIDR = 0,
@@ -25690,6 +25734,7 @@ async function startServer() {
       countedEdcBatchIDR?: number;
       notes?: string;
     };
+    const storeId = resolvePosRetailStoreId(rawCloseStoreId);
 
     const shift =
       (shiftId ? posShiftsList.find((s) => s.id === shiftId) : undefined) ||

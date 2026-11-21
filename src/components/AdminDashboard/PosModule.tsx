@@ -337,8 +337,16 @@ export const PosModule: React.FC<PosModuleProps> = ({
     } catch {}
   };
 
-  // Load Products for current store
-  const effectiveStoreId = selectedStore === 'CONSOLIDATED' ? 'store-jkt-senopati' : selectedStore;
+  // Load Products for current retail store (normalize consolidated / warehouse hub views to Senopati Flagship)
+  const selectedOutletObj = storeOutlets.find((s) => s.storeId === selectedStore);
+  const effectiveStoreId =
+    !selectedStore ||
+    selectedStore === 'CONSOLIDATED' ||
+    selectedStore === 'ALL' ||
+    selectedStore === 'WH-CDC-01' ||
+    selectedOutletObj?.outletType === 'CENTRAL_HUB'
+      ? 'store-jkt-senopati'
+      : selectedStore;
   const currentStoreInfo = useMemo(() => {
     return storeOutlets.find((s) => s.storeId === effectiveStoreId) || {
       storeId: effectiveStoreId,
@@ -944,7 +952,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
       storeName: currentStoreInfo.storeName,
       cashierId: activeStaffSession?.userId || 'USR-CASH-01',
       cashierName: activeStaffSession?.userName || 'Andi Wijaya (Frontline Cashier)',
-      shiftId: activeStaffSession?.activeShiftId || 'SHIFT-JKT-SEN-MORNING',
+      shiftId: activeShift?.id || activeStaffSession?.activeShiftId || 'SHIFT-JKT-SEN-MORNING',
       items: cart,
       subtotal,
       discount: baseDiscountAmount,
@@ -3140,7 +3148,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
         cashierName={activeStaffSession?.userName || 'Andi Wijaya'}
         activeShift={activeShift}
         shiftHistory={shiftHistory}
-        onShiftUpdated={() => {
+        onShiftUpdated={(updatedShift) => {
+          if (updatedShift !== undefined) {
+            setActiveShift(updatedShift);
+          }
           loadShiftState();
           if (onInventoryUpdated) onInventoryUpdated();
         }}

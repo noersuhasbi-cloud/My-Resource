@@ -31,6 +31,7 @@ import type {
   RemovalStrategyConfig,
   VendorBill,
   EnterpriseSettingsConfig,
+  ErpConfigurationSettings,
   EnterpriseNotification,
   TrialGovernanceStatusSnapshot,
 } from '../../types/index.ts';
@@ -129,6 +130,8 @@ interface AdminDashboardProps {
   onCloseToStorefront: () => void;
   onLogout?: () => void;
   onShowToast: (title: string, message: string) => void;
+  enableB2BAndStorefrontPortal?: boolean;
+  onErpSettingsUpdated?: (erpSettings: ErpConfigurationSettings) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -136,6 +139,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onCloseToStorefront,
   onLogout,
   onShowToast,
+  enableB2BAndStorefrontPortal: propEnableB2BPortal = false,
+  onErpSettingsUpdated,
 }) => {
   // Theme Toggle: Synchronized with global DarkModeContext
   const { theme, toggleDarkMode: toggleTheme } = useDarkMode();
@@ -247,6 +252,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
   }, [activeStaffSession?.userId, handleTrialGovernanceUpdated]);
 
+  // Enterprise settings (declared before route guard effect)
+  const [enterpriseSettings, setEnterpriseSettings] = useState<EnterpriseSettingsConfig | null>(null);
+
   // Synchronize API operator context & strictly guard activeTab/subTab redirects
   useEffect(() => {
     apiClient.setOperatorContext(activeStaffSession);
@@ -254,8 +262,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     if (!activeStaffSession) return;
+    const portalEnabled = Boolean(
+      enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal
+    );
 
-    if (!isDashboardTabAllowed(activeStaffSession, activeTab, trialGovernance)) {
+    if (!isDashboardTabAllowed(activeStaffSession, activeTab, trialGovernance, portalEnabled)) {
       const preferredDefault = getDefaultTabForSession(activeStaffSession);
       const fallbackCandidates: AdminDashboardTab[] = [
         preferredDefault,
@@ -279,7 +290,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         'settings',
       ];
       const nextAllowedTab = fallbackCandidates.find((tab) =>
-        isDashboardTabAllowed(activeStaffSession, tab, trialGovernance)
+        isDashboardTabAllowed(activeStaffSession, tab, trialGovernance, portalEnabled)
       );
       if (nextAllowedTab && nextAllowedTab !== activeTab) {
         setActiveTab(nextAllowedTab);
@@ -292,7 +303,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setAccountingDeepSubTab(nextSubTab);
       }
     }
-  }, [activeStaffSession, activeTab, accountingDeepSubTab, trialGovernance]);
+  }, [activeStaffSession, activeTab, accountingDeepSubTab, trialGovernance, enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal, propEnableB2BPortal]);
 
   useEffect(() => {
     if (!activeStaffSession) return;
@@ -361,7 +372,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptRecord[]>([]);
   const [vendorBills, setVendorBills] = useState<VendorBill[]>([]);
-  const [enterpriseSettings, setEnterpriseSettings] = useState<EnterpriseSettingsConfig | null>(null);
   const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
   const [selectedPrSku, setSelectedPrSku] = useState<string>('');
   const [prQuantity, setPrQuantity] = useState<number>(50);
@@ -626,8 +636,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       apiClient
         .getAdminNotifications()
         .then((res) => {
-          setNotifications(res.notifications || []);
-          setUnreadNotificationsCount(res.unreadCount || 0);
+          const nextList = res.notifications || [];
+          const nextUnread = res.unreadCount || 0;
+          setNotifications((prev) => (JSON.stringify(prev) === JSON.stringify(nextList) ? prev : nextList));
+          setUnreadNotificationsCount((prev) => (prev === nextUnread ? prev : nextUnread));
         })
         .catch(() => {});
     }, 15000);
@@ -872,10 +884,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
 
   const cardClass = isLight
-    ? 'bg-white border border-slate-200 shadow-sm text-slate-900 rounded-2xl'
+    ? 'gm-surface-card bg-white border border-slate-200 shadow-sm text-slate-900 rounded-2xl'
     : 'bg-[#12141C] border border-slate-800/80 text-slate-100 rounded-2xl';
   const subCardClass = isLight
-    ? 'bg-slate-50/80 border border-slate-200 text-slate-900 rounded-xl shadow-xs'
+    ? 'gm-surface-muted bg-slate-50/80 border border-slate-200 text-slate-900 rounded-xl shadow-xs'
     : 'bg-[#090A0F]/80 border border-slate-800/80 text-slate-100 rounded-xl';
   const textTitle = isLight ? 'text-slate-900' : 'text-slate-100';
   const textMuted = isLight ? 'text-slate-500' : 'text-slate-400';
@@ -886,7 +898,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     ? 'bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600'
     : 'bg-[#090A0F] border border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500';
   const modalClass = isLight
-    ? 'bg-white border border-slate-200 text-slate-900 shadow-2xl rounded-2xl'
+    ? 'gm-surface-card bg-white border border-slate-200 text-slate-900 shadow-2xl rounded-2xl'
     : 'bg-[#12141C] border border-slate-800/80 text-slate-100 shadow-2xl rounded-2xl';
 
   const currentModuleTitle = (() => {
@@ -939,7 +951,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   })();
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'dark' : ''} bg-slate-50 dark:bg-[#090A0F] text-slate-900 dark:text-slate-100 flex font-sans transition-colors duration-200 overflow-x-hidden`}>
+    <div className={`min-h-screen ${theme === 'dark' ? 'dark' : ''} gm-surface gm-daylight-canvas bg-slate-50 dark:bg-[#090A0F] text-slate-900 dark:text-slate-100 flex font-sans overflow-x-hidden`}>
       {/* 1. Left Vertical Sidebar Component */}
       <AdminSidebar
         theme={theme}
@@ -962,6 +974,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         onLogout={onLogout}
         activeStaffSession={activeStaffSession}
         trialGovernance={trialGovernance}
+        enableB2BAndStorefrontPortal={Boolean(
+          enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal
+        )}
       />
 
       {/* 2. Main Content Wrapper with Dynamic Left Margin corresponding to Sidebar */}
@@ -972,7 +987,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       >
         {/* Top Utility Header Bar */}
         <header
-          className="print:hidden bg-white/95 dark:bg-[#090A0F]/95 border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 shadow-xs backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-2.5 transition-colors duration-200"
+          className="print:hidden gm-chrome-surface bg-white/95 dark:bg-[#090A0F]/95 border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 shadow-xs backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-2.5"
         >
           <div className="flex items-center justify-between gap-3 flex-wrap">
             {/* Left: Mobile Hamburger Toggle + Current Module Breadcrumb */}
@@ -2336,7 +2351,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             storeOutlets={storeOutlets}
             activeStaffSession={activeStaffSession}
             onShowToast={onShowToast}
-            onNavigateToQuotations={() => setActiveTab('quotations')}
+            onNavigateToQuotations={
+              Boolean(enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal)
+                ? () => setActiveTab('quotations')
+                : undefined
+            }
             onRefreshData={handleRefreshData}
           />
         )}
@@ -2641,8 +2660,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               setAccountingDeepSubTab('margin_analysis');
               setActiveTab('accounting');
             }}
-            onNavigateToQuotations={() => setActiveTab('quotations')}
+            onNavigateToQuotations={
+              Boolean(enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal)
+                ? () => setActiveTab('quotations')
+                : undefined
+            }
             onTrialGovernanceUpdated={handleTrialGovernanceUpdated}
+            onErpSettingsUpdated={(nextErp) => {
+              setEnterpriseSettings((prev) =>
+                prev
+                  ? { ...prev, erpSettings: nextErp }
+                  : prev
+              );
+              onErpSettingsUpdated?.(nextErp);
+            }}
           />
         )}
           </div>

@@ -17,6 +17,8 @@ export interface AppState {
   dismissToast: (id: string) => void;
 }
 
+let storeThemeTransitionTimer: number | null = null;
+
 export const useAppStore = create<AppState>((set, get) => ({
   theme: (() => {
     try {
@@ -38,10 +40,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       localStorage.setItem('grocemart_admin_theme', theme);
     } catch {}
     if (typeof document !== 'undefined') {
+      if (typeof window !== 'undefined' && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+        document.documentElement.classList.add('theme-transitioning');
+        if (storeThemeTransitionTimer !== null) window.clearTimeout(storeThemeTransitionTimer);
+        storeThemeTransitionTimer = window.setTimeout(() => {
+          document.documentElement.classList.remove('theme-transitioning');
+          storeThemeTransitionTimer = null;
+        }, 280);
+      }
       if (theme === 'dark') {
         document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light-theme');
       } else {
         document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light-theme');
       }
     }
     set({ theme });
