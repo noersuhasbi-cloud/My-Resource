@@ -62,6 +62,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
 
   const filteredProducts = useMemo(() => {
     let result = PRODUCTS.filter((p) => {
+      if (p.itemClassification && p.itemClassification !== 'MERCHANDISE') return false;
       const matchCategory = selectedCategory === 'all' || p.category === selectedCategory;
       const matchOrganic = !filterOrganicOnly || p.isOrganic;
       const matchFarmDirect = !filterFarmDirectOnly || p.isFarmDirect;

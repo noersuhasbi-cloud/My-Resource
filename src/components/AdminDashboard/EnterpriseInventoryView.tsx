@@ -19,6 +19,7 @@ import type {
   WarehouseRackConfig,
   ReturnableContainerRecord,
   ReturnableDirection,
+  ItemClassification,
 } from '../../types/index.ts';
 import type { AdminDashboardTab } from './AdminSidebar';
 import { apiClient } from '../../services/apiClient';
@@ -210,6 +211,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   const [hubFilter, setHubFilter] = useState<HubScope>('ALL');
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('ALL');
   const [strategyFilter, setStrategyFilter] = useState<'ALL' | RemovalStrategyType>('ALL');
+  const [classificationFilter, setClassificationFilter] = useState<'ALL' | ItemClassification>('ALL');
   const [includeB2BCatalogRows, setIncludeB2BCatalogRows] = useState<boolean>(true);
   const [showStrategyModal, setShowStrategyModal] = useState<boolean>(false);
   const [showBarcodeLabelModal, setShowBarcodeLabelModal] = useState<boolean>(false);
@@ -278,12 +280,11 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   const modalClass =
     'bg-white dark:bg-[#12141C] border border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 shadow-2xl rounded-2xl';
 
-  // Aggregate summary metrics across retail tiers + B2B catalog
+  // Aggregate summary metrics across retail tiers + B2B catalog (COA #1040 excludes Fixed Assets & Consumables)
   const summaryMetrics = useMemo(() => {
-    const retailValuation = allTiers.reduce(
-      (sum, t) => sum + (t.physicalStock || 0) * (t.unitCost || 0),
-      0
-    );
+    const retailValuation = allTiers
+      .filter((t) => !t.itemClassification || t.itemClassification === 'MERCHANDISE')
+      .reduce((sum, t) => sum + (t.physicalStock || 0) * (t.unitCost || 0), 0);
     const b2bValuation = wholesaleProducts.reduce(
       (sum, p) => sum + (p.currentStockBaseUnits || 0) * Math.round((p.baseUnitPrice || 0) * 0.72),
       0
@@ -397,6 +398,11 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
         const uomBreakdown = formatMultiUomStock(safePhysical, profile.uomConversion);
         const availableUom = formatMultiUomStock(safeAvailable, profile.uomConversion);
         const totalValuation = safePhysical * (row.unitCost || 0);
+        const invMeta = inventory.find((it) => it.sku === row.sku);
+        const itemClassification: ItemClassification =
+          (!row.isWholesaleRow && row.itemClassification) ||
+          invMeta?.itemClassification ||
+          'MERCHANDISE';
         return {
           row,
           safePhysical,
@@ -408,6 +414,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
           uomBreakdown,
           availableUom,
           totalValuation,
+          itemClassification,
         };
       })
       .filter((entry) => {
@@ -417,9 +424,10 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
           if (channelFilter === 'BOTH' && entry.profile.salesChannel !== 'BOTH') return false;
         }
         if (strategyFilter !== 'ALL' && entry.strategy !== strategyFilter) return false;
+        if (classificationFilter !== 'ALL' && entry.itemClassification !== classificationFilter) return false;
         return true;
       });
-  }, [filteredTiers, wholesaleQuantRows, removalStrategies, batches, warehouseBins, channelFilter, strategyFilter]);
+  }, [filteredTiers, wholesaleQuantRows, removalStrategies, batches, warehouseBins, inventory, channelFilter, strategyFilter, classificationFilter]);
 
   // Compute live operational counts per Warehouse Hub for GroceMatrix™ Kanban Cards
   const hubKanbanCards = useMemo(() => {
@@ -1236,6 +1244,17 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                 <option value="FIFO">FIFO (Dry / Bulk)</option>
               </select>
 
+              <select
+                value={classificationFilter}
+                onChange={(e) => setClassificationFilter(e.target.value as 'ALL' | ItemClassification)}
+                className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+              >
+                <option value="ALL">All Classifications</option>
+                <option value="MERCHANDISE">Merchandise (#1040)</option>
+                <option value="FIXED_ASSET">Fixed Asset (#1510)</option>
+                <option value="CONSUMABLE">Consumable (#1050)</option>
+              </select>
+
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                 <input
@@ -1282,7 +1301,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${isLight ? 'divide-slate-200' : 'divide-slate-800/80'}`}>
-                  {enrichedListRows.map(({ row, safeReserved, safeAvailable, profile, strategy, lotInfo, uomBreakdown, availableUom, totalValuation }) => {
+                  {enrichedListRows.map(({ row, safeReserved, safeAvailable, profile, strategy, lotInfo, uomBreakdown, availableUom, totalValuation, itemClassification }) => {
                     const safetyThreshold = !row.isWholesaleRow && 'minimumThreshold' in row ? row.minimumThreshold : 10;
                     const isLowStock = safeAvailable > 0 && safeAvailable <= safetyThreshold;
                     const isOutOfStock = safeAvailable <= 0;
@@ -1322,6 +1341,22 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                                 <span className="font-mono text-[10px] text-[#0F4C3A] dark:text-emerald-400 font-bold">
                                   {row.sku}
                                 </span>
+                                {itemClassification === 'FIXED_ASSET' && (
+                                  <span
+                                    title="Non-sellable Store Equipment routed to COA #1510 (Blocked from POS)"
+                                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30"
+                                  >
+                                    FIXED ASSET · #1510
+                                  </span>
+                                )}
+                                {itemClassification === 'CONSUMABLE' && (
+                                  <span
+                                    title="Internal Store Supply routed to COA #1050 (Blocked from POS)"
+                                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                                  >
+                                    CONSUMABLE · #1050
+                                  </span>
+                                )}
                                 <span
                                   className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
                                     profile.salesChannel === 'B2B'

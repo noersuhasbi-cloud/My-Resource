@@ -2007,6 +2007,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
+                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
+                      Item Classification (POS &amp; COA Routing)
+                    </label>
+                    <select
+                      value={editingTier.itemClassification || 'MERCHANDISE'}
+                      onChange={(e) =>
+                        setEditingTier({
+                          ...editingTier,
+                          itemClassification: e.target.value as 'MERCHANDISE' | 'FIXED_ASSET' | 'CONSUMABLE',
+                        })
+                      }
+                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
+                    >
+                      <option value="MERCHANDISE">MERCHANDISE — Barang Dagangan (Sellable at POS · COA #1040)</option>
+                      <option value="FIXED_ASSET">FIXED_ASSET — Aset Tetap / Peralatan Toko (Blocked at POS · COA #1510)</option>
+                      <option value="CONSUMABLE">CONSUMABLE — Bahan Habis Pakai Internal (Blocked at POS · COA #1050)</option>
+                    </select>
+                  </div>
+
+                  <div>
                     <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>Handling Instructions (Staff Directives)</label>
                     <textarea
                       rows={3}
@@ -2046,8 +2066,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           maxCapacity: editingTier.maxCapacity,
                           handlingInstructions: editingTier.handlingInstructions,
                           internalNotes: editingTier.internalNotes,
+                          itemClassification: editingTier.itemClassification || 'MERCHANDISE',
                         });
-                        onShowToast('Metadata Saved', `Updated instructions for ${editingTier.productName}.`);
+                        onShowToast('Metadata Saved', `Updated attributes for ${editingTier.productName}.`);
                         setEditingTier(null);
                         refreshAllData();
                       }}

@@ -59,6 +59,7 @@ import type {
   StoreOperationalStatus,
   StoreOutletSchedule,
   OutletType,
+  ItemClassification,
   WarehouseZone,
   StoreInventoryStock,
   GoodsReceiptRecord,
@@ -1783,12 +1784,30 @@ function ensureRegulatoryCoaAccounts() {
     },
     {
       accountCode: '1510',
-      accountName: 'Cold-Chain Walk-in Coolers & Display Chillers',
+      accountName: 'Fixed Assets & Store Equipment',
       category: 'Asset',
       normalBalance: 'Debit',
       storeId: 'CONSOLIDATED',
       balance: 210000000,
-      description: 'Fixed assets: industrial walk-in chillers and display refrigerators',
+      description: 'Fixed assets: walk-in chillers, gondola racks, digital barcode scales, and store equipment',
+    },
+    {
+      accountCode: '1050',
+      accountName: 'Store Supplies & Consumables',
+      category: 'Asset',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Internal operational supplies and consumables (thermal paper rolls, labels, packaging bags)',
+    },
+    {
+      accountCode: '5040',
+      accountName: 'Store Supplies Expense',
+      category: 'Expense',
+      normalBalance: 'Debit',
+      storeId: 'CONSOLIDATED',
+      balance: 0,
+      description: 'Consumed store operational supplies, thermal rolls, and inbound operational logistics',
     },
     {
       accountCode: '1520',
@@ -1933,6 +1952,55 @@ function ensureRegulatoryCoaAccounts() {
   });
 }
 ensureRegulatoryCoaAccounts();
+
+function normalizeItemClassification(val?: unknown): ItemClassification {
+  const upper = String(val || '').trim().toUpperCase();
+  if (
+    upper === 'FIXED_ASSET' ||
+    upper === 'FIXED ASSET' ||
+    upper === 'ASSET' ||
+    upper === 'ASET TETAP' ||
+    upper === 'EQUIPMENT'
+  ) {
+    return 'FIXED_ASSET';
+  }
+  if (
+    upper === 'CONSUMABLE' ||
+    upper === 'CONSUMABLES' ||
+    upper === 'SUPPLIES' ||
+    upper === 'STORE_SUPPLIES' ||
+    upper === 'ATK' ||
+    upper === 'PERLENGKAPAN'
+  ) {
+    return 'CONSUMABLE';
+  }
+  return 'MERCHANDISE';
+}
+
+function resolveSkuClassification(sku: string, fallback?: unknown): ItemClassification {
+  const cleanSku = String(sku || '').trim();
+  const inv = inventoryList.find((i) => i.sku === cleanSku);
+  if (inv?.itemClassification) return normalizeItemClassification(inv.itemClassification);
+  const tier = storeInventoryTiers.find((t) => t.sku === cleanSku);
+  if (tier?.itemClassification) return normalizeItemClassification(tier.itemClassification);
+  if (fallback !== undefined && fallback !== null && String(fallback).trim() !== '') {
+    return normalizeItemClassification(fallback);
+  }
+  return 'MERCHANDISE';
+}
+
+function getAssetCoaForClassification(classification: ItemClassification): {
+  accountCode: AccountCode;
+  accountName: string;
+} {
+  if (classification === 'FIXED_ASSET') {
+    return { accountCode: '1510', accountName: 'Fixed Assets & Store Equipment' };
+  }
+  if (classification === 'CONSUMABLE') {
+    return { accountCode: '1050', accountName: 'Store Supplies & Consumables' };
+  }
+  return { accountCode: '1040', accountName: 'Merchandise Inventory Asset' };
+}
 
 function resolveSkuHalalStatus(sku: string): HalalStatus {
   const inv = inventoryList.find((i) => i.sku === sku);
@@ -9775,6 +9843,7 @@ async function startServer() {
       handlingInstructions,
       internalNotes,
       supplierRemarks,
+      itemClassification,
     } = req.body;
 
     if (safetyStockBuffer !== undefined) tier.safetyStockBuffer = Number(safetyStockBuffer);
@@ -9783,6 +9852,18 @@ async function startServer() {
     if (handlingInstructions !== undefined) tier.handlingInstructions = handlingInstructions;
     if (internalNotes !== undefined) tier.internalNotes = internalNotes;
     if (supplierRemarks !== undefined) tier.supplierRemarks = supplierRemarks;
+    if (itemClassification !== undefined) {
+      const normalizedCls = normalizeItemClassification(itemClassification);
+      tier.itemClassification = normalizedCls;
+      const masterInv = inventoryList.find((i) => i.sku === tier.sku);
+      if (masterInv) masterInv.itemClassification = normalizedCls;
+      storeInventoryTiers.forEach((t) => {
+        if (t.sku === tier.sku) t.itemClassification = normalizedCls;
+      });
+      inventoryBatches.forEach((b) => {
+        if (b.sku === tier.sku) b.itemClassification = normalizedCls;
+      });
+    }
     tier.updatedAt = new Date().toISOString();
 
     res.json({ success: true, stockTier: tier });
@@ -10937,6 +11018,9 @@ async function startServer() {
         (i) => i.productId === prod.id || (prod.sku && i.sku === prod.sku)
       );
       const sku = inv?.sku || prod.sku || prod.id;
+      if (resolveSkuClassification(sku, inv?.itemClassification ?? prod.itemClassification) !== 'MERCHANDISE') {
+        return;
+      }
       const tier = storeInventoryTiers.find(
         (t) => t.storeId === targetStoreId && (t.sku === sku || t.productId === prod.id)
       );
@@ -11124,6 +11208,15 @@ async function startServer() {
           if (!tier && !invItem) {
             const err: any = new Error(`SKU ${sku} not found in branch inventory.`);
             err.statusCode = 404;
+            throw err;
+          }
+          const skuClass = resolveSkuClassification(sku, invItem?.itemClassification ?? tier?.itemClassification);
+          if (skuClass !== 'MERCHANDISE') {
+            const err: any = new Error(
+              `Order ditolak: Item '${invItem?.productName || tier?.productName || sku}' berklasifikasi ${skuClass} dan tidak dapat dijual di Storefront.`
+            );
+            err.statusCode = 422;
+            err.code = 'NON_SELLABLE_ASSET_OR_CONSUMABLE';
             throw err;
           }
           const branchAvail = tier
@@ -12550,6 +12643,11 @@ async function startServer() {
 
     let grTotalCost = 0;
     let ownedGrTotalCost = 0;
+    const ownedGrByClass: Record<ItemClassification, number> = {
+      MERCHANDISE: 0,
+      FIXED_ASSET: 0,
+      CONSUMABLE: 0,
+    };
     let consignmentItemCount = 0;
     const grItemsReceived: GoodsReceiptRecord['items'] = [];
     const landedAllocatedItems: LandedCostRecord['allocatedItems'] = [];
@@ -12569,6 +12667,10 @@ async function startServer() {
       poItem.remainingBackorder = Math.max(0, poItem.orderedQuantity - poItem.receivedQuantity);
 
       const catalogItem = inventoryList.find((i) => i.sku === poItem.sku);
+      const lineClassification = resolveSkuClassification(
+        poItem.sku,
+        itemInput.itemClassification ?? catalogItem?.itemClassification
+      );
       const isConsignmentItem = Boolean(
         poItem.isConsignment || catalogItem?.isConsignment || itemInput.isConsignment
       );
@@ -12582,6 +12684,7 @@ async function startServer() {
         consignmentItemCount += 1;
       } else {
         ownedGrTotalCost += itemCost;
+        ownedGrByClass[lineClassification] += Math.round(itemCost);
       }
       const baseDilutedUnitCost =
         totalStockAdded > 0 ? Math.round(itemCost / totalStockAdded) : poItem.unitCost;
@@ -12719,6 +12822,7 @@ async function startServer() {
         consignmentSupplier: isConsignmentItem ? (poItem.consignmentSupplier || catalogItem?.consignmentSupplier || po.supplierName) : undefined,
         consignmentCommissionPercent: isConsignmentItem ? (poItem.consignmentCommissionPercent || catalogItem?.consignmentCommissionPercent || 20) : undefined,
         consignmentCostIDR: isConsignmentItem ? poItem.unitCost : undefined,
+        itemClassification: lineClassification,
       });
     });
 
@@ -12766,42 +12870,73 @@ async function startServer() {
 
     const createdJournalIds: string[] = [];
 
-    // Auto-Post Double Entry to General Ledger ONLY for owned inventory (Titip Jual skips #1040/#2010 until sold)
+    // Auto-Post Double Entry to General Ledger ONLY for owned items, routed by ItemClassification:
+    // MERCHANDISE -> #1040, FIXED_ASSET -> #1510, CONSUMABLE -> #1050 (Titip Jual skips until sold)
     if (roundedOwnedCost > 0) {
-      commitBalancedGlBatch(
-        [
-          {
-            id: gleId1,
-            timestamp: new Date().toISOString(),
-            storeId: po.storeId,
-            storeName: po.storeName,
-            accountCode: '1040',
-            accountName: 'Merchandise Inventory Asset',
-            category: 'Asset',
-            debit: roundedOwnedCost,
-            credit: 0,
-            referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
-            referenceId: grId,
-            description: `${grId}: ${isPartial ? 'Partial' : 'Full'} Goods receipt on PO #${po.id} from ${po.supplierName}`,
-          },
-          {
-            id: gleId2,
-            timestamp: new Date().toISOString(),
-            storeId: po.storeId,
-            storeName: po.storeName,
-            accountCode: '2010',
-            accountName: 'Trade Accounts Payable (Vendors)',
-            category: 'Liability',
-            debit: 0,
-            credit: roundedOwnedCost,
-            referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
-            referenceId: grId,
-            description: `${grId}: Trade liability accrued for received items on PO #${po.id}`,
-          },
-        ],
-        true
-      );
-      createdJournalIds.push(gleId1, gleId2);
+      ensureRegulatoryCoaAccounts();
+      const grGlIso = new Date().toISOString();
+      const grBatchLines: GeneralLedgerEntry[] = [];
+      let glSeq = generalLedger.length + 1;
+      const classOrder: ItemClassification[] = ['MERCHANDISE', 'FIXED_ASSET', 'CONSUMABLE'];
+      let totalDebited = 0;
+      classOrder.forEach((cls) => {
+        const amt = Math.max(0, roundIDR(ownedGrByClass[cls]));
+        if (amt <= 0) return;
+        const coaTarget = getAssetCoaForClassification(cls);
+        const drId =
+          grBatchLines.length === 0
+            ? gleId1
+            : `GLE-2026-${(glSeq + grBatchLines.length).toString().padStart(4, '0')}`;
+        grBatchLines.push({
+          id: drId,
+          timestamp: grGlIso,
+          storeId: po.storeId,
+          storeName: po.storeName,
+          accountCode: coaTarget.accountCode,
+          accountName: coaTarget.accountName,
+          category: 'Asset',
+          debit: amt,
+          credit: 0,
+          referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
+          referenceId: grId,
+          description: `${grId}: ${isPartial ? 'Partial' : 'Full'} Goods receipt (${cls} -> #${coaTarget.accountCode}) on PO #${po.id} from ${po.supplierName}`,
+        });
+        totalDebited += amt;
+      });
+      if (totalDebited === 0) {
+        grBatchLines.push({
+          id: gleId1,
+          timestamp: grGlIso,
+          storeId: po.storeId,
+          storeName: po.storeName,
+          accountCode: '1040',
+          accountName: 'Merchandise Inventory Asset',
+          category: 'Asset',
+          debit: roundedOwnedCost,
+          credit: 0,
+          referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
+          referenceId: grId,
+          description: `${grId}: ${isPartial ? 'Partial' : 'Full'} Goods receipt on PO #${po.id} from ${po.supplierName}`,
+        });
+        totalDebited = roundedOwnedCost;
+      }
+      const crId = `GLE-2026-${(glSeq + grBatchLines.length).toString().padStart(4, '0')}`;
+      grBatchLines.push({
+        id: crId,
+        timestamp: grGlIso,
+        storeId: po.storeId,
+        storeName: po.storeName,
+        accountCode: '2010',
+        accountName: 'Trade Accounts Payable (Vendors)',
+        category: 'Liability',
+        debit: 0,
+        credit: totalDebited,
+        referenceType: isPartial ? 'PARTIAL_GR' : 'PURCHASE_ORDER',
+        referenceId: grId,
+        description: `${grId}: Trade liability accrued for received items on PO #${po.id}`,
+      });
+      commitBalancedGlBatch(grBatchLines, true);
+      createdJournalIds.push(...grBatchLines.map((l) => l.id));
     }
 
     // Capitalize optional Import / Freight / Cold-Chain Landed Cost extras into #1040 vs #2040 Clearing
@@ -14455,9 +14590,14 @@ async function startServer() {
     const nowMs = Date.now();
     inventoryBatches.forEach((b) => syncBatchExpiryStatus(b, nowMs));
 
-    const posCatalog: POSProductItem[] = PRODUCTS.map((prod) => {
+    const posCatalog: POSProductItem[] = [];
+    PRODUCTS.forEach((prod) => {
       const inv = inventoryList.find((i) => i.productId === prod.id || i.productName.toLowerCase() === prod.name.toLowerCase());
       const sku = inv?.sku || `SKU-${prod.category.slice(0, 3).toUpperCase()}-${prod.id.replace(/\D/g, '').padStart(3, '0')}`;
+      // Hard Rule 1: Exclude FIXED_ASSET and CONSUMABLE from retail POS catalog
+      if (resolveSkuClassification(sku, inv?.itemClassification ?? prod.itemClassification) !== 'MERCHANDISE') {
+        return;
+      }
 
       const tier = storeInventoryTiers.find(
         (t) => t.sku === sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
@@ -14497,11 +14637,12 @@ async function startServer() {
         ? Math.round(prod.price * (1 - nearestBatch.markdownDiscountPercent / 100))
         : prod.price;
 
-      return {
+      posCatalog.push({
         sku,
         productId: prod.id,
         name: prod.name,
         category: prod.category,
+        itemClassification: 'MERCHANDISE',
         sellingPrice: effectiveSellingPrice,
         unitCost: inv?.unitCost || Math.round(prod.price * 0.62),
         unit: prod.unit,
@@ -14531,13 +14672,14 @@ async function startServer() {
         bpjphExpiryDate: inv?.bpjphExpiryDate,
         bpomRegNumber: inv?.bpomRegNumber,
         wholesaleTiers: inv?.wholesaleTiers,
-      };
+      });
     });
 
-    // Include additional catalog SKUs from inventoryList (e.g. segregated Non-Halal Deli SKU-DEL-NH01)
+    // Include additional sellable MERCHANDISE catalog SKUs from inventoryList (strictly excluding FIXED_ASSET / CONSUMABLE)
     const mappedSkus = new Set(posCatalog.map((p) => p.sku));
     inventoryList.forEach((inv) => {
       if (mappedSkus.has(inv.sku)) return;
+      if (normalizeItemClassification(inv.itemClassification) !== 'MERCHANDISE') return;
       const tier = storeInventoryTiers.find(
         (t) => t.sku === inv.sku && (t.storeId === storeId || storeId === 'CONSOLIDATED')
       );
@@ -14553,6 +14695,7 @@ async function startServer() {
         productId: inv.productId || inv.sku,
         name: inv.productName || inv.name || inv.sku,
         category: inv.category,
+        itemClassification: 'MERCHANDISE',
         sellingPrice: inv.sellingPrice,
         unitCost: inv.unitCost,
         unit: inv.unit,
@@ -14588,6 +14731,7 @@ async function startServer() {
         new Date(b.expiryDate).getTime() > nowMs &&
         (b.storeId === storeId || storeId === 'CONSOLIDATED' || b.storeId === 'store-jkt-senopati')
       ) {
+        if (resolveSkuClassification(b.sku, b.itemClassification) !== 'MERCHANDISE') return;
         const inv = inventoryList.find((i) => i.sku === b.sku);
         const prod = PRODUCTS.find(
           (p) => p.id === inv?.productId || p.name.toLowerCase() === b.productName.toLowerCase()
@@ -14739,6 +14883,36 @@ async function startServer() {
     const posBranchViolation = checkBranchIsolationViolation(req, storeId);
     if (posBranchViolation) {
       return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: posBranchViolation });
+    }
+
+    // HARD RULE 2: Mandatory POS Open Register Gate before accepting any payment
+    const activeRegisterShift = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
+    if (!activeRegisterShift) {
+      return res.status(422).json({
+        success: false,
+        code: 'REGISTER_NOT_OPEN',
+        storeId,
+        error: 'Transaksi ditolak: Kasir wajib melakukan Open Register terlebih dahulu sebelum menerima pembayaran',
+      });
+    }
+
+    // HARD RULE 1: Strict Product Classification — reject any FIXED_ASSET or CONSUMABLE at POS checkout
+    for (const line of items) {
+      const lookupSku = String((line as any).originalSku || line.sku || '').trim();
+      const matchedInv =
+        inventoryList.find(
+          (i) => i.sku === lookupSku || (line.productId && i.productId === line.productId)
+        ) || storeInventoryTiers.find((t) => t.sku === lookupSku);
+      const lineClassification = resolveSkuClassification(lookupSku, matchedInv?.itemClassification);
+      if (lineClassification !== 'MERCHANDISE') {
+        return res.status(422).json({
+          success: false,
+          code: 'NON_SELLABLE_ASSET_OR_CONSUMABLE',
+          sku: lookupSku,
+          itemClassification: lineClassification,
+          error: `Transaksi ditolak: Item '${line.name || matchedInv?.productName || lookupSku}' berklasifikasi ${lineClassification} dan tidak boleh dijual melalui kasir POS (hanya MERCHANDISE).`,
+        });
+      }
     }
 
     // Validate optional CRM Member & Loyalty Point Redemption BEFORE any stock mutation
@@ -15545,7 +15719,8 @@ async function startServer() {
       storeName,
       cashierId,
       cashierName,
-      shiftId: shiftId || 'SHIFT-01',
+      shiftId: activeRegisterShift.id || shiftId || 'SHIFT-01',
+      shiftSessionId: activeRegisterShift.id,
       items: normalizedItems,
       subtotal: resolvedSubtotal,
       discount: discountAmount,
@@ -16528,6 +16703,11 @@ async function startServer() {
       const grId = `GR-MON-${Date.now().toString().slice(-5)}`;
       const receivedItems: GoodsReceiptRecord['items'] = [];
       let totalVal = 0;
+      const arrValByClass: Record<ItemClassification, number> = {
+        MERCHANDISE: 0,
+        FIXED_ASSET: 0,
+        CONSUMABLE: 0,
+      };
 
       po.items.forEach((item, idx) => {
         const remaining = Math.max(0, (item.orderedQuantity || 0) - (item.receivedQuantity || 0));
@@ -16557,6 +16737,7 @@ async function startServer() {
         }
 
         const daysUntilExpiry = 18;
+        const arrLineClass = resolveSkuClassification(item.sku);
         inventoryBatches.unshift({
           batchId: `BAT-PO-ARR-${Date.now().toString().slice(-5)}-${idx + 1}`,
           sku: item.sku,
@@ -16575,10 +16756,13 @@ async function startServer() {
           status: 'fresh',
           storageZone: tier?.storageType || 'cold_chilled',
           supplierName: po.supplierName,
+          itemClassification: arrLineClass,
           notes: `Dock arrival confirmed via Multi-Branch Monitor (${po.id})`,
         });
 
-        totalVal += Math.round(remaining * item.unitCost);
+        const lineVal = Math.round(remaining * item.unitCost);
+        totalVal += lineVal;
+        arrValByClass[arrLineClass] += lineVal;
         receivedItems.push({
           sku: item.sku,
           productName: item.productName,
@@ -16592,7 +16776,6 @@ async function startServer() {
 
       po.status = 'Completed';
       const gleId1 = `GLE-ARR-${Date.now()}-1`;
-      const gleId2 = `GLE-ARR-${Date.now()}-2`;
 
       goodsReceipts.unshift({
         id: grId,
@@ -16611,46 +16794,50 @@ async function startServer() {
       });
 
       if (totalVal > 0) {
-        commitBalancedGlBatch(
-          [
-            {
-              id: gleId1,
-              timestamp,
-              storeId: po.storeId,
-              storeName: po.storeName,
-              accountCode: '1040',
-              accountName: 'Merchandise Inventory Asset',
-              category: 'Asset',
-              debit: totalVal,
-              credit: 0,
-              referenceType: 'PARTIAL_GR',
-              referenceId: grId,
-              description: `Dock Arrival Confirmation for ${po.id} -> ${grId}`,
-            },
-            {
-              id: gleId2,
-              timestamp,
-              storeId: po.storeId,
-              storeName: po.storeName,
-              accountCode: '2010',
-              accountName: 'Trade Accounts Payable (Vendors)',
-              category: 'Liability',
-              debit: 0,
-              credit: totalVal,
-              referenceType: 'PARTIAL_GR',
-              referenceId: grId,
-              description: `Vendor AP accrual for dock receipt ${grId} (${po.supplierName})`,
-            },
-          ],
-          true
-        );
+        ensureRegulatoryCoaAccounts();
+        const arrGlLines: GeneralLedgerEntry[] = [];
+        const classList: ItemClassification[] = ['MERCHANDISE', 'FIXED_ASSET', 'CONSUMABLE'];
+        classList.forEach((cls, cIdx) => {
+          const amt = Math.max(0, roundIDR(arrValByClass[cls]));
+          if (amt <= 0) return;
+          const coaTarget = getAssetCoaForClassification(cls);
+          arrGlLines.push({
+            id: arrGlLines.length === 0 ? gleId1 : `GLE-ARR-${Date.now()}-${cIdx + 2}`,
+            timestamp,
+            storeId: po.storeId,
+            storeName: po.storeName,
+            accountCode: coaTarget.accountCode,
+            accountName: coaTarget.accountName,
+            category: 'Asset',
+            debit: amt,
+            credit: 0,
+            referenceType: 'PARTIAL_GR',
+            referenceId: grId,
+            description: `Dock Arrival Confirmation (${cls} -> #${coaTarget.accountCode}) for ${po.id} -> ${grId}`,
+          });
+        });
+        arrGlLines.push({
+          id: `GLE-ARR-${Date.now()}-CR`,
+          timestamp,
+          storeId: po.storeId,
+          storeName: po.storeName,
+          accountCode: '2010',
+          accountName: 'Trade Accounts Payable (Vendors)',
+          category: 'Liability',
+          debit: 0,
+          credit: totalVal,
+          referenceType: 'PARTIAL_GR',
+          referenceId: grId,
+          description: `Vendor AP accrual for dock receipt ${grId} (${po.supplierName})`,
+        });
+        commitBalancedGlBatch(arrGlLines, true);
       }
 
       return res.json({
         success: true,
         type: 'PO',
         id,
-        message: `Purchase Order #${id} dock arrival confirmed (${grId}). Stock & Inventory GL (#1040) updated for ${po.storeName}.`,
+        message: `Purchase Order #${id} dock arrival confirmed (${grId}). Stock & Asset GL updated for ${po.storeName}.`,
       });
     }
 
@@ -26846,6 +27033,7 @@ async function startServer() {
       expiryDateIso: string;
       daysUntilExpiry: number;
       initialQty: number;
+      itemClassification: ItemClassification;
     }> = [];
 
     for (let idx = 0; idx < rows.length; idx++) {
@@ -26918,6 +27106,11 @@ async function startServer() {
       }
       const expTs = Date.parse(`${expiryRaw}T23:59:59.000Z`);
       const daysUntilExpiry = Math.max(0, Math.ceil((expTs - nowMs) / 86400000));
+      const rawClass = (r as any).item_classification ?? (r as any).itemClassification ?? (r as any).classification;
+      const itemClassification: ItemClassification =
+        rawClass !== undefined && rawClass !== null && String(rawClass).trim() !== ''
+          ? normalizeItemClassification(rawClass)
+          : resolveSkuClassification(sku);
 
       validatedRows.push({
         sku,
@@ -26934,6 +27127,7 @@ async function startServer() {
         expiryDateIso: new Date(expTs).toISOString(),
         daysUntilExpiry,
         initialQty,
+        itemClassification,
       });
     }
 
@@ -26943,6 +27137,11 @@ async function startServer() {
     let createdRacksCount = 0;
     let totalImportedQty = 0;
     let totalOpeningValuationIDR = 0;
+    const openingValByClass: Record<ItemClassification, number> = {
+      MERCHANDISE: 0,
+      FIXED_ASSET: 0,
+      CONSUMABLE: 0,
+    };
 
     validatedRows.forEach((row, idx) => {
       // 1. Ensure or auto-create rack/bin
@@ -26991,6 +27190,7 @@ async function startServer() {
         if (row.sellingPrice > 0) inv.sellingPrice = row.sellingPrice;
         inv.removalStrategy = row.rotationStrategy;
         inv.binLocation = row.rackBinCode;
+        inv.itemClassification = row.itemClassification;
         inv.lastRestockedAt = timestamp;
         updatedSkusCount += 1;
       } else {
@@ -27018,6 +27218,7 @@ async function startServer() {
           removalStrategy: row.rotationStrategy,
           binLocation: row.rackBinCode,
           salesChannel: 'BOTH',
+          itemClassification: row.itemClassification,
         };
         inventoryList.push(inv);
         createdSkusCount += 1;
@@ -27072,6 +27273,7 @@ async function startServer() {
         tier.rotationStrategy = row.rotationStrategy;
         tier.storageType = storageType;
         tier.warehouseZoneId = warehouseZoneId;
+        tier.itemClassification = row.itemClassification;
         tier.lastRestockedAt = timestamp;
         tier.updatedAt = timestamp;
       } else {
@@ -27108,11 +27310,12 @@ async function startServer() {
           removalStrategy: row.rotationStrategy,
           rotationStrategy: row.rotationStrategy,
           salesChannel: 'BOTH',
+          itemClassification: row.itemClassification,
         };
         storeInventoryTiers.push(tier);
       }
 
-      // 5. Create InventoryBatch tagged with rackBinCode & rotationStrategy
+      // 5. Create InventoryBatch tagged with rackBinCode, rotationStrategy & itemClassification
       const batchStatus =
         row.daysUntilExpiry <= 1 ? 'critical' : row.daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh';
       const newBatch: InventoryBatch = {
@@ -27135,56 +27338,64 @@ async function startServer() {
         supplierName: 'CSV Opening Stock Import',
         rackBinCode: row.rackBinCode,
         rotationStrategy: row.rotationStrategy,
+        itemClassification: row.itemClassification,
         notes: `Imported via Bulk SKU CSV into ${row.rackBinCode}`,
       };
       inventoryBatches.push(newBatch);
 
+      const lineVal = Math.round(row.initialQty * row.unitCost);
       totalImportedQty += row.initialQty;
-      totalOpeningValuationIDR += Math.round(row.initialQty * row.unitCost);
+      totalOpeningValuationIDR += lineVal;
+      openingValByClass[row.itemClassification] += lineVal;
     });
 
-    // 6. Optional Opening Inventory Balance GL Posting (DR 1040 / CR 3010)
+    // 6. Optional Opening Inventory Balance GL Posting routed by Classification (DR #1040/#1510/#1050 / CR #3010)
     const glVoucherIds: string[] = [];
     if (postOpeningBalanceGl && totalOpeningValuationIDR > 0) {
       ensureRegulatoryCoaAccounts();
       const refId = `CSV-IMP-${Date.now().toString().slice(-6)}`;
-      const g1 = `GLE-IMP-${Date.now().toString().slice(-5)}-1`;
-      const g2 = `GLE-IMP-${Date.now().toString().slice(-5)}-2`;
-      glVoucherIds.push(g1, g2);
+      const baseStamp = Date.now().toString().slice(-5);
       const primaryStore = validatedRows[0].outlet;
-      commitBalancedGlBatch(
-        [
-          {
-            id: g1,
-            timestamp,
-            storeId: primaryStore.storeId,
-            storeName: primaryStore.storeName,
-            accountCode: '1040',
-            accountName: 'Merchandise Inventory Asset',
-            category: 'Asset',
-            debit: totalOpeningValuationIDR,
-            credit: 0,
-            referenceType: 'INVENTORY_ADJUSTMENT',
-            referenceId: refId,
-            description: `Bulk CSV Opening Stock Import (${validatedRows.length} batch lots, ${totalImportedQty} units) by ${actorName}`,
-          },
-          {
-            id: g2,
-            timestamp,
-            storeId: primaryStore.storeId,
-            storeName: primaryStore.storeName,
-            accountCode: '3010',
-            accountName: 'Opening Balance & Paid-In Capital Equity',
-            category: 'Equity',
-            debit: 0,
-            credit: totalOpeningValuationIDR,
-            referenceType: 'INVENTORY_ADJUSTMENT',
-            referenceId: refId,
-            description: `Opening Inventory Equity offset for Bulk CSV Import ${refId}`,
-          },
-        ],
-        true
-      );
+      const glLines: GeneralLedgerEntry[] = [];
+      let lineSeq = 1;
+      (['MERCHANDISE', 'FIXED_ASSET', 'CONSUMABLE'] as ItemClassification[]).forEach((cls) => {
+        const amt = Math.round(openingValByClass[cls]);
+        if (amt <= 0) return;
+        const coaTarget = getAssetCoaForClassification(cls);
+        const gid = `GLE-IMP-${baseStamp}-${lineSeq++}`;
+        glVoucherIds.push(gid);
+        glLines.push({
+          id: gid,
+          timestamp,
+          storeId: primaryStore.storeId,
+          storeName: primaryStore.storeName,
+          accountCode: coaTarget.accountCode,
+          accountName: coaTarget.accountName,
+          category: 'Asset',
+          debit: amt,
+          credit: 0,
+          referenceType: 'INVENTORY_ADJUSTMENT',
+          referenceId: refId,
+          description: `Bulk CSV Opening Stock Import (${cls} -> #${coaTarget.accountCode}, ${validatedRows.length} lots) by ${actorName}`,
+        });
+      });
+      const crId = `GLE-IMP-${baseStamp}-${lineSeq++}`;
+      glVoucherIds.push(crId);
+      glLines.push({
+        id: crId,
+        timestamp,
+        storeId: primaryStore.storeId,
+        storeName: primaryStore.storeName,
+        accountCode: '3010',
+        accountName: 'Opening Balance & Paid-In Capital Equity',
+        category: 'Equity',
+        debit: 0,
+        credit: totalOpeningValuationIDR,
+        referenceType: 'INVENTORY_ADJUSTMENT',
+        referenceId: refId,
+        description: `Opening Inventory Equity offset for Bulk CSV Import ${refId}`,
+      });
+      commitBalancedGlBatch(glLines, true);
     }
 
     syncWarehouseRackOccupancy();
@@ -27270,6 +27481,13 @@ async function startServer() {
       const rawExpiry = String(raw?.expiryDate ?? raw?.expiry_date ?? '').trim();
       const expiryDate = rawExpiry || inferDefaultExpiryForCategory(category, nowMs);
       const serialNumbers = parseSerialNumbersInput(raw?.serialNumbers ?? raw?.serial_numbers ?? raw?.sn);
+      const rawClass = raw?.itemClassification ?? raw?.item_classification ?? raw?.classification;
+      const itemClassification: ItemClassification =
+        rawClass !== undefined && rawClass !== null && String(rawClass).trim() !== ''
+          ? normalizeItemClassification(rawClass)
+          : sku
+          ? resolveSkuClassification(sku)
+          : 'MERCHANDISE';
 
       const errors: string[] = [];
       if (!sku) errors.push('SKU required');
@@ -27298,6 +27516,7 @@ async function startServer() {
         sku,
         productName,
         category,
+        itemClassification,
         physicalStock: Number.isFinite(physicalStock) ? Number(physicalStock.toFixed(2)) : 0,
         unitCost: Number.isFinite(unitCost) ? unitCost : 0,
         sellingPrice: Number.isFinite(sellingPrice) ? sellingPrice : 0,
@@ -27513,8 +27732,16 @@ async function startServer() {
     let createdBatchesCount = 0;
     let totalImportedQty = 0;
     let totalValuationIDR = 0;
+    const draftValByClass: Record<ItemClassification, number> = {
+      MERCHANDISE: 0,
+      FIXED_ASSET: 0,
+      CONSUMABLE: 0,
+    };
 
     validatedRows.forEach((row, idx) => {
+      const rowClassification: ItemClassification = normalizeItemClassification(
+        row.itemClassification ?? resolveSkuClassification(row.sku)
+      );
       const catLower = row.category.toLowerCase();
       const rotationStrategy: RemovalStrategyType =
         catLower.includes('produce') ||
@@ -27576,6 +27803,7 @@ async function startServer() {
         inv.minimumThreshold = row.minimumThreshold;
         inv.binLocation = row.rackLocation;
         inv.removalStrategy = rotationStrategy;
+        inv.itemClassification = rowClassification;
         inv.lastRestockedAt = timestamp;
         if (row.serialNumbers.length > 0) {
           inv.serialNumbers = Array.from(new Set([...(inv.serialNumbers || []), ...row.serialNumbers]));
@@ -27606,6 +27834,7 @@ async function startServer() {
           removalStrategy: rotationStrategy,
           binLocation: row.rackLocation,
           salesChannel: 'BOTH',
+          itemClassification: rowClassification,
           serialNumbers: row.serialNumbers.length > 0 ? [...row.serialNumbers] : undefined,
         };
         inventoryList.push(inv);
@@ -27630,6 +27859,7 @@ async function startServer() {
         tier.storageType = storageType;
         tier.warehouseZoneId = warehouseZoneId;
         tier.supplierName = row.supplierName;
+        tier.itemClassification = rowClassification;
         tier.lastRestockedAt = timestamp;
         tier.updatedAt = timestamp;
         if (row.serialNumbers.length > 0) {
@@ -27670,11 +27900,12 @@ async function startServer() {
           removalStrategy: rotationStrategy,
           rotationStrategy,
           salesChannel: 'BOTH',
+          itemClassification: rowClassification,
         };
         storeInventoryTiers.push(tier);
       }
 
-      // 4. Create active FEFO/FIFO InventoryBatch with Rack, Lot & Serial Numbers (SN)
+      // 4. Create active FEFO/FIFO InventoryBatch with Rack, Lot, Classification & Serial Numbers (SN)
       const batchStatus =
         daysUntilExpiry <= 1 ? 'critical' : daysUntilExpiry <= 7 ? 'near_expiry' : 'fresh';
       const newBatch: InventoryBatch = {
@@ -27697,6 +27928,7 @@ async function startServer() {
         supplierName: row.supplierName,
         rackBinCode: row.rackLocation,
         rotationStrategy,
+        itemClassification: rowClassification,
         serialNumbers: row.serialNumbers.length > 0 ? [...row.serialNumbers] : undefined,
         notes:
           row.serialNumbers.length > 0
@@ -27706,50 +27938,58 @@ async function startServer() {
       inventoryBatches.push(newBatch);
       createdBatchesCount += 1;
 
+      const rowVal = Math.round(row.physicalStock * row.unitCost);
       totalImportedQty += row.physicalStock;
-      totalValuationIDR += Math.round(row.physicalStock * row.unitCost);
+      totalValuationIDR += rowVal;
+      draftValByClass[rowClassification] += rowVal;
     });
 
-    // 5. Post balanced integer IDR Journal Entry (DR 1040 Merchandise Inventory / CR 3010 Opening Balance Equity)
+    // 5. Post balanced integer IDR Journal Entry routed by ItemClassification:
+    // MERCHANDISE -> DR #1040, FIXED_ASSET -> DR #1510, CONSUMABLE -> DR #1050 / CR #3010 Opening Balance Equity
     const glVoucherIds: string[] = [];
     if (totalValuationIDR > 0) {
       ensureRegulatoryCoaAccounts();
-      const g1 = `GLE-DRF-${Date.now().toString().slice(-5)}-1`;
-      const g2 = `GLE-DRF-${Date.now().toString().slice(-5)}-2`;
-      glVoucherIds.push(g1, g2);
-      commitBalancedGlBatch(
-        [
-          {
-            id: g1,
-            timestamp,
-            storeId: outlet.storeId,
-            storeName: outlet.storeName,
-            accountCode: '1040',
-            accountName: 'Merchandise Inventory Asset',
-            category: 'Asset',
-            debit: totalValuationIDR,
-            credit: 0,
-            referenceType: 'INVENTORY_ADJUSTMENT',
-            referenceId: draft.id,
-            description: `Draft Bulk Import Applied (${draft.id}: ${validatedRows.length} rows, ${totalImportedQty} units) by ${actorName}`,
-          },
-          {
-            id: g2,
-            timestamp,
-            storeId: outlet.storeId,
-            storeName: outlet.storeName,
-            accountCode: '3010',
-            accountName: 'Opening Balance & Paid-In Capital Equity',
-            category: 'Equity',
-            debit: 0,
-            credit: totalValuationIDR,
-            referenceType: 'INVENTORY_ADJUSTMENT',
-            referenceId: draft.id,
-            description: `Opening Balance Equity offset for Draft Bulk Import ${draft.id}`,
-          },
-        ],
-        true
-      );
+      const baseStamp = Date.now().toString().slice(-5);
+      const glLines: GeneralLedgerEntry[] = [];
+      let lineSeq = 1;
+      (['MERCHANDISE', 'FIXED_ASSET', 'CONSUMABLE'] as ItemClassification[]).forEach((cls) => {
+        const amt = Math.round(draftValByClass[cls]);
+        if (amt <= 0) return;
+        const coaTarget = getAssetCoaForClassification(cls);
+        const gid = `GLE-DRF-${baseStamp}-${lineSeq++}`;
+        glVoucherIds.push(gid);
+        glLines.push({
+          id: gid,
+          timestamp,
+          storeId: outlet.storeId,
+          storeName: outlet.storeName,
+          accountCode: coaTarget.accountCode,
+          accountName: coaTarget.accountName,
+          category: 'Asset',
+          debit: amt,
+          credit: 0,
+          referenceType: 'INVENTORY_ADJUSTMENT',
+          referenceId: draft.id,
+          description: `Draft Bulk Import Applied (${draft.id} | ${cls} -> #${coaTarget.accountCode}) by ${actorName}`,
+        });
+      });
+      const crId = `GLE-DRF-${baseStamp}-${lineSeq++}`;
+      glVoucherIds.push(crId);
+      glLines.push({
+        id: crId,
+        timestamp,
+        storeId: outlet.storeId,
+        storeName: outlet.storeName,
+        accountCode: '3010',
+        accountName: 'Opening Balance & Paid-In Capital Equity',
+        category: 'Equity',
+        debit: 0,
+        credit: totalValuationIDR,
+        referenceType: 'INVENTORY_ADJUSTMENT',
+        referenceId: draft.id,
+        description: `Opening Balance Equity offset for Draft Bulk Import ${draft.id}`,
+      });
+      commitBalancedGlBatch(glLines, true);
     }
 
     syncWarehouseRackOccupancy();
@@ -27766,7 +28006,18 @@ async function startServer() {
       createdBatchesCount,
       glVoucherIds,
       totalValuationIDR,
+      coaBreakdown: {
+        coa1040IDR: draftValByClass.MERCHANDISE,
+        coa1510IDR: draftValByClass.FIXED_ASSET,
+        coa1050IDR: draftValByClass.CONSUMABLE,
+      },
     };
+
+    const coaSummaryParts: string[] = [];
+    if (draftValByClass.MERCHANDISE > 0) coaSummaryParts.push(`#1040 Rp ${draftValByClass.MERCHANDISE.toLocaleString('id-ID')}`);
+    if (draftValByClass.FIXED_ASSET > 0) coaSummaryParts.push(`#1510 Rp ${draftValByClass.FIXED_ASSET.toLocaleString('id-ID')}`);
+    if (draftValByClass.CONSUMABLE > 0) coaSummaryParts.push(`#1050 Rp ${draftValByClass.CONSUMABLE.toLocaleString('id-ID')}`);
+    const coaSummaryText = coaSummaryParts.length > 0 ? coaSummaryParts.join(', ') : '#1040';
 
     appendAuditTrailLog({
       req,
@@ -27775,7 +28026,7 @@ async function startServer() {
       module: 'INVENTORY',
       action: 'BULK_IMPORT_DRAFT_APPLIED',
       referenceId: draft.id,
-      summary: `Applied Draft ${draft.id} to ${outlet.storeName}: ${validatedRows.length} rows (${createdSkusCount} new, ${updatedSkusCount} restocked, ${createdBatchesCount} lots, ${createdRacksCount} new racks, Rp ${totalValuationIDR.toLocaleString('id-ID')} posted to COA #1040/#3010).`,
+      summary: `Applied Draft ${draft.id} to ${outlet.storeName}: ${validatedRows.length} rows (${createdSkusCount} new, ${updatedSkusCount} restocked, ${createdBatchesCount} lots, ${createdRacksCount} new racks, posted to ${coaSummaryText} / CR #3010).`,
     });
 
     scheduleStateSave();
@@ -27783,7 +28034,7 @@ async function startServer() {
     res.json({
       success: true,
       draft,
-      message: `Draft ${draft.id} applied to ${outlet.storeName}: ${validatedRows.length} SKU row(s), ${createdBatchesCount} active batch lot(s), Rp ${totalValuationIDR.toLocaleString('id-ID')} posted to COA #1040 / #3010.`,
+      message: `Draft ${draft.id} applied to ${outlet.storeName}: ${validatedRows.length} SKU row(s), ${createdBatchesCount} active batch lot(s), posted to ${coaSummaryText} / CR #3010.`,
     });
   });
 

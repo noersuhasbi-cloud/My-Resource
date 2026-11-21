@@ -297,6 +297,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [activeShift, setActiveShift] = useState<PosRegisterShiftSession | null>(null);
   const [shiftHistory, setShiftHistory] = useState<PosRegisterShiftSession[]>([]);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState<boolean>(false);
+  const isRegisterOpen = Boolean(activeShift && activeShift.status === 'OPEN');
   const [isSafeDropModalOpen, setIsSafeDropModalOpen] = useState<boolean>(false);
   const [rmaTargetReceipt, setRmaTargetReceipt] = useState<POSTransactionReceipt | null>(null);
   const [isBarcodeLabelModalOpen, setIsBarcodeLabelModalOpen] = useState<boolean>(false);
@@ -890,6 +891,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
   // Checkout execution
   const handleExecuteCheckout = async (overrideCashTendered?: number) => {
     if (cart.length === 0 || isProcessingCheckout || checkoutSubmitLockRef.current) return;
+    if (!isRegisterOpen) {
+      onShowToast(
+        'Register Belum Dibuka',
+        'Silakan Open Register & Input Modal Laci Awal Sebelum Melakukan Transaksi.'
+      );
+      setIsShiftModalOpen(true);
+      return;
+    }
     const effectiveCashTendered =
       typeof overrideCashTendered === 'number' && Number.isFinite(overrideCashTendered)
         ? overrideCashTendered
@@ -1211,6 +1220,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
     splitLeg1Amount,
     isTenderModalOpen,
     isProcessingCheckout,
+    isRegisterOpen,
     marginOverridePrompt,
     scalingProduct,
     completedReceipt,
@@ -1228,6 +1238,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
     splitLeg1Amount,
     isTenderModalOpen,
     isProcessingCheckout,
+    isRegisterOpen,
     marginOverridePrompt,
     scalingProduct,
     completedReceipt,
@@ -1336,6 +1347,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
       if (e.key === 'F8') {
         if (hasBlockingSubModal || s.cartLength === 0) return;
         e.preventDefault();
+        if (!s.isRegisterOpen) {
+          onShowToast(
+            'Register Belum Dibuka',
+            'Silakan Open Register & Input Modal Laci Awal Sebelum Melakukan Transaksi.'
+          );
+          setIsShiftModalOpen(true);
+          return;
+        }
         if (!s.isTenderModalOpen) {
           setCashTendered(s.totalAmount);
           setIsTenderModalOpen(true);
@@ -1354,6 +1373,14 @@ export const PosModule: React.FC<PosModuleProps> = ({
       if (e.key === 'F12') {
         if (hasBlockingSubModal || s.cartLength === 0 || s.isProcessingCheckout) return;
         e.preventDefault();
+        if (!s.isRegisterOpen) {
+          onShowToast(
+            'Register Belum Dibuka',
+            'Silakan Open Register & Input Modal Laci Awal Sebelum Melakukan Transaksi.'
+          );
+          setIsShiftModalOpen(true);
+          return;
+        }
         if (s.isTenderModalOpen) {
           void s.handleExecuteCheckout();
         } else {
@@ -1367,10 +1394,11 @@ export const PosModule: React.FC<PosModuleProps> = ({
     return () => window.removeEventListener('keydown', onPosKeyDown);
   }, []);
 
-  // Filtered product items
+  // Filtered product items (strictly MERCHANDISE only; Fixed Assets & Consumables blocked)
   const filteredProducts = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return products.filter((prod) => {
+      if (prod.itemClassification && prod.itemClassification !== 'MERCHANDISE') return false;
       const matchesCategory = selectedCategory === 'ALL' || prod.category === selectedCategory;
       const matchesQuery =
         !q ||
@@ -2225,16 +2253,42 @@ export const PosModule: React.FC<PosModuleProps> = ({
               </span>
             </div>
 
+            {!isRegisterOpen && (
+              <div className="mt-2.5 p-2.5 rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/35 text-amber-800 dark:text-amber-200 space-y-2">
+                <div className="flex items-start gap-2 text-[11px] font-semibold leading-snug">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <span>
+                    Register Belum Dibuka — Silakan Open Register &amp; Input Modal Laci Awal Sebelum Melakukan Transaksi
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsShiftModalOpen(true)}
+                  className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                >
+                  Open Register / Start Shift
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || !isRegisterOpen}
               onClick={() => {
+                if (!isRegisterOpen) {
+                  onShowToast(
+                    'Register Belum Dibuka',
+                    'Silakan Open Register & Input Modal Laci Awal Sebelum Melakukan Transaksi.'
+                  );
+                  setIsShiftModalOpen(true);
+                  return;
+                }
                 setCashTendered(totalAmount);
                 setIsSplitMode(false);
                 setSplitLeg1Amount(Math.floor(totalAmount / 2));
                 setIsTenderModalOpen(true);
               }}
-              className="w-full mt-3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              className="w-full mt-3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
               <CreditCard className="w-4 h-4" />
               <span>Tender Payment ({activeCurrency})</span>
@@ -2671,11 +2725,12 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 <button
                   type="button"
                   disabled={
+                    !isRegisterOpen ||
                     isProcessingCheckout ||
                     (isSplitMode ? !isSplitValid : paymentMethod === 'cash' && cashTendered < totalAmount)
                   }
                   onClick={() => handleExecuteCheckout()}
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   {isProcessingCheckout ? (
                     <>

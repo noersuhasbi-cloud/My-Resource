@@ -39,6 +39,7 @@ import type {
   ErpConfigurationSettings,
   OutletType,
   BranchMonitorHubSummary,
+  ItemClassification,
 } from '../../types/index.ts';
 import {
   INITIAL_ENTERPRISE_SETTINGS,
@@ -1213,6 +1214,20 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     const lotIdx = findCol(['lot', 'batch'], 10);
     const expIdx = findCol(['exp', 'kadaluarsa', 'ed'], 11);
     const snIdx = findCol(['serial', 'sn'], 12);
+    const classIdx = headers.findIndex((h) =>
+      ['class', 'klasifikasi', 'item_class', 'asset_type'].some((p) => h.includes(p))
+    );
+
+    const normalizeDraftClass = (raw: string): ItemClassification => {
+      const up = raw.trim().toUpperCase().replace(/[\s-]+/g, '_');
+      if (up === 'FIXED_ASSET' || up === 'ASSET' || up === 'ASET_TETAP' || up === 'EQUIPMENT') {
+        return 'FIXED_ASSET';
+      }
+      if (up === 'CONSUMABLE' || up === 'SUPPLIES' || up === 'BAHAN_HABIS_PAKAI') {
+        return 'CONSUMABLE';
+      }
+      return 'MERCHANDISE';
+    };
 
     const todayStamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
     const parsed: Partial<InventoryImportDraftRow>[] = [];
@@ -1234,11 +1249,16 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       const serialNumbers = rawSn
         ? Array.from(new Set(rawSn.split(/[;,|]+/).map((s) => s.trim()).filter(Boolean)))
         : [];
+      const rawClassVal = classIdx >= 0 ? getVal(classIdx) : '';
+      const itemClassification: ItemClassification | undefined = rawClassVal
+        ? normalizeDraftClass(rawClassVal)
+        : undefined;
 
       parsed.push({
         sku,
         productName: getVal(nameIdx) || `Product ${sku}`,
         category,
+        itemClassification,
         physicalStock,
         unitCost,
         sellingPrice,
@@ -6602,6 +6622,30 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                     (s, r) => s + (r.status === 'VALIDATION_ERROR' ? 0 : Math.round((Number(r.physicalStock) || 0) * (Number(r.unitCost) || 0))),
                     0
                   );
+                  const est1040IDR = draftEditableRows.reduce(
+                    (s, r) =>
+                      s +
+                      (r.status === 'VALIDATION_ERROR' || (r.itemClassification && r.itemClassification !== 'MERCHANDISE')
+                        ? 0
+                        : Math.round((Number(r.physicalStock) || 0) * (Number(r.unitCost) || 0))),
+                    0
+                  );
+                  const est1510IDR = draftEditableRows.reduce(
+                    (s, r) =>
+                      s +
+                      (r.status === 'VALIDATION_ERROR' || r.itemClassification !== 'FIXED_ASSET'
+                        ? 0
+                        : Math.round((Number(r.physicalStock) || 0) * (Number(r.unitCost) || 0))),
+                    0
+                  );
+                  const est1050IDR = draftEditableRows.reduce(
+                    (s, r) =>
+                      s +
+                      (r.status === 'VALIDATION_ERROR' || r.itemClassification !== 'CONSUMABLE'
+                        ? 0
+                        : Math.round((Number(r.physicalStock) || 0) * (Number(r.unitCost) || 0))),
+                    0
+                  );
 
                   return (
                     <div className="space-y-3 pt-2 border-t border-gray-200 dark:border-slate-800/80">
@@ -6630,7 +6674,10 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             </span>
                           )}
                           <span className={`text-[11px] font-mono ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
-                            · {totalUnits.toLocaleString('id-ID')} units · Est. COA #1040: {formatIDR(totalValIDR)}
+                            · {totalUnits.toLocaleString('id-ID')} units · Total {formatIDR(totalValIDR)}
+                            {est1040IDR > 0 ? ` (#1040: ${formatIDR(est1040IDR)})` : ''}
+                            {est1510IDR > 0 ? ` (#1510: ${formatIDR(est1510IDR)})` : ''}
+                            {est1050IDR > 0 ? ` (#1050: ${formatIDR(est1050IDR)})` : ''}
                           </span>
                         </div>
 
@@ -6685,6 +6732,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             <tr>
                               <th className="py-2.5 px-2.5">Status</th>
                               <th className="py-2.5 px-2.5">SKU &amp; Product</th>
+                              <th className="py-2.5 px-2.5">Class (COA)</th>
                               <th className="py-2.5 px-2.5">Rack / Bin</th>
                               <th className="py-2.5 px-2.5">Qty</th>
                               <th className="py-2.5 px-2.5">Lot / Batch</th>
@@ -6737,6 +6785,23 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                                   <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                                     {row.category} · {row.unit}
                                   </div>
+                                </td>
+                                <td className="py-2 px-2 align-top">
+                                  <select
+                                    value={row.itemClassification || 'MERCHANDISE'}
+                                    onChange={(e) =>
+                                      handleDraftRowFieldChange(
+                                        row.rowId,
+                                        'itemClassification',
+                                        e.target.value as ItemClassification
+                                      )
+                                    }
+                                    className={`w-32 px-2 py-1 text-[11px] font-semibold rounded-lg ${inputClass}`}
+                                  >
+                                    <option value="MERCHANDISE">Merch (#1040)</option>
+                                    <option value="FIXED_ASSET">Fixed Asset (#1510)</option>
+                                    <option value="CONSUMABLE">Consumable (#1050)</option>
+                                  </select>
                                 </td>
                                 <td className="py-2 px-2 align-top">
                                   <input

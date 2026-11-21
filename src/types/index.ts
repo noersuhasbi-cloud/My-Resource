@@ -63,6 +63,7 @@ export interface Product {
   b2bImageUrl?: string;
   retailPackagingSpec?: string;
   removalStrategy?: 'FEFO' | 'FIFO';
+  itemClassification?: ItemClassification;
 }
 
 export interface CartItem {
@@ -216,6 +217,8 @@ export interface WarehouseZone {
 // -------------------------------------------------------------
 // Inventory & Valuation (Multi-Tier & Store-Specific)
 // -------------------------------------------------------------
+export type ItemClassification = 'MERCHANDISE' | 'FIXED_ASSET' | 'CONSUMABLE';
+
 export interface StoreInventoryStock {
   id: string;
   sku: string;
@@ -285,6 +288,7 @@ export interface StoreInventoryStock {
   bpjphExpiryDate?: string;
   bpomRegNumber?: string;
   wholesaleTiers?: WholesaleVolumeTier[];
+  itemClassification?: ItemClassification;
 }
 
 export interface InventoryItem {
@@ -328,6 +332,7 @@ export interface InventoryItem {
   b2bImageUrl?: string;
   binLocation?: string;
   serialNumbers?: string[];
+  itemClassification?: ItemClassification;
   retailPackagingSpec?: string;
   wholesalePackagingSpec?: string;
   outerBoxBarcode?: string;
@@ -560,6 +565,7 @@ export interface InventoryBatch {
   consignmentCostIDR?: number;
   reservedQuantity?: number;
   serialNumbers?: string[];
+  itemClassification?: ItemClassification;
 }
 
 export interface FEFOAllocationTrace {
@@ -1325,6 +1331,7 @@ export interface POSProductItem {
   productId: string;
   name: string;
   category: string;
+  itemClassification?: ItemClassification;
   sellingPrice: number; // IDR
   unitCost: number; // IDR
   unit: string;
@@ -1447,6 +1454,7 @@ export interface POSTransactionReceipt {
   cashierId: string;
   cashierName: string;
   shiftId: string;
+  shiftSessionId?: string;
   items: POSCartItem[];
   subtotal: number;
   discount: number;
@@ -1556,6 +1564,7 @@ export interface BulkInventoryImportRow {
   lotNumber?: string;
   expiryDate?: string;
   serialNumbers?: string[];
+  itemClassification?: ItemClassification;
 }
 
 export type InventoryImportDraftRowStatus = 'NEW_SKU' | 'RESTOCK' | 'VALIDATION_ERROR';
@@ -1565,6 +1574,7 @@ export interface InventoryImportDraftRow {
   sku: string;
   productName: string;
   category: string;
+  itemClassification?: ItemClassification;
   physicalStock: number;
   unitCost: number;
   sellingPrice: number;
@@ -1608,6 +1618,11 @@ export interface InventoryImportDraft {
     createdBatchesCount: number;
     glVoucherIds: string[];
     totalValuationIDR: number;
+    coaBreakdown?: {
+      coa1040IDR: number;
+      coa1510IDR: number;
+      coa1050IDR: number;
+    };
   };
 }
 
