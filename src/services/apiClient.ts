@@ -98,6 +98,9 @@ import type {
   OperatorBranchAssignment,
   ConfirmArrivalResponse,
   CommunicationGatewayConfig,
+  TrialGovernanceConfig,
+  TrialGovernanceStatusSnapshot,
+  ImportExportDiagnosticReport,
   CommunicationDispatchLog,
   SendDocumentDispatchPayload,
   SendDocumentDispatchResponse,
@@ -1519,7 +1522,12 @@ export const apiClient = {
     storeId: string;
     sourceFilename?: string;
     rows: Partial<InventoryImportDraftRow>[];
-  }): Promise<{ success: boolean; draft: InventoryImportDraft; message: string }> {
+  }): Promise<{
+    success: boolean;
+    draft: InventoryImportDraft;
+    diagnosticReport?: ImportExportDiagnosticReport;
+    message: string;
+  }> {
     const res = await fetchApi('/api/admin/inventory/import-drafts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1527,7 +1535,10 @@ export const apiClient = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to stage inventory import draft');
+      const errorObj: any = new Error(err.error || 'Failed to stage inventory import draft');
+      if (err.code) errorObj.code = err.code;
+      if (err.diagnosticReport) errorObj.diagnosticReport = err.diagnosticReport;
+      throw errorObj;
     }
     return res.json();
   },
@@ -1574,7 +1585,10 @@ export const apiClient = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to apply inventory import draft');
+      const errorObj: any = new Error(err.error || 'Failed to apply inventory import draft');
+      if (err.code) errorObj.code = err.code;
+      if (err.diagnosticReport) errorObj.diagnosticReport = err.diagnosticReport;
+      throw errorObj;
     }
     return res.json();
   },
@@ -3414,7 +3428,10 @@ export const apiClient = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to export system backup');
+      const errorObj: any = new Error(err.error || 'Failed to export system backup');
+      if (err.code) errorObj.code = err.code;
+      if (err.diagnosticReport) errorObj.diagnosticReport = err.diagnosticReport;
+      throw errorObj;
     }
     const disposition = res.headers.get('Content-Disposition') || '';
     const match = /filename="?([^"]+)"?/i.exec(disposition);
@@ -3441,7 +3458,10 @@ export const apiClient = {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(data.error || 'Failed to restore system snapshot');
+      const errorObj: any = new Error(data.error || 'Failed to restore system snapshot');
+      if (data.code) errorObj.code = data.code;
+      if (data.diagnosticReport) errorObj.diagnosticReport = data.diagnosticReport;
+      throw errorObj;
     }
     return data;
   },
@@ -4732,6 +4752,60 @@ export const apiClient = {
     if (!res.ok) throw new Error(data.error || 'Failed to resolve Fraud Radar alert');
     return data;
   },
+
+  // -------------------------------------------------------------
+  // TRIAL / DEMO GOVERNANCE & IMPORT/EXPORT DIAGNOSTICS APIS
+  // -------------------------------------------------------------
+  async getTrialGovernance(): Promise<{
+    success: boolean;
+    governance: TrialGovernanceStatusSnapshot;
+  }> {
+    const res = await fetchApi('/api/admin/settings/trial-governance');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load Trial & Demo Governance configuration');
+    }
+    return data;
+  },
+
+  async updateTrialGovernance(patch: Partial<TrialGovernanceConfig>): Promise<{
+    success: boolean;
+    governance: TrialGovernanceStatusSnapshot;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/settings/trial-governance', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to update Trial & Demo Governance configuration');
+    }
+    return data;
+  },
+
+  async getImportExportDiagnostics(): Promise<{
+    success: boolean;
+    reports: ImportExportDiagnosticReport[];
+  }> {
+    const res = await fetchApi('/api/admin/settings/import-export-diagnostics');
+    const data = await res.json().catch(() => ({ success: false, reports: [] }));
+    if (!res.ok) {
+      return { success: false, reports: [] };
+    }
+    return data;
+  },
+
+  async recordImportExportDiagnostic(report: Partial<ImportExportDiagnosticReport>): Promise<{
+    success: boolean;
+    report?: ImportExportDiagnosticReport;
+  }> {
+    const res = await fetchApi('/api/admin/settings/import-export-diagnostics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(report),
+    });
+    return res.json().catch(() => ({ success: false }));
+  },
 };
-
-

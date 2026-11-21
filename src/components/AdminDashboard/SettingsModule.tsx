@@ -40,7 +40,14 @@ import type {
   OutletType,
   BranchMonitorHubSummary,
   ItemClassification,
+  TrialGovernanceStatusSnapshot,
+  ImportExportDiagnosticReport,
 } from '../../types/index.ts';
+import { TrialGovernancePanel } from './TrialGovernancePanel';
+import {
+  analyzeSnapshotRestorePayload,
+  buildDiagnosticFromError,
+} from '../../utils/importExportDiagnostics';
 import {
   INITIAL_ENTERPRISE_SETTINGS,
   INITIAL_ERP_SETTINGS,
@@ -158,6 +165,7 @@ interface SettingsModuleProps {
   onNavigateToAnalytic?: () => void;
   onNavigateToMargin?: () => void;
   onNavigateToQuotations?: () => void;
+  onTrialGovernanceUpdated?: (snapshot: TrialGovernanceStatusSnapshot) => void;
 }
 
 export const SettingsModule: React.FC<SettingsModuleProps> = ({
@@ -176,6 +184,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   onNavigateToAnalytic,
   onNavigateToMargin,
   onNavigateToQuotations,
+  onTrialGovernanceUpdated,
 }) => {
   const isLight = theme === 'light';
   const currentRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
@@ -234,7 +243,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [goodsReceipts, setGoodsReceipts] = useState<GoodsReceiptRecord[]>([]);
   const [isSavingEnterprise, setIsSavingEnterprise] = useState<boolean>(false);
-  const [enterpriseQuickFilter, setEnterpriseQuickFilter] = useState<'ALL' | 'VALUATION' | 'WAREHOUSE' | 'ANALYTICS' | 'QUOTATIONS' | 'MATCHING' | 'TAX' | 'ERP_CONFIG'>('ALL');
+  const [enterpriseQuickFilter, setEnterpriseQuickFilter] = useState<
+    'ALL' | 'VALUATION' | 'WAREHOUSE' | 'ANALYTICS' | 'QUOTATIONS' | 'MATCHING' | 'TAX' | 'ERP_CONFIG' | 'TRIAL_GOV'
+  >('ALL');
+  const [snapshotDiagnosticReport, setSnapshotDiagnosticReport] = useState<ImportExportDiagnosticReport | null>(null);
+  const [bulkImportDiagnosticReport, setBulkImportDiagnosticReport] = useState<ImportExportDiagnosticReport | null>(null);
+  const [diagnosticRefreshKey, setDiagnosticRefreshKey] = useState<number>(0);
 
   // Configurable 14-Division System Users & Per-Module Permission Matrix State
   const [systemUsersList, setSystemUsersList] = useState<SystemUserAccount[]>([]);
@@ -1284,18 +1298,35 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       return;
     }
     setIsStagingDraft(true);
+    setBulkImportDiagnosticReport(null);
     try {
       const res = await apiClient.createInventoryImportDraft({
         storeId: targetStoreOverride || importTargetStoreId,
         sourceFilename,
         rows: rowsToStage,
       });
+      if (res.diagnosticReport && (res.diagnosticReport.errorCount > 0 || res.diagnosticReport.warningCount > 0)) {
+        setBulkImportDiagnosticReport(res.diagnosticReport);
+        setDiagnosticRefreshKey((k) => k + 1);
+      }
       if (res.success && res.draft) {
         syncActiveDraftState(res.draft);
         setImportDraftsList((prev) => [res.draft, ...prev.filter((d) => d.id !== res.draft.id)]);
         onShowToast('Import Draft Staged', res.message);
       }
     } catch (err: any) {
+      const diag = buildDiagnosticFromError({
+        operation: 'IMPORT',
+        source: sourceFilename || 'bulk_inventory_import.csv',
+        error: err,
+        totalRecords: rowsToStage.length,
+        actorName: activeStaffSession?.userName,
+      });
+      setBulkImportDiagnosticReport(diag);
+      if (!err?.diagnosticReport) {
+        apiClient.recordImportExportDiagnostic(diag).catch(() => {});
+      }
+      setDiagnosticRefreshKey((k) => k + 1);
       onShowToast('Draft Staging Failed', err.message || 'Could not create import draft');
     } finally {
       setIsStagingDraft(false);
@@ -1377,11 +1408,31 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
       const draftRows = parseTabularRowsToDraftInput(matrix);
       if (draftRows.length === 0) {
+        const emptyDiag = buildDiagnosticFromError({
+          operation: 'IMPORT',
+          source: file.name,
+          error: new Error('No valid data rows found in the uploaded file. Verify column headers (SKU, Product Name, Stock, Unit Cost).'),
+          totalRecords: 0,
+          actorName: activeStaffSession?.userName,
+        });
+        setBulkImportDiagnosticReport(emptyDiag);
+        apiClient.recordImportExportDiagnostic(emptyDiag).catch(() => {});
+        setDiagnosticRefreshKey((k) => k + 1);
         onShowToast('Empty File', 'No valid data rows found in the uploaded file.');
         return;
       }
       await stageRowsAsServerDraft(draftRows, file.name);
     } catch (err: any) {
+      const parseDiag = buildDiagnosticFromError({
+        operation: 'IMPORT',
+        source: file.name,
+        error: err,
+        totalRecords: 0,
+        actorName: activeStaffSession?.userName,
+      });
+      setBulkImportDiagnosticReport(parseDiag);
+      apiClient.recordImportExportDiagnostic(parseDiag).catch(() => {});
+      setDiagnosticRefreshKey((k) => k + 1);
       onShowToast('File Parse Error', err.message || 'Failed to read .CSV / .XLSX file');
     } finally {
       if (bulkImportFileInputRef.current) bulkImportFileInputRef.current.value = '';
@@ -1550,6 +1601,18 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
         if (onRefreshData) onRefreshData();
       }
     } catch (err: any) {
+      const diag = buildDiagnosticFromError({
+        operation: 'IMPORT',
+        source: activeImportDraft.sourceFilename || activeImportDraft.id,
+        error: err,
+        totalRecords: draftEditableRows.length,
+        actorName: activeStaffSession?.userName,
+      });
+      setBulkImportDiagnosticReport(diag);
+      if (!err?.diagnosticReport) {
+        apiClient.recordImportExportDiagnostic(diag).catch(() => {});
+      }
+      setDiagnosticRefreshKey((k) => k + 1);
       onShowToast('Apply Draft Failed', err.message || 'Failed to apply draft to live inventory');
     } finally {
       setIsApplyingDraft(false);
@@ -2050,6 +2113,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                 { id: 'MATCHING', label: '3-Way Matching' },
                 { id: 'TAX', label: 'Indonesian Tax & NPWP' },
                 { id: 'ERP_CONFIG', label: 'ERP Rules & Period Lock' },
+                { id: 'TRIAL_GOV', label: 'Trial & Demo Governance' },
               ] as const
             ).map((filter) => (
               <button
@@ -3172,18 +3236,40 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         e.target.value = '';
                         if (!file) return;
                         setIsRestoringSnapshot(true);
+                        setSnapshotDiagnosticReport(null);
                         try {
                           const rawText = await file.text();
-                          let parsed: any;
-                          try {
-                            parsed = JSON.parse(rawText);
-                          } catch {
-                            throw new Error('Selected file is not valid JSON.');
+                          const { parsed, report } = analyzeSnapshotRestorePayload(
+                            rawText,
+                            file.name,
+                            activeStaffSession?.userName
+                          );
+                          if (!parsed || report.errorCount > 0) {
+                            setSnapshotDiagnosticReport(report);
+                            apiClient.recordImportExportDiagnostic(report).catch(() => {});
+                            setDiagnosticRefreshKey((k) => k + 1);
+                            throw new Error(report.issues[0]?.rootCause || 'Selected file failed snapshot schema validation.');
                           }
                           const res = await apiClient.restoreSystemSnapshot(parsed);
+                          if (report.warningCount > 0) {
+                            setSnapshotDiagnosticReport(report);
+                            apiClient.recordImportExportDiagnostic(report).catch(() => {});
+                            setDiagnosticRefreshKey((k) => k + 1);
+                          }
                           onShowToast('Snapshot Restored', res.message);
                           onRefreshData?.();
                         } catch (err: any) {
+                          const diag = buildDiagnosticFromError({
+                            operation: 'IMPORT',
+                            source: file.name,
+                            error: err,
+                            actorName: activeStaffSession?.userName,
+                          });
+                          setSnapshotDiagnosticReport((prev) => prev || diag);
+                          if (!err?.diagnosticReport) {
+                            apiClient.recordImportExportDiagnostic(diag).catch(() => {});
+                          }
+                          setDiagnosticRefreshKey((k) => k + 1);
                           onShowToast('Restore Failed', err?.message || 'Failed to validate or restore snapshot.');
                         } finally {
                           setIsRestoringSnapshot(false);
@@ -3196,6 +3282,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         disabled={!isSuperAdmin || isDownloadingBackup}
                         onClick={async () => {
                           setIsDownloadingBackup(true);
+                          setSnapshotDiagnosticReport(null);
                           try {
                             const { blob, filename } = await apiClient.downloadSystemBackup();
                             const url = URL.createObjectURL(blob);
@@ -3208,6 +3295,17 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             URL.revokeObjectURL(url);
                             onShowToast('Backup Downloaded', `Saved ${filename} cleanly.`);
                           } catch (err: any) {
+                            const diag = buildDiagnosticFromError({
+                              operation: 'EXPORT',
+                              source: 'system_backup.json',
+                              error: err,
+                              actorName: activeStaffSession?.userName,
+                            });
+                            setSnapshotDiagnosticReport(diag);
+                            if (!err?.diagnosticReport) {
+                              apiClient.recordImportExportDiagnostic(diag).catch(() => {});
+                            }
+                            setDiagnosticRefreshKey((k) => k + 1);
                             onShowToast('Backup Failed', err?.message || 'Failed to download backup snapshot.');
                           } finally {
                             setIsDownloadingBackup(false);
@@ -3229,6 +3327,33 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         <span>{isRestoringSnapshot ? 'Validating & Restoring...' : 'Restore Snapshot (.JSON)'}</span>
                       </button>
                     </div>
+                    {snapshotDiagnosticReport && (snapshotDiagnosticReport.errorCount > 0 || snapshotDiagnosticReport.warningCount > 0) && (
+                      <div className="mt-2 p-3 rounded-xl border border-rose-200 dark:border-rose-800/60 bg-rose-50/70 dark:bg-rose-950/25 space-y-1.5 text-[11px]">
+                        <div className="flex items-center justify-between gap-2 font-bold text-rose-700 dark:text-rose-300">
+                          <span>
+                            Diagnostic Report ({snapshotDiagnosticReport.errorCount} error / {snapshotDiagnosticReport.warningCount} warning)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSnapshotDiagnosticReport(null)}
+                            className="text-[10px] underline cursor-pointer"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                        {snapshotDiagnosticReport.issues.slice(0, 4).map((iss, idx) => (
+                          <div key={idx} className="space-y-0.5 text-slate-700 dark:text-slate-200">
+                            <div>
+                              <span className="font-mono font-bold text-rose-700 dark:text-rose-300">[{iss.errorType}]</span>{' '}
+                              <span className="font-semibold">{iss.reference}:</span> {iss.rootCause}
+                            </div>
+                            <div className="text-emerald-800 dark:text-emerald-300">
+                              Fix: {iss.remediationHint}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Store Lifecycle: Initialize Clean Production Store & Reset Demo Data */}
@@ -3317,6 +3442,21 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* SECTION 8 (ADDITIVE): TRIAL / DEMO GOVERNANCE, GRANULAR SUB-ROLE RESTRICTIONS & IMPORT/EXPORT DIAGNOSTICS */}
+            {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'TRIAL_GOV') && (
+              <TrialGovernancePanel
+                isLight={isLight}
+                isSuperAdmin={isSuperAdmin}
+                cardClass={cardClass}
+                subCardClass={subCardClass}
+                inputClass={inputClass}
+                labelClass={labelClass}
+                onShowToast={onShowToast}
+                onGovernanceUpdated={onTrialGovernanceUpdated}
+                externalDiagnosticRefreshKey={diagnosticRefreshKey}
+              />
             )}
           </div>
         </div>
@@ -6723,6 +6863,34 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           </button>
                         </div>
                       </div>
+
+                      {bulkImportDiagnosticReport && (bulkImportDiagnosticReport.errorCount > 0 || bulkImportDiagnosticReport.warningCount > 0) && (
+                        <div className="p-3 rounded-xl border border-amber-300 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-950/25 space-y-1.5 text-[11px]">
+                          <div className="flex items-center justify-between gap-2 font-bold text-amber-900 dark:text-amber-300">
+                            <span>
+                              Import Diagnostic Analysis ({bulkImportDiagnosticReport.errorCount} error / {bulkImportDiagnosticReport.warningCount} warning)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setBulkImportDiagnosticReport(null)}
+                              className="text-[10px] underline cursor-pointer"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                          {bulkImportDiagnosticReport.issues.slice(0, 6).map((iss, idx) => (
+                            <div key={idx} className="space-y-0.5 text-slate-700 dark:text-slate-200">
+                              <div>
+                                <span className="font-mono font-bold text-rose-700 dark:text-rose-300">[{iss.errorType}]</span>{' '}
+                                <span className="font-semibold">{iss.reference}:</span> {iss.rootCause}
+                              </div>
+                              <div className="text-emerald-800 dark:text-emerald-300">
+                                Remediation: {iss.remediationHint}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
                         <table className="w-full text-left text-xs">

@@ -4135,8 +4135,96 @@ export interface FraudRadarResponse {
   generatedAt: string;
 }
 
+// =============================================================
+// TRIAL / DEMO GOVERNANCE & IMPORT/EXPORT DIAGNOSTICS (ADDITIVE)
+// =============================================================
+export type TrialLifecycleStatus =
+  | 'ACTIVE_TRIAL'
+  | 'EXPIRING_SOON'
+  | 'LOCKED_EXPIRED'
+  | 'CONVERTED_PAID'
+  | 'SUSPENDED';
 
+export type GovernanceMode = 'TRIAL' | 'DEMO' | 'PRODUCTION';
 
+export type TrialManualStatusOverride = 'AUTO' | TrialLifecycleStatus;
 
+export interface TrialAccountingSubAccess {
+  ar: boolean;
+  ap: boolean;
+  glTax: boolean;
+  financeApproval: boolean;
+}
 
+export interface TrialGovernanceConfig {
+  mode: GovernanceMode;
+  enforceRestrictions: boolean;
+  startDateIso: string; // YYYY-MM-DD
+  durationDays: number;
+  expirationDateIso: string; // YYYY-MM-DD or ISO timestamp
+  warningWindowDays: number;
+  graceHours: number;
+  manualStatusOverride: TrialManualStatusOverride;
+  allowDemoQuickFill: boolean;
+  allowLegacyQuickIds: boolean;
+  restrictExternalExport: boolean;
+  maxTrialImportRows: number;
+  maskSensitiveWorkflowMetadata: boolean;
+  enforceSingleSessionPerUser: boolean;
+  demoSessionTimeoutMinutes: number;
+  moduleAccess: Partial<Record<ModulePermissionKey, boolean>>;
+  subRoleAccess: Partial<Record<DivisionRoleCode, boolean>>;
+  accountingSubAccess: TrialAccountingSubAccess;
+  updatedAt: string;
+  updatedBy: string;
+}
 
+export interface TrialGovernanceStatusSnapshot {
+  config: TrialGovernanceConfig;
+  effectiveStatus: TrialLifecycleStatus;
+  serverTimestampIso: string;
+  expiresAtIso: string;
+  graceEndsAtIso: string;
+  daysRemaining: number;
+  hoursRemaining: number;
+  isOperationalLocked: boolean;
+  isExpiringSoon: boolean;
+  isInGraceWindow: boolean;
+  statusMessage: string;
+}
+
+export type ImportExportErrorType =
+  | 'INVALID_FILE_FORMAT'
+  | 'SCHEMA_MISMATCH'
+  | 'MISSING_REQUIRED_FIELD'
+  | 'INVALID_VALUE_TYPE'
+  | 'DUPLICATE_KEY'
+  | 'CONSTRAINT_RELATION_MISMATCH'
+  | 'TRIAL_LIMIT_EXCEEDED'
+  | 'TRIAL_LOCKED'
+  | 'EXPORT_RESTRICTED'
+  | 'SERVER_ERROR';
+
+export interface ImportExportDiagnosticIssue {
+  errorType: ImportExportErrorType;
+  severity: 'error' | 'warning';
+  reference: string;
+  field?: string;
+  rowNumber?: number;
+  rootCause: string;
+  remediationHint: string;
+}
+
+export interface ImportExportDiagnosticReport {
+  id: string;
+  timestamp: string;
+  operation: 'IMPORT' | 'EXPORT';
+  source: string;
+  status: 'SUCCESS' | 'PARTIAL_ERROR' | 'FAILED';
+  totalRecords: number;
+  errorCount: number;
+  warningCount: number;
+  summary: string;
+  issues: ImportExportDiagnosticIssue[];
+  actorName?: string;
+}

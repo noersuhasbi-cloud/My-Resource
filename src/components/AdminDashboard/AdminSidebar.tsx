@@ -1,11 +1,18 @@
 import React from 'react';
-import type { StaffShiftSession } from '../../types/index.ts';
+import type { StaffShiftSession, TrialGovernanceStatusSnapshot } from '../../types/index.ts';
 import {
   hasModuleAccess,
   isAccountingSubTabAllowed,
   isModulePermissionTabAllowed,
   isRoleTabAllowed,
 } from '../../utils/rbac';
+import {
+  isAccountingAreaAllowedByGovernance,
+  isModuleAllowedByGovernance,
+  isSubRoleAllowedByGovernance,
+  mapAccountingSubTabToGovernanceArea,
+  mapDashboardTabToGovernanceModule,
+} from '../../utils/trialGovernance';
 import {
   LayoutDashboard,
   Store,
@@ -108,14 +115,28 @@ interface AdminSidebarProps {
   onCloseToStorefront: () => void;
   onLogout?: () => void;
   activeStaffSession?: StaffShiftSession | null;
+  trialGovernance?: TrialGovernanceStatusSnapshot | null;
 }
 
-export function isDashboardTabAllowed(session: StaffShiftSession | null | undefined, tab: AdminDashboardTab): boolean {
+export function isDashboardTabAllowed(
+  session: StaffShiftSession | null | undefined,
+  tab: AdminDashboardTab,
+  trialGovernance?: TrialGovernanceStatusSnapshot | null
+): boolean {
   if (!session) return true;
-  if (session.modulePermissions) {
-    return isModulePermissionTabAllowed(session.modulePermissions, tab, session.roleCode);
+  const baseAllowed = session.modulePermissions
+    ? isModulePermissionTabAllowed(session.modulePermissions, tab, session.roleCode)
+    : isRoleTabAllowed(session.userRole, tab);
+  if (!baseAllowed) return false;
+  if (trialGovernance && session.roleCode && session.roleCode !== 'SUPER_ADMIN') {
+    if (trialGovernance.isOperationalLocked) return false;
+    if (!isSubRoleAllowedByGovernance(trialGovernance, session.roleCode)) return false;
+    const modKey = mapDashboardTabToGovernanceModule(tab);
+    if (modKey && !isModuleAllowedByGovernance(trialGovernance, modKey, session.roleCode)) {
+      return false;
+    }
   }
-  return isRoleTabAllowed(session.userRole, tab);
+  return true;
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -138,10 +159,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onCloseToStorefront,
   onLogout,
   activeStaffSession,
+  trialGovernance,
 }) => {
   const isLight = theme === 'light';
-  const allow = (tab: AdminDashboardTab) => isDashboardTabAllowed(activeStaffSession, tab);
-  const allowAccountingSub = (sub: AccountingSubTab) => isAccountingSubTabAllowed(activeStaffSession, sub);
+  const allow = (tab: AdminDashboardTab) => isDashboardTabAllowed(activeStaffSession, tab, trialGovernance);
+  const allowAccountingSub = (sub: AccountingSubTab) => {
+    if (!isAccountingSubTabAllowed(activeStaffSession, sub)) return false;
+    if (trialGovernance && activeStaffSession?.roleCode && activeStaffSession.roleCode !== 'SUPER_ADMIN') {
+      const area = mapAccountingSubTabToGovernanceArea(sub);
+      if (area && !isAccountingAreaAllowedByGovernance(trialGovernance, area, activeStaffSession.roleCode)) {
+        return false;
+      }
+    }
+    return true;
+  };
   const canViewStorefront = activeStaffSession
     ? hasModuleAccess(activeStaffSession, 'storefront', 'view') === true
     : true;

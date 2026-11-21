@@ -32,6 +32,7 @@ import type {
   VendorBill,
   EnterpriseSettingsConfig,
   EnterpriseNotification,
+  TrialGovernanceStatusSnapshot,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -211,12 +212,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     getDefaultAccountingSubTabForSession(initialStaffSession)
   );
 
+  // Additive Trial / Demo Governance snapshot (server-authoritative clock)
+  const [trialGovernance, setTrialGovernance] = useState<TrialGovernanceStatusSnapshot | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    apiClient
+      .getTrialGovernance()
+      .then((res) => {
+        if (active && res?.governance) setTrialGovernance(res.governance);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [activeStaffSession?.userId]);
+
   // Synchronize API operator context, activeTab guard & branch scope whenever activeStaffSession updates
   useEffect(() => {
     apiClient.setOperatorContext(activeStaffSession);
     if (!activeStaffSession) return;
 
-    if (!isDashboardTabAllowed(activeStaffSession, activeTab)) {
+    if (!isDashboardTabAllowed(activeStaffSession, activeTab, trialGovernance)) {
       setActiveTab(getDefaultTabForSession(activeStaffSession));
     }
 
@@ -232,7 +249,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setSelectedOutletFilter(assigned);
       setSelectedFinanceStore(assigned);
     }
-  }, [activeStaffSession, activeTab, accountingDeepSubTab]);
+  }, [activeStaffSession, activeTab, accountingDeepSubTab, trialGovernance]);
 
   // Loading & refresh
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -877,6 +894,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         onCloseToStorefront={onCloseToStorefront}
         onLogout={onLogout}
         activeStaffSession={activeStaffSession}
+        trialGovernance={trialGovernance}
       />
 
       {/* 2. Main Content Wrapper with Dynamic Left Margin corresponding to Sidebar */}
@@ -1144,6 +1162,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </header>
 
+        {/* Non-Intrusive Trial / Demo Governance Status Notice (Only shown when Expiring Soon or Locked) */}
+        {trialGovernance && (trialGovernance.isExpiringSoon || trialGovernance.isOperationalLocked) && (
+          <div
+            className={`print:hidden px-4 sm:px-6 py-2 text-xs border-b flex flex-wrap items-center justify-between gap-2 ${
+              trialGovernance.isOperationalLocked
+                ? 'bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950/40 dark:border-rose-900/60 dark:text-rose-200'
+                : 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/40 dark:border-amber-900/60 dark:text-amber-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span className="font-semibold">
+                [{trialGovernance.effectiveStatus.replace(/_/g, ' ')}] {trialGovernance.statusMessage}
+              </span>
+            </div>
+            {canonicalRole === 'super_admin' && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('settings')}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#0F4C3A] text-white hover:bg-[#0b382b] cursor-pointer"
+              >
+                Manage Trial Governance
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Non-Destructive Operational Lock Gate for Non-Owner Sessions when Trial Expired/Suspended */}
+        {trialGovernance?.isOperationalLocked && canonicalRole !== 'super_admin' ? (
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="max-w-lg w-full rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-[#12141C] p-6 sm:p-8 shadow-lg text-center space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 mx-auto flex items-center justify-center">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Trial / Demo Access Locked ({trialGovernance.effectiveStatus.replace(/_/g, ' ')})
+                </h2>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {trialGovernance.statusMessage}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-[11px] text-slate-600 dark:text-slate-400 font-mono">
+                Server Verification (UTC): {trialGovernance.serverTimestampIso.replace('T', ' ').slice(0, 19)}
+              </div>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out / Switch to Super Admin</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Executive Stock Ticker (Top Bar Status Widget) */}
         <ExecutiveStockTicker
           selectedStore={selectedGlobalStore}
@@ -1153,7 +1230,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           lowStockCount={inventoryMetrics.lowStockCount}
           totalStockCount={inventoryMetrics.totalStockCount}
           onNavigateTab={(tab) => {
-            if (isDashboardTabAllowed(activeStaffSession, tab)) {
+            if (isDashboardTabAllowed(activeStaffSession, tab, trialGovernance)) {
               setActiveTab(tab);
             }
           }}
@@ -2498,6 +2575,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               setActiveTab('accounting');
             }}
             onNavigateToQuotations={() => setActiveTab('quotations')}
+            onTrialGovernanceUpdated={(snap) => setTrialGovernance(snap)}
           />
         )}
           </div>
@@ -2561,6 +2639,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           document.body
         )}
         </main>
+        </>
+        )}
       </div>
     </div>
   );

@@ -49,6 +49,19 @@ import {
   getDefaultModulePermissions,
   divisionRoleToCanonicalRole,
 } from './src/utils/rbac.ts';
+import {
+  createDefaultTrialGovernanceConfig,
+  normalizeTrialGovernanceConfig,
+  evaluateTrialGovernanceSnapshot,
+  isSubRoleAllowedByGovernance,
+  isModuleAllowedByGovernance,
+  isAccountingAreaAllowedByGovernance,
+} from './src/utils/trialGovernance.ts';
+import {
+  analyzeSnapshotRestorePayload,
+  analyzeInventoryImportRows,
+  createDiagnosticReport,
+} from './src/utils/importExportDiagnostics.ts';
 
 import type {
   InventoryItem,
@@ -60,6 +73,9 @@ import type {
   StoreOutletSchedule,
   OutletType,
   ItemClassification,
+  TrialGovernanceConfig,
+  TrialGovernanceStatusSnapshot,
+  ImportExportDiagnosticReport,
   WarehouseZone,
   StoreInventoryStock,
   GoodsReceiptRecord,
@@ -5027,7 +5043,217 @@ function createInitialSystemUsers(): SystemUserAccount[] {
 }
 
 let systemUsers: SystemUserAccount[] = createInitialSystemUsers();
-const activeAuthTokens = new Map<string, string>(); // bearer token -> systemUser.id
+const activeAuthTokens = new Map<string, { userId: string; issuedAtMs: number; expiresAtMs: number }>();
+const revokedAuthTokens = new Set<string>();
+
+// Non-Destructive Additive Trial / Demo Governance & Import/Export Diagnostics State
+let trialGovernanceConfig: TrialGovernanceConfig = createDefaultTrialGovernanceConfig();
+let importExportDiagnosticsLog: ImportExportDiagnosticReport[] = [];
+
+function recordImportExportDiagnostic(report: ImportExportDiagnosticReport): ImportExportDiagnosticReport {
+  importExportDiagnosticsLog.unshift(report);
+  if (importExportDiagnosticsLog.length > 50) {
+    importExportDiagnosticsLog = importExportDiagnosticsLog.slice(0, 50);
+  }
+  return report;
+}
+
+function evaluateRouteGovernancePolicy(
+  user: SystemUserAccount,
+  urlPath: string,
+  method: string
+): {
+  allowed: boolean;
+  code?: 'TRIAL_LOCKED' | 'TRIAL_SUBROLE_RESTRICTED' | 'TRIAL_MODULE_RESTRICTED' | 'EXPORT_RESTRICTED';
+  reason?: string;
+  snapshot: TrialGovernanceStatusSnapshot;
+} {
+  const nowMs = Date.now(); // Authoritative server-side clock (ignores client headers)
+  const snapshot = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, nowMs);
+
+  // Super Admin always retains governance & recovery access
+  if (user.roleCode === 'SUPER_ADMIN') {
+    return { allowed: true, snapshot };
+  }
+
+  // Always allow authenticated users to read trial governance status so UI banners/locks reflect server truth
+  if (urlPath === '/admin/settings/trial-governance' && method === 'GET') {
+    return { allowed: true, snapshot };
+  }
+
+  if (snapshot.isOperationalLocked) {
+    return {
+      allowed: false,
+      code: 'TRIAL_LOCKED',
+      reason: snapshot.statusMessage,
+      snapshot,
+    };
+  }
+
+  if (!isSubRoleAllowedByGovernance(snapshot, user.roleCode)) {
+    return {
+      allowed: false,
+      code: 'TRIAL_SUBROLE_RESTRICTED',
+      reason: `Akses Ditolak (Trial/Demo Governance): Sub-peran '${user.divisionLabel}' (${user.roleCode}) sedang dibatasi pada konfigurasi Trial/Demo aktif.`,
+      snapshot,
+    };
+  }
+
+  const cfg = snapshot.config;
+  if (!cfg.enforceRestrictions || (cfg.mode === 'PRODUCTION' && cfg.manualStatusOverride === 'AUTO')) {
+    return { allowed: true, snapshot };
+  }
+
+  // Export restriction guardrail for external demo/trial users
+  if (
+    cfg.restrictExternalExport &&
+    (urlPath === '/admin/system/backup' ||
+      urlPath === '/admin/compliance/coretax-export' ||
+      urlPath === '/admin/accounting/coretax-export')
+  ) {
+    const reason =
+      'Export Dibatasi (Trial/Demo Governance): Ekspor data eksternal dinonaktifkan untuk akun non-Owner demi keamanan sistem.';
+    recordImportExportDiagnostic(
+      createDiagnosticReport({
+        operation: 'EXPORT',
+        source: urlPath,
+        totalRecords: 0,
+        actorName: user.fullName,
+        issues: [
+          {
+            errorType: 'EXPORT_RESTRICTED',
+            severity: 'error',
+            reference: `${method} ${urlPath}`,
+            rootCause: reason,
+            remediationHint:
+              'Disable "Restrict External Data Exports" in Enterprise Settings -> Trial & Demo Governance or perform export as Super Admin.',
+          },
+        ],
+      })
+    );
+    return { allowed: false, code: 'EXPORT_RESTRICTED', reason, snapshot };
+  }
+
+  // Granular Module & Accounting Sub-Area Policy Overlay (evaluated without mutating systemUsers)
+  const denyMod = (label: string) => ({
+    allowed: false as const,
+    code: 'TRIAL_MODULE_RESTRICTED' as const,
+    reason: `Modul Dibatasi (Trial/Demo Governance): Akses ke '${label}' sedang dinonaktifkan sementara pada kebijakan Trial/Demo.`,
+    snapshot,
+  });
+
+  if (urlPath.startsWith('/admin/procurement/vendor-bills')) {
+    if (!isAccountingAreaAllowedByGovernance(snapshot, 'ap', user.roleCode)) {
+      return denyMod('Accounting — Account Payable (AP)');
+    }
+    if ((urlPath.endsWith('/pay') || urlPath.endsWith('/void')) && !isAccountingAreaAllowedByGovernance(snapshot, 'financeApproval', user.roleCode)) {
+      return denyMod('Accounting — Finance Payment Release');
+    }
+  } else if (
+    urlPath.startsWith('/b2b/giro') ||
+    urlPath === '/b2b/checkout' ||
+    urlPath === '/b2b/orders' ||
+    urlPath.startsWith('/b2b/orders/') ||
+    urlPath.startsWith('/admin/accounting/settlement-reconcile') ||
+    urlPath.startsWith('/admin/kanvas') ||
+    urlPath.startsWith('/admin/warung-kasbon')
+  ) {
+    if (!isAccountingAreaAllowedByGovernance(snapshot, 'ar', user.roleCode)) {
+      return denyMod('Accounting — Account Receivable (AR)');
+    }
+  } else if (
+    urlPath.startsWith('/admin/accounting/') ||
+    urlPath.startsWith('/admin/settings/coa-account') ||
+    urlPath === '/admin/settings/coa-mapping' ||
+    urlPath === '/admin/compliance/coretax-export'
+  ) {
+    if (urlPath === '/admin/accounting/executive-summary') {
+      if (!isModuleAllowedByGovernance(snapshot, 'dashboard', user.roleCode) && !isModuleAllowedByGovernance(snapshot, 'accounting', user.roleCode)) {
+        return denyMod('Executive Dashboard / Accounting');
+      }
+    } else if (!isAccountingAreaAllowedByGovernance(snapshot, 'glTax', user.roleCode)) {
+      return denyMod('Accounting — General Ledger & Tax');
+    }
+  } else if (
+    urlPath.startsWith('/admin/procurement/') ||
+    urlPath.startsWith('/admin/replenishment/') ||
+    urlPath.startsWith('/admin/vendor-credit-notes') ||
+    urlPath.startsWith('/admin/supplier-debit-notes')
+  ) {
+    if (!isModuleAllowedByGovernance(snapshot, 'procurement', user.roleCode)) {
+      return denyMod('Purchasing & Procurement');
+    }
+  } else if (urlPath.startsWith('/admin/inventory/transfer')) {
+    if (!isModuleAllowedByGovernance(snapshot, 'warehouseTransfers', user.roleCode)) {
+      return denyMod('Inter-Warehouse Transfers');
+    }
+  } else if (
+    urlPath.startsWith('/admin/inventory') ||
+    urlPath.startsWith('/admin/warehouse') ||
+    urlPath === '/inventory/fefo-allocate' ||
+    urlPath.startsWith('/admin/cold-chain') ||
+    urlPath.startsWith('/admin/batch-recall')
+  ) {
+    if (!isModuleAllowedByGovernance(snapshot, 'inventory', user.roleCode)) {
+      return denyMod('Inventory & Multi-Warehouse');
+    }
+  } else if (
+    urlPath.startsWith('/pos/') ||
+    urlPath.startsWith('/admin/pos/') ||
+    urlPath.startsWith('/admin/hardware/') ||
+    urlPath.startsWith('/admin/returns')
+  ) {
+    if (!isModuleAllowedByGovernance(snapshot, 'pos', user.roleCode)) {
+      return denyMod('POS Terminal');
+    }
+  } else if (urlPath.startsWith('/admin/qc/')) {
+    if (!isModuleAllowedByGovernance(snapshot, 'qualityControl', user.roleCode)) {
+      return denyMod('Quality Control & Halal');
+    }
+  } else if (urlPath.startsWith('/admin/logistics/')) {
+    if (!isModuleAllowedByGovernance(snapshot, 'logistics', user.roleCode)) {
+      return denyMod('Logistics & Delivery');
+    }
+  } else if (urlPath.startsWith('/admin/waste')) {
+    if (!isModuleAllowedByGovernance(snapshot, 'wasteShrinkage', user.roleCode)) {
+      return denyMod('Waste & Shrinkage');
+    }
+  } else if (urlPath.startsWith('/admin/picker')) {
+    if (!isModuleAllowedByGovernance(snapshot, 'fulfillment', user.roleCode)) {
+      return denyMod('Picker & Fulfillment');
+    }
+  } else if (urlPath.startsWith('/admin/sales/quotations')) {
+    if (!isModuleAllowedByGovernance(snapshot, 'quotations', user.roleCode)) {
+      return denyMod('B2B Quotations');
+    }
+  } else if (urlPath.startsWith('/admin/crm') || urlPath.startsWith('/admin/promotions')) {
+    if (!isModuleAllowedByGovernance(snapshot, 'crm', user.roleCode)) {
+      return denyMod('CRM & Loyalty');
+    }
+  } else if (urlPath.startsWith('/admin/approvals/')) {
+    if (!isModuleAllowedByGovernance(snapshot, 'approvalMatrix', user.roleCode)) {
+      return denyMod('Approval Matrix');
+    }
+  } else if (urlPath.startsWith('/admin/reports/') || urlPath.startsWith('/admin/analytics/')) {
+    if (!isModuleAllowedByGovernance(snapshot, 'analytics', user.roleCode)) {
+      return denyMod('Grocery Analytics & Reports');
+    }
+  } else if (urlPath.startsWith('/admin/audit/fraud-radar') || urlPath === '/admin/settings/audit-trail') {
+    if (!isModuleAllowedByGovernance(snapshot, 'fraudRadar', user.roleCode)) {
+      return denyMod('Fraud Radar & Audit Trail');
+    }
+  } else if (
+    urlPath.startsWith('/admin/settings/') &&
+    method !== 'GET' &&
+    urlPath !== '/admin/settings/import-export-diagnostics'
+  ) {
+    if (!isModuleAllowedByGovernance(snapshot, 'settings', user.roleCode)) {
+      return denyMod('Enterprise Settings');
+    }
+  }
+
+  return { allowed: true, snapshot };
+}
 
 function sanitizeSystemUserForClient(u: SystemUserAccount): SystemUserAccount {
   const { password, ...rest } = u;
@@ -5128,10 +5354,15 @@ function resolveSystemUserForRequest(req: Request): SystemUserAccount | undefine
   const authHeader = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
   if (authHeader.toLowerCase().startsWith('bearer ')) {
     const token = authHeader.slice(7).trim();
-    const mappedId = activeAuthTokens.get(token);
-    if (mappedId) {
-      const byToken = systemUsers.find((u) => u.id === mappedId);
-      if (byToken) return byToken;
+    const tokenEntry = activeAuthTokens.get(token);
+    if (tokenEntry) {
+      if (Date.now() > tokenEntry.expiresAtMs) {
+        activeAuthTokens.delete(token);
+        revokedAuthTokens.add(token);
+      } else {
+        const byToken = systemUsers.find((u) => u.id === tokenEntry.userId);
+        if (byToken) return byToken;
+      }
     }
   }
   // 2. Explicit x-operator-id or x-user-id header matching a SystemUserAccount
@@ -5199,7 +5430,7 @@ function evaluateSystemUserModulePermission(
       `Akses Ditolak: Peran Anda (${user.divisionLabel}) tidak memiliki hak [${action.toUpperCase()}] pada modul ${MODULE_DISPLAY_LABELS[moduleKey]}.`,
   });
 
-  // 1. Strictly Super Admin Only endpoints (System lifecycle & User/Permission/Outlet mutations)
+  // 1. Strictly Super Admin Only endpoints (System lifecycle & User/Permission/Outlet/Trial Governance mutations)
   if (
     urlPath === '/admin/system/reset-demo-data' ||
     urlPath === '/admin/reset-demo-data' ||
@@ -5207,6 +5438,7 @@ function evaluateSystemUserModulePermission(
     urlPath === '/admin/system/restore' ||
     urlPath === '/admin/system/init-production' ||
     urlPath === '/admin/rbac/switch-session' ||
+    (urlPath === '/admin/settings/trial-governance' && method !== 'GET') ||
     (urlPath === '/admin/settings/operator-assignments' && method !== 'GET') ||
     ((urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) && method !== 'GET') ||
     ((urlPath === '/admin/settings/outlets' || urlPath.startsWith('/admin/settings/outlets/')) && method !== 'GET') ||
@@ -5214,6 +5446,15 @@ function evaluateSystemUserModulePermission(
     (urlPath === '/admin/compliance/sku-tax-rules' && method === 'PUT')
   ) {
     return deny('settings', 'approve');
+  }
+  if (urlPath === '/admin/settings/trial-governance' && isRead) {
+    return { allowed: true };
+  }
+  if (urlPath === '/admin/settings/import-export-diagnostics') {
+    if (isRead) return { allowed: true };
+    return mp.settings.view === true || mp.inventory.create === true || mp.accounting.view === true
+      ? { allowed: true }
+      : deny('settings', 'view');
   }
 
   // 2. Settings Users Read (strictly settings.view === true), Outlets Read & Branch Monitor Read
@@ -7519,6 +7760,7 @@ function captureServerState() {
     enterpriseNotificationsList,
     operatorBranchAssignments,
     systemUsers,
+    trialGovernanceConfig,
     communicationGatewayConfig,
     communicationLogs,
     warehouseRacks,
@@ -7739,6 +7981,9 @@ function applyServerState(snap: any) {
     });
   } else {
     systemUsers = createInitialSystemUsers();
+  }
+  if (snap.trialGovernanceConfig && typeof snap.trialGovernanceConfig === 'object') {
+    trialGovernanceConfig = normalizeTrialGovernanceConfig(snap.trialGovernanceConfig);
   }
 }
 
@@ -8167,8 +8412,56 @@ async function startServer() {
       urlPath.startsWith('/b2b/') ||
       urlPath === '/inventory/fefo-allocate'
     ) {
+      const authHeaderRaw = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
+      if (authHeaderRaw.toLowerCase().startsWith('bearer ')) {
+        const bearerTok = authHeaderRaw.slice(7).trim();
+        const tokMeta = activeAuthTokens.get(bearerTok);
+        if (tokMeta && Date.now() > tokMeta.expiresAtMs) {
+          activeAuthTokens.delete(bearerTok);
+          revokedAuthTokens.add(bearerTok);
+        }
+        if (revokedAuthTokens.has(bearerTok)) {
+          return res.status(401).json({
+            success: false,
+            code: 'SESSION_REVOKED_OR_EXPIRED',
+            error: 'Session has been revoked (single-session policy) or expired by Trial/Demo Governance timeout. Please sign in again.',
+          });
+        }
+      }
       const resolvedSystemUser = resolveSystemUserForRequest(req);
       if (resolvedSystemUser) {
+        // Additive Trial / Demo Governance & Granular Sub-Role/Module Overlay Guard (Server-Side Authoritative Clock)
+        const govResult = evaluateRouteGovernancePolicy(resolvedSystemUser, urlPath, method);
+        if (!govResult.allowed) {
+          securityAuditTrail.unshift({
+            id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+            timestamp: new Date().toISOString(),
+            actionType: 'ZONE_CONFIG_UPDATE',
+            resourceId: `${method} ${urlPath}`,
+            userId: resolvedSystemUser.id,
+            userName: resolvedSystemUser.fullName,
+            userRole: divisionRoleToCanonicalRole(resolvedSystemUser.roleCode),
+            storeId: resolvedSystemUser.branchId || 'ALL',
+            shiftId: currentActiveStaffSession.activeShiftId,
+            status: 'PERMISSION_DENIED',
+            metadata: {
+              governanceCode: govResult.code,
+              roleCode: resolvedSystemUser.roleCode,
+              trialStatus: govResult.snapshot.effectiveStatus,
+              reason: govResult.reason,
+            },
+          });
+          return res.status(403).json({
+            success: false,
+            code: govResult.code || 'TRIAL_LOCKED',
+            roleCode: resolvedSystemUser.roleCode,
+            divisionLabel: resolvedSystemUser.divisionLabel,
+            trialStatus: govResult.snapshot.effectiveStatus,
+            serverTimestampIso: govResult.snapshot.serverTimestampIso,
+            error: govResult.reason,
+          });
+        }
+
         const permResult = evaluateSystemUserModulePermission(resolvedSystemUser, urlPath, method, req.body);
         if (!permResult.allowed) {
           const reason =
@@ -8233,6 +8526,19 @@ async function startServer() {
 
     // Check scoped rules for /api/admin/*, /api/pos/*, and /api/b2b/giro* (Legacy 7-Role compatibility)
     if (urlPath.startsWith('/admin/') || urlPath.startsWith('/pos/') || urlPath.startsWith('/b2b/giro')) {
+      // Trial expiration lock check for legacy sessions (Super Admin exempt for recovery)
+      if (effectiveRole !== 'super_admin' && !(urlPath === '/admin/settings/trial-governance' && method === 'GET')) {
+        const legacyGovSnap = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, Date.now());
+        if (legacyGovSnap.isOperationalLocked) {
+          return res.status(403).json({
+            success: false,
+            code: 'TRIAL_LOCKED',
+            trialStatus: legacyGovSnap.effectiveStatus,
+            serverTimestampIso: legacyGovSnap.serverTimestampIso,
+            error: legacyGovSnap.statusMessage,
+          });
+        }
+      }
       // Reject deactivated operator or unknown role header spoofing
       if (rawHeaderRole && !strictHeaderRole) {
         return denyAccess(['super_admin'], `RBAC Access Denied (403): Unrecognized operator role '${rawHeaderRole}'.`);
@@ -8258,6 +8564,7 @@ async function startServer() {
         urlPath === '/admin/system/restore' ||
         urlPath === '/admin/system/init-production' ||
         urlPath === '/admin/rbac/switch-session' ||
+        (urlPath === '/admin/settings/trial-governance' && method !== 'GET') ||
         (urlPath === '/admin/settings/operator-assignments' && method === 'POST') ||
         ((urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) && method !== 'GET') ||
         ((urlPath === '/admin/settings/outlets' || urlPath.startsWith('/admin/settings/outlets/')) && method !== 'GET') ||
@@ -8640,12 +8947,108 @@ async function startServer() {
     res.send(JSON.stringify(snapshot, null, 2));
   });
 
+  // =============================================================
+  // TRIAL / DEMO GOVERNANCE & IMPORT/EXPORT DIAGNOSTICS APIS (ADDITIVE)
+  // =============================================================
+  app.get('/api/admin/settings/trial-governance', (_req: Request, res: Response) => {
+    const governance = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, Date.now());
+    res.json({ success: true, governance });
+  });
+
+  app.put('/api/admin/settings/trial-governance', (req: Request, res: Response) => {
+    const callerSystemUser = resolveSystemUserForRequest(req);
+    const callerRoleHeader = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim().toLowerCase() : '';
+    const isOwner =
+      callerSystemUser?.roleCode === 'SUPER_ADMIN' ||
+      (!callerSystemUser && (callerRoleHeader === 'super_admin' || currentActiveStaffSession?.userRole === 'super_admin'));
+
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Only Super Admin (Owner) is authorized to modify Trial / Demo Governance policies.',
+      });
+    }
+
+    const patch = req.body && typeof req.body === 'object' ? req.body : {};
+    const nowMs = Date.now();
+    const actorName = getEffectiveOperatorName(req);
+
+    trialGovernanceConfig = normalizeTrialGovernanceConfig(
+      {
+        ...patch,
+        updatedAt: new Date(nowMs).toISOString(),
+        updatedBy: actorName,
+      },
+      trialGovernanceConfig,
+      nowMs
+    );
+
+    const governance = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, nowMs);
+
+    appendAuditTrailLog({
+      req,
+      branchScope: 'ALL',
+      module: 'SECURITY',
+      action: 'TRIAL_GOVERNANCE_UPDATED',
+      referenceId: `GOV-${nowMs.toString().slice(-6)}`,
+      summary: `Updated Trial/Demo Governance: mode=${governance.config.mode}, status=${governance.effectiveStatus}, expires=${governance.config.expirationDateIso}, locked=${governance.isOperationalLocked}.`,
+    });
+
+    scheduleStateSave();
+
+    res.json({
+      success: true,
+      governance,
+      message: `Trial & Demo Governance policy saved cleanly (Effective Status: ${governance.effectiveStatus}).`,
+    });
+  });
+
+  app.get('/api/admin/settings/import-export-diagnostics', (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      reports: importExportDiagnosticsLog,
+    });
+  });
+
+  app.post('/api/admin/settings/import-export-diagnostics', (req: Request, res: Response) => {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const operation = body.operation === 'EXPORT' ? 'EXPORT' : 'IMPORT';
+    const source = String(body.source || 'client_operation').slice(0, 140);
+    const rawIssues = Array.isArray(body.issues) ? body.issues.slice(0, 100) : [];
+    const normalizedIssues = rawIssues
+      .filter((i: any) => i && typeof i === 'object')
+      .map((i: any) => ({
+        errorType: String(i.errorType || 'SERVER_ERROR') as any,
+        severity: i.severity === 'warning' ? ('warning' as const) : ('error' as const),
+        reference: String(i.reference || source).slice(0, 120),
+        field: typeof i.field === 'string' ? i.field.slice(0, 80) : undefined,
+        rowNumber: typeof i.rowNumber === 'number' && Number.isFinite(i.rowNumber) ? i.rowNumber : undefined,
+        rootCause: String(i.rootCause || 'Validation failure').slice(0, 400),
+        remediationHint: String(i.remediationHint || 'Review source file and retry.').slice(0, 400),
+      }));
+
+    const report = createDiagnosticReport({
+      operation,
+      source,
+      totalRecords: typeof body.totalRecords === 'number' && Number.isFinite(body.totalRecords) ? Math.max(0, body.totalRecords) : 0,
+      issues: normalizedIssues,
+      actorName: getEffectiveOperatorName(req),
+      summaryOverride: typeof body.summary === 'string' && body.summary.trim() ? body.summary.trim().slice(0, 300) : undefined,
+    });
+    recordImportExportDiagnostic(report);
+    res.json({ success: true, report });
+  });
+
   app.post('/api/admin/system/restore', async (req: Request, res: Response) => {
     const rawBody = req.body;
     const snap =
       rawBody && typeof rawBody === 'object' && rawBody.snapshot && typeof rawBody.snapshot === 'object'
         ? rawBody.snapshot
         : rawBody;
+    const actorName = getEffectiveOperatorName(req);
+
+    const { report: restoreDiagnostic } = analyzeSnapshotRestorePayload(rawBody, 'snapshot_restore.json', actorName);
 
     const schemaErrors: string[] = [];
     if (!snap || typeof snap !== 'object' || Array.isArray(snap)) {
@@ -8670,12 +9073,14 @@ async function startServer() {
       }
     }
 
-    if (schemaErrors.length > 0) {
+    if (schemaErrors.length > 0 || restoreDiagnostic.errorCount > 0) {
+      recordImportExportDiagnostic(restoreDiagnostic);
       return res.status(400).json({
         success: false,
         code: 'INVALID_SNAPSHOT_SCHEMA',
-        error: `Snapshot validation failed: ${schemaErrors.join(' ')}`,
-        details: schemaErrors,
+        error: `Snapshot validation failed: ${schemaErrors.length > 0 ? schemaErrors.join(' ') : restoreDiagnostic.summary}`,
+        details: schemaErrors.length > 0 ? schemaErrors : restoreDiagnostic.issues.map((i) => i.rootCause),
+        diagnosticReport: restoreDiagnostic,
       });
     }
 
@@ -14168,6 +14573,28 @@ async function startServer() {
   // =============================================================
   // Public lightweight listing of demo accounts for Login Gate Quick-Fill (never exposes passwords)
   app.get('/api/auth/demo-accounts', (_req: Request, res: Response) => {
+    const governance = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, Date.now());
+    const quickFillEnabled =
+      !trialGovernanceConfig.enforceRestrictions ||
+      trialGovernanceConfig.mode === 'PRODUCTION' ||
+      trialGovernanceConfig.allowDemoQuickFill;
+    const allowLegacyQuickIds =
+      !trialGovernanceConfig.enforceRestrictions ||
+      trialGovernanceConfig.mode === 'PRODUCTION' ||
+      trialGovernanceConfig.allowLegacyQuickIds;
+
+    if (!quickFillEnabled) {
+      return res.json({
+        success: true,
+        quickFillEnabled: false,
+        allowLegacyQuickIds,
+        governanceStatus: governance.effectiveStatus,
+        isOperationalLocked: governance.isOperationalLocked,
+        statusMessage: governance.statusMessage,
+        accounts: [],
+      });
+    }
+
     const accounts = systemUsers.map((u) => ({
       id: u.id,
       fullName: u.fullName,
@@ -14177,14 +14604,25 @@ async function startServer() {
       branchId: u.branchId,
       branchName: resolveBranchNameById(u.branchId),
       isActive: u.isActive,
+      governanceAllowed: isSubRoleAllowedByGovernance(governance, u.roleCode),
     }));
-    res.json({ success: true, accounts });
+    res.json({
+      success: true,
+      quickFillEnabled: true,
+      allowLegacyQuickIds,
+      governanceStatus: governance.effectiveStatus,
+      isOperationalLocked: governance.isOperationalLocked,
+      statusMessage: governance.statusMessage,
+      accounts,
+    });
   });
 
   // Unified Authentication Handler (Email + Password for 14 Division SystemUsers + Legacy Roster compatibility)
   const handleEnterpriseAuthLogin = (req: Request, res: Response) => {
     syncAssignmentsOntoProfiles();
     const { email, userId, username, password, pin, shiftName } = req.body || {};
+    const nowMs = Date.now();
+    const governance = evaluateTrialGovernanceSnapshot(trialGovernanceConfig, nowMs);
 
     const rawIdentifier =
       (typeof email === 'string' && email.trim()) ||
@@ -14216,14 +14654,55 @@ async function startServer() {
         }
       }
 
+      // Enforce Trial/Demo Governance lock & sub-role access after credential verification (Super Admin exempt for recovery)
+      if (matchedSystemUser.roleCode !== 'SUPER_ADMIN') {
+        if (governance.isOperationalLocked) {
+          return res.status(403).json({
+            success: false,
+            code: 'TRIAL_LOCKED',
+            trialStatus: governance.effectiveStatus,
+            serverTimestampIso: governance.serverTimestampIso,
+            error: governance.statusMessage,
+          });
+        }
+        if (!isSubRoleAllowedByGovernance(governance, matchedSystemUser.roleCode)) {
+          return res.status(403).json({
+            success: false,
+            code: 'TRIAL_SUBROLE_RESTRICTED',
+            roleCode: matchedSystemUser.roleCode,
+            error: `Akses Ditolak (Trial/Demo Governance): Sub-peran '${matchedSystemUser.divisionLabel}' (${matchedSystemUser.roleCode}) sedang dinonaktifkan pada sesi Trial/Demo ini.`,
+          });
+        }
+      }
+
       const session = buildSessionFromSystemUser(matchedSystemUser, shiftName);
       currentActiveStaffSession = session;
-      const token = `erp-sys-jwt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${matchedSystemUser.id}`;
-      activeAuthTokens.set(token, matchedSystemUser.id);
+
+      // Single-session isolation when enabled by governance
+      if (trialGovernanceConfig.enforceRestrictions && trialGovernanceConfig.enforceSingleSessionPerUser) {
+        for (const [tok, entry] of activeAuthTokens.entries()) {
+          if (entry.userId === matchedSystemUser.id) {
+            activeAuthTokens.delete(tok);
+            revokedAuthTokens.add(tok);
+            if (revokedAuthTokens.size > 500) {
+              const oldest = revokedAuthTokens.values().next().value;
+              if (oldest) revokedAuthTokens.delete(oldest);
+            }
+          }
+        }
+      }
+
+      const ttlMinutes = Math.max(5, trialGovernanceConfig.demoSessionTimeoutMinutes || 120);
+      const token = `erp-sys-jwt-${nowMs}-${Math.random().toString(36).slice(2, 8)}-${matchedSystemUser.id}`;
+      activeAuthTokens.set(token, {
+        userId: matchedSystemUser.id,
+        issuedAtMs: nowMs,
+        expiresAtMs: nowMs + ttlMinutes * 60 * 1000,
+      });
 
       securityAuditTrail.unshift({
         id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(nowMs).toISOString(),
         actionType: 'USER_AUTHENTICATION',
         resourceId: `SESSION-${matchedSystemUser.id}`,
         userId: matchedSystemUser.id,
@@ -14254,6 +14733,7 @@ async function startServer() {
         defaultLandingTab: sanitizedUser.defaultLandingTab,
         hideFinancialCost: sanitizedUser.hideFinancialCost,
         modulePermissions: sanitizedUser.modulePermissions,
+        trialGovernance: governance,
         session,
         availableProfiles: AVAILABLE_STAFF_USERS,
         message: `Login berhasil sebagai ${matchedSystemUser.fullName} (${matchedSystemUser.divisionLabel}).`,
@@ -14286,6 +14766,29 @@ async function startServer() {
       });
     }
 
+    if (
+      target.userRole !== 'super_admin' &&
+      trialGovernanceConfig.enforceRestrictions &&
+      trialGovernanceConfig.mode !== 'PRODUCTION'
+    ) {
+      if (!trialGovernanceConfig.allowLegacyQuickIds) {
+        return res.status(403).json({
+          success: false,
+          code: 'LEGACY_LOGIN_DISABLED',
+          error: 'Legacy Employee ID quick login is disabled by Trial/Demo Governance. Use your assigned Email & Password.',
+        });
+      }
+      if (governance.isOperationalLocked) {
+        return res.status(403).json({
+          success: false,
+          code: 'TRIAL_LOCKED',
+          trialStatus: governance.effectiveStatus,
+          serverTimestampIso: governance.serverTimestampIso,
+          error: governance.statusMessage,
+        });
+      }
+    }
+
     const configuredPin = assignment?.loginPin || '8821';
     const hasCustomPin = configuredPin !== '8821';
     if (password !== undefined || pin !== undefined) {
@@ -14305,13 +14808,13 @@ async function startServer() {
 
     currentActiveStaffSession = {
       ...target,
-      loginTimestamp: new Date().toISOString(),
+      loginTimestamp: new Date(nowMs).toISOString(),
       shiftName: shiftName || target.shiftName,
     };
 
     securityAuditTrail.unshift({
       id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(nowMs).toISOString(),
       actionType: 'USER_AUTHENTICATION',
       resourceId: `SESSION-${target.userId}`,
       userId: target.userId,
@@ -14331,7 +14834,8 @@ async function startServer() {
 
     return res.json({
       success: true,
-      token: `erp-session-jwt-${Date.now()}-${target.userId}`,
+      token: `erp-session-jwt-${nowMs}-${target.userId}`,
+      trialGovernance: governance,
       session: currentActiveStaffSession,
       availableProfiles: AVAILABLE_STAFF_USERS,
       message: `Authentication successful. Logged in as ${target.userName}`,
@@ -17316,8 +17820,8 @@ async function startServer() {
       changes.push(`active=${targetUser.isActive}`);
       if (!targetUser.isActive) {
         // Invalidate any live tokens belonging to the suspended account
-        for (const [tok, uid] of activeAuthTokens.entries()) {
-          if (uid === targetUser.id) activeAuthTokens.delete(tok);
+        for (const [tok, entry] of activeAuthTokens.entries()) {
+          if (entry.userId === targetUser.id) activeAuthTokens.delete(tok);
         }
       }
     }
@@ -27008,12 +27512,39 @@ async function startServer() {
       postOpeningBalanceGl?: boolean;
     };
 
+    const actorName = getEffectiveOperatorName(req);
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ error: 'rows array with at least 1 SKU/Batch entry is required.' });
+      const diag = recordImportExportDiagnostic(
+        analyzeInventoryImportRows([], { sourceName: 'import-skus', actorName })
+      );
+      return res.status(400).json({
+        error: 'rows array with at least 1 SKU/Batch entry is required.',
+        code: 'SCHEMA_MISMATCH',
+        diagnosticReport: diag,
+      });
+    }
+
+    const rowCap =
+      trialGovernanceConfig.enforceRestrictions && trialGovernanceConfig.mode !== 'PRODUCTION'
+        ? trialGovernanceConfig.maxTrialImportRows
+        : undefined;
+    if (rowCap && rows.length > rowCap) {
+      const diag = recordImportExportDiagnostic(
+        analyzeInventoryImportRows(rows as any[], {
+          sourceName: 'import-skus',
+          maxAllowedRows: rowCap,
+          actorName,
+        })
+      );
+      return res.status(422).json({
+        success: false,
+        code: 'TRIAL_LIMIT_EXCEEDED',
+        error: `Import batch size (${rows.length} rows) exceeds Trial/Demo limit of ${rowCap} rows per batch.`,
+        diagnosticReport: diag,
+      });
     }
 
     const scope = resolveRequestBranchScope(req);
-    const actorName = getEffectiveOperatorName(req);
     const nowMs = Date.now();
     const todayStr = new Date(nowMs).toISOString().split('T')[0];
 
@@ -27566,8 +28097,36 @@ async function startServer() {
       rows?: any[];
     };
 
+    const actorName = getEffectiveOperatorName(req);
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ error: 'At least 1 parsed row is required to create an import draft.' });
+      const diag = recordImportExportDiagnostic(
+        analyzeInventoryImportRows([], { sourceName: sourceFilename || 'import_draft.csv', actorName })
+      );
+      return res.status(400).json({
+        error: 'At least 1 parsed row is required to create an import draft.',
+        code: 'SCHEMA_MISMATCH',
+        diagnosticReport: diag,
+      });
+    }
+
+    const rowCap =
+      trialGovernanceConfig.enforceRestrictions && trialGovernanceConfig.mode !== 'PRODUCTION'
+        ? trialGovernanceConfig.maxTrialImportRows
+        : undefined;
+    if (rowCap && rows.length > rowCap) {
+      const diag = recordImportExportDiagnostic(
+        analyzeInventoryImportRows(rows, {
+          sourceName: sourceFilename || 'import_draft.csv',
+          maxAllowedRows: rowCap,
+          actorName,
+        })
+      );
+      return res.status(422).json({
+        success: false,
+        code: 'TRIAL_LIMIT_EXCEEDED',
+        error: `Draft batch size (${rows.length} rows) exceeds active Trial/Demo limit of ${rowCap} rows per batch.`,
+        diagnosticReport: diag,
+      });
     }
 
     const outlet = resolveOutletFromCodeOrId(storeId || 'store-jkt-senopati') || storeSchedules[0];
@@ -27587,9 +28146,16 @@ async function startServer() {
       });
     }
 
-    const actorName = getEffectiveOperatorName(req);
     const timestamp = new Date().toISOString();
     const { rows: normalizedRows, summary } = normalizeInventoryDraftRows(rows, outlet.storeId);
+    const diagnosticReport = analyzeInventoryImportRows(normalizedRows, {
+      sourceName: sourceFilename || 'import_draft.csv',
+      maxAllowedRows: rowCap,
+      actorName,
+    });
+    if (diagnosticReport.errorCount > 0 || diagnosticReport.warningCount > 0) {
+      recordImportExportDiagnostic(diagnosticReport);
+    }
 
     const draft: InventoryImportDraft = {
       id: `IMP-DRF-${Date.now().toString().slice(-6)}-${(inventoryImportDrafts.length + 1).toString().padStart(2, '0')}`,
@@ -27610,6 +28176,7 @@ async function startServer() {
     res.json({
       success: true,
       draft,
+      diagnosticReport: diagnosticReport.errorCount > 0 || diagnosticReport.warningCount > 0 ? diagnosticReport : undefined,
       message: `Draft ${draft.id} staged with ${summary.totalRows} row(s) (${summary.newSkuCount} new, ${summary.restockCount} restock, ${summary.errorCount} error). Live inventory untouched.`,
     });
   });
@@ -27706,12 +28273,25 @@ async function startServer() {
     draft.summary = summary;
 
     if (validatedRows.length === 0) {
-      return res.status(400).json({ error: 'Draft contains 0 rows and cannot be applied.' });
+      const diag = recordImportExportDiagnostic(
+        analyzeInventoryImportRows([], { sourceName: draft.sourceFilename || draft.id, actorName: getEffectiveOperatorName(req) })
+      );
+      return res.status(400).json({
+        error: 'Draft contains 0 rows and cannot be applied.',
+        diagnosticReport: diag,
+      });
     }
     if (summary.errorCount > 0) {
+      const diag = recordImportExportDiagnostic(
+        analyzeInventoryImportRows(validatedRows, {
+          sourceName: draft.sourceFilename || draft.id,
+          actorName: getEffectiveOperatorName(req),
+        })
+      );
       return res.status(400).json({
         error: `Draft has ${summary.errorCount} validation error(s). Resolve or remove invalid rows before applying.`,
         draft,
+        diagnosticReport: diag,
       });
     }
 

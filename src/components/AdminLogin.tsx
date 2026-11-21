@@ -236,6 +236,7 @@ interface DemoDivisionAccountOption {
   branchId: string;
   branchName: string;
   isActive: boolean;
+  governanceAllowed?: boolean;
 }
 
 const DEFAULT_DEMO_PASSWORDS_BY_ROLE: Record<DivisionRoleCode, string> = {
@@ -293,6 +294,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [quickFillEnabled, setQuickFillEnabled] = useState<boolean>(true);
+  const [allowLegacyQuickIds, setAllowLegacyQuickIds] = useState<boolean>(true);
+  const [governanceBanner, setGovernanceBanner] = useState<string | null>(null);
 
   // Fetch live available profiles & 14 division demo accounts from the server
   useEffect(() => {
@@ -312,9 +316,21 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
       });
     apiClient
       .getDemoAccounts()
-      .then((res) => {
-        if (isMounted && res.success && Array.isArray(res.accounts) && res.accounts.length > 0) {
+      .then((res: any) => {
+        if (!isMounted || !res?.success) return;
+        if (res.quickFillEnabled === false) {
+          setQuickFillEnabled(false);
+          setDemoAccounts([]);
+        } else if (Array.isArray(res.accounts) && res.accounts.length > 0) {
+          setQuickFillEnabled(true);
           setDemoAccounts(res.accounts);
+        }
+        if (res.allowLegacyQuickIds === false) {
+          setAllowLegacyQuickIds(false);
+          setActiveTab('credentials');
+        }
+        if (res.isOperationalLocked && res.statusMessage) {
+          setGovernanceBanner(String(res.statusMessage));
         }
       })
       .catch(() => {});
@@ -715,28 +731,43 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
           {/* Tab 2: Manual Credentials Form (Email + Password & 14-Division Quick Fill) */}
           {activeTab === 'credentials' && (
             <form onSubmit={handleExecuteLogin} className="p-6 sm:p-8 space-y-5">
-              {/* Compact 14-Division Demo Account Quick-Fill Selector */}
-              <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#090A0F] border border-gray-200 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <div className="text-xs">
-                  <span className="font-bold text-gray-800 dark:text-slate-200 block">
-                    Quick Fill Demo Account (14 Divisions)
-                  </span>
-                  <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                    Pilih akun divisi untuk mengisi Email &amp; Password uji coba otomatis.
-                  </span>
+              {governanceBanner && (
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                  <span>{governanceBanner} (Super Admin credentials remain enabled for recovery.)</span>
                 </div>
-                <select
-                  value={selectedDemoAccountId}
-                  onChange={(e) => handleQuickFillDemoAccount(e.target.value)}
-                  className="bg-white dark:bg-[#12141C] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] cursor-pointer sm:min-w-[290px]"
-                >
-                  {demoAccounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.divisionLabel} — {acc.email}{!acc.isActive ? ' [SUSPENDED]' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              )}
+
+              {/* Compact 14-Division Demo Account Quick-Fill Selector (Respects Trial/Demo Governance) */}
+              {quickFillEnabled ? (
+                <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#090A0F] border border-gray-200 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="text-xs">
+                    <span className="font-bold text-gray-800 dark:text-slate-200 block">
+                      Quick Fill Demo Account (14 Divisions)
+                    </span>
+                    <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                      Pilih akun divisi untuk mengisi Email &amp; Password uji coba otomatis.
+                    </span>
+                  </div>
+                  <select
+                    value={selectedDemoAccountId}
+                    onChange={(e) => handleQuickFillDemoAccount(e.target.value)}
+                    className="bg-white dark:bg-[#12141C] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] cursor-pointer sm:min-w-[290px]"
+                  >
+                    {demoAccounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.divisionLabel} — {acc.email}
+                        {!acc.isActive ? ' [SUSPENDED]' : acc.governanceAllowed === false ? ' [RESTRICTED]' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                  <Lock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Demo Quick-Fill directory is hidden by Enterprise Trial/Demo Governance. Enter your assigned credentials manually.</span>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Email or Employee ID */}
@@ -752,22 +783,24 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                     placeholder="e.g. owner@grocematrix.id or USR-CASH-01"
                     className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] font-mono"
                   />
-                  <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px] text-gray-500 dark:text-slate-400">
-                    <span>Legacy ID:</span>
-                    {availableProfiles.map((p) => (
-                      <button
-                        key={p.userId}
-                        type="button"
-                        onClick={() => {
-                          setUsernameInput(p.userId);
-                          setPasswordInput('admin123');
-                        }}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-[#090A0F] text-gray-700 dark:text-slate-300 hover:text-[#0F4C3A] dark:hover:text-emerald-300 border border-gray-200 dark:border-slate-800/80 font-mono transition-colors cursor-pointer"
-                      >
-                        {p.userId}
-                      </button>
-                    ))}
-                  </div>
+                  {allowLegacyQuickIds && (
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px] text-gray-500 dark:text-slate-400">
+                      <span>Legacy ID:</span>
+                      {availableProfiles.map((p) => (
+                        <button
+                          key={p.userId}
+                          type="button"
+                          onClick={() => {
+                            setUsernameInput(p.userId);
+                            setPasswordInput('admin123');
+                          }}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-[#090A0F] text-gray-700 dark:text-slate-300 hover:text-[#0F4C3A] dark:hover:text-emerald-300 border border-gray-200 dark:border-slate-800/80 font-mono transition-colors cursor-pointer"
+                        >
+                          {p.userId}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Password / Security PIN */}
