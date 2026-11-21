@@ -123,6 +123,7 @@ import {
   hasModuleAccess,
   canSessionViewValuation,
   isRoleTabAllowed,
+  isOwnerRoleCode,
 } from '../../utils/rbac';
 
 interface AdminDashboardProps {
@@ -202,7 +203,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!activeStaffSession) return true;
     if (activeStaffSession.modulePermissions) {
       return (
-        activeStaffSession.roleCode === 'SUPER_ADMIN' ||
+        isOwnerRoleCode(activeStaffSession.roleCode) ||
         activeStaffSession.modulePermissions.accounting?.view === true
       );
     }
@@ -424,7 +425,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const hasMod = (key: Parameters<typeof hasModuleAccess>[1]) =>
       !effectiveSession || hasModuleAccess(effectiveSession, key, 'view') === true;
     const allowAccountingReads = effectiveSession?.modulePermissions
-      ? effectiveSession.roleCode === 'SUPER_ADMIN' || effectiveSession.modulePermissions.accounting?.view === true
+      ? isOwnerRoleCode(effectiveSession.roleCode) || effectiveSession.modulePermissions.accounting?.view === true
       : effectiveRole === 'store_manager' ||
         effectiveRole === 'admin' ||
         effectiveRole === 'coo' ||
@@ -438,7 +439,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       hasMod('quotations') ||
       Boolean(
         !effectiveSession?.modulePermissions ||
-          effectiveSession.roleCode === 'SUPER_ADMIN' ||
+          isOwnerRoleCode(effectiveSession.roleCode) ||
           (effectiveSession.modulePermissions.accounting?.view &&
             effectiveSession.modulePermissions.accounting?.canAccessAR)
       );
@@ -448,7 +449,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const allowVendorBillReads =
       allowAccountingReads &&
       (!effectiveSession?.modulePermissions ||
-        effectiveSession.roleCode === 'SUPER_ADMIN' ||
+        isOwnerRoleCode(effectiveSession.roleCode) ||
         effectiveSession.modulePermissions.accounting?.canAccessAP === true)
         ? true
         : Boolean(effectiveSession?.modulePermissions?.procurement?.approve === true);

@@ -34,93 +34,120 @@ export const DarkModeContext = createContext<DarkModeContextValue | undefined>(u
 
 export const DarkModeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeMode>(getInitialTheme);
+  const themeRef = React.useRef<ThemeMode>(theme);
   const transitionTimerRef = React.useRef<number | null>(null);
+  const rafRef = React.useRef<number | null>(null);
 
   const isDarkMode = theme === 'dark';
 
-  const triggerThemeTransition = useCallback(() => {
-    if (typeof document === 'undefined' || typeof window === 'undefined') return;
-    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    if (prefersReducedMotion) return;
-
+  const applyThemeClassesSync = useCallback((nextTheme: ThemeMode) => {
+    if (typeof document === 'undefined') return;
+    const isDark = nextTheme === 'dark';
     const root = document.documentElement;
-    root.classList.add('theme-transitioning');
-    if (transitionTimerRef.current !== null) {
-      window.clearTimeout(transitionTimerRef.current);
+    if (root.classList.contains('dark') !== isDark) {
+      root.classList.toggle('dark', isDark);
     }
-    transitionTimerRef.current = window.setTimeout(() => {
-      root.classList.remove('theme-transitioning');
-      transitionTimerRef.current = null;
-    }, 280);
+    if (root.classList.contains('light-theme') === isDark) {
+      root.classList.toggle('light-theme', !isDark);
+    }
+    if (root.style.colorScheme !== nextTheme) {
+      root.style.colorScheme = nextTheme;
+    }
   }, []);
+
+  const scheduleFastThemeSwitch = useCallback(
+    (nextTheme: ThemeMode) => {
+      themeRef.current = nextTheme;
+      const isDark = nextTheme === 'dark';
+
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        if (rafRef.current !== null) {
+          window.cancelAnimationFrame(rafRef.current);
+        }
+        rafRef.current = window.requestAnimationFrame(() => {
+          rafRef.current = null;
+          const root = document.documentElement;
+          root.classList.add('theme-switching');
+          root.classList.toggle('dark', isDark);
+          root.classList.toggle('light-theme', !isDark);
+          root.style.colorScheme = nextTheme;
+
+          if (transitionTimerRef.current !== null) {
+            window.clearTimeout(transitionTimerRef.current);
+          }
+          transitionTimerRef.current = window.setTimeout(() => {
+            root.classList.remove('theme-switching');
+            transitionTimerRef.current = null;
+          }, 150);
+        });
+      }
+
+      React.startTransition(() => {
+        setThemeState(nextTheme);
+        try {
+          localStorage.setItem(DARK_MODE_STORAGE_KEY, String(isDark));
+          localStorage.setItem(LEGACY_ADMIN_THEME_KEY, nextTheme);
+        } catch {
+          // Ignore storage write errors
+        }
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     return () => {
+      if (rafRef.current !== null && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(rafRef.current);
+      }
       if (transitionTimerRef.current !== null && typeof window !== 'undefined') {
         window.clearTimeout(transitionTimerRef.current);
       }
       if (typeof document !== 'undefined') {
-        document.documentElement.classList.remove('theme-transitioning');
+        document.documentElement.classList.remove('theme-switching');
       }
     };
   }, []);
 
-  const applyThemeToDomAndStorage = useCallback((nextTheme: ThemeMode) => {
-    const isDark = nextTheme === 'dark';
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('dark', isDark);
-      document.documentElement.classList.toggle('light-theme', !isDark);
-      document.documentElement.style.colorScheme = nextTheme;
-    }
-    try {
-      localStorage.setItem(DARK_MODE_STORAGE_KEY, String(isDark));
-      localStorage.setItem(LEGACY_ADMIN_THEME_KEY, nextTheme);
-    } catch {
-      // Ignore storage write errors
-    }
-  }, []);
-
   useEffect(() => {
-    applyThemeToDomAndStorage(theme);
-  }, [theme, applyThemeToDomAndStorage]);
+    themeRef.current = theme;
+    applyThemeClassesSync(theme);
+  }, [theme, applyThemeClassesSync]);
 
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === DARK_MODE_STORAGE_KEY && event.newValue !== null) {
-        triggerThemeTransition();
-        setThemeState(event.newValue === 'true' ? 'dark' : 'light');
+        const nextTheme: ThemeMode = event.newValue === 'true' ? 'dark' : 'light';
+        scheduleFastThemeSwitch(nextTheme);
       } else if (
         event.key === LEGACY_ADMIN_THEME_KEY &&
         (event.newValue === 'dark' || event.newValue === 'light')
       ) {
-        triggerThemeTransition();
-        setThemeState(event.newValue);
+        scheduleFastThemeSwitch(event.newValue);
       }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [triggerThemeTransition]);
+  }, [scheduleFastThemeSwitch]);
 
   const setTheme = useCallback(
     (nextTheme: ThemeMode) => {
-      triggerThemeTransition();
-      setThemeState(nextTheme);
+      scheduleFastThemeSwitch(nextTheme);
     },
-    [triggerThemeTransition]
+    [scheduleFastThemeSwitch]
   );
 
   const setDarkMode = useCallback(
     (dark: boolean) => {
-      triggerThemeTransition();
-      setThemeState(dark ? 'dark' : 'light');
+      scheduleFastThemeSwitch(dark ? 'dark' : 'light');
     },
-    [triggerThemeTransition]
+    [scheduleFastThemeSwitch]
   );
 
   const toggleDarkMode = useCallback(() => {
-    triggerThemeTransition();
-    setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  }, [triggerThemeTransition]);
+    const currentIsDark = themeRef.current === 'dark';
+    scheduleFastThemeSwitch(currentIsDark ? 'light' : 'dark');
+  }, [scheduleFastThemeSwitch]);
 
   return (
     <DarkModeContext.Provider

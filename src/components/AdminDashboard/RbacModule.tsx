@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import type { StaffShiftSession, StorageZoneType, UserRole } from '../../types/index.ts';
+import type { DivisionRoleCode, StaffShiftSession, StorageZoneType, SystemUserAccount, UserRole } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
+import { isOwnerRoleCode, MODULE_PERMISSION_META } from '../../utils/rbac';
 import {
   Shield,
   ShieldCheck,
@@ -40,6 +41,7 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
 }) => {
   const [currentSession, setCurrentSession] = useState<StaffShiftSession | null>(activeStaffSession || null);
   const [availableProfiles, setAvailableProfiles] = useState<StaffShiftSession[]>([]);
+  const [systemUsers, setSystemUsers] = useState<SystemUserAccount[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Live Zone Access Guard Tester
@@ -62,9 +64,15 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
   const loadRbacData = async () => {
     setIsLoading(true);
     try {
-      const res = await apiClient.getRbacSession();
+      const [res, sysRes] = await Promise.all([
+        apiClient.getRbacSession(),
+        apiClient.getSystemUsers().catch(() => null),
+      ]);
       setCurrentSession(activeStaffSession || res.currentSession);
       setAvailableProfiles(res.availableProfiles || []);
+      if (sysRes?.users) {
+        setSystemUsers(sysRes.users);
+      }
     } catch (e) {
       console.error('Failed to load RBAC session:', e);
       onShowToast('Error', 'Failed to retrieve RBAC staff session');
@@ -111,6 +119,22 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
     } finally {
       setIsTestingZone(false);
     }
+  };
+
+  const divisionBadgeColor = (roleCode: DivisionRoleCode) => {
+    if (isOwnerRoleCode(roleCode)) {
+      return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30';
+    }
+    if (roleCode.includes('WAREHOUSE') || roleCode === 'QC_INSPECTOR') {
+      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30';
+    }
+    if (roleCode.includes('PURCHASING')) {
+      return 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30';
+    }
+    if (roleCode.includes('POS') || roleCode === 'STORE_MANAGER') {
+      return 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30';
+    }
+    return 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30';
   };
 
   const roleBadgeColor = (role: UserRole) => {
@@ -290,55 +314,102 @@ export const RbacModule: React.FC<RbacModuleProps> = ({
                   Authorized Enterprise Personnel Roster (Read-Only)
                 </h3>
                 <p className="text-xs text-gray-400 dark:text-slate-400">
-                  Role and branch governance is configured exclusively by Super Admin. Use Lock / Sign Out to switch accounts.
+                  Synced live with Enterprise User Management ({systemUsers.length > 0 ? systemUsers.length : availableProfiles.length} active database users). Use Lock / Sign Out to switch accounts.
                 </p>
               </div>
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
                 <Lock className="w-3 h-3" />
-                Session Locked • {availableProfiles.length} Profiles
+                Session Locked • {systemUsers.length > 0 ? systemUsers.length : availableProfiles.length} Users
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {availableProfiles.map((profile) => {
-                const isActive = currentSession?.userId === profile.userId;
-                return (
-                  <div
-                    key={profile.userId}
-                    className={`p-3 rounded-xl border text-left relative flex flex-col justify-between ${
-                      isActive
-                        ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 shadow-xs ring-1 ring-[#0F4C3A]'
-                        : isLight
-                        ? 'border-gray-200 bg-gray-50/40'
-                        : 'border-slate-800/80 bg-[#090A0F]'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-bold text-xs sm:text-sm text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
-                          {profile.userName}
-                          {isActive && (
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                          )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[420px] overflow-y-auto pr-1">
+              {systemUsers.length > 0
+                ? systemUsers.map((user) => {
+                    const isActiveSession =
+                      currentSession?.userId === user.id || currentSession?.email === user.email;
+                    const activeModulesCount = MODULE_PERMISSION_META.filter(
+                      (m) => user.modulePermissions?.[m.key]?.view === true
+                    ).length;
+                    return (
+                      <div
+                        key={user.id}
+                        className={`p-3 rounded-xl border text-left relative flex flex-col justify-between ${
+                          isActiveSession
+                            ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 shadow-xs ring-1 ring-[#0F4C3A]'
+                            : isLight
+                            ? 'border-gray-200 bg-gray-50/40'
+                            : 'border-slate-800/80 bg-[#090A0F]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-bold text-xs sm:text-sm text-gray-900 dark:text-slate-100 flex items-center gap-1.5 truncate">
+                              <span className="truncate">{user.fullName}</span>
+                              {isActiveSession && (
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                              )}
+                            </div>
+                            <div className="text-[11px] font-mono text-gray-500 dark:text-slate-400 mt-0.5 truncate">
+                              @{user.username || user.email.split('@')[0]} · {user.email}
+                            </div>
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                              {user.branchName || user.branchId}
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border shrink-0 ${divisionBadgeColor(user.roleCode)}`}>
+                            {user.divisionLabel}
+                          </span>
                         </div>
-                        <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
-                          {profile.storeName}
+
+                        <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-400">
+                          <span className="font-mono">{user.roleCode}</span>
+                          <span className={`font-mono font-semibold ${user.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                            {user.isActive ? `${activeModulesCount} / ${MODULE_PERMISSION_META.length} Modul` : 'NONAKTIF'}
+                          </span>
                         </div>
                       </div>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${roleBadgeColor(profile.userRole)}`}>
-                        {profile.userRole.replace(/_/g, ' ')}
-                      </span>
-                    </div>
+                    );
+                  })
+                : availableProfiles.map((profile) => {
+                    const isActive = currentSession?.userId === profile.userId;
+                    return (
+                      <div
+                        key={profile.userId}
+                        className={`p-3 rounded-xl border text-left relative flex flex-col justify-between ${
+                          isActive
+                            ? 'border-[#0F4C3A] bg-[#0F4C3A]/5 shadow-xs ring-1 ring-[#0F4C3A]'
+                            : isLight
+                            ? 'border-gray-200 bg-gray-50/40'
+                            : 'border-slate-800/80 bg-[#090A0F]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-bold text-xs sm:text-sm text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
+                              {profile.userName}
+                              {isActive && (
+                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              )}
+                            </div>
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
+                              {profile.storeName}
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${roleBadgeColor(profile.userRole)}`}>
+                            {profile.userRole.replace(/_/g, ' ')}
+                          </span>
+                        </div>
 
-                    <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-400">
-                      <span>Shift: {profile.shiftName}</span>
-                      <span className="font-mono">
-                        {profile.isActive === false ? 'SUSPENDED' : `Zones: [${profile.assignedZones?.length ? profile.assignedZones.join(', ') : 'ALL'}]`}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+                        <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-slate-800/80 flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-400">
+                          <span>Shift: {profile.shiftName}</span>
+                          <span className="font-mono">
+                            {profile.isActive === false ? 'SUSPENDED' : `Zones: [${profile.assignedZones?.length ? profile.assignedZones.join(', ') : 'ALL'}]`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
             </div>
           </div>
 

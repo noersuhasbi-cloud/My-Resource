@@ -2042,6 +2042,7 @@ export const INITIAL_ENTERPRISE_SETTINGS: EnterpriseSettingsConfig = {
     accountingLockBeforeDate: '',
     minMarginFloorPct: 2.0,
     maxAllowedOutlets: 10,
+    maxAllowedUsers: 25,
     enableB2BAndStorefrontPortal: false,
   },
 };

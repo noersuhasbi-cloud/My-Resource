@@ -5,6 +5,7 @@ import {
   isAccountingSubTabAllowed,
   isModulePermissionTabAllowed,
   isRoleTabAllowed,
+  isOwnerRoleCode,
 } from '../../utils/rbac';
 import {
   isAccountingAreaAllowedByGovernance,
@@ -131,7 +132,7 @@ export function isDashboardTabAllowed(
     ? isModulePermissionTabAllowed(session.modulePermissions, tab, session.roleCode)
     : isRoleTabAllowed(session.userRole, tab);
   if (!baseAllowed) return false;
-  if (trialGovernance && session.roleCode && session.roleCode !== 'SUPER_ADMIN') {
+  if (trialGovernance && session.roleCode && !isOwnerRoleCode(session.roleCode)) {
     if (trialGovernance.isOperationalLocked) return false;
     if (!isSubRoleAllowedByGovernance(trialGovernance, session.roleCode)) return false;
     const modKey = mapDashboardTabToGovernanceModule(tab);
@@ -170,7 +171,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     isDashboardTabAllowed(activeStaffSession, tab, trialGovernance, enableB2BAndStorefrontPortal);
   const allowAccountingSub = (sub: AccountingSubTab) => {
     if (!isAccountingSubTabAllowed(activeStaffSession, sub)) return false;
-    if (trialGovernance && activeStaffSession?.roleCode && activeStaffSession.roleCode !== 'SUPER_ADMIN') {
+    if (trialGovernance && activeStaffSession?.roleCode && !isOwnerRoleCode(activeStaffSession.roleCode)) {
       const area = mapAccountingSubTabToGovernanceArea(sub);
       if (area && !isAccountingAreaAllowedByGovernance(trialGovernance, area, activeStaffSession.roleCode)) {
         return false;

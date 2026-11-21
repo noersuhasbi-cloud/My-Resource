@@ -4,26 +4,17 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import type { StaffShiftSession, UserRole, StorageZoneType, DivisionRoleCode } from '../types/index.ts';
+import type { StaffShiftSession } from '../types/index.ts';
 import { apiClient } from '../services/apiClient';
 import { useDarkMode } from '../context/DarkModeContext';
 import {
-  Shield,
   ShieldCheck,
   Lock,
-  Unlock,
   KeyRound,
-  Users,
-  Building2,
-  Package,
-  Layers,
   ArrowLeft,
-  Clock,
-  CheckCircle2,
   AlertTriangle,
   Eye,
   EyeOff,
-  Store,
   Sun,
   Moon,
 } from 'lucide-react';
@@ -35,245 +26,6 @@ interface AdminLoginProps {
   enableB2BAndStorefrontPortal?: boolean;
 }
 
-// Fallback staff roster if backend request fails (all 7 canonical roles)
-const FALLBACK_STAFF_ROSTER: StaffShiftSession[] = [
-  {
-    userId: 'USR-SADM-01',
-    userName: 'Mochammad Noer Suhasbi (Super Admin)',
-    userRole: 'super_admin',
-    storeId: 'ALL',
-    storeName: 'GroceMart Consolidated Group (All Outlets)',
-    assignedBranchId: 'ALL',
-    isBranchScoped: false,
-    activeShiftId: 'SHIFT-SADM-ALL-HOURS',
-    shiftName: 'Morning Shift',
-    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
-    loginTimestamp: new Date().toISOString(),
-    permissions: {
-      canViewPos: true,
-      canViewInventory: true,
-      canAdjustInventory: true,
-      canPickZone: () => true,
-      canReceiveGoods: true,
-      canApprovePurchaseOrder: true,
-      canViewFinancePnL: true,
-      canManageOutlets: true,
-      canOverrideStoreClosure: true,
-      canViewValuation: true,
-      canManageOperatorAssignments: true,
-      canOverridePosPrice: true,
-    },
-  },
-  {
-    userId: 'USR-COO-01',
-    userName: 'Irfan Hakim (COO & VP Operations)',
-    userRole: 'coo',
-    storeId: 'ALL',
-    storeName: 'GroceMart Consolidated Group (All Outlets)',
-    assignedBranchId: 'ALL',
-    isBranchScoped: false,
-    activeShiftId: 'SHIFT-COO-ALL-HOURS',
-    shiftName: 'Morning Shift',
-    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
-    loginTimestamp: new Date().toISOString(),
-    permissions: {
-      canViewPos: true,
-      canViewInventory: true,
-      canAdjustInventory: true,
-      canPickZone: () => true,
-      canReceiveGoods: true,
-      canApprovePurchaseOrder: true,
-      canViewFinancePnL: true,
-      canManageOutlets: true,
-      canOverrideStoreClosure: true,
-      canViewValuation: true,
-      canManageOperatorAssignments: false,
-      canOverridePosPrice: true,
-    },
-  },
-  {
-    userId: 'USR-ADM-01',
-    userName: 'Siti Aminah (Back-Office & Finance Admin)',
-    userRole: 'admin',
-    storeId: 'ALL',
-    storeName: 'GroceMart Consolidated Group (All Outlets)',
-    assignedBranchId: 'ALL',
-    isBranchScoped: false,
-    activeShiftId: 'SHIFT-ADM-OFFICE',
-    shiftName: 'Morning Shift',
-    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
-    loginTimestamp: new Date().toISOString(),
-    permissions: {
-      canViewPos: false,
-      canViewInventory: true,
-      canAdjustInventory: false,
-      canPickZone: () => false,
-      canReceiveGoods: false,
-      canApprovePurchaseOrder: false,
-      canViewFinancePnL: true,
-      canManageOutlets: false,
-      canOverrideStoreClosure: false,
-      canViewValuation: true,
-      canManageOperatorAssignments: false,
-      canOverridePosPrice: false,
-    },
-  },
-  {
-    userId: 'USR-MGR-01',
-    userName: 'Rina Kartika (Store Manager)',
-    userRole: 'store_manager',
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    assignedBranchId: 'store-jkt-senopati',
-    isBranchScoped: true,
-    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
-    shiftName: 'Morning Shift',
-    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
-    loginTimestamp: new Date().toISOString(),
-    permissions: {
-      canViewPos: true,
-      canViewInventory: true,
-      canAdjustInventory: true,
-      canPickZone: () => true,
-      canReceiveGoods: true,
-      canApprovePurchaseOrder: true,
-      canViewFinancePnL: true,
-      canManageOutlets: true,
-      canOverrideStoreClosure: true,
-      canViewValuation: true,
-      canManageOperatorAssignments: false,
-      canOverridePosPrice: true,
-    },
-  },
-  {
-    userId: 'USR-PUR-01',
-    userName: 'Dewi Lestari (Purchasing & Vendor Lead)',
-    userRole: 'purchasing',
-    storeId: 'ALL',
-    storeName: 'GroceMart Consolidated Group (All Outlets)',
-    assignedBranchId: 'ALL',
-    isBranchScoped: false,
-    activeShiftId: 'SHIFT-PUR-HQ',
-    shiftName: 'Morning Shift',
-    assignedZones: ['ambient', 'cold_chilled', 'freezer'],
-    loginTimestamp: new Date().toISOString(),
-    permissions: {
-      canViewPos: false,
-      canViewInventory: true,
-      canAdjustInventory: false,
-      canPickZone: () => false,
-      canReceiveGoods: true,
-      canApprovePurchaseOrder: true,
-      canViewFinancePnL: false,
-      canManageOutlets: false,
-      canOverrideStoreClosure: false,
-      canViewValuation: true,
-      canManageOperatorAssignments: false,
-      canOverridePosPrice: false,
-    },
-  },
-  {
-    userId: 'USR-WHS-01',
-    userName: 'Budi Santoso (Warehouse Staff)',
-    userRole: 'warehouse',
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    assignedBranchId: 'store-jkt-senopati',
-    isBranchScoped: true,
-    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
-    shiftName: 'Morning Shift',
-    assignedZones: ['cold_chilled', 'ambient', 'freezer'],
-    loginTimestamp: new Date().toISOString(),
-    permissions: {
-      canViewPos: false,
-      canViewInventory: true,
-      canAdjustInventory: true,
-      canPickZone: (zone: StorageZoneType) => ['cold_chilled', 'ambient', 'freezer'].includes(zone),
-      canReceiveGoods: true,
-      canApprovePurchaseOrder: false,
-      canViewFinancePnL: false,
-      canManageOutlets: false,
-      canOverrideStoreClosure: false,
-      canViewValuation: false,
-      canManageOperatorAssignments: false,
-      canOverridePosPrice: false,
-    },
-  },
-  {
-    userId: 'USR-CASH-01',
-    userName: 'Andi Wijaya (Frontline Cashier)',
-    userRole: 'cashier',
-    storeId: 'store-jkt-senopati',
-    storeName: 'GroceMart Senopati Flagship',
-    assignedBranchId: 'store-jkt-senopati',
-    isBranchScoped: true,
-    activeShiftId: 'SHIFT-JKT-SEN-MORNING',
-    shiftName: 'Morning Shift',
-    assignedZones: ['ambient'],
-    loginTimestamp: new Date().toISOString(),
-    permissions: {
-      canViewPos: true,
-      canViewInventory: false,
-      canAdjustInventory: false,
-      canPickZone: () => false,
-      canReceiveGoods: false,
-      canApprovePurchaseOrder: false,
-      canViewFinancePnL: false,
-      canManageOutlets: false,
-      canOverrideStoreClosure: false,
-      canViewValuation: false,
-      canManageOperatorAssignments: false,
-      canOverridePosPrice: false,
-    },
-  },
-];
-
-interface DemoDivisionAccountOption {
-  id: string;
-  fullName: string;
-  email: string;
-  roleCode: DivisionRoleCode;
-  divisionLabel: string;
-  branchId: string;
-  branchName: string;
-  isActive: boolean;
-  governanceAllowed?: boolean;
-}
-
-const DEFAULT_DEMO_PASSWORDS_BY_ROLE: Record<DivisionRoleCode, string> = {
-  SUPER_ADMIN: 'Groce@2026',
-  WAREHOUSE_STAFF: 'Gudang@123',
-  WAREHOUSE_ADMIN: 'Gudang@123',
-  WAREHOUSE_HEAD: 'Gudang@123',
-  PURCHASING_STAFF: 'Beli@123',
-  PURCHASING_HEAD: 'Beli@123',
-  QC_INSPECTOR: 'Halal@123',
-  POS_CASHIER: 'Kasir@123',
-  STORE_MANAGER: 'Store@123',
-  AR_STAFF: 'Finance@123',
-  AP_STAFF: 'Finance@123',
-  ACCOUNTING_TAX: 'Acc@123',
-  FINANCE_MANAGER: 'Finance@123',
-  HEAD_ACCOUNTING: 'Acc@123',
-};
-
-const FALLBACK_DIVISION_DEMO_ACCOUNTS: DemoDivisionAccountOption[] = [
-  { id: 'SYS-USR-01', fullName: 'Hendra Wijaya (Owner / Super Admin)', email: 'owner@grocematrix.id', roleCode: 'SUPER_ADMIN', divisionLabel: 'Owner / Super Admin', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
-  { id: 'SYS-USR-02', fullName: 'Budi Santoso (Staf Gudang)', email: 'gudang.staf@grocematrix.id', roleCode: 'WAREHOUSE_STAFF', divisionLabel: 'Staf Gudang', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
-  { id: 'SYS-USR-03', fullName: 'Agus Setiawan (Admin Gudang)', email: 'gudang.admin@grocematrix.id', roleCode: 'WAREHOUSE_ADMIN', divisionLabel: 'Admin Gudang', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
-  { id: 'SYS-USR-04', fullName: 'Darmawan Putra (Head Gudang)', email: 'gudang.head@grocematrix.id', roleCode: 'WAREHOUSE_HEAD', divisionLabel: 'Head Gudang', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
-  { id: 'SYS-USR-05', fullName: 'Nadia Putri (Staf Purchasing)', email: 'purchasing.staf@grocematrix.id', roleCode: 'PURCHASING_STAFF', divisionLabel: 'Staf Purchasing', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
-  { id: 'SYS-USR-06', fullName: 'Dewi Lestari (Head Purchasing)', email: 'purchasing.head@grocematrix.id', roleCode: 'PURCHASING_HEAD', divisionLabel: 'Head Purchasing', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
-  { id: 'SYS-USR-07', fullName: 'Rahmawati Nur (QC & Halal Inspector)', email: 'qc.halal@grocematrix.id', roleCode: 'QC_INSPECTOR', divisionLabel: 'QC & Halal Inspector', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
-  { id: 'SYS-USR-08', fullName: 'Andi Pratama (Kasir POS)', email: 'kasir.pos@grocematrix.id', roleCode: 'POS_CASHIER', divisionLabel: 'Kasir POS', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
-  { id: 'SYS-USR-09', fullName: 'Rina Kartika (Store Manager / Supervisor)', email: 'store.manager@grocematrix.id', roleCode: 'STORE_MANAGER', divisionLabel: 'Store Manager / Supervisor', branchId: 'store-jkt-senopati', branchName: 'GroceMart Senopati Flagship', isActive: true },
-  { id: 'SYS-USR-10', fullName: 'Fajar Ramadhan (Account Receivable)', email: 'ar.finance@grocematrix.id', roleCode: 'AR_STAFF', divisionLabel: 'Account Receivable', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
-  { id: 'SYS-USR-11', fullName: 'Siti Aminah (Account Payable)', email: 'ap.finance@grocematrix.id', roleCode: 'AP_STAFF', divisionLabel: 'Account Payable', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
-  { id: 'SYS-USR-12', fullName: 'Yusuf Maulana (Accounting & Tax)', email: 'accounting.tax@grocematrix.id', roleCode: 'ACCOUNTING_TAX', divisionLabel: 'Accounting & Tax', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
-  { id: 'SYS-USR-13', fullName: 'Lina Marlina (Finance Manager)', email: 'finance.head@grocematrix.id', roleCode: 'FINANCE_MANAGER', divisionLabel: 'Finance Manager', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
-  { id: 'SYS-USR-14', fullName: 'Irfan Hakim (Head Accounting / Controller)', email: 'controller@grocematrix.id', roleCode: 'HEAD_ACCOUNTING', divisionLabel: 'Head Accounting / Controller', branchId: 'ALL', branchName: 'All Outlets (Consolidated)', isActive: true },
-];
-
 export const AdminLogin: React.FC<AdminLoginProps> = ({
   onLoginSuccess,
   onReturnToStorefront,
@@ -281,56 +33,23 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   enableB2BAndStorefrontPortal = false,
 }) => {
   const { theme, toggleDarkMode: toggleTheme } = useDarkMode();
-
   const isLight = theme === 'light';
 
-  const [activeTab, setActiveTab] = useState<'roster' | 'credentials'>('credentials');
-  const [availableProfiles, setAvailableProfiles] = useState<StaffShiftSession[]>(FALLBACK_STAFF_ROSTER);
-  const [demoAccounts, setDemoAccounts] = useState<DemoDivisionAccountOption[]>(FALLBACK_DIVISION_DEMO_ACCOUNTS);
-  const [selectedDemoAccountId, setSelectedDemoAccountId] = useState<string>('SYS-USR-01');
-  const [selectedUserId, setSelectedUserId] = useState<string>('USR-SADM-01');
-  const [usernameInput, setUsernameInput] = useState<string>('owner@grocematrix.id');
-  const [passwordInput, setPasswordInput] = useState<string>('Groce@2026');
+  const [identifierInput, setIdentifierInput] = useState<string>('');
+  const [passwordInput, setPasswordInput] = useState<string>('');
   const [selectedShift, setSelectedShift] = useState<'Morning Shift' | 'Afternoon Shift' | 'Night Shift'>('Morning Shift');
   const [rememberWorkstation, setRememberWorkstation] = useState<boolean>(true);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [quickFillEnabled, setQuickFillEnabled] = useState<boolean>(true);
-  const [allowLegacyQuickIds, setAllowLegacyQuickIds] = useState<boolean>(true);
   const [governanceBanner, setGovernanceBanner] = useState<string | null>(null);
 
-  // Fetch live available profiles & 14 division demo accounts from the server
   useEffect(() => {
     let isMounted = true;
-    apiClient
-      .getRbacSession()
-      .then((res) => {
-        if (isMounted && res.availableProfiles && res.availableProfiles.length > 0) {
-          setAvailableProfiles(res.availableProfiles);
-          if (!res.availableProfiles.some((p) => p.userId === selectedUserId)) {
-            setSelectedUserId(res.availableProfiles[0].userId);
-          }
-        }
-      })
-      .catch((err) => {
-        console.warn('Using local fallback staff roster:', err);
-      });
     apiClient
       .getDemoAccounts()
       .then((res: any) => {
         if (!isMounted || !res?.success) return;
-        if (res.quickFillEnabled === false) {
-          setQuickFillEnabled(false);
-          setDemoAccounts([]);
-        } else if (Array.isArray(res.accounts) && res.accounts.length > 0) {
-          setQuickFillEnabled(true);
-          setDemoAccounts(res.accounts);
-        }
-        if (res.allowLegacyQuickIds === false) {
-          setAllowLegacyQuickIds(false);
-          setActiveTab('credentials');
-        }
         if (res.isOperationalLocked && res.statusMessage) {
           setGovernanceBanner(String(res.statusMessage));
         }
@@ -341,46 +60,23 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
     };
   }, []);
 
-  const handleQuickFillDemoAccount = (accountId: string) => {
-    setSelectedDemoAccountId(accountId);
-    const found = demoAccounts.find((a) => a.id === accountId);
-    if (found) {
-      setUsernameInput(found.email);
-      setPasswordInput(DEFAULT_DEMO_PASSWORDS_BY_ROLE[found.roleCode] || '');
-      setErrorMessage(null);
+  const handleExecuteLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedIdentifier = identifierInput.trim();
+    if (!trimmedIdentifier || !passwordInput) {
+      setErrorMessage('Masukkan email atau username beserta password Anda.');
+      return;
     }
-  };
 
-  const handleSelectProfile = (profile: StaffShiftSession) => {
-    setSelectedUserId(profile.userId);
-    setUsernameInput(profile.userId);
-    setErrorMessage(null);
-  };
-
-  const handleExecuteLogin = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
     setErrorMessage(null);
     setIsAuthenticating(true);
 
     try {
-      const trimmedInput = usernameInput.trim();
-      const payload =
-        activeTab === 'roster'
-          ? {
-              userId: selectedUserId,
-              shiftName: selectedShift,
-            }
-          : trimmedInput.includes('@')
-          ? {
-              email: trimmedInput,
-              password: passwordInput,
-              shiftName: selectedShift,
-            }
-          : {
-              username: trimmedInput,
-              password: passwordInput,
-              shiftName: selectedShift,
-            };
+      const payload = {
+        identifier: trimmedIdentifier,
+        password: passwordInput,
+        shiftName: selectedShift,
+      };
 
       const res = await apiClient.adminLogin(payload);
       if (res.success && res.session) {
@@ -399,61 +95,16 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
         }
         onLoginSuccess(res.session);
       } else {
-        throw new Error(res.message || 'Authentication rejected by security gate');
+        throw new Error(res.message || 'Email/Username atau password salah');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Authentication failed. Please verify credentials.');
+      const msg = err?.message || 'Email/Username atau password salah';
+      setErrorMessage(msg);
       if (onShowToast) {
-        onShowToast('Access Denied', err.message || 'Login failed');
+        onShowToast('Access Denied', msg);
       }
     } finally {
       setIsAuthenticating(false);
-    }
-  };
-
-  const getRoleBadgeColor = (role: UserRole) => {
-    switch (role) {
-      case 'super_admin':
-        return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800/60';
-      case 'coo':
-      case 'executive':
-        return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800/60';
-      case 'admin':
-        return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800/60';
-      case 'store_manager':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60';
-      case 'purchasing':
-        return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800/60';
-      case 'warehouse':
-      case 'warehouse_picker':
-        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60';
-      case 'cashier':
-        return 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800/60';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-slate-900/90 dark:text-slate-300 dark:border-slate-800/80';
-    }
-  };
-
-  const getRoleIcon = (role: UserRole) => {
-    switch (role) {
-      case 'super_admin':
-        return <ShieldCheck className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />;
-      case 'coo':
-      case 'executive':
-        return <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />;
-      case 'admin':
-        return <Shield className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />;
-      case 'store_manager':
-        return <Building2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />;
-      case 'purchasing':
-        return <Users className="w-5 h-5 text-teal-600 dark:text-teal-400 shrink-0" />;
-      case 'warehouse':
-      case 'warehouse_picker':
-        return <Package className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />;
-      case 'cashier':
-        return <Layers className="w-5 h-5 text-sky-600 dark:text-sky-400 shrink-0" />;
-      default:
-        return <Shield className="w-5 h-5 text-gray-500 dark:text-slate-400 shrink-0" />;
     }
   };
 
@@ -463,10 +114,11 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
         theme === 'dark' ? 'dark bg-[#090A0F] text-slate-100' : 'bg-[#EEF2F0] text-[#18221D] gm-daylight-canvas'
       } min-h-screen flex flex-col font-sans selection:bg-[#0F4C3A] selection:text-white relative overflow-hidden gm-surface`}
     >
-      {/* Top Banner Navigation: Back to Storefront (when portal enabled), Theme Switcher & Security Badge */}
+      {/* Top Banner Navigation */}
       <header className="border-b border-gray-200/90 dark:border-slate-800/80 bg-white/90 dark:bg-[#12141C]/90 backdrop-blur-md px-4 sm:px-8 py-3 flex items-center justify-between z-10 gm-chrome-surface">
         {enableB2BAndStorefrontPortal ? (
           <button
+            type="button"
             onClick={onReturnToStorefront}
             className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 transition-colors cursor-pointer group px-3 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800/70"
           >
@@ -501,16 +153,16 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
       {/* Main Authentication Card */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 z-10">
-        <div className="w-full max-w-4xl bg-white dark:bg-[#12141C] border border-gray-200/90 dark:border-slate-800/80 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-2xl overflow-hidden gm-surface-card">
+        <div className="w-full max-w-2xl bg-white dark:bg-[#12141C] border border-gray-200/90 dark:border-slate-800/80 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.04)] dark:shadow-2xl overflow-hidden gm-surface-card">
           {/* Header Card Branding */}
           <div className="p-6 sm:p-8 border-b border-gray-200 dark:border-slate-800/80 bg-gradient-to-r from-emerald-50/60 via-white to-gray-50/60 dark:from-[#12141C] dark:via-[#12141C] dark:to-emerald-950/60 gm-hero-banner">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-[#0F4C3A] text-white flex items-center justify-center font-extrabold text-xl shadow-md shadow-[#0F4C3A]/20">
+                <div className="w-12 h-12 rounded-xl bg-[#0F4C3A] text-white flex items-center justify-center font-extrabold text-xl shadow-md shadow-[#0F4C3A]/20 shrink-0">
                   GM
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-100 font-display">
                       GroceMart ERP &amp; POS Suite
                     </h1>
@@ -524,44 +176,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 self-start sm:self-auto bg-gray-100 dark:bg-[#090A0F] px-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-800/80 text-xs text-gray-700 dark:text-slate-300 font-medium">
+              <div className="flex items-center gap-2 self-start sm:self-auto bg-gray-100 dark:bg-[#090A0F] px-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-800/80 text-xs text-gray-700 dark:text-slate-300 font-medium shrink-0">
                 <Lock className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-amber-400" />
-                <span>Role-Based Access Gate</span>
+                <span>Authorized Sign-In</span>
               </div>
-            </div>
-
-            {/* Authentication Mode Switcher Tabs */}
-            <div className="flex items-center gap-2 mt-6 pt-5 border-t border-gray-200/80 dark:border-slate-800/80">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('roster');
-                  setErrorMessage(null);
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                  activeTab === 'roster'
-                    ? 'bg-[#0F4C3A] text-white shadow-xs'
-                    : 'bg-gray-100 dark:bg-[#090A0F] text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-200/70 dark:hover:bg-slate-800/80 border border-transparent dark:border-slate-800/80'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>Select Staff Profile (RBAC Roster)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('credentials');
-                  setErrorMessage(null);
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                  activeTab === 'credentials'
-                    ? 'bg-[#0F4C3A] text-white shadow-xs'
-                    : 'bg-gray-100 dark:bg-[#090A0F] text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-200/70 dark:hover:bg-slate-800/80 border border-transparent dark:border-slate-800/80'
-                }`}
-              >
-                <KeyRound className="w-4 h-4" />
-                <span>Email / Employee ID &amp; Password</span>
-              </button>
             </div>
           </div>
 
@@ -570,339 +188,129 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
             <div className="mx-6 sm:mx-8 mt-6 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/60 flex items-start gap-3 text-xs sm:text-sm text-rose-800 dark:text-rose-200">
               <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <span className="font-semibold block">Authentication Rejection</span>
+                <span className="font-semibold block">Autentikasi Ditolak</span>
                 <span className="text-rose-700 dark:text-rose-300 text-xs">{errorMessage}</span>
               </div>
             </div>
           )}
 
-          {/* Tab 1: Staff Profiles RBAC Selection */}
-          {activeTab === 'roster' && (
-            <div className="p-6 sm:p-8 space-y-6">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                    Authorized Personnel Roster
-                  </h2>
-                  <p className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">
-                    Select a staff profile to initialize your authenticated ERP or POS Cashier session with strict role boundaries.
-                  </p>
-                </div>
-                <span className="text-xs font-mono font-semibold text-[#0F4C3A] dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800/50">
-                  {availableProfiles.length} Profiles Available
-                </span>
+          {/* Clean Go-Live Credentials Form */}
+          <form onSubmit={handleExecuteLogin} className="p-6 sm:p-8 space-y-5">
+            {governanceBanner && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                <span>{governanceBanner}</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Email atau Username */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Email atau Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoComplete="username"
+                  value={identifierInput}
+                  onChange={(e) => setIdentifierInput(e.target.value)}
+                  placeholder="Masukkan email atau username..."
+                  className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] font-mono"
+                />
               </div>
 
-              {/* Profiles Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                {availableProfiles.map((profile) => {
-                  const isSelected = selectedUserId === profile.userId;
-                  const isSuspended = profile.isActive === false;
-                  return (
-                    <div
-                      key={profile.userId}
-                      onClick={() => handleSelectProfile(profile)}
-                      className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative group ${
-                        isSuspended
-                          ? 'opacity-65 bg-rose-50/40 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60'
-                          : isSelected
-                          ? 'bg-emerald-50/40 dark:bg-slate-900/90 border-[#0F4C3A] dark:border-emerald-500 shadow-xs ring-1 ring-[#0F4C3A]/30 dark:ring-emerald-500/40'
-                          : 'bg-white dark:bg-[#090A0F]/80 border-gray-200 dark:border-slate-800/80 hover:bg-gray-50 dark:hover:bg-slate-900/70 hover:border-gray-300 dark:hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-colors ${
-                              isSelected
-                                ? 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-700/60'
-                                : 'bg-gray-50 dark:bg-[#12141C] border-gray-200 dark:border-slate-800/80'
-                            }`}
-                          >
-                            {getRoleIcon(profile.userRole)}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-gray-900 dark:text-slate-100 group-hover:text-[#0F4C3A] dark:group-hover:text-emerald-300 transition-colors">
-                                {profile.userName}
-                              </span>
-                            </div>
-                            <span className="text-[11px] font-mono text-gray-500 dark:text-slate-400">
-                              ID: {profile.userId}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-end gap-1">
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md border uppercase tracking-wider ${getRoleBadgeColor(
-                              profile.userRole
-                            )}`}
-                          >
-                            {profile.userRole.replace(/_/g, ' ')}
-                          </span>
-                          {isSuspended && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-500/30 uppercase">
-                              Suspended
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Store & Scope */}
-                      <div className="mt-3.5 pt-3 border-t border-gray-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between text-[11px] text-gray-500 dark:text-slate-400 gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <Store className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
-                          <span className="text-gray-700 dark:text-slate-300 font-medium truncate max-w-[180px]">
-                            {profile.storeName}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 font-mono text-[10px] text-gray-500 dark:text-slate-400">
-                          <Clock className="w-3 h-3 text-gray-400 dark:text-slate-500" />
-                          <span>{profile.shiftName}</span>
-                        </div>
-                      </div>
-
-                      {/* Storage Zones & Clearance */}
-                      <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] text-gray-400 dark:text-slate-500 uppercase font-bold">Zones:</span>
-                        {profile.assignedZones.map((z) => (
-                          <span
-                            key={z}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-[#12141C] text-gray-700 dark:text-slate-300 font-mono border border-gray-200 dark:border-slate-800/80"
-                          >
-                            {z.replace(/_/g, ' ')}
-                          </span>
-                        ))}
-                        {profile.permissions.canViewPos && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/80 text-[#0F4C3A] dark:text-emerald-300 font-mono font-semibold border border-emerald-200 dark:border-emerald-800/50 ml-auto">
-                            POS Authorized
-                          </span>
-                        )}
-                      </div>
-
-                      {isSelected && (
-                        <div className="absolute top-2.5 right-2.5 sm:hidden">
-                          <CheckCircle2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Workstation Shift & Fast Authenticate CTA */}
-              <div className="pt-4 border-t border-gray-200 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <span className="text-xs text-gray-600 dark:text-slate-400 font-medium shrink-0">Active Shift:</span>
-                  <select
-                    value={selectedShift}
-                    onChange={(e) => setSelectedShift(e.target.value as any)}
-                    className="bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-[#0F4C3A] cursor-pointer w-full sm:w-auto"
-                  >
-                    <option value="Morning Shift">Morning Shift (06:00 - 14:00)</option>
-                    <option value="Afternoon Shift">Afternoon Shift (14:00 - 22:00)</option>
-                    <option value="Night Shift">Night Shift (22:00 - 06:00)</option>
-                  </select>
-                </div>
-
-                <div className={`flex items-center gap-3 w-full sm:w-auto ${enableB2BAndStorefrontPortal ? '' : 'sm:ml-auto'}`}>
-                  {enableB2BAndStorefrontPortal && (
-                    <button
-                      type="button"
-                      onClick={onReturnToStorefront}
-                      className="w-1/2 sm:w-auto px-4 py-2.5 rounded-xl border border-gray-300 dark:border-slate-800/80 text-xs font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer text-center"
-                    >
-                      Cancel
-                    </button>
-                  )}
+              {/* Password */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    autoComplete="current-password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="Masukkan password..."
+                    className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] pr-10 font-mono"
+                  />
                   <button
                     type="button"
-                    onClick={() => handleExecuteLogin()}
-                    disabled={isAuthenticating}
-                    className={`${enableB2BAndStorefrontPortal ? 'w-1/2 sm:w-auto' : 'w-full sm:w-auto'} flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs sm:text-sm font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50`}
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 dark:hover:text-slate-100 cursor-pointer"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {isAuthenticating ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Verifying Gate...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Unlock className="w-4 h-4" />
-                        <span>Sign In &amp; Launch ERP</span>
-                      </>
-                    )}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
             </div>
-          )}
 
-          {/* Tab 2: Manual Credentials Form (Email + Password & 14-Division Quick Fill) */}
-          {activeTab === 'credentials' && (
-            <form onSubmit={handleExecuteLogin} className="p-6 sm:p-8 space-y-5">
-              {governanceBanner && (
-                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
-                  <span>{governanceBanner} (Super Admin credentials remain enabled for recovery.)</span>
-                </div>
-              )}
-
-              {/* Compact 14-Division Demo Account Quick-Fill Selector (Respects Trial/Demo Governance) */}
-              {quickFillEnabled ? (
-                <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#090A0F] border border-gray-200 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                  <div className="text-xs">
-                    <span className="font-bold text-gray-800 dark:text-slate-200 block">
-                      Quick Fill Demo Account (14 Divisions)
-                    </span>
-                    <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                      Pilih akun divisi untuk mengisi Email &amp; Password uji coba otomatis.
-                    </span>
-                  </div>
-                  <select
-                    value={selectedDemoAccountId}
-                    onChange={(e) => handleQuickFillDemoAccount(e.target.value)}
-                    className="bg-white dark:bg-[#12141C] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] cursor-pointer sm:min-w-[290px]"
-                  >
-                    {demoAccounts.map((acc) => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.divisionLabel} — {acc.email}
-                        {!acc.isActive ? ' [SUSPENDED]' : acc.governanceAllowed === false ? ' [RESTRICTED]' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                  <Lock className="w-3.5 h-3.5 shrink-0" />
-                  <span>Demo Quick-Fill directory is hidden by Enterprise Trial/Demo Governance. Enter your assigned credentials manually.</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Email or Employee ID */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider block">
-                    Email Address or Employee ID
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="e.g. owner@grocematrix.id or USR-CASH-01"
-                    className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] font-mono"
-                  />
-                  {allowLegacyQuickIds && (
-                    <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px] text-gray-500 dark:text-slate-400">
-                      <span>Legacy ID:</span>
-                      {availableProfiles.map((p) => (
-                        <button
-                          key={p.userId}
-                          type="button"
-                          onClick={() => {
-                            setUsernameInput(p.userId);
-                            setPasswordInput('admin123');
-                          }}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-[#090A0F] text-gray-700 dark:text-slate-300 hover:text-[#0F4C3A] dark:hover:text-emerald-300 border border-gray-200 dark:border-slate-800/80 font-mono transition-colors cursor-pointer"
-                        >
-                          {p.userId}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Password / Security PIN */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider block">
-                    Password / Security PIN
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={passwordInput}
-                      onChange={(e) => setPasswordInput(e.target.value)}
-                      placeholder="Enter password or PIN"
-                      className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] pr-10 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 dark:hover:text-slate-100 cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <span className="text-[11px] text-gray-500 dark:text-slate-400 block pt-1">
-                    Owner demo: <code className="font-mono font-bold text-gray-800 dark:text-slate-200">owner@grocematrix.id</code> / <code className="font-mono font-bold text-gray-800 dark:text-slate-200">Groce@2026</code>
-                  </span>
-                </div>
-              </div>
-
-              {/* Workstation Shift Selection */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider block">
-                    Workstation Shift
-                  </label>
-                  <select
-                    value={selectedShift}
-                    onChange={(e) => setSelectedShift(e.target.value as any)}
-                    className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] cursor-pointer"
-                  >
-                    <option value="Morning Shift">Morning Shift (06:00 - 14:00)</option>
-                    <option value="Afternoon Shift">Afternoon Shift (14:00 - 22:00)</option>
-                    <option value="Night Shift">Night Shift (22:00 - 06:00)</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center sm:pt-6">
-                  <label className="flex items-center gap-2.5 text-xs text-gray-700 dark:text-slate-300 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={rememberWorkstation}
-                      onChange={(e) => setRememberWorkstation(e.target.checked)}
-                      className="w-4 h-4 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] border-gray-300 dark:border-slate-700"
-                    />
-                    <span>Remember authenticated session on this terminal</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className={`pt-4 border-t border-gray-200 dark:border-slate-800/80 flex items-center ${enableB2BAndStorefrontPortal ? 'justify-between' : 'justify-end'} gap-4`}>
-                {enableB2BAndStorefrontPortal && (
-                  <button
-                    type="button"
-                    onClick={onReturnToStorefront}
-                    className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-slate-800/80 text-xs font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                )}
-                <button
-                  type="submit"
-                  disabled={isAuthenticating}
-                  className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs sm:text-sm font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            {/* Workstation Shift & Session Persistence */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Workstation Shift
+                </label>
+                <select
+                  value={selectedShift}
+                  onChange={(e) => setSelectedShift(e.target.value as any)}
+                  className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] cursor-pointer"
                 >
-                  {isAuthenticating ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Authenticating Credentials...</span>
-                    </>
-                  ) : (
-                    <>
-                      <KeyRound className="w-4 h-4" />
-                      <span>Authenticate &amp; Enter Dashboard</span>
-                    </>
-                  )}
-                </button>
+                  <option value="Morning Shift">Morning Shift (06:00 - 14:00)</option>
+                  <option value="Afternoon Shift">Afternoon Shift (14:00 - 22:00)</option>
+                  <option value="Night Shift">Night Shift (22:00 - 06:00)</option>
+                </select>
               </div>
-            </form>
-          )}
+
+              <div className="flex items-center sm:pt-6">
+                <label className="flex items-center gap-2.5 text-xs text-gray-700 dark:text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberWorkstation}
+                    onChange={(e) => setRememberWorkstation(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] border-gray-300 dark:border-slate-700"
+                  />
+                  <span>Remember authenticated session on this terminal</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <div
+              className={`pt-4 border-t border-gray-200 dark:border-slate-800/80 flex items-center ${
+                enableB2BAndStorefrontPortal ? 'justify-between' : 'justify-end'
+              } gap-4`}
+            >
+              {enableB2BAndStorefrontPortal && (
+                <button
+                  type="button"
+                  onClick={onReturnToStorefront}
+                  className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-slate-800/80 text-xs font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={isAuthenticating}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs sm:text-sm font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isAuthenticating ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Memverifikasi Akun...</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-4 h-4" />
+                    <span>Sign In to Workspace</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
 
           {/* Footer Security Notice */}
           <div className="p-4 bg-gray-50 dark:bg-[#090A0F] border-t border-gray-200/80 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-500 dark:text-slate-500">

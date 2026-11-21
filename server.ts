@@ -48,6 +48,7 @@ import {
   MODULE_PERMISSION_META,
   getDefaultModulePermissions,
   divisionRoleToCanonicalRole,
+  isOwnerRoleCode,
 } from './src/utils/rbac.ts';
 import {
   createDefaultTrialGovernanceConfig,
@@ -376,11 +377,13 @@ function mergeErpSettings(raw?: Partial<ErpConfigurationSettings> | null): ErpCo
   const src = raw || {};
   const rawMarginFloor = Number(src.minMarginFloorPct);
   const rawMaxOutlets = Number(src.maxAllowedOutlets);
+  const rawMaxUsers = Number(src.maxAllowedUsers);
   return {
     ...base,
     ...src,
     minMarginFloorPct: Number.isFinite(rawMarginFloor) ? Math.max(0, Math.min(50, rawMarginFloor)) : (base.minMarginFloorPct ?? 2.0),
     maxAllowedOutlets: Number.isFinite(rawMaxOutlets) ? Math.max(1, Math.min(500, Math.round(rawMaxOutlets))) : (base.maxAllowedOutlets ?? 10),
+    maxAllowedUsers: Number.isFinite(rawMaxUsers) ? Math.max(1, Math.min(500, Math.round(rawMaxUsers))) : (base.maxAllowedUsers ?? 25),
     enableB2BAndStorefrontPortal: src.enableB2BAndStorefrontPortal === true,
     ojolChannelRates: {
       grabMart: { ...base.ojolChannelRates.grabMart, ...(src.ojolChannelRates?.grabMart || {}) },
@@ -4904,6 +4907,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
   const seeds: Array<{
     id: string;
     fullName: string;
+    username: string;
     email: string;
     password: string;
     roleCode: DivisionRoleCode;
@@ -4912,11 +4916,23 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     viewCost?: boolean;
   }> = [
     {
+      id: 'SYS-USR-00',
+      fullName: 'Platform Principal (Platform Owner)',
+      username: 'principal',
+      email: 'principal@grocematrix.id',
+      password: 'Principal@2026',
+      roleCode: 'PLATFORM_OWNER',
+      branchId: 'ALL',
+      supervisorPin: '1234',
+      viewCost: true,
+    },
+    {
       id: 'SYS-USR-01',
-      fullName: 'Hendra Wijaya (Owner / Super Admin)',
+      fullName: 'Hendra Wijaya (Client Owner)',
+      username: 'owner',
       email: 'owner@grocematrix.id',
       password: 'Groce@2026',
-      roleCode: 'SUPER_ADMIN',
+      roleCode: 'CLIENT_OWNER',
       branchId: 'ALL',
       supervisorPin: '1234',
       viewCost: true,
@@ -4924,6 +4940,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-02',
       fullName: 'Budi Santoso (Staf Gudang)',
+      username: 'gudang.staf',
       email: 'gudang.staf@grocematrix.id',
       password: 'Gudang@123',
       roleCode: 'WAREHOUSE_STAFF',
@@ -4933,6 +4950,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-03',
       fullName: 'Agus Setiawan (Admin Gudang)',
+      username: 'gudang.admin',
       email: 'gudang.admin@grocematrix.id',
       password: 'Gudang@123',
       roleCode: 'WAREHOUSE_ADMIN',
@@ -4942,6 +4960,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-04',
       fullName: 'Darmawan Putra (Head Gudang)',
+      username: 'gudang.head',
       email: 'gudang.head@grocematrix.id',
       password: 'Gudang@123',
       roleCode: 'WAREHOUSE_HEAD',
@@ -4951,6 +4970,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-05',
       fullName: 'Nadia Putri (Staf Purchasing)',
+      username: 'purchasing.staf',
       email: 'purchasing.staf@grocematrix.id',
       password: 'Beli@123',
       roleCode: 'PURCHASING_STAFF',
@@ -4960,6 +4980,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-06',
       fullName: 'Dewi Lestari (Head Purchasing)',
+      username: 'purchasing.head',
       email: 'purchasing.head@grocematrix.id',
       password: 'Beli@123',
       roleCode: 'PURCHASING_HEAD',
@@ -4969,6 +4990,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-07',
       fullName: 'Rahmawati Nur (QC & Halal Inspector)',
+      username: 'qc.halal',
       email: 'qc.halal@grocematrix.id',
       password: 'Halal@123',
       roleCode: 'QC_INSPECTOR',
@@ -4978,6 +5000,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-08',
       fullName: 'Andi Pratama (Kasir POS)',
+      username: 'kasir.pos',
       email: 'kasir.pos@grocematrix.id',
       password: 'Kasir@123',
       roleCode: 'POS_CASHIER',
@@ -4987,6 +5010,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-09',
       fullName: 'Rina Kartika (Store Manager / Supervisor)',
+      username: 'store.manager',
       email: 'store.manager@grocematrix.id',
       password: 'Store@123',
       roleCode: 'STORE_MANAGER',
@@ -4997,6 +5021,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-10',
       fullName: 'Fajar Ramadhan (Account Receivable)',
+      username: 'ar.finance',
       email: 'ar.finance@grocematrix.id',
       password: 'Finance@123',
       roleCode: 'AR_STAFF',
@@ -5006,6 +5031,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-11',
       fullName: 'Siti Aminah (Account Payable)',
+      username: 'ap.finance',
       email: 'ap.finance@grocematrix.id',
       password: 'Finance@123',
       roleCode: 'AP_STAFF',
@@ -5015,6 +5041,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-12',
       fullName: 'Yusuf Maulana (Accounting & Tax)',
+      username: 'accounting.tax',
       email: 'accounting.tax@grocematrix.id',
       password: 'Acc@123',
       roleCode: 'ACCOUNTING_TAX',
@@ -5024,6 +5051,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-13',
       fullName: 'Lina Marlina (Finance Manager)',
+      username: 'finance.head',
       email: 'finance.head@grocematrix.id',
       password: 'Finance@123',
       roleCode: 'FINANCE_MANAGER',
@@ -5033,6 +5061,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     {
       id: 'SYS-USR-14',
       fullName: 'Irfan Hakim (Head Accounting / Controller)',
+      username: 'controller',
       email: 'controller@grocematrix.id',
       password: 'Acc@123',
       roleCode: 'HEAD_ACCOUNTING',
@@ -5047,6 +5076,7 @@ function createInitialSystemUsers(): SystemUserAccount[] {
     return {
       id: s.id,
       fullName: s.fullName,
+      username: s.username.toLowerCase(),
       email: s.email.toLowerCase(),
       password: s.password,
       roleCode: s.roleCode,
@@ -5099,8 +5129,8 @@ function evaluateRouteGovernancePolicy(
   const nowMs = Date.now(); // Authoritative server-side clock (ignores client headers)
   const snapshot = buildServerTrialGovernanceSnapshot(nowMs);
 
-  // Super Admin always retains governance & recovery access
-  if (user.roleCode === 'SUPER_ADMIN') {
+  // Owners / Super Admin always retain governance & recovery access
+  if (isOwnerRoleCode(user.roleCode)) {
     return { allowed: true, snapshot };
   }
 
@@ -5314,7 +5344,7 @@ function buildSessionFromSystemUser(
   const preset = DIVISION_ROLE_PRESETS[user.roleCode] || DIVISION_ROLE_PRESETS.POS_CASHIER;
   const canonicalRole = divisionRoleToCanonicalRole(user.roleCode) as CanonicalServerRole;
   const mp = normalizeModulePermissionsInput(user.modulePermissions, user.roleCode);
-  const isSuper = user.roleCode === 'SUPER_ADMIN';
+  const isSuper = isOwnerRoleCode(user.roleCode);
   const branchScoped = user.branchId !== 'ALL' && user.branchId !== 'CONSOLIDATED';
   const hideFinancialCost = isSuper
     ? false
@@ -5327,6 +5357,7 @@ function buildSessionFromSystemUser(
   return {
     userId: user.id,
     userName: user.fullName,
+    username: user.username,
     email: user.email,
     userRole: canonicalRole,
     roleCode: user.roleCode,
@@ -5380,7 +5411,12 @@ function findSystemUserByIdOrEmail(identifier?: string | null): SystemUserAccoun
   const trimmed = String(identifier).trim();
   if (!trimmed) return undefined;
   const lower = trimmed.toLowerCase();
-  return systemUsers.find((u) => u.id === trimmed || u.email.toLowerCase() === lower);
+  return systemUsers.find(
+    (u) =>
+      u.id === trimmed ||
+      u.email.toLowerCase() === lower ||
+      (typeof u.username === 'string' && u.username.toLowerCase() === lower)
+  );
 }
 
 function resolveSystemUserForRequest(req: Request): SystemUserAccount | undefined {
@@ -5430,7 +5466,7 @@ function resolveSystemUserForRequest(req: Request): SystemUserAccount | undefine
 function shouldHideFinancialCostForRequest(req: Request): boolean {
   const user = resolveSystemUserForRequest(req);
   if (!user) return false;
-  if (user.roleCode === 'SUPER_ADMIN') return false;
+  if (isOwnerRoleCode(user.roleCode)) return false;
   const preset = DIVISION_ROLE_PRESETS[user.roleCode] || DIVISION_ROLE_PRESETS.POS_CASHIER;
   if (typeof user.hideFinancialCost === 'boolean') return user.hideFinancialCost;
   if (typeof user.viewCost === 'boolean') return !user.viewCost;
@@ -5446,10 +5482,10 @@ function evaluateSystemUserModulePermission(
   if (!user.isActive) {
     return {
       allowed: false,
-      reason: `Akses Ditolak: Akun '${user.email}' sedang dinonaktifkan oleh Super Admin.`,
+      reason: `Akses Ditolak: Akun '${user.email}' sedang dinonaktifkan oleh Administrator.`,
     };
   }
-  if (user.roleCode === 'SUPER_ADMIN') {
+  if (isOwnerRoleCode(user.roleCode)) {
     return { allowed: true };
   }
 
@@ -7988,20 +8024,41 @@ function applyServerState(snap: any) {
   }
   syncAssignmentsOntoProfiles();
   if (Array.isArray(snap.systemUsers) && snap.systemUsers.length > 0) {
-    systemUsers = snap.systemUsers.map((u: any) => {
-      const roleCode: DivisionRoleCode = DIVISION_ROLE_CODES.includes(u.roleCode) ? u.roleCode : 'POS_CASHIER';
+    const seededList = createInitialSystemUsers();
+    const mapped = snap.systemUsers.map((u: any) => {
+      const rawId = String(u.id || `SYS-USR-${Date.now()}`);
+      const cleanEmail = String(u.email || '').trim().toLowerCase();
+      const seedMatch = seededList.find((s) => s.id === rawId || (cleanEmail && s.email === cleanEmail));
+      let roleCode: DivisionRoleCode = DIVISION_ROLE_CODES.includes(u.roleCode) ? u.roleCode : 'POS_CASHIER';
+      let divisionLabel = String(u.divisionLabel || DIVISION_ROLE_PRESETS[roleCode].divisionLabel);
+      // Cleanly migrate legacy SYS-USR-01 SUPER_ADMIN snapshot entry -> CLIENT_OWNER
+      if (rawId === 'SYS-USR-01' && roleCode === 'SUPER_ADMIN') {
+        roleCode = 'CLIENT_OWNER';
+        divisionLabel = DIVISION_ROLE_PRESETS.CLIENT_OWNER.divisionLabel;
+      }
       const preset = DIVISION_ROLE_PRESETS[roleCode];
       const hideFinancialCost =
         typeof u.hideFinancialCost === 'boolean'
           ? u.hideFinancialCost
           : u.viewCost === false || preset.hideFinancialCost === true;
+      const derivedUsername = String(
+        u.username ||
+          seedMatch?.username ||
+          (cleanEmail.includes('@') ? cleanEmail.split('@')[0] : rawId.toLowerCase())
+      )
+        .trim()
+        .toLowerCase();
       return {
-        id: String(u.id || `SYS-USR-${Date.now()}`),
-        fullName: String(u.fullName || u.email || 'ERP User'),
-        email: String(u.email || '').trim().toLowerCase(),
-        password: String(u.password || 'Groce@2026'),
+        id: rawId,
+        fullName:
+          rawId === 'SYS-USR-01' && String(u.fullName || '').includes('(Owner / Super Admin)')
+            ? 'Hendra Wijaya (Client Owner)'
+            : String(u.fullName || cleanEmail || 'ERP User'),
+        username: derivedUsername,
+        email: cleanEmail,
+        password: String(u.password || seedMatch?.password || 'Groce@2026'),
         roleCode,
-        divisionLabel: String(u.divisionLabel || preset.divisionLabel),
+        divisionLabel,
         branchId: String(u.branchId || preset.defaultBranchId || 'ALL'),
         branchName: resolveBranchNameById(String(u.branchId || preset.defaultBranchId || 'ALL')),
         isActive: u.isActive !== false,
@@ -8014,6 +8071,20 @@ function applyServerState(snap: any) {
         updatedBy: u.updatedBy || 'Snapshot Restore',
       };
     });
+    // Ensure 15th Platform Owner account ('principal') is always populated in existing snapshots
+    const principalSeed = seededList.find((s) => s.username === 'principal');
+    if (
+      principalSeed &&
+      !mapped.some(
+        (u: SystemUserAccount) =>
+          u.id === principalSeed.id ||
+          u.username.toLowerCase() === 'principal' ||
+          u.email.toLowerCase() === principalSeed.email
+      )
+    ) {
+      mapped.unshift(principalSeed);
+    }
+    systemUsers = mapped;
   } else {
     systemUsers = createInitialSystemUsers();
   }
@@ -8546,7 +8617,7 @@ async function startServer() {
         // Branch-scope write isolation for branch-bound division users
         if (
           method !== 'GET' &&
-          resolvedSystemUser.roleCode !== 'SUPER_ADMIN' &&
+          !isOwnerRoleCode(resolvedSystemUser.roleCode) &&
           resolvedSystemUser.branchId &&
           resolvedSystemUser.branchId !== 'ALL' &&
           resolvedSystemUser.branchId !== 'CONSOLIDATED' &&
@@ -9011,7 +9082,7 @@ async function startServer() {
     const callerSystemUser = resolveSystemUserForRequest(req);
     const callerRoleHeader = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim().toLowerCase() : '';
     const isOwner =
-      callerSystemUser?.roleCode === 'SUPER_ADMIN' ||
+      isOwnerRoleCode(callerSystemUser?.roleCode) ||
       (!callerSystemUser && (callerRoleHeader === 'super_admin' || currentActiveStaffSession?.userRole === 'super_admin'));
 
     if (!isOwner) {
@@ -14740,6 +14811,7 @@ async function startServer() {
     const accounts = systemUsers.map((u) => ({
       id: u.id,
       fullName: u.fullName,
+      username: u.username,
       email: u.email,
       roleCode: u.roleCode,
       divisionLabel: u.divisionLabel,
@@ -14760,45 +14832,51 @@ async function startServer() {
     });
   });
 
-  // Unified Authentication Handler (Email + Password for 14 Division SystemUsers + Legacy Roster compatibility)
+  // Unified Authentication Handler (Dual Email OR Username + Password for 15-User Database + Legacy Compatibility)
   const handleEnterpriseAuthLogin = (req: Request, res: Response) => {
     syncAssignmentsOntoProfiles();
-    const { email, userId, username, password, pin, shiftName } = req.body || {};
+    const { identifier, email, userId, username, password, pin, shiftName } = req.body || {};
     const nowMs = Date.now();
     const governance = buildServerTrialGovernanceSnapshot(nowMs);
 
     const rawIdentifier =
+      (typeof identifier === 'string' && identifier.trim()) ||
       (typeof email === 'string' && email.trim()) ||
       (typeof username === 'string' && username.trim()) ||
       (typeof userId === 'string' && userId.trim()) ||
       '';
 
-    // 1. Check configurable 14-Division SystemUserAccount by Email or SYS-USR-* ID
+    // 1. Check configurable SystemUserAccount by Email, Username, or SYS-USR-* ID (case-insensitive)
     const matchedSystemUser = rawIdentifier ? findSystemUserByIdOrEmail(rawIdentifier) : undefined;
     if (matchedSystemUser) {
       if (!matchedSystemUser.isActive) {
         return res.status(403).json({
           success: false,
           code: 'ACCOUNT_SUSPENDED',
-          error: `Akun '${matchedSystemUser.fullName}' (${matchedSystemUser.email}) sedang dinonaktifkan oleh Super Admin.`,
+          error: 'Akun dinonaktifkan oleh Administrator',
         });
       }
 
-      // Require password verification whenever logging in by email/credentials (unless quick userId roster selection without email/password)
-      const isEmailLogin = Boolean(email) || rawIdentifier.includes('@') || password !== undefined;
-      if (isEmailLogin) {
+      // Require password verification whenever logging in via credentials (identifier / email / username / password)
+      const isCredentialLogin =
+        Boolean(identifier) ||
+        Boolean(email) ||
+        Boolean(username) ||
+        rawIdentifier.includes('@') ||
+        password !== undefined;
+      if (isCredentialLogin) {
         const providedPassword = password !== undefined ? String(password) : '';
         if (!providedPassword || providedPassword !== matchedSystemUser.password) {
           return res.status(401).json({
             success: false,
             code: 'INVALID_CREDENTIALS',
-            error: 'Email atau password tidak sesuai. Silakan periksa kembali kredensial Anda.',
+            error: 'Email/Username atau password salah',
           });
         }
       }
 
-      // Enforce Trial/Demo Governance lock & sub-role access after credential verification (Super Admin exempt for recovery)
-      if (matchedSystemUser.roleCode !== 'SUPER_ADMIN') {
+      // Enforce Trial/Demo Governance lock & sub-role access after credential verification (Owners exempt for recovery)
+      if (!isOwnerRoleCode(matchedSystemUser.roleCode)) {
         if (governance.isOperationalLocked) {
           return res.status(403).json({
             success: false,
@@ -14813,7 +14891,7 @@ async function startServer() {
             success: false,
             code: 'TRIAL_SUBROLE_RESTRICTED',
             roleCode: matchedSystemUser.roleCode,
-            error: `Akses Ditolak (Trial/Demo Governance): Sub-peran '${matchedSystemUser.divisionLabel}' (${matchedSystemUser.roleCode}) sedang dinonaktifkan pada sesi Trial/Demo ini.`,
+            error: `Akses Ditolak (Trial/Demo Governance): Sub-peran '${matchedSystemUser.divisionLabel}' (${matchedSystemUser.roleCode}) sedang dinonaktifkan pada sesi ini.`,
           });
         }
       }
@@ -14855,7 +14933,8 @@ async function startServer() {
         shiftId: session.activeShiftId,
         status: 'AUTHORIZED_EXECUTED',
         metadata: {
-          loginMethod: 'email_password_rbac',
+          loginMethod: 'identifier_password_rbac',
+          username: matchedSystemUser.username,
           email: matchedSystemUser.email,
           roleCode: matchedSystemUser.roleCode,
           divisionLabel: matchedSystemUser.divisionLabel,
@@ -14878,26 +14957,37 @@ async function startServer() {
         modulePermissions: sanitizedUser.modulePermissions,
         trialGovernance: governance,
         session,
-        availableProfiles: AVAILABLE_STAFF_USERS,
+        availableProfiles: systemUsers.map((u) => buildSessionFromSystemUser(u)),
         message: `Login berhasil sebagai ${matchedSystemUser.fullName} (${matchedSystemUser.divisionLabel}).`,
       });
     }
 
-    // If an email address was explicitly typed but didn't match any systemUser, return clean 401
-    if ((typeof email === 'string' && email.trim().length > 0) || rawIdentifier.includes('@')) {
-      return res.status(401).json({
-        success: false,
-        code: 'INVALID_CREDENTIALS',
-        error: 'Email tidak terdaftar atau password tidak sesuai.',
-      });
+    // If credential fields were provided and didn't match any SystemUserAccount, reject cleanly with 401
+    if (
+      typeof identifier === 'string' ||
+      (typeof email === 'string' && email.trim().length > 0) ||
+      (typeof username === 'string' && username.trim().length > 0) ||
+      rawIdentifier.includes('@') ||
+      password !== undefined
+    ) {
+      // Allow explicit legacy USR-* profile lookup only if no password failure is triggered
+      if (userId && !identifier && !email && !username && password === undefined) {
+        // fall through to legacy userId check
+      } else {
+        return res.status(401).json({
+          success: false,
+          code: 'INVALID_CREDENTIALS',
+          error: 'Email/Username atau password salah',
+        });
+      }
     }
 
-    // 2. Fallback: Legacy 7-Role Quick Roster / Employee ID compatibility
+    // 2. Fallback: Legacy Employee ID compatibility
     const target = resolveStaffUser(userId || username);
     if (!target) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid credentials. Please enter a valid Email & Password or select an authorized staff profile.',
+        error: 'Email/Username atau password salah',
       });
     }
 
@@ -14905,7 +14995,7 @@ async function startServer() {
     if (assignment?.isActive === false || target.isActive === false) {
       return res.status(403).json({
         success: false,
-        error: `Account '${target.userName}' is currently suspended/inactive. Contact your Super Admin to reactivate access.`,
+        error: 'Akun dinonaktifkan oleh Administrator',
       });
     }
 
@@ -15013,7 +15103,8 @@ async function startServer() {
     syncAssignmentsOntoProfiles();
     res.json({
       currentSession: currentActiveStaffSession,
-      availableProfiles: AVAILABLE_STAFF_USERS,
+      availableProfiles: systemUsers.map((u) => buildSessionFromSystemUser(u)),
+      systemUsers: systemUsers.map(sanitizeSystemUserForClient),
     });
   });
 
@@ -16727,6 +16818,29 @@ async function startServer() {
       mergedErp.maxAllowedOutlets = nextQuota;
     }
 
+    if (patch.maxAllowedUsers !== undefined) {
+      if (!isCallerSuperAdminForUserMgmt(req)) {
+        return res.status(403).json({
+          success: false,
+          code: 'RBAC_FORBIDDEN',
+          error: 'Only Super Admin / Owner can change Max Allowed Users quota.',
+        });
+      }
+      const nextUserQuota = Math.round(Number(patch.maxAllowedUsers));
+      const activeUserCount = systemUsers.filter((u) => u.isActive !== false).length;
+      if (!Number.isFinite(nextUserQuota) || nextUserQuota < 1 || nextUserQuota > 500) {
+        return res.status(400).json({ error: 'maxAllowedUsers must be an integer between 1 and 500.' });
+      }
+      if (nextUserQuota < activeUserCount) {
+        return res.status(400).json({
+          success: false,
+          code: 'QUOTA_BELOW_ACTIVE_USERS',
+          error: `Max Allowed Users (${nextUserQuota}) tidak boleh lebih kecil dari jumlah user aktif saat ini (${activeUserCount}).`,
+        });
+      }
+      mergedErp.maxAllowedUsers = nextUserQuota;
+    }
+
     enterpriseSettings = {
       ...enterpriseSettings,
       threeWayMatching: {
@@ -17710,12 +17824,23 @@ async function startServer() {
   // =============================================================
   const isCallerSuperAdminForUserMgmt = (req: Request): boolean => {
     const resolvedSys = resolveSystemUserForRequest(req);
-    if (resolvedSys) return resolvedSys.roleCode === 'SUPER_ADMIN' && resolvedSys.isActive;
+    if (resolvedSys) return isOwnerRoleCode(resolvedSys.roleCode) && resolvedSys.isActive;
     const rawHeaderRole = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : undefined;
     const callerRole = rawHeaderRole
       ? normalizeServerRoleStrict(rawHeaderRole)
       : normalizeServerRole(currentActiveStaffSession.userRole);
     return callerRole === 'super_admin';
+  };
+
+  const getUserQuotaSnapshot = () => {
+    const maxAllowedUsers = Math.max(1, Number(getErpSettings().maxAllowedUsers ?? 25));
+    const activeUsers = systemUsers.filter((u) => u.isActive !== false).length;
+    return {
+      activeUsers,
+      totalUsers: systemUsers.length,
+      maxAllowedUsers,
+      remainingSlots: Math.max(0, maxAllowedUsers - activeUsers),
+    };
   };
 
   app.get('/api/admin/settings/users', (_req: Request, res: Response) => {
@@ -17725,6 +17850,7 @@ async function startServer() {
       rolePresets: DIVISION_ROLE_CODES.map((code) => DIVISION_ROLE_PRESETS[code]),
       moduleMetadata: MODULE_PERMISSION_META,
       branchOptions: getDynamicBranchOptions(),
+      quota: getUserQuotaSnapshot(),
     });
   });
 
@@ -17739,6 +17865,7 @@ async function startServer() {
 
     const {
       fullName,
+      username,
       email,
       password,
       roleCode,
@@ -17751,6 +17878,7 @@ async function startServer() {
       modulePermissions,
     } = (req.body || {}) as {
       fullName?: string;
+      username?: string;
       email?: string;
       password?: string;
       roleCode?: DivisionRoleCode;
@@ -17765,10 +17893,22 @@ async function startServer() {
 
     const cleanName = String(fullName || '').trim();
     const cleanEmail = String(email || '').trim().toLowerCase();
+    const rawUsername = String(username || (cleanEmail.includes('@') ? cleanEmail.split('@')[0] : ''))
+      .trim()
+      .toLowerCase();
     const cleanPassword = String(password || '');
 
     if (!cleanName) {
-      return res.status(400).json({ success: false, error: 'Nama lengkap (fullName) wajib diisi.' });
+      return res.status(400).json({ success: false, error: 'Nama lengkap wajib diisi.' });
+    }
+    if (!rawUsername || !/^[a-z0-9._-]{3,40}$/.test(rawUsername)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username wajib 3-40 karakter (hanya huruf kecil, angka, titik, underscore, atau tanda hubung).',
+      });
+    }
+    if (systemUsers.some((u) => (u.username || '').toLowerCase() === rawUsername)) {
+      return res.status(400).json({ success: false, error: `Username '${rawUsername}' sudah digunakan oleh akun lain.` });
     }
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return res.status(400).json({ success: false, error: 'Format alamat email tidak valid.' });
@@ -17778,6 +17918,17 @@ async function startServer() {
     }
     if (cleanPassword.length < 6) {
       return res.status(400).json({ success: false, error: 'Password wajib minimal 6 karakter.' });
+    }
+
+    const willBeActive = isActive !== false;
+    const quota = getUserQuotaSnapshot();
+    if (willBeActive && quota.activeUsers >= quota.maxAllowedUsers) {
+      return res.status(400).json({
+        success: false,
+        code: 'USER_QUOTA_EXCEEDED',
+        quota,
+        error: `Kuota User Penuh (${quota.activeUsers}/${quota.maxAllowedUsers}): Tingkatkan Max Allowed Users di Enterprise SaaS Config terlebih dahulu.`,
+      });
     }
 
     const resolvedRoleCode: DivisionRoleCode =
@@ -17802,13 +17953,14 @@ async function startServer() {
     const createdUser: SystemUserAccount = {
       id: newId,
       fullName: cleanName,
+      username: rawUsername,
       email: cleanEmail,
       password: cleanPassword,
       roleCode: resolvedRoleCode,
       divisionLabel: preset.divisionLabel,
       branchId: resolvedBranchId,
       branchName: resolveBranchNameById(resolvedBranchId),
-      isActive: isActive !== false,
+      isActive: willBeActive,
       supervisorPin: supervisorPin ? String(supervisorPin).trim() : preset.defaultSupervisorPin,
       viewCost: !resolvedHideCost,
       hideFinancialCost: resolvedHideCost,
@@ -17828,16 +17980,17 @@ async function startServer() {
       module: 'SECURITY',
       action: 'SYSTEM_USER_CREATED',
       referenceId: createdUser.id,
-      summary: `Created division account ${createdUser.fullName} (${createdUser.email}) — Role: ${createdUser.roleCode}, Branch: ${createdUser.branchName}.`,
+      summary: `Created division account ${createdUser.fullName} (@${createdUser.username}, ${createdUser.email}) — Role: ${createdUser.roleCode}, Branch: ${createdUser.branchName}.`,
     });
 
     scheduleStateSave();
 
     return res.status(201).json({
       success: true,
-      message: `Akun '${createdUser.fullName}' (${createdUser.email}) berhasil dibuat.`,
+      message: `Akun '${createdUser.fullName}' (@${createdUser.username}) berhasil dibuat.`,
       user: sanitizeSystemUserForClient(createdUser),
       users: systemUsers.map(sanitizeSystemUserForClient),
+      quota: getUserQuotaSnapshot(),
     });
   });
 
@@ -17858,6 +18011,7 @@ async function startServer() {
 
     const {
       fullName,
+      username,
       email,
       password,
       roleCode,
@@ -17870,6 +18024,7 @@ async function startServer() {
       modulePermissions,
     } = (req.body || {}) as {
       fullName?: string;
+      username?: string;
       email?: string;
       password?: string;
       roleCode?: DivisionRoleCode;
@@ -17886,9 +18041,7 @@ async function startServer() {
       roleCode !== undefined
         ? DIVISION_ROLE_CODES.includes(roleCode)
           ? roleCode
-          : (() => {
-              return targetUser.roleCode;
-            })()
+          : targetUser.roleCode
         : targetUser.roleCode;
 
     if (roleCode !== undefined && !DIVISION_ROLE_CODES.includes(roleCode)) {
@@ -17897,18 +18050,55 @@ async function startServer() {
 
     const nextIsActive = isActive !== undefined ? Boolean(isActive) : targetUser.isActive;
 
-    // Guard: Prevent disabling or demoting the last active SUPER_ADMIN account
-    const isCurrentlyActiveSuperAdmin = targetUser.roleCode === 'SUPER_ADMIN' && targetUser.isActive;
-    const willStopBeingActiveSuperAdmin = !nextIsActive || nextRoleCode !== 'SUPER_ADMIN';
-    if (isCurrentlyActiveSuperAdmin && willStopBeingActiveSuperAdmin) {
-      const otherActiveSuperAdmins = systemUsers.filter(
-        (u) => u.id !== targetUser.id && u.roleCode === 'SUPER_ADMIN' && u.isActive
+    // Enforce quota when reactivating a suspended account
+    if (!targetUser.isActive && nextIsActive) {
+      const quota = getUserQuotaSnapshot();
+      if (quota.activeUsers >= quota.maxAllowedUsers) {
+        return res.status(400).json({
+          success: false,
+          code: 'USER_QUOTA_EXCEEDED',
+          quota,
+          error: `Kuota User Penuh (${quota.activeUsers}/${quota.maxAllowedUsers}): Tidak dapat mengaktifkan '${targetUser.fullName}'.`,
+        });
+      }
+    }
+
+    // Guard: Prevent disabling or demoting the last active PLATFORM_OWNER / CLIENT_OWNER / owner account
+    if (targetUser.isActive && targetUser.roleCode === 'PLATFORM_OWNER' && (!nextIsActive || nextRoleCode !== 'PLATFORM_OWNER')) {
+      const otherPlatformOwners = systemUsers.filter(
+        (u) => u.id !== targetUser.id && u.roleCode === 'PLATFORM_OWNER' && u.isActive
       );
-      if (otherActiveSuperAdmins.length === 0) {
+      if (otherPlatformOwners.length === 0) {
+        return res.status(400).json({
+          success: false,
+          code: 'LAST_PLATFORM_OWNER_GUARD',
+          error: 'Proteksi Sistem: Tidak dapat menonaktifkan atau menurunkan peran akun PLATFORM_OWNER aktif terakhir.',
+        });
+      }
+    }
+    if (targetUser.isActive && targetUser.roleCode === 'CLIENT_OWNER' && (!nextIsActive || nextRoleCode !== 'CLIENT_OWNER')) {
+      const otherClientOwners = systemUsers.filter(
+        (u) => u.id !== targetUser.id && u.roleCode === 'CLIENT_OWNER' && u.isActive
+      );
+      if (otherClientOwners.length === 0) {
+        return res.status(400).json({
+          success: false,
+          code: 'LAST_CLIENT_OWNER_GUARD',
+          error: 'Proteksi Sistem: Tidak dapat menonaktifkan atau menurunkan peran akun CLIENT_OWNER aktif terakhir.',
+        });
+      }
+    }
+    const isCurrentlyActiveOwner = isOwnerRoleCode(targetUser.roleCode) && targetUser.isActive;
+    const willStopBeingActiveOwner = !nextIsActive || !isOwnerRoleCode(nextRoleCode);
+    if (isCurrentlyActiveOwner && willStopBeingActiveOwner) {
+      const otherActiveOwners = systemUsers.filter(
+        (u) => u.id !== targetUser.id && isOwnerRoleCode(u.roleCode) && u.isActive
+      );
+      if (otherActiveOwners.length === 0) {
         return res.status(400).json({
           success: false,
           code: 'LAST_SUPER_ADMIN_GUARD',
-          error: 'Proteksi Sistem: Tidak dapat menonaktifkan atau menurunkan peran akun SUPER_ADMIN aktif terakhir.',
+          error: 'Proteksi Sistem: Tidak dapat menonaktifkan atau menurunkan peran akun Owner aktif terakhir.',
         });
       }
     }
@@ -17923,6 +18113,29 @@ async function startServer() {
       if (cleanName !== targetUser.fullName) {
         targetUser.fullName = cleanName;
         changes.push(`name=${cleanName}`);
+      }
+    }
+
+    if (username !== undefined) {
+      const cleanUsername = String(username).trim().toLowerCase();
+      if (!cleanUsername || !/^[a-z0-9._-]{3,40}$/.test(cleanUsername)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Username wajib 3-40 karakter (hanya huruf kecil, angka, titik, underscore, atau tanda hubung).',
+        });
+      }
+      const dupUsername = systemUsers.find(
+        (u) => u.id !== targetUser.id && (u.username || '').toLowerCase() === cleanUsername
+      );
+      if (dupUsername) {
+        return res.status(400).json({
+          success: false,
+          error: `Username '${cleanUsername}' sudah digunakan oleh '${dupUsername.fullName}'.`,
+        });
+      }
+      if (cleanUsername !== (targetUser.username || '').toLowerCase()) {
+        targetUser.username = cleanUsername;
+        changes.push(`username=${cleanUsername}`);
       }
     }
 
@@ -17981,7 +18194,6 @@ async function startServer() {
       targetUser.isActive = Boolean(isActive);
       changes.push(`active=${targetUser.isActive}`);
       if (!targetUser.isActive) {
-        // Invalidate any live tokens belonging to the suspended account
         for (const [tok, entry] of activeAuthTokens.entries()) {
           if (entry.userId === targetUser.id) activeAuthTokens.delete(tok);
         }
@@ -18018,7 +18230,6 @@ async function startServer() {
     targetUser.updatedAt = new Date().toISOString();
     targetUser.updatedBy = actorName;
 
-    // Refresh live currentActiveStaffSession if it belongs to this updated account
     if (currentActiveStaffSession?.userId === targetUser.id) {
       currentActiveStaffSession = buildSessionFromSystemUser(targetUser, currentActiveStaffSession.shiftName);
     }
@@ -18031,7 +18242,7 @@ async function startServer() {
       module: 'SECURITY',
       action: 'SYSTEM_USER_UPDATED',
       referenceId: targetUser.id,
-      summary: `Updated ${targetUser.fullName} (${targetUser.email}): ${changes.join(', ') || 'saved'}.`,
+      summary: `Updated ${targetUser.fullName} (@${targetUser.username}, ${targetUser.email}): ${changes.join(', ') || 'saved'}.`,
     });
 
     scheduleStateSave();
@@ -18041,6 +18252,7 @@ async function startServer() {
       message: `Perubahan akun '${targetUser.fullName}' berhasil disimpan.`,
       user: sanitizeSystemUserForClient(targetUser),
       users: systemUsers.map(sanitizeSystemUserForClient),
+      quota: getUserQuotaSnapshot(),
     });
   });
 
@@ -27203,7 +27415,7 @@ async function startServer() {
   function resolveRequestBranchScope(req: Request): { isBranchScoped: boolean; storeId: string } {
     const resolvedSys = resolveSystemUserForRequest(req);
     if (resolvedSys) {
-      if (resolvedSys.roleCode === 'SUPER_ADMIN') {
+      if (isOwnerRoleCode(resolvedSys.roleCode)) {
         return { isBranchScoped: false, storeId: 'ALL' };
       }
       const sysBranch = String(resolvedSys.branchId || 'ALL').trim() || 'ALL';
@@ -28900,7 +29112,7 @@ async function startServer() {
       effectiveRole === 'store_manager' ||
       effectiveRole === 'coo' ||
       effectiveRole === 'super_admin' ||
-      resolvedSys?.roleCode === 'SUPER_ADMIN' ||
+      isOwnerRoleCode(resolvedSys?.roleCode) ||
       resolvedSys?.modulePermissions?.inventory?.approve === true;
 
     const lines: RackStocktakeLineResult[] = [];
@@ -31833,7 +32045,7 @@ async function startServer() {
     const resolvedSys = resolveSystemUserForRequest(req);
     const role = getEffectiveRequestRole(req);
     const canViewAuditTrail = resolvedSys
-      ? resolvedSys.roleCode === 'SUPER_ADMIN' ||
+      ? isOwnerRoleCode(resolvedSys.roleCode) ||
         resolvedSys.modulePermissions?.fraudRadar?.view === true ||
         resolvedSys.modulePermissions?.settings?.view === true
       : role === 'super_admin' || role === 'coo';

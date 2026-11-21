@@ -11,7 +11,7 @@ import type {
   TrialLifecycleStatus,
   TrialManualStatusOverride,
 } from '../types/index.ts';
-import { DIVISION_ROLE_CODES, DIVISION_ROLE_PRESETS, MODULE_PERMISSION_KEYS } from './rbac.ts';
+import { DIVISION_ROLE_CODES, DIVISION_ROLE_PRESETS, isOwnerRoleCode, MODULE_PERMISSION_KEYS } from './rbac.ts';
 
 export const TRIAL_LIFECYCLE_STATUSES: TrialLifecycleStatus[] = [
   'ACTIVE_TRIAL',
@@ -197,7 +197,7 @@ export function computeRbacGovernanceSummary(
   const overlayApplies = cfgEnforces && !isProdMode;
 
   roleCodesSet.forEach((roleCode) => {
-    if (roleCode === 'SUPER_ADMIN') return;
+    if (isOwnerRoleCode(roleCode)) return;
 
     const usersForRole = sourceUsers.filter((u) => u.roleCode === roleCode);
     const presetPerms = DIVISION_ROLE_PRESETS[roleCode]?.permissions;
@@ -492,8 +492,10 @@ export function normalizeTrialGovernanceConfig(
       }
     });
   }
-  // Super Admin can never be locked out of recovery & governance controls
+  // Owners can never be locked out of recovery & governance controls
   subRoleAccess.SUPER_ADMIN = true;
+  subRoleAccess.PLATFORM_OWNER = true;
+  subRoleAccess.CLIENT_OWNER = true;
 
   const accountingSubAccess: TrialAccountingSubAccess = {
     ar: typeof raw.accountingSubAccess?.ar === 'boolean' ? raw.accountingSubAccess.ar : base.accountingSubAccess.ar,
@@ -628,7 +630,7 @@ export function isSubRoleAllowedByGovernance(
   governance: TrialGovernanceStatusSnapshot | TrialGovernanceConfig | null | undefined,
   roleCode?: DivisionRoleCode | null
 ): boolean {
-  if (!governance || !roleCode || roleCode === 'SUPER_ADMIN') return true;
+  if (!governance || !roleCode || isOwnerRoleCode(roleCode)) return true;
   const cfg = 'config' in governance ? governance.config : governance;
   if (!cfg.enforceRestrictions) return true;
   if ((cfg.mode === 'PRODUCTION' || cfg.licenseMode === 'ENTERPRISE_PRODUCTION') && cfg.manualStatusOverride === 'AUTO') {
@@ -642,7 +644,7 @@ export function isModuleAllowedByGovernance(
   moduleKey: ModulePermissionKey,
   roleCode?: DivisionRoleCode | null
 ): boolean {
-  if (!governance || roleCode === 'SUPER_ADMIN') return true;
+  if (!governance || isOwnerRoleCode(roleCode)) return true;
   const cfg = 'config' in governance ? governance.config : governance;
   if (!cfg.enforceRestrictions) return true;
   if ((cfg.mode === 'PRODUCTION' || cfg.licenseMode === 'ENTERPRISE_PRODUCTION') && cfg.manualStatusOverride === 'AUTO') {
@@ -656,7 +658,7 @@ export function isAccountingAreaAllowedByGovernance(
   area: keyof TrialAccountingSubAccess,
   roleCode?: DivisionRoleCode | null
 ): boolean {
-  if (!governance || roleCode === 'SUPER_ADMIN') return true;
+  if (!governance || isOwnerRoleCode(roleCode)) return true;
   const cfg = 'config' in governance ? governance.config : governance;
   if (!cfg.enforceRestrictions) return true;
   if ((cfg.mode === 'PRODUCTION' || cfg.licenseMode === 'ENTERPRISE_PRODUCTION') && cfg.manualStatusOverride === 'AUTO') {

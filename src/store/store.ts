@@ -1,3 +1,4 @@
+import React from 'react';
 import { create } from 'zustand';
 
 export interface ToastMessage {
@@ -18,6 +19,7 @@ export interface AppState {
 }
 
 let storeThemeTransitionTimer: number | null = null;
+let storeThemeRaf: number | null = null;
 
 export const useAppStore = create<AppState>((set, get) => ({
   theme: (() => {
@@ -36,27 +38,29 @@ export const useAppStore = create<AppState>((set, get) => ({
   toasts: [],
 
   setTheme: (theme: 'light' | 'dark') => {
-    try {
-      localStorage.setItem('grocemart_admin_theme', theme);
-    } catch {}
-    if (typeof document !== 'undefined') {
-      if (typeof window !== 'undefined' && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
-        document.documentElement.classList.add('theme-transitioning');
+    const isDark = theme === 'dark';
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      if (storeThemeRaf !== null) window.cancelAnimationFrame(storeThemeRaf);
+      storeThemeRaf = window.requestAnimationFrame(() => {
+        storeThemeRaf = null;
+        const root = document.documentElement;
+        root.classList.add('theme-switching');
+        root.classList.toggle('dark', isDark);
+        root.classList.toggle('light-theme', !isDark);
+        root.style.colorScheme = theme;
         if (storeThemeTransitionTimer !== null) window.clearTimeout(storeThemeTransitionTimer);
         storeThemeTransitionTimer = window.setTimeout(() => {
-          document.documentElement.classList.remove('theme-transitioning');
+          root.classList.remove('theme-switching');
           storeThemeTransitionTimer = null;
-        }, 280);
-      }
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light-theme');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.classList.add('light-theme');
-      }
+        }, 150);
+      });
     }
-    set({ theme });
+    React.startTransition(() => {
+      try {
+        localStorage.setItem('grocemart_admin_theme', theme);
+      } catch {}
+      set({ theme });
+    });
   },
 
   toggleTheme: () => {

@@ -65,10 +65,13 @@ import {
   isSessionBranchScoped,
   getSessionAssignedBranchId,
   DIVISION_ROLE_CODES,
+  SELECTABLE_DIVISION_ROLE_CODES,
+  DIVISION_ROLE_GROUPS,
   DIVISION_ROLE_PRESETS,
   MODULE_PERMISSION_META,
   ACCOUNTING_SUB_FLAGS,
   getDefaultModulePermissions,
+  isOwnerRoleCode,
 } from '../../utils/rbac';
 import {
   Settings,
@@ -83,6 +86,7 @@ import {
   Save,
   Download,
   Upload,
+  ArrowLeft,
   ArrowRight,
   TrendingDown,
   TrendingUp,
@@ -251,13 +255,21 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [bulkImportDiagnosticReport, setBulkImportDiagnosticReport] = useState<ImportExportDiagnosticReport | null>(null);
   const [diagnosticRefreshKey, setDiagnosticRefreshKey] = useState<number>(0);
 
-  // Configurable 14-Division System Users & Per-Module Permission Matrix State
+  // Configurable Unified 15-User Database & Master-Detail ERP User Access Control State
   const [systemUsersList, setSystemUsersList] = useState<SystemUserAccount[]>([]);
+  const [userQuota, setUserQuota] = useState<{
+    activeUsers: number;
+    totalUsers: number;
+    maxAllowedUsers: number;
+    remainingSlots: number;
+  } | null>(null);
   const [userSearchQuery, setUserSearchQuery] = useState<string>('');
   const [userDivisionFilter, setUserDivisionFilter] = useState<string>('ALL');
-  const [isUserModalOpen, setIsUserModalOpen] = useState<boolean>(false);
+  const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [userViewMode, setUserViewMode] = useState<'list' | 'detail'>('list');
   const [editingSystemUser, setEditingSystemUser] = useState<SystemUserAccount | null>(null);
   const [userFormFullName, setUserFormFullName] = useState<string>('');
+  const [userFormUsername, setUserFormUsername] = useState<string>('');
   const [userFormEmail, setUserFormEmail] = useState<string>('');
   const [userFormPassword, setUserFormPassword] = useState<string>('');
   const [showUserFormPassword, setShowUserFormPassword] = useState<boolean>(false);
@@ -266,11 +278,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [userFormIsActive, setUserFormIsActive] = useState<boolean>(true);
   const [userFormSupervisorPin, setUserFormSupervisorPin] = useState<string>('');
   const [userFormViewCost, setUserFormViewCost] = useState<boolean>(false);
-  const [userFormApplyPresetOnSave, setUserFormApplyPresetOnSave] = useState<boolean>(false);
+  const [userFormPermissions, setUserFormPermissions] = useState<ModulePermissionsMap>(() =>
+    getDefaultModulePermissions('POS_CASHIER')
+  );
+  const [userFormError, setUserFormError] = useState<string | null>(null);
   const [isSavingSystemUser, setIsSavingSystemUser] = useState<boolean>(false);
-  const [permModalUser, setPermModalUser] = useState<SystemUserAccount | null>(null);
-  const [permDraft, setPermDraft] = useState<ModulePermissionsMap | null>(null);
-  const [isSavingPermMatrix, setIsSavingPermMatrix] = useState<boolean>(false);
 
   // Loading states
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -280,16 +292,13 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isTransferring, setIsTransferring] = useState<boolean>(false);
 
-  // 0B. Multi-Branch Monitor (Cabang, Omzet & Barang Datang) + Operator Assignments State
+  // 0B. Multi-Branch Monitor (Cabang, Omzet & Barang Datang)
   const [branchMonitorData, setBranchMonitorData] = useState<BranchMonitorResponse | null>(null);
   const [isLoadingMonitor, setIsLoadingMonitor] = useState<boolean>(false);
   const [confirmingArrivalId, setConfirmingArrivalId] = useState<string | null>(null);
-  const [operatorAssignments, setOperatorAssignments] = useState<OperatorBranchAssignment[]>([]);
   const [branchAssignmentOptions, setBranchAssignmentOptions] = useState<
     { storeId: string; storeName: string; hubType: string }[]
   >([]);
-  const [savingAssignmentUserId, setSavingAssignmentUserId] = useState<string | null>(null);
-  const [operatorPinDrafts, setOperatorPinDrafts] = useState<Record<string, string>>({});
 
   // Outlet Profile Create / Edit Modal State
   const [isOutletModalOpen, setIsOutletModalOpen] = useState<boolean>(false);
@@ -456,7 +465,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         poRes,
         grRes,
         monitorRes,
-        assignRes,
+        sysUsersRes,
       ] = await Promise.all([
         apiClient.getCoaMapping().catch(() => null),
         apiClient.getPosConfig().catch(() => null),
@@ -473,7 +482,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         apiClient.getPurchaseOrders().catch(() => []),
         apiClient.getGoodsReceipts().catch(() => []),
         canViewBranchMonitor ? apiClient.getBranchMonitor().catch(() => null) : Promise.resolve(null),
-        canViewBranchMonitor ? apiClient.getOperatorAssignments().catch(() => null) : Promise.resolve(null),
+        canViewBranchMonitor ? apiClient.getSystemUsers().catch(() => null) : Promise.resolve(null),
       ]);
 
       if (coaRes) setCoaConfig(coaRes);
@@ -519,15 +528,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       if (poRes) setPurchaseOrders(poRes);
       if (grRes) setGoodsReceipts(grRes);
       if (monitorRes) setBranchMonitorData(monitorRes);
-      if (assignRes) {
-        const list = assignRes.assignments || [];
-        setOperatorAssignments(list);
-        setBranchAssignmentOptions(assignRes.branchOptions || []);
-        const pinMap: Record<string, string> = {};
-        list.forEach((op) => {
-          if (op.loginPin) pinMap[op.userId] = op.loginPin;
-        });
-        setOperatorPinDrafts(pinMap);
+      if (sysUsersRes?.users) {
+        setSystemUsersList(sysUsersRes.users);
+        if (sysUsersRes.quota) setUserQuota(sysUsersRes.quota);
+        if (sysUsersRes.branchOptions?.length) {
+          setBranchAssignmentOptions(sysUsersRes.branchOptions);
+        }
       }
     } catch (err) {
       console.error('Failed to load Settings & Configuration:', err);
@@ -540,25 +546,15 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     if (!canViewBranchMonitor) return;
     setIsLoadingMonitor(true);
     try {
-      const [monitorRes, assignRes, sysUsersRes] = await Promise.all([
+      const [monitorRes, sysUsersRes] = await Promise.all([
         apiClient.getBranchMonitor().catch(() => null),
-        apiClient.getOperatorAssignments().catch(() => null),
         apiClient.getSystemUsers().catch(() => null),
       ]);
       if (monitorRes) setBranchMonitorData(monitorRes);
-      if (assignRes) {
-        const list = assignRes.assignments || [];
-        setOperatorAssignments(list);
-        setBranchAssignmentOptions(assignRes.branchOptions || []);
-        const pinMap: Record<string, string> = {};
-        list.forEach((op) => {
-          if (op.loginPin) pinMap[op.userId] = op.loginPin;
-        });
-        setOperatorPinDrafts(pinMap);
-      }
       if (sysUsersRes?.users) {
         setSystemUsersList(sysUsersRes.users);
-        if (sysUsersRes.branchOptions?.length && branchAssignmentOptions.length === 0) {
+        if (sysUsersRes.quota) setUserQuota(sysUsersRes.quota);
+        if (sysUsersRes.branchOptions?.length) {
           setBranchAssignmentOptions(sysUsersRes.branchOptions);
         }
       }
@@ -573,16 +569,19 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         .getSystemUsers()
         .then((res) => {
           if (res?.users) setSystemUsersList(res.users);
+          if (res?.quota) setUserQuota(res.quota);
+          if (res?.branchOptions?.length) setBranchAssignmentOptions(res.branchOptions);
         })
         .catch(() => {});
     }
   }, [canViewBranchMonitor]);
 
-  const openCreateSystemUserModal = () => {
+  const openCreateSystemUserForm = () => {
     const defaultRole: DivisionRoleCode = 'POS_CASHIER';
     const preset = DIVISION_ROLE_PRESETS[defaultRole];
     setEditingSystemUser(null);
     setUserFormFullName('');
+    setUserFormUsername('');
     setUserFormEmail('');
     setUserFormPassword('');
     setShowUserFormPassword(false);
@@ -591,13 +590,16 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     setUserFormIsActive(true);
     setUserFormSupervisorPin(preset.defaultSupervisorPin || '');
     setUserFormViewCost(preset.defaultViewCost);
-    setUserFormApplyPresetOnSave(true);
-    setIsUserModalOpen(true);
+    setUserFormPermissions(getDefaultModulePermissions(defaultRole));
+    setUserFormError(null);
+    setUserViewMode('detail');
   };
 
-  const openEditSystemUserModal = (user: SystemUserAccount) => {
+  const openEditSystemUserForm = (user: SystemUserAccount) => {
+    const preset = DIVISION_ROLE_PRESETS[user.roleCode] || DIVISION_ROLE_PRESETS.POS_CASHIER;
     setEditingSystemUser(user);
     setUserFormFullName(user.fullName);
+    setUserFormUsername(user.username || user.email.split('@')[0] || '');
     setUserFormEmail(user.email);
     setUserFormPassword('');
     setShowUserFormPassword(false);
@@ -605,42 +607,153 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     setUserFormBranchId(user.branchId || 'ALL');
     setUserFormIsActive(user.isActive !== false);
     setUserFormSupervisorPin(user.supervisorPin || '');
-    setUserFormViewCost(user.viewCost ?? DIVISION_ROLE_PRESETS[user.roleCode]?.defaultViewCost ?? true);
-    setUserFormApplyPresetOnSave(false);
-    setIsUserModalOpen(true);
+    setUserFormViewCost(user.viewCost ?? (user.hideFinancialCost ? false : preset.defaultViewCost));
+    setUserFormPermissions(
+      JSON.parse(JSON.stringify(user.modulePermissions || getDefaultModulePermissions(user.roleCode)))
+    );
+    setUserFormError(null);
+    setUserViewMode('detail');
+  };
+
+  const handleSelectUserRolePreset = (nextRole: DivisionRoleCode) => {
+    const preset = DIVISION_ROLE_PRESETS[nextRole] || DIVISION_ROLE_PRESETS.POS_CASHIER;
+    setUserFormRoleCode(nextRole);
+    setUserFormViewCost(preset.defaultViewCost);
+    if (preset.defaultSupervisorPin && !userFormSupervisorPin) {
+      setUserFormSupervisorPin(preset.defaultSupervisorPin);
+    }
+    if (preset.defaultBranchId && (!editingSystemUser || isOwnerRoleCode(nextRole))) {
+      setUserFormBranchId(preset.defaultBranchId);
+    }
+    setUserFormPermissions(getDefaultModulePermissions(nextRole));
+  };
+
+  const handleResetPermissionsToPreset = () => {
+    setUserFormPermissions(getDefaultModulePermissions(userFormRoleCode));
+  };
+
+  const handleToggleUserFormPermissionCell = (modKey: ModulePermissionKey, action: ModulePermissionAction) => {
+    setUserFormPermissions((prev) => {
+      const currentSet = prev[modKey] || { view: false, create: false, edit: false, approve: false, export: false };
+      const nextVal = !currentSet[action];
+      return {
+        ...prev,
+        [modKey]: {
+          ...currentSet,
+          [action]: nextVal,
+          ...(action !== 'view' && nextVal ? { view: true } : {}),
+        },
+      };
+    });
+  };
+
+  const handleToggleUserFormAccountingSubFlag = (
+    flagKey: 'canAccessAR' | 'canAccessAP' | 'canAccessGLTax' | 'canApprovePayments' | 'canLockPeriod'
+  ) => {
+    setUserFormPermissions((prev) => {
+      const currentAcct = prev.accounting || {
+        view: false,
+        create: false,
+        edit: false,
+        approve: false,
+        export: false,
+      };
+      const nextVal = !(currentAcct[flagKey] === true);
+      return {
+        ...prev,
+        accounting: {
+          ...currentAcct,
+          [flagKey]: nextVal,
+          ...(nextVal ? { view: true } : {}),
+        },
+      };
+    });
   };
 
   const handleSaveSystemUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSuperAdmin) return;
+    setUserFormError(null);
+
+    const trimmedName = userFormFullName.trim();
+    const trimmedUsername = userFormUsername.trim().toLowerCase();
+    const trimmedEmail = userFormEmail.trim().toLowerCase();
+
+    if (!trimmedName) {
+      setUserFormError('Nama lengkap wajib diisi.');
+      return;
+    }
+    if (!/^[a-z0-9._-]{3,40}$/.test(trimmedUsername)) {
+      setUserFormError('Username harus 3–40 karakter (huruf kecil a-z, angka, titik, underscore, atau strip).');
+      return;
+    }
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      setUserFormError('Format email tidak valid.');
+      return;
+    }
+    const duplicateUsername = systemUsersList.find(
+      (u) => u.id !== editingSystemUser?.id && (u.username || '').toLowerCase() === trimmedUsername
+    );
+    if (duplicateUsername) {
+      setUserFormError(`Username "${trimmedUsername}" sudah digunakan oleh ${duplicateUsername.fullName}.`);
+      return;
+    }
+    const duplicateEmail = systemUsersList.find(
+      (u) => u.id !== editingSystemUser?.id && u.email.toLowerCase() === trimmedEmail
+    );
+    if (duplicateEmail) {
+      setUserFormError(`Email "${trimmedEmail}" sudah digunakan oleh ${duplicateEmail.fullName}.`);
+      return;
+    }
+    if (!editingSystemUser && userFormPassword.length < 6) {
+      setUserFormError('Password minimal 6 karakter untuk akun user baru.');
+      return;
+    }
+    if (editingSystemUser && userFormPassword.length > 0 && userFormPassword.length < 6) {
+      setUserFormError('Password baru minimal 6 karakter.');
+      return;
+    }
+
     setIsSavingSystemUser(true);
     try {
       if (editingSystemUser) {
         const patch: Parameters<typeof apiClient.updateSystemUser>[1] = {
-          fullName: userFormFullName.trim(),
-          email: userFormEmail.trim().toLowerCase(),
+          fullName: trimmedName,
+          username: trimmedUsername,
+          email: trimmedEmail,
           roleCode: userFormRoleCode,
           branchId: userFormBranchId,
           isActive: userFormIsActive,
           supervisorPin: userFormSupervisorPin.trim(),
           viewCost: userFormViewCost,
           hideFinancialCost: !userFormViewCost,
+          modulePermissions: userFormPermissions,
         };
-        if (userFormPassword.trim().length > 0) {
+        if (userFormPassword.length > 0) {
           patch.password = userFormPassword;
-        }
-        if (userFormApplyPresetOnSave || userFormRoleCode !== editingSystemUser.roleCode) {
-          patch.modulePermissions = getDefaultModulePermissions(userFormRoleCode);
         }
         const res = await apiClient.updateSystemUser(editingSystemUser.id, patch);
         setSystemUsersList(res.users || []);
+        if (res.quota) setUserQuota(res.quota);
         setDiagnosticRefreshKey((k) => k + 1);
         apiClient.getTrialGovernance().then((g) => g?.governance && onTrialGovernanceUpdated?.(g.governance)).catch(() => {});
+        apiClient
+          .getRbacSession()
+          .then((rbacRes) => {
+            if (rbacRes?.currentSession && rbacRes?.availableProfiles) {
+              onOperatorAssignmentsUpdated?.({
+                currentSession: rbacRes.currentSession,
+                availableProfiles: rbacRes.availableProfiles,
+              });
+            }
+          })
+          .catch(() => {});
         onShowToast('Akun User Diperbarui', res.message);
       } else {
         const res = await apiClient.createSystemUser({
-          fullName: userFormFullName.trim(),
-          email: userFormEmail.trim().toLowerCase(),
+          fullName: trimmedName,
+          username: trimmedUsername,
+          email: trimmedEmail,
           password: userFormPassword,
           roleCode: userFormRoleCode,
           branchId: userFormBranchId,
@@ -648,17 +761,31 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           supervisorPin: userFormSupervisorPin.trim() || undefined,
           viewCost: userFormViewCost,
           hideFinancialCost: !userFormViewCost,
-          modulePermissions: getDefaultModulePermissions(userFormRoleCode),
+          modulePermissions: userFormPermissions,
         });
         setSystemUsersList(res.users || []);
+        if (res.quota) setUserQuota(res.quota);
         setDiagnosticRefreshKey((k) => k + 1);
         apiClient.getTrialGovernance().then((g) => g?.governance && onTrialGovernanceUpdated?.(g.governance)).catch(() => {});
+        apiClient
+          .getRbacSession()
+          .then((rbacRes) => {
+            if (rbacRes?.currentSession && rbacRes?.availableProfiles) {
+              onOperatorAssignmentsUpdated?.({
+                currentSession: rbacRes.currentSession,
+                availableProfiles: rbacRes.availableProfiles,
+              });
+            }
+          })
+          .catch(() => {});
         onShowToast('Akun User Ditambahkan', res.message);
       }
-      setIsUserModalOpen(false);
+      setUserViewMode('list');
       setEditingSystemUser(null);
+      setUserFormPassword('');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
+      setUserFormError(msg);
       onShowToast('Gagal Menyimpan User', msg);
     } finally {
       setIsSavingSystemUser(false);
@@ -774,72 +901,6 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     }
   };
 
-  const openPermissionMatrixModal = (user: SystemUserAccount) => {
-    setPermModalUser(user);
-    setPermDraft(JSON.parse(JSON.stringify(user.modulePermissions || getDefaultModulePermissions(user.roleCode))));
-  };
-
-  const handleToggleModulePermissionCell = (modKey: ModulePermissionKey, action: ModulePermissionAction) => {
-    setPermDraft((prev) => {
-      if (!prev) return prev;
-      const currentSet = prev[modKey] || { view: false, create: false, edit: false, approve: false, export: false };
-      const nextVal = !currentSet[action];
-      return {
-        ...prev,
-        [modKey]: {
-          ...currentSet,
-          [action]: nextVal,
-          ...(action !== 'view' && nextVal ? { view: true } : {}),
-        },
-      };
-    });
-  };
-
-  const handleToggleAccountingSubFlag = (
-    flagKey: 'canAccessAR' | 'canAccessAP' | 'canAccessGLTax' | 'canApprovePayments' | 'canLockPeriod'
-  ) => {
-    setPermDraft((prev) => {
-      if (!prev) return prev;
-      const currentAcct = prev.accounting || {
-        view: false,
-        create: false,
-        edit: false,
-        approve: false,
-        export: false,
-      };
-      const nextVal = !(currentAcct[flagKey] === true);
-      return {
-        ...prev,
-        accounting: {
-          ...currentAcct,
-          [flagKey]: nextVal,
-          ...(nextVal ? { view: true } : {}),
-        },
-      };
-    });
-  };
-
-  const handleSavePermissionMatrix = async () => {
-    if (!permModalUser || !permDraft || !isSuperAdmin) return;
-    setIsSavingPermMatrix(true);
-    try {
-      const res = await apiClient.updateSystemUser(permModalUser.id, {
-        modulePermissions: permDraft,
-      });
-      setSystemUsersList(res.users || []);
-      setDiagnosticRefreshKey((k) => k + 1);
-      apiClient.getTrialGovernance().then((g) => g?.governance && onTrialGovernanceUpdated?.(g.governance)).catch(() => {});
-      onShowToast('Hak Akses Modul Disimpan', `Matriks izin ${permModalUser.fullName} berhasil diperbarui.`);
-      setPermModalUser(null);
-      setPermDraft(null);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      onShowToast('Gagal Menyimpan Hak Akses', msg);
-    } finally {
-      setIsSavingPermMatrix(false);
-    }
-  };
-
   const handleConfirmArrival = async (type: 'TRANSFER' | 'PO', id: string) => {
     setConfirmingArrivalId(`${type}:${id}`);
     try {
@@ -852,33 +913,6 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       onShowToast('Confirm Arrival Failed', msg);
     } finally {
       setConfirmingArrivalId(null);
-    }
-  };
-
-  const handleUpdateOperatorAssignment = async (
-    userId: string,
-    patch: { storeId?: string; userRole?: UserRole; isActive?: boolean; loginPin?: string }
-  ) => {
-    setSavingAssignmentUserId(userId);
-    try {
-      const res = await apiClient.updateOperatorAssignment({ userId, ...patch });
-      const list = res.assignments || [];
-      setOperatorAssignments(list);
-      const pinMap: Record<string, string> = {};
-      list.forEach((op) => {
-        if (op.loginPin) pinMap[op.userId] = op.loginPin;
-      });
-      setOperatorPinDrafts((prev) => ({ ...prev, ...pinMap }));
-      onShowToast('Operator Governance Updated', res.message);
-      onOperatorAssignmentsUpdated?.({
-        currentSession: res.currentSession,
-        availableProfiles: res.availableProfiles,
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      onShowToast('Assignment Update Blocked', msg);
-    } finally {
-      setSavingAssignmentUserId(null);
     }
   };
 
@@ -3142,7 +3176,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                       <div>
                         <label className={labelClass}>GOLD Tier Threshold (IDR)</label>
                         <input
@@ -3191,6 +3225,25 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                             setErpConfigDraft((p) => ({
                               ...p,
                               maxAllowedOutlets: Math.max(1, Math.min(500, Math.round(Number(e.target.value) || 1))),
+                            }))
+                          }
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Max Allowed Users (Quota)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="500"
+                          disabled={!isSuperAdmin}
+                          title={!isSuperAdmin ? 'Hanya Super Admin yang dapat mengubah kuota user aktif' : 'Batas maksimal user aktif ERP'}
+                          value={erpConfigDraft.maxAllowedUsers ?? 25}
+                          onChange={(e) =>
+                            setErpConfigDraft((p) => ({
+                              ...p,
+                              maxAllowedUsers: Math.max(1, Math.min(500, Math.round(Number(e.target.value) || 1))),
                             }))
                           }
                           className={`${inputClass} border font-mono`}
@@ -3848,770 +3901,562 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             </div>
           </div>
 
-          {/* 3. Operator Role & Branch Assignment Configuration */}
-          <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">
-              <div>
-                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
-                  <Users className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
-                  <span>Operator Role &amp; Branch Assignment Configuration</span>
-                </h3>
-                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Only Super Admin can configure an operator&apos;s Enterprise Role, Assigned Outlet / Hub, Active Status, and Login PIN. All active sessions remain strictly locked until Lock / Sign Out.
-                </p>
-              </div>
-              {!isSuperAdmin ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25 whitespace-nowrap">
-                  <Lock className="w-3.5 h-3.5" />
-                  Super Admin Only
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/25 whitespace-nowrap">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Super Admin Governance Active
-                </span>
-              )}
-            </div>
+          {/* 3. Unified 15-User Database & Master-Detail ERP User Access Control Form */}
+          <div className={`${cardClass} p-5 sm:p-6 space-y-5`}>
+            {userViewMode === 'list' ? (
+              <>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">
+                  <div className="min-w-0 flex-1">
+                    <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                      <Users className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 shrink-0" />
+                      <span>Manajemen User &amp; Hak Akses ERP ({systemUsersList.length} Akun)</span>
+                    </h3>
+                    <p className={`text-xs mt-0.5 break-words ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                      Database user terpusat untuk seluruh divisi operasional (termasuk Platform Owner &amp; Client Owner). Kelola username, email, reset password, PIN supervisor, outlet, dan matriks hak akses modul dalam satu formulir terstruktur.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <span className="font-mono text-[11px] font-bold px-2.5 py-1 rounded-xl bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/20">
+                      Aktif: {userQuota ? userQuota.activeUsers : systemUsersList.filter((u) => u.isActive).length} /{' '}
+                      {userQuota ? userQuota.maxAllowedUsers : erpConfigDraft.maxAllowedUsers ?? 25} Kuota User
+                    </span>
+                    {isSuperAdmin && (
+                      <button
+                        type="button"
+                        onClick={openCreateSystemUserForm}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>+ Tambah User Baru</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
-              <table className="w-full text-left text-xs min-w-[960px]">
-                <thead>
-                  <tr className={`border-b text-[10px] font-bold uppercase tracking-wider ${
-                    isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
-                  }`}>
-                    <th className="py-3 px-3.5">Operator Profile</th>
-                    <th className="py-3 px-3">Assigned Role</th>
-                    <th className="py-3 px-3">Scope Mode</th>
-                    <th className="py-3 px-3">Assigned Branch / Hub</th>
-                    <th className="py-3 px-3">Status</th>
-                    <th className="py-3 px-3">Login PIN</th>
-                    <th className="py-3 px-3 text-right">Last Updated</th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
-                  {operatorAssignments.map((op) => {
-                    const scoped = op.isBranchScoped || isBranchScopedRole(op.userRole);
-                    const allowedOptions = scoped
-                      ? branchAssignmentOptions.filter((b) => b.storeId !== 'ALL')
-                      : branchAssignmentOptions;
-                    const isSelf = op.userId === activeStaffSession?.userId;
-                    const isActiveOp = op.isActive !== false;
-                    const pinDraft = operatorPinDrafts[op.userId] ?? op.loginPin ?? '';
-                    const isSavingOp = savingAssignmentUserId === op.userId;
+                {/* Search, Role Filter & Status Filter */}
+                <div className="flex flex-col lg:flex-row lg:items-center gap-2.5">
+                  <div className="relative flex-1 min-w-0">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      placeholder="Cari nama lengkap, username, email, role, atau cabang..."
+                      className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border ${inputClass}`}
+                    />
+                  </div>
+                  <select
+                    value={userDivisionFilter}
+                    onChange={(e) => setUserDivisionFilter(e.target.value)}
+                    className={`lg:w-64 px-3 py-2 text-xs rounded-xl border cursor-pointer ${inputClass}`}
+                  >
+                    <option value="ALL">Semua Divisi ({SELECTABLE_DIVISION_ROLE_CODES.length} Role)</option>
+                    {DIVISION_ROLE_GROUPS.map((grp) => (
+                      <optgroup key={grp.groupId} label={grp.label}>
+                        {grp.roles.map((code) => (
+                          <option key={code} value={code}>
+                            {DIVISION_ROLE_PRESETS[code].divisionLabel} ({code})
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <select
+                    value={userStatusFilter}
+                    onChange={(e) => setUserStatusFilter(e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')}
+                    className={`lg:w-44 px-3 py-2 text-xs rounded-xl border cursor-pointer ${inputClass}`}
+                  >
+                    <option value="ALL">Semua Status</option>
+                    <option value="ACTIVE">Aktif Saja</option>
+                    <option value="INACTIVE">Nonaktif Saja</option>
+                  </select>
+                </div>
 
-                    return (
-                      <tr key={op.userId} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
-                        <td className="py-3 px-3.5">
-                          <div className="font-bold">{op.userName}</div>
-                          <div className="font-mono text-[10px] text-slate-400">{op.userId}</div>
-                        </td>
-                        <td className="py-3 px-3 min-w-[165px]">
-                          {isSuperAdmin ? (
-                            <select
-                              disabled={isSelf || isSavingOp}
-                              value={normalizeEnterpriseRole(op.userRole)}
-                              onChange={(e) =>
-                                handleUpdateOperatorAssignment(op.userId, {
-                                  userRole: e.target.value as UserRole,
-                                })
-                              }
-                              className={`w-full px-2.5 py-1.5 text-xs rounded-xl font-semibold border ${
-                                isSelf ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
-                              } ${inputClass}`}
-                              title={isSelf ? 'Cannot demote your own active Super Admin account' : 'Assign Enterprise Role'}
-                            >
-                              <option value="cashier">Cashier</option>
-                              <option value="warehouse">Warehouse Ops</option>
-                              <option value="purchasing">Purchasing</option>
-                              <option value="store_manager">Store Manager</option>
-                              <option value="admin">Back-Office Admin</option>
-                              <option value="coo">COO</option>
-                              <option value="super_admin">Super Admin</option>
-                            </select>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/20 whitespace-nowrap">
-                              {getRoleDisplayLabel(op.userRole)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          {scoped ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
-                              <Lock className="w-3 h-3" />
-                              Locked to Branch
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/25">
-                              Multi-Branch Network
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 min-w-[220px]">
-                          <select
-                            disabled={!isSuperAdmin || isSavingOp}
-                            value={op.storeId}
-                            onChange={(e) =>
-                              handleUpdateOperatorAssignment(op.userId, { storeId: e.target.value })
-                            }
-                            className={`w-full px-3 py-1.5 text-xs rounded-xl font-semibold border ${
-                              !isSuperAdmin ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
-                            } ${inputClass}`}
-                          >
-                            {allowedOptions.map((opt) => (
-                              <option key={opt.storeId} value={opt.storeId}>
-                                {opt.storeName} ({opt.hubType})
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <button
-                            type="button"
-                            disabled={!isSuperAdmin || isSelf || isSavingOp}
-                            onClick={() =>
-                              handleUpdateOperatorAssignment(op.userId, { isActive: !isActiveOp })
-                            }
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
-                              isActiveOp
-                                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
-                                : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
-                            } ${!isSuperAdmin || isSelf ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:opacity-90'}`}
-                            title={
-                              !isSuperAdmin
-                                ? 'Super Admin Only'
-                                : isSelf
-                                ? 'Cannot deactivate your own active session'
-                                : isActiveOp
-                                ? 'Click to suspend operator login'
-                                : 'Click to reactivate operator login'
-                            }
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${isActiveOp ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                            {isActiveOp ? 'Active' : 'Suspended'}
-                          </button>
-                        </td>
-                        <td className="py-3 px-3 min-w-[165px]">
-                          {isSuperAdmin ? (
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="text"
-                                value={pinDraft}
-                                disabled={isSavingOp}
-                                onChange={(e) =>
-                                  setOperatorPinDrafts((prev) => ({ ...prev, [op.userId]: e.target.value }))
-                                }
-                                placeholder="PIN (min 4)"
-                                maxLength={32}
-                                className={`w-24 px-2.5 py-1 text-xs font-mono rounded-lg border ${inputClass}`}
-                              />
-                              <button
-                                type="button"
-                                disabled={
-                                  isSavingOp ||
-                                  !pinDraft.trim() ||
-                                  pinDraft.trim().length < 4 ||
-                                  pinDraft.trim() === (op.loginPin || '8821')
-                                }
-                                onClick={() =>
-                                  handleUpdateOperatorAssignment(op.userId, { loginPin: pinDraft.trim() })
-                                }
-                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-[#0F4C3A] text-white hover:bg-[#0b382b] disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="font-mono text-[11px] text-slate-400 inline-flex items-center gap-1">
-                              <Lock className="w-3 h-3" />
-                              {op.hasCustomPin ? 'Custom PIN' : 'Standard'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono text-[10px] text-slate-500 dark:text-slate-400">
-                          {op.updatedAt ? (
-                            <>
-                              <div>{new Date(op.updatedAt).toLocaleString()}</div>
-                              <div>by {op.updatedBy || 'System'}</div>
-                            </>
-                          ) : (
-                            <span>Default Roster</span>
-                          )}
-                        </td>
+                {/* Unified 15-User List Table */}
+                <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
+                  <table className="w-full text-left text-xs min-w-[960px]">
+                    <thead>
+                      <tr
+                        className={`border-b text-[10px] font-bold uppercase tracking-wider ${
+                          isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
+                        }`}
+                      >
+                        <th className="py-3 px-3.5">Nama Lengkap</th>
+                        <th className="py-3 px-3">Username</th>
+                        <th className="py-3 px-3">Email</th>
+                        <th className="py-3 px-3">Posisi / Role</th>
+                        <th className="py-3 px-3">Outlet / Cabang</th>
+                        <th className="py-3 px-3">Status Aktif</th>
+                        <th className="py-3 px-3.5 text-right">Aksi</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </thead>
+                    <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
+                      {systemUsersList
+                        .filter((u) => {
+                          if (userDivisionFilter !== 'ALL' && u.roleCode !== userDivisionFilter) return false;
+                          if (userStatusFilter === 'ACTIVE' && !u.isActive) return false;
+                          if (userStatusFilter === 'INACTIVE' && u.isActive) return false;
+                          const q = userSearchQuery.trim().toLowerCase();
+                          if (!q) return true;
+                          return (
+                            u.fullName.toLowerCase().includes(q) ||
+                            (u.username || '').toLowerCase().includes(q) ||
+                            u.email.toLowerCase().includes(q) ||
+                            u.id.toLowerCase().includes(q) ||
+                            u.divisionLabel.toLowerCase().includes(q) ||
+                            u.roleCode.toLowerCase().includes(q) ||
+                            (u.branchName || '').toLowerCase().includes(q)
+                          );
+                        })
+                        .map((u) => {
+                          const activeModulesCount = MODULE_PERMISSION_META.filter(
+                            (m) => u.modulePermissions?.[m.key]?.view
+                          ).length;
 
-          {/* 4. Manajemen User, Email/Password & Hak Akses Per Modul (14-Division RBAC) */}
-          <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800/80">
-              <div className="min-w-0 flex-1">
-                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
-                  <KeyRound className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 shrink-0" />
-                  <span>Manajemen User, Email/Password &amp; Hak Akses Per Modul</span>
-                </h3>
-                <p className={`text-xs mt-0.5 break-words ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Kelola akun 14 divisi operasional (Email, Password, Cabang, Status Aktif) serta atur matriks hak akses granular (View, Create, Edit, Approve, Export) pada seluruh 13 modul ERP.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <span className="font-mono text-[11px] font-bold px-2.5 py-1 rounded-xl bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/20">
-                  {systemUsersList.length} Akun Terdaftar
-                </span>
-                {isSuperAdmin && (
-                  <button
-                    type="button"
-                    onClick={openCreateSystemUserModal}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Tambah Akun User</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Search & Division Filter */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
-              <div className="relative flex-1 min-w-0">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={userSearchQuery}
-                  onChange={(e) => setUserSearchQuery(e.target.value)}
-                  placeholder="Cari nama, email, ID, atau divisi..."
-                  className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl border ${inputClass}`}
-                />
-              </div>
-              <select
-                value={userDivisionFilter}
-                onChange={(e) => setUserDivisionFilter(e.target.value)}
-                className={`sm:w-64 px-3 py-2 text-xs rounded-xl border cursor-pointer ${inputClass}`}
-              >
-                <option value="ALL">Semua Divisi (14 Role)</option>
-                {DIVISION_ROLE_CODES.map((code) => (
-                  <option key={code} value={code}>
-                    {DIVISION_ROLE_PRESETS[code].divisionLabel} ({code})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* System Users Table */}
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
-              <table className="w-full text-left text-xs min-w-[1020px]">
-                <thead>
-                  <tr
-                    className={`border-b text-[10px] font-bold uppercase tracking-wider ${
-                      isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
-                    }`}
-                  >
-                    <th className="py-3 px-3.5">Nama &amp; ID</th>
-                    <th className="py-3 px-3">Divisi / Role</th>
-                    <th className="py-3 px-3">Email &amp; Password</th>
-                    <th className="py-3 px-3">Cabang / Hub</th>
-                    <th className="py-3 px-3">Status</th>
-                    <th className="py-3 px-3">Modul Aktif</th>
-                    <th className="py-3 px-3.5 text-right">Aksi Pengaturan</th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
-                  {systemUsersList
-                    .filter((u) => {
-                      if (userDivisionFilter !== 'ALL' && u.roleCode !== userDivisionFilter) return false;
-                      const q = userSearchQuery.trim().toLowerCase();
-                      if (!q) return true;
-                      return (
-                        u.fullName.toLowerCase().includes(q) ||
-                        u.email.toLowerCase().includes(q) ||
-                        u.id.toLowerCase().includes(q) ||
-                        u.divisionLabel.toLowerCase().includes(q) ||
-                        u.roleCode.toLowerCase().includes(q)
-                      );
-                    })
-                    .map((u) => {
-                      const activeModulesCount = MODULE_PERMISSION_META.filter(
-                        (m) => u.modulePermissions?.[m.key]?.view
-                      ).length;
-                      const approveModulesCount = MODULE_PERMISSION_META.filter(
-                        (m) => u.modulePermissions?.[m.key]?.approve
-                      ).length;
-
-                      return (
-                        <tr key={u.id} className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
-                          <td className="py-3 px-3.5">
-                            <div className="font-bold text-slate-900 dark:text-slate-100">{u.fullName}</div>
-                            <div className="font-mono text-[10px] text-slate-400 flex items-center gap-1.5">
-                              <span>{u.id}</span>
-                              {u.supervisorPin && (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
-                                  PIN: {u.supervisorPin}
+                          return (
+                            <tr
+                              key={u.id}
+                              onClick={() => isSuperAdmin && openEditSystemUserForm(u)}
+                              className={`${
+                                isSuperAdmin ? 'cursor-pointer' : ''
+                              } ${isLight ? 'hover:bg-slate-50/90' : 'hover:bg-slate-900/60'}`}
+                            >
+                              <td className="py-3 px-3.5">
+                                <div className="font-bold text-slate-900 dark:text-slate-100">{u.fullName}</div>
+                                <div className="font-mono text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                  <span>{u.id}</span>
+                                  {u.supervisorPin && (
+                                    <span className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                                      PIN: {u.supervisorPin}
+                                    </span>
+                                  )}
+                                  <span className="text-[#0F4C3A] dark:text-emerald-400">
+                                    • {activeModulesCount}/{MODULE_PERMISSION_META.length} modul
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                @{u.username || u.email.split('@')[0]}
+                              </td>
+                              <td className="py-3 px-3 font-mono text-xs text-slate-700 dark:text-slate-300">
+                                {u.email}
+                              </td>
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${
+                                    isOwnerRoleCode(u.roleCode)
+                                      ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
+                                      : u.roleCode.includes('WAREHOUSE') || u.roleCode === 'QC_INSPECTOR'
+                                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25'
+                                      : u.roleCode.includes('PURCHASING')
+                                      ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/25'
+                                      : u.roleCode.includes('POS') || u.roleCode === 'STORE_MANAGER'
+                                      ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/25'
+                                      : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/25'
+                                  }`}
+                                >
+                                  {u.divisionLabel}
                                 </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${
-                                u.roleCode === 'SUPER_ADMIN'
-                                  ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
-                                  : u.roleCode.includes('WAREHOUSE') || u.roleCode === 'QC_INSPECTOR'
-                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25'
-                                  : u.roleCode.includes('PURCHASING')
-                                  ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/25'
-                                  : u.roleCode.includes('POS') || u.roleCode === 'STORE_MANAGER'
-                                  ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/25'
-                                  : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/25'
-                              }`}
-                            >
-                              {u.divisionLabel}
-                            </span>
-                            <div className="font-mono text-[10px] text-slate-400 mt-0.5">{u.roleCode}</div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <div className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">{u.email}</div>
-                            <div className="font-mono text-[10px] text-slate-400">
-                              Pass: {u.maskedPassword || '••••••••'}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3">
-                            <div className="font-medium text-xs text-slate-700 dark:text-slate-300">
-                              {u.branchName || u.branchId}
-                            </div>
-                            <div className="font-mono text-[10px] text-slate-400">
-                              {u.viewCost === false ? 'Cost Tersembunyi' : 'Cost Visible'}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                                u.isActive
-                                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
-                                  : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
-                              }`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                              {u.isActive ? 'Active' : 'Suspended'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            <div className="font-mono text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">
-                              {activeModulesCount} / {MODULE_PERMISSION_META.length} Modul
-                            </div>
-                            <div className="text-[10px] text-slate-400">
-                              Approve: {approveModulesCount} modul
-                            </div>
-                          </td>
-                          <td className="py-3 px-3.5 text-right whitespace-nowrap">
-                            <div className="inline-flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                disabled={!isSuperAdmin}
-                                onClick={() => openEditSystemUserModal(u)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                                  isSuperAdmin
-                                    ? isLight
-                                      ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700 cursor-pointer'
-                                      : 'bg-[#090A0F] hover:bg-slate-800 border-slate-700 text-slate-200 cursor-pointer'
-                                    : 'opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-800 text-slate-400'
-                                }`}
-                                title={isSuperAdmin ? 'Ubah Email, Password, Role & Status' : 'Super Admin Only'}
-                              >
-                                <Edit3 className="w-3 h-3" />
-                                <span>Edit Akun &amp; Password</span>
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!isSuperAdmin}
-                                onClick={() => openPermissionMatrixModal(u)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${
-                                  isSuperAdmin
-                                    ? 'bg-[#0F4C3A] hover:bg-[#0b382b] text-white cursor-pointer shadow-2xs'
-                                    : 'opacity-50 cursor-not-allowed bg-slate-200 dark:bg-slate-800 text-slate-400'
-                                }`}
-                                title={isSuperAdmin ? 'Atur Checkbox View/Create/Edit/Approve/Export per Modul' : 'Super Admin Only'}
-                              >
-                                <Sliders className="w-3 h-3" />
-                                <span>Atur Hak Akses Modul</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                                <div className="font-mono text-[10px] text-slate-400 mt-0.5">{u.roleCode}</div>
+                              </td>
+                              <td className="py-3 px-3">
+                                <div className="font-medium text-xs text-slate-700 dark:text-slate-300">
+                                  {u.branchName || u.branchId}
+                                </div>
+                                <div className="font-mono text-[10px] text-slate-400">
+                                  {u.viewCost === false || u.hideFinancialCost ? 'HPP Tersembunyi' : 'HPP Visible'}
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    u.isActive
+                                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
+                                      : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25'
+                                  }`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${u.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                  {u.isActive ? 'Aktif' : 'Nonaktif'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3.5 text-right whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  disabled={!isSuperAdmin}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditSystemUserForm(u);
+                                  }}
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all ${
+                                    isSuperAdmin
+                                      ? 'bg-[#0F4C3A] hover:bg-[#0b382b] text-white cursor-pointer shadow-2xs'
+                                      : 'opacity-50 cursor-not-allowed bg-slate-200 dark:bg-slate-800 text-slate-400'
+                                  }`}
+                                  title={isSuperAdmin ? 'Buka Detail & Atur Hak Akses User' : 'Owner / Super Admin Only'}
+                                >
+                                  <Sliders className="w-3 h-3" />
+                                  <span>Kelola User</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              /* Master-Detail View: Structured ERP User Access Control Form */
+              <form onSubmit={handleSaveSystemUser} className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800/80">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserViewMode('list');
+                        setEditingSystemUser(null);
+                        setUserFormError(null);
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer shrink-0 ${
+                        isLight
+                          ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                          : 'bg-[#090A0F] border-slate-700 text-slate-200 hover:bg-slate-800'
+                      }`}
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Kembali ke Daftar User</span>
+                    </button>
+                    <div className="min-w-0">
+                      <h3 className={`text-sm font-bold truncate ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                        {editingSystemUser
+                          ? `Kelola User — ${editingSystemUser.fullName}`
+                          : 'Tambah User ERP Baru'}
+                      </h3>
+                      <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">
+                        {editingSystemUser
+                          ? `${editingSystemUser.id} • @${editingSystemUser.username || editingSystemUser.email.split('@')[0]}`
+                          : `Slot tersedia: ${userQuota ? userQuota.remainingSlots : Math.max(0, (erpConfigDraft.maxAllowedUsers ?? 25) - systemUsersList.filter((u) => u.isActive).length)} user`}
+                      </p>
+                    </div>
+                  </div>
 
-          {/* Modal 1: Edit Akun & Password / Tambah Akun User */}
-          {isUserModalOpen &&
-            createPortal(
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-                <div
-                  className={`w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden ${
-                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800 text-slate-100'
-                  }`}
-                >
-                  <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 flex items-center justify-center">
-                        <KeyRound className="w-4 h-4" />
+                  <button
+                    type="submit"
+                    disabled={isSavingSystemUser || !isSuperAdmin}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs disabled:opacity-50 cursor-pointer shrink-0"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSavingSystemUser ? 'Menyimpan...' : 'Simpan User & Hak Akses'}</span>
+                  </button>
+                </div>
+
+                {userFormError && (
+                  <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/60 flex items-start gap-2.5 text-xs text-rose-800 dark:text-rose-200">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                    <span>{userFormError}</span>
+                  </div>
+                )}
+
+                {/* Section A: Identitas & Kredensial Login */}
+                <div className={`${subCardClass} space-y-4`}>
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-800/80">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F4C3A] dark:text-emerald-400 flex items-center gap-1.5">
+                        <KeyRound className="w-3.5 h-3.5" />
+                        <span>Section A — Identitas &amp; Kredensial Login</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Atur nama lengkap, username unik, email login, reset password, PIN otorisasi POS, outlet penugasan, dan status akun.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    <div>
+                      <label className={labelClass}>Nama Lengkap *</label>
+                      <input
+                        type="text"
+                        required
+                        value={userFormFullName}
+                        onChange={(e) => setUserFormFullName(e.target.value)}
+                        placeholder="e.g. Andi Pratama (Kasir POS)"
+                        className={`w-full ${inputClass} border`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Username Login (Unik) *</label>
+                      <input
+                        type="text"
+                        required
+                        value={userFormUsername}
+                        onChange={(e) => setUserFormUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))}
+                        placeholder="e.g. kasir.pos"
+                        className={`w-full font-mono ${inputClass} border`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Email Login (Unik) *</label>
+                      <input
+                        type="email"
+                        required
+                        value={userFormEmail}
+                        onChange={(e) => setUserFormEmail(e.target.value)}
+                        placeholder="nama@grocematrix.id"
+                        className={`w-full font-mono ${inputClass} border`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>
+                        {editingSystemUser ? 'Reset Password Baru (Opsional)' : 'Password Login Awal (Min. 6) *'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showUserFormPassword ? 'text' : 'password'}
+                          required={!editingSystemUser}
+                          minLength={editingSystemUser && !userFormPassword ? undefined : 6}
+                          value={userFormPassword}
+                          onChange={(e) => setUserFormPassword(e.target.value)}
+                          placeholder={editingSystemUser ? 'Kosongkan jika tidak diganti' : 'Min. 6 karakter'}
+                          className={`w-full pr-9 font-mono ${inputClass} border`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowUserFormPassword((v) => !v)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                          aria-label={showUserFormPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showUserFormPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-bold">
-                          {editingSystemUser ? 'Edit Akun, Email & Password' : 'Tambah Akun User Divisi Baru'}
-                        </h4>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {editingSystemUser ? `${editingSystemUser.id} • ${editingSystemUser.divisionLabel}` : 'Otomatis mengisi matriks hak akses sesuai preset divisi'}
-                        </p>
-                      </div>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Supervisor PIN (Override POS)</label>
+                      <input
+                        type="text"
+                        value={userFormSupervisorPin}
+                        onChange={(e) => setUserFormSupervisorPin(e.target.value)}
+                        placeholder="e.g. 1234 (4-12 digit)"
+                        maxLength={12}
+                        className={`w-full font-mono ${inputClass} border`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Outlet / Cabang Penugasan</label>
+                      <select
+                        value={userFormBranchId}
+                        onChange={(e) => setUserFormBranchId(e.target.value)}
+                        className={`w-full cursor-pointer ${inputClass} border`}
+                      >
+                        <option value="ALL">All Outlets (Consolidated)</option>
+                        {storeOutlets.map((st) => (
+                          <option key={st.storeId} value={st.storeId}>
+                            {st.storeName} ({st.city})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-6 pt-1">
+                    <label className="inline-flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={userFormIsActive}
+                        onChange={(e) => setUserFormIsActive(e.target.checked)}
+                        className="w-4 h-4 rounded text-[#0F4C3A]"
+                      />
+                      <span>Status Akun Aktif (Diizinkan Login)</span>
+                    </label>
+
+                    <label className="inline-flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!userFormViewCost}
+                        onChange={(e) => setUserFormViewCost(!e.target.checked)}
+                        className="w-4 h-4 rounded text-[#0F4C3A]"
+                      />
+                      <span>Hide HPP / Cost (Sembunyikan Harga Modal &amp; Valuasi)</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Section B: Pengaturan Hak Akses Per Divisi */}
+                <div className={`${subCardClass} space-y-4`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/80 dark:border-slate-800/80">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F4C3A] dark:text-emerald-400 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Section B — Pengaturan Hak Akses Per Divisi ({MODULE_PERMISSION_META.length} Modul)</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Pilih preset role divisi untuk mengisi hak akses default otomatis, lalu sesuaikan checkbox View, Create, Edit, Approve, Export &amp; sub-hak keuangan di bawah.
+                      </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setIsUserModalOpen(false)}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
+                      onClick={handleResetPermissionsToPreset}
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border cursor-pointer shrink-0 ${
+                        isLight
+                          ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                          : 'bg-[#090A0F] hover:bg-slate-800 border-slate-700 text-slate-200'
+                      }`}
                     >
-                      <X className="w-4 h-4" />
+                      Terapkan / Reset Preset Role
                     </button>
                   </div>
 
-                  <form onSubmit={handleSaveSystemUser} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                      <div className="sm:col-span-2">
-                        <label className={labelClass}>Nama Lengkap</label>
-                        <input
-                          type="text"
-                          required
-                          value={userFormFullName}
-                          onChange={(e) => setUserFormFullName(e.target.value)}
-                          placeholder="e.g. Budi Santoso (Staf Gudang)"
-                          className={`w-full ${inputClass}`}
-                        />
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>Email Login (Unik)</label>
-                        <input
-                          type="email"
-                          required
-                          value={userFormEmail}
-                          onChange={(e) => setUserFormEmail(e.target.value)}
-                          placeholder="nama@grocematrix.id"
-                          className={`w-full font-mono ${inputClass}`}
-                        />
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>
-                          {editingSystemUser ? 'Password Baru (Kosongkan jika tetap)' : 'Password (Min 6 karakter)'}
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showUserFormPassword ? 'text' : 'password'}
-                            required={!editingSystemUser}
-                            minLength={editingSystemUser && !userFormPassword ? undefined : 6}
-                            value={userFormPassword}
-                            onChange={(e) => setUserFormPassword(e.target.value)}
-                            placeholder={editingSystemUser ? 'Isi untuk reset password' : 'Min. 6 karakter'}
-                            className={`w-full pr-9 font-mono ${inputClass}`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowUserFormPassword((v) => !v)}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                          >
-                            {showUserFormPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>Preset Role Divisi (14 Divisi)</label>
-                        <select
-                          value={userFormRoleCode}
-                          onChange={(e) => {
-                            const nextRole = e.target.value as DivisionRoleCode;
-                            const preset = DIVISION_ROLE_PRESETS[nextRole];
-                            setUserFormRoleCode(nextRole);
-                            setUserFormViewCost(preset.defaultViewCost);
-                            if (preset.defaultSupervisorPin && !userFormSupervisorPin) {
-                              setUserFormSupervisorPin(preset.defaultSupervisorPin);
-                            }
-                            setUserFormApplyPresetOnSave(true);
-                          }}
-                          className={`w-full cursor-pointer ${inputClass}`}
-                        >
-                          {DIVISION_ROLE_CODES.map((code) => (
-                            <option key={code} value={code}>
-                              {DIVISION_ROLE_PRESETS[code].divisionLabel} ({code})
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                          {DIVISION_ROLE_PRESETS[userFormRoleCode]?.description}
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>Assigned Branch / Outlet</label>
-                        <select
-                          value={userFormBranchId}
-                          onChange={(e) => setUserFormBranchId(e.target.value)}
-                          className={`w-full cursor-pointer ${inputClass}`}
-                        >
-                          <option value="ALL">All Outlets (Consolidated)</option>
-                          {storeOutlets.map((st) => (
-                            <option key={st.storeId} value={st.storeId}>
-                              {st.storeName} ({st.city})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>Supervisor PIN (Opsional)</label>
-                        <input
-                          type="text"
-                          value={userFormSupervisorPin}
-                          onChange={(e) => setUserFormSupervisorPin(e.target.value)}
-                          placeholder="e.g. 1234 (Store Manager)"
-                          maxLength={12}
-                          className={`w-full font-mono ${inputClass}`}
-                        />
-                      </div>
-
-                      <div className="flex flex-col justify-center gap-2 pt-2">
-                        <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={userFormIsActive}
-                            onChange={(e) => setUserFormIsActive(e.target.checked)}
-                            className="w-4 h-4 rounded text-[#0F4C3A]"
-                          />
-                          <span>Akun Aktif (Diizinkan Login)</span>
-                        </label>
-                        <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={userFormViewCost}
-                            onChange={(e) => setUserFormViewCost(e.target.checked)}
-                            className="w-4 h-4 rounded text-[#0F4C3A]"
-                          />
-                          <span>Boleh Melihat HPP / Cost &amp; Valuasi</span>
-                        </label>
-                      </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 items-start">
+                    <div>
+                      <label className={labelClass}>Role / Jabatan Divisi</label>
+                      <select
+                        value={userFormRoleCode}
+                        onChange={(e) => handleSelectUserRolePreset(e.target.value as DivisionRoleCode)}
+                        className={`w-full cursor-pointer ${inputClass} border`}
+                      >
+                        {DIVISION_ROLE_GROUPS.map((grp) => (
+                          <optgroup key={grp.groupId} label={grp.label}>
+                            {grp.roles.map((code) => (
+                              <option key={code} value={code}>
+                                {DIVISION_ROLE_PRESETS[code].divisionLabel} ({code})
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
                     </div>
-
-                    {editingSystemUser && (
-                      <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 pt-1 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={userFormApplyPresetOnSave}
-                          onChange={(e) => setUserFormApplyPresetOnSave(e.target.checked)}
-                          className="w-4 h-4 rounded text-[#0F4C3A]"
-                        />
-                        <span>Auto-fill ulang seluruh checkbox hak akses modul sesuai preset divisi yang dipilih</span>
-                      </label>
-                    )}
-
-                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                      <button
-                        type="button"
-                        onClick={() => setIsUserModalOpen(false)}
-                        className={`px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
-                          isLight
-                            ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                            : 'bg-[#090A0F] border-slate-700 text-slate-300 hover:bg-slate-800'
-                        }`}
-                      >
-                        Batal
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSavingSystemUser}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs disabled:opacity-50 cursor-pointer"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        <span>{isSavingSystemUser ? 'Menyimpan...' : 'Simpan Perubahan Akun'}</span>
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>,
-              document.body
-            )}
-
-          {/* Modal 2: Granular 13-Module Permission Matrix */}
-          {permModalUser &&
-            permDraft &&
-            createPortal(
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-                <div
-                  className={`w-full max-w-4xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[88vh] ${
-                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800 text-slate-100'
-                  }`}
-                >
-                  <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-9 h-9 rounded-xl bg-[#0F4C3A]/10 text-[#0F4C3A] dark:text-emerald-400 flex items-center justify-center shrink-0">
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-bold truncate">
-                          Matriks Hak Akses Per Modul — {permModalUser.fullName}
-                        </h4>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate">
-                          {permModalUser.email} • {permModalUser.divisionLabel} ({permModalUser.roleCode})
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPermDraft(getDefaultModulePermissions(permModalUser.roleCode))}
-                        className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border cursor-pointer ${
-                          isLight
-                            ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
-                            : 'bg-[#090A0F] hover:bg-slate-800 border-slate-700 text-slate-300'
-                        }`}
-                      >
-                        Reset ke Preset Divisi
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPermModalUser(null);
-                          setPermDraft(null);
-                        }}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                    <div className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-[#090A0F]/60 text-xs">
+                      <span className="font-bold block text-slate-800 dark:text-slate-200">
+                        {DIVISION_ROLE_PRESETS[userFormRoleCode]?.divisionLabel} ({userFormRoleCode})
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {DIVISION_ROLE_PRESETS[userFormRoleCode]?.description}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="p-5 overflow-y-auto flex-1">
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
-                      <table className="w-full text-left text-xs min-w-[680px]">
-                        <thead>
-                          <tr
-                            className={`border-b text-[10px] font-bold uppercase tracking-wider ${
-                              isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
-                            }`}
-                          >
-                            <th className="py-3 px-3.5">Modul ERP ({MODULE_PERMISSION_META.length} Modul)</th>
-                            <th className="py-3 px-3 text-center">View</th>
-                            <th className="py-3 px-3 text-center">Create</th>
-                            <th className="py-3 px-3 text-center">Edit</th>
-                            <th className="py-3 px-3 text-center">Approve</th>
-                            <th className="py-3 px-3 text-center">Export</th>
-                          </tr>
-                        </thead>
-                        <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
-                          {MODULE_PERMISSION_META.map((mod) => {
-                            const p = permDraft[mod.key] || {
-                              view: false,
-                              create: false,
-                              edit: false,
-                              approve: false,
-                              export: false,
-                            };
-                            return (
-                              <React.Fragment key={mod.key}>
-                                <tr className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
-                                  <td className="py-2.5 px-3.5">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-bold text-slate-900 dark:text-slate-100">{mod.label}</span>
-                                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold">
-                                        {mod.category}
-                                      </span>
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{mod.description}</div>
+                  {/* Granular 19-Module Matrix */}
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800/80">
+                    <table className="w-full text-left text-xs min-w-[700px]">
+                      <thead>
+                        <tr
+                          className={`border-b text-[10px] font-bold uppercase tracking-wider ${
+                            isLight ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-[#090A0F] text-slate-400 border-slate-800/80'
+                          }`}
+                        >
+                          <th className="py-3 px-3.5">Modul ERP ({MODULE_PERMISSION_META.length} Modul)</th>
+                          <th className="py-3 px-3 text-center">View</th>
+                          <th className="py-3 px-3 text-center">Create</th>
+                          <th className="py-3 px-3 text-center">Edit</th>
+                          <th className="py-3 px-3 text-center">Approve</th>
+                          <th className="py-3 px-3 text-center">Export</th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${isLight ? 'divide-slate-100' : 'divide-slate-800/80'}`}>
+                        {MODULE_PERMISSION_META.map((mod) => {
+                          const p = userFormPermissions[mod.key] || {
+                            view: false,
+                            create: false,
+                            edit: false,
+                            approve: false,
+                            export: false,
+                          };
+                          return (
+                            <React.Fragment key={mod.key}>
+                              <tr className={isLight ? 'hover:bg-slate-50/80' : 'hover:bg-slate-900/60'}>
+                                <td className="py-2.5 px-3.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-slate-900 dark:text-slate-100">{mod.label}</span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold">
+                                      {mod.category}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400">{mod.description}</div>
+                                </td>
+                                {(['view', 'create', 'edit', 'approve', 'export'] as ModulePermissionAction[]).map((act) => (
+                                  <td key={act} className="py-2.5 px-3 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={p[act] === true}
+                                      onChange={() => handleToggleUserFormPermissionCell(mod.key, act)}
+                                      className="w-4 h-4 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] cursor-pointer"
+                                      aria-label={`${mod.label} ${act}`}
+                                    />
                                   </td>
-                                  {(['view', 'create', 'edit', 'approve', 'export'] as ModulePermissionAction[]).map((act) => (
-                                    <td key={act} className="py-2.5 px-3 text-center">
-                                      <input
-                                        type="checkbox"
-                                        checked={p[act] === true}
-                                        onChange={() => handleToggleModulePermissionCell(mod.key, act)}
-                                        className="w-4 h-4 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] cursor-pointer"
-                                        aria-label={`${mod.label} ${act}`}
-                                      />
-                                    </td>
-                                  ))}
+                                ))}
+                              </tr>
+                              {mod.key === 'accounting' && (
+                                <tr className={isLight ? 'bg-emerald-50/40' : 'bg-emerald-950/15'}>
+                                  <td colSpan={6} className="py-2 px-4">
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
+                                      <span className="font-bold text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                                        Granular Finance Sub-Flags:
+                                      </span>
+                                      {ACCOUNTING_SUB_FLAGS.map((sf) => (
+                                        <label
+                                          key={sf.key}
+                                          title={sf.description}
+                                          className="inline-flex items-center gap-1.5 cursor-pointer select-none text-slate-700 dark:text-slate-300"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={p[sf.key] === true}
+                                            onChange={() => handleToggleUserFormAccountingSubFlag(sf.key)}
+                                            className="w-3.5 h-3.5 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] cursor-pointer"
+                                          />
+                                          <span className="font-semibold">{sf.label}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </td>
                                 </tr>
-                                {mod.key === 'accounting' && (
-                                  <tr className={isLight ? 'bg-emerald-50/40' : 'bg-emerald-950/15'}>
-                                    <td colSpan={6} className="py-2 px-4">
-                                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
-                                        <span className="font-bold text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                                          Granular Finance Sub-Flags:
-                                        </span>
-                                        {ACCOUNTING_SUB_FLAGS.map((sf) => (
-                                          <label
-                                            key={sf.key}
-                                            title={sf.description}
-                                            className="inline-flex items-center gap-1.5 cursor-pointer select-none text-slate-700 dark:text-slate-300"
-                                          >
-                                            <input
-                                              type="checkbox"
-                                              checked={p[sf.key] === true}
-                                              onChange={() => handleToggleAccountingSubFlag(sf.key)}
-                                              className="w-3.5 h-3.5 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] cursor-pointer"
-                                            />
-                                            <span className="font-semibold">{sf.label}</span>
-                                          </label>
-                                        ))}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Perubahan langsung berlaku pada middleware RBAC &amp; dicatat di Immutable Audit Trail.
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPermModalUser(null);
-                          setPermDraft(null);
-                        }}
-                        className={`px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
-                          isLight
-                            ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                            : 'bg-[#090A0F] border-slate-700 text-slate-300 hover:bg-slate-800'
-                        }`}
-                      >
-                        Batal
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isSavingPermMatrix}
-                        onClick={handleSavePermissionMatrix}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs disabled:opacity-50 cursor-pointer"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        <span>{isSavingPermMatrix ? 'Menyimpan...' : 'Simpan Hak Akses Modul'}</span>
-                      </button>
-                    </div>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              </div>,
-              document.body
+
+                {/* Form Footer Actions */}
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Seluruh perubahan kredensial &amp; hak akses langsung aktif di middleware RBAC dan tercatat ke Immutable Audit Trail.
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserViewMode('list');
+                        setEditingSystemUser(null);
+                        setUserFormError(null);
+                      }}
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                        isLight
+                          ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                          : 'bg-[#090A0F] border-slate-700 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingSystemUser || !isSuperAdmin}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs disabled:opacity-50 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isSavingSystemUser ? 'Menyimpan...' : 'Simpan User & Hak Akses'}</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
             )}
+          </div>
 
           {/* Modal 3: Create / Edit Outlet Profile (Super Admin) */}
           {isOutletModalOpen &&

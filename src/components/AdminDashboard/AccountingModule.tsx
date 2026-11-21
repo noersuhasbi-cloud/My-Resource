@@ -19,6 +19,7 @@ import type {
   BankMutationCsvReconcileResponse,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
+import { isOwnerRoleCode } from '../../utils/rbac';
 import {
   Building2,
   ReceiptText,
@@ -195,7 +196,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
 
   const canAccessAR =
     !activeStaffSession ||
-    activeStaffSession.roleCode === 'SUPER_ADMIN' ||
+    isOwnerRoleCode(activeStaffSession.roleCode) ||
     !activeStaffSession.modulePermissions ||
     (activeStaffSession.modulePermissions.accounting?.view === true &&
       activeStaffSession.modulePermissions.accounting?.canAccessAR === true);

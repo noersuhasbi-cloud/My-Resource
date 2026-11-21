@@ -1115,6 +1115,8 @@ export interface SubstitutionPromptRecord {
 // =============================================================
 
 export type DivisionRoleCode =
+  | 'PLATFORM_OWNER'
+  | 'CLIENT_OWNER'
   | 'SUPER_ADMIN'
   | 'WAREHOUSE_STAFF'
   | 'WAREHOUSE_ADMIN'
@@ -1179,6 +1181,7 @@ export type ModulePermissionsMap = Record<ModulePermissionKey, ModulePermissionS
 export interface SystemUserAccount {
   id: string;
   fullName: string;
+  username: string;
   email: string;
   password?: string;
   maskedPassword?: string;
@@ -1199,6 +1202,7 @@ export interface SystemUserAccount {
 export interface StaffShiftSession {
   userId: string;
   userName: string;
+  username?: string;
   email?: string;
   userRole: UserRole;
   roleCode?: DivisionRoleCode;
@@ -2385,6 +2389,7 @@ export interface ErpConfigurationSettings {
   accountingLockBeforeDate: string; // Optional YYYY-MM-DD preventing backdated GL mutations
   minMarginFloorPct?: number; // Dynamic Margin Floor above WAC unitCost (default 2.0%)
   maxAllowedOutlets?: number; // Maximum active outlets allowed under SaaS quota (default 10)
+  maxAllowedUsers?: number; // Maximum active user accounts allowed under SaaS quota (default 25)
   enableB2BAndStorefrontPortal?: boolean; // Feature flag controlling Customer Storefront, B2B Portal & Quotations visibility (default false)
   updatedAt?: string;
   updatedBy?: string;

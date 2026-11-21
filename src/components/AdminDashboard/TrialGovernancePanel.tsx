@@ -28,6 +28,7 @@ import type {
   TrialManualStatusOverride,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
+import { isOwnerRoleCode } from '../../utils/rbac';
 import {
   SUB_ROLE_GOVERNANCE_GROUPS,
   MODULE_GOVERNANCE_OPTIONS,
@@ -191,7 +192,7 @@ export const TrialGovernancePanel: React.FC<TrialGovernancePanelProps> = ({
   };
 
   const toggleSubRole = (roleCode: DivisionRoleCode, enabled: boolean) => {
-    if (roleCode === 'SUPER_ADMIN') return;
+    if (isOwnerRoleCode(roleCode)) return;
     setDraftConfig((prev) =>
       prev
         ? {
@@ -210,7 +211,7 @@ export const TrialGovernancePanel: React.FC<TrialGovernancePanelProps> = ({
       if (!prev) return prev;
       const nextSub = { ...prev.subRoleAccess };
       roles.forEach((code) => {
-        if (code !== 'SUPER_ADMIN') nextSub[code] = enabled;
+        if (!isOwnerRoleCode(code)) nextSub[code] = enabled;
       });
       return { ...prev, subRoleAccess: nextSub };
     });
@@ -256,10 +257,10 @@ export const TrialGovernancePanel: React.FC<TrialGovernancePanelProps> = ({
   }
 
   const savedSubRoleOverlayOff = Object.entries(snapshot.config.subRoleAccess || {}).filter(
-    ([code, allowed]) => code !== 'SUPER_ADMIN' && allowed === false
+    ([code, allowed]) => !isOwnerRoleCode(code) && allowed === false
   ).length;
   const draftSubRoleOverlayOff = Object.entries(draftConfig.subRoleAccess || {}).filter(
-    ([code, allowed]) => code !== 'SUPER_ADMIN' && allowed === false
+    ([code, allowed]) => !isOwnerRoleCode(code) && allowed === false
   ).length;
   const disabledSubRoleCount = Math.max(
     draftSubRoleOverlayOff,

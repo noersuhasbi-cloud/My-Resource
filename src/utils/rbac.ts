@@ -165,7 +165,75 @@ function buildModuleMap(overrides: Partial<Record<ModulePermissionKey, ModulePer
   };
 }
 
+export function isOwnerRoleCode(roleCode?: string | null): boolean {
+  return roleCode === 'PLATFORM_OWNER' || roleCode === 'CLIENT_OWNER' || roleCode === 'SUPER_ADMIN';
+}
+
 export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset> = {
+  PLATFORM_OWNER: {
+    roleCode: 'PLATFORM_OWNER',
+    divisionLabel: 'Platform Owner',
+    canonicalRole: 'super_admin',
+    defaultBranchId: 'ALL',
+    defaultLandingTab: 'dashboard',
+    hideFinancialCost: false,
+    defaultViewCost: true,
+    defaultSupervisorPin: '1234',
+    description: 'Platform Principal with unrestricted governance across all 19 ERP modules, SaaS quotas & user matrix.',
+    permissions: buildModuleMap({
+      dashboard: ALL_PERM(),
+      pos: ALL_PERM(),
+      storefront: ALL_PERM(),
+      crm: ALL_PERM(),
+      quotations: ALL_PERM(),
+      outlets: ALL_PERM(),
+      inventory: ALL_PERM(),
+      fefoBatches: ALL_PERM(),
+      wasteShrinkage: ALL_PERM(),
+      fulfillment: ALL_PERM(),
+      warehouseTransfers: ALL_PERM(),
+      logistics: ALL_PERM(),
+      procurement: ALL_PERM(),
+      qualityControl: ALL_PERM(),
+      approvalMatrix: ALL_PERM(),
+      analytics: ALL_PERM(),
+      accounting: ALL_ACCOUNTING_PERM(),
+      fraudRadar: ALL_PERM(),
+      settings: ALL_PERM(),
+    }),
+  },
+  CLIENT_OWNER: {
+    roleCode: 'CLIENT_OWNER',
+    divisionLabel: 'Client Owner',
+    canonicalRole: 'super_admin',
+    defaultBranchId: 'ALL',
+    defaultLandingTab: 'dashboard',
+    hideFinancialCost: false,
+    defaultViewCost: true,
+    defaultSupervisorPin: '1234',
+    description: 'Enterprise Owner / Super Admin with full operational, financial, and user administration authority.',
+    permissions: buildModuleMap({
+      dashboard: ALL_PERM(),
+      pos: ALL_PERM(),
+      storefront: ALL_PERM(),
+      crm: ALL_PERM(),
+      quotations: ALL_PERM(),
+      outlets: ALL_PERM(),
+      inventory: ALL_PERM(),
+      fefoBatches: ALL_PERM(),
+      wasteShrinkage: ALL_PERM(),
+      fulfillment: ALL_PERM(),
+      warehouseTransfers: ALL_PERM(),
+      logistics: ALL_PERM(),
+      procurement: ALL_PERM(),
+      qualityControl: ALL_PERM(),
+      approvalMatrix: ALL_PERM(),
+      analytics: ALL_PERM(),
+      accounting: ALL_ACCOUNTING_PERM(),
+      fraudRadar: ALL_PERM(),
+      settings: ALL_PERM(),
+    }),
+  },
   SUPER_ADMIN: {
     roleCode: 'SUPER_ADMIN',
     divisionLabel: 'Owner / Super Admin',
@@ -470,6 +538,37 @@ export const DIVISION_ROLE_PRESETS: Record<DivisionRoleCode, DivisionRolePreset>
 
 export const DIVISION_ROLE_CODES: DivisionRoleCode[] = Object.keys(DIVISION_ROLE_PRESETS) as DivisionRoleCode[];
 
+export const SELECTABLE_DIVISION_ROLE_CODES: DivisionRoleCode[] = [
+  'PLATFORM_OWNER',
+  'CLIENT_OWNER',
+  'WAREHOUSE_STAFF',
+  'WAREHOUSE_ADMIN',
+  'WAREHOUSE_HEAD',
+  'PURCHASING_STAFF',
+  'PURCHASING_HEAD',
+  'QC_INSPECTOR',
+  'POS_CASHIER',
+  'STORE_MANAGER',
+  'AR_STAFF',
+  'AP_STAFF',
+  'ACCOUNTING_TAX',
+  'FINANCE_MANAGER',
+  'HEAD_ACCOUNTING',
+];
+
+export const DIVISION_ROLE_GROUPS: Array<{
+  groupId: string;
+  label: string;
+  roles: DivisionRoleCode[];
+}> = [
+  { groupId: 'owner', label: 'Owner & Platform Governance', roles: ['PLATFORM_OWNER', 'CLIENT_OWNER'] },
+  { groupId: 'inventory', label: 'Inventory & Warehouse', roles: ['WAREHOUSE_STAFF', 'WAREHOUSE_ADMIN', 'WAREHOUSE_HEAD'] },
+  { groupId: 'purchasing', label: 'Purchasing & Procurement', roles: ['PURCHASING_STAFF', 'PURCHASING_HEAD'] },
+  { groupId: 'pos', label: 'Point of Sale & Store Ops', roles: ['POS_CASHIER', 'STORE_MANAGER'] },
+  { groupId: 'accounting', label: 'Accounting & Finance', roles: ['AR_STAFF', 'AP_STAFF', 'ACCOUNTING_TAX', 'FINANCE_MANAGER', 'HEAD_ACCOUNTING'] },
+  { groupId: 'qc', label: 'Quality Control & Halal', roles: ['QC_INSPECTOR'] },
+];
+
 export function getDefaultModulePermissions(roleCode: DivisionRoleCode): ModulePermissionsMap {
   const preset = DIVISION_ROLE_PRESETS[roleCode] || DIVISION_ROLE_PRESETS.POS_CASHIER;
   return JSON.parse(JSON.stringify(preset.permissions));
@@ -573,6 +672,8 @@ export function normalizeEnterpriseRole(role?: UserRole | string | null): Canoni
       return 'coo';
     case 'super_admin':
     case 'SUPER_ADMIN':
+    case 'PLATFORM_OWNER':
+    case 'CLIENT_OWNER':
     default:
       return 'super_admin';
   }
@@ -585,7 +686,7 @@ export function isBranchScopedRole(role?: UserRole | string | null): boolean {
 
 export function getSessionAssignedBranchId(session?: StaffShiftSession | null): string {
   if (!session) return 'ALL';
-  if (session.roleCode === 'SUPER_ADMIN') return 'ALL';
+  if (isOwnerRoleCode(session.roleCode)) return 'ALL';
   const raw = session.branchId || session.assignedBranchId || session.storeId;
   if (raw && raw !== 'ALL' && raw !== 'CONSOLIDATED') {
     return raw;
@@ -604,7 +705,7 @@ export function getSessionAssignedBranchId(session?: StaffShiftSession | null): 
 
 export function isSessionBranchScoped(session?: StaffShiftSession | null): boolean {
   if (!session) return false;
-  if (session.roleCode === 'SUPER_ADMIN') return false;
+  if (isOwnerRoleCode(session.roleCode)) return false;
   const raw = session.branchId || session.assignedBranchId || session.storeId;
   if (raw && raw !== 'ALL' && raw !== 'CONSOLIDATED') {
     return true;
@@ -681,7 +782,7 @@ export function hasModuleAccess(
   action: ModulePermissionAction = 'view'
 ): boolean {
   if (!session) return false;
-  if (session.roleCode === 'SUPER_ADMIN') return true;
+  if (isOwnerRoleCode(session.roleCode)) return true;
   if (session.modulePermissions) {
     return session.modulePermissions[moduleKey]?.[action] === true;
   }
@@ -703,7 +804,7 @@ export function isModulePermissionTabAllowed(
   tab: AdminDashboardTab,
   roleCode?: DivisionRoleCode
 ): boolean {
-  if (roleCode === 'SUPER_ADMIN') return true;
+  if (isOwnerRoleCode(roleCode)) return true;
   switch (tab) {
     case 'overview':
       return mp.dashboard?.view === true;
@@ -755,7 +856,7 @@ export function isAccountingSubTabAllowed(
   subTab: AccountingSubTab
 ): boolean {
   if (!session) return false;
-  if (session.roleCode === 'SUPER_ADMIN') return true;
+  if (isOwnerRoleCode(session.roleCode)) return true;
   const acct = session.modulePermissions?.accounting;
   if (!acct) return true; // legacy session fallback
   if (acct.view !== true) return false;
@@ -784,7 +885,7 @@ export function isAccountingSubTabAllowed(
 }
 
 export function getDefaultAccountingSubTabForSession(session?: StaffShiftSession | null): AccountingSubTab {
-  if (!session || session.roleCode === 'SUPER_ADMIN') return 'pnl';
+  if (!session || isOwnerRoleCode(session.roleCode)) return 'pnl';
   const acct = session.modulePermissions?.accounting;
   if (!acct) return 'pnl';
   if (acct.canAccessGLTax === true) return 'pnl';
@@ -819,7 +920,7 @@ export function getDefaultTabForRole(role?: UserRole | string | null): AdminDash
 
 export function getDefaultTabForSession(session?: StaffShiftSession | null): AdminDashboardTab {
   if (!session) return 'overview';
-  if (session.roleCode === 'SUPER_ADMIN') return 'overview';
+  if (isOwnerRoleCode(session.roleCode)) return 'overview';
 
   if (session.modulePermissions) {
     const preferredKey = session.defaultLandingTab || getDefaultLandingTabKey(session.roleCode);
@@ -867,7 +968,7 @@ export function hasModulePermission(
 
 export function canSessionViewValuation(session?: StaffShiftSession | null): boolean {
   if (!session) return true;
-  if (session.roleCode === 'SUPER_ADMIN') return true;
+  if (isOwnerRoleCode(session.roleCode)) return true;
   if (session.hideFinancialCost === true || session.viewCost === false) return false;
   if (session.roleCode) {
     const preset = DIVISION_ROLE_PRESETS[session.roleCode];

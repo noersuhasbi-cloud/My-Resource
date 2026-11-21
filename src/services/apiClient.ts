@@ -1288,6 +1288,7 @@ export const apiClient = {
   },
 
   async adminLogin(params: {
+    identifier?: string;
     email?: string;
     userId?: string;
     username?: string;
@@ -3334,6 +3335,12 @@ export const apiClient = {
     success: boolean;
     users: SystemUserAccount[];
     branchOptions: Array<{ storeId: string; storeName: string; hubType: string }>;
+    quota?: {
+      activeUsers: number;
+      totalUsers: number;
+      maxAllowedUsers: number;
+      remainingSlots: number;
+    };
   }> {
     const res = await fetchApi('/api/admin/settings/users');
     const data = await res.json().catch(() => ({}));
@@ -3345,6 +3352,7 @@ export const apiClient = {
 
   async createSystemUser(payload: {
     fullName: string;
+    username: string;
     email: string;
     password: string;
     roleCode: DivisionRoleCode;
@@ -3360,6 +3368,12 @@ export const apiClient = {
     message: string;
     user: SystemUserAccount;
     users: SystemUserAccount[];
+    quota?: {
+      activeUsers: number;
+      totalUsers: number;
+      maxAllowedUsers: number;
+      remainingSlots: number;
+    };
   }> {
     const res = await fetchApi('/api/admin/settings/users', {
       method: 'POST',
@@ -3377,6 +3391,7 @@ export const apiClient = {
     id: string,
     patch: {
       fullName?: string;
+      username?: string;
       email?: string;
       password?: string;
       roleCode?: DivisionRoleCode;
@@ -3393,6 +3408,12 @@ export const apiClient = {
     message: string;
     user: SystemUserAccount;
     users: SystemUserAccount[];
+    quota?: {
+      activeUsers: number;
+      totalUsers: number;
+      maxAllowedUsers: number;
+      remainingSlots: number;
+    };
   }> {
     const res = await fetchApi(`/api/admin/settings/users/${encodeURIComponent(id)}`, {
       method: 'PATCH',
