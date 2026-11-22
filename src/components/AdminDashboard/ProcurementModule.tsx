@@ -16,10 +16,12 @@ import type {
   SupplierDebitNoteCategory,
   LastPurchasePriceResponse,
   DemandForecastResponse,
+  ProcurementFocusTarget,
+  VendorBillBridgeTarget,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
-import { canSessionViewValuation, hasModuleAccess, normalizeEnterpriseRole } from '../../utils/rbac';
+import { canSessionViewValuation, hasModuleAccess, isOwnerRoleCode, normalizeEnterpriseRole } from '../../utils/rbac';
 import {
   Truck,
   Plus,
@@ -51,6 +53,7 @@ import {
   TrendingUp,
   Barcode,
   History,
+  ExternalLink,
 } from 'lucide-react';
 import { VendorBillModule } from './VendorBillModule';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
@@ -68,6 +71,12 @@ interface ProcurementModuleProps {
   vendorBills?: VendorBill[];
   storeOutlets?: StoreOutletSchedule[];
   activeStaffSession?: StaffShiftSession | null;
+  focusTarget?: ProcurementFocusTarget | null;
+  onClearFocusTarget?: () => void;
+  vendorBillBridgeTarget?: VendorBillBridgeTarget | null;
+  onClearVendorBillBridge?: () => void;
+  onNavigateToVendorBill?: (bridge: Omit<VendorBillBridgeTarget, 'triggerNonce'>) => void;
+  onNavigateToDoc?: (subTab: 'pr' | 'po' | 'gr', docId: string) => void;
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -82,6 +91,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   vendorBills = [],
   storeOutlets = [],
   activeStaffSession,
+  focusTarget,
+  onClearFocusTarget,
+  vendorBillBridgeTarget,
+  onClearVendorBillBridge,
+  onNavigateToVendorBill,
+  onNavigateToDoc,
   onRefreshData,
   onShowToast,
 }) => {
@@ -92,10 +107,26 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     hasModuleAccess(activeStaffSession, 'procurement', 'approve') ||
     ['store_manager', 'coo', 'super_admin'].includes(canonicalRole);
   const canReceiveGR = ['warehouse', 'purchasing', 'store_manager', 'coo', 'super_admin'].includes(canonicalRole);
-  const canCreateVendorBill = ['purchasing', 'admin', 'coo', 'super_admin'].includes(canonicalRole);
+  const canCreateVendorBill = activeStaffSession?.modulePermissions
+    ? Boolean(
+        isOwnerRoleCode(activeStaffSession.roleCode) ||
+          (activeStaffSession.modulePermissions.accounting?.view &&
+            activeStaffSession.modulePermissions.accounting?.canAccessAP &&
+            activeStaffSession.modulePermissions.accounting?.create)
+      )
+    : ['admin', 'coo', 'super_admin'].includes(canonicalRole);
+  const canViewVendorBill = activeStaffSession?.modulePermissions
+    ? Boolean(
+        isOwnerRoleCode(activeStaffSession.roleCode) ||
+          (activeStaffSession.modulePermissions.accounting?.view &&
+            activeStaffSession.modulePermissions.accounting?.canAccessAP) ||
+          activeStaffSession.modulePermissions.procurement?.approve
+      )
+    : ['purchasing', 'admin', 'coo', 'super_admin'].includes(canonicalRole);
   const isWarehouseRole = canonicalRole === 'warehouse';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
   const [approvingPoId, setApprovingPoId] = useState<string | null>(null);
+  const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
 
   // Modal States
   const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
@@ -196,6 +227,66 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       setActiveTab('gr');
     }
   }, [isWarehouseRole, activeTab]);
+
+  const jumpToSubDoc = React.useCallback((subTab: 'pr' | 'po' | 'gr', docId: string) => {
+    setActiveTab(subTab);
+    setPrFilter('ALL');
+    setPoFilter('ALL');
+    setSearchQuery('');
+    setHighlightedDocId(docId);
+    window.setTimeout(() => {
+      const row = document.querySelector(`tr[data-doc-id="${docId}"]`);
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+    window.setTimeout(() => {
+      setHighlightedDocId((prev) => (prev === docId ? null : prev));
+    }, 4500);
+    if (onNavigateToDoc) {
+      onNavigateToDoc(subTab, docId);
+    }
+  }, [onNavigateToDoc]);
+
+  React.useEffect(() => {
+    if (!focusTarget) return;
+    if (isWarehouseRole && focusTarget.subTab === 'vendor_bills') {
+      onClearFocusTarget?.();
+      return;
+    }
+    setActiveTab(focusTarget.subTab);
+    setPrFilter('ALL');
+    setPoFilter('ALL');
+    setSearchQuery('');
+    if (focusTarget.docId) {
+      setHighlightedDocId(focusTarget.docId);
+      window.setTimeout(() => {
+        const row = document.querySelector(`tr[data-doc-id="${focusTarget.docId}"]`);
+        row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 90);
+      window.setTimeout(() => {
+        setHighlightedDocId((prev) => (prev === focusTarget.docId ? null : prev));
+      }, 4500);
+    }
+    onClearFocusTarget?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTarget?.triggerNonce]);
+
+  const openVendorBillCreate = (poId: string, grId?: string, grIds?: string[]) => {
+    if (onNavigateToVendorBill) {
+      onNavigateToVendorBill({ mode: 'create', poId, grId, grIds });
+      return;
+    }
+    setPreselectedPoId(poId);
+    if (grId) setPreselectedGrId(grId);
+    setActiveTab('vendor_bills');
+  };
+
+  const openVendorBillView = (billId: string, poId?: string) => {
+    if (onNavigateToVendorBill) {
+      onNavigateToVendorBill({ mode: 'view', billId, poId });
+      return;
+    }
+    setActiveTab('vendor_bills');
+  };
 
   // Auto-Replenishment & Min-Max Stock Planning State
   const [replenishmentPlan, setReplenishmentPlan] = useState<AutoReplenishmentConsolidatedPlan | null>(null);
@@ -1734,15 +1825,47 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredPRs.map((pr) => (
+                filteredPRs.map((pr) => {
+                  const linkedPoIds = Array.from(
+                    new Set([...(pr.linkedPoIds || []), ...(pr.poId ? [pr.poId] : [])].filter(Boolean))
+                  );
+                  const isRowHighlighted = highlightedDocId === pr.id;
+                  return (
                   <tr
                     key={pr.id}
+                    data-doc-id={pr.id}
                     className={`transition-colors ${
-                      isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'
+                      isRowHighlighted
+                        ? isLight
+                          ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-500/60'
+                          : 'bg-emerald-950/35 ring-1 ring-inset ring-emerald-500/60'
+                        : isLight
+                        ? 'hover:bg-gray-50/80'
+                        : 'hover:bg-slate-900/60'
                     }`}
                   >
                     <td className="py-3.5 px-4 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
-                      {pr.id}
+                      <div>{pr.id}</div>
+                      {linkedPoIds.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {linkedPoIds.map((poId) => (
+                            <button
+                              key={poId}
+                              type="button"
+                              onClick={() => jumpToSubDoc('po', poId)}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold cursor-pointer ${
+                                isLight
+                                  ? 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
+                                  : 'bg-sky-950/40 border-sky-800/60 text-sky-300 hover:bg-sky-900/60'
+                              }`}
+                              title={`Jump to ${poId}`}
+                            >
+                              {poId}
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className={`py-3.5 px-4 ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
                       {pr.storeName || 'Senopati Flagship'}
@@ -1805,10 +1928,19 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                               Pending Approval
                             </span>
                           )
+                        ) : linkedPoIds.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => jumpToSubDoc('po', linkedPoIds[0])}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            PO #{linkedPoIds[0]}
+                          </button>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            PO #{pr.poId}
+                            Approved
                           </span>
                         )}
                         <button
@@ -1854,7 +1986,8 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -1932,12 +2065,38 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   const totalReceived = po.items.reduce((s, i) => s + (i.receivedQuantity || 0), 0);
                   const totalBackorder = po.items.reduce((s, i) => s + (i.remainingBackorder || 0), 0);
                   const percent = totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
+                  const poPrId = po.sourcePrId || po.prId;
+                  const poGrs = goodsReceipts.filter((g) => g.poId === po.id);
+                  const linkedGrIds = Array.from(
+                    new Set([...(po.linkedGrIds || []), ...(po.goodsReceiptIds || []), ...poGrs.map((g) => g.id)].filter(Boolean))
+                  );
+                  const activeBillsForPo = vendorBills.filter((b) => b.status !== 'VOID' && b.poId === po.id);
+                  const poTotalReceivedQty = poGrs.reduce(
+                    (s, g) => s + g.items.reduce((isum, it) => isum + it.quantityReceived, 0),
+                    0
+                  );
+                  const poTotalBilledQty = activeBillsForPo.reduce(
+                    (s, b) => s + b.items.reduce((isum, it) => isum + (it.billedQuantity || 0), 0),
+                    0
+                  );
+                  const poHasUnbilledGrQty = poGrs.length > 0 && poTotalReceivedQty > poTotalBilledQty;
+                  const poApprovedOrReceived = !['Draft', 'PENDING_APPROVAL', 'pending_approval', 'REJECTED', 'Cancelled'].includes(
+                    po.status
+                  );
+                  const isRowHighlighted = highlightedDocId === po.id;
 
                   return (
                     <tr
                       key={po.id}
+                      data-doc-id={po.id}
                       className={`transition-colors ${
-                        isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'
+                        isRowHighlighted
+                          ? isLight
+                            ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-500/60'
+                            : 'bg-emerald-950/35 ring-1 ring-inset ring-emerald-500/60'
+                          : isLight
+                          ? 'hover:bg-gray-50/80'
+                          : 'hover:bg-slate-900/60'
                       }`}
                     >
                       <td className="py-3.5 px-4">
@@ -1947,6 +2106,58 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                         <div className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           Expected: {po.expectedDeliveryDate}
                         </div>
+                        {(poPrId || linkedGrIds.length > 0 || (canViewVendorBill && activeBillsForPo.length > 0)) && (
+                          <div className="flex flex-wrap gap-1 mt-1.5 font-mono">
+                            {poPrId && (
+                              <button
+                                type="button"
+                                onClick={() => jumpToSubDoc('pr', poPrId)}
+                                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-semibold cursor-pointer ${
+                                  isLight
+                                    ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                                    : 'bg-slate-900/90 border-slate-700/80 text-slate-300 hover:bg-slate-800'
+                                }`}
+                                title={`Jump to PR ${poPrId}`}
+                              >
+                                {poPrId}
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                            {linkedGrIds.map((grId) => (
+                              <button
+                                key={grId}
+                                type="button"
+                                onClick={() => jumpToSubDoc('gr', grId)}
+                                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-semibold cursor-pointer ${
+                                  isLight
+                                    ? 'bg-emerald-50 border-emerald-200 text-[#0F4C3A] hover:bg-emerald-100'
+                                    : 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/60'
+                                }`}
+                                title={`Jump to GR ${grId}`}
+                              >
+                                {grId}
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </button>
+                            ))}
+                            {canViewVendorBill &&
+                              activeBillsForPo.map((bill) => (
+                                <button
+                                  key={bill.id}
+                                  type="button"
+                                  onClick={() => openVendorBillView(bill.id, po.id)}
+                                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-semibold cursor-pointer ${
+                                    isLight
+                                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                      : 'bg-indigo-950/40 border-indigo-800/60 text-indigo-300 hover:bg-indigo-900/60'
+                                  }`}
+                                  title={`Open Vendor Bill ${bill.id}`}
+                                >
+                                  {bill.id}
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </button>
+                              ))}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -2020,7 +2231,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
                       <td className="py-3.5 px-4 text-right">
                         {po.status !== 'Completed' && po.status !== 'Cancelled' && po.status !== 'REJECTED' ? (
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
                             {canApprovePrPo && (po.status === 'PENDING_APPROVAL' || po.status === 'pending_approval' || po.status === 'Draft') && (
                               <button
                                 type="button"
@@ -2039,19 +2250,28 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 Receive GR
                               </button>
                             )}
-                            {canCreateVendorBill && (
+                            {canCreateVendorBill && poApprovedOrReceived && poHasUnbilledGrQty && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setPreselectedPoId(po.id);
-                                  const gr = goodsReceipts.find((g) => g.poId === po.id);
-                                  if (gr) setPreselectedGrId(gr.id);
-                                  setActiveTab('vendor_bills');
-                                }}
-                                className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
-                                title="Create or match Vendor Bill against this PO"
+                                onClick={() => openVendorBillCreate(po.id, poGrs[0]?.id, poGrs.map((g) => g.id))}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors cursor-pointer"
+                                title="Create Vendor Bill for unbilled received goods"
                               >
-                                Match Bill
+                                Create Vendor Bill
+                              </button>
+                            )}
+                            {canViewVendorBill && activeBillsForPo.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => openVendorBillView(activeBillsForPo[0].id, po.id)}
+                                className={`px-2 py-1 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                                  isLight
+                                    ? 'bg-emerald-50 text-[#0F4C3A] border-emerald-200 hover:bg-emerald-100'
+                                    : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-900/60'
+                                }`}
+                                title={`View Vendor Bill #${activeBillsForPo[0].id}`}
+                              >
+                                View Bill (#{activeBillsForPo[0].id})
                               </button>
                             )}
                             {canManagePrPo && totalBackorder > 0 && (
@@ -2117,7 +2337,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             )}
                           </div>
                         ) : (
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-2 flex-wrap">
                             <div>
                               <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block">
                                 Completed
@@ -2128,19 +2348,28 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                                 </span>
                               )}
                             </div>
-                            {canCreateVendorBill && (
+                            {canCreateVendorBill && poApprovedOrReceived && poHasUnbilledGrQty && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setPreselectedPoId(po.id);
-                                  const gr = goodsReceipts.find((g) => g.poId === po.id);
-                                  if (gr) setPreselectedGrId(gr.id);
-                                  setActiveTab('vendor_bills');
-                                }}
-                                className="px-2 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
-                                title="View or match Vendor Bill"
+                                onClick={() => openVendorBillCreate(po.id, poGrs[0]?.id, poGrs.map((g) => g.id))}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors cursor-pointer"
+                                title="Create Vendor Bill for unbilled received goods"
                               >
-                                Vendor Bill
+                                Create Vendor Bill
+                              </button>
+                            )}
+                            {canViewVendorBill && activeBillsForPo.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => openVendorBillView(activeBillsForPo[0].id, po.id)}
+                                className={`px-2 py-1 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                                  isLight
+                                    ? 'bg-emerald-50 text-[#0F4C3A] border-emerald-200 hover:bg-emerald-100'
+                                    : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-900/60'
+                                }`}
+                                title={`View Vendor Bill #${activeBillsForPo[0].id}`}
+                              >
+                                View Bill (#{activeBillsForPo[0].id})
                               </button>
                             )}
                             <button
@@ -2241,21 +2470,102 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredGRs.map((gr) => (
+                filteredGRs.map((gr) => {
+                  const activeBillsForGr = vendorBills.filter(
+                    (b) =>
+                      b.status !== 'VOID' &&
+                      b.poId === gr.poId &&
+                      (b.goodsReceiptId === gr.id || (b.linkedGrIds || []).includes(gr.id))
+                  );
+                  const grTotalReceived = gr.items.reduce((s, it) => s + it.quantityReceived, 0);
+                  const activeBillsForPo = vendorBills.filter((b) => b.status !== 'VOID' && b.poId === gr.poId);
+                  const poGrs = goodsReceipts.filter((g) => g.poId === gr.poId);
+                  const poReceivedQty = poGrs.reduce(
+                    (s, g) => s + g.items.reduce((isum, it) => isum + it.quantityReceived, 0),
+                    0
+                  );
+                  const poBilledQty = activeBillsForPo.reduce(
+                    (s, b) => s + b.items.reduce((isum, it) => isum + (it.billedQuantity || 0), 0),
+                    0
+                  );
+                  const grHasUnbilledQty = activeBillsForGr.length === 0 && grTotalReceived > 0 && poReceivedQty > poBilledQty;
+                  const isRowHighlighted = highlightedDocId === gr.id;
+
+                  return (
                   <tr
                     key={gr.id}
+                    data-doc-id={gr.id}
                     className={`transition-colors ${
-                      isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'
+                      isRowHighlighted
+                        ? isLight
+                          ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-500/60'
+                          : 'bg-emerald-950/35 ring-1 ring-inset ring-emerald-500/60'
+                        : isLight
+                        ? 'hover:bg-gray-50/80'
+                        : 'hover:bg-slate-900/60'
                     }`}
                   >
                     <td className="py-3.5 px-4 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
-                      {gr.id}
+                      <div>{gr.id}</div>
+                      {canViewVendorBill && activeBillsForGr.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {activeBillsForGr.map((bill) => (
+                            <button
+                              key={bill.id}
+                              type="button"
+                              onClick={() => openVendorBillView(bill.id, gr.poId)}
+                              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-semibold cursor-pointer ${
+                                isLight
+                                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                  : 'bg-indigo-950/40 border-indigo-800/60 text-indigo-300 hover:bg-indigo-900/60'
+                              }`}
+                              title={`Open Vendor Bill ${bill.id}`}
+                            >
+                              {bill.id}
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className={`py-3.5 px-4 font-mono ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
                       {gr.deliveryNoteNumber}
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-blue-600 dark:text-blue-400">
-                      {gr.poId}
+                    <td className="py-3.5 px-4 font-mono">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {purchaseOrders.some((p) => p.id === gr.poId) ? (
+                          <button
+                            type="button"
+                            onClick={() => jumpToSubDoc('po', gr.poId)}
+                            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-semibold cursor-pointer ${
+                              isLight
+                                ? 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
+                                : 'bg-sky-950/40 border-sky-800/60 text-sky-300 hover:bg-sky-900/60'
+                            }`}
+                            title={`Jump to PO ${gr.poId}`}
+                          >
+                            {gr.poId}
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </button>
+                        ) : (
+                          <span className="text-blue-600 dark:text-blue-400">{gr.poId}</span>
+                        )}
+                        {gr.sourcePrId && (
+                          <button
+                            type="button"
+                            onClick={() => jumpToSubDoc('pr', gr.sourcePrId!)}
+                            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-semibold cursor-pointer ${
+                              isLight
+                                ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                                : 'bg-slate-900/90 border-slate-700/80 text-slate-300 hover:bg-slate-800'
+                            }`}
+                            title={`Jump to PR ${gr.sourcePrId}`}
+                          >
+                            {gr.sourcePrId}
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4">
                       <div className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
@@ -2288,18 +2598,27 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        {canCreateVendorBill ? (
+                        {canCreateVendorBill && grHasUnbilledQty ? (
                           <button
                             type="button"
-                            onClick={() => {
-                              setPreselectedPoId(gr.poId);
-                              setPreselectedGrId(gr.id);
-                              setActiveTab('vendor_bills');
-                            }}
-                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors"
-                            title="Create or match Vendor Bill for this Goods Receipt"
+                            onClick={() => openVendorBillCreate(gr.poId, gr.id, [gr.id])}
+                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors cursor-pointer"
+                            title="Create Vendor Bill for this Goods Receipt"
                           >
-                            Match Bill
+                            Create Vendor Bill
+                          </button>
+                        ) : canViewVendorBill && activeBillsForGr.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => openVendorBillView(activeBillsForGr[0].id, gr.poId)}
+                            className={`px-2 py-1 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                              isLight
+                                ? 'bg-emerald-50 text-[#0F4C3A] border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-900/60'
+                            }`}
+                            title={`View Vendor Bill #${activeBillsForGr[0].id}`}
+                          >
+                            View Bill (#{activeBillsForGr[0].id})
                           </button>
                         ) : (
                           <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
@@ -2349,7 +2668,8 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -2370,6 +2690,9 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           initialPreselectedPoId={preselectedPoId}
           initialPreselectedGrId={preselectedGrId}
           activeStaffSession={activeStaffSession}
+          bridgeTarget={vendorBillBridgeTarget}
+          onClearBridgeTarget={onClearVendorBillBridge}
+          onNavigateToProcurementDoc={jumpToSubDoc}
         />
       )}
 

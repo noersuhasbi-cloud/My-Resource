@@ -121,6 +121,8 @@ import type {
   VendorBillItem,
   VendorBillStatus,
   VendorBillPaymentMethod,
+  ItemTraceabilityResponse,
+  VendorBillPoPrefillResponse,
   PromotionRule,
   CoaMappingConfig,
   PosCheckoutConfig,
@@ -5648,10 +5650,15 @@ function evaluateSystemUserModulePermission(
   }
 
   // 8. Account Payable (Vendor Bills, Payment Release, 3-Way Match Approval)
-  if (urlPath.startsWith('/admin/procurement/vendor-bills')) {
+  if (
+    urlPath.startsWith('/admin/procurement/vendor-bills') ||
+    (urlPath.startsWith('/admin/procurement/po/') && urlPath.endsWith('/bill-prefill'))
+  ) {
     const canAP = mp.accounting.view === true && mp.accounting.canAccessAP === true;
     if (isRead) {
-      return canAP || mp.procurement.approve === true ? { allowed: true } : deny('accounting', 'view');
+      return canAP || mp.procurement.approve === true || mp.procurement.view === true
+        ? { allowed: true }
+        : deny('accounting', 'view');
     }
     if (urlPath === '/admin/procurement/vendor-bills' && method === 'POST') {
       return canAP && mp.accounting.create === true ? { allowed: true } : deny('accounting', 'create');
@@ -5950,6 +5957,11 @@ function evaluateSystemUserModulePermission(
     urlPath.startsWith('/admin/scalability/climate-thresholds')
   ) {
     if (isRead) {
+      if (urlPath.startsWith('/admin/inventory/items/') && urlPath.endsWith('/traceability')) {
+        return mp.inventory.view === true || mp.procurement.view === true || mp.accounting.view === true
+          ? { allowed: true }
+          : deny('inventory', 'view');
+      }
       if (urlPath === '/admin/markdown-rules' || urlPath.startsWith('/admin/markdown-rules/')) {
         return mp.inventory.view === true || mp.fefoBatches.view === true || mp.qualityControl.view === true
           ? { allowed: true }
@@ -8130,6 +8142,121 @@ function applyServerState(snap: any) {
   if (snap.trialGovernanceConfig && typeof snap.trialGovernanceConfig === 'object') {
     trialGovernanceConfig = normalizeTrialGovernanceConfig(snap.trialGovernanceConfig);
   }
+  backfillBidirectionalProcurementLinks();
+}
+
+function pushUniqueDocId(existing: string[] | undefined, ...ids: Array<string | undefined | null>): string[] {
+  const out: string[] = Array.isArray(existing) ? existing.filter((v): v is string => typeof v === 'string' && v.trim().length > 0) : [];
+  for (const raw of ids) {
+    if (typeof raw === 'string' && raw.trim().length > 0 && !out.includes(raw.trim())) {
+      out.push(raw.trim());
+    }
+  }
+  return out;
+}
+
+function linkPrToPo(pr: PurchaseRequest | undefined, po: PurchaseOrder | undefined) {
+  if (!pr || !po) return;
+  pr.poId = pr.poId || po.id;
+  pr.linkedPoIds = pushUniqueDocId(pr.linkedPoIds, pr.poId, po.id);
+  po.prId = po.prId || pr.id;
+  po.sourcePrId = po.sourcePrId || pr.id;
+}
+
+function linkPoToGr(po: PurchaseOrder | undefined, gr: GoodsReceiptRecord | undefined) {
+  if (!po || !gr) return;
+  po.goodsReceiptIds = pushUniqueDocId(po.goodsReceiptIds, ...(po.linkedGrIds || []), gr.id);
+  po.linkedGrIds = [...po.goodsReceiptIds];
+  gr.sourcePoId = gr.sourcePoId || po.id;
+  gr.sourcePrId = gr.sourcePrId || po.sourcePrId || po.prId;
+}
+
+function linkVendorBillToPoAndGrs(bill: VendorBill | undefined) {
+  if (!bill) return;
+  bill.sourcePoId = bill.sourcePoId || bill.poId;
+  const matchedPo = purchaseOrders.find((p) => p.id === bill.poId || p.poNumber === bill.poId);
+  if (matchedPo) {
+    matchedPo.linkedVendorBillIds = pushUniqueDocId(matchedPo.linkedVendorBillIds, bill.id);
+    if (!bill.sourcePoId) bill.sourcePoId = matchedPo.id;
+  }
+  const candidateGrIds = pushUniqueDocId(bill.linkedGrIds, bill.goodsReceiptId);
+  const validGrIds: string[] = [];
+  candidateGrIds.forEach((grId) => {
+    const gr = goodsReceipts.find((g) => g.id === grId);
+    if (gr && (!matchedPo || gr.poId === matchedPo.id || gr.sourcePoId === matchedPo.id)) {
+      gr.linkedVendorBillIds = pushUniqueDocId(gr.linkedVendorBillIds, gr.linkedVendorBillId, bill.id);
+      if (!gr.linkedVendorBillId) {
+        gr.linkedVendorBillId = bill.id;
+      }
+      validGrIds.push(gr.id);
+    } else if (!gr) {
+      validGrIds.push(grId);
+    }
+  });
+  bill.linkedGrIds = validGrIds;
+}
+
+function backfillBidirectionalProcurementLinks() {
+  // 1. PR <-> PO
+  purchaseRequests.forEach((pr) => {
+    pr.linkedPoIds = pushUniqueDocId(pr.linkedPoIds, pr.poId);
+  });
+  purchaseOrders.forEach((po) => {
+    po.sourcePrId = po.sourcePrId || po.prId;
+    if (po.sourcePrId) {
+      const pr = purchaseRequests.find((p) => p.id === po.sourcePrId);
+      if (pr) linkPrToPo(pr, po);
+    } else {
+      const pr = purchaseRequests.find((p) => p.poId === po.id || p.linkedPoIds?.includes(po.id));
+      if (pr) linkPrToPo(pr, po);
+    }
+    po.linkedGrIds = pushUniqueDocId(po.linkedGrIds, ...(po.goodsReceiptIds || []));
+    po.goodsReceiptIds = [...po.linkedGrIds];
+    po.linkedVendorBillIds = pushUniqueDocId(po.linkedVendorBillIds);
+  });
+
+  // 2. PO <-> GR
+  goodsReceipts.forEach((gr) => {
+    gr.sourcePoId = gr.sourcePoId || gr.poId;
+    const po = purchaseOrders.find((p) => p.id === gr.poId || p.id === gr.sourcePoId);
+    if (po) {
+      linkPoToGr(po, gr);
+    }
+    gr.linkedVendorBillIds = pushUniqueDocId(gr.linkedVendorBillIds, gr.linkedVendorBillId);
+    if (gr.linkedVendorBillIds.length > 0 && !gr.linkedVendorBillId) {
+      gr.linkedVendorBillId = gr.linkedVendorBillIds[0];
+    }
+  });
+
+  // 3. PO / GR <-> VendorBill
+  vendorBillsList.forEach((bill) => {
+    linkVendorBillToPoAndGrs(bill);
+  });
+
+  // 4. Batches <-> GR / PR
+  inventoryBatches.forEach((batch) => {
+    if (!batch.sourceGrId) {
+      const matchedGr = goodsReceipts.find((g) => {
+        const poMatches = batch.sourcePoNumber ? g.poId === batch.sourcePoNumber || g.sourcePoId === batch.sourcePoNumber : true;
+        if (!poMatches) return false;
+        const hasExactLot = g.items.some((it) => it.sku === batch.sku && it.batchNumber === batch.lotNumber);
+        if (hasExactLot) return true;
+        if (batch.notes && batch.notes.includes(g.id)) return true;
+        return Boolean(batch.sourcePoNumber) && g.items.some((it) => it.sku === batch.sku);
+      });
+      if (matchedGr) {
+        batch.sourceGrId = matchedGr.id;
+        batch.sourcePrId = batch.sourcePrId || matchedGr.sourcePrId;
+        batch.sourcePoNumber = batch.sourcePoNumber || matchedGr.poId;
+      }
+    }
+    if (!batch.sourcePrId && batch.sourcePoNumber) {
+      const matchedPo = purchaseOrders.find((p) => p.id === batch.sourcePoNumber);
+      if (matchedPo) {
+        batch.sourcePrId = matchedPo.sourcePrId || matchedPo.prId;
+      }
+    }
+  });
 }
 
 const INITIAL_STATE_BASELINE_JSON = JSON.stringify(captureServerState());
@@ -8189,6 +8316,7 @@ function hydrateStateFromSnapshot() {
         ensureHalalComplianceMetadata();
         ensurePromoGimmickRuleSeeded();
         ensureConsignmentSeedItems();
+        backfillBidirectionalProcurementLinks();
         syncAllBatchesExpiryStatus(Date.now());
         syncWarehouseRackOccupancy();
         console.log(`[GroceMart Snapshot] Hydrated persistent state from ${STATE_SNAPSHOT_PATH}`);
@@ -8203,6 +8331,7 @@ function hydrateStateFromSnapshot() {
   ensureHalalComplianceMetadata();
   ensurePromoGimmickRuleSeeded();
   ensureConsignmentSeedItems();
+  backfillBidirectionalProcurementLinks();
   syncWarehouseRackOccupancy();
   seedBaselineEnterpriseNotifications();
 }
@@ -8244,6 +8373,7 @@ async function resetDemoStateToBaseline() {
     ensureHalalComplianceMetadata();
     ensurePromoGimmickRuleSeeded();
     ensureConsignmentSeedItems();
+    backfillBidirectionalProcurementLinks();
     syncAllBatchesExpiryStatus(Date.now());
     syncWarehouseRackOccupancy();
     systemUsers = createInitialSystemUsers();
@@ -13319,6 +13449,7 @@ async function startServer() {
       id: poId,
       createdAt: new Date().toISOString(),
       prId: pr.id,
+      sourcePrId: pr.id,
       storeId: pr.storeId || 'store-jkt-senopati',
       storeName: pr.storeName || 'GroceMart Senopati Flagship',
       warehouseZoneId: 'WH-JKT-SEN-COLD',
@@ -13345,10 +13476,12 @@ async function startServer() {
       notes: `Generated from approved PR ${pr.id}`,
       paymentTerms: 'Net 30',
       goodsReceiptIds: [],
+      linkedGrIds: [],
+      linkedVendorBillIds: [],
     };
     (newPO as any).incomingStockApplied = true;
 
-    pr.poId = poId;
+    linkPrToPo(pr, newPO);
     purchaseOrders.unshift(newPO);
 
     if (inv) {
@@ -13726,6 +13859,7 @@ async function startServer() {
 
     let grTotalCost = 0;
     let ownedGrTotalCost = 0;
+    const grId = `GR-2026-${(goodsReceipts.length + 1).toString().padStart(3, '0')}`;
     const ownedGrByClass: Record<ItemClassification, number> = {
       MERCHANDISE: 0,
       FIXED_ASSET: 0,
@@ -13894,6 +14028,8 @@ async function startServer() {
         storageZone: tier?.storageType || 'cold_chilled',
         supplierName: po.supplierName,
         sourcePoNumber: po.id,
+        sourceGrId: grId,
+        sourcePrId: po.sourcePrId || po.prId,
         notes: isConsignmentItem
           ? `Consignment (Titip Jual) received via GR against ${po.id} — Zero #1040/#2010 GL on receipt`
           : lineLandedShare > 0
@@ -13915,8 +14051,7 @@ async function startServer() {
     po.status = isPartial ? 'Partially Received' : 'Completed';
     po.actualDeliveryDate = new Date().toISOString().split('T')[0];
 
-    // Create Goods Receipt Record
-    const grId = `GR-2026-${(goodsReceipts.length + 1).toString().padStart(3, '0')}`;
+    // Create Goods Receipt Record (using pre-reserved grId)
     const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
 
@@ -13925,6 +14060,8 @@ async function startServer() {
     const newGR: GoodsReceiptRecord = {
       id: grId,
       poId: po.id,
+      sourcePoId: po.id,
+      sourcePrId: po.sourcePrId || po.prId,
       storeId: po.storeId,
       storeName: po.storeName,
       warehouseZoneId,
@@ -13942,13 +14079,13 @@ async function startServer() {
           ? `Partial shipment received. ${totalRemaining} units backorder remaining.`
           : 'Order 100% fulfilled.'),
       glEntryId: roundedOwnedCost > 0 ? gleId1 : undefined,
+      linkedVendorBillIds: [],
       unloadingLaborFeeIDR: safeUnloadingFee > 0 ? safeUnloadingFee : undefined,
       unloadingFeePayerCoa: safeUnloadingFee > 0 ? resolvedUnloadingPayerCoa : undefined,
       capitalizedToLandedCost: safeUnloadingFee > 0 ? isUnloadingCapitalized : undefined,
     };
 
-    po.goodsReceiptIds = po.goodsReceiptIds || [];
-    po.goodsReceiptIds.push(grId);
+    linkPoToGr(po, newGR);
     goodsReceipts.unshift(newGR);
 
     const createdJournalIds: string[] = [];
@@ -18035,6 +18172,9 @@ async function startServer() {
           status: 'fresh',
           storageZone: tier?.storageType || 'cold_chilled',
           supplierName: po.supplierName,
+          sourcePoNumber: po.id,
+          sourceGrId: grId,
+          sourcePrId: po.sourcePrId || po.prId,
           itemClassification: arrLineClass,
           notes: `Dock arrival confirmed via Multi-Branch Monitor (${po.id})`,
         });
@@ -18056,9 +18196,11 @@ async function startServer() {
       po.status = 'Completed';
       const gleId1 = `GLE-ARR-${Date.now()}-1`;
 
-      goodsReceipts.unshift({
+      const arrGrRecord: GoodsReceiptRecord = {
         id: grId,
         poId: po.id,
+        sourcePoId: po.id,
+        sourcePrId: po.sourcePrId || po.prId,
         vendorName: po.supplierName,
         storeId: po.storeId,
         storeName: po.storeName,
@@ -18070,7 +18212,10 @@ async function startServer() {
         items: receivedItems,
         receiverNotes: 'Dock arrival confirmed via Multi-Branch Monitor',
         glEntryId: totalVal > 0 ? gleId1 : undefined,
-      });
+        linkedVendorBillIds: [],
+      };
+      linkPoToGr(po, arrGrRecord);
+      goodsReceipts.unshift(arrGrRecord);
 
       if (totalVal > 0) {
         ensureRegulatoryCoaAccounts();
@@ -20239,6 +20384,26 @@ async function startServer() {
   });
 
   // --- 5. PROCUREMENT 3-WAY MATCHING & VENDOR BILLS ---
+  function getGrBilledSkuMapForOtherBills(
+    targetGrIds: string[],
+    poId: string,
+    excludeBillId?: string
+  ): Map<string, number> {
+    const billedMap = new Map<string, number>();
+    const targetGrSet = new Set(targetGrIds);
+    vendorBillsList.forEach((b) => {
+      if (b.status === 'VOID' || b.status === 'REJECTED') return;
+      if (excludeBillId && b.id === excludeBillId) return;
+      if (b.poId !== poId) return;
+      const bGrIds = pushUniqueDocId(b.linkedGrIds, b.goodsReceiptId);
+      if (!bGrIds.some((gid) => targetGrSet.has(gid))) return;
+      (b.items || []).forEach((it) => {
+        billedMap.set(it.sku, (billedMap.get(it.sku) || 0) + (Number(it.billedQuantity) || 0));
+      });
+    });
+    return billedMap;
+  }
+
   function postVendorBillApprovalGL(bill: VendorBill, approverName: string): string[] {
     if (bill.glEntryIds && bill.glEntryIds.length > 0) {
       return bill.glEntryIds;
@@ -20250,24 +20415,32 @@ async function startServer() {
     const billSubtotalIDR = Math.round(bill.subtotal * exRate);
     const billTaxIDR = billTotalIDR - billSubtotalIDR;
 
-    const gr = goodsReceipts.find((g) => g.id === bill.goodsReceiptId && g.poId === bill.poId);
     const po = purchaseOrders.find((p) => p.id === bill.poId);
-    const grAlreadyReconciled = vendorBillsList.some(
-      (b) =>
-        b.id !== bill.id &&
-        b.goodsReceiptId === bill.goodsReceiptId &&
-        (b.status === 'APPROVED' || b.status === 'PAID' || b.status === 'PARTIALLY_PAID')
-    );
+    const billGrIds = pushUniqueDocId(bill.linkedGrIds, bill.goodsReceiptId);
+    const matchedUnreconciledGrs = billGrIds
+      .map((gid) => goodsReceipts.find((g) => g.id === gid && g.poId === bill.poId))
+      .filter((gr): gr is GoodsReceiptRecord => {
+        if (!gr) return false;
+        const alreadyReconciled = vendorBillsList.some(
+          (b) =>
+            b.id !== bill.id &&
+            b.poId === bill.poId &&
+            (b.status === 'APPROVED' || b.status === 'PAID' || b.status === 'PARTIALLY_PAID') &&
+            pushUniqueDocId(b.linkedGrIds, b.goodsReceiptId).includes(gr.id)
+        );
+        return !alreadyReconciled;
+      });
 
     let grAccruedIDR = 0;
-    if (gr && !grAlreadyReconciled) {
-      grAccruedIDR = gr.items.reduce((sum, grIt) => {
+    matchedUnreconciledGrs.forEach((gr) => {
+      gr.items.forEach((grIt) => {
+        if (grIt.isConsignment) return;
         const poIt = po?.items.find((p) => p.sku === grIt.sku);
         const billIt = bill.items.find((bi) => bi.sku === grIt.sku);
         const unitCost = poIt?.unitCost ?? (billIt ? Math.round(billIt.unitCost * exRate) : 0);
-        return sum + Math.round(grIt.quantityReceived * unitCost);
-      }, 0);
-    }
+        grAccruedIDR += Math.round((Number(grIt.quantityReceived) || 0) * unitCost);
+      });
+    });
 
     const netInventoryVarianceIDR = billSubtotalIDR - grAccruedIDR;
     const netApAdjustmentIDR = billTotalIDR - grAccruedIDR;
@@ -20294,7 +20467,7 @@ async function startServer() {
         referenceId: bill.id,
         description:
           grAccruedIDR > 0
-            ? `Vendor Bill #${bill.id} invoice variance vs GR #${bill.goodsReceiptId} [${bill.billNumber}] (${approverName})`
+            ? `Vendor Bill #${bill.id} invoice variance vs GR [${billGrIds.join(', ')}] (${bill.billNumber}) (${approverName})`
             : `Vendor Bill #${bill.id} approved [${bill.billNumber} - ${bill.supplierName}]`,
       });
     }
@@ -20433,6 +20606,68 @@ async function startServer() {
     return glIds;
   }
 
+  app.get('/api/admin/procurement/po/:poId/bill-prefill', (req: Request, res: Response) => {
+    const { poId } = req.params;
+    const po = purchaseOrders.find((p) => p.id === poId || p.poNumber === poId);
+    if (!po) {
+      return res.status(404).json({ error: `Purchase Order '${poId}' not found.` });
+    }
+
+    const poGrs = goodsReceipts.filter((g) => g.poId === po.id || g.sourcePoId === po.id);
+    const activeBillsForPo = vendorBillsList.filter(
+      (b) => b.poId === po.id && b.status !== 'VOID' && b.status !== 'REJECTED'
+    );
+
+    const unbilledGrs = poGrs
+      .map((gr) => {
+        const billedMap = getGrBilledSkuMapForOtherBills([gr.id], po.id);
+        const items = (gr.items || []).map((grIt) => {
+          const receivedQty = Number(grIt.quantityReceived) || 0;
+          const alreadyBilledQty = billedMap.get(grIt.sku) || 0;
+          const unbilledQty = Math.max(0, Number((receivedQty - alreadyBilledQty).toFixed(2)));
+          return {
+            sku: grIt.sku,
+            productName: grIt.productName,
+            receivedQty,
+            alreadyBilledQty,
+            unbilledQty,
+          };
+        });
+        const totalReceivedQty = items.reduce((s, i) => s + i.receivedQty, 0);
+        const totalUnbilledQty = items.reduce((s, i) => s + i.unbilledQty, 0);
+        return {
+          grId: gr.id,
+          deliveryNoteNumber: gr.deliveryNoteNumber,
+          receivedAt: gr.receivedAt,
+          totalReceivedQty,
+          totalUnbilledQty,
+          items,
+        };
+      })
+      .filter((g) => g.totalUnbilledQty > 0);
+
+    const firstSku = po.items[0]?.sku;
+    const taxRule = firstSku ? skuTaxRulesList.find((r) => r.sku === firstSku) : undefined;
+    const suggestedTaxPercent =
+      typeof taxRule?.taxRatePercent === 'number'
+        ? taxRule.taxRatePercent
+        : typeof po.taxPercent === 'number'
+        ? po.taxPercent
+        : 11;
+
+    const payload: VendorBillPoPrefillResponse = {
+      poId: po.id,
+      supplierName: po.supplierName,
+      storeId: po.storeId,
+      storeName: po.storeName,
+      openAdvance1150IDR: getSupplierOpenAdvance1150IDR(po.supplierName),
+      suggestedTaxPercent,
+      unbilledGrs,
+      existingBillIds: activeBillsForPo.map((b) => b.id),
+    };
+    res.json(payload);
+  });
+
   app.get('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
     const { storeId, status, currency } = req.query;
     let filtered = vendorBillsList;
@@ -20453,6 +20688,7 @@ async function startServer() {
       billNumber,
       poId,
       goodsReceiptId,
+      linkedGrIds,
       supplierName = 'Farm Partner',
       supplierContact,
       storeId = 'store-jkt-senopati',
@@ -20474,8 +20710,55 @@ async function startServer() {
       return res.status(400).json({ error: 'billNumber, poId, and goodsReceiptId are required.' });
     }
 
+    const cleanBillNo = String(billNumber).trim();
+    const duplicateInvoice = vendorBillsList.find(
+      (b) =>
+        b.status !== 'VOID' &&
+        b.status !== 'REJECTED' &&
+        b.billNumber.trim().toLowerCase() === cleanBillNo.toLowerCase() &&
+        b.supplierName.trim().toLowerCase() === String(supplierName || '').trim().toLowerCase()
+    );
+    if (duplicateInvoice) {
+      return res.status(409).json({
+        error: `Duplicate Supplier Invoice blocked: Invoice '${cleanBillNo}' is already recorded as ${duplicateInvoice.id}.`,
+      });
+    }
+
     const po = purchaseOrders.find((p) => p.id === poId);
-    const gr = goodsReceipts.find((g) => g.id === goodsReceiptId);
+    const targetGrIds = pushUniqueDocId(Array.isArray(linkedGrIds) ? linkedGrIds : [], goodsReceiptId);
+    const matchedGrs = goodsReceipts.filter(
+      (g) => targetGrIds.includes(g.id) && (!po || g.poId === po.id || g.sourcePoId === po.id)
+    );
+    const gr = matchedGrs[0] || goodsReceipts.find((g) => g.id === goodsReceiptId);
+
+    // Prevent duplicate billing if ALL selected GR(s) are already 100% billed by active non-VOID bills
+    if (matchedGrs.length > 0 && po) {
+      const priorBilledBySku = getGrBilledSkuMapForOtherBills(
+        matchedGrs.map((g) => g.id),
+        po.id
+      );
+      const totalUnbilledAcrossMatchedGrs = matchedGrs.reduce((sumGr, grRec) => {
+        return (
+          sumGr +
+          (grRec.items || []).reduce((sumIt, it) => {
+            const billedBefore = priorBilledBySku.get(it.sku) || 0;
+            return sumIt + Math.max(0, (Number(it.quantityReceived) || 0) - billedBefore);
+          }, 0)
+        );
+      }, 0);
+      const anyActiveBillUsesExactGrs = vendorBillsList.some(
+        (b) =>
+          b.status !== 'VOID' &&
+          b.status !== 'REJECTED' &&
+          b.poId === po.id &&
+          pushUniqueDocId(b.linkedGrIds, b.goodsReceiptId).some((gid) => targetGrIds.includes(gid))
+      );
+      if (anyActiveBillUsesExactGrs && totalUnbilledAcrossMatchedGrs <= 0) {
+        return res.status(409).json({
+          error: `Selected Goods Receipt(s) [${targetGrIds.join(', ')}] on PO #${po.id} have already been 100% billed. Void an existing bill or select an unbilled GR.`,
+        });
+      }
+    }
 
     const enforcementMode = enterpriseSettings.threeWayMatching.enforcementMode || 'TOLERANCE_3_WAY';
     const qtyTolPercent =
@@ -20490,18 +20773,28 @@ async function startServer() {
     let hasAnyPriceVariance = false;
     let hasAnyQtyVariance = false;
 
+    const priorBilledAcrossPoGrs = po
+      ? getGrBilledSkuMapForOtherBills(matchedGrs.map((g) => g.id), po.id)
+      : new Map<string, number>();
+
     const validatedItems: VendorBillItem[] = items.map((it: any) => {
       const poItem = po?.items.find((p) => p.sku === it.sku);
-      const grItem = gr?.items.find((g) => g.sku === it.sku);
+      const totalMatchedGrReceived = matchedGrs.reduce((sum, grRec) => {
+        const line = grRec.items.find((g) => g.sku === it.sku);
+        return sum + (line ? Number(line.quantityReceived) || 0 : 0);
+      }, 0);
 
       const poQty = poItem ? poItem.orderedQuantity : it.billedQuantity;
       const qcRejectedQty = qcInspectionsList
         .filter((q) => q.referenceId === poId && q.sku === it.sku && q.disposition === 'REJECTED')
         .reduce((sum, q) => sum + (Number(q.totalBatchQuantity) || 0), 0);
+      const alreadyBilledOnTargetGrs = priorBilledAcrossPoGrs.get(it.sku) || 0;
       const grQty =
         enforcementMode === 'TWO_WAY'
-          ? (grItem ? grItem.quantityReceived : poQty)
-          : (grItem ? Math.max(0, grItem.quantityReceived - qcRejectedQty) : 0);
+          ? (matchedGrs.length > 0 ? totalMatchedGrReceived : poQty)
+          : (matchedGrs.length > 0
+              ? Math.max(0, totalMatchedGrReceived - qcRejectedQty - alreadyBilledOnTargetGrs)
+              : 0);
       const billedQty = Number(it.billedQuantity) || 0;
 
       const poPrice = poItem ? (currency === 'IDR' ? poItem.unitCost : poItem.unitCost / exchangeRate) : it.unitCost;
@@ -20559,14 +20852,18 @@ async function startServer() {
 
     const newBill: VendorBill = {
       id,
-      billNumber,
+      billNumber: cleanBillNo,
       supplierName,
       supplierContact,
       storeId,
       storeName,
       poId,
-      goodsReceiptId,
-      deliveryNoteNumber,
+      sourcePoId: po?.id || poId,
+      goodsReceiptId: matchedGrs[0]?.id || goodsReceiptId,
+      linkedGrIds: matchedGrs.length > 0 ? matchedGrs.map((g) => g.id) : targetGrIds,
+      deliveryNoteNumber:
+        deliveryNoteNumber ||
+        (matchedGrs.length > 0 ? matchedGrs.map((g) => g.deliveryNoteNumber).filter(Boolean).join(', ') : gr?.deliveryNoteNumber),
       billDate,
       dueDate: calculatedDueDate,
       paymentTerms: paymentTerms as any,
@@ -20596,6 +20893,7 @@ async function startServer() {
     }
 
     vendorBillsList.unshift(newBill);
+    linkVendorBillToPoAndGrs(newBill);
 
     // Flag 3-Way Match Variances exceeding tolerance into Approval Matrix
     let approvalRequestId: string | undefined;
@@ -20608,7 +20906,7 @@ async function startServer() {
         id: approvalRequestId,
         module: 'procurement_po',
         documentId: id,
-        documentTitle: `3-Way Match Variance [${billStatus}]: ${billNumber} (${supplierName})`,
+        documentTitle: `3-Way Match Variance [${billStatus}]: ${cleanBillNo} (${supplierName})`,
         requestedBy: actorName,
         requestedAt: timestamp,
         amountIDR: grandTotalIDR,
@@ -20622,7 +20920,7 @@ async function startServer() {
           sku: validatedItems[0]?.sku,
           productName: validatedItems[0]?.productName,
           quantity: validatedItems.reduce((s, it) => s + it.billedQuantity, 0),
-          reason: `3-Way Match ${billStatus} on PO #${poId} / GR #${goodsReceiptId} exceeding tolerance`,
+          reason: `3-Way Match ${billStatus} on PO #${poId} / GR #${targetGrIds.join(', ')} exceeding tolerance`,
         },
       });
 
@@ -20630,13 +20928,14 @@ async function startServer() {
         dedupeKey: `APR_QUEUE:${approvalRequestId}`,
         category: 'PROCUREMENT_FINANCE',
         severity: 'WARNING',
-        title: `3-Way Match Variance: ${billNumber}`,
-        message: `Vendor Bill ${billNumber} (${supplierName}) flagged ${billStatus} on PO #${poId} / GR #${goodsReceiptId} and routed to Approval Matrix.`,
+        title: `3-Way Match Variance: ${cleanBillNo}`,
+        message: `Vendor Bill ${cleanBillNo} (${supplierName}) flagged ${billStatus} on PO #${poId} / GR #${targetGrIds.join(', ')} and routed to Approval Matrix.`,
         metadataLabel: `${id} • Rp ${grandTotalIDR.toLocaleString('id-ID')}`,
         targetTab: 'approvals',
       });
     }
 
+    scheduleStateSave();
     res.json({
       success: true,
       vendorBill: newBill,
@@ -20683,6 +20982,7 @@ async function startServer() {
       summary: `Approved Vendor Bill #${bill.billNumber} (${bill.supplierName}) for Rp ${bill.grandTotalIDR.toLocaleString('id-ID')}.`,
     });
 
+    scheduleStateSave();
     res.json({ success: true, vendorBill: bill, syncedApprovalIds, message: `Vendor Bill #${id} approved.` });
   });
 
@@ -20756,6 +21056,7 @@ async function startServer() {
       true
     );
 
+    scheduleStateSave();
     res.json({ success: true, vendorBill: bill, message: `Payment of ${payAmt} recorded for Bill #${id}.` });
   });
 
@@ -20841,6 +21142,7 @@ async function startServer() {
       summary: `Voided Vendor Bill #${bill.billNumber} (${bill.supplierName}) with ${reversingIds.length} GL reversal(s): ${reason}`,
     });
 
+    scheduleStateSave();
     res.json({
       success: true,
       vendorBill: bill,
@@ -24790,6 +25092,8 @@ async function startServer() {
         totalAmount: totalPoCost,
         paymentTerms: 'Net 30',
         goodsReceiptIds: [],
+        linkedGrIds: [],
+        linkedVendorBillIds: [],
         notes: 'Auto-generated replenishment purchase order triggered by min-max inventory thresholds.',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -24798,6 +25102,7 @@ async function startServer() {
       purchaseOrders.unshift(newPo);
       generatedOrders.push(newPo);
     });
+    scheduleStateSave();
 
     res.json({
       success: true,
@@ -26400,19 +26705,98 @@ async function startServer() {
 
   app.post('/api/pos/shifts/open', (req: Request, res: Response) => {
     const scope = resolveRequestBranchScope(req);
+    const effectiveRole = getEffectiveRequestRole(req);
+    const resolvedSysUser = resolveSystemUserForRequest(req);
+    const isPosAuthorized =
+      ['cashier', 'store_manager', 'coo', 'super_admin', 'admin'].includes(effectiveRole) ||
+      resolvedSysUser?.modulePermissions?.pos?.view === true ||
+      resolvedSysUser?.modulePermissions?.pos?.create === true ||
+      resolvedSysUser?.modulePermissions?.pos?.edit === true;
+    if (!isPosAuthorized) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: `Permission Denied: Operator ${getEffectiveOperatorName(req)} (${effectiveRole}) is not authorized to open a POS cash register shift.`,
+      });
+    }
+
     const {
       storeId: rawStoreId,
+      branchId: rawBranchId,
       storeName: rawStoreName,
       registerId = 'REG-04',
-      openingFloatIDR = 500000,
+      shiftName: rawShiftName,
+      openingPettyCashIDR: rawPettyCash,
+      openingFloatIDR: rawOpeningFloat,
       cashierName,
-    } = req.body;
-    const storeId = resolvePosRetailStoreId(rawStoreId || (scope.isBranchScoped ? scope.storeId : 'store-jkt-senopati'));
+    } = req.body || {};
+
+    const storeId = resolvePosRetailStoreId(
+      rawStoreId || rawBranchId || (scope.isBranchScoped ? scope.storeId : 'store-jkt-senopati')
+    );
     const shiftBranchViolation = checkBranchIsolationViolation(req, storeId);
     if (shiftBranchViolation) {
       return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: shiftBranchViolation });
     }
-    const storeName = (rawStoreName && rawStoreId === storeId) ? rawStoreName : resolveBranchNameById(storeId);
+    const storeName = rawStoreName && (rawStoreId === storeId || rawBranchId === storeId)
+      ? rawStoreName
+      : resolveBranchNameById(storeId);
+
+    const rawFloatInput = rawPettyCash !== undefined ? rawPettyCash : rawOpeningFloat;
+    const parsedFloat = rawFloatInput !== undefined && rawFloatInput !== null && rawFloatInput !== ''
+      ? Number(rawFloatInput)
+      : 0;
+    if (!Number.isFinite(parsedFloat) || parsedFloat < 0) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_PETTY_CASH',
+        error: 'Open Petty Cash (Modal Awal Laci) must be a valid non-negative IDR amount.',
+      });
+    }
+    const cleanOpeningFloatIDR = Math.round(parsedFloat);
+
+    const nowDate = new Date();
+    const wibHour = Number(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit',
+        hour12: false,
+      }).format(nowDate)
+    ) % 24;
+    const autoShiftLabel =
+      wibHour >= 6 && wibHour < 14
+        ? 'Morning Shift (06:00 - 14:00)'
+        : wibHour >= 14 && wibHour < 22
+        ? 'Afternoon Shift (14:00 - 22:00)'
+        : 'Night Shift (22:00 - 06:00)';
+
+    let resolvedShiftLabel = autoShiftLabel;
+    let canonicalStaffShift: 'Morning Shift' | 'Afternoon Shift' | 'Night Shift' =
+      wibHour >= 6 && wibHour < 14
+        ? 'Morning Shift'
+        : wibHour >= 14 && wibHour < 22
+        ? 'Afternoon Shift'
+        : 'Night Shift';
+
+    if (typeof rawShiftName === 'string' && rawShiftName.trim().length > 0) {
+      const normalizedShift = rawShiftName.trim().toLowerCase();
+      if (normalizedShift.includes('morning') || normalizedShift.includes('pagi')) {
+        resolvedShiftLabel = 'Morning Shift (06:00 - 14:00)';
+        canonicalStaffShift = 'Morning Shift';
+      } else if (normalizedShift.includes('afternoon') || normalizedShift.includes('siang') || normalizedShift.includes('sore')) {
+        resolvedShiftLabel = 'Afternoon Shift (14:00 - 22:00)';
+        canonicalStaffShift = 'Afternoon Shift';
+      } else if (normalizedShift.includes('night') || normalizedShift.includes('malam')) {
+        resolvedShiftLabel = 'Night Shift (22:00 - 06:00)';
+        canonicalStaffShift = 'Night Shift';
+      } else {
+        return res.status(400).json({
+          success: false,
+          code: 'INVALID_SHIFT_NAME',
+          error: 'Shift must be Morning Shift (06:00 - 14:00), Afternoon Shift (14:00 - 22:00), or Night Shift (22:00 - 06:00).',
+        });
+      }
+    }
 
     const existing = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
     if (existing) {
@@ -26423,32 +26807,68 @@ async function startServer() {
       });
     }
 
+    const openedAtIso = nowDate.toISOString();
+    const openedAtWib =
+      new Intl.DateTimeFormat('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      })
+        .format(nowDate)
+        .replace(/\./g, ':') + ' WIB';
+    const currentWibYear =
+      Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Jakarta', year: 'numeric' }).format(nowDate)) ||
+      nowDate.getFullYear();
+
     const seq = (posShiftsList.length + 1).toString().padStart(4, '0');
     const newShift: PosRegisterShiftSession = {
-      id: `SHF-2026-${seq}`,
+      id: `SHF-${currentWibYear}-${seq}`,
       storeId,
       storeName,
-      registerId,
+      registerId: String(registerId || 'REG-04').trim() || 'REG-04',
+      shiftName: resolvedShiftLabel,
       cashierId: getEffectiveOperatorId(req),
-      cashierName: cashierName || getEffectiveOperatorName(req),
+      cashierName: (typeof cashierName === 'string' && cashierName.trim()) || getEffectiveOperatorName(req),
       status: 'OPEN',
-      openedAt: new Date().toISOString(),
-      openingFloatIDR: Math.max(0, Number(openingFloatIDR) || 0),
+      openedAt: openedAtIso,
+      openedAtWib,
+      openingFloatIDR: cleanOpeningFloatIDR,
+      openingPettyCashIDR: cleanOpeningFloatIDR,
       transactionCount: 0,
       expectedCashSalesIDR: 0,
       expectedQrisSalesIDR: 0,
       expectedEdcSalesIDR: 0,
-      expectedTotalCashInDrawerIDR: Math.max(0, Number(openingFloatIDR) || 0),
+      expectedTotalCashInDrawerIDR: cleanOpeningFloatIDR,
       cashRefundsIDR: 0,
       safeDropsTotalIDR: 0,
     };
 
     posShiftsList.unshift(newShift);
+    if (currentActiveStaffSession) {
+      currentActiveStaffSession.shiftName = canonicalStaffShift;
+      currentActiveStaffSession.activeShiftId = newShift.id;
+    }
+
+    appendAuditTrailLog({
+      req,
+      branchScope: storeId,
+      module: 'POS',
+      action: 'POS_REGISTER_OPENED',
+      referenceId: newShift.id,
+      summary: `${newShift.cashierName} opened register ${newShift.registerId} (${resolvedShiftLabel}) at ${openedAtWib} with Open Petty Cash Rp ${cleanOpeningFloatIDR.toLocaleString('id-ID')}.`,
+    });
+
     scheduleStateSave();
     res.json({
       success: true,
       shift: newShift,
-      message: `Shift ${newShift.id} opened with petty cash float Rp ${newShift.openingFloatIDR.toLocaleString('id-ID')}.`,
+      message: `Shift ${newShift.id} (${resolvedShiftLabel}) opened at ${openedAtWib} with petty cash float Rp ${newShift.openingFloatIDR.toLocaleString('id-ID')}.`,
     });
   });
 
@@ -30327,6 +30747,8 @@ async function startServer() {
     const newGr: GoodsReceiptRecord = {
       id: grId,
       poId: po.id,
+      sourcePoId: po.id,
+      sourcePrId: po.sourcePrId || po.prId,
       storeId: po.storeId,
       storeName: po.storeName,
       warehouseZoneId: 'CROSS-DOCK-BAY',
@@ -30340,9 +30762,9 @@ async function startServer() {
         receiverNotes ||
         `Cross-Dock Direct Fulfillment: ${createdTransfers.length} branch transfer(s) dispatched immediately without CDC shelf putaway.`,
       glEntryId: glVoucherIds[0],
+      linkedVendorBillIds: [],
     };
-    po.goodsReceiptIds = po.goodsReceiptIds || [];
-    po.goodsReceiptIds.push(grId);
+    linkPoToGr(po, newGr);
     goodsReceipts.unshift(newGr);
 
     emitEnterpriseNotification({
@@ -32548,6 +32970,8 @@ async function startServer() {
       notes: notes?.trim() || `Direct PO issued to ${cleanSupplier}`,
       paymentTerms,
       goodsReceiptIds: [],
+      linkedGrIds: [],
+      linkedVendorBillIds: [],
     };
 
     purchaseOrders.unshift(newPO);
@@ -35454,6 +35878,228 @@ async function startServer() {
         openVendorBillsCount: scopedBills.length,
       },
     });
+  });
+
+  // -------------------------------------------------------------
+  // ITEM & LOT INBOUND SUPPLY-CHAIN TRACEABILITY (PR -> PO -> GR -> LOT -> VENDOR BILL)
+  // -------------------------------------------------------------
+  app.get('/api/admin/inventory/items/:sku/traceability', (req: Request, res: Response) => {
+    const skuParam = decodeURIComponent(String(req.params.sku || '')).trim();
+    if (!skuParam) {
+      return res.status(400).json({ error: 'SKU is required for traceability lookup.' });
+    }
+
+    syncAllBatchesExpiryStatus(Date.now());
+    syncWarehouseRackOccupancy();
+    backfillBidirectionalProcurementLinks();
+
+    const invItem = inventoryList.find((i) => i.sku.toLowerCase() === skuParam.toLowerCase());
+    const tierFallback = storeInventoryTiers.find((t) => t.sku.toLowerCase() === skuParam.toLowerCase());
+    const batchFallback = inventoryBatches.find((b) => b.sku.toLowerCase() === skuParam.toLowerCase());
+    if (!invItem && !tierFallback && !batchFallback) {
+      return res.status(404).json({ error: `SKU '${skuParam}' not found in catalog or inventory lots.` });
+    }
+
+    const canonicalSku = invItem?.sku || tierFallback?.sku || batchFallback?.sku || skuParam;
+    const scope = resolveRequestBranchScope(req);
+    const branchLockedStore =
+      scope.isBranchScoped &&
+      scope.storeId !== 'ALL' &&
+      scope.storeId !== 'CONSOLIDATED' &&
+      scope.storeId !== 'WH-CDC-01'
+        ? scope.storeId
+        : null;
+    const hideCosts = shouldHideFinancialCostForRequest(req);
+
+    // 1. Batches for this SKU (and branch scope if locked)
+    const skuBatchesRaw = inventoryBatches.filter(
+      (b) =>
+        b.sku === canonicalSku &&
+        (!branchLockedStore || b.storeId === branchLockedStore)
+    );
+    const batchPoIds = new Set(skuBatchesRaw.map((b) => b.sourcePoNumber).filter((v): v is string => Boolean(v)));
+    const batchGrIds = new Set(skuBatchesRaw.map((b) => b.sourceGrId).filter((v): v is string => Boolean(v)));
+    const batchPrIds = new Set(skuBatchesRaw.map((b) => b.sourcePrId).filter((v): v is string => Boolean(v)));
+
+    // 2. Purchase Orders containing SKU or linked via batches
+    const skuPOsRaw = purchaseOrders.filter(
+      (po) =>
+        (!branchLockedStore || po.storeId === branchLockedStore) &&
+        (po.items.some((it) => it.sku === canonicalSku) || batchPoIds.has(po.id))
+    );
+    const poIdsSet = new Set(skuPOsRaw.map((po) => po.id));
+    const prIdsFromPos = new Set(
+      skuPOsRaw.map((po) => po.sourcePrId || po.prId).filter((v): v is string => Boolean(v))
+    );
+
+    // 3. Purchase Requests containing SKU or linked to matching POs/batches
+    const skuPRsRaw = purchaseRequests.filter(
+      (pr) =>
+        (!branchLockedStore || !pr.storeId || pr.storeId === branchLockedStore) &&
+        (pr.sku === canonicalSku ||
+          prIdsFromPos.has(pr.id) ||
+          batchPrIds.has(pr.id) ||
+          Boolean(pr.poId && poIdsSet.has(pr.poId)) ||
+          Boolean(pr.linkedPoIds?.some((pid) => poIdsSet.has(pid))))
+    );
+
+    // 4. Goods Receipts containing SKU or linked to matching POs/batches
+    const skuGRsRaw = goodsReceipts.filter(
+      (gr) =>
+        (!branchLockedStore || gr.storeId === branchLockedStore) &&
+        (gr.items.some((it) => it.sku === canonicalSku) ||
+          poIdsSet.has(gr.poId) ||
+          batchGrIds.has(gr.id))
+    );
+    const grIdsSet = new Set(skuGRsRaw.map((gr) => gr.id));
+
+    // 5. Vendor Bills containing SKU or linked to matching POs/GRs (hidden completely if financialCostMasked)
+    const skuBillsRaw = hideCosts
+      ? []
+      : vendorBillsList.filter(
+          (b) =>
+            (!branchLockedStore || b.storeId === branchLockedStore) &&
+            (b.items.some((it) => it.sku === canonicalSku) ||
+              poIdsSet.has(b.poId) ||
+              pushUniqueDocId(b.linkedGrIds, b.goodsReceiptId).some((gid) => grIdsSet.has(gid)))
+        );
+
+    const rackByCodeOrSku = (binCode?: string, storeId?: string) => {
+      if (binCode) {
+        const exact = warehouseRacks.find((r) => r.rackBinCode === binCode && (!storeId || r.storeId === storeId));
+        if (exact) return exact;
+      }
+      return warehouseRacks.find(
+        (r) => Array.isArray(r.assignedSkus) && r.assignedSkus.includes(canonicalSku) && (!storeId || r.storeId === storeId)
+      );
+    };
+
+    const byDateAsc = (a?: string, b?: string) =>
+      new Date(a || 0).getTime() - new Date(b || 0).getTime();
+
+    const responsePayload: ItemTraceabilityResponse = {
+      sku: canonicalSku,
+      productName: invItem?.productName || tierFallback?.productName || batchFallback?.productName || canonicalSku,
+      category: invItem?.category || tierFallback?.category || 'produce',
+      unit: invItem?.unit || tierFallback?.unit || 'unit',
+      supplierName: invItem?.supplierName || batchFallback?.supplierName,
+      itemClassification: invItem?.itemClassification || tierFallback?.itemClassification || 'MERCHANDISE',
+      financialCostMasked: hideCosts,
+      ...(hideCosts
+        ? {}
+        : {
+            unitCost: invItem?.unitCost ?? tierFallback?.unitCost,
+            wacUnitCost: invItem?.wacUnitCost ?? invItem?.unitCost ?? tierFallback?.unitCost,
+          }),
+      sellingPrice: invItem?.sellingPrice ?? tierFallback?.sellingPrice ?? batchFallback?.sellingPrice ?? 0,
+      purchaseRequests: [...skuPRsRaw]
+        .sort((a, b) => byDateAsc(a.createdAt, b.createdAt))
+        .map((pr) => ({
+          id: pr.id,
+          createdAt: pr.createdAt,
+          status: pr.status,
+          priority: pr.priority,
+          storeId: pr.storeId,
+          storeName: pr.storeName,
+          suggestedQuantity: pr.suggestedQuantity,
+          ...(hideCosts
+            ? {}
+            : {
+                estimatedUnitCost: pr.estimatedUnitCost,
+                totalEstimatedCost: pr.totalEstimatedCost,
+              }),
+          poId: pr.poId,
+          linkedPoIds: pr.linkedPoIds,
+          requestedBy: pr.requestedBy,
+        })),
+      purchaseOrders: [...skuPOsRaw]
+        .sort((a, b) => byDateAsc(a.createdAt, b.createdAt))
+        .map((po) => ({
+          id: po.id,
+          createdAt: po.createdAt,
+          status: po.status,
+          supplierName: po.supplierName,
+          storeId: po.storeId,
+          storeName: po.storeName,
+          sourcePrId: po.sourcePrId || po.prId,
+          linkedGrIds: po.linkedGrIds || po.goodsReceiptIds || [],
+          linkedVendorBillIds: hideCosts ? [] : (po.linkedVendorBillIds || []),
+          expectedDeliveryDate: po.expectedDeliveryDate,
+          ...(hideCosts
+            ? {}
+            : {
+                subtotalCost: po.subtotalCost,
+                taxAmount: po.taxAmount,
+                totalCost: po.totalCost,
+              }),
+          items: po.items.map((it) => ({
+            sku: it.sku,
+            productName: it.productName,
+            orderedQuantity: it.orderedQuantity,
+            receivedQuantity: it.receivedQuantity,
+            remainingBackorder: it.remainingBackorder,
+            ...(hideCosts
+              ? {}
+              : {
+                  unitCost: it.unitCost,
+                  totalCost: it.totalCost,
+                }),
+          })),
+        })),
+      goodsReceipts: [...skuGRsRaw]
+        .sort((a, b) => byDateAsc(a.receivedAt, b.receivedAt))
+        .map((gr) => ({
+          id: gr.id,
+          poId: gr.poId,
+          sourcePoId: gr.sourcePoId || gr.poId,
+          sourcePrId: gr.sourcePrId,
+          storeId: gr.storeId,
+          storeName: gr.storeName,
+          warehouseZoneId: gr.warehouseZoneId,
+          deliveryNoteNumber: gr.deliveryNoteNumber,
+          vendorName: gr.vendorName,
+          receivedAt: gr.receivedAt,
+          receivedBy: gr.receivedBy,
+          isPartial: gr.isPartial,
+          linkedVendorBillId: hideCosts ? undefined : gr.linkedVendorBillId,
+          linkedVendorBillIds: hideCosts ? [] : (gr.linkedVendorBillIds || []),
+          items: gr.items,
+        })),
+      batches: [...skuBatchesRaw]
+        .sort((a, b) => byDateAsc(a.receivedDate, b.receivedDate))
+        .map((b) => {
+          const rack = rackByCodeOrSku(b.rackBinCode, b.storeId);
+          return {
+            batchId: b.batchId,
+            lotNumber: b.lotNumber,
+            storeId: b.storeId,
+            storeName: b.storeName,
+            warehouseZoneId: b.warehouseZoneId,
+            rackBinCode: b.rackBinCode || rack?.rackBinCode,
+            rackLabel: rack?.storageZone ? `${rack.storageZone}${rack.rackHalalZone ? ` (${rack.rackHalalZone})` : ''}` : rack?.notes,
+            initialQuantity: b.initialQuantity,
+            currentStock: b.currentStock,
+            ...(hideCosts
+              ? {}
+              : {
+                  unitCost: b.unitCost,
+                  landedCostPerUnitDelta: b.landedCostPerUnitDelta,
+                }),
+            receivedDate: b.receivedDate,
+            expiryDate: b.expiryDate,
+            daysUntilExpiry: b.daysUntilExpiry,
+            status: b.status,
+            supplierName: b.supplierName,
+            sourcePoNumber: b.sourcePoNumber,
+            sourceGrId: b.sourceGrId,
+            sourcePrId: b.sourcePrId,
+            isConsignment: b.isConsignment,
+          };
+        }),
+      vendorBills: [...skuBillsRaw].sort((a, b) => byDateAsc(a.createdAt, b.createdAt)),
+    };
+
+    res.json(responsePayload);
   });
 
   // -------------------------------------------------------------

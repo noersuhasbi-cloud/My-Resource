@@ -34,6 +34,8 @@ import type {
   ErpConfigurationSettings,
   EnterpriseNotification,
   TrialGovernanceStatusSnapshot,
+  ProcurementFocusTarget,
+  VendorBillBridgeTarget,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -218,6 +220,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     getDefaultAccountingSubTabForSession(initialStaffSession)
   );
 
+  // Cross-module bidirectional traceability jump targets
+  const [procurementFocusTarget, setProcurementFocusTarget] = useState<ProcurementFocusTarget | null>(null);
+  const [vendorBillBridgeTarget, setVendorBillBridgeTarget] = useState<VendorBillBridgeTarget | null>(null);
+
   // Additive Trial / Demo Governance snapshot (server-authoritative clock)
   const [trialGovernance, setTrialGovernance] = useState<TrialGovernanceStatusSnapshot | null>(null);
 
@@ -315,6 +321,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setSelectedFinanceStore((prev) => (prev === assigned ? prev : assigned));
     }
   }, [activeStaffSession]);
+
+  const navigateToProcurementDoc = useCallback(
+    (subTab: 'pr' | 'po' | 'gr', docId: string) => {
+      const portalEnabled = Boolean(
+        enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal
+      );
+      if (!isDashboardTabAllowed(activeStaffSession, 'procurement', trialGovernance, portalEnabled)) {
+        onShowToast('Access Restricted', 'Role aktif tidak memiliki izin akses ke modul Procurement.');
+        return;
+      }
+      setActiveTab('procurement');
+      setProcurementFocusTarget({
+        subTab,
+        docId,
+        triggerNonce: Date.now() + Math.random(),
+      });
+    },
+    [activeStaffSession, enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal, propEnableB2BPortal, trialGovernance, onShowToast]
+  );
+
+  const navigateToVendorBillBridge = useCallback(
+    (bridge: Omit<VendorBillBridgeTarget, 'triggerNonce'>) => {
+      const portalEnabled = Boolean(
+        enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal
+      );
+      const payload: VendorBillBridgeTarget = {
+        ...bridge,
+        triggerNonce: Date.now() + Math.random(),
+      };
+      const canRouteToAccountingAP =
+        isDashboardTabAllowed(activeStaffSession, 'accounting', trialGovernance, portalEnabled) &&
+        isAccountingSubTabAllowed(activeStaffSession, 'vendor_bills');
+      if (canRouteToAccountingAP) {
+        setActiveTab('accounting');
+        setAccountingDeepSubTab('vendor_bills');
+        setVendorBillBridgeTarget(payload);
+        return;
+      }
+      if (isDashboardTabAllowed(activeStaffSession, 'procurement', trialGovernance, portalEnabled)) {
+        setActiveTab('procurement');
+        setVendorBillBridgeTarget(payload);
+        setProcurementFocusTarget({
+          subTab: 'vendor_bills',
+          docId: bridge.billId || bridge.poId || '',
+          triggerNonce: payload.triggerNonce,
+        });
+        return;
+      }
+      onShowToast('Access Restricted', 'Role aktif tidak memiliki izin akses ke modul Vendor Bills (AP).');
+    },
+    [activeStaffSession, enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal, propEnableB2BPortal, trialGovernance, onShowToast]
+  );
 
   // Loading & refresh
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -2105,6 +2163,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 setRemovalStrategies(res.config);
               }}
               onNavigateTab={(tab) => setActiveTab(tab)}
+              onNavigateToProcurementDoc={navigateToProcurementDoc}
+              onNavigateToVendorBill={navigateToVendorBillBridge}
               onAuditSku={(sku) => {
                 setAdjustingSku(sku);
                 setAdjustQty(0);
@@ -2324,6 +2384,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             goodsReceipts={goodsReceipts}
             vendorBills={vendorBills}
             storeOutlets={storeOutlets}
+            focusTarget={procurementFocusTarget}
+            onClearFocusTarget={() => setProcurementFocusTarget(null)}
+            vendorBillBridgeTarget={vendorBillBridgeTarget}
+            onClearVendorBillBridge={() => setVendorBillBridgeTarget(null)}
+            onNavigateToVendorBill={navigateToVendorBillBridge}
+            onNavigateToDoc={navigateToProcurementDoc}
             onRefreshData={handleRefreshData}
             onShowToast={onShowToast}
           />
@@ -2387,6 +2453,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onShowToast={onShowToast}
             activeSubTab={accountingDeepSubTab}
             onSubTabChange={(sub) => setAccountingDeepSubTab(sub)}
+            vendorBillBridgeTarget={vendorBillBridgeTarget}
+            onClearVendorBillBridge={() => setVendorBillBridgeTarget(null)}
+            onNavigateToProcurementDoc={navigateToProcurementDoc}
           />
         )}
 

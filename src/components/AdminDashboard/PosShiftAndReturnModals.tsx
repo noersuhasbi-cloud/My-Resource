@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   Banknote,
+  Calendar,
   CheckCircle2,
   ClipboardCheck,
   Clock,
@@ -39,6 +40,24 @@ interface PosShiftModalProps {
   onShowToast: (title: string, message: string) => void;
 }
 
+const POS_SHIFT_OPTIONS = [
+  'Morning Shift (06:00 - 14:00)',
+  'Afternoon Shift (14:00 - 22:00)',
+  'Night Shift (22:00 - 06:00)',
+] as const;
+
+function getDefaultPosShiftForWib(now: Date = new Date()): (typeof POS_SHIFT_OPTIONS)[number] {
+  const hourStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    hour12: false,
+  }).format(now);
+  const wibHour = Number(hourStr) % 24;
+  if (wibHour >= 6 && wibHour < 14) return 'Morning Shift (06:00 - 14:00)';
+  if (wibHour >= 14 && wibHour < 22) return 'Afternoon Shift (14:00 - 22:00)';
+  return 'Night Shift (22:00 - 06:00)';
+}
+
 export const PosShiftModal: React.FC<PosShiftModalProps> = ({
   theme,
   isOpen,
@@ -54,7 +73,9 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
   const isLight = theme === 'light';
   const { triggerPrint } = usePrint();
   const [openingFloatIDR, setOpeningFloatIDR] = useState<number>(500000);
+  const [shiftName, setShiftName] = useState<string>(() => getDefaultPosShiftForWib());
   const [registerId, setRegisterId] = useState<string>('REG-04');
+  const [liveWibNow, setLiveWibNow] = useState<Date>(() => new Date());
   const [denomCounts, setDenomCounts] = useState<Record<number, number>>({
     100000: 5,
     50000: 0,
@@ -72,6 +93,16 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [finalizedZReport, setFinalizedZReport] = useState<PosRegisterShiftSession | null>(null);
 
+  useEffect(() => {
+    if (!isOpen || activeShift) return;
+    setLiveWibNow(new Date());
+    setShiftName(getDefaultPosShiftForWib(new Date()));
+    const timer = window.setInterval(() => {
+      setLiveWibNow(new Date());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isOpen, activeShift]);
+
   const countedCashTotal = useMemo(() => {
     return IDR_DENOMINATIONS.reduce(
       (sum, denom) => sum + denom * (Math.max(0, denomCounts[denom] || 0)),
@@ -81,16 +112,40 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
 
   if (!isOpen) return null;
 
+  const liveWibDateStr = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(liveWibNow);
+
+  const liveWibTimeStr =
+    new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+      .format(liveWibNow)
+      .replace(/\./g, ':') + ' WIB';
+
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      const cleanFloat = Math.max(0, Math.round(Number(openingFloatIDR) || 0));
       const res = await apiClient.openPosShift({
         storeId,
+        branchId: storeId,
         storeName,
         registerId,
-        openingFloatIDR,
+        shiftName,
+        openingPettyCashIDR: cleanFloat,
+        openingFloatIDR: cleanFloat,
         cashierName,
+        clientTimestampIso: new Date().toISOString(),
       });
       onShowToast('Register Shift Opened', res.message);
       setFinalizedZReport(null);
@@ -286,14 +341,29 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
             >
               <div className="font-bold flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 text-amber-600" />
-                <span>Declare Opening Petty Cash Float (Modal Awal Laci)</span>
+                <span>Declare Shift &amp; Open Petty Cash Float (Modal Awal Laci)</span>
               </div>
               <p className="text-[11px] mt-0.5">
-                Cashier must declare the starting cash drawer float before settling cash transactions so end-of-shift Z-Report variance (COA #5220) is tracked accurately.
+                Cashier must declare the shift, live timestamp, and starting petty cash drawer float before processing any sales so Z-Report variance (COA #5220) is reconciled accurately.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div
+              className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-2 ${
+                isLight ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                <span className="font-semibold">{liveWibDateStr}</span>
+              </div>
+              <div className="flex items-center gap-1.5 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400">
+                <Clock className="w-3.5 h-3.5" />
+                <span>{liveWibTimeStr}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block font-semibold mb-1">Store Hub</label>
                 <input
@@ -304,6 +374,22 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                     isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Workstation Shift</label>
+                <select
+                  value={shiftName}
+                  onChange={(e) => setShiftName(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-xl border cursor-pointer ${
+                    isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                  }`}
+                >
+                  {POS_SHIFT_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block font-semibold mb-1">Register Terminal ID</label>
@@ -317,11 +403,12 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                 />
               </div>
               <div>
-                <label className="block font-semibold mb-1">Opening Cash Float (IDR)</label>
+                <label className="block font-semibold mb-1">Open Petty Cash / Drawer Float (IDR)</label>
                 <input
                   type="number"
                   min={0}
                   step={10000}
+                  required
                   value={openingFloatIDR}
                   onChange={(e) => setOpeningFloatIDR(Math.max(0, Number(e.target.value) || 0))}
                   className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
@@ -344,7 +431,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                 disabled={isSubmitting}
                 className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-bold cursor-pointer"
               >
-                {isSubmitting ? 'Opening Shift...' : 'Open Shift & Start Register'}
+                {isSubmitting ? 'Opening Register...' : 'Open Register & Start Shift'}
               </button>
             </div>
           </form>

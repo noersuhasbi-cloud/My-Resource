@@ -37,8 +37,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
   const [identifierInput, setIdentifierInput] = useState<string>('');
   const [passwordInput, setPasswordInput] = useState<string>('');
-  const [selectedShift, setSelectedShift] = useState<'Morning Shift' | 'Afternoon Shift' | 'Night Shift'>('Morning Shift');
-  const [rememberWorkstation, setRememberWorkstation] = useState<boolean>(true);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -75,18 +73,15 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
       const payload = {
         identifier: trimmedIdentifier,
         password: passwordInput,
-        shiftName: selectedShift,
       };
 
       const res = await apiClient.adminLogin(payload);
       if (res.success && res.session) {
         apiClient.setOperatorContext({ ...res.session, authToken: res.token });
-        if (rememberWorkstation) {
-          try {
-            localStorage.setItem('grocemart_admin_session', JSON.stringify(res.session));
-            if (res.token) localStorage.setItem('grocemart_auth_token', res.token);
-          } catch {}
-        }
+        try {
+          localStorage.setItem('grocemart_admin_session', JSON.stringify(res.session));
+          if (res.token) localStorage.setItem('grocemart_auth_token', res.token);
+        } catch {}
         if (onShowToast) {
           onShowToast(
             'Authentication Successful',
@@ -244,36 +239,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-              </div>
-            </div>
-
-            {/* Workstation Shift & Session Persistence */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Workstation Shift
-                </label>
-                <select
-                  value={selectedShift}
-                  onChange={(e) => setSelectedShift(e.target.value as any)}
-                  className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] cursor-pointer"
-                >
-                  <option value="Morning Shift">Morning Shift (06:00 - 14:00)</option>
-                  <option value="Afternoon Shift">Afternoon Shift (14:00 - 22:00)</option>
-                  <option value="Night Shift">Night Shift (22:00 - 06:00)</option>
-                </select>
-              </div>
-
-              <div className="flex items-center sm:pt-6">
-                <label className="flex items-center gap-2.5 text-xs text-gray-700 dark:text-slate-300 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={rememberWorkstation}
-                    onChange={(e) => setRememberWorkstation(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] border-gray-300 dark:border-slate-700"
-                  />
-                  <span>Remember authenticated session on this terminal</span>
-                </label>
               </div>
             </div>
 

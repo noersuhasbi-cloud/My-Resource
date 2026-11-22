@@ -77,8 +77,27 @@ import {
   WifiOff,
   RefreshCw,
   Gift,
+  Calendar,
 } from 'lucide-react';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
+
+const POS_SHIFT_OPTIONS = [
+  'Morning Shift (06:00 - 14:00)',
+  'Afternoon Shift (14:00 - 22:00)',
+  'Night Shift (22:00 - 06:00)',
+] as const;
+
+function getDefaultWibShiftName(now: Date = new Date()): (typeof POS_SHIFT_OPTIONS)[number] {
+  const hourStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    hour12: false,
+  }).format(now);
+  const wibHour = Number(hourStr) % 24;
+  if (wibHour >= 6 && wibHour < 14) return 'Morning Shift (06:00 - 14:00)';
+  if (wibHour >= 14 && wibHour < 22) return 'Afternoon Shift (14:00 - 22:00)';
+  return 'Night Shift (22:00 - 06:00)';
+}
 
 const OFFLINE_POS_QUEUE_KEY = 'grocematrix_offline_pos_queue';
 const POS_ACTIVE_CART_STORAGE_KEY = 'grocematrix_active_pos_cart';
@@ -298,9 +317,26 @@ export const PosModule: React.FC<PosModuleProps> = ({
   const [shiftHistory, setShiftHistory] = useState<PosRegisterShiftSession[]>([]);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState<boolean>(false);
   const isRegisterOpen = Boolean(activeShift && activeShift.status === 'OPEN');
+  const [openGateClock, setOpenGateClock] = useState<Date>(() => new Date());
+  const [openGateShiftName, setOpenGateShiftName] = useState<string>(() => getDefaultWibShiftName());
+  const [openGateRegisterId, setOpenGateRegisterId] = useState<string>('REG-04');
+  const [openGatePettyCashInput, setOpenGatePettyCashInput] = useState<string>('500000');
+  const [openGateError, setOpenGateError] = useState<string>('');
+  const [isOpeningRegister, setIsOpeningRegister] = useState<boolean>(false);
   const [isSafeDropModalOpen, setIsSafeDropModalOpen] = useState<boolean>(false);
   const [rmaTargetReceipt, setRmaTargetReceipt] = useState<POSTransactionReceipt | null>(null);
   const [isBarcodeLabelModalOpen, setIsBarcodeLabelModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isRegisterOpen) return;
+    const now = new Date();
+    setOpenGateClock(now);
+    setOpenGateShiftName(getDefaultWibShiftName(now));
+    const timer = window.setInterval(() => {
+      setOpenGateClock(new Date());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isRegisterOpen]);
   const [safeDropThresholdIDR, setSafeDropThresholdIDR] = useState<number>(5000000);
   const [loyaltyPointRedeemValueIDR, setLoyaltyPointRedeemValueIDR] = useState<number>(100);
   const [minMarginFloorPct, setMinMarginFloorPct] = useState<number>(2.0);
@@ -585,7 +621,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
 
   const cashChange = Math.max(0, cashTendered - totalAmount);
 
-  // Cart operations (with live availableStock cap)
+  // Cart operations (with live availableStock cap & mandatory Open Register lock)
   const addToCart = (
     product: POSProductItem,
     quantity = 1,
@@ -593,6 +629,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
     weightGrams?: number,
     grossGrams?: number
   ) => {
+    if (!isRegisterOpen) {
+      onShowToast(
+        'Register Locked',
+        'Complete Open Register & Petty Cash declaration before adding items.'
+      );
+      return;
+    }
     const requestedAdd = isWeighted && weightGrams ? Number((weightGrams / 1000).toFixed(3)) : quantity;
     const currentInCart = cart
       .filter((c) => c.sku === product.sku)
@@ -802,6 +845,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
   // Barcode search and instant add (including Variable-Weight embedded scale barcodes)
   const handleBarcodeSubmit = (e?: React.FormEvent, directBarcodeInput?: string) => {
     if (e) e.preventDefault();
+    if (!isRegisterOpen) {
+      onShowToast(
+        'Register Locked',
+        'Complete Open Register & Petty Cash declaration before scanning items.'
+      );
+      return;
+    }
     const rawCode = (directBarcodeInput || barcodeInput).trim();
     if (!rawCode) return;
 
@@ -1475,7 +1525,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
                 {activeStaffSession?.userRole || 'cashier'}
               </span>
               <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:inline">
-                ({activeStaffSession?.shiftName || 'Morning Shift'})
+                ({isRegisterOpen ? (activeShift?.shiftName || activeStaffSession?.shiftName || 'Shift Open') : 'Register Closed'})
               </span>
             </div>
           </div>
@@ -1497,7 +1547,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <span>
                 {activeShift
                   ? `Shift Open · ${activeShift.transactionCount} Txn`
-                  : 'Open Shift (Modal Awal)'}
+                  : 'Open Register (Modal Awal)'}
               </span>
             </button>
 
@@ -1615,63 +1665,314 @@ export const PosModule: React.FC<PosModuleProps> = ({
           </div>
         )}
 
-        {/* Barcode Scanner Input Form */}
-        <form onSubmit={handleBarcodeSubmit} className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800/80 flex items-center gap-2">
-          <div className="relative flex-1">
-            <Scan className="w-4 h-4 text-emerald-600 dark:text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              ref={barcodeInputRef}
-              type="text"
-              value={barcodeInput}
-              onChange={(e) => setBarcodeInput(e.target.value)}
-              placeholder="Barcode Scanner Ready — Scan SKU (e.g. SKU-PRD-001) or press Enter to add..."
-              className={`w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono ${
-                isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
-              }`}
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-          >
-            <Scan className="w-3.5 h-3.5" />
-            <span>Scan / Add</span>
-          </button>
-        </form>
+        {/* Barcode Scanner & Variable-Weight Controls (Active Only When Register Is Open) */}
+        {isRegisterOpen && (
+          <>
+            <form onSubmit={handleBarcodeSubmit} className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800/80 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Scan className="w-4 h-4 text-emerald-600 dark:text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  ref={barcodeInputRef}
+                  type="text"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  placeholder="Barcode Scanner Ready — Scan SKU (e.g. SKU-PRD-001) or press Enter to add..."
+                  className={`w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono ${
+                    isLight ? 'bg-gray-50 border-gray-200 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100 dark:placeholder:text-slate-500'
+                  }`}
+                />
+              </div>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+              >
+                <Scan className="w-3.5 h-3.5" />
+                <span>Scan / Add</span>
+              </button>
+            </form>
 
-        {/* Quick Scale Variable-Weight Barcode Test Buttons */}
-        <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[11px]">
-          <span className="text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1">
-            <Scale className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            Variable Scale Barcode Tests:
-          </span>
-          {SAMPLE_SCALE_BARCODES.map((s) => (
-            <button
-              key={s.barcode}
-              type="button"
-              onClick={() => {
-                setBarcodeInput(s.barcode);
-                handleBarcodeSubmit(undefined, s.barcode);
-              }}
-              className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 font-mono transition-all flex items-center gap-1"
-              title={`Simulate scanning scale tag: ${s.barcode}`}
-            >
-              <span>{s.label}</span>
-              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">({s.weightGrams}g)</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setIsBarcodeLabelModalOpen(true)}
-            className="px-2.5 py-1 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-sans font-bold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
-          >
-            <Tag className="w-3 h-3" />
-            <span>Generate EAN-13 Scale &amp; Shelf Labels</span>
-          </button>
-        </div>
+            {/* Quick Scale Variable-Weight Barcode Test Buttons */}
+            <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[11px]">
+              <span className="text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1">
+                <Scale className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                Variable Scale Barcode Tests:
+              </span>
+              {SAMPLE_SCALE_BARCODES.map((s) => (
+                <button
+                  key={s.barcode}
+                  type="button"
+                  onClick={() => {
+                    setBarcodeInput(s.barcode);
+                    handleBarcodeSubmit(undefined, s.barcode);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 font-mono transition-all flex items-center gap-1"
+                  title={`Simulate scanning scale tag: ${s.barcode}`}
+                >
+                  <span>{s.label}</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">({s.weightGrams}g)</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setIsBarcodeLabelModalOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-[#0F4C3A] hover:bg-[#0b382b] text-white font-sans font-bold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <Tag className="w-3 h-3" />
+                <span>Generate EAN-13 Scale &amp; Shelf Labels</span>
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* 2. Main POS Workspace: Product Grid (60%) + Cart Ticket (40%) */}
+      {/* 2. MANDATORY POS OPEN REGISTER & PETTY CASH SESSION GATE OR ACTIVE POS WORKSPACE */}
+      {!isRegisterOpen ? (
+        (() => {
+          const liveWibDateStr = new Intl.DateTimeFormat('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            weekday: 'long',
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+          }).format(openGateClock);
+          const liveWibTimeStr =
+            new Intl.DateTimeFormat('id-ID', {
+              timeZone: 'Asia/Jakarta',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false,
+            })
+              .format(openGateClock)
+              .replace(/\./g, ':') + ' WIB';
+          const liveWibYear = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Jakarta',
+            year: 'numeric',
+          }).format(openGateClock);
+
+          const parsedPettyCash = openGatePettyCashInput.trim() === '' ? NaN : Number(openGatePettyCashInput);
+          const isValidPettyCash = Number.isFinite(parsedPettyCash) && parsedPettyCash >= 0;
+
+          const handleInlineOpenRegister = async (e: React.FormEvent) => {
+            e.preventDefault();
+            if (!isValidPettyCash) {
+              setOpenGateError('Masukkan nominal Open Petty Cash / Modal Laci awal yang valid (>= Rp 0).');
+              return;
+            }
+            setOpenGateError('');
+            setIsOpeningRegister(true);
+            try {
+              const cleanFloat = Math.round(parsedPettyCash);
+              const res = await apiClient.openPosShift({
+                storeId: currentStoreInfo.storeId,
+                branchId: currentStoreInfo.storeId,
+                storeName: currentStoreInfo.storeName,
+                registerId: openGateRegisterId.trim() || 'REG-04',
+                shiftName: openGateShiftName,
+                openingPettyCashIDR: cleanFloat,
+                openingFloatIDR: cleanFloat,
+                cashierName: activeStaffSession?.userName || 'Frontline Cashier',
+                clientTimestampIso: new Date().toISOString(),
+              });
+              setActiveShift(res.shift);
+              loadShiftState();
+              onShowToast('Register Opened', res.message);
+            } catch (err: any) {
+              const msg = err?.message || 'Gagal membuka register kasir.';
+              setOpenGateError(msg);
+              onShowToast('Open Register Error', msg);
+            } finally {
+              setIsOpeningRegister(false);
+            }
+          };
+
+          return (
+            <div className="py-2 sm:py-4">
+              <div
+                className={`max-w-2xl mx-auto rounded-2xl border shadow-sm overflow-hidden ${
+                  isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+                }`}
+              >
+                {/* Gate Header */}
+                <div
+                  className={`p-5 sm:p-6 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                    isLight
+                      ? 'border-gray-200 bg-gradient-to-r from-emerald-50/70 via-white to-amber-50/40'
+                      : 'border-slate-800/80 bg-gradient-to-r from-[#12141C] via-[#12141C] to-emerald-950/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-[#0F4C3A] text-white flex items-center justify-center shadow-sm shrink-0">
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 block">
+                        POS Terminal Locked · Mandatory Cash Drawer Gate
+                      </span>
+                      <h2 className="text-lg sm:text-xl font-bold tracking-tight">
+                        Open Register &amp; Petty Cash Session
+                      </h2>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 self-start sm:self-auto shrink-0">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Register Closed
+                  </span>
+                </div>
+
+                {/* Live Synchronized Date, Clock & Year Banner */}
+                <div
+                  className={`mx-5 sm:mx-6 mt-5 p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    isLight
+                      ? 'bg-[#EEF2F0]/70 border-emerald-200/80 text-[#18221D]'
+                      : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Calendar className="w-5 h-5 text-[#0F4C3A] dark:text-emerald-400 shrink-0" />
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                        Synchronized System Date (WIB · Year {liveWibYear})
+                      </span>
+                      <span className="text-sm sm:text-base font-bold">{liveWibDateStr}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-[#12141C] border border-gray-200 dark:border-slate-800/80 font-mono font-extrabold text-sm sm:text-base text-[#0F4C3A] dark:text-emerald-400 tabular-nums self-start sm:self-auto">
+                    <Clock className="w-4 h-4" />
+                    <span>{liveWibTimeStr}</span>
+                  </div>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleInlineOpenRegister} className="p-5 sm:p-6 space-y-4 text-xs sm:text-sm">
+                  {openGateError && (
+                    <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-rose-800 dark:text-rose-200 text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                      <span>{openGateError}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 block mb-1.5">
+                        Workstation Shift
+                      </label>
+                      <select
+                        value={openGateShiftName}
+                        onChange={(e) => setOpenGateShiftName(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] cursor-pointer ${
+                          isLight ? 'bg-white border-gray-300 text-slate-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                        }`}
+                      >
+                        {POS_SHIFT_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 block mb-1.5">
+                        Register Terminal &amp; Store Hub
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={openGateRegisterId}
+                          onChange={(e) => setOpenGateRegisterId(e.target.value)}
+                          placeholder="REG-04"
+                          className={`w-28 px-3 py-2.5 rounded-xl border font-mono text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] ${
+                            isLight ? 'bg-white border-gray-300 text-slate-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                          }`}
+                        />
+                        <input
+                          type="text"
+                          readOnly
+                          value={currentStoreInfo.storeName}
+                          className={`flex-1 min-w-0 px-3 py-2.5 rounded-xl border text-xs sm:text-sm truncate ${
+                            isLight ? 'bg-gray-50 border-gray-200 text-slate-700' : 'bg-[#090A0F] border-slate-800/80 text-slate-300'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                        Open Petty Cash / Opening Drawer Float (Rp)
+                      </label>
+                      <span className="font-mono text-xs font-bold text-[#0F4C3A] dark:text-emerald-400">
+                        {isValidPettyCash ? formatIDR(Math.round(parsedPettyCash)) : '—'}
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      required
+                      value={openGatePettyCashInput}
+                      onChange={(e) => setOpenGatePettyCashInput(e.target.value)}
+                      placeholder="e.g. 500000"
+                      className={`w-full px-4 py-3 rounded-xl border font-mono text-base font-extrabold focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] ${
+                        isLight ? 'bg-white border-gray-300 text-slate-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                      }`}
+                    />
+                    <div className="flex items-center gap-2 flex-wrap mt-2">
+                      {[0, 300000, 500000, 1000000].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setOpenGatePettyCashInput(String(preset))}
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono font-bold cursor-pointer transition-colors ${
+                            Number(openGatePettyCashInput) === preset
+                              ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
+                              : isLight
+                              ? 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-slate-700'
+                              : 'bg-[#090A0F] hover:bg-slate-800 border-slate-800/80 text-slate-300'
+                          }`}
+                        >
+                          {formatIDR(preset)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-gray-200 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Product scanning, cart additions, and payments remain locked until the register drawer is opened for this shift.
+                    </p>
+                    <button
+                      type="submit"
+                      disabled={isOpeningRegister}
+                      className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs sm:text-sm font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+                    >
+                      <Banknote className="w-4 h-4" />
+                      <span>{isOpeningRegister ? 'Opening Register...' : 'Open Register & Start Shift'}</span>
+                    </button>
+                  </div>
+                </form>
+
+                {shiftHistory.length > 0 && (
+                  <div
+                    className={`px-5 sm:px-6 py-3 border-t text-[11px] flex flex-wrap items-center justify-between gap-2 ${
+                      isLight ? 'bg-gray-50 border-gray-200 text-slate-600' : 'bg-[#090A0F] border-slate-800/80 text-slate-400'
+                    }`}
+                  >
+                    <span>
+                      Last Closed Shift: <strong className="font-mono">{shiftHistory[0].id}</strong> ({shiftHistory[0].cashierName})
+                    </span>
+                    <span className="font-mono">
+                      Z-Report: {shiftHistory[0].zReportNumber || '—'} · Float {formatIDR(shiftHistory[0].openingFloatIDR)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         {/* Left Column: Product Grid & Category Filters (7 cols) */}
         <div className="lg:col-span-7 space-y-3">
@@ -2316,6 +2617,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* 3. DIGITAL WEIGHT SCALE MODAL (Produce & Meat nuanced workflow) */}
       {scalingProduct &&

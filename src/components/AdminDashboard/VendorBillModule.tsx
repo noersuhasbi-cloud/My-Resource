@@ -10,10 +10,12 @@ import type {
   SupportedCurrency,
   VendorCreditNote,
   StaffShiftSession,
+  VendorBillBridgeTarget,
+  VendorBillPoPrefillResponse,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { apiClient } from '../../services/apiClient';
-import { normalizeEnterpriseRole } from '../../utils/rbac';
+import { isOwnerRoleCode, normalizeEnterpriseRole } from '../../utils/rbac';
 import { usePrint } from '../../context/PrintContext';
 import {
   FileText,
@@ -64,6 +66,9 @@ interface VendorBillModuleProps {
   initialPreselectedPoId?: string;
   initialPreselectedGrId?: string;
   activeStaffSession?: StaffShiftSession | null;
+  bridgeTarget?: VendorBillBridgeTarget | null;
+  onClearBridgeTarget?: () => void;
+  onNavigateToProcurementDoc?: (subTab: 'pr' | 'po' | 'gr', docId: string) => void;
 }
 
 export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
@@ -77,12 +82,29 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   initialPreselectedPoId,
   initialPreselectedGrId,
   activeStaffSession,
+  bridgeTarget,
+  onClearBridgeTarget,
+  onNavigateToProcurementDoc,
 }) => {
   const isLight = theme === 'light';
   const { triggerPrint } = usePrint();
   const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
-  const canCreateVendorBill = ['purchasing', 'admin', 'coo', 'super_admin'].includes(canonicalRole);
-  const canApprovePayVoidBill = ['admin', 'coo', 'super_admin'].includes(canonicalRole);
+  const canCreateVendorBill = activeStaffSession?.modulePermissions
+    ? Boolean(
+        isOwnerRoleCode(activeStaffSession.roleCode) ||
+          (activeStaffSession.modulePermissions.accounting?.view &&
+            activeStaffSession.modulePermissions.accounting?.canAccessAP &&
+            activeStaffSession.modulePermissions.accounting?.create)
+      )
+    : ['admin', 'coo', 'super_admin'].includes(canonicalRole);
+  const canApprovePayVoidBill = activeStaffSession?.modulePermissions
+    ? Boolean(
+        isOwnerRoleCode(activeStaffSession.roleCode) ||
+          (activeStaffSession.modulePermissions.accounting?.view &&
+            activeStaffSession.modulePermissions.accounting?.canAccessAP &&
+            activeStaffSession.modulePermissions.accounting?.approve)
+      )
+    : ['admin', 'coo', 'super_admin'].includes(canonicalRole);
 
   // State Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -92,6 +114,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(Boolean(initialPreselectedPoId || initialPreselectedGrId));
   const [selectedBillForDetail, setSelectedBillForDetail] = useState<VendorBill | null>(null);
+  const [highlightedBillId, setHighlightedBillId] = useState<string | null>(null);
   const [billToPay, setBillToPay] = useState<VendorBill | null>(null);
   const [billToVoid, setBillToVoid] = useState<VendorBill | null>(null);
   const [voidReasonInput, setVoidReasonInput] = useState<string>('Cancelled / Duplicate supplier invoice');
@@ -152,6 +175,9 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   // Form State for Creating Vendor Bill
   const [selectedPoId, setSelectedPoId] = useState<string>(initialPreselectedPoId || '');
   const [selectedGrId, setSelectedGrId] = useState<string>(initialPreselectedGrId || '');
+  const [selectedGrIds, setSelectedGrIds] = useState<string[]>(initialPreselectedGrId ? [initialPreselectedGrId] : []);
+  const [poPrefill, setPoPrefill] = useState<VendorBillPoPrefillResponse | null>(null);
+  const [isLoadingPrefill, setIsLoadingPrefill] = useState<boolean>(false);
   const [invoiceNumberInput, setInvoiceNumberInput] = useState<string>('');
   const [billDateInput, setBillDateInput] = useState<string>(new Date().toISOString().split('T')[0]);
   const [paymentTermsInput, setPaymentTermsInput] = useState<'COD' | 'Net 7' | 'Net 14' | 'Net 30' | 'Net 60'>('Net 30');
@@ -185,48 +211,178 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   }, [purchaseOrders, selectedPoId]);
 
   const activeSelectedGR = useMemo(() => {
-    return goodsReceipts.find((g) => g.id === selectedGrId) || null;
-  }, [goodsReceipts, selectedGrId]);
+    return goodsReceipts.find((g) => g.id === (selectedGrIds[0] || selectedGrId)) || null;
+  }, [goodsReceipts, selectedGrIds, selectedGrId]);
 
-  // When PO is chosen, auto-select its first available GR if not yet set
+  // When PO is chosen, list its GRs
   const availableGRsForPO = useMemo(() => {
     if (!selectedPoId) return goodsReceipts;
     return goodsReceipts.filter((g) => g.poId === selectedPoId);
   }, [goodsReceipts, selectedPoId]);
 
+  const loadPoPrefill = async (poId: string, preferredGrIds?: string[]) => {
+    if (!poId) {
+      setPoPrefill(null);
+      return;
+    }
+    setIsLoadingPrefill(true);
+    try {
+      const prefill = await apiClient.getVendorBillPoPrefill(poId);
+      setPoPrefill(prefill);
+      setTaxPercentInput(prefill.suggestedTaxPercent ?? 11);
+      const unbilledIds = prefill.unbilledGrs.map((g) => g.grId);
+      let nextGrIds: string[] = [];
+      if (preferredGrIds && preferredGrIds.length > 0) {
+        nextGrIds = preferredGrIds.filter((id) => unbilledIds.includes(id));
+      }
+      if (nextGrIds.length === 0) {
+        nextGrIds = unbilledIds;
+      }
+      if (nextGrIds.length === 0) {
+        const fallback = goodsReceipts.filter((g) => g.poId === poId).map((g) => g.id);
+        nextGrIds = preferredGrIds?.length ? preferredGrIds : fallback.slice(0, 1);
+      }
+      setSelectedGrIds(nextGrIds);
+      setSelectedGrId(nextGrIds[0] || '');
+    } catch {
+      setPoPrefill(null);
+      const matchingGrs = goodsReceipts.filter((g) => g.poId === poId);
+      const nextIds =
+        preferredGrIds && preferredGrIds.length > 0
+          ? preferredGrIds
+          : matchingGrs.length > 0
+          ? [matchingGrs[0].id]
+          : [];
+      setSelectedGrIds(nextIds);
+      setSelectedGrId(nextIds[0] || '');
+    } finally {
+      setIsLoadingPrefill(false);
+    }
+  };
+
   const handleSelectPO = (poId: string) => {
     setSelectedPoId(poId);
-    const matchingGrs = goodsReceipts.filter((g) => g.poId === poId);
-    if (matchingGrs.length > 0) {
-      setSelectedGrId(matchingGrs[0].id);
-    } else {
-      setSelectedGrId('');
-    }
-    // Reset overrides
     setItemBilledOverrides({});
+    const matchingGrs = goodsReceipts.filter((g) => g.poId === poId);
+    const defaultGrIds = matchingGrs.length > 0 ? [matchingGrs[0].id] : [];
+    setSelectedGrIds(defaultGrIds);
+    setSelectedGrId(defaultGrIds[0] || '');
+    void loadPoPrefill(poId);
+  };
+
+  const handleToggleGrSelection = (grId: string) => {
+    setItemBilledOverrides({});
+    setSelectedGrIds((prev) => {
+      const next = prev.includes(grId) ? prev.filter((id) => id !== grId) : [...prev, grId];
+      setSelectedGrId(next[0] || '');
+      return next;
+    });
   };
 
   useEffect(() => {
     if (initialPreselectedPoId || initialPreselectedGrId) {
-      if (initialPreselectedPoId) {
-        setSelectedPoId(initialPreselectedPoId);
-        const matchingGrs = goodsReceipts.filter((g) => g.poId === initialPreselectedPoId);
-        setSelectedGrId(initialPreselectedGrId || (matchingGrs[0]?.id ?? ''));
-      } else if (initialPreselectedGrId) {
-        setSelectedGrId(initialPreselectedGrId);
+      const targetPo =
+        initialPreselectedPoId ||
+        goodsReceipts.find((g) => g.id === initialPreselectedGrId)?.poId ||
+        '';
+      if (targetPo) {
+        setSelectedPoId(targetPo);
+        const prefGrs = initialPreselectedGrId ? [initialPreselectedGrId] : undefined;
+        void loadPoPrefill(targetPo, prefGrs);
       }
       setItemBilledOverrides({});
       setIsCreateModalOpen(true);
     }
-  }, [initialPreselectedPoId, initialPreselectedGrId, goodsReceipts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPreselectedPoId, initialPreselectedGrId]);
+
+  useEffect(() => {
+    if (!bridgeTarget) return;
+    if (bridgeTarget.mode === 'view' && bridgeTarget.billId) {
+      setStatusFilter('ALL');
+      setDisplayCurrency('ALL');
+      setSearchQuery('');
+      const targetBill =
+        vendorBills.find((b) => b.id === bridgeTarget.billId || b.billNumber === bridgeTarget.billId) || null;
+      if (targetBill) {
+        setHighlightedBillId(targetBill.id);
+        setSelectedBillForDetail(targetBill);
+        window.setTimeout(() => {
+          const rowEl = document.querySelector(`tr[data-bill-id="${targetBill.id}"]`);
+          rowEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 80);
+        window.setTimeout(() => setHighlightedBillId(null), 4500);
+      } else {
+        onShowToast('Vendor Bill Not Found', `Bill ${bridgeTarget.billId} is not available in current scope.`);
+      }
+      onClearBridgeTarget?.();
+      return;
+    }
+    if (bridgeTarget.mode === 'create') {
+      const targetPo =
+        bridgeTarget.poId ||
+        (bridgeTarget.grId ? goodsReceipts.find((g) => g.id === bridgeTarget.grId)?.poId : '') ||
+        '';
+      if (targetPo) {
+        setSelectedPoId(targetPo);
+        const prefGrs =
+          bridgeTarget.grIds && bridgeTarget.grIds.length > 0
+            ? bridgeTarget.grIds
+            : bridgeTarget.grId
+            ? [bridgeTarget.grId]
+            : undefined;
+        setItemBilledOverrides({});
+        setIsCreateModalOpen(true);
+        void loadPoPrefill(targetPo, prefGrs);
+      }
+      onClearBridgeTarget?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bridgeTarget?.triggerNonce]);
+
+  const grItemMetricsBySku = useMemo(() => {
+    const map: Record<string, { receivedQty: number; unbilledQty: number }> = {};
+    if (!activeSelectedPO) return map;
+    const effectiveGrIds = selectedGrIds.length > 0 ? selectedGrIds : selectedGrId ? [selectedGrId] : [];
+    const selectedGrSet = new Set(effectiveGrIds);
+    const matchingPrefillGrs =
+      poPrefill && poPrefill.poId === activeSelectedPO.id
+        ? poPrefill.unbilledGrs.filter((g) => selectedGrSet.has(g.grId))
+        : [];
+    for (const poItem of activeSelectedPO.items) {
+      let receivedQty = 0;
+      let unbilledQty = 0;
+      if (matchingPrefillGrs.length > 0) {
+        for (const pgr of matchingPrefillGrs) {
+          const line = pgr.items.find((x) => x.sku === poItem.sku);
+          if (line) {
+            receivedQty += line.receivedQty;
+            unbilledQty += line.unbilledQty;
+          }
+        }
+      } else {
+        for (const gr of goodsReceipts) {
+          if (!selectedGrSet.has(gr.id)) continue;
+          const grLine = gr.items.find((g) => g.sku === poItem.sku);
+          if (grLine) {
+            receivedQty += grLine.quantityReceived;
+            unbilledQty += grLine.quantityReceived;
+          }
+        }
+      }
+      map[poItem.sku] = { receivedQty, unbilledQty };
+    }
+    return map;
+  }, [activeSelectedPO, selectedGrIds, selectedGrId, poPrefill, goodsReceipts]);
 
   const draftTotals = useMemo(() => {
     if (!activeSelectedPO) return { subtotal: 0, taxAmount: 0, grandTotal: 0, grandTotalIDR: 0 };
+    const hasSelectedGrs = selectedGrIds.length > 0 || Boolean(selectedGrId);
     const subtotal = activeSelectedPO.items.reduce((sum, it) => {
-      const grItem = activeSelectedGR?.items.find((g) => g.sku === it.sku);
-      const grQty = grItem ? grItem.quantityReceived : 0;
+      const metrics = grItemMetricsBySku[it.sku];
+      const defaultQty = hasSelectedGrs ? (metrics ? metrics.unbilledQty : 0) : it.orderedQuantity;
       const override = itemBilledOverrides[it.sku];
-      const billedQty = override !== undefined ? override.billedQty : grQty || it.orderedQuantity;
+      const billedQty = override !== undefined ? override.billedQty : defaultQty;
       const defaultCost = currencyInput === 'IDR' ? it.unitCost : it.unitCost / FX_RATES[currencyInput].rate;
       const unitCost = override !== undefined ? override.unitCost : defaultCost;
       return sum + billedQty * unitCost;
@@ -235,7 +391,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
     const grandTotal = subtotal + taxAmount;
     const grandTotalIDR = Math.round(grandTotal * (FX_RATES[currencyInput]?.rate || 1));
     return { subtotal, taxAmount, grandTotal, grandTotalIDR };
-  }, [activeSelectedPO, activeSelectedGR, itemBilledOverrides, currencyInput, taxPercentInput]);
+  }, [activeSelectedPO, selectedGrIds, selectedGrId, grItemMetricsBySku, itemBilledOverrides, currencyInput, taxPercentInput]);
 
   // Format currency helper
   const formatAmount = (amount: number, curr: SupportedCurrency) => {
@@ -310,16 +466,18 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
   const handleCreateVendorBill = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingBill) return;
-    if (!selectedPoId || !selectedGrId || !invoiceNumberInput.trim()) {
-      onShowToast('Missing Fields', 'Please select a PO, Goods Receipt, and provide the Supplier Invoice Number.');
+    const effectiveGrIds = selectedGrIds.length > 0 ? selectedGrIds : selectedGrId ? [selectedGrId] : [];
+    const primaryGrId = effectiveGrIds[0] || '';
+    if (!selectedPoId || !primaryGrId || !invoiceNumberInput.trim()) {
+      onShowToast('Missing Fields', 'Please select a PO, at least one Goods Receipt, and provide the Supplier Invoice Number.');
       return;
     }
 
     setIsSubmittingBill(true);
     try {
       const itemsPayload = (activeSelectedPO?.items || []).map((poItem) => {
-        const grItem = activeSelectedGR?.items.find((g) => g.sku === poItem.sku);
-        const defaultQty = grItem ? grItem.quantityReceived : poItem.orderedQuantity;
+        const metrics = grItemMetricsBySku[poItem.sku];
+        const defaultQty = metrics ? metrics.unbilledQty : poItem.orderedQuantity;
         const defaultCost = currencyInput === 'IDR' ? poItem.unitCost : poItem.unitCost / FX_RATES[currencyInput].rate;
 
         const override = itemBilledOverrides[poItem.sku];
@@ -332,15 +490,22 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
         };
       });
 
+      const selectedGrObjs = goodsReceipts.filter((g) => effectiveGrIds.includes(g.id));
+      const combinedSjNotes = selectedGrObjs
+        .map((g) => g.deliveryNoteNumber)
+        .filter(Boolean)
+        .join(', ');
+
       const res = await apiClient.createVendorBill({
         billNumber: invoiceNumberInput.trim(),
         poId: selectedPoId,
-        goodsReceiptId: selectedGrId,
+        goodsReceiptId: primaryGrId,
+        linkedGrIds: effectiveGrIds,
         supplierName: activeSelectedPO?.supplierName,
         supplierContact: activeSelectedPO?.supplierContact,
         storeId: activeSelectedPO?.storeId,
         storeName: activeSelectedPO?.storeName,
-        deliveryNoteNumber: activeSelectedGR?.deliveryNoteNumber,
+        deliveryNoteNumber: combinedSjNotes || activeSelectedGR?.deliveryNoteNumber,
         billDate: billDateInput,
         paymentTerms: paymentTermsInput,
         currency: currencyInput,
@@ -362,6 +527,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
         setBillNotesInput('');
         setIsNonCreditableVatInput(false);
         setItemBilledOverrides({});
+        setPoPrefill(null);
         onRefreshData();
       }
     } catch (err: any) {
@@ -376,7 +542,8 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
     if (approvingBillId) return;
     setApprovingBillId(billId);
     try {
-      const res = await apiClient.approveVendorBill(billId, 'Finance Lead (ERP)');
+      const approverName = activeStaffSession?.userName || 'Finance Lead (ERP)';
+      const res = await apiClient.approveVendorBill(billId, approverName);
       if (res.success) {
         onShowToast('Bill Approved', res.message || `Vendor Bill #${billId} approved and posted to General Ledger.`);
         onRefreshData();
@@ -692,11 +859,24 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                   const isVarianceBlocked =
                     bill.status === 'PRICE_VARIANCE' || bill.status === 'QTY_VARIANCE';
 
+                  const linkedGrs =
+                    bill.linkedGrIds && bill.linkedGrIds.length > 0
+                      ? bill.linkedGrIds
+                      : bill.goodsReceiptId
+                      ? [bill.goodsReceiptId]
+                      : [];
+                  const isHighlighted = highlightedBillId === bill.id;
+
                   return (
                     <tr
                       key={bill.id}
+                      data-bill-id={bill.id}
                       className={`transition-colors ${
-                        bill.status === 'VOID'
+                        isHighlighted
+                          ? isLight
+                            ? 'bg-emerald-50/90 ring-1 ring-inset ring-emerald-500/60'
+                            : 'bg-emerald-950/35 ring-1 ring-inset ring-emerald-500/60'
+                          : bill.status === 'VOID'
                           ? 'opacity-60 bg-gray-50/40 dark:bg-[#090A0F]/60'
                           : isLight
                           ? 'hover:bg-gray-50/80'
@@ -728,10 +908,51 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
 
                       {/* PO & GR Links */}
                       <td className="py-3.5 px-4 font-mono text-[11px]">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-blue-600 dark:text-blue-400 font-semibold">{bill.poId}</span>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {onNavigateToProcurementDoc && purchaseOrders.some((p) => p.id === bill.poId) ? (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToProcurementDoc('po', bill.poId)}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold transition-colors cursor-pointer ${
+                                isLight
+                                  ? 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
+                                  : 'bg-sky-950/40 border-sky-800/60 text-sky-300 hover:bg-sky-900/60'
+                              }`}
+                              title={`Open ${bill.poId} in Procurement`}
+                            >
+                              {bill.poId}
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </button>
+                          ) : (
+                            <span className="text-blue-600 dark:text-blue-400 font-semibold">{bill.poId}</span>
+                          )}
                           <span className="text-slate-400">→</span>
-                          <span className="text-emerald-600 dark:text-emerald-400">{bill.goodsReceiptId}</span>
+                          {linkedGrs.map((grId) => {
+                            const hasMatchingGr = goodsReceipts.some((g) => g.id === grId && g.poId === bill.poId);
+                            if (onNavigateToProcurementDoc && hasMatchingGr) {
+                              return (
+                                <button
+                                  key={grId}
+                                  type="button"
+                                  onClick={() => onNavigateToProcurementDoc('gr', grId)}
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold transition-colors cursor-pointer ${
+                                    isLight
+                                      ? 'bg-emerald-50 border-emerald-200 text-[#0F4C3A] hover:bg-emerald-100'
+                                      : 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/60'
+                                  }`}
+                                  title={`Open ${grId} in Procurement`}
+                                >
+                                  {grId}
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </button>
+                              );
+                            }
+                            return (
+                              <span key={grId} className="text-slate-400 text-[10px]">
+                                {grId}
+                              </span>
+                            );
+                          })}
                         </div>
                         {bill.deliveryNoteNumber && (
                           <div className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-slate-400'} mt-0.5`}>
@@ -967,11 +1188,23 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">2. Linked Goods Receipt (Dock Inward) *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      2. Linked Goods Receipt(s) *
+                    </label>
+                    {isLoadingPrefill && (
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">Loading GR balances...</span>
+                    )}
+                  </div>
                   <select
                     value={selectedGrId}
-                    onChange={(e) => setSelectedGrId(e.target.value)}
-                    required
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedGrId(val);
+                      setSelectedGrIds(val ? [val] : []);
+                      setItemBilledOverrides({});
+                    }}
+                    required={selectedGrIds.length === 0}
                     className={`w-full p-2 rounded-lg border text-xs font-mono font-semibold focus:ring-1 focus:ring-emerald-500 ${
                       isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
@@ -985,6 +1218,76 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                   </select>
                 </div>
               </div>
+
+              {selectedPoId && poPrefill && poPrefill.poId === selectedPoId && (
+                <div className="space-y-2.5">
+                  {poPrefill.unbilledGrs.length > 0 && (
+                    <div
+                      className={`p-3 rounded-xl border space-y-2 ${
+                        isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">
+                          Unbilled Goods Receipts for {selectedPoId} ({selectedGrIds.length} selected)
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-400">
+                          Supports multi-GR consolidated billing
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {poPrefill.unbilledGrs.map((ugr) => {
+                          const checked = selectedGrIds.includes(ugr.grId);
+                          return (
+                            <label
+                              key={ugr.grId}
+                              className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-mono cursor-pointer transition-colors ${
+                                checked
+                                  ? isLight
+                                    ? 'bg-emerald-50 border-emerald-300 text-[#0F4C3A]'
+                                    : 'bg-emerald-950/40 border-emerald-700/60 text-emerald-300'
+                                  : isLight
+                                  ? 'bg-white border-gray-200 text-gray-700'
+                                  : 'bg-[#12141C] border-slate-800/80 text-slate-300'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => handleToggleGrSelection(ugr.grId)}
+                                className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span className="font-bold">{ugr.grId}</span>
+                              <span className="text-[10px] opacity-80">SJ {ugr.deliveryNoteNumber}</span>
+                              <span className="text-[10px] font-semibold tabular-nums">({ugr.totalUnbilledQty} unbilled)</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {poPrefill.openAdvance1150IDR > 0 && (
+                    <div
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
+                        isLight
+                          ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                          : 'bg-amber-950/25 border-amber-800/50 text-amber-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 shrink-0" />
+                        <span>
+                          Open Vendor Down Payment (<strong>COA #1150</strong>) detected for {selectedPoId}. Approval will auto-offset AP Liability (#2010).
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold tabular-nums shrink-0 ml-3">
+                        {formatIDR(poPrefill.openAdvance1150IDR)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Step 2: Invoice Details & Multi-Currency */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -1090,8 +1393,11 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                     <span className="font-bold text-xs uppercase tracking-wider text-slate-400">
                       3-Way Line Item Match Breakdown
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      PO: <strong className="text-blue-500">{activeSelectedPO.id}</strong> • GR: <strong className="text-emerald-500">{activeSelectedGR?.id || 'None'}</strong>
+                      <span className="text-[11px] text-slate-400 font-mono">
+                      PO: <strong className="text-blue-500">{activeSelectedPO.id}</strong> • GR:{' '}
+                      <strong className="text-emerald-500">
+                        {selectedGrIds.length > 0 ? selectedGrIds.join(', ') : activeSelectedGR?.id || 'None'}
+                      </strong>
                     </span>
                   </div>
 
@@ -1109,15 +1415,18 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80">
                         {activeSelectedPO.items.map((it) => {
-                          const grItem = activeSelectedGR?.items.find((g) => g.sku === it.sku);
-                          const grQty = grItem ? grItem.quantityReceived : 0;
+                          const hasSelectedGrs = selectedGrIds.length > 0 || Boolean(selectedGrId);
+                          const metrics = grItemMetricsBySku[it.sku];
+                          const grQty = metrics ? metrics.receivedQty : 0;
+                          const unbilledGrQty = metrics ? metrics.unbilledQty : 0;
+                          const defaultQty = hasSelectedGrs ? unbilledGrQty : it.orderedQuantity;
                           const override = itemBilledOverrides[it.sku];
-                          const billedQty = override !== undefined ? override.billedQty : grQty || it.orderedQuantity;
+                          const billedQty = override !== undefined ? override.billedQty : defaultQty;
                           const defaultCost = currencyInput === 'IDR' ? it.unitCost : it.unitCost / FX_RATES[currencyInput].rate;
                           const unitCost = override !== undefined ? override.unitCost : defaultCost;
                           const lineTotal = billedQty * unitCost;
 
-                          const hasQtyMismatch = billedQty !== grQty && grQty > 0;
+                          const hasQtyMismatch = billedQty !== unbilledGrQty && unbilledGrQty > 0;
 
                           return (
                             <tr key={it.sku} className="py-2">
@@ -1125,9 +1434,14 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                                 <div className="font-semibold">{it.productName}</div>
                                 <div className="font-mono text-[10px] text-slate-400">{it.sku}</div>
                               </td>
-                              <td className="py-2.5 text-center font-mono">{it.orderedQuantity}</td>
-                              <td className="py-2.5 text-center font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                              <td className="py-2.5 text-center font-mono tabular-nums">{it.orderedQuantity}</td>
+                              <td className="py-2.5 text-center font-mono tabular-nums text-emerald-600 dark:text-emerald-400 font-bold">
                                 {grQty}
+                                {unbilledGrQty !== grQty && (
+                                  <span className="block text-[10px] font-normal text-slate-400">
+                                    ({unbilledGrQty} unbilled)
+                                  </span>
+                                )}
                               </td>
                               <td className="py-2.5 text-center">
                                 <input
@@ -1537,7 +1851,63 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 <div className="text-right">
                   <div className="text-[10px] text-slate-400 uppercase font-semibold">Receiving Store Outlet</div>
                   <div className="text-sm font-bold mt-0.5">{selectedBillForDetail.storeName}</div>
-                  <div className="text-[11px] text-slate-400">PO #{selectedBillForDetail.poId} • GR #{selectedBillForDetail.goodsReceiptId}</div>
+                  <div className="flex flex-wrap items-center justify-end gap-1.5 mt-1 font-mono text-[11px]">
+                    {onNavigateToProcurementDoc && purchaseOrders.some((p) => p.id === selectedBillForDetail.poId) ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetPo = selectedBillForDetail.poId;
+                          setSelectedBillForDetail(null);
+                          onNavigateToProcurementDoc('po', targetPo);
+                        }}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-semibold cursor-pointer ${
+                          isLight
+                            ? 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
+                            : 'bg-sky-950/40 border-sky-800/60 text-sky-300 hover:bg-sky-900/60'
+                        }`}
+                      >
+                        PO #{selectedBillForDetail.poId}
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </button>
+                    ) : (
+                      <span className="text-slate-400">PO #{selectedBillForDetail.poId}</span>
+                    )}
+                    {(selectedBillForDetail.linkedGrIds && selectedBillForDetail.linkedGrIds.length > 0
+                      ? selectedBillForDetail.linkedGrIds
+                      : selectedBillForDetail.goodsReceiptId
+                      ? [selectedBillForDetail.goodsReceiptId]
+                      : []
+                    ).map((grId) => {
+                      const hasMatchingGr = goodsReceipts.some(
+                        (g) => g.id === grId && g.poId === selectedBillForDetail.poId
+                      );
+                      if (onNavigateToProcurementDoc && hasMatchingGr) {
+                        return (
+                          <button
+                            key={grId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedBillForDetail(null);
+                              onNavigateToProcurementDoc('gr', grId);
+                            }}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-semibold cursor-pointer ${
+                              isLight
+                                ? 'bg-emerald-50 border-emerald-200 text-[#0F4C3A] hover:bg-emerald-100'
+                                : 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/60'
+                            }`}
+                          >
+                            GR #{grId}
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </button>
+                        );
+                      }
+                      return (
+                        <span key={grId} className="text-slate-400 text-[10px]">
+                          GR #{grId}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 

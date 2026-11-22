@@ -9,6 +9,8 @@ import type {
   PurchaseOrder,
   GoodsReceiptRecord,
   VendorBill,
+  ItemTraceabilityResponse,
+  VendorBillPoPrefillResponse,
   ChartOfAccount,
   GeneralLedgerEntry,
   ProfitAndLossReport,
@@ -707,10 +709,29 @@ export const apiClient = {
     return res.json();
   },
 
+  async getVendorBillPoPrefill(poId: string): Promise<VendorBillPoPrefillResponse> {
+    const res = await fetchApi(`/api/admin/procurement/po/${encodeURIComponent(poId)}/bill-prefill`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to load PO billing prefill');
+    }
+    return res.json();
+  },
+
+  async getItemTraceability(sku: string): Promise<ItemTraceabilityResponse> {
+    const res = await fetchApi(`/api/admin/inventory/items/${encodeURIComponent(sku)}/traceability`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to load item traceability');
+    }
+    return res.json();
+  },
+
   async createVendorBill(payload: {
     billNumber: string;
     poId: string;
     goodsReceiptId: string;
+    linkedGrIds?: string[];
     supplierName?: string;
     supplierContact?: string;
     storeId?: string;
@@ -3089,10 +3110,14 @@ export const apiClient = {
 
   async openPosShift(payload: {
     storeId: string;
+    branchId?: string;
     storeName: string;
     registerId?: string;
-    openingFloatIDR: number;
+    shiftName?: string;
+    openingPettyCashIDR?: number;
+    openingFloatIDR?: number;
     cashierName?: string;
+    clientTimestampIso?: string;
   }): Promise<{ success: boolean; shift: PosRegisterShiftSession; message: string }> {
     const res = await fetchApi('/api/pos/shifts/open', {
       method: 'POST',

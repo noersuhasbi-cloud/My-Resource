@@ -384,6 +384,7 @@ export interface PurchaseRequest {
   reason: 'low_stock_auto_trigger' | 'seasonal_demand' | 'manual_request';
   priority: 'high' | 'medium' | 'low';
   poId?: string;
+  linkedPoIds?: string[];
   approvedAt?: string;
 }
 
@@ -410,6 +411,7 @@ export interface PurchaseOrder {
   poNumber?: string;
   createdAt: string;
   prId?: string;
+  sourcePrId?: string;
   storeId: string;
   storeName: string;
   warehouseZoneId?: string;
@@ -430,6 +432,8 @@ export interface PurchaseOrder {
   supplierRemarks?: string;
   paymentTerms?: 'Net 30' | 'COD' | 'Advance Payment';
   goodsReceiptIds?: string[];
+  linkedGrIds?: string[];
+  linkedVendorBillIds?: string[];
   closureNotes?: string;
   forceClosedAt?: string;
   isForceClosed?: boolean;
@@ -453,6 +457,8 @@ export interface GoodsReceiptItem {
 export interface GoodsReceiptRecord {
   id: string; // e.g. GR-2026-041
   poId: string;
+  sourcePoId?: string;
+  sourcePrId?: string;
   storeId: string;
   storeName: string;
   warehouseZoneId: string;
@@ -464,6 +470,8 @@ export interface GoodsReceiptRecord {
   items: GoodsReceiptItem[];
   receiverNotes?: string;
   glEntryId?: string;
+  linkedVendorBillId?: string;
+  linkedVendorBillIds?: string[];
   unloadingLaborFeeIDR?: number;
   unloadingFeePayerCoa?: '1011' | '1010' | '2010';
   capitalizedToLandedCost?: boolean;
@@ -497,7 +505,9 @@ export interface VendorBill {
   storeId: string;
   storeName: string;
   poId: string; // Purchase Order reference
-  goodsReceiptId: string; // Goods Receipt reference
+  sourcePoId?: string;
+  goodsReceiptId: string; // Primary Goods Receipt reference
+  linkedGrIds?: string[]; // Multi-GR / split-delivery references
   deliveryNoteNumber?: string; // Surat Jalan vendor reference
   billDate: string; // YYYY-MM-DD
   dueDate: string; // YYYY-MM-DD
@@ -526,6 +536,136 @@ export interface VendorBill {
   isNonCreditableVat?: boolean;
 }
 
+export interface ProcurementFocusTarget {
+  subTab: 'pr' | 'po' | 'gr' | 'vendor_bills';
+  docId: string;
+  triggerNonce: number;
+}
+
+export interface VendorBillBridgeTarget {
+  mode: 'create' | 'view';
+  poId?: string;
+  grId?: string;
+  grIds?: string[];
+  billId?: string;
+  triggerNonce: number;
+}
+
+export interface VendorBillPoPrefillResponse {
+  poId: string;
+  supplierName: string;
+  storeId: string;
+  storeName: string;
+  openAdvance1150IDR: number;
+  suggestedTaxPercent: number;
+  unbilledGrs: Array<{
+    grId: string;
+    deliveryNoteNumber: string;
+    receivedAt: string;
+    totalReceivedQty: number;
+    totalUnbilledQty: number;
+    items: Array<{
+      sku: string;
+      productName: string;
+      receivedQty: number;
+      alreadyBilledQty: number;
+      unbilledQty: number;
+    }>;
+  }>;
+  existingBillIds: string[];
+}
+
+export interface ItemTraceabilityResponse {
+  sku: string;
+  productName: string;
+  category: string;
+  unit: string;
+  supplierName?: string;
+  itemClassification?: ItemClassification;
+  financialCostMasked: boolean;
+  unitCost?: number;
+  wacUnitCost?: number;
+  sellingPrice: number;
+  purchaseRequests: Array<{
+    id: string;
+    createdAt: string;
+    status: PurchaseRequest['status'];
+    priority: PurchaseRequest['priority'];
+    storeId?: string;
+    storeName?: string;
+    suggestedQuantity: number;
+    estimatedUnitCost?: number;
+    totalEstimatedCost?: number;
+    poId?: string;
+    linkedPoIds?: string[];
+    requestedBy: string;
+  }>;
+  purchaseOrders: Array<{
+    id: string;
+    createdAt: string;
+    status: PurchaseOrder['status'];
+    supplierName: string;
+    storeId: string;
+    storeName: string;
+    sourcePrId?: string;
+    linkedGrIds?: string[];
+    linkedVendorBillIds?: string[];
+    expectedDeliveryDate: string;
+    subtotalCost?: number;
+    taxAmount?: number;
+    totalCost?: number;
+    items: Array<{
+      sku: string;
+      productName: string;
+      orderedQuantity: number;
+      receivedQuantity: number;
+      remainingBackorder: number;
+      unitCost?: number;
+      totalCost?: number;
+    }>;
+  }>;
+  goodsReceipts: Array<{
+    id: string;
+    poId: string;
+    sourcePoId?: string;
+    sourcePrId?: string;
+    storeId: string;
+    storeName: string;
+    warehouseZoneId: string;
+    deliveryNoteNumber: string;
+    vendorName: string;
+    receivedAt: string;
+    receivedBy: string;
+    isPartial: boolean;
+    linkedVendorBillId?: string;
+    linkedVendorBillIds?: string[];
+    items: GoodsReceiptItem[];
+  }>;
+  batches: Array<{
+    batchId: string;
+    lotNumber: string;
+    storeId: string;
+    storeName: string;
+    warehouseZoneId: string;
+    rackBinCode?: string;
+    rackLabel?: string;
+    initialQuantity: number;
+    currentStock: number;
+    unitCost?: number;
+    landedCostPerUnitDelta?: number;
+    receivedDate: string;
+    expiryDate: string;
+    daysUntilExpiry: number;
+    status: BatchExpiryStatus;
+    supplierName: string;
+    sourcePoNumber?: string;
+    sourceGrId?: string;
+    sourcePrId?: string;
+    isConsignment?: boolean;
+  }>;
+  vendorBills: VendorBill[];
+}
+
 // -------------------------------------------------------------
 // FEFO (First Expired, First Out) Batch Tracking
 // -------------------------------------------------------------
@@ -552,6 +692,8 @@ export interface InventoryBatch {
   storageZone: StorageZoneType;
   supplierName: string;
   sourcePoNumber?: string;
+  sourceGrId?: string;
+  sourcePrId?: string;
   rackBinCode?: string;
   rotationStrategy?: 'FEFO' | 'FIFO';
   notes?: string;
@@ -2826,12 +2968,15 @@ export interface PosRegisterShiftSession {
   storeId: string;
   storeName: string;
   registerId: string;
+  shiftName?: string;
   cashierId: string;
   cashierName: string;
   status: 'OPEN' | 'CLOSED';
   openedAt: string;
+  openedAtWib?: string;
   closedAt?: string;
   openingFloatIDR: number;
+  openingPettyCashIDR?: number;
   transactionCount: number;
   expectedCashSalesIDR: number;
   expectedQrisSalesIDR: number;

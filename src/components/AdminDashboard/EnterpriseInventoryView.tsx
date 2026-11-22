@@ -20,6 +20,8 @@ import type {
   ReturnableContainerRecord,
   ReturnableDirection,
   ItemClassification,
+  ItemTraceabilityResponse,
+  VendorBillBridgeTarget,
 } from '../../types/index.ts';
 import type { AdminDashboardTab } from './AdminSidebar';
 import { apiClient } from '../../services/apiClient';
@@ -63,6 +65,10 @@ import {
   X,
   Scissors,
   Zap,
+  ExternalLink,
+  GitBranch,
+  FileText,
+  Receipt,
 } from 'lucide-react';
 import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
 import { WarehouseRackSetupPanel } from './WarehouseRackSetupPanel';
@@ -96,6 +102,8 @@ interface EnterpriseInventoryViewProps {
   removalStrategies: RemovalStrategyConfig | null;
   onSaveRemovalStrategies: (next: Partial<RemovalStrategyConfig>) => Promise<void>;
   onNavigateTab: (tab: AdminDashboardTab) => void;
+  onNavigateToProcurementDoc?: (subTab: 'pr' | 'po' | 'gr', docId: string) => void;
+  onNavigateToVendorBill?: (bridge: Omit<VendorBillBridgeTarget, 'triggerNonce'>) => void;
   onAuditSku: (sku: string) => void;
   onEditTier: (tier: StoreInventoryStock) => void;
   onRefreshData?: () => Promise<void> | void;
@@ -191,6 +199,8 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   removalStrategies,
   onSaveRemovalStrategies,
   onNavigateTab,
+  onNavigateToProcurementDoc,
+  onNavigateToVendorBill,
   onAuditSku,
   onEditTier,
   onRefreshData,
@@ -218,6 +228,10 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   const [opnameWorkspaceMode, setOpnameWorkspaceMode] = useState<'standard_import' | 'rack_blind'>('standard_import');
   const [savingStrategy, setSavingStrategy] = useState<boolean>(false);
   const [mediaInspector, setMediaInspector] = useState<MediaInspectorTarget | null>(null);
+  const [traceTargetSku, setTraceTargetSku] = useState<string | null>(null);
+  const [traceData, setTraceData] = useState<ItemTraceabilityResponse | null>(null);
+  const [isLoadingTrace, setIsLoadingTrace] = useState<boolean>(false);
+  const [traceError, setTraceError] = useState<string | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [warehouseRacks, setWarehouseRacks] = useState<WarehouseRackConfig[]>([]);
   const [flashSaleTargetBatch, setFlashSaleTargetBatch] = useState<InventoryBatch | null>(null);
@@ -266,6 +280,22 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
       .then((res) => setWarehouseRacks(res.racks || []))
       .catch(() => {});
   }, [viewMode, selectedOutletFilter]);
+
+  const handleOpenTraceability = async (sku: string) => {
+    setTraceTargetSku(sku);
+    setTraceData(null);
+    setTraceError(null);
+    setIsLoadingTrace(true);
+    try {
+      const res = await apiClient.getItemTraceability(sku);
+      setTraceData(res);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTraceError(msg || 'Failed to load item inbound traceability.');
+    } finally {
+      setIsLoadingTrace(false);
+    }
+  };
 
   const cardClass =
     'bg-white dark:bg-[#12141C] border border-slate-200 dark:border-slate-800/80 shadow-sm text-slate-900 dark:text-slate-100 rounded-2xl transition-colors duration-200';
@@ -1572,6 +1602,16 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                               B2B/B2C
                             </button>
 
+                            <button
+                              type="button"
+                              onClick={() => handleOpenTraceability(row.sku)}
+                              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-emerald-300/80 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/40 text-[#0F4C3A] dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] inline-flex items-center gap-1 cursor-pointer"
+                              title="Inspect Inbound PR -> PO -> GR -> Lot -> Vendor Bill Lineage"
+                            >
+                              <GitBranch className="w-3 h-3" />
+                              Traceability
+                            </button>
+
                             {canManageWarehouseTopology && !row.isWholesaleRow && row.sourceTier && (
                               <>
                                 <button
@@ -2364,6 +2404,455 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
         }}
         onShowToast={onShowToast}
       />
+
+      {/* Inbound Supply Chain Lineage / Traceability Modal */}
+      {traceTargetSku && typeof document !== 'undefined' && createPortal(
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setTraceTargetSku(null);
+              setTraceData(null);
+              setTraceError(null);
+            }
+          }}
+          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto gm-backdrop-fade"
+        >
+          <div
+            className={`w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border overflow-hidden my-auto gm-modal-pop ${
+              isLight
+                ? 'bg-white border-slate-200 text-[#13221B]'
+                : 'bg-[#12141C] border-slate-800/80 text-[#ECFDF5]'
+            }`}
+          >
+            {/* Header */}
+            <div
+              className={`p-4 border-b flex items-center justify-between gap-3 ${
+                isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 shrink-0" />
+                  <h3 className="text-sm font-bold truncate">
+                    Inbound Supply Chain Lineage &amp; Lot Traceability
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-bold bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/25">
+                    {traceTargetSku}
+                  </span>
+                  {traceData && (traceData.financialCostMasked || !canViewValuation) && (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                      Financial Cost Masked (Role SoD)
+                    </span>
+                  )}
+                </div>
+                {traceData && (
+                  <div className={`text-xs mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 ${textMuted}`}>
+                    <span className={`font-semibold ${isLight ? 'text-[#13221B]' : 'text-[#ECFDF5]'}`}>
+                      {traceData.productName}
+                    </span>
+                    <span>Category: {traceData.category}</span>
+                    <span>UoM: {traceData.unit}</span>
+                    {traceData.supplierName && <span>Supplier: {traceData.supplierName}</span>}
+                    {canViewValuation && !traceData.financialCostMasked && traceData.wacUnitCost !== undefined && (
+                      <span className="font-mono tabular-nums">
+                        WAC Cost: <strong>{formatIDR(traceData.wacUnitCost)}</strong>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setTraceTargetSku(null);
+                  setTraceData(null);
+                  setTraceError(null);
+                }}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isLight ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-slate-800 text-slate-300'
+                }`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 overflow-y-auto space-y-3.5 flex-1 text-xs">
+              {isLoadingTrace && (
+                <div className={`p-6 rounded-xl border text-center ${subCardClass}`}>
+                  <span className="font-mono text-xs">Loading PR → PO → GR → Lot → Vendor Bill lineage...</span>
+                </div>
+              )}
+
+              {traceError && (
+                <div className="p-4 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/30 dark:border-rose-800/60 text-rose-700 dark:text-rose-300">
+                  {traceError}
+                </div>
+              )}
+
+              {traceData && !isLoadingTrace && (() => {
+                const hideFinancialCost = !canViewValuation || traceData.financialCostMasked;
+                return (
+                  <>
+                    {/* Pipeline Stepper Summary */}
+                    <div className={`grid gap-3 ${hideFinancialCost ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-5'}`}>
+                      {[
+                        { label: '1. Purchase Requests', count: traceData.purchaseRequests.length, tone: 'slate' },
+                        { label: '2. Purchase Orders', count: traceData.purchaseOrders.length, tone: 'sky' },
+                        { label: '3. Goods Receipts', count: traceData.goodsReceipts.length, tone: 'emerald' },
+                        { label: '4. Physical Lots', count: traceData.batches.length, tone: 'emerald' },
+                        ...(!hideFinancialCost
+                          ? [{ label: '5. Vendor Bills', count: traceData.vendorBills.length, tone: 'indigo' }]
+                          : []),
+                      ].map((step) => (
+                        <div
+                          key={step.label}
+                          className={`p-3 rounded-xl border ${
+                            isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
+                          }`}
+                        >
+                          <div className={`text-[10px] uppercase font-semibold ${textMuted}`}>{step.label}</div>
+                          <div className="text-base font-bold font-mono tabular-nums mt-1">{step.count}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Stage 1: Purchase Requests */}
+                    <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold flex items-center gap-1.5">
+                          <ClipboardList className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
+                          Stage 1: Purchase Requests (PR)
+                        </span>
+                        <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.purchaseRequests.length} records</span>
+                      </div>
+                      {traceData.purchaseRequests.length === 0 ? (
+                        <p className={`text-[11px] ${textMuted}`}>Direct PO or initial baseline stock (no upstream PR recorded).</p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {traceData.purchaseRequests.map((pr) => (
+                            <div
+                              key={pr.id}
+                              className={`p-3 rounded-lg border flex flex-col gap-1.5 ${
+                                isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-[#12141C] border-slate-800/80'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                {onNavigateToProcurementDoc ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTraceTargetSku(null);
+                                      onNavigateToProcurementDoc('pr', pr.id);
+                                    }}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px] font-bold cursor-pointer ${
+                                      isLight
+                                        ? 'bg-white border-slate-300 text-[#0F4C3A] hover:bg-emerald-50'
+                                        : 'bg-[#090A0F] border-slate-700 text-emerald-300 hover:bg-slate-800'
+                                    }`}
+                                  >
+                                    {pr.id}
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </button>
+                                ) : (
+                                  <span className="font-mono font-bold">{pr.id}</span>
+                                )}
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase border border-slate-300/60 dark:border-slate-700">
+                                  {pr.status}
+                                </span>
+                              </div>
+                              <div className={`text-[11px] flex flex-wrap gap-x-3 gap-y-0.5 font-mono tabular-nums ${textMuted}`}>
+                                <span>Qty: {pr.suggestedQuantity}</span>
+                                <span>Store: {pr.storeName || pr.storeId || 'Hub'}</span>
+                                <span>By: {pr.requestedBy}</span>
+                                {!hideFinancialCost && pr.totalEstimatedCost !== undefined && (
+                                  <span>Est: {formatIDR(pr.totalEstimatedCost)}</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stage 2: Purchase Orders */}
+                    <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                          Stage 2: Purchase Orders (PO)
+                        </span>
+                        <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.purchaseOrders.length} records</span>
+                      </div>
+                      {traceData.purchaseOrders.length === 0 ? (
+                        <p className={`text-[11px] ${textMuted}`}>No Purchase Orders linked to this SKU.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {traceData.purchaseOrders.map((po) => {
+                            const skuLine = po.items.find((i) => i.sku === traceData.sku) || po.items[0];
+                            return (
+                              <div
+                                key={po.id}
+                                className={`p-3 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                                  isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-[#12141C] border-slate-800/80'
+                                }`}
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {onNavigateToProcurementDoc ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setTraceTargetSku(null);
+                                          onNavigateToProcurementDoc('po', po.id);
+                                        }}
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px] font-bold cursor-pointer ${
+                                          isLight
+                                            ? 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
+                                            : 'bg-sky-950/40 border-sky-800/60 text-sky-300 hover:bg-sky-900/60'
+                                        }`}
+                                      >
+                                        {po.id}
+                                        <ExternalLink className="w-2.5 h-2.5" />
+                                      </button>
+                                    ) : (
+                                      <span className="font-mono font-bold">{po.id}</span>
+                                    )}
+                                    <span className="font-semibold">{po.supplierName}</span>
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border border-slate-300/60 dark:border-slate-700">
+                                      {po.status}
+                                    </span>
+                                  </div>
+                                  <div className={`text-[11px] font-mono tabular-nums ${textMuted}`}>
+                                    {po.storeName} · ETA {po.expectedDeliveryDate}
+                                    {po.sourcePrId ? ` · Source: ${po.sourcePrId}` : ''}
+                                  </div>
+                                </div>
+                                <div className="text-right font-mono tabular-nums text-[11px]">
+                                  {skuLine && (
+                                    <div className="font-semibold">
+                                      Rcvd {skuLine.receivedQuantity} / {skuLine.orderedQuantity}
+                                      {skuLine.remainingBackorder > 0 ? ` (${skuLine.remainingBackorder} backorder)` : ''}
+                                    </div>
+                                  )}
+                                  {!hideFinancialCost && po.totalCost !== undefined && (
+                                    <div className={textMuted}>PO Total: {formatIDR(po.totalCost)}</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stage 3: Goods Receipts */}
+                    <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold flex items-center gap-1.5">
+                          <Truck className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
+                          Stage 3: Goods Receipts (GR / Dock Inward)
+                        </span>
+                        <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.goodsReceipts.length} records</span>
+                      </div>
+                      {traceData.goodsReceipts.length === 0 ? (
+                        <p className={`text-[11px] ${textMuted}`}>No Goods Receipts recorded for this SKU.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {traceData.goodsReceipts.map((gr) => {
+                            const skuGr = gr.items.find((i) => i.sku === traceData.sku);
+                            return (
+                              <div
+                                key={gr.id}
+                                className={`p-3 rounded-lg border space-y-1 ${
+                                  isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-[#12141C] border-slate-800/80'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  {onNavigateToProcurementDoc ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setTraceTargetSku(null);
+                                        onNavigateToProcurementDoc('gr', gr.id);
+                                      }}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px] font-bold cursor-pointer ${
+                                        isLight
+                                          ? 'bg-emerald-50 border-emerald-200 text-[#0F4C3A] hover:bg-emerald-100'
+                                          : 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/60'
+                                      }`}
+                                    >
+                                      {gr.id}
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </button>
+                                  ) : (
+                                    <span className="font-mono font-bold">{gr.id}</span>
+                                  )}
+                                  <span className="font-mono text-[10px] tabular-nums font-bold text-[#0F4C3A] dark:text-emerald-400">
+                                    +{skuGr?.quantityReceived ?? 0} rcvd
+                                  </span>
+                                </div>
+                                <div className={`text-[11px] font-mono ${textMuted}`}>
+                                  SJ: {gr.deliveryNoteNumber} · PO: {gr.poId}
+                                </div>
+                                <div className={`text-[10px] ${textMuted}`}>
+                                  {gr.storeName} · By {gr.receivedBy} ({skuGr?.qualityCondition || 'Verified'})
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stage 4: Physical Lots & Warehouse Racks */}
+                    <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold flex items-center gap-1.5">
+                          <Boxes className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
+                          Stage 4: Physical Lots / Batches &amp; Rack Bins
+                        </span>
+                        <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.batches.length} lots</span>
+                      </div>
+                      {traceData.batches.length === 0 ? (
+                        <p className={`text-[11px] ${textMuted}`}>No active batch/lot records found in scope.</p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800/80">
+                          <table className="w-full text-left text-[11px] font-mono">
+                            <thead>
+                              <tr className={tableHeaderClass}>
+                                <th className="py-2 px-3">Lot / Batch</th>
+                                <th className="py-2 px-3">Store &amp; Rack</th>
+                                <th className="py-2 px-3">Upstream Refs</th>
+                                <th className="py-2 px-3 text-right">Stock</th>
+                                {!hideFinancialCost && <th className="py-2 px-3 text-right">Unit Cost</th>}
+                                <th className="py-2 px-3 text-right">Expiry / Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80">
+                              {traceData.batches.map((b) => (
+                                <tr key={b.batchId}>
+                                  <td className="py-2 px-3">
+                                    <div className="font-bold">{b.lotNumber}</div>
+                                    <div className={`text-[10px] ${textMuted}`}>{b.batchId}</div>
+                                  </td>
+                                  <td className="py-2 px-3 font-sans">
+                                    <div>{b.storeName}</div>
+                                    <div className={`text-[10px] font-mono ${textMuted}`}>
+                                      {b.rackBinCode ? `${b.rackBinCode}${b.rackLabel ? ` (${b.rackLabel})` : ''}` : b.warehouseZoneId}
+                                    </div>
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <div className="flex flex-wrap gap-1">
+                                      {b.sourcePoNumber && <span>{b.sourcePoNumber}</span>}
+                                      {b.sourceGrId && <span className="text-emerald-600 dark:text-emerald-400">· {b.sourceGrId}</span>}
+                                      {b.sourcePrId && <span className={textMuted}>· {b.sourcePrId}</span>}
+                                    </div>
+                                  </td>
+                                  <td className="py-2 px-3 text-right tabular-nums font-bold">
+                                    {b.currentStock} / {b.initialQuantity}
+                                  </td>
+                                  {!hideFinancialCost && (
+                                    <td className="py-2 px-3 text-right tabular-nums">
+                                      {b.unitCost !== undefined ? formatIDR(b.unitCost) : '—'}
+                                    </td>
+                                  )}
+                                  <td className="py-2 px-3 text-right">
+                                    <div>{b.expiryDate.split('T')[0]}</div>
+                                    <div className={`text-[10px] uppercase ${textMuted}`}>{b.status.replace(/_/g, ' ')}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stage 5: Vendor Bills & AP (Hidden when Financial Cost Masked / No Valuation Permission) */}
+                    {!hideFinancialCost && (
+                      <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold flex items-center gap-1.5">
+                            <Receipt className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                            Stage 5: Vendor Bills &amp; Accounts Payable (3-Way Match)
+                          </span>
+                          <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.vendorBills.length} bills</span>
+                        </div>
+                        {traceData.vendorBills.length === 0 ? (
+                          <p className={`text-[11px] ${textMuted}`}>No Vendor Bills posted yet for upstream POs of this SKU.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {traceData.vendorBills.map((vb) => (
+                              <div
+                                key={vb.id}
+                                className={`p-3 rounded-lg border flex items-center justify-between gap-2 ${
+                                  isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-[#12141C] border-slate-800/80'
+                                }`}
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {onNavigateToVendorBill ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setTraceTargetSku(null);
+                                          onNavigateToVendorBill({ mode: 'view', billId: vb.id, poId: vb.poId });
+                                        }}
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px] font-bold cursor-pointer ${
+                                          isLight
+                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                            : 'bg-indigo-950/40 border-indigo-800/60 text-indigo-300 hover:bg-indigo-900/60'
+                                        }`}
+                                      >
+                                        {vb.id}
+                                        <ExternalLink className="w-2.5 h-2.5" />
+                                      </button>
+                                    ) : (
+                                      <span className="font-mono font-bold">{vb.id}</span>
+                                    )}
+                                    <span className="font-mono text-[11px]">{vb.billNumber}</span>
+                                  </div>
+                                  <div className={`text-[10px] font-mono ${textMuted}`}>
+                                    {vb.poId} · {vb.status} · {vb.paymentStatus}
+                                  </div>
+                                </div>
+                                <div className="text-right font-mono tabular-nums font-bold">
+                                  {formatIDR(vb.grandTotalIDR)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div
+              className={`p-3.5 border-t flex justify-end ${
+                isLight ? 'border-slate-200 bg-slate-50/70' : 'border-slate-800/80 bg-[#090A0F]'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setTraceTargetSku(null);
+                  setTraceData(null);
+                  setTraceError(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 text-white rounded-xl transition-all cursor-pointer"
+              >
+                Close Lineage
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

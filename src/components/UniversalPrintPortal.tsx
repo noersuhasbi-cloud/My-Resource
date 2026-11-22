@@ -266,6 +266,12 @@ export function renderPrintDocument(
                 <span>Shift / Reg:</span>
                 <span>{s.id} / {s.registerId}</span>
               </div>
+              {s.shiftName && (
+                <div className="flex justify-between">
+                  <span>Shift Window:</span>
+                  <span>{s.shiftName}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span>Cashier:</span>
                 <span className="font-bold">{s.cashierName}</span>

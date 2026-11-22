@@ -17,6 +17,7 @@ import type {
   SettlementReconcileResponse,
   ExecutiveFinancialHealthSummary,
   BankMutationCsvReconcileResponse,
+  VendorBillBridgeTarget,
 } from '../../types/index.ts';
 import { formatIDR } from '../../utils/formatters';
 import { isOwnerRoleCode } from '../../utils/rbac';
@@ -89,6 +90,9 @@ interface AccountingModuleProps {
   activeSubTab?: AccountingSubTab;
   onSubTabChange?: (subTab: AccountingSubTab) => void;
   activeStaffSession?: StaffShiftSession | null;
+  vendorBillBridgeTarget?: VendorBillBridgeTarget | null;
+  onClearVendorBillBridge?: () => void;
+  onNavigateToProcurementDoc?: (subTab: 'pr' | 'po' | 'gr', docId: string) => void;
 }
 
 export const AccountingModule: React.FC<AccountingModuleProps> = ({
@@ -109,6 +113,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   activeSubTab,
   onSubTabChange,
   activeStaffSession,
+  vendorBillBridgeTarget,
+  onClearVendorBillBridge,
+  onNavigateToProcurementDoc,
 }) => {
   const isLight = theme === 'light';
   const { triggerPrint } = usePrint();
@@ -1204,6 +1211,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           onRefreshData={onRefreshData}
           onShowToast={onShowToast}
           activeStaffSession={activeStaffSession}
+          bridgeTarget={vendorBillBridgeTarget}
+          onClearBridgeTarget={onClearVendorBillBridge}
+          onNavigateToProcurementDoc={onNavigateToProcurementDoc}
         />
       )}
 
