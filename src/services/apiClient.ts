@@ -2,7 +2,6 @@ import type {
   StoreOperationalStatus,
   StoreOutletSchedule,
   OutletType,
-  CompanyProfile,
   WarehouseZone,
   StoreInventoryStock,
   InventoryItem,
@@ -10,8 +9,6 @@ import type {
   PurchaseOrder,
   GoodsReceiptRecord,
   VendorBill,
-  ItemTraceabilityResponse,
-  VendorBillPoPrefillResponse,
   ChartOfAccount,
   GeneralLedgerEntry,
   ProfitAndLossReport,
@@ -167,6 +164,8 @@ import type {
   FraudTelemetryEvent,
   FraudRadarAlert,
   FraudRadarResponse,
+  ItemInboundTraceabilityResponse,
+  PoBillingPreviewResponse,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
@@ -197,10 +196,24 @@ export function setApiOperatorContext(
     }
     return;
   }
+  const isSameUserAsActive = Boolean(
+    activeOperatorContext?.userId &&
+      session.userId &&
+      activeOperatorContext.userId === session.userId
+  );
+  let savedTokenForSameUser: string | undefined;
+  if (!session.authToken && !isSameUserAsActive && typeof window !== 'undefined') {
+    try {
+      const savedSessionRaw = localStorage.getItem('grocemart_admin_session');
+      const savedSession = savedSessionRaw ? JSON.parse(savedSessionRaw) : null;
+      if (savedSession?.userId && savedSession.userId === session.userId) {
+        savedTokenForSameUser = localStorage.getItem('grocemart_auth_token') || undefined;
+      }
+    } catch {}
+  }
   const existingToken =
     session.authToken ||
-    activeOperatorContext?.authToken ||
-    (typeof window !== 'undefined' ? (() => { try { return localStorage.getItem('grocemart_auth_token') || undefined; } catch { return undefined; } })() : undefined);
+    (isSameUserAsActive ? activeOperatorContext?.authToken : savedTokenForSameUser);
   const resolvedStoreId = session.branchId || session.storeId;
   activeOperatorContext = {
     userRole: session.userRole,
@@ -209,9 +222,13 @@ export function setApiOperatorContext(
     userId: session.userId,
     authToken: existingToken,
   };
-  if (session.authToken && typeof window !== 'undefined') {
+  if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem('grocemart_auth_token', session.authToken);
+      if (session.authToken) {
+        localStorage.setItem('grocemart_auth_token', session.authToken);
+      } else if (!existingToken && !isSameUserAsActive) {
+        localStorage.removeItem('grocemart_auth_token');
+      }
     } catch {}
   }
 }
@@ -710,20 +727,20 @@ export const apiClient = {
     return res.json();
   },
 
-  async getVendorBillPoPrefill(poId: string): Promise<VendorBillPoPrefillResponse> {
-    const res = await fetchApi(`/api/admin/procurement/po/${encodeURIComponent(poId)}/bill-prefill`);
+  async getPoBillingPreview(poId: string): Promise<PoBillingPreviewResponse> {
+    const res = await fetchApi(`/api/admin/procurement/vendor-bills/preview/${encodeURIComponent(poId)}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to load PO billing prefill');
+      throw new Error(err.error || 'Failed to load PO billing preview');
     }
     return res.json();
   },
 
-  async getItemTraceability(sku: string): Promise<ItemTraceabilityResponse> {
+  async getItemTraceability(sku: string): Promise<ItemInboundTraceabilityResponse> {
     const res = await fetchApi(`/api/admin/inventory/items/${encodeURIComponent(sku)}/traceability`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to load item traceability');
+      throw new Error(err.error || 'Failed to load item inbound traceability');
     }
     return res.json();
   },
@@ -751,6 +768,7 @@ export const apiClient = {
       notes?: string;
     }[];
     taxPercent?: number;
+    pphPercent?: number;
     isNonCreditableVat?: boolean;
     notes?: string;
     autoApprove?: boolean;
@@ -3111,14 +3129,10 @@ export const apiClient = {
 
   async openPosShift(payload: {
     storeId: string;
-    branchId?: string;
     storeName: string;
     registerId?: string;
-    shiftName?: string;
-    openingPettyCashIDR?: number;
-    openingFloatIDR?: number;
+    openingFloatIDR: number;
     cashierName?: string;
-    clientTimestampIso?: string;
   }): Promise<{ success: boolean; shift: PosRegisterShiftSession; message: string }> {
     const res = await fetchApi('/api/pos/shifts/open', {
       method: 'POST',
@@ -3271,66 +3285,11 @@ export const apiClient = {
   // -------------------------------------------------------------
   // EDITABLE OUTLET / BRANCH PROFILES & QUOTA + MULTI-BRANCH MONITOR
   // -------------------------------------------------------------
-  async getAdminCompanies(): Promise<{
-    success: boolean;
-    companies: CompanyProfile[];
-    primaryCompany: CompanyProfile;
-  }> {
-    const res = await fetchApi('/api/admin/settings/companies');
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to load company profiles');
-    }
-    return data;
-  },
-
-  async createAdminCompany(payload: Partial<CompanyProfile> & { companyName: string }): Promise<{
-    success: boolean;
-    company: CompanyProfile;
-    companies: CompanyProfile[];
-    primaryCompany: CompanyProfile;
-    message: string;
-  }> {
-    const res = await fetchApi('/api/admin/settings/companies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Gagal membuat profil perusahaan');
-    }
-    return data;
-  },
-
-  async updateAdminCompany(
-    id: string,
-    patch: Partial<CompanyProfile>
-  ): Promise<{
-    success: boolean;
-    company: CompanyProfile;
-    companies: CompanyProfile[];
-    primaryCompany: CompanyProfile;
-    message: string;
-  }> {
-    const res = await fetchApi(`/api/admin/settings/companies/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Gagal memperbarui profil perusahaan');
-    }
-    return data;
-  },
-
   async getAdminOutlets(): Promise<{
     success: boolean;
     outlets: StoreOutletSchedule[];
     quota: { activeOutlets: number; maxAllowedOutlets: number; remainingSlots: number };
     branchOptions: Array<{ storeId: string; storeName: string; hubType: string }>;
-    companies?: CompanyProfile[];
   }> {
     const res = await fetchApi('/api/admin/settings/outlets');
     const data = await res.json().catch(() => ({}));
@@ -3343,8 +3302,6 @@ export const apiClient = {
   async createAdminOutlet(payload: {
     branchCode: string;
     name: string;
-    parentCompanyId?: string;
-    branchPartnerName?: string;
     outletType: OutletType;
     address: string;
     city: string;
@@ -3382,8 +3339,6 @@ export const apiClient = {
       branchCode: string;
       name: string;
       storeName: string;
-      parentCompanyId: string;
-      branchPartnerName: string;
       outletType: OutletType;
       address: string;
       city: string;

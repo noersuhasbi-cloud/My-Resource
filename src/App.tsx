@@ -624,11 +624,16 @@ export default function App() {
     }
   };
 
-  const handleAdminLoginSuccess = (session: StaffShiftSession) => {
+  const handleAdminLoginSuccess = (session: StaffShiftSession, rememberWorkstation: boolean = true) => {
     apiClient.setOperatorContext(session);
     setAdminSession(session);
     try {
-      localStorage.setItem('grocemart_admin_session', JSON.stringify(session));
+      if (rememberWorkstation) {
+        localStorage.setItem('grocemart_admin_session', JSON.stringify(session));
+      } else {
+        localStorage.removeItem('grocemart_admin_session');
+        localStorage.removeItem('grocemart_auth_token');
+      }
     } catch {}
     window.location.hash = session.userRole === 'cashier' ? '#pos' : '#admin';
     setPortalView('admin_erp');
@@ -640,6 +645,7 @@ export default function App() {
     setAdminSession(null);
     try {
       localStorage.removeItem('grocemart_admin_session');
+      localStorage.removeItem('grocemart_auth_token');
     } catch {}
     window.location.hash = '#admin-login';
     setPortalView('admin_login');

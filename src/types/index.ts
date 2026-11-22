@@ -158,59 +158,6 @@ export type UserRole =
   | 'receiving_clerk'
   | 'executive';
 
-export type IndonesiaTimezone = 'Asia/Jakarta' | 'Asia/Makassar' | 'Asia/Jayapura';
-
-export interface CompanySocialMedia {
-  instagram?: string;
-  whatsappBusiness?: string;
-  tiktok?: string;
-  linkedin?: string;
-}
-
-export interface CompanyProfile {
-  id: string;
-  companyName: string;
-  partnerName: string;
-  logoUrl?: string;
-  npwp: string;
-  isPrimary?: boolean;
-  street: string;
-  city: string;
-  province: string;
-  postalCode: string;
-  country: 'Indonesia';
-  currency: 'IDR';
-  timezone: IndonesiaTimezone;
-  emailDomain: string;
-  companyEmail: string;
-  phoneNumber: string;
-  website: string;
-  socialMedia: CompanySocialMedia;
-  updatedAt?: string;
-  updatedBy?: string;
-}
-
-export type CompanyPublicBranding = Pick<
-  CompanyProfile,
-  | 'id'
-  | 'companyName'
-  | 'partnerName'
-  | 'logoUrl'
-  | 'npwp'
-  | 'street'
-  | 'city'
-  | 'province'
-  | 'postalCode'
-  | 'country'
-  | 'currency'
-  | 'timezone'
-  | 'emailDomain'
-  | 'companyEmail'
-  | 'phoneNumber'
-  | 'website'
-  | 'socialMedia'
->;
-
 export interface StoreOperationalStatus {
   isOpen: boolean;
   isHolidayMode: boolean;
@@ -220,8 +167,6 @@ export interface StoreOperationalStatus {
   allowCatalogBrowsing: boolean;
   updatedAt: string;
   enableB2BAndStorefrontPortal?: boolean;
-  enableB2BFeatures?: boolean;
-  primaryCompany?: CompanyPublicBranding;
 }
 
 export type OutletType = 'FLAGSHIP_STORE' | 'DARK_STORE' | 'CENTRAL_HUB' | 'EXPRESS_MART';
@@ -232,9 +177,6 @@ export interface StoreOutletSchedule {
   branchCode?: string;
   storeName: string;
   name?: string;
-  parentCompanyId?: string;
-  parentCompanyName?: string;
-  branchPartnerName?: string;
   outletType?: OutletType;
   address?: string;
   city: 'Jakarta' | 'Bandung' | 'Surabaya' | 'Bali' | 'Yogyakarta' | 'Medan' | string;
@@ -517,6 +459,8 @@ export interface GoodsReceiptRecord {
   poId: string;
   sourcePoId?: string;
   sourcePrId?: string;
+  linkedVendorBillId?: string;
+  linkedVendorBillIds?: string[];
   storeId: string;
   storeName: string;
   warehouseZoneId: string;
@@ -528,8 +472,6 @@ export interface GoodsReceiptRecord {
   items: GoodsReceiptItem[];
   receiverNotes?: string;
   glEntryId?: string;
-  linkedVendorBillId?: string;
-  linkedVendorBillIds?: string[];
   unloadingLaborFeeIDR?: number;
   unloadingFeePayerCoa?: '1011' | '1010' | '2010';
   capitalizedToLandedCost?: boolean;
@@ -565,7 +507,7 @@ export interface VendorBill {
   poId: string; // Purchase Order reference
   sourcePoId?: string;
   goodsReceiptId: string; // Primary Goods Receipt reference
-  linkedGrIds?: string[]; // Multi-GR / split-delivery references
+  linkedGrIds?: string[]; // 1-to-many GR references for partial/split deliveries
   deliveryNoteNumber?: string; // Surat Jalan vendor reference
   billDate: string; // YYYY-MM-DD
   dueDate: string; // YYYY-MM-DD
@@ -576,6 +518,9 @@ export interface VendorBill {
   subtotal: number; // In bill currency
   taxPercent: number; // e.g. 11% PPN, or 0% for tax-exempt farm produce
   taxAmount: number; // In bill currency
+  pphPercent?: number;
+  pphAmount?: number;
+  appliedAdvance1150IDR?: number;
   grandTotal: number; // In bill currency
   grandTotalIDR: number; // Statutory base currency amount
   amountPaid: number; // In bill currency
@@ -594,134 +539,147 @@ export interface VendorBill {
   isNonCreditableVat?: boolean;
 }
 
-export interface ProcurementFocusTarget {
-  subTab: 'pr' | 'po' | 'gr' | 'vendor_bills';
-  docId: string;
-  triggerNonce: number;
+export interface CrossDocumentNavTarget {
+  target: 'pr' | 'po' | 'gr' | 'vendor_bill' | 'create_vendor_bill';
+  documentId: string;
+  secondaryGrId?: string;
+  linkedGrIds?: string[];
 }
 
-export interface VendorBillBridgeTarget {
-  mode: 'create' | 'view';
-  poId?: string;
-  grId?: string;
-  grIds?: string[];
-  billId?: string;
-  triggerNonce: number;
+export interface PoBillingPreviewItem {
+  sku: string;
+  productName: string;
+  orderedQuantity: number;
+  totalGrReceivedQty: number;
+  alreadyBilledQty: number;
+  unbilledGrQty: number;
+  unitCost: number;
 }
 
-export interface VendorBillPoPrefillResponse {
+export interface PoBillingPreviewResponse {
+  success: boolean;
   poId: string;
+  poNumber?: string;
   supplierName: string;
   storeId: string;
   storeName: string;
-  openAdvance1150IDR: number;
+  status: string;
+  paymentTerms?: string;
   suggestedTaxPercent: number;
-  unbilledGrs: Array<{
-    grId: string;
+  suggestedPphPercent: number;
+  openVendorAdvance1150IDR: number;
+  linkedGrs: Array<{
+    id: string;
     deliveryNoteNumber: string;
     receivedAt: string;
-    totalReceivedQty: number;
-    totalUnbilledQty: number;
-    items: Array<{
-      sku: string;
-      productName: string;
-      receivedQty: number;
-      alreadyBilledQty: number;
-      unbilledQty: number;
-    }>;
+    isPartial: boolean;
+    linkedVendorBillIds: string[];
+    items: Array<{ sku: string; productName: string; quantityReceived: number }>;
   }>;
+  items: PoBillingPreviewItem[];
   existingBillIds: string[];
+  totalUnbilledGrQty: number;
 }
 
-export interface ItemTraceabilityResponse {
+export interface ItemInboundTraceabilityResponse {
+  success: boolean;
   sku: string;
   productName: string;
-  category: string;
-  unit: string;
-  supplierName?: string;
+  category?: string;
+  unit?: string;
   itemClassification?: ItemClassification;
-  financialCostMasked: boolean;
-  unitCost?: number;
-  wacUnitCost?: number;
-  sellingPrice: number;
-  purchaseRequests: Array<{
+  financialDataMasked: boolean;
+  generatedAt: string;
+  summary: {
+    prCount: number;
+    poCount: number;
+    grCount: number;
+    lotCount: number;
+    vendorBillCount: number;
+    totalOnHandStock: number;
+    totalIncomingStock: number;
+    totalReceivedQty: number;
+  };
+  prs: Array<{
     id: string;
     createdAt: string;
-    status: PurchaseRequest['status'];
-    priority: PurchaseRequest['priority'];
-    storeId?: string;
+    requestedBy: string;
     storeName?: string;
     suggestedQuantity: number;
+    status: string;
+    priority: string;
+    linkedPoIds: string[];
     estimatedUnitCost?: number;
     totalEstimatedCost?: number;
-    poId?: string;
-    linkedPoIds?: string[];
-    requestedBy: string;
   }>;
-  purchaseOrders: Array<{
+  pos: Array<{
     id: string;
+    poNumber?: string;
     createdAt: string;
-    status: PurchaseOrder['status'];
     supplierName: string;
-    storeId: string;
     storeName: string;
-    sourcePrId?: string;
-    linkedGrIds?: string[];
-    linkedVendorBillIds?: string[];
+    status: string;
     expectedDeliveryDate: string;
-    subtotalCost?: number;
-    taxAmount?: number;
-    totalCost?: number;
-    items: Array<{
-      sku: string;
-      productName: string;
-      orderedQuantity: number;
-      receivedQuantity: number;
-      remainingBackorder: number;
-      unitCost?: number;
-      totalCost?: number;
-    }>;
-  }>;
-  goodsReceipts: Array<{
-    id: string;
-    poId: string;
-    sourcePoId?: string;
+    orderedQuantity: number;
+    receivedQuantity: number;
+    remainingBackorder: number;
     sourcePrId?: string;
-    storeId: string;
-    storeName: string;
-    warehouseZoneId: string;
-    deliveryNoteNumber: string;
-    vendorName: string;
+    linkedGrIds: string[];
+    linkedVendorBillIds: string[];
+    unitCost?: number;
+    totalCost?: number;
+  }>;
+  grs: Array<{
+    id: string;
     receivedAt: string;
     receivedBy: string;
+    vendorName: string;
+    storeName: string;
+    deliveryNoteNumber: string;
     isPartial: boolean;
-    linkedVendorBillId?: string;
-    linkedVendorBillIds?: string[];
-    items: GoodsReceiptItem[];
+    quantityReceived: number;
+    batchNumber: string;
+    expiryDate?: string;
+    qualityCondition: string;
+    qcStatus?: string;
+    sourcePoId?: string;
+    sourcePrId?: string;
+    linkedVendorBillIds: string[];
   }>;
-  batches: Array<{
+  lotsAndRacks: Array<{
     batchId: string;
     lotNumber: string;
     storeId: string;
     storeName: string;
-    warehouseZoneId: string;
-    rackBinCode?: string;
-    rackLabel?: string;
+    rackBinCode: string;
+    storageZone: string;
     initialQuantity: number;
     currentStock: number;
-    unitCost?: number;
-    landedCostPerUnitDelta?: number;
     receivedDate: string;
     expiryDate: string;
     daysUntilExpiry: number;
-    status: BatchExpiryStatus;
-    supplierName: string;
+    status: string;
     sourcePoNumber?: string;
     sourceGrId?: string;
-    sourcePrId?: string;
-    isConsignment?: boolean;
+    unitCost?: number;
   }>;
-  vendorBills: VendorBill[];
+  vendorBills: Array<{
+    id: string;
+    billNumber: string;
+    supplierName: string;
+    billDate: string;
+    dueDate: string;
+    status: string;
+    paymentStatus: string;
+    currency: SupportedCurrency;
+    billedQuantity: number;
+    unitCost?: number;
+    grandTotal?: number;
+    grandTotalIDR?: number;
+    remainingDue?: number;
+    sourcePoId?: string;
+    linkedGrIds: string[];
+  }>;
 }
 
 // -------------------------------------------------------------
@@ -750,8 +708,6 @@ export interface InventoryBatch {
   storageZone: StorageZoneType;
   supplierName: string;
   sourcePoNumber?: string;
-  sourceGrId?: string;
-  sourcePrId?: string;
   rackBinCode?: string;
   rotationStrategy?: 'FEFO' | 'FIFO';
   notes?: string;
@@ -2591,9 +2547,6 @@ export interface ErpConfigurationSettings {
   maxAllowedOutlets?: number; // Maximum active outlets allowed under SaaS quota (default 10)
   maxAllowedUsers?: number; // Maximum active user accounts allowed under SaaS quota (default 25)
   enableB2BAndStorefrontPortal?: boolean; // Feature flag controlling Customer Storefront, B2B Portal & Quotations visibility (default false)
-  enableB2BFeatures?: boolean; // Alias/Master switch hiding CRM B2B & all B2B surfaces by default (false)
-  localizationCountry?: 'Indonesia';
-  primaryCurrency?: 'IDR';
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -3029,15 +2982,12 @@ export interface PosRegisterShiftSession {
   storeId: string;
   storeName: string;
   registerId: string;
-  shiftName?: string;
   cashierId: string;
   cashierName: string;
   status: 'OPEN' | 'CLOSED';
   openedAt: string;
-  openedAtWib?: string;
   closedAt?: string;
   openingFloatIDR: number;
-  openingPettyCashIDR?: number;
   transactionCount: number;
   expectedCashSalesIDR: number;
   expectedQrisSalesIDR: number;
@@ -3108,9 +3058,6 @@ export interface BranchMonitorHubSummary {
   storeId: string;
   branchCode: string;
   storeName: string;
-  parentCompanyId?: string;
-  parentCompanyName?: string;
-  branchPartnerName?: string;
   city: string;
   district: string;
   hubType: 'Retail Flagship' | 'Dark Store' | 'Central CDC' | 'Express Mart';

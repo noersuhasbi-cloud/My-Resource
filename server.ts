@@ -6,6 +6,7 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 import http from 'http';
 import https from 'https';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 
@@ -74,9 +75,6 @@ import type {
   StoreOperationalStatus,
   StoreOutletSchedule,
   OutletType,
-  CompanyProfile,
-  CompanyPublicBranding,
-  IndonesiaTimezone,
   ItemClassification,
   TrialGovernanceConfig,
   TrialGovernanceStatusSnapshot,
@@ -124,8 +122,6 @@ import type {
   VendorBillItem,
   VendorBillStatus,
   VendorBillPaymentMethod,
-  ItemTraceabilityResponse,
-  VendorBillPoPrefillResponse,
   PromotionRule,
   CoaMappingConfig,
   PosCheckoutConfig,
@@ -377,116 +373,19 @@ let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDER
 let customerOrders: Order[] = JSON.parse(JSON.stringify(INITIAL_ORDERS));
 let enterpriseSettings: EnterpriseSettingsConfig = JSON.parse(JSON.stringify(INITIAL_ENTERPRISE_SETTINGS));
 
-const INITIAL_COMPANIES: CompanyProfile[] = [
-  {
-    id: 'COMP-001',
-    companyName: 'PT GroceMart Ritel Nusantara',
-    partnerName: 'PT Bumi Retail Sejahtera Tbk',
-    logoUrl: '',
-    npwp: '01.308.449.2-007.000',
-    isPrimary: true,
-    street: 'Jl. Senopati No. 82, Kebayoran Baru',
-    city: 'Jakarta Selatan',
-    province: 'DKI Jakarta',
-    postalCode: '12110',
-    country: 'Indonesia',
-    currency: 'IDR',
-    timezone: 'Asia/Jakarta',
-    emailDomain: '@grocemart.co.id',
-    companyEmail: 'corporate@grocemart.co.id',
-    phoneNumber: '+62 21 5550 1888',
-    website: 'https://www.grocemart.co.id',
-    socialMedia: {
-      instagram: '@grocemart.id',
-      whatsappBusiness: '+62 811 9000 1888',
-      tiktok: '@grocemart.id',
-      linkedin: 'company/grocemart-nusantara',
-    },
-    updatedAt: new Date().toISOString(),
-    updatedBy: 'System Seed',
-  },
-];
-
-let companiesList: CompanyProfile[] = JSON.parse(JSON.stringify(INITIAL_COMPANIES));
-
-const ALLOWED_ID_TIMEZONES: IndonesiaTimezone[] = ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura'];
-
-function normalizeIndonesiaTimezone(tz?: string): IndonesiaTimezone {
-  if (tz && ALLOWED_ID_TIMEZONES.includes(tz as IndonesiaTimezone)) return tz as IndonesiaTimezone;
-  if (tz === 'WITA') return 'Asia/Makassar';
-  if (tz === 'WIT') return 'Asia/Jayapura';
-  return 'Asia/Jakarta';
-}
-
-function sanitizeCompanyLogoUrl(raw?: string): { valid: boolean; value: string; error?: string } {
-  const val = String(raw || '').trim();
-  if (!val) return { valid: true, value: '' };
-  if (/^(javascript|vbscript|data:text\/html|data:image\/svg\+xml)/i.test(val)) {
-    return { valid: false, value: '', error: 'Format Logo URL tidak diizinkan demi keamanan.' };
-  }
-  if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(val)) {
-    if (val.length > 2_800_000) {
-      return { valid: false, value: '', error: 'Ukuran gambar logo melebihi batas maksimal 2 MB.' };
-    }
-    return { valid: true, value: val };
-  }
-  if (/^https?:\/\/[^\s"'<>]+$/i.test(val) || /^\/[A-Za-z0-9._\-\/]+$/.test(val)) {
-    return { valid: true, value: val };
-  }
-  return { valid: false, value: '', error: 'Logo harus berupa URL http(s)://, path lokal /, atau gambar PNG/JPG/WEBP base64.' };
-}
-
-function sanitizeWebsiteUrl(raw?: string): string {
-  const val = String(raw || '').trim();
-  if (!val) return '';
-  if (/^(javascript|vbscript|data:)/i.test(val)) return '';
-  if (/^https?:\/\//i.test(val)) return val;
-  return `https://${val}`;
-}
-
-function getPrimaryCompany(): CompanyProfile {
-  return companiesList.find((c) => c.isPrimary) || companiesList[0] || INITIAL_COMPANIES[0];
-}
-
-function toPublicCompanyBranding(comp: CompanyProfile): CompanyPublicBranding {
-  return {
-    id: comp.id,
-    companyName: comp.companyName,
-    partnerName: comp.partnerName,
-    logoUrl: comp.logoUrl,
-    npwp: comp.npwp,
-    street: comp.street,
-    city: comp.city,
-    province: comp.province,
-    postalCode: comp.postalCode,
-    country: 'Indonesia',
-    currency: 'IDR',
-    timezone: normalizeIndonesiaTimezone(comp.timezone),
-    emailDomain: comp.emailDomain,
-    companyEmail: comp.companyEmail,
-    phoneNumber: comp.phoneNumber,
-    website: comp.website,
-    socialMedia: { ...(comp.socialMedia || {}) },
-  };
-}
-
 function mergeErpSettings(raw?: Partial<ErpConfigurationSettings> | null): ErpConfigurationSettings {
   const base = INITIAL_ERP_SETTINGS;
   const src = raw || {};
   const rawMarginFloor = Number(src.minMarginFloorPct);
   const rawMaxOutlets = Number(src.maxAllowedOutlets);
   const rawMaxUsers = Number(src.maxAllowedUsers);
-  const b2bEnabled = src.enableB2BFeatures === true || src.enableB2BAndStorefrontPortal === true;
   return {
     ...base,
     ...src,
     minMarginFloorPct: Number.isFinite(rawMarginFloor) ? Math.max(0, Math.min(50, rawMarginFloor)) : (base.minMarginFloorPct ?? 2.0),
     maxAllowedOutlets: Number.isFinite(rawMaxOutlets) ? Math.max(1, Math.min(500, Math.round(rawMaxOutlets))) : (base.maxAllowedOutlets ?? 10),
     maxAllowedUsers: Number.isFinite(rawMaxUsers) ? Math.max(1, Math.min(500, Math.round(rawMaxUsers))) : (base.maxAllowedUsers ?? 25),
-    enableB2BAndStorefrontPortal: b2bEnabled,
-    enableB2BFeatures: b2bEnabled,
-    localizationCountry: 'Indonesia',
-    primaryCurrency: 'IDR',
+    enableB2BAndStorefrontPortal: src.enableB2BAndStorefrontPortal === true,
     ojolChannelRates: {
       grabMart: { ...base.ojolChannelRates.grabMart, ...(src.ojolChannelRates?.grabMart || {}) },
       goMart: { ...base.ojolChannelRates.goMart, ...(src.ojolChannelRates?.goMart || {}) },
@@ -4286,17 +4185,12 @@ function enrichOutletSchedule(st: StoreOutletSchedule, idx: number): StoreOutlet
   const name = (st.name || st.storeName || st.storeId).trim();
   const branchCode = deriveDefaultBranchCode(st, idx);
   const phone = st.phone || st.contactPhone || '+62 21 5550100';
-  const primary = getPrimaryCompany();
-  const matchedCompany = (st.parentCompanyId ? companiesList.find((c) => c.id === st.parentCompanyId) : undefined) || primary;
   return {
     ...st,
     id: st.id || st.storeId,
     branchCode,
     name,
     storeName: st.storeName || name,
-    parentCompanyId: matchedCompany.id,
-    parentCompanyName: matchedCompany.companyName,
-    branchPartnerName: (st.branchPartnerName || matchedCompany.partnerName || '').trim(),
     outletType,
     address: st.address || `${st.district || 'Central'}, ${st.city || 'Indonesia'}`,
     phone,
@@ -5755,15 +5649,10 @@ function evaluateSystemUserModulePermission(
   }
 
   // 8. Account Payable (Vendor Bills, Payment Release, 3-Way Match Approval)
-  if (
-    urlPath.startsWith('/admin/procurement/vendor-bills') ||
-    (urlPath.startsWith('/admin/procurement/po/') && urlPath.endsWith('/bill-prefill'))
-  ) {
+  if (urlPath.startsWith('/admin/procurement/vendor-bills')) {
     const canAP = mp.accounting.view === true && mp.accounting.canAccessAP === true;
     if (isRead) {
-      return canAP || mp.procurement.approve === true || mp.procurement.view === true
-        ? { allowed: true }
-        : deny('accounting', 'view');
+      return canAP || mp.procurement.approve === true ? { allowed: true } : deny('accounting', 'view');
     }
     if (urlPath === '/admin/procurement/vendor-bills' && method === 'POST') {
       return canAP && mp.accounting.create === true ? { allowed: true } : deny('accounting', 'create');
@@ -6062,11 +5951,6 @@ function evaluateSystemUserModulePermission(
     urlPath.startsWith('/admin/scalability/climate-thresholds')
   ) {
     if (isRead) {
-      if (urlPath.startsWith('/admin/inventory/items/') && urlPath.endsWith('/traceability')) {
-        return mp.inventory.view === true || mp.procurement.view === true || mp.accounting.view === true
-          ? { allowed: true }
-          : deny('inventory', 'view');
-      }
       if (urlPath === '/admin/markdown-rules' || urlPath.startsWith('/admin/markdown-rules/')) {
         return mp.inventory.view === true || mp.fefoBatches.view === true || mp.qualityControl.view === true
           ? { allowed: true }
@@ -7930,7 +7814,6 @@ function captureServerState() {
     savedAt: new Date().toISOString(),
     isCleanProductionMode,
     erpSettings: enterpriseSettings.erpSettings,
-    companiesList,
     storeStatus,
     storeSchedules,
     warehouseZones,
@@ -8020,11 +7903,6 @@ function captureServerState() {
 function applyServerState(snap: any) {
   if (!snap || typeof snap !== 'object') return;
   isCleanProductionMode = Boolean(snap.isCleanProductionMode);
-  if (Array.isArray(snap.companiesList) && snap.companiesList.length > 0) {
-    companiesList = snap.companiesList;
-  } else {
-    companiesList = JSON.parse(JSON.stringify(INITIAL_COMPANIES));
-  }
   if (snap.storeStatus) storeStatus = snap.storeStatus;
   if (Array.isArray(snap.storeSchedules)) {
     storeSchedules = snap.storeSchedules.map((st: StoreOutletSchedule, idx: number) => enrichOutletSchedule(st, idx));
@@ -8253,122 +8131,108 @@ function applyServerState(snap: any) {
   if (snap.trialGovernanceConfig && typeof snap.trialGovernanceConfig === 'object') {
     trialGovernanceConfig = normalizeTrialGovernanceConfig(snap.trialGovernanceConfig);
   }
-  backfillBidirectionalProcurementLinks();
+  backfillProcurementRelationalLinks();
 }
 
-function pushUniqueDocId(existing: string[] | undefined, ...ids: Array<string | undefined | null>): string[] {
-  const out: string[] = Array.isArray(existing) ? existing.filter((v): v is string => typeof v === 'string' && v.trim().length > 0) : [];
-  for (const raw of ids) {
-    if (typeof raw === 'string' && raw.trim().length > 0 && !out.includes(raw.trim())) {
-      out.push(raw.trim());
-    }
+function appendUniqueId(list: string[] | undefined, id?: string | null): string[] {
+  const arr = Array.isArray(list) ? list.filter((v): v is string => typeof v === 'string' && v.trim().length > 0) : [];
+  if (id && id.trim() && !arr.includes(id.trim())) {
+    arr.push(id.trim());
   }
-  return out;
+  return arr;
 }
 
-function linkPrToPo(pr: PurchaseRequest | undefined, po: PurchaseOrder | undefined) {
-  if (!pr || !po) return;
-  pr.poId = pr.poId || po.id;
-  pr.linkedPoIds = pushUniqueDocId(pr.linkedPoIds, pr.poId, po.id);
-  po.prId = po.prId || pr.id;
-  po.sourcePrId = po.sourcePrId || pr.id;
-}
-
-function linkPoToGr(po: PurchaseOrder | undefined, gr: GoodsReceiptRecord | undefined) {
-  if (!po || !gr) return;
-  po.goodsReceiptIds = pushUniqueDocId(po.goodsReceiptIds, ...(po.linkedGrIds || []), gr.id);
-  po.linkedGrIds = [...po.goodsReceiptIds];
-  gr.sourcePoId = gr.sourcePoId || po.id;
-  gr.sourcePrId = gr.sourcePrId || po.sourcePrId || po.prId;
-}
-
-function linkVendorBillToPoAndGrs(bill: VendorBill | undefined) {
-  if (!bill) return;
-  bill.sourcePoId = bill.sourcePoId || bill.poId;
-  const matchedPo = purchaseOrders.find((p) => p.id === bill.poId || p.poNumber === bill.poId);
-  if (matchedPo) {
-    matchedPo.linkedVendorBillIds = pushUniqueDocId(matchedPo.linkedVendorBillIds, bill.id);
-    if (!bill.sourcePoId) bill.sourcePoId = matchedPo.id;
-  }
-  const candidateGrIds = pushUniqueDocId(bill.linkedGrIds, bill.goodsReceiptId);
-  const validGrIds: string[] = [];
-  candidateGrIds.forEach((grId) => {
-    const gr = goodsReceipts.find((g) => g.id === grId);
-    if (gr && (!matchedPo || gr.poId === matchedPo.id || gr.sourcePoId === matchedPo.id)) {
-      gr.linkedVendorBillIds = pushUniqueDocId(gr.linkedVendorBillIds, gr.linkedVendorBillId, bill.id);
-      if (!gr.linkedVendorBillId) {
-        gr.linkedVendorBillId = bill.id;
-      }
-      validGrIds.push(gr.id);
-    } else if (!gr) {
-      validGrIds.push(grId);
-    }
-  });
-  bill.linkedGrIds = validGrIds;
-}
-
-function backfillBidirectionalProcurementLinks() {
-  // 1. PR <-> PO
+/**
+ * Idempotent, non-destructive bidirectional backfill for PR <-> PO <-> GR <-> VendorBill.
+ * Ensures legacy seeded records and restored snapshots always expose consistent 1-to-many lineage arrays
+ * without altering any amounts, stock quantities, or statuses.
+ */
+function backfillProcurementRelationalLinks(): void {
+  // 1. Initialize arrays on PRs
   purchaseRequests.forEach((pr) => {
-    pr.linkedPoIds = pushUniqueDocId(pr.linkedPoIds, pr.poId);
+    pr.linkedPoIds = appendUniqueId(pr.linkedPoIds, pr.poId);
   });
+
+  // 2. Sync PO <-> PR and initialize PO arrays
   purchaseOrders.forEach((po) => {
-    po.sourcePrId = po.sourcePrId || po.prId;
-    if (po.sourcePrId) {
-      const pr = purchaseRequests.find((p) => p.id === po.sourcePrId);
-      if (pr) linkPrToPo(pr, po);
-    } else {
-      const pr = purchaseRequests.find((p) => p.poId === po.id || p.linkedPoIds?.includes(po.id));
-      if (pr) linkPrToPo(pr, po);
+    const resolvedPrId = po.sourcePrId || po.prId;
+    if (resolvedPrId) {
+      po.prId = resolvedPrId;
+      po.sourcePrId = resolvedPrId;
+      const parentPr = purchaseRequests.find((p) => p.id === resolvedPrId);
+      if (parentPr) {
+        parentPr.linkedPoIds = appendUniqueId(parentPr.linkedPoIds, po.id);
+        if (!parentPr.poId) parentPr.poId = po.id;
+      }
     }
-    po.linkedGrIds = pushUniqueDocId(po.linkedGrIds, ...(po.goodsReceiptIds || []));
-    po.goodsReceiptIds = [...po.linkedGrIds];
-    po.linkedVendorBillIds = pushUniqueDocId(po.linkedVendorBillIds);
-  });
-
-  // 2. PO <-> GR
-  goodsReceipts.forEach((gr) => {
-    gr.sourcePoId = gr.sourcePoId || gr.poId;
-    const po = purchaseOrders.find((p) => p.id === gr.poId || p.id === gr.sourcePoId);
-    if (po) {
-      linkPoToGr(po, gr);
-    }
-    gr.linkedVendorBillIds = pushUniqueDocId(gr.linkedVendorBillIds, gr.linkedVendorBillId);
-    if (gr.linkedVendorBillIds.length > 0 && !gr.linkedVendorBillId) {
-      gr.linkedVendorBillId = gr.linkedVendorBillIds[0];
-    }
-  });
-
-  // 3. PO / GR <-> VendorBill
-  vendorBillsList.forEach((bill) => {
-    linkVendorBillToPoAndGrs(bill);
-  });
-
-  // 4. Batches <-> GR / PR
-  inventoryBatches.forEach((batch) => {
-    if (!batch.sourceGrId) {
-      const matchedGr = goodsReceipts.find((g) => {
-        const poMatches = batch.sourcePoNumber ? g.poId === batch.sourcePoNumber || g.sourcePoId === batch.sourcePoNumber : true;
-        if (!poMatches) return false;
-        const hasExactLot = g.items.some((it) => it.sku === batch.sku && it.batchNumber === batch.lotNumber);
-        if (hasExactLot) return true;
-        if (batch.notes && batch.notes.includes(g.id)) return true;
-        return Boolean(batch.sourcePoNumber) && g.items.some((it) => it.sku === batch.sku);
+    let grIds = Array.isArray(po.linkedGrIds) ? [...po.linkedGrIds] : [];
+    if (Array.isArray(po.goodsReceiptIds)) {
+      po.goodsReceiptIds.forEach((gid) => {
+        grIds = appendUniqueId(grIds, gid);
       });
-      if (matchedGr) {
-        batch.sourceGrId = matchedGr.id;
-        batch.sourcePrId = batch.sourcePrId || matchedGr.sourcePrId;
-        batch.sourcePoNumber = batch.sourcePoNumber || matchedGr.poId;
+    }
+    po.linkedGrIds = grIds;
+    po.goodsReceiptIds = [...grIds];
+    po.linkedVendorBillIds = Array.isArray(po.linkedVendorBillIds)
+      ? Array.from(new Set(po.linkedVendorBillIds.filter(Boolean)))
+      : [];
+  });
+
+  // Also link PRs where pr.poId matches a PO whose prId wasn't set
+  purchaseRequests.forEach((pr) => {
+    const poIds = appendUniqueId(pr.linkedPoIds, pr.poId);
+    pr.linkedPoIds = poIds;
+    poIds.forEach((pid) => {
+      const childPo = purchaseOrders.find((o) => o.id === pid || o.poNumber === pid);
+      if (childPo) {
+        if (!childPo.prId) childPo.prId = pr.id;
+        if (!childPo.sourcePrId) childPo.sourcePrId = pr.id;
+      }
+    });
+  });
+
+  // 3. Sync GR <-> PO <-> PR
+  goodsReceipts.forEach((gr) => {
+    const resolvedPoId = gr.sourcePoId || gr.poId;
+    if (resolvedPoId) {
+      gr.poId = resolvedPoId;
+      gr.sourcePoId = resolvedPoId;
+      const parentPo = purchaseOrders.find((p) => p.id === resolvedPoId || p.poNumber === resolvedPoId);
+      if (parentPo) {
+        parentPo.linkedGrIds = appendUniqueId(parentPo.linkedGrIds, gr.id);
+        parentPo.goodsReceiptIds = appendUniqueId(parentPo.goodsReceiptIds, gr.id);
+        const prRef = gr.sourcePrId || parentPo.sourcePrId || parentPo.prId;
+        if (prRef) gr.sourcePrId = prRef;
       }
     }
-    if (!batch.sourcePrId && batch.sourcePoNumber) {
-      const matchedPo = purchaseOrders.find((p) => p.id === batch.sourcePoNumber);
-      if (matchedPo) {
-        batch.sourcePrId = matchedPo.sourcePrId || matchedPo.prId;
+    gr.linkedVendorBillIds = appendUniqueId(gr.linkedVendorBillIds, gr.linkedVendorBillId);
+  });
+
+  // 4. Sync VendorBill <-> PO <-> GR(s)
+  vendorBillsList.forEach((bill) => {
+    const resolvedPoId = bill.sourcePoId || bill.poId;
+    if (resolvedPoId) {
+      bill.poId = resolvedPoId;
+      bill.sourcePoId = resolvedPoId;
+      const parentPo = purchaseOrders.find((p) => p.id === resolvedPoId || p.poNumber === resolvedPoId);
+      if (parentPo) {
+        parentPo.linkedVendorBillIds = appendUniqueId(parentPo.linkedVendorBillIds, bill.id);
       }
     }
+    bill.linkedGrIds = appendUniqueId(bill.linkedGrIds, bill.goodsReceiptId);
+    bill.linkedGrIds.forEach((gid) => {
+      const parentGr = goodsReceipts.find((g) => g.id === gid);
+      if (parentGr) {
+        parentGr.linkedVendorBillIds = appendUniqueId(parentGr.linkedVendorBillIds, bill.id);
+        if (!parentGr.linkedVendorBillId && bill.status !== 'VOID') {
+          parentGr.linkedVendorBillId = bill.id;
+        }
+      }
+    });
   });
 }
+
+backfillProcurementRelationalLinks();
 
 const INITIAL_STATE_BASELINE_JSON = JSON.stringify(captureServerState());
 
@@ -8427,9 +8291,9 @@ function hydrateStateFromSnapshot() {
         ensureHalalComplianceMetadata();
         ensurePromoGimmickRuleSeeded();
         ensureConsignmentSeedItems();
-        backfillBidirectionalProcurementLinks();
         syncAllBatchesExpiryStatus(Date.now());
         syncWarehouseRackOccupancy();
+        backfillProcurementRelationalLinks();
         console.log(`[GroceMart Snapshot] Hydrated persistent state from ${STATE_SNAPSHOT_PATH}`);
         return;
       }
@@ -8442,8 +8306,8 @@ function hydrateStateFromSnapshot() {
   ensureHalalComplianceMetadata();
   ensurePromoGimmickRuleSeeded();
   ensureConsignmentSeedItems();
-  backfillBidirectionalProcurementLinks();
   syncWarehouseRackOccupancy();
+  backfillProcurementRelationalLinks();
   seedBaselineEnterpriseNotifications();
 }
 
@@ -8484,9 +8348,9 @@ async function resetDemoStateToBaseline() {
     ensureHalalComplianceMetadata();
     ensurePromoGimmickRuleSeeded();
     ensureConsignmentSeedItems();
-    backfillBidirectionalProcurementLinks();
     syncAllBatchesExpiryStatus(Date.now());
     syncWarehouseRackOccupancy();
+    backfillProcurementRelationalLinks();
     systemUsers = createInitialSystemUsers();
     trialGovernanceConfig = createDefaultTrialGovernanceConfig(Date.now());
     activeAuthTokens.clear();
@@ -8515,7 +8379,6 @@ async function initializeCleanProductionStore(req?: Request) {
 
     // Preserve enterpriseSettings (Coretax/PPN/MDR/Margin Floor), COA mapping, POS config, RBAC & warehouse structure
     const preservedEnterpriseSettings = JSON.parse(JSON.stringify(enterpriseSettings));
-    const preservedCompaniesList = JSON.parse(JSON.stringify(companiesList));
     const preservedCoaMapping = JSON.parse(JSON.stringify(coaMappingConfig));
     const preservedPosConfig = JSON.parse(JSON.stringify(posCheckoutConfig));
     const preservedOperatorAssignments = JSON.parse(JSON.stringify(operatorBranchAssignments));
@@ -8604,7 +8467,6 @@ async function initializeCleanProductionStore(req?: Request) {
 
     // Restore preserved configuration & RBAC roles
     enterpriseSettings = preservedEnterpriseSettings;
-    companiesList = preservedCompaniesList;
     coaMappingConfig = preservedCoaMapping;
     posCheckoutConfig = preservedPosConfig;
     operatorBranchAssignments = preservedOperatorAssignments;
@@ -10454,13 +10316,9 @@ async function startServer() {
   // STORE OPERATIONS & SCHEDULES MANAGEMENT ENDPOINTS
   // -------------------------------------------------------------
   app.get(['/api/admin/store-status', '/api/store-status', '/api/store/status'], (_req: Request, res: Response) => {
-    const erp = getErpSettings();
-    const b2bOn = erp.enableB2BFeatures === true || erp.enableB2BAndStorefrontPortal === true;
     res.json({
       ...storeStatus,
-      enableB2BAndStorefrontPortal: b2bOn,
-      enableB2BFeatures: b2bOn,
-      primaryCompany: toPublicCompanyBranding(getPrimaryCompany()),
+      enableB2BAndStorefrontPortal: getErpSettings().enableB2BAndStorefrontPortal === true,
     });
   });
 
@@ -10652,6 +10510,253 @@ async function startServer() {
         financialCostMasked: hideCost,
       },
       bpjphExpiringAlerts,
+    });
+  });
+
+  // Bidirectional Item & Lot Inbound Supply-Chain Traceability Endpoint (PR -> PO -> GR -> Lot/Rack -> Vendor Bill)
+  app.get('/api/admin/inventory/items/:sku/traceability', (req: Request, res: Response) => {
+    syncAllBatchesExpiryStatus(Date.now());
+    backfillProcurementRelationalLinks();
+
+    const rawSku = decodeURIComponent(String(req.params.sku || '')).trim();
+    if (!rawSku) {
+      return res.status(400).json({ success: false, error: 'SKU parameter is required.' });
+    }
+
+    const skuLower = rawSku.toLowerCase();
+    const hideFinancial = shouldHideFinancialCostForRequest(req);
+    const invItem = inventoryList.find((i) => i.sku.toLowerCase() === skuLower);
+    const matchingTiers = storeInventoryTiers.filter((t) => t.sku.toLowerCase() === skuLower);
+    const matchingBatches = inventoryBatches.filter((b) => b.sku.toLowerCase() === skuLower);
+
+    // 1. Collect matching Purchase Orders containing this SKU
+    const matchedPOs = purchaseOrders.filter((po) =>
+      po.items.some((it) => it.sku.toLowerCase() === skuLower)
+    );
+    const matchedPoIds = new Set(matchedPOs.map((p) => p.id));
+
+    // 2. Collect matching Goods Receipts containing this SKU or linked to matched POs
+    const matchedGRs = goodsReceipts.filter(
+      (gr) =>
+        gr.items.some((it) => it.sku.toLowerCase() === skuLower) ||
+        (matchedPoIds.has(gr.sourcePoId || gr.poId) && gr.items.some((it) => it.sku.toLowerCase() === skuLower))
+    );
+    const matchedGrIds = new Set(matchedGRs.map((g) => g.id));
+
+    // 3. Collect matching Purchase Requests by SKU or linked from matched POs
+    const referencedPrIds = new Set<string>();
+    matchedPOs.forEach((po) => {
+      if (po.sourcePrId || po.prId) referencedPrIds.add(String(po.sourcePrId || po.prId));
+    });
+    matchedGRs.forEach((gr) => {
+      if (gr.sourcePrId) referencedPrIds.add(gr.sourcePrId);
+    });
+    const matchedPRs = purchaseRequests.filter(
+      (pr) => pr.sku.toLowerCase() === skuLower || referencedPrIds.has(pr.id)
+    );
+
+    // 4. Collect matching Vendor Bills (omitted completely if caller has hideFinancialCost === true)
+    const matchedBills = hideFinancial
+      ? []
+      : vendorBillsList.filter(
+          (bill) =>
+            bill.items.some((it) => it.sku.toLowerCase() === skuLower) ||
+            matchedPoIds.has(bill.sourcePoId || bill.poId) ||
+            (bill.linkedGrIds || [bill.goodsReceiptId]).some((gid) => matchedGrIds.has(gid))
+        );
+
+    const canonicalSku =
+      invItem?.sku ||
+      matchingTiers[0]?.sku ||
+      matchingBatches[0]?.sku ||
+      matchedPOs[0]?.items.find((it) => it.sku.toLowerCase() === skuLower)?.sku ||
+      rawSku;
+    const productName =
+      invItem?.productName ||
+      invItem?.name ||
+      matchingTiers[0]?.productName ||
+      matchingBatches[0]?.productName ||
+      matchedPOs[0]?.items.find((it) => it.sku.toLowerCase() === skuLower)?.productName ||
+      canonicalSku;
+
+    const prsPayload = matchedPRs
+      .slice()
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .map((pr) => ({
+        id: pr.id,
+        createdAt: pr.createdAt,
+        requestedBy: pr.requestedBy,
+        storeName: pr.storeName,
+        suggestedQuantity: pr.suggestedQuantity,
+        status: pr.status,
+        priority: pr.priority,
+        linkedPoIds: appendUniqueId(pr.linkedPoIds, pr.poId),
+        ...(hideFinancial
+          ? {}
+          : {
+              estimatedUnitCost: pr.estimatedUnitCost,
+              totalEstimatedCost: pr.totalEstimatedCost,
+            }),
+      }));
+
+    const posPayload = matchedPOs
+      .slice()
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .map((po) => {
+        const line = po.items.find((it) => it.sku.toLowerCase() === skuLower);
+        return {
+          id: po.id,
+          poNumber: po.poNumber,
+          createdAt: po.createdAt,
+          supplierName: po.supplierName,
+          storeName: po.storeName,
+          status: po.status,
+          expectedDeliveryDate: po.expectedDeliveryDate,
+          orderedQuantity: line?.orderedQuantity ?? 0,
+          receivedQuantity: line?.receivedQuantity ?? 0,
+          remainingBackorder: line?.remainingBackorder ?? 0,
+          sourcePrId: po.sourcePrId || po.prId,
+          linkedGrIds: po.linkedGrIds || po.goodsReceiptIds || [],
+          linkedVendorBillIds: hideFinancial ? [] : po.linkedVendorBillIds || [],
+          ...(hideFinancial
+            ? {}
+            : {
+                unitCost: line?.unitCost,
+                totalCost: line?.totalCost ?? po.totalCost,
+              }),
+        };
+      });
+
+    const grsPayload = matchedGRs
+      .slice()
+      .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))
+      .map((gr) => {
+        const line = gr.items.find((it) => it.sku.toLowerCase() === skuLower);
+        const qc = qcInspectionsList.find(
+          (q) =>
+            (q.referenceId === gr.poId || q.referenceId === gr.id) &&
+            q.sku.toLowerCase() === skuLower
+        );
+        return {
+          id: gr.id,
+          receivedAt: gr.receivedAt,
+          receivedBy: gr.receivedBy,
+          vendorName: gr.vendorName,
+          storeName: gr.storeName,
+          deliveryNoteNumber: gr.deliveryNoteNumber,
+          isPartial: gr.isPartial,
+          quantityReceived: line?.quantityReceived ?? 0,
+          batchNumber: line?.batchNumber || '-',
+          expiryDate: line?.expiryDate,
+          qualityCondition: line?.qualityCondition || 'Verified',
+          qcStatus: qc?.disposition || (qc ? 'INSPECTED' : undefined),
+          sourcePoId: gr.sourcePoId || gr.poId,
+          sourcePrId: gr.sourcePrId,
+          linkedVendorBillIds: hideFinancial ? [] : appendUniqueId(gr.linkedVendorBillIds, gr.linkedVendorBillId),
+        };
+      });
+
+    const lotsAndRacksPayload = matchingBatches
+      .slice()
+      .sort((a, b) => Date.parse(b.receivedDate) - Date.parse(a.receivedDate))
+      .map((b) => {
+        const matchingRack = warehouseRacks.find(
+          (r) =>
+            r.storeId === b.storeId &&
+            (r.rackBinCode === (b as any).rackBinCode ||
+              (Array.isArray(r.assignedSkus) && r.assignedSkus.some((s) => s.toLowerCase() === skuLower)))
+        );
+        const matchedBin = warehouseBinsList.find(
+          (bin) =>
+            bin.storeId === b.storeId &&
+            (bin.binCode === (b as any).rackBinCode || bin.zoneId === b.warehouseZoneId)
+        );
+        const linkedGr = matchedGRs.find(
+          (g) =>
+            g.id === (b as any).sourceGrId ||
+            g.items.some((it) => it.sku.toLowerCase() === skuLower && it.batchNumber === b.lotNumber)
+        );
+        return {
+          batchId: b.batchId,
+          lotNumber: b.lotNumber,
+          storeId: b.storeId,
+          storeName: b.storeName,
+          rackBinCode:
+            (b as any).rackBinCode ||
+            matchingRack?.rackBinCode ||
+            matchedBin?.binCode ||
+            b.warehouseZoneId ||
+            'RACK-GEN-01',
+          storageZone: b.storageZone || 'ambient',
+          initialQuantity: b.initialQuantity,
+          currentStock: b.currentStock,
+          receivedDate: b.receivedDate,
+          expiryDate: b.expiryDate,
+          daysUntilExpiry: b.daysUntilExpiry,
+          status: b.status,
+          sourcePoNumber: b.sourcePoNumber || linkedGr?.sourcePoId || linkedGr?.poId,
+          sourceGrId: (b as any).sourceGrId || linkedGr?.id,
+          ...(hideFinancial ? {} : { unitCost: b.unitCost }),
+        };
+      });
+
+    const vendorBillsPayload = matchedBills
+      .slice()
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .map((bill) => {
+        const line = bill.items.find((it) => it.sku.toLowerCase() === skuLower);
+        return {
+          id: bill.id,
+          billNumber: bill.billNumber,
+          supplierName: bill.supplierName,
+          billDate: bill.billDate,
+          dueDate: bill.dueDate,
+          status: bill.status,
+          paymentStatus: bill.paymentStatus,
+          currency: bill.currency,
+          billedQuantity: line?.billedQuantity ?? bill.items.reduce((s, it) => s + it.billedQuantity, 0),
+          unitCost: line?.unitCost,
+          grandTotal: bill.grandTotal,
+          grandTotalIDR: bill.grandTotalIDR,
+          remainingDue: bill.remainingDue,
+          sourcePoId: bill.sourcePoId || bill.poId,
+          linkedGrIds: appendUniqueId(bill.linkedGrIds, bill.goodsReceiptId),
+        };
+      });
+
+    const totalOnHandStock =
+      matchingTiers.length > 0
+        ? matchingTiers.reduce((s, t) => s + (t.physicalStock || 0), 0)
+        : invItem?.currentStock ?? matchingBatches.reduce((s, b) => s + (b.currentStock || 0), 0);
+    const totalIncomingStock =
+      matchingTiers.length > 0
+        ? matchingTiers.reduce((s, t) => s + (t.incomingStock || 0), 0)
+        : invItem?.incomingStock ?? 0;
+
+    res.json({
+      success: true,
+      sku: canonicalSku,
+      productName,
+      category: invItem?.category || matchingTiers[0]?.category,
+      unit: invItem?.unit || matchingTiers[0]?.unit || 'pcs',
+      itemClassification: resolveSkuClassification(canonicalSku, invItem?.itemClassification),
+      financialDataMasked: hideFinancial,
+      generatedAt: new Date().toISOString(),
+      summary: {
+        prCount: prsPayload.length,
+        poCount: posPayload.length,
+        grCount: grsPayload.length,
+        lotCount: lotsAndRacksPayload.length,
+        vendorBillCount: vendorBillsPayload.length,
+        totalOnHandStock: Number(totalOnHandStock.toFixed(2)),
+        totalIncomingStock: Number(totalIncomingStock.toFixed(2)),
+        totalReceivedQty: grsPayload.reduce((s, g) => s + g.quantityReceived, 0),
+      },
+      prs: prsPayload,
+      pos: posPayload,
+      grs: grsPayload,
+      lotsAndRacks: lotsAndRacksPayload,
+      vendorBills: vendorBillsPayload,
     });
   });
 
@@ -13598,7 +13703,8 @@ async function startServer() {
     };
     (newPO as any).incomingStockApplied = true;
 
-    linkPrToPo(pr, newPO);
+    pr.poId = poId;
+    pr.linkedPoIds = appendUniqueId(pr.linkedPoIds, poId);
     purchaseOrders.unshift(newPO);
 
     if (inv) {
@@ -13976,7 +14082,6 @@ async function startServer() {
 
     let grTotalCost = 0;
     let ownedGrTotalCost = 0;
-    const grId = `GR-2026-${(goodsReceipts.length + 1).toString().padStart(3, '0')}`;
     const ownedGrByClass: Record<ItemClassification, number> = {
       MERCHANDISE: 0,
       FIXED_ASSET: 0,
@@ -14145,8 +14250,6 @@ async function startServer() {
         storageZone: tier?.storageType || 'cold_chilled',
         supplierName: po.supplierName,
         sourcePoNumber: po.id,
-        sourceGrId: grId,
-        sourcePrId: po.sourcePrId || po.prId,
         notes: isConsignmentItem
           ? `Consignment (Titip Jual) received via GR against ${po.id} — Zero #1040/#2010 GL on receipt`
           : lineLandedShare > 0
@@ -14168,9 +14271,20 @@ async function startServer() {
     po.status = isPartial ? 'Partially Received' : 'Completed';
     po.actualDeliveryDate = new Date().toISOString().split('T')[0];
 
-    // Create Goods Receipt Record (using pre-reserved grId)
+    // Create Goods Receipt Record
+    const grId = `GR-2026-${(goodsReceipts.length + 1).toString().padStart(3, '0')}`;
     const gleId1 = `GLE-2026-${(generalLedger.length + 1).toString().padStart(4, '0')}`;
     const gleId2 = `GLE-2026-${(generalLedger.length + 2).toString().padStart(4, '0')}`;
+
+    // Tag the newly created batch(es) from this GR with sourceGrId for exact Lot -> GR traceability
+    grItemsReceived.forEach((grLine) => {
+      const matchedBatch = inventoryBatches.find(
+        (b) => b.sku === grLine.sku && b.lotNumber === grLine.batchNumber && b.sourcePoNumber === po.id && !(b as any).sourceGrId
+      );
+      if (matchedBatch) {
+        (matchedBatch as any).sourceGrId = grId;
+      }
+    });
 
     const roundedOwnedCost = Math.max(0, roundIDR(ownedGrTotalCost));
 
@@ -14179,6 +14293,7 @@ async function startServer() {
       poId: po.id,
       sourcePoId: po.id,
       sourcePrId: po.sourcePrId || po.prId,
+      linkedVendorBillIds: [],
       storeId: po.storeId,
       storeName: po.storeName,
       warehouseZoneId,
@@ -14196,13 +14311,13 @@ async function startServer() {
           ? `Partial shipment received. ${totalRemaining} units backorder remaining.`
           : 'Order 100% fulfilled.'),
       glEntryId: roundedOwnedCost > 0 ? gleId1 : undefined,
-      linkedVendorBillIds: [],
       unloadingLaborFeeIDR: safeUnloadingFee > 0 ? safeUnloadingFee : undefined,
       unloadingFeePayerCoa: safeUnloadingFee > 0 ? resolvedUnloadingPayerCoa : undefined,
       capitalizedToLandedCost: safeUnloadingFee > 0 ? isUnloadingCapitalized : undefined,
     };
 
-    linkPoToGr(po, newGR);
+    po.goodsReceiptIds = appendUniqueId(po.goodsReceiptIds, grId);
+    po.linkedGrIds = appendUniqueId(po.linkedGrIds, grId);
     goodsReceipts.unshift(newGR);
 
     const createdJournalIds: string[] = [];
@@ -15637,7 +15752,7 @@ async function startServer() {
       }
 
       const ttlMinutes = Math.max(5, trialGovernanceConfig.demoSessionTimeoutMinutes || 120);
-      const token = `erp-sys-jwt-${nowMs}-${Math.random().toString(36).slice(2, 8)}-${matchedSystemUser.id}`;
+      const token = `erp-sys-jwt-${nowMs}-${crypto.randomBytes(24).toString('hex')}-${matchedSystemUser.id}`;
       activeAuthTokens.set(token, {
         userId: matchedSystemUser.id,
         issuedAtMs: nowMs,
@@ -15790,7 +15905,7 @@ async function startServer() {
     });
 
     const legacyTtlMinutes = Math.max(5, trialGovernanceConfig.demoSessionTimeoutMinutes || 120);
-    const legacyToken = `erp-session-jwt-${nowMs}-${Math.random().toString(36).slice(2, 6)}-${target.userId}`;
+    const legacyToken = `erp-session-jwt-${nowMs}-${crypto.randomBytes(24).toString('hex')}-${target.userId}`;
     activeAuthTokens.set(legacyToken, {
       userId: target.userId,
       issuedAtMs: nowMs,
@@ -15811,6 +15926,7 @@ async function startServer() {
   app.post('/api/admin/auth/login', handleEnterpriseAuthLogin);
 
   app.post('/api/admin/auth/logout', (req: Request, res: Response) => {
+    const loggingOutSysUser = resolveSystemUserForRequest(req);
     const authHeaderRaw = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
     const bearerTok = authHeaderRaw.toLowerCase().startsWith('bearer ')
       ? authHeaderRaw.slice(7).trim()
@@ -15827,7 +15943,15 @@ async function startServer() {
     }
 
     const callerId = getEffectiveOperatorId(req);
-    const callerProfile = AVAILABLE_STAFF_USERS.find((u) => u.userId === callerId) || currentActiveStaffSession;
+    const callerProfile = loggingOutSysUser
+      ? {
+          userId: loggingOutSysUser.id,
+          userName: loggingOutSysUser.fullName,
+          userRole: divisionRoleToCanonicalRole(loggingOutSysUser.roleCode),
+          storeId: loggingOutSysUser.branchId || 'ALL',
+          activeShiftId: currentActiveStaffSession.activeShiftId,
+        }
+      : AVAILABLE_STAFF_USERS.find((u) => u.userId === callerId) || currentActiveStaffSession;
     securityAuditTrail.unshift({
       id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
       timestamp: new Date().toISOString(),
@@ -15839,7 +15963,11 @@ async function startServer() {
       storeId: callerProfile.storeId,
       shiftId: callerProfile.activeShiftId,
       status: 'AUTHORIZED_EXECUTED',
-      metadata: { reason: 'User initiated ERP session lock / sign out', tokenRevoked: Boolean(bearerTok) },
+      metadata: {
+        reason: 'User initiated ERP session lock / sign out',
+        tokenRevoked: Boolean(bearerTok),
+        ...(loggingOutSysUser ? { roleCode: loggingOutSysUser.roleCode, email: loggingOutSysUser.email } : {}),
+      },
     });
 
     res.json({ success: true, message: 'ERP session locked and logged out.' });
@@ -17546,21 +17674,7 @@ async function startServer() {
       return res.status(400).json({ error: 'minMarginFloorPct must be between 0% and 50%.' });
     }
     mergedErp.minMarginFloorPct = Number(normalizedMarginFloor.toFixed(2));
-    const nextB2BState =
-      patch.enableB2BFeatures !== undefined && patch.enableB2BAndStorefrontPortal === undefined
-        ? Boolean(patch.enableB2BFeatures)
-        : patch.enableB2BAndStorefrontPortal !== undefined && patch.enableB2BFeatures === undefined
-        ? Boolean(patch.enableB2BAndStorefrontPortal)
-        : Boolean(
-            patch.enableB2BFeatures ??
-              patch.enableB2BAndStorefrontPortal ??
-              mergedErp.enableB2BFeatures ??
-              mergedErp.enableB2BAndStorefrontPortal
-          );
-    mergedErp.enableB2BAndStorefrontPortal = nextB2BState;
-    mergedErp.enableB2BFeatures = nextB2BState;
-    mergedErp.localizationCountry = 'Indonesia';
-    mergedErp.primaryCurrency = 'IDR';
+    mergedErp.enableB2BAndStorefrontPortal = Boolean(mergedErp.enableB2BAndStorefrontPortal);
 
     if (patch.maxAllowedOutlets !== undefined) {
       if (!isCallerSuperAdminForUserMgmt(req)) {
@@ -17695,189 +17809,6 @@ async function startServer() {
     });
   });
 
-  // --- 1A1. MULTI-COMPANY PROFILE MASTER (LOGO, ADDRESS, IDR/WIB, CONTACTS & SOCIALS) ---
-  app.get('/api/admin/settings/companies', (_req: Request, res: Response) => {
-    res.json({
-      success: true,
-      companies: companiesList,
-      primaryCompany: getPrimaryCompany(),
-    });
-  });
-
-  app.post('/api/admin/settings/companies', (req: Request, res: Response) => {
-    if (!isCallerSuperAdminForUserMgmt(req)) {
-      return res.status(403).json({
-        success: false,
-        code: 'RBAC_FORBIDDEN',
-        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat menambah profil perusahaan.',
-      });
-    }
-    const body = (req.body || {}) as Partial<CompanyProfile>;
-    const companyName = String(body.companyName || '').trim();
-    if (!companyName) {
-      return res.status(400).json({ success: false, error: 'Nama Perusahaan (Company Name) wajib diisi.' });
-    }
-    if (body.currency && body.currency !== 'IDR') {
-      return res.status(400).json({ success: false, error: 'Sistem terkunci pada mata uang Rupiah Indonesia (IDR).' });
-    }
-    if (body.country && body.country !== 'Indonesia') {
-      return res.status(400).json({ success: false, error: 'Lokalisasi sistem terkunci untuk wilayah Indonesia.' });
-    }
-    const logoCheck = sanitizeCompanyLogoUrl(body.logoUrl);
-    if (!logoCheck.valid) {
-      return res.status(400).json({ success: false, code: 'INVALID_LOGO_URL', error: logoCheck.error });
-    }
-    const rawDomain = String(body.emailDomain || '').trim();
-    const emailDomain = rawDomain ? (rawDomain.startsWith('@') ? rawDomain : `@${rawDomain}`) : '@grocemart.co.id';
-    const nextId = `COMP-${String(companiesList.length + 1).padStart(3, '0')}`;
-    const shouldBePrimary = body.isPrimary === true || companiesList.length === 0;
-    if (shouldBePrimary) {
-      companiesList.forEach((c) => {
-        c.isPrimary = false;
-      });
-    }
-    const newComp: CompanyProfile = {
-      id: nextId,
-      companyName,
-      partnerName: String(body.partnerName || companyName).trim(),
-      logoUrl: logoCheck.value,
-      npwp: String(body.npwp || '').trim(),
-      isPrimary: shouldBePrimary,
-      street: String(body.street || '').trim(),
-      city: String(body.city || 'Jakarta').trim(),
-      province: String(body.province || 'DKI Jakarta').trim(),
-      postalCode: String(body.postalCode || '').trim(),
-      country: 'Indonesia',
-      currency: 'IDR',
-      timezone: normalizeIndonesiaTimezone(body.timezone),
-      emailDomain,
-      companyEmail: String(body.companyEmail || '').trim(),
-      phoneNumber: String(body.phoneNumber || '').trim(),
-      website: sanitizeWebsiteUrl(body.website),
-      socialMedia: {
-        instagram: String(body.socialMedia?.instagram || '').trim(),
-        whatsappBusiness: String(body.socialMedia?.whatsappBusiness || '').trim(),
-        tiktok: String(body.socialMedia?.tiktok || '').trim(),
-        linkedin: String(body.socialMedia?.linkedin || '').trim(),
-      },
-      updatedAt: new Date().toISOString(),
-      updatedBy: getEffectiveOperatorName(req),
-    };
-    companiesList.push(newComp);
-    appendAuditTrailLog({
-      req,
-      actorName: getEffectiveOperatorName(req),
-      actorRole: 'super_admin',
-      branchScope: 'CONSOLIDATED',
-      module: 'SECURITY',
-      action: 'COMPANY_PROFILE_CREATED',
-      referenceId: newComp.id,
-      summary: `Created company profile ${newComp.companyName} (Partner: ${newComp.partnerName}, Currency: IDR, TZ: ${newComp.timezone}).`,
-    });
-    scheduleStateSave();
-    return res.status(201).json({
-      success: true,
-      company: newComp,
-      companies: companiesList,
-      primaryCompany: getPrimaryCompany(),
-      message: `Perusahaan '${newComp.companyName}' berhasil ditambahkan.`,
-    });
-  });
-
-  app.patch('/api/admin/settings/companies/:id', (req: Request, res: Response) => {
-    if (!isCallerSuperAdminForUserMgmt(req)) {
-      return res.status(403).json({
-        success: false,
-        code: 'RBAC_FORBIDDEN',
-        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat memperbarui profil perusahaan.',
-      });
-    }
-    const targetId = String(req.params.id || '').trim();
-    const idx = companiesList.findIndex((c) => c.id === targetId);
-    if (idx === -1) {
-      return res.status(404).json({ success: false, error: `Perusahaan '${targetId}' tidak ditemukan.` });
-    }
-    const body = (req.body || {}) as Partial<CompanyProfile>;
-    if (body.currency && body.currency !== 'IDR') {
-      return res.status(400).json({ success: false, error: 'Sistem terkunci pada mata uang Rupiah Indonesia (IDR).' });
-    }
-    if (body.country && body.country !== 'Indonesia') {
-      return res.status(400).json({ success: false, error: 'Lokalisasi sistem terkunci untuk wilayah Indonesia.' });
-    }
-    const existing = companiesList[idx];
-    if (body.companyName !== undefined) {
-      const cleanName = String(body.companyName).trim();
-      if (!cleanName) {
-        return res.status(400).json({ success: false, error: 'Nama Perusahaan tidak boleh kosong.' });
-      }
-      existing.companyName = cleanName;
-    }
-    if (body.partnerName !== undefined) existing.partnerName = String(body.partnerName).trim();
-    if (body.logoUrl !== undefined) {
-      const logoCheck = sanitizeCompanyLogoUrl(body.logoUrl);
-      if (!logoCheck.valid) {
-        return res.status(400).json({ success: false, code: 'INVALID_LOGO_URL', error: logoCheck.error });
-      }
-      existing.logoUrl = logoCheck.value;
-    }
-    if (body.npwp !== undefined) existing.npwp = String(body.npwp).trim();
-    if (body.street !== undefined) existing.street = String(body.street).trim();
-    if (body.city !== undefined) existing.city = String(body.city).trim();
-    if (body.province !== undefined) existing.province = String(body.province).trim();
-    if (body.postalCode !== undefined) existing.postalCode = String(body.postalCode).trim();
-    if (body.timezone !== undefined) existing.timezone = normalizeIndonesiaTimezone(body.timezone);
-    if (body.emailDomain !== undefined) {
-      const d = String(body.emailDomain).trim();
-      existing.emailDomain = d ? (d.startsWith('@') ? d : `@${d}`) : '';
-    }
-    if (body.companyEmail !== undefined) existing.companyEmail = String(body.companyEmail).trim();
-    if (body.phoneNumber !== undefined) existing.phoneNumber = String(body.phoneNumber).trim();
-    if (body.website !== undefined) existing.website = sanitizeWebsiteUrl(body.website);
-    if (body.socialMedia !== undefined) {
-      existing.socialMedia = {
-        instagram: String(body.socialMedia?.instagram ?? existing.socialMedia?.instagram ?? '').trim(),
-        whatsappBusiness: String(body.socialMedia?.whatsappBusiness ?? existing.socialMedia?.whatsappBusiness ?? '').trim(),
-        tiktok: String(body.socialMedia?.tiktok ?? existing.socialMedia?.tiktok ?? '').trim(),
-        linkedin: String(body.socialMedia?.linkedin ?? existing.socialMedia?.linkedin ?? '').trim(),
-      };
-    }
-    if (body.isPrimary === true) {
-      companiesList.forEach((c) => {
-        c.isPrimary = c.id === existing.id;
-      });
-    }
-    existing.country = 'Indonesia';
-    existing.currency = 'IDR';
-    existing.updatedAt = new Date().toISOString();
-    existing.updatedBy = getEffectiveOperatorName(req);
-
-    // Cascade company name update to linked outlets
-    storeSchedules.forEach((s) => {
-      if (s.parentCompanyId === existing.id) {
-        s.parentCompanyName = existing.companyName;
-      }
-    });
-
-    appendAuditTrailLog({
-      req,
-      actorName: getEffectiveOperatorName(req),
-      actorRole: 'super_admin',
-      branchScope: 'CONSOLIDATED',
-      module: 'SECURITY',
-      action: 'COMPANY_PROFILE_UPDATED',
-      referenceId: existing.id,
-      summary: `Updated company profile ${existing.companyName} (Primary: ${existing.isPrimary ? 'Yes' : 'No'}, TZ: ${existing.timezone}).`,
-    });
-    scheduleStateSave();
-    return res.json({
-      success: true,
-      company: existing,
-      companies: companiesList,
-      primaryCompany: getPrimaryCompany(),
-      message: `Profil perusahaan '${existing.companyName}' berhasil diperbarui.`,
-    });
-  });
-
   // --- 1A2. EDITABLE OUTLET / BRANCH PROFILES & QUOTA MANAGEMENT (SUPER ADMIN) ---
   app.get('/api/admin/settings/outlets', (_req: Request, res: Response) => {
     res.json({
@@ -17885,7 +17816,6 @@ async function startServer() {
       outlets: storeSchedules.map((st, idx) => enrichOutletSchedule(st, idx)),
       quota: getOutletQuotaSummary(),
       branchOptions: getDynamicBranchOptions(),
-      companies: companiesList,
     });
   });
 
@@ -17910,17 +17840,6 @@ async function startServer() {
       ? (body.outletType as OutletType)
       : 'FLAGSHIP_STORE';
     const nextIsActive = body.isActive !== false;
-
-    const requestedCompanyId = String(body.parentCompanyId || '').trim();
-    let parentCompany = getPrimaryCompany();
-    if (requestedCompanyId) {
-      const foundComp = companiesList.find((c) => c.id === requestedCompanyId);
-      if (!foundComp) {
-        return res.status(400).json({ success: false, error: `Perusahaan induk '${requestedCompanyId}' tidak ditemukan.` });
-      }
-      parentCompany = foundComp;
-    }
-    const cleanBranchPartner = String(body.branchPartnerName || parentCompany.partnerName || '').trim();
 
     if (!cleanName) {
       return res.status(400).json({ success: false, error: 'Nama Outlet / Cabang wajib diisi.' });
@@ -17964,9 +17883,6 @@ async function startServer() {
         branchCode: cleanCode,
         name: cleanName,
         storeName: cleanName,
-        parentCompanyId: parentCompany.id,
-        parentCompanyName: parentCompany.companyName,
-        branchPartnerName: cleanBranchPartner,
         outletType,
         address: cleanAddress,
         city: cleanCity,
@@ -18113,18 +18029,6 @@ async function startServer() {
     if (body.outletType !== undefined && validTypes.includes(body.outletType)) {
       existing.outletType = body.outletType;
     }
-    if (body.parentCompanyId !== undefined) {
-      const reqCompId = String(body.parentCompanyId).trim();
-      const matchedComp = reqCompId ? companiesList.find((c) => c.id === reqCompId) : getPrimaryCompany();
-      if (!matchedComp) {
-        return res.status(400).json({ success: false, error: `Perusahaan induk '${reqCompId}' tidak ditemukan.` });
-      }
-      existing.parentCompanyId = matchedComp.id;
-      existing.parentCompanyName = matchedComp.companyName;
-    }
-    if (body.branchPartnerName !== undefined) {
-      existing.branchPartnerName = String(body.branchPartnerName).trim();
-    }
     if (body.address !== undefined) existing.address = String(body.address).trim();
     if (body.city !== undefined) existing.city = String(body.city).trim() || existing.city;
     if (body.district !== undefined) existing.district = String(body.district).trim() || existing.district;
@@ -18257,9 +18161,6 @@ async function startServer() {
         storeId: st.storeId,
         branchCode,
         storeName: st.storeName,
-        parentCompanyId: st.parentCompanyId,
-        parentCompanyName: st.parentCompanyName,
-        branchPartnerName: st.branchPartnerName,
         city: st.city,
         district: st.district,
         hubType,
@@ -18516,9 +18417,6 @@ async function startServer() {
           status: 'fresh',
           storageZone: tier?.storageType || 'cold_chilled',
           supplierName: po.supplierName,
-          sourcePoNumber: po.id,
-          sourceGrId: grId,
-          sourcePrId: po.sourcePrId || po.prId,
           itemClassification: arrLineClass,
           notes: `Dock arrival confirmed via Multi-Branch Monitor (${po.id})`,
         });
@@ -18540,11 +18438,9 @@ async function startServer() {
       po.status = 'Completed';
       const gleId1 = `GLE-ARR-${Date.now()}-1`;
 
-      const arrGrRecord: GoodsReceiptRecord = {
+      goodsReceipts.unshift({
         id: grId,
         poId: po.id,
-        sourcePoId: po.id,
-        sourcePrId: po.sourcePrId || po.prId,
         vendorName: po.supplierName,
         storeId: po.storeId,
         storeName: po.storeName,
@@ -18556,10 +18452,7 @@ async function startServer() {
         items: receivedItems,
         receiverNotes: 'Dock arrival confirmed via Multi-Branch Monitor',
         glEntryId: totalVal > 0 ? gleId1 : undefined,
-        linkedVendorBillIds: [],
-      };
-      linkPoToGr(po, arrGrRecord);
-      goodsReceipts.unshift(arrGrRecord);
+      });
 
       if (totalVal > 0) {
         ensureRegulatoryCoaAccounts();
@@ -19183,7 +19076,14 @@ async function startServer() {
       changes.push(`active=${targetUser.isActive}`);
       if (!targetUser.isActive) {
         for (const [tok, entry] of activeAuthTokens.entries()) {
-          if (entry.userId === targetUser.id) activeAuthTokens.delete(tok);
+          if (entry.userId === targetUser.id) {
+            activeAuthTokens.delete(tok);
+            revokedAuthTokens.add(tok);
+            if (revokedAuthTokens.size > 500) {
+              const oldest = revokedAuthTokens.values().next().value;
+              if (oldest) revokedAuthTokens.delete(oldest);
+            }
+          }
         }
       }
     }
@@ -20728,26 +20628,6 @@ async function startServer() {
   });
 
   // --- 5. PROCUREMENT 3-WAY MATCHING & VENDOR BILLS ---
-  function getGrBilledSkuMapForOtherBills(
-    targetGrIds: string[],
-    poId: string,
-    excludeBillId?: string
-  ): Map<string, number> {
-    const billedMap = new Map<string, number>();
-    const targetGrSet = new Set(targetGrIds);
-    vendorBillsList.forEach((b) => {
-      if (b.status === 'VOID' || b.status === 'REJECTED') return;
-      if (excludeBillId && b.id === excludeBillId) return;
-      if (b.poId !== poId) return;
-      const bGrIds = pushUniqueDocId(b.linkedGrIds, b.goodsReceiptId);
-      if (!bGrIds.some((gid) => targetGrSet.has(gid))) return;
-      (b.items || []).forEach((it) => {
-        billedMap.set(it.sku, (billedMap.get(it.sku) || 0) + (Number(it.billedQuantity) || 0));
-      });
-    });
-    return billedMap;
-  }
-
   function postVendorBillApprovalGL(bill: VendorBill, approverName: string): string[] {
     if (bill.glEntryIds && bill.glEntryIds.length > 0) {
       return bill.glEntryIds;
@@ -20759,32 +20639,24 @@ async function startServer() {
     const billSubtotalIDR = Math.round(bill.subtotal * exRate);
     const billTaxIDR = billTotalIDR - billSubtotalIDR;
 
+    const gr = goodsReceipts.find((g) => g.id === bill.goodsReceiptId && g.poId === bill.poId);
     const po = purchaseOrders.find((p) => p.id === bill.poId);
-    const billGrIds = pushUniqueDocId(bill.linkedGrIds, bill.goodsReceiptId);
-    const matchedUnreconciledGrs = billGrIds
-      .map((gid) => goodsReceipts.find((g) => g.id === gid && g.poId === bill.poId))
-      .filter((gr): gr is GoodsReceiptRecord => {
-        if (!gr) return false;
-        const alreadyReconciled = vendorBillsList.some(
-          (b) =>
-            b.id !== bill.id &&
-            b.poId === bill.poId &&
-            (b.status === 'APPROVED' || b.status === 'PAID' || b.status === 'PARTIALLY_PAID') &&
-            pushUniqueDocId(b.linkedGrIds, b.goodsReceiptId).includes(gr.id)
-        );
-        return !alreadyReconciled;
-      });
+    const grAlreadyReconciled = vendorBillsList.some(
+      (b) =>
+        b.id !== bill.id &&
+        b.goodsReceiptId === bill.goodsReceiptId &&
+        (b.status === 'APPROVED' || b.status === 'PAID' || b.status === 'PARTIALLY_PAID')
+    );
 
     let grAccruedIDR = 0;
-    matchedUnreconciledGrs.forEach((gr) => {
-      gr.items.forEach((grIt) => {
-        if (grIt.isConsignment) return;
+    if (gr && !grAlreadyReconciled) {
+      grAccruedIDR = gr.items.reduce((sum, grIt) => {
         const poIt = po?.items.find((p) => p.sku === grIt.sku);
         const billIt = bill.items.find((bi) => bi.sku === grIt.sku);
         const unitCost = poIt?.unitCost ?? (billIt ? Math.round(billIt.unitCost * exRate) : 0);
-        grAccruedIDR += Math.round((Number(grIt.quantityReceived) || 0) * unitCost);
-      });
-    });
+        return sum + Math.round(grIt.quantityReceived * unitCost);
+      }, 0);
+    }
 
     const netInventoryVarianceIDR = billSubtotalIDR - grAccruedIDR;
     const netApAdjustmentIDR = billTotalIDR - grAccruedIDR;
@@ -20811,7 +20683,7 @@ async function startServer() {
         referenceId: bill.id,
         description:
           grAccruedIDR > 0
-            ? `Vendor Bill #${bill.id} invoice variance vs GR [${billGrIds.join(', ')}] (${bill.billNumber}) (${approverName})`
+            ? `Vendor Bill #${bill.id} invoice variance vs GR #${bill.goodsReceiptId} [${bill.billNumber}] (${approverName})`
             : `Vendor Bill #${bill.id} approved [${bill.billNumber} - ${bill.supplierName}]`,
       });
     }
@@ -20950,68 +20822,6 @@ async function startServer() {
     return glIds;
   }
 
-  app.get('/api/admin/procurement/po/:poId/bill-prefill', (req: Request, res: Response) => {
-    const { poId } = req.params;
-    const po = purchaseOrders.find((p) => p.id === poId || p.poNumber === poId);
-    if (!po) {
-      return res.status(404).json({ error: `Purchase Order '${poId}' not found.` });
-    }
-
-    const poGrs = goodsReceipts.filter((g) => g.poId === po.id || g.sourcePoId === po.id);
-    const activeBillsForPo = vendorBillsList.filter(
-      (b) => b.poId === po.id && b.status !== 'VOID' && b.status !== 'REJECTED'
-    );
-
-    const unbilledGrs = poGrs
-      .map((gr) => {
-        const billedMap = getGrBilledSkuMapForOtherBills([gr.id], po.id);
-        const items = (gr.items || []).map((grIt) => {
-          const receivedQty = Number(grIt.quantityReceived) || 0;
-          const alreadyBilledQty = billedMap.get(grIt.sku) || 0;
-          const unbilledQty = Math.max(0, Number((receivedQty - alreadyBilledQty).toFixed(2)));
-          return {
-            sku: grIt.sku,
-            productName: grIt.productName,
-            receivedQty,
-            alreadyBilledQty,
-            unbilledQty,
-          };
-        });
-        const totalReceivedQty = items.reduce((s, i) => s + i.receivedQty, 0);
-        const totalUnbilledQty = items.reduce((s, i) => s + i.unbilledQty, 0);
-        return {
-          grId: gr.id,
-          deliveryNoteNumber: gr.deliveryNoteNumber,
-          receivedAt: gr.receivedAt,
-          totalReceivedQty,
-          totalUnbilledQty,
-          items,
-        };
-      })
-      .filter((g) => g.totalUnbilledQty > 0);
-
-    const firstSku = po.items[0]?.sku;
-    const taxRule = firstSku ? skuTaxRulesList.find((r) => r.sku === firstSku) : undefined;
-    const suggestedTaxPercent =
-      typeof taxRule?.taxRatePercent === 'number'
-        ? taxRule.taxRatePercent
-        : typeof po.taxPercent === 'number'
-        ? po.taxPercent
-        : 11;
-
-    const payload: VendorBillPoPrefillResponse = {
-      poId: po.id,
-      supplierName: po.supplierName,
-      storeId: po.storeId,
-      storeName: po.storeName,
-      openAdvance1150IDR: getSupplierOpenAdvance1150IDR(po.supplierName),
-      suggestedTaxPercent,
-      unbilledGrs,
-      existingBillIds: activeBillsForPo.map((b) => b.id),
-    };
-    res.json(payload);
-  });
-
   app.get('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
     const { storeId, status, currency } = req.query;
     let filtered = vendorBillsList;
@@ -21027,12 +20837,82 @@ async function startServer() {
     res.json(filtered);
   });
 
+  app.get('/api/admin/procurement/vendor-bills/preview/:poId', (req: Request, res: Response) => {
+    backfillProcurementRelationalLinks();
+    const rawPoId = decodeURIComponent(String(req.params.poId || '')).trim();
+    const po = purchaseOrders.find((p) => p.id === rawPoId || p.poNumber === rawPoId);
+    if (!po) {
+      return res.status(404).json({ success: false, error: `Purchase Order '${rawPoId}' not found.` });
+    }
+
+    const linkedGrIds = appendUniqueId(po.linkedGrIds, undefined);
+    const linkedGrs = goodsReceipts.filter(
+      (g) => (g.sourcePoId || g.poId) === po.id || linkedGrIds.includes(g.id)
+    );
+    const activeBills = vendorBillsList.filter(
+      (b) => (b.sourcePoId || b.poId) === po.id && b.status !== 'VOID'
+    );
+
+    const items = po.items.map((it) => {
+      const totalGrReceivedQty = linkedGrs.reduce((sum, g) => {
+        const line = g.items.find((gi) => gi.sku === it.sku);
+        return sum + (line ? Number(line.quantityReceived) || 0 : 0);
+      }, 0);
+      const alreadyBilledQty = activeBills.reduce((sum, b) => {
+        const line = b.items.find((bi) => bi.sku === it.sku);
+        return sum + (line ? Number(line.billedQuantity) || 0 : 0);
+      }, 0);
+      const unbilledGrQty = Math.max(0, Number((totalGrReceivedQty - alreadyBilledQty).toFixed(2)));
+      return {
+        sku: it.sku,
+        productName: it.productName,
+        orderedQuantity: it.orderedQuantity,
+        totalGrReceivedQty,
+        alreadyBilledQty,
+        unbilledGrQty,
+        unitCost: it.unitCost,
+      };
+    });
+
+    const openVendorAdvance1150IDR = getSupplierOpenAdvance1150IDR(po.supplierName);
+    const totalUnbilledGrQty = items.reduce((s, it) => s + it.unbilledGrQty, 0);
+
+    res.json({
+      success: true,
+      poId: po.id,
+      poNumber: po.poNumber,
+      supplierName: po.supplierName,
+      storeId: po.storeId,
+      storeName: po.storeName,
+      status: po.status,
+      paymentTerms: po.paymentTerms || 'Net 30',
+      suggestedTaxPercent: typeof po.taxPercent === 'number' ? po.taxPercent : 11,
+      suggestedPphPercent: 0,
+      openVendorAdvance1150IDR,
+      linkedGrs: linkedGrs.map((g) => ({
+        id: g.id,
+        deliveryNoteNumber: g.deliveryNoteNumber,
+        receivedAt: g.receivedAt,
+        isPartial: g.isPartial,
+        linkedVendorBillIds: appendUniqueId(g.linkedVendorBillIds, g.linkedVendorBillId),
+        items: g.items.map((gi) => ({
+          sku: gi.sku,
+          productName: gi.productName,
+          quantityReceived: gi.quantityReceived,
+        })),
+      })),
+      items,
+      existingBillIds: activeBills.map((b) => b.id),
+      totalUnbilledGrQty,
+    });
+  });
+
   app.post('/api/admin/procurement/vendor-bills', (req: Request, res: Response) => {
     const {
       billNumber,
       poId,
       goodsReceiptId,
-      linkedGrIds,
+      linkedGrIds: rawLinkedGrIds,
       supplierName = 'Farm Partner',
       supplierContact,
       storeId = 'store-jkt-senopati',
@@ -21045,64 +20925,35 @@ async function startServer() {
       exchangeRate = 1,
       items = [],
       taxPercent = 11,
+      pphPercent = 0,
       isNonCreditableVat = false,
       notes,
       autoApprove = false,
     } = req.body;
 
-    if (!billNumber || !poId || !goodsReceiptId) {
+    const resolvedLinkedGrIds: string[] = [];
+    if (Array.isArray(rawLinkedGrIds)) {
+      rawLinkedGrIds.forEach((gid: any) => {
+        if (typeof gid === 'string' && gid.trim() && !resolvedLinkedGrIds.includes(gid.trim())) {
+          resolvedLinkedGrIds.push(gid.trim());
+        }
+      });
+    }
+    const primaryGrId =
+      (typeof goodsReceiptId === 'string' && goodsReceiptId.trim()) || resolvedLinkedGrIds[0] || '';
+    if (primaryGrId && !resolvedLinkedGrIds.includes(primaryGrId)) {
+      resolvedLinkedGrIds.unshift(primaryGrId);
+    }
+
+    if (!billNumber || !poId || !primaryGrId) {
       return res.status(400).json({ error: 'billNumber, poId, and goodsReceiptId are required.' });
     }
 
-    const cleanBillNo = String(billNumber).trim();
-    const duplicateInvoice = vendorBillsList.find(
-      (b) =>
-        b.status !== 'VOID' &&
-        b.status !== 'REJECTED' &&
-        b.billNumber.trim().toLowerCase() === cleanBillNo.toLowerCase() &&
-        b.supplierName.trim().toLowerCase() === String(supplierName || '').trim().toLowerCase()
-    );
-    if (duplicateInvoice) {
-      return res.status(409).json({
-        error: `Duplicate Supplier Invoice blocked: Invoice '${cleanBillNo}' is already recorded as ${duplicateInvoice.id}.`,
-      });
-    }
-
-    const po = purchaseOrders.find((p) => p.id === poId);
-    const targetGrIds = pushUniqueDocId(Array.isArray(linkedGrIds) ? linkedGrIds : [], goodsReceiptId);
-    const matchedGrs = goodsReceipts.filter(
-      (g) => targetGrIds.includes(g.id) && (!po || g.poId === po.id || g.sourcePoId === po.id)
-    );
-    const gr = matchedGrs[0] || goodsReceipts.find((g) => g.id === goodsReceiptId);
-
-    // Prevent duplicate billing if ALL selected GR(s) are already 100% billed by active non-VOID bills
-    if (matchedGrs.length > 0 && po) {
-      const priorBilledBySku = getGrBilledSkuMapForOtherBills(
-        matchedGrs.map((g) => g.id),
-        po.id
-      );
-      const totalUnbilledAcrossMatchedGrs = matchedGrs.reduce((sumGr, grRec) => {
-        return (
-          sumGr +
-          (grRec.items || []).reduce((sumIt, it) => {
-            const billedBefore = priorBilledBySku.get(it.sku) || 0;
-            return sumIt + Math.max(0, (Number(it.quantityReceived) || 0) - billedBefore);
-          }, 0)
-        );
-      }, 0);
-      const anyActiveBillUsesExactGrs = vendorBillsList.some(
-        (b) =>
-          b.status !== 'VOID' &&
-          b.status !== 'REJECTED' &&
-          b.poId === po.id &&
-          pushUniqueDocId(b.linkedGrIds, b.goodsReceiptId).some((gid) => targetGrIds.includes(gid))
-      );
-      if (anyActiveBillUsesExactGrs && totalUnbilledAcrossMatchedGrs <= 0) {
-        return res.status(409).json({
-          error: `Selected Goods Receipt(s) [${targetGrIds.join(', ')}] on PO #${po.id} have already been 100% billed. Void an existing bill or select an unbilled GR.`,
-        });
-      }
-    }
+    const po = purchaseOrders.find((p) => p.id === poId || p.poNumber === poId);
+    const matchedGrRecords = resolvedLinkedGrIds
+      .map((gid) => goodsReceipts.find((g) => g.id === gid))
+      .filter((g): g is GoodsReceiptRecord => Boolean(g));
+    const gr = matchedGrRecords[0] || goodsReceipts.find((g) => g.id === primaryGrId);
 
     const enforcementMode = enterpriseSettings.threeWayMatching.enforcementMode || 'TOLERANCE_3_WAY';
     const qtyTolPercent =
@@ -21117,28 +20968,22 @@ async function startServer() {
     let hasAnyPriceVariance = false;
     let hasAnyQtyVariance = false;
 
-    const priorBilledAcrossPoGrs = po
-      ? getGrBilledSkuMapForOtherBills(matchedGrs.map((g) => g.id), po.id)
-      : new Map<string, number>();
-
     const validatedItems: VendorBillItem[] = items.map((it: any) => {
       const poItem = po?.items.find((p) => p.sku === it.sku);
-      const totalMatchedGrReceived = matchedGrs.reduce((sum, grRec) => {
-        const line = grRec.items.find((g) => g.sku === it.sku);
+      const totalMatchedGrQty = matchedGrRecords.reduce((sum, rec) => {
+        const line = rec.items.find((g) => g.sku === it.sku);
         return sum + (line ? Number(line.quantityReceived) || 0 : 0);
       }, 0);
+      const hasAnyGrLine = matchedGrRecords.some((rec) => rec.items.some((g) => g.sku === it.sku));
 
       const poQty = poItem ? poItem.orderedQuantity : it.billedQuantity;
       const qcRejectedQty = qcInspectionsList
         .filter((q) => q.referenceId === poId && q.sku === it.sku && q.disposition === 'REJECTED')
         .reduce((sum, q) => sum + (Number(q.totalBatchQuantity) || 0), 0);
-      const alreadyBilledOnTargetGrs = priorBilledAcrossPoGrs.get(it.sku) || 0;
       const grQty =
         enforcementMode === 'TWO_WAY'
-          ? (matchedGrs.length > 0 ? totalMatchedGrReceived : poQty)
-          : (matchedGrs.length > 0
-              ? Math.max(0, totalMatchedGrReceived - qcRejectedQty - alreadyBilledOnTargetGrs)
-              : 0);
+          ? (hasAnyGrLine ? totalMatchedGrQty : poQty)
+          : (hasAnyGrLine ? Math.max(0, totalMatchedGrQty - qcRejectedQty) : 0);
       const billedQty = Number(it.billedQuantity) || 0;
 
       const poPrice = poItem ? (currency === 'IDR' ? poItem.unitCost : poItem.unitCost / exchangeRate) : it.unitCost;
@@ -21173,6 +21018,8 @@ async function startServer() {
 
     const subtotal = validatedItems.reduce((sum, it) => sum + it.totalCost, 0);
     const taxAmount = Math.round(subtotal * ((Number(taxPercent) || 0) / 100));
+    const safePphPercent = Math.max(0, Math.min(20, Number(pphPercent) || 0));
+    const pphAmount = safePphPercent > 0 ? Math.round(subtotal * (safePphPercent / 100)) : 0;
     const grandTotal = subtotal + taxAmount;
     const grandTotalIDR = Math.round(grandTotal * exchangeRate);
 
@@ -21196,18 +21043,19 @@ async function startServer() {
 
     const newBill: VendorBill = {
       id,
-      billNumber: cleanBillNo,
+      billNumber,
       supplierName,
       supplierContact,
       storeId,
       storeName,
-      poId,
+      poId: po?.id || poId,
       sourcePoId: po?.id || poId,
-      goodsReceiptId: matchedGrs[0]?.id || goodsReceiptId,
-      linkedGrIds: matchedGrs.length > 0 ? matchedGrs.map((g) => g.id) : targetGrIds,
+      goodsReceiptId: primaryGrId,
+      linkedGrIds: resolvedLinkedGrIds,
       deliveryNoteNumber:
         deliveryNoteNumber ||
-        (matchedGrs.length > 0 ? matchedGrs.map((g) => g.deliveryNoteNumber).filter(Boolean).join(', ') : gr?.deliveryNoteNumber),
+        matchedGrRecords.map((g) => g.deliveryNoteNumber).filter(Boolean).join(', ') ||
+        gr?.deliveryNoteNumber,
       billDate,
       dueDate: calculatedDueDate,
       paymentTerms: paymentTerms as any,
@@ -21217,6 +21065,7 @@ async function startServer() {
       subtotal,
       taxPercent: Number(taxPercent) || 0,
       taxAmount,
+      ...(safePphPercent > 0 ? { pphPercent: safePphPercent, pphAmount } : {}),
       isNonCreditableVat: Boolean(isNonCreditableVat),
       grandTotal,
       grandTotalIDR,
@@ -21237,7 +21086,17 @@ async function startServer() {
     }
 
     vendorBillsList.unshift(newBill);
-    linkVendorBillToPoAndGrs(newBill);
+
+    // Atomic Bidirectional Relational Linking: PO <-> GR(s) <-> VendorBill
+    if (po) {
+      po.linkedVendorBillIds = appendUniqueId(po.linkedVendorBillIds, newBill.id);
+    }
+    matchedGrRecords.forEach((rec) => {
+      rec.linkedVendorBillIds = appendUniqueId(rec.linkedVendorBillIds, newBill.id);
+      if (!rec.linkedVendorBillId) {
+        rec.linkedVendorBillId = newBill.id;
+      }
+    });
 
     // Flag 3-Way Match Variances exceeding tolerance into Approval Matrix
     let approvalRequestId: string | undefined;
@@ -21250,7 +21109,7 @@ async function startServer() {
         id: approvalRequestId,
         module: 'procurement_po',
         documentId: id,
-        documentTitle: `3-Way Match Variance [${billStatus}]: ${cleanBillNo} (${supplierName})`,
+        documentTitle: `3-Way Match Variance [${billStatus}]: ${billNumber} (${supplierName})`,
         requestedBy: actorName,
         requestedAt: timestamp,
         amountIDR: grandTotalIDR,
@@ -21264,7 +21123,7 @@ async function startServer() {
           sku: validatedItems[0]?.sku,
           productName: validatedItems[0]?.productName,
           quantity: validatedItems.reduce((s, it) => s + it.billedQuantity, 0),
-          reason: `3-Way Match ${billStatus} on PO #${poId} / GR #${targetGrIds.join(', ')} exceeding tolerance`,
+          reason: `3-Way Match ${billStatus} on PO #${poId} / GR #${resolvedLinkedGrIds.join(', ')} exceeding tolerance`,
         },
       });
 
@@ -21272,8 +21131,8 @@ async function startServer() {
         dedupeKey: `APR_QUEUE:${approvalRequestId}`,
         category: 'PROCUREMENT_FINANCE',
         severity: 'WARNING',
-        title: `3-Way Match Variance: ${cleanBillNo}`,
-        message: `Vendor Bill ${cleanBillNo} (${supplierName}) flagged ${billStatus} on PO #${poId} / GR #${targetGrIds.join(', ')} and routed to Approval Matrix.`,
+        title: `3-Way Match Variance: ${billNumber}`,
+        message: `Vendor Bill ${billNumber} (${supplierName}) flagged ${billStatus} on PO #${poId} / GR #${resolvedLinkedGrIds.join(', ')} and routed to Approval Matrix.`,
         metadataLabel: `${id} • Rp ${grandTotalIDR.toLocaleString('id-ID')}`,
         targetTab: 'approvals',
       });
@@ -21326,7 +21185,6 @@ async function startServer() {
       summary: `Approved Vendor Bill #${bill.billNumber} (${bill.supplierName}) for Rp ${bill.grandTotalIDR.toLocaleString('id-ID')}.`,
     });
 
-    scheduleStateSave();
     res.json({ success: true, vendorBill: bill, syncedApprovalIds, message: `Vendor Bill #${id} approved.` });
   });
 
@@ -21400,7 +21258,6 @@ async function startServer() {
       true
     );
 
-    scheduleStateSave();
     res.json({ success: true, vendorBill: bill, message: `Payment of ${payAmt} recorded for Bill #${id}.` });
   });
 
@@ -21486,7 +21343,6 @@ async function startServer() {
       summary: `Voided Vendor Bill #${bill.billNumber} (${bill.supplierName}) with ${reversingIds.length} GL reversal(s): ${reason}`,
     });
 
-    scheduleStateSave();
     res.json({
       success: true,
       vendorBill: bill,
@@ -21857,17 +21713,90 @@ async function startServer() {
   });
 
   app.post('/api/admin/inventory/bulk-import', (req: Request, res: Response) => {
-    const { rows = [] } = req.body as { rows: BulkInventoryImportRow[] };
-    let imported = 0;
-    rows.forEach((r) => {
-      const existing = inventoryList.find((i) => i.sku === r.sku);
-      const qtyToAdd = r.physicalStock ?? r.stock ?? 0;
-      const cost = r.unitCost ?? r.costPrice ?? (existing ? existing.unitCost : 0);
-      if (existing) {
-        existing.currentStock += qtyToAdd;
-        existing.unitCost = cost;
+    const rawRows = Array.isArray((req.body as any)?.rows) ? ((req.body as any).rows as BulkInventoryImportRow[]) : [];
+    const actorName = getEffectiveOperatorName(req);
+    const rowCap =
+      trialGovernanceConfig.enforceRestrictions &&
+      trialGovernanceConfig.mode !== 'PRODUCTION' &&
+      trialGovernanceConfig.licenseMode !== 'ENTERPRISE_PRODUCTION'
+        ? trialGovernanceConfig.maxTrialImportRows
+        : undefined;
+
+    if (rawRows.length === 0) {
+      const diag = recordImportExportDiagnostic(
+        analyzeInventoryImportRows([], { sourceName: 'bulk-import', actorName })
+      );
+      return res.status(400).json({
+        success: false,
+        code: 'SCHEMA_MISMATCH',
+        error: 'rows array with at least 1 valid inventory item is required.',
+        diagnosticReport: diag,
+      });
+    }
+
+    if (rowCap && rawRows.length > rowCap) {
+      const diag = recordImportExportDiagnostic(
+        analyzeInventoryImportRows(rawRows as any[], {
+          sourceName: 'bulk-import',
+          maxAllowedRows: rowCap,
+          actorName,
+        })
+      );
+      return res.status(422).json({
+        success: false,
+        code: 'TRIAL_LIMIT_EXCEEDED',
+        error: `Import batch size (${rawRows.length} rows) exceeds Trial/Demo limit of ${rowCap} rows per batch.`,
+        diagnosticReport: diag,
+      });
+    }
+
+    const validationIssues: Array<{ row: number; message: string }> = [];
+    const normalizedRows: Array<{ sku: string; qtyToAdd: number; cost?: number }> = [];
+    rawRows.forEach((r, idx) => {
+      const rowNo = idx + 1;
+      const sku = typeof r?.sku === 'string' ? r.sku.trim() : '';
+      const rawQty = r?.physicalStock ?? r?.stock ?? 0;
+      const qtyToAdd = Number(rawQty);
+      const rawCost = r?.unitCost ?? r?.costPrice;
+      const cost =
+        rawCost !== undefined && rawCost !== null && String(rawCost).trim() !== ''
+          ? Number(rawCost)
+          : undefined;
+      if (!sku) {
+        validationIssues.push({ row: rowNo, message: `Row ${rowNo}: SKU is required.` });
       }
-      imported++;
+      if (!Number.isFinite(qtyToAdd) || qtyToAdd < 0) {
+        validationIssues.push({ row: rowNo, message: `Row ${rowNo}: Stock quantity must be a non-negative number.` });
+      }
+      if (cost !== undefined && (!Number.isFinite(cost) || cost < 0)) {
+        validationIssues.push({ row: rowNo, message: `Row ${rowNo}: Unit cost must be a non-negative number.` });
+      }
+      normalizedRows.push({ sku, qtyToAdd, cost });
+    });
+
+    if (validationIssues.length > 0) {
+      const diag = recordImportExportDiagnostic(
+        analyzeInventoryImportRows(rawRows as any[], { sourceName: 'bulk-import', maxAllowedRows: rowCap, actorName })
+      );
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_IMPORT_ROWS',
+        error: validationIssues.map((v) => v.message).slice(0, 5).join(' '),
+        details: validationIssues,
+        diagnosticReport: diag,
+      });
+    }
+
+    let imported = 0;
+    normalizedRows.forEach((r) => {
+      const existing = inventoryList.find((i) => i.sku.toLowerCase() === r.sku.toLowerCase());
+      if (existing) {
+        existing.currentStock = Math.max(0, existing.currentStock + r.qtyToAdd);
+        if (r.cost !== undefined) {
+          existing.unitCost = r.cost;
+        }
+        imported++;
+      }
     });
     res.json({ success: true, importedCount: imported, tiersUpdatedCount: imported, message: `${imported} items imported.` });
   });
@@ -25436,8 +25365,6 @@ async function startServer() {
         totalAmount: totalPoCost,
         paymentTerms: 'Net 30',
         goodsReceiptIds: [],
-        linkedGrIds: [],
-        linkedVendorBillIds: [],
         notes: 'Auto-generated replenishment purchase order triggered by min-max inventory thresholds.',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -25446,7 +25373,6 @@ async function startServer() {
       purchaseOrders.unshift(newPo);
       generatedOrders.push(newPo);
     });
-    scheduleStateSave();
 
     res.json({
       success: true,
@@ -27049,98 +26975,19 @@ async function startServer() {
 
   app.post('/api/pos/shifts/open', (req: Request, res: Response) => {
     const scope = resolveRequestBranchScope(req);
-    const effectiveRole = getEffectiveRequestRole(req);
-    const resolvedSysUser = resolveSystemUserForRequest(req);
-    const isPosAuthorized =
-      ['cashier', 'store_manager', 'coo', 'super_admin', 'admin'].includes(effectiveRole) ||
-      resolvedSysUser?.modulePermissions?.pos?.view === true ||
-      resolvedSysUser?.modulePermissions?.pos?.create === true ||
-      resolvedSysUser?.modulePermissions?.pos?.edit === true;
-    if (!isPosAuthorized) {
-      return res.status(403).json({
-        success: false,
-        code: 'RBAC_FORBIDDEN',
-        error: `Permission Denied: Operator ${getEffectiveOperatorName(req)} (${effectiveRole}) is not authorized to open a POS cash register shift.`,
-      });
-    }
-
     const {
       storeId: rawStoreId,
-      branchId: rawBranchId,
       storeName: rawStoreName,
       registerId = 'REG-04',
-      shiftName: rawShiftName,
-      openingPettyCashIDR: rawPettyCash,
-      openingFloatIDR: rawOpeningFloat,
+      openingFloatIDR = 500000,
       cashierName,
-    } = req.body || {};
-
-    const storeId = resolvePosRetailStoreId(
-      rawStoreId || rawBranchId || (scope.isBranchScoped ? scope.storeId : 'store-jkt-senopati')
-    );
+    } = req.body;
+    const storeId = resolvePosRetailStoreId(rawStoreId || (scope.isBranchScoped ? scope.storeId : 'store-jkt-senopati'));
     const shiftBranchViolation = checkBranchIsolationViolation(req, storeId);
     if (shiftBranchViolation) {
       return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: shiftBranchViolation });
     }
-    const storeName = rawStoreName && (rawStoreId === storeId || rawBranchId === storeId)
-      ? rawStoreName
-      : resolveBranchNameById(storeId);
-
-    const rawFloatInput = rawPettyCash !== undefined ? rawPettyCash : rawOpeningFloat;
-    const parsedFloat = rawFloatInput !== undefined && rawFloatInput !== null && rawFloatInput !== ''
-      ? Number(rawFloatInput)
-      : 0;
-    if (!Number.isFinite(parsedFloat) || parsedFloat < 0) {
-      return res.status(400).json({
-        success: false,
-        code: 'INVALID_PETTY_CASH',
-        error: 'Open Petty Cash (Modal Awal Laci) must be a valid non-negative IDR amount.',
-      });
-    }
-    const cleanOpeningFloatIDR = Math.round(parsedFloat);
-
-    const nowDate = new Date();
-    const wibHour = Number(
-      new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Asia/Jakarta',
-        hour: '2-digit',
-        hour12: false,
-      }).format(nowDate)
-    ) % 24;
-    const autoShiftLabel =
-      wibHour >= 6 && wibHour < 14
-        ? 'Morning Shift (06:00 - 14:00)'
-        : wibHour >= 14 && wibHour < 22
-        ? 'Afternoon Shift (14:00 - 22:00)'
-        : 'Night Shift (22:00 - 06:00)';
-
-    let resolvedShiftLabel = autoShiftLabel;
-    let canonicalStaffShift: 'Morning Shift' | 'Afternoon Shift' | 'Night Shift' =
-      wibHour >= 6 && wibHour < 14
-        ? 'Morning Shift'
-        : wibHour >= 14 && wibHour < 22
-        ? 'Afternoon Shift'
-        : 'Night Shift';
-
-    if (typeof rawShiftName === 'string' && rawShiftName.trim().length > 0) {
-      const normalizedShift = rawShiftName.trim().toLowerCase();
-      if (normalizedShift.includes('morning') || normalizedShift.includes('pagi')) {
-        resolvedShiftLabel = 'Morning Shift (06:00 - 14:00)';
-        canonicalStaffShift = 'Morning Shift';
-      } else if (normalizedShift.includes('afternoon') || normalizedShift.includes('siang') || normalizedShift.includes('sore')) {
-        resolvedShiftLabel = 'Afternoon Shift (14:00 - 22:00)';
-        canonicalStaffShift = 'Afternoon Shift';
-      } else if (normalizedShift.includes('night') || normalizedShift.includes('malam')) {
-        resolvedShiftLabel = 'Night Shift (22:00 - 06:00)';
-        canonicalStaffShift = 'Night Shift';
-      } else {
-        return res.status(400).json({
-          success: false,
-          code: 'INVALID_SHIFT_NAME',
-          error: 'Shift must be Morning Shift (06:00 - 14:00), Afternoon Shift (14:00 - 22:00), or Night Shift (22:00 - 06:00).',
-        });
-      }
-    }
+    const storeName = (rawStoreName && rawStoreId === storeId) ? rawStoreName : resolveBranchNameById(storeId);
 
     const existing = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
     if (existing) {
@@ -27151,68 +26998,32 @@ async function startServer() {
       });
     }
 
-    const openedAtIso = nowDate.toISOString();
-    const openedAtWib =
-      new Intl.DateTimeFormat('id-ID', {
-        timeZone: 'Asia/Jakarta',
-        weekday: 'long',
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      })
-        .format(nowDate)
-        .replace(/\./g, ':') + ' WIB';
-    const currentWibYear =
-      Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Jakarta', year: 'numeric' }).format(nowDate)) ||
-      nowDate.getFullYear();
-
     const seq = (posShiftsList.length + 1).toString().padStart(4, '0');
     const newShift: PosRegisterShiftSession = {
-      id: `SHF-${currentWibYear}-${seq}`,
+      id: `SHF-2026-${seq}`,
       storeId,
       storeName,
-      registerId: String(registerId || 'REG-04').trim() || 'REG-04',
-      shiftName: resolvedShiftLabel,
+      registerId,
       cashierId: getEffectiveOperatorId(req),
-      cashierName: (typeof cashierName === 'string' && cashierName.trim()) || getEffectiveOperatorName(req),
+      cashierName: cashierName || getEffectiveOperatorName(req),
       status: 'OPEN',
-      openedAt: openedAtIso,
-      openedAtWib,
-      openingFloatIDR: cleanOpeningFloatIDR,
-      openingPettyCashIDR: cleanOpeningFloatIDR,
+      openedAt: new Date().toISOString(),
+      openingFloatIDR: Math.max(0, Number(openingFloatIDR) || 0),
       transactionCount: 0,
       expectedCashSalesIDR: 0,
       expectedQrisSalesIDR: 0,
       expectedEdcSalesIDR: 0,
-      expectedTotalCashInDrawerIDR: cleanOpeningFloatIDR,
+      expectedTotalCashInDrawerIDR: Math.max(0, Number(openingFloatIDR) || 0),
       cashRefundsIDR: 0,
       safeDropsTotalIDR: 0,
     };
 
     posShiftsList.unshift(newShift);
-    if (currentActiveStaffSession) {
-      currentActiveStaffSession.shiftName = canonicalStaffShift;
-      currentActiveStaffSession.activeShiftId = newShift.id;
-    }
-
-    appendAuditTrailLog({
-      req,
-      branchScope: storeId,
-      module: 'POS',
-      action: 'POS_REGISTER_OPENED',
-      referenceId: newShift.id,
-      summary: `${newShift.cashierName} opened register ${newShift.registerId} (${resolvedShiftLabel}) at ${openedAtWib} with Open Petty Cash Rp ${cleanOpeningFloatIDR.toLocaleString('id-ID')}.`,
-    });
-
     scheduleStateSave();
     res.json({
       success: true,
       shift: newShift,
-      message: `Shift ${newShift.id} (${resolvedShiftLabel}) opened at ${openedAtWib} with petty cash float Rp ${newShift.openingFloatIDR.toLocaleString('id-ID')}.`,
+      message: `Shift ${newShift.id} opened with petty cash float Rp ${newShift.openingFloatIDR.toLocaleString('id-ID')}.`,
     });
   });
 
@@ -31091,8 +30902,6 @@ async function startServer() {
     const newGr: GoodsReceiptRecord = {
       id: grId,
       poId: po.id,
-      sourcePoId: po.id,
-      sourcePrId: po.sourcePrId || po.prId,
       storeId: po.storeId,
       storeName: po.storeName,
       warehouseZoneId: 'CROSS-DOCK-BAY',
@@ -31106,9 +30915,9 @@ async function startServer() {
         receiverNotes ||
         `Cross-Dock Direct Fulfillment: ${createdTransfers.length} branch transfer(s) dispatched immediately without CDC shelf putaway.`,
       glEntryId: glVoucherIds[0],
-      linkedVendorBillIds: [],
     };
-    linkPoToGr(po, newGr);
+    po.goodsReceiptIds = po.goodsReceiptIds || [];
+    po.goodsReceiptIds.push(grId);
     goodsReceipts.unshift(newGr);
 
     emitEnterpriseNotification({
@@ -33317,6 +33126,21 @@ async function startServer() {
       linkedGrIds: [],
       linkedVendorBillIds: [],
     };
+
+    const optPrId = typeof (req.body as any)?.prId === 'string'
+      ? (req.body as any).prId.trim()
+      : typeof (req.body as any)?.sourcePrId === 'string'
+      ? (req.body as any).sourcePrId.trim()
+      : '';
+    if (optPrId) {
+      newPO.prId = optPrId;
+      newPO.sourcePrId = optPrId;
+      const linkedPr = purchaseRequests.find((p) => p.id === optPrId);
+      if (linkedPr) {
+        linkedPr.linkedPoIds = appendUniqueId(linkedPr.linkedPoIds, poId);
+        if (!linkedPr.poId) linkedPr.poId = poId;
+      }
+    }
 
     purchaseOrders.unshift(newPO);
     if (inv) {
@@ -36222,228 +36046,6 @@ async function startServer() {
         openVendorBillsCount: scopedBills.length,
       },
     });
-  });
-
-  // -------------------------------------------------------------
-  // ITEM & LOT INBOUND SUPPLY-CHAIN TRACEABILITY (PR -> PO -> GR -> LOT -> VENDOR BILL)
-  // -------------------------------------------------------------
-  app.get('/api/admin/inventory/items/:sku/traceability', (req: Request, res: Response) => {
-    const skuParam = decodeURIComponent(String(req.params.sku || '')).trim();
-    if (!skuParam) {
-      return res.status(400).json({ error: 'SKU is required for traceability lookup.' });
-    }
-
-    syncAllBatchesExpiryStatus(Date.now());
-    syncWarehouseRackOccupancy();
-    backfillBidirectionalProcurementLinks();
-
-    const invItem = inventoryList.find((i) => i.sku.toLowerCase() === skuParam.toLowerCase());
-    const tierFallback = storeInventoryTiers.find((t) => t.sku.toLowerCase() === skuParam.toLowerCase());
-    const batchFallback = inventoryBatches.find((b) => b.sku.toLowerCase() === skuParam.toLowerCase());
-    if (!invItem && !tierFallback && !batchFallback) {
-      return res.status(404).json({ error: `SKU '${skuParam}' not found in catalog or inventory lots.` });
-    }
-
-    const canonicalSku = invItem?.sku || tierFallback?.sku || batchFallback?.sku || skuParam;
-    const scope = resolveRequestBranchScope(req);
-    const branchLockedStore =
-      scope.isBranchScoped &&
-      scope.storeId !== 'ALL' &&
-      scope.storeId !== 'CONSOLIDATED' &&
-      scope.storeId !== 'WH-CDC-01'
-        ? scope.storeId
-        : null;
-    const hideCosts = shouldHideFinancialCostForRequest(req);
-
-    // 1. Batches for this SKU (and branch scope if locked)
-    const skuBatchesRaw = inventoryBatches.filter(
-      (b) =>
-        b.sku === canonicalSku &&
-        (!branchLockedStore || b.storeId === branchLockedStore)
-    );
-    const batchPoIds = new Set(skuBatchesRaw.map((b) => b.sourcePoNumber).filter((v): v is string => Boolean(v)));
-    const batchGrIds = new Set(skuBatchesRaw.map((b) => b.sourceGrId).filter((v): v is string => Boolean(v)));
-    const batchPrIds = new Set(skuBatchesRaw.map((b) => b.sourcePrId).filter((v): v is string => Boolean(v)));
-
-    // 2. Purchase Orders containing SKU or linked via batches
-    const skuPOsRaw = purchaseOrders.filter(
-      (po) =>
-        (!branchLockedStore || po.storeId === branchLockedStore) &&
-        (po.items.some((it) => it.sku === canonicalSku) || batchPoIds.has(po.id))
-    );
-    const poIdsSet = new Set(skuPOsRaw.map((po) => po.id));
-    const prIdsFromPos = new Set(
-      skuPOsRaw.map((po) => po.sourcePrId || po.prId).filter((v): v is string => Boolean(v))
-    );
-
-    // 3. Purchase Requests containing SKU or linked to matching POs/batches
-    const skuPRsRaw = purchaseRequests.filter(
-      (pr) =>
-        (!branchLockedStore || !pr.storeId || pr.storeId === branchLockedStore) &&
-        (pr.sku === canonicalSku ||
-          prIdsFromPos.has(pr.id) ||
-          batchPrIds.has(pr.id) ||
-          Boolean(pr.poId && poIdsSet.has(pr.poId)) ||
-          Boolean(pr.linkedPoIds?.some((pid) => poIdsSet.has(pid))))
-    );
-
-    // 4. Goods Receipts containing SKU or linked to matching POs/batches
-    const skuGRsRaw = goodsReceipts.filter(
-      (gr) =>
-        (!branchLockedStore || gr.storeId === branchLockedStore) &&
-        (gr.items.some((it) => it.sku === canonicalSku) ||
-          poIdsSet.has(gr.poId) ||
-          batchGrIds.has(gr.id))
-    );
-    const grIdsSet = new Set(skuGRsRaw.map((gr) => gr.id));
-
-    // 5. Vendor Bills containing SKU or linked to matching POs/GRs (hidden completely if financialCostMasked)
-    const skuBillsRaw = hideCosts
-      ? []
-      : vendorBillsList.filter(
-          (b) =>
-            (!branchLockedStore || b.storeId === branchLockedStore) &&
-            (b.items.some((it) => it.sku === canonicalSku) ||
-              poIdsSet.has(b.poId) ||
-              pushUniqueDocId(b.linkedGrIds, b.goodsReceiptId).some((gid) => grIdsSet.has(gid)))
-        );
-
-    const rackByCodeOrSku = (binCode?: string, storeId?: string) => {
-      if (binCode) {
-        const exact = warehouseRacks.find((r) => r.rackBinCode === binCode && (!storeId || r.storeId === storeId));
-        if (exact) return exact;
-      }
-      return warehouseRacks.find(
-        (r) => Array.isArray(r.assignedSkus) && r.assignedSkus.includes(canonicalSku) && (!storeId || r.storeId === storeId)
-      );
-    };
-
-    const byDateAsc = (a?: string, b?: string) =>
-      new Date(a || 0).getTime() - new Date(b || 0).getTime();
-
-    const responsePayload: ItemTraceabilityResponse = {
-      sku: canonicalSku,
-      productName: invItem?.productName || tierFallback?.productName || batchFallback?.productName || canonicalSku,
-      category: invItem?.category || tierFallback?.category || 'produce',
-      unit: invItem?.unit || tierFallback?.unit || 'unit',
-      supplierName: invItem?.supplierName || batchFallback?.supplierName,
-      itemClassification: invItem?.itemClassification || tierFallback?.itemClassification || 'MERCHANDISE',
-      financialCostMasked: hideCosts,
-      ...(hideCosts
-        ? {}
-        : {
-            unitCost: invItem?.unitCost ?? tierFallback?.unitCost,
-            wacUnitCost: invItem?.wacUnitCost ?? invItem?.unitCost ?? tierFallback?.unitCost,
-          }),
-      sellingPrice: invItem?.sellingPrice ?? tierFallback?.sellingPrice ?? batchFallback?.sellingPrice ?? 0,
-      purchaseRequests: [...skuPRsRaw]
-        .sort((a, b) => byDateAsc(a.createdAt, b.createdAt))
-        .map((pr) => ({
-          id: pr.id,
-          createdAt: pr.createdAt,
-          status: pr.status,
-          priority: pr.priority,
-          storeId: pr.storeId,
-          storeName: pr.storeName,
-          suggestedQuantity: pr.suggestedQuantity,
-          ...(hideCosts
-            ? {}
-            : {
-                estimatedUnitCost: pr.estimatedUnitCost,
-                totalEstimatedCost: pr.totalEstimatedCost,
-              }),
-          poId: pr.poId,
-          linkedPoIds: pr.linkedPoIds,
-          requestedBy: pr.requestedBy,
-        })),
-      purchaseOrders: [...skuPOsRaw]
-        .sort((a, b) => byDateAsc(a.createdAt, b.createdAt))
-        .map((po) => ({
-          id: po.id,
-          createdAt: po.createdAt,
-          status: po.status,
-          supplierName: po.supplierName,
-          storeId: po.storeId,
-          storeName: po.storeName,
-          sourcePrId: po.sourcePrId || po.prId,
-          linkedGrIds: po.linkedGrIds || po.goodsReceiptIds || [],
-          linkedVendorBillIds: hideCosts ? [] : (po.linkedVendorBillIds || []),
-          expectedDeliveryDate: po.expectedDeliveryDate,
-          ...(hideCosts
-            ? {}
-            : {
-                subtotalCost: po.subtotalCost,
-                taxAmount: po.taxAmount,
-                totalCost: po.totalCost,
-              }),
-          items: po.items.map((it) => ({
-            sku: it.sku,
-            productName: it.productName,
-            orderedQuantity: it.orderedQuantity,
-            receivedQuantity: it.receivedQuantity,
-            remainingBackorder: it.remainingBackorder,
-            ...(hideCosts
-              ? {}
-              : {
-                  unitCost: it.unitCost,
-                  totalCost: it.totalCost,
-                }),
-          })),
-        })),
-      goodsReceipts: [...skuGRsRaw]
-        .sort((a, b) => byDateAsc(a.receivedAt, b.receivedAt))
-        .map((gr) => ({
-          id: gr.id,
-          poId: gr.poId,
-          sourcePoId: gr.sourcePoId || gr.poId,
-          sourcePrId: gr.sourcePrId,
-          storeId: gr.storeId,
-          storeName: gr.storeName,
-          warehouseZoneId: gr.warehouseZoneId,
-          deliveryNoteNumber: gr.deliveryNoteNumber,
-          vendorName: gr.vendorName,
-          receivedAt: gr.receivedAt,
-          receivedBy: gr.receivedBy,
-          isPartial: gr.isPartial,
-          linkedVendorBillId: hideCosts ? undefined : gr.linkedVendorBillId,
-          linkedVendorBillIds: hideCosts ? [] : (gr.linkedVendorBillIds || []),
-          items: gr.items,
-        })),
-      batches: [...skuBatchesRaw]
-        .sort((a, b) => byDateAsc(a.receivedDate, b.receivedDate))
-        .map((b) => {
-          const rack = rackByCodeOrSku(b.rackBinCode, b.storeId);
-          return {
-            batchId: b.batchId,
-            lotNumber: b.lotNumber,
-            storeId: b.storeId,
-            storeName: b.storeName,
-            warehouseZoneId: b.warehouseZoneId,
-            rackBinCode: b.rackBinCode || rack?.rackBinCode,
-            rackLabel: rack?.storageZone ? `${rack.storageZone}${rack.rackHalalZone ? ` (${rack.rackHalalZone})` : ''}` : rack?.notes,
-            initialQuantity: b.initialQuantity,
-            currentStock: b.currentStock,
-            ...(hideCosts
-              ? {}
-              : {
-                  unitCost: b.unitCost,
-                  landedCostPerUnitDelta: b.landedCostPerUnitDelta,
-                }),
-            receivedDate: b.receivedDate,
-            expiryDate: b.expiryDate,
-            daysUntilExpiry: b.daysUntilExpiry,
-            status: b.status,
-            supplierName: b.supplierName,
-            sourcePoNumber: b.sourcePoNumber,
-            sourceGrId: b.sourceGrId,
-            sourcePrId: b.sourcePrId,
-            isConsignment: b.isConsignment,
-          };
-        }),
-      vendorBills: [...skuBillsRaw].sort((a, b) => byDateAsc(a.createdAt, b.createdAt)),
-    };
-
-    res.json(responsePayload);
   });
 
   // -------------------------------------------------------------

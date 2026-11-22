@@ -128,6 +128,7 @@ import {
   isRoleTabAllowed,
   isOwnerRoleCode,
 } from '../../utils/rbac';
+import { isSubRoleAllowedByGovernance } from '../../utils/trialGovernance';
 
 interface AdminDashboardProps {
   initialStaffSession?: StaffShiftSession | null;
@@ -1340,8 +1341,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         )}
 
-        {/* Non-Destructive Operational Lock Gate for Non-Owner Sessions when Trial Expired/Suspended */}
-        {trialGovernance?.isOperationalLocked && canonicalRole !== 'super_admin' ? (
+        {/* Non-Destructive Operational Lock Gate for Non-Owner Sessions when Trial Expired/Suspended or Sub-Role Restricted */}
+        {(() => {
+          const isSubRoleGovernanceLocked = Boolean(
+            trialGovernance &&
+              activeStaffSession?.roleCode &&
+              !isOwnerRoleCode(activeStaffSession.roleCode) &&
+              !isSubRoleAllowedByGovernance(trialGovernance, activeStaffSession.roleCode)
+          );
+          const isOperationalGateBlocked =
+            (trialGovernance?.isOperationalLocked || isSubRoleGovernanceLocked) &&
+            canonicalRole !== 'super_admin' &&
+            !isOwnerRoleCode(activeStaffSession?.roleCode);
+          return isOperationalGateBlocked && trialGovernance ? (
           <div className="flex-1 flex items-center justify-center p-6">
             <div className="max-w-lg w-full rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-[#12141C] p-6 sm:p-8 shadow-lg text-center space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 mx-auto flex items-center justify-center">
@@ -1349,10 +1361,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
               <div className="space-y-1.5">
                 <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  Trial / Demo Access Locked ({trialGovernance.effectiveStatus.replace(/_/g, ' ')})
+                  {trialGovernance.isOperationalLocked
+                    ? `Trial / Demo Access Locked (${trialGovernance.effectiveStatus.replace(/_/g, ' ')})`
+                    : `Sub-Role Access Restricted (${activeStaffSession?.divisionLabel || activeStaffSession?.roleCode})`}
                 </h2>
                 <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                  {trialGovernance.statusMessage}
+                  {trialGovernance.isOperationalLocked
+                    ? trialGovernance.statusMessage
+                    : `Akses untuk sub-peran '${activeStaffSession?.divisionLabel || activeStaffSession?.roleCode}' sedang dinonaktifkan sementara oleh kebijakan Trial/Demo Governance. Seluruh data operasional tetap tersimpan aman.`}
                 </p>
               </div>
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 text-[11px] text-slate-600 dark:text-slate-400 font-mono">
@@ -1381,7 +1397,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           lowStockCount={inventoryMetrics.lowStockCount}
           totalStockCount={inventoryMetrics.totalStockCount}
           onNavigateTab={(tab) => {
-            if (isDashboardTabAllowed(activeStaffSession, tab, trialGovernance)) {
+            const portalEnabled = Boolean(
+              enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal
+            );
+            if (isDashboardTabAllowed(activeStaffSession, tab, trialGovernance, portalEnabled)) {
               setActiveTab(tab);
             }
           }}
@@ -2841,7 +2860,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
         </main>
         </>
-        )}
+        );
+        })()}
       </div>
     </div>
   );

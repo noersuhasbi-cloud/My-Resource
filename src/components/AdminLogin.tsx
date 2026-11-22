@@ -4,10 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import type { CompanyPublicBranding, StaffShiftSession } from '../types/index.ts';
+import type { StaffShiftSession } from '../types/index.ts';
 import { apiClient } from '../services/apiClient';
 import { useDarkMode } from '../context/DarkModeContext';
-import { getCompanyMonogram, isSafeLogoUrl } from '../utils/formatters';
 import {
   ShieldCheck,
   Lock,
@@ -21,11 +20,10 @@ import {
 } from 'lucide-react';
 
 interface AdminLoginProps {
-  onLoginSuccess: (session: StaffShiftSession) => void;
+  onLoginSuccess: (session: StaffShiftSession, rememberWorkstation?: boolean) => void;
   onReturnToStorefront: () => void;
   onShowToast?: (title: string, message: string) => void;
   enableB2BAndStorefrontPortal?: boolean;
-  companyBranding?: CompanyPublicBranding | null;
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({
@@ -33,16 +31,14 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   onReturnToStorefront,
   onShowToast,
   enableB2BAndStorefrontPortal = false,
-  companyBranding,
 }) => {
   const { theme, toggleDarkMode: toggleTheme } = useDarkMode();
   const isLight = theme === 'light';
-  const brandName = companyBranding?.companyName || 'PT GroceMart Ritel Nusantara';
-  const brandLogo = isSafeLogoUrl(companyBranding?.logoUrl) ? companyBranding!.logoUrl! : '';
-  const brandMonogram = getCompanyMonogram(brandName);
 
   const [identifierInput, setIdentifierInput] = useState<string>('');
   const [passwordInput, setPasswordInput] = useState<string>('');
+  const [selectedShift, setSelectedShift] = useState<'Morning Shift' | 'Afternoon Shift' | 'Night Shift'>('Morning Shift');
+  const [rememberWorkstation, setRememberWorkstation] = useState<boolean>(true);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -79,22 +75,30 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
       const payload = {
         identifier: trimmedIdentifier,
         password: passwordInput,
+        shiftName: selectedShift,
       };
 
       const res = await apiClient.adminLogin(payload);
       if (res.success && res.session) {
         apiClient.setOperatorContext({ ...res.session, authToken: res.token });
-        try {
-          localStorage.setItem('grocemart_admin_session', JSON.stringify(res.session));
-          if (res.token) localStorage.setItem('grocemart_auth_token', res.token);
-        } catch {}
+        if (rememberWorkstation) {
+          try {
+            localStorage.setItem('grocemart_admin_session', JSON.stringify(res.session));
+            if (res.token) localStorage.setItem('grocemart_auth_token', res.token);
+          } catch {}
+        } else {
+          try {
+            localStorage.removeItem('grocemart_admin_session');
+            localStorage.removeItem('grocemart_auth_token');
+          } catch {}
+        }
         if (onShowToast) {
           onShowToast(
             'Authentication Successful',
             `Welcome back, ${res.session.userName} (${res.session.divisionLabel || res.session.userRole.replace(/_/g, ' ')})`
           );
         }
-        onLoginSuccess(res.session);
+        onLoginSuccess(res.session, rememberWorkstation);
       } else {
         throw new Error(res.message || 'Email/Username atau password salah');
       }
@@ -159,19 +163,13 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
           <div className="p-6 sm:p-8 border-b border-gray-200 dark:border-slate-800/80 bg-gradient-to-r from-emerald-50/60 via-white to-gray-50/60 dark:from-[#12141C] dark:via-[#12141C] dark:to-emerald-950/60 gm-hero-banner">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                {brandLogo ? (
-                  <div className="w-12 h-12 rounded-xl bg-white dark:bg-[#090A0F] border border-gray-200 dark:border-slate-800/80 flex items-center justify-center p-1 shadow-sm shrink-0 overflow-hidden">
-                    <img src={brandLogo} alt={brandName} className="w-full h-full object-contain" />
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 rounded-xl bg-[#0F4C3A] text-white flex items-center justify-center font-extrabold text-xl shadow-md shadow-[#0F4C3A]/20 shrink-0">
-                    {brandMonogram}
-                  </div>
-                )}
+                <div className="w-12 h-12 rounded-xl bg-[#0F4C3A] text-white flex items-center justify-center font-extrabold text-xl shadow-md shadow-[#0F4C3A]/20 shrink-0">
+                  GM
+                </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-100 font-display">
-                      {brandName}
+                      GroceMart ERP &amp; POS Suite
                     </h1>
                     <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800/50 font-mono">
                       v4.2 ENTERPRISE
@@ -254,6 +252,36 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               </div>
             </div>
 
+            {/* Workstation Shift & Session Persistence */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Workstation Shift
+                </label>
+                <select
+                  value={selectedShift}
+                  onChange={(e) => setSelectedShift(e.target.value as any)}
+                  className="w-full bg-white dark:bg-[#090A0F] border border-gray-300 dark:border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0F4C3A] cursor-pointer"
+                >
+                  <option value="Morning Shift">Morning Shift (06:00 - 14:00)</option>
+                  <option value="Afternoon Shift">Afternoon Shift (14:00 - 22:00)</option>
+                  <option value="Night Shift">Night Shift (22:00 - 06:00)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center sm:pt-6">
+                <label className="flex items-center gap-2.5 text-xs text-gray-700 dark:text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberWorkstation}
+                    onChange={(e) => setRememberWorkstation(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#0F4C3A] focus:ring-[#0F4C3A] border-gray-300 dark:border-slate-700"
+                  />
+                  <span>Remember authenticated session on this terminal</span>
+                </label>
+              </div>
+            </div>
+
             {/* Submit Button */}
             <div
               className={`pt-4 border-t border-gray-200 dark:border-slate-800/80 flex items-center ${
@@ -295,10 +323,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               <ShieldCheck className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-500" />
               <span>ISO 27001 Certified · General Ledger Financial Immutability Enforced</span>
             </div>
-            <span className="font-mono text-[11px]">
-              {brandName}
-              {companyBranding?.phoneNumber ? ` · ${companyBranding.phoneNumber}` : ''}
-            </span>
+            <span className="font-mono text-[11px]">PT Bumi Retail Sejahtera (GroceMart)</span>
           </div>
         </div>
       </main>

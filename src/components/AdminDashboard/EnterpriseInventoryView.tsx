@@ -20,8 +20,7 @@ import type {
   ReturnableContainerRecord,
   ReturnableDirection,
   ItemClassification,
-  ItemTraceabilityResponse,
-  VendorBillBridgeTarget,
+  CrossDocumentNavTarget,
 } from '../../types/index.ts';
 import type { AdminDashboardTab } from './AdminSidebar';
 import { apiClient } from '../../services/apiClient';
@@ -65,10 +64,7 @@ import {
   X,
   Scissors,
   Zap,
-  ExternalLink,
   GitBranch,
-  FileText,
-  Receipt,
 } from 'lucide-react';
 import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
 import { WarehouseRackSetupPanel } from './WarehouseRackSetupPanel';
@@ -76,6 +72,7 @@ import { RackBlindOpnamePanel } from './RackBlindOpnamePanel';
 import { RepackBundlePanel } from './RepackBundlePanel';
 import { FefoHeatmapRackVisualizer } from './FefoHeatmapRackVisualizer';
 import { FlashSaleClearanceModal } from './FlashSaleClearanceModal';
+import { ItemTraceabilityModal } from './ItemTraceabilityModal';
 
 interface EnterpriseInventoryViewProps {
   theme: 'light' | 'dark';
@@ -102,14 +99,12 @@ interface EnterpriseInventoryViewProps {
   removalStrategies: RemovalStrategyConfig | null;
   onSaveRemovalStrategies: (next: Partial<RemovalStrategyConfig>) => Promise<void>;
   onNavigateTab: (tab: AdminDashboardTab) => void;
-  onNavigateToProcurementDoc?: (subTab: 'pr' | 'po' | 'gr', docId: string) => void;
-  onNavigateToVendorBill?: (bridge: Omit<VendorBillBridgeTarget, 'triggerNonce'>) => void;
+  onNavigateToDocument?: (nav: CrossDocumentNavTarget) => void;
   onAuditSku: (sku: string) => void;
   onEditTier: (tier: StoreInventoryStock) => void;
   onRefreshData?: () => Promise<void> | void;
   onShowToast: (title: string, message: string) => void;
   renderStocktakeImport?: () => React.ReactNode;
-  enableB2BFeatures?: boolean;
 }
 
 type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'fefo_heatmap' | 'stocktake_opname' | 'repack_bundle' | 'returnables';
@@ -200,14 +195,12 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   removalStrategies,
   onSaveRemovalStrategies,
   onNavigateTab,
-  onNavigateToProcurementDoc,
-  onNavigateToVendorBill,
+  onNavigateToDocument,
   onAuditSku,
   onEditTier,
   onRefreshData,
   onShowToast,
   renderStocktakeImport,
-  enableB2BFeatures = false,
 }) => {
   const isLight = theme === 'light';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
@@ -224,16 +217,13 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('ALL');
   const [strategyFilter, setStrategyFilter] = useState<'ALL' | RemovalStrategyType>('ALL');
   const [classificationFilter, setClassificationFilter] = useState<'ALL' | ItemClassification>('ALL');
-  const [includeB2BCatalogRows, setIncludeB2BCatalogRows] = useState<boolean>(enableB2BFeatures);
+  const [includeB2BCatalogRows, setIncludeB2BCatalogRows] = useState<boolean>(true);
   const [showStrategyModal, setShowStrategyModal] = useState<boolean>(false);
   const [showBarcodeLabelModal, setShowBarcodeLabelModal] = useState<boolean>(false);
   const [opnameWorkspaceMode, setOpnameWorkspaceMode] = useState<'standard_import' | 'rack_blind'>('standard_import');
   const [savingStrategy, setSavingStrategy] = useState<boolean>(false);
   const [mediaInspector, setMediaInspector] = useState<MediaInspectorTarget | null>(null);
-  const [traceTargetSku, setTraceTargetSku] = useState<string | null>(null);
-  const [traceData, setTraceData] = useState<ItemTraceabilityResponse | null>(null);
-  const [isLoadingTrace, setIsLoadingTrace] = useState<boolean>(false);
-  const [traceError, setTraceError] = useState<string | null>(null);
+  const [traceabilityTarget, setTraceabilityTarget] = useState<{ sku: string; productName: string } | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [warehouseRacks, setWarehouseRacks] = useState<WarehouseRackConfig[]>([]);
   const [flashSaleTargetBatch, setFlashSaleTargetBatch] = useState<InventoryBatch | null>(null);
@@ -276,37 +266,12 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   }, [viewMode, loadReturnables]);
 
   React.useEffect(() => {
-    if (!enableB2BFeatures) {
-      setIncludeB2BCatalogRows(false);
-      if (channelFilter === 'B2B' || channelFilter === 'BOTH') {
-        setChannelFilter('ALL');
-      }
-    }
-  }, [enableB2BFeatures, channelFilter]);
-
-  React.useEffect(() => {
     if (viewMode !== 'repack_bundle') return;
     apiClient
       .getWarehouseRacks(selectedOutletFilter)
       .then((res) => setWarehouseRacks(res.racks || []))
       .catch(() => {});
   }, [viewMode, selectedOutletFilter]);
-
-  const handleOpenTraceability = async (sku: string) => {
-    setTraceTargetSku(sku);
-    setTraceData(null);
-    setTraceError(null);
-    setIsLoadingTrace(true);
-    try {
-      const res = await apiClient.getItemTraceability(sku);
-      setTraceData(res);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setTraceError(msg || 'Failed to load item inbound traceability.');
-    } finally {
-      setIsLoadingTrace(false);
-    }
-  };
 
   const cardClass =
     'bg-white dark:bg-[#12141C] border border-slate-200 dark:border-slate-800/80 shadow-sm text-slate-900 dark:text-slate-100 rounded-2xl transition-colors duration-200';
@@ -599,37 +564,33 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
           ],
           progressPercent: b2cTotal > 0 ? Math.round(((b2cTotal - b2cToPick) / b2cTotal) * 100) : 100,
         },
-        ...(enableB2BFeatures
-          ? [
-              {
-                id: 'b2b_dispatch',
-                title: 'B2B Wholesale Bulk Dispatch',
-                subtitle: 'Pallet, Dus & Renceng Outbound (Warung / Agen / HoReCa)',
-                icon: Truck,
-                accentColor: 'text-amber-700 dark:text-amber-400',
-                iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-                barColor: 'bg-amber-600 dark:bg-amber-500',
-                toProcessCount: b2bToDispatch,
-                primaryLabel:
-                  b2bToDispatch > 0
-                    ? `Dispatch ${b2bToDispatch} Bulk`
-                    : b2bWaitingFinance > 0
-                    ? `Review ${b2bWaitingFinance} Credit`
-                    : 'Fleet & DO Docs',
-                targetTab: (b2bWaitingFinance > 0 && b2bToDispatch === 0 ? 'approvals' : 'logistics') as AdminDashboardTab,
-                secondaryAction: { label: 'Credit Queue', tab: 'approvals' as AdminDashboardTab },
-                metrics: [
-                  { label: 'To Dispatch', value: b2bToDispatch, tone: b2bToDispatch > 0 ? 'emerald' : 'slate' },
-                  { label: 'Finance Hold', value: b2bWaitingFinance, tone: b2bWaitingFinance > 0 ? 'amber' : 'slate' },
-                  { label: 'Dispatched', value: b2bDispatched, tone: 'slate' },
-                ],
-                progressPercent:
-                  b2bOrders.length > 0 && hub.id === 'CDC'
-                    ? Math.round((b2bDispatched / b2bOrders.length) * 100)
-                    : 100,
-              },
-            ]
-          : []),
+        {
+          id: 'b2b_dispatch',
+          title: 'B2B Wholesale Bulk Dispatch',
+          subtitle: 'Pallet, Dus & Renceng Outbound (Warung / Agen / HoReCa)',
+          icon: Truck,
+          accentColor: 'text-amber-700 dark:text-amber-400',
+          iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+          barColor: 'bg-amber-600 dark:bg-amber-500',
+          toProcessCount: b2bToDispatch,
+          primaryLabel:
+            b2bToDispatch > 0
+              ? `Dispatch ${b2bToDispatch} Bulk`
+              : b2bWaitingFinance > 0
+              ? `Review ${b2bWaitingFinance} Credit`
+              : 'Fleet & DO Docs',
+          targetTab: (b2bWaitingFinance > 0 && b2bToDispatch === 0 ? 'approvals' : 'logistics') as AdminDashboardTab,
+          secondaryAction: { label: 'Credit Queue', tab: 'approvals' as AdminDashboardTab },
+          metrics: [
+            { label: 'To Dispatch', value: b2bToDispatch, tone: b2bToDispatch > 0 ? 'emerald' : 'slate' },
+            { label: 'Finance Hold', value: b2bWaitingFinance, tone: b2bWaitingFinance > 0 ? 'amber' : 'slate' },
+            { label: 'Dispatched', value: b2bDispatched, tone: 'slate' },
+          ],
+          progressPercent:
+            b2bOrders.length > 0 && hub.id === 'CDC'
+              ? Math.round((b2bDispatched / b2bOrders.length) * 100)
+              : 100,
+        },
         {
           id: 'pos_replenishment',
           title: 'POS Shelf Replenishment',
@@ -827,12 +788,8 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
               </span>
               <span aria-hidden="true" className="opacity-60">·</span>
               <span>Multi-Warehouse Operations</span>
-              {enableB2BFeatures && (
-                <>
-                  <span aria-hidden="true" className="opacity-60">·</span>
-                  <span>B2B/B2C Catalog Split</span>
-                </>
-              )}
+              <span aria-hidden="true" className="opacity-60">·</span>
+              <span>B2B/B2C Catalog Split</span>
               <span aria-hidden="true" className="opacity-60">·</span>
               <span>FEFO/FIFO Engine</span>
             </div>
@@ -1006,7 +963,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
 
           <div className={`${subCardClass} p-3.5`}>
             <span className={`text-[11px] font-medium ${textMuted} block`}>
-              {enableB2BFeatures ? 'On-Hand Quants (B2C + B2B)' : 'On-Hand Stock Quants'}
+              On-Hand Quants (B2C + B2B)
             </span>
             <span className="text-sm sm:text-base font-bold font-mono tabular-nums text-[#164E29] dark:text-emerald-400 mt-0.5 block">
               {summaryMetrics.totalPhysicalBaseUnits.toLocaleString('id-ID')} Base Units
@@ -1272,18 +1229,16 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                 <option value="ambient">Ambient Dry</option>
               </select>
 
-              {enableB2BFeatures && (
-                <select
-                  value={channelFilter}
-                  onChange={(e) => setChannelFilter(e.target.value as ChannelFilter)}
-                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
-                >
-                  <option value="ALL">All Channels (B2C + B2B)</option>
-                  <option value="B2C">B2C Retail Eligible</option>
-                  <option value="B2B">B2B Wholesale Eligible</option>
-                  <option value="BOTH">Dual Channel (Both)</option>
-                </select>
-              )}
+              <select
+                value={channelFilter}
+                onChange={(e) => setChannelFilter(e.target.value as ChannelFilter)}
+                className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+              >
+                <option value="ALL">All Channels (B2C + B2B)</option>
+                <option value="B2C">B2C Retail Eligible</option>
+                <option value="B2B">B2B Wholesale Eligible</option>
+                <option value="BOTH">Dual Channel (Both)</option>
+              </select>
 
               <select
                 value={strategyFilter}
@@ -1319,17 +1274,15 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
-              {enableB2BFeatures && (
-                <label className="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={includeB2BCatalogRows}
-                    onChange={(e) => setIncludeB2BCatalogRows(e.target.checked)}
-                    className="rounded border-slate-300 text-[#0F4C3A] focus:ring-[#0F4C3A]"
-                  />
-                  <span className={textMuted}>Include B2B Bulk Catalog SKUs</span>
-                </label>
-              )}
+              <label className="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={includeB2BCatalogRows}
+                  onChange={(e) => setIncludeB2BCatalogRows(e.target.checked)}
+                  className="rounded border-slate-300 text-[#0F4C3A] focus:ring-[#0F4C3A]"
+                />
+                <span className={textMuted}>Include B2B Bulk Catalog SKUs</span>
+              </label>
               <span className={`text-xs ${textMuted}`}>
                 Showing <strong className={textTitle}>{enrichedListRows.length}</strong> stock quants
               </span>
@@ -1342,9 +1295,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className={tableHeaderClass}>
-                    <th className="py-3 px-3.5">
-                      {enableB2BFeatures ? 'SKU & Product (B2B/B2C Split)' : 'SKU & Product'}
-                    </th>
+                    <th className="py-3 px-3.5">SKU &amp; Product (B2B/B2C Split)</th>
                     <th className="py-3 px-3.5">Warehouse &amp; Bin Location</th>
                     <th className="py-3 px-3.5">Lot / Batch &amp; Expiry</th>
                     <th className="py-3 px-3 text-center">Removal Strategy</th>
@@ -1414,16 +1365,14 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                                 )}
                                 <span
                                   className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                    enableB2BFeatures && profile.salesChannel === 'B2B'
+                                    profile.salesChannel === 'B2B'
                                       ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                                      : profile.salesChannel === 'B2C' || !enableB2BFeatures
+                                      : profile.salesChannel === 'B2C'
                                       ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
                                       : 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300'
                                   }`}
                                 >
-                                  {!enableB2BFeatures
-                                    ? 'Retail'
-                                    : profile.salesChannel === 'BOTH'
+                                  {profile.salesChannel === 'BOTH'
                                     ? 'B2C + B2B'
                                     : profile.salesChannel === 'B2B'
                                     ? 'B2B Wholesale'
@@ -1623,17 +1572,22 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                                 })
                               }
                               className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] inline-flex items-center gap-1 cursor-pointer"
-                              title={enableB2BFeatures ? 'Inspect B2B vs B2C Media, Packaging & Multi-UoM' : 'Inspect Retail Media, Packaging & Multi-UoM'}
+                              title="Inspect B2B vs B2C Media, Packaging & Multi-UoM"
                             >
                               <Eye className="w-3 h-3" />
-                              {enableB2BFeatures ? 'B2B/B2C' : 'Media'}
+                              B2B/B2C
                             </button>
 
                             <button
                               type="button"
-                              onClick={() => handleOpenTraceability(row.sku)}
-                              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-emerald-300/80 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/40 text-[#0F4C3A] dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] inline-flex items-center gap-1 cursor-pointer"
-                              title="Inspect Inbound PR -> PO -> GR -> Lot -> Vendor Bill Lineage"
+                              onClick={() =>
+                                setTraceabilityTarget({
+                                  sku: row.sku,
+                                  productName: row.productName,
+                                })
+                              }
+                              className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-emerald-200/90 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/50 text-[#0F4C3A] dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/70 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] inline-flex items-center gap-1 cursor-pointer"
+                              title="View full inbound supply-chain lineage (PR → PO → GR → Lots → Vendor Bill)"
                             >
                               <GitBranch className="w-3 h-3" />
                               Traceability
@@ -2233,12 +2187,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                       {mediaInspector.sku}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300">
-                      Channel:{' '}
-                      {enableB2BFeatures
-                        ? profile.salesChannel === 'BOTH'
-                          ? 'B2C Retail + B2B Wholesale'
-                          : profile.salesChannel
-                        : 'Retail POS & Store'}
+                      Channel: {profile.salesChannel === 'BOTH' ? 'B2C Retail + B2B Wholesale' : profile.salesChannel}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300">
                       {mediaInspector.strategy} Removal
@@ -2262,13 +2211,13 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                 </button>
               </div>
 
-              {/* Retail & Optional B2B Visual & Packaging Cards */}
-              <div className={`grid grid-cols-1 ${enableB2BFeatures ? 'md:grid-cols-2' : ''} gap-4`}>
-                {/* Retail Card */}
+              {/* Strict B2C vs B2B Visual & Packaging Differentiation Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* B2C Retail Card */}
                 <div className={`${subCardClass} p-4 space-y-3`}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider">
-                      Retail Storefront Asset
+                      B2C Consumer Storefront Asset
                     </span>
                     <span className="font-mono text-[11px] font-bold text-[#0F4C3A] dark:text-emerald-400">
                       {formatIDR(mediaInspector.sellingPrice)} / {profile.uomConversion.baseUnitLabel}
@@ -2276,7 +2225,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                   </div>
                   {renderThumbnail(
                     profile.b2cImageUrl,
-                    `${mediaInspector.productName} Retail`,
+                    `${mediaInspector.productName} B2C Retail`,
                     `${mediaInspector.sku}-b2c`,
                     'w-full h-40 rounded-xl'
                   )}
@@ -2294,47 +2243,45 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                   </div>
                 </div>
 
-                {/* B2B Wholesale Card (only when enableB2BFeatures is ON) */}
-                {enableB2BFeatures && (
-                  <div className={`${subCardClass} p-4 space-y-3`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
-                        B2B Wholesale Master Carton / Pallet
+                {/* B2B Wholesale Card */}
+                <div className={`${subCardClass} p-4 space-y-3`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                      B2B Wholesale Master Carton / Pallet
+                    </span>
+                    <span className="font-mono text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                      {profile.uomConversion.unitsPerCarton}x {profile.uomConversion.baseUnitLabel} / {profile.uomConversion.wholesaleUnitLabel}
+                    </span>
+                  </div>
+                  {renderThumbnail(
+                    profile.b2bImageUrl,
+                    `${mediaInspector.productName} B2B Wholesale`,
+                    `${mediaInspector.sku}-b2b`,
+                    'w-full h-40 rounded-xl'
+                  )}
+                  <div className="space-y-1.5 text-xs">
+                    <div>
+                      <span className={`text-[10px] uppercase font-semibold ${textMuted} block`}>
+                        Wholesale Carton &amp; Pallet Spec
                       </span>
-                      <span className="font-mono text-[11px] font-bold text-amber-700 dark:text-amber-300">
-                        {profile.uomConversion.unitsPerCarton}x {profile.uomConversion.baseUnitLabel} / {profile.uomConversion.wholesaleUnitLabel}
-                      </span>
+                      <span className={`font-medium ${textTitle}`}>{profile.wholesalePackagingSpec}</span>
                     </div>
-                    {renderThumbnail(
-                      profile.b2bImageUrl,
-                      `${mediaInspector.productName} B2B Wholesale`,
-                      `${mediaInspector.sku}-b2b`,
-                      'w-full h-40 rounded-xl'
-                    )}
-                    <div className="space-y-1.5 text-xs">
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[10px]">
                       <div>
-                        <span className={`text-[10px] uppercase font-semibold ${textMuted} block`}>
-                          Wholesale Carton &amp; Pallet Spec
-                        </span>
-                        <span className={`font-medium ${textTitle}`}>{profile.wholesalePackagingSpec}</span>
+                        <span className={textMuted}>Outer GTIN:</span>{' '}
+                        <strong className={textTitle}>{profile.outerBoxBarcode}</strong>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[10px]">
-                        <div>
-                          <span className={textMuted}>Outer GTIN:</span>{' '}
-                          <strong className={textTitle}>{profile.outerBoxBarcode}</strong>
-                        </div>
-                        <div>
-                          <span className={textMuted}>Gross Wt:</span>{' '}
-                          <strong className={textTitle}>{profile.grossWeightKg} kg</strong>
-                        </div>
-                        <div className="col-span-2">
-                          <span className={textMuted}>Pallet Ti-Hi:</span>{' '}
-                          <strong className={textTitle}>{profile.palletDimensions}</strong>
-                        </div>
+                      <div>
+                        <span className={textMuted}>Gross Wt:</span>{' '}
+                        <strong className={textTitle}>{profile.grossWeightKg} kg</strong>
+                      </div>
+                      <div className="col-span-2">
+                        <span className={textMuted}>Pallet Ti-Hi:</span>{' '}
+                        <strong className={textTitle}>{profile.palletDimensions}</strong>
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Lot / Batch Breakdown for this SKU */}
@@ -2439,453 +2386,15 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
         onShowToast={onShowToast}
       />
 
-      {/* Inbound Supply Chain Lineage / Traceability Modal */}
-      {traceTargetSku && typeof document !== 'undefined' && createPortal(
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setTraceTargetSku(null);
-              setTraceData(null);
-              setTraceError(null);
-            }
-          }}
-          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto gm-backdrop-fade"
-        >
-          <div
-            className={`w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border overflow-hidden my-auto gm-modal-pop ${
-              isLight
-                ? 'bg-white border-slate-200 text-[#13221B]'
-                : 'bg-[#12141C] border-slate-800/80 text-[#ECFDF5]'
-            }`}
-          >
-            {/* Header */}
-            <div
-              className={`p-4 border-b flex items-center justify-between gap-3 ${
-                isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
-              }`}
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <GitBranch className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400 shrink-0" />
-                  <h3 className="text-sm font-bold truncate">
-                    Inbound Supply Chain Lineage &amp; Lot Traceability
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-bold bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/25">
-                    {traceTargetSku}
-                  </span>
-                  {traceData && (traceData.financialCostMasked || !canViewValuation) && (
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
-                      Financial Cost Masked (Role SoD)
-                    </span>
-                  )}
-                </div>
-                {traceData && (
-                  <div className={`text-xs mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 ${textMuted}`}>
-                    <span className={`font-semibold ${isLight ? 'text-[#13221B]' : 'text-[#ECFDF5]'}`}>
-                      {traceData.productName}
-                    </span>
-                    <span>Category: {traceData.category}</span>
-                    <span>UoM: {traceData.unit}</span>
-                    {traceData.supplierName && <span>Supplier: {traceData.supplierName}</span>}
-                    {canViewValuation && !traceData.financialCostMasked && traceData.wacUnitCost !== undefined && (
-                      <span className="font-mono tabular-nums">
-                        WAC Cost: <strong>{formatIDR(traceData.wacUnitCost)}</strong>
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setTraceTargetSku(null);
-                  setTraceData(null);
-                  setTraceError(null);
-                }}
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  isLight ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-slate-800 text-slate-300'
-                }`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="p-4 overflow-y-auto space-y-3.5 flex-1 text-xs">
-              {isLoadingTrace && (
-                <div className={`p-6 rounded-xl border text-center ${subCardClass}`}>
-                  <span className="font-mono text-xs">Loading PR → PO → GR → Lot → Vendor Bill lineage...</span>
-                </div>
-              )}
-
-              {traceError && (
-                <div className="p-4 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/30 dark:border-rose-800/60 text-rose-700 dark:text-rose-300">
-                  {traceError}
-                </div>
-              )}
-
-              {traceData && !isLoadingTrace && (() => {
-                const hideFinancialCost = !canViewValuation || traceData.financialCostMasked;
-                return (
-                  <>
-                    {/* Pipeline Stepper Summary */}
-                    <div className={`grid gap-3 ${hideFinancialCost ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-5'}`}>
-                      {[
-                        { label: '1. Purchase Requests', count: traceData.purchaseRequests.length, tone: 'slate' },
-                        { label: '2. Purchase Orders', count: traceData.purchaseOrders.length, tone: 'sky' },
-                        { label: '3. Goods Receipts', count: traceData.goodsReceipts.length, tone: 'emerald' },
-                        { label: '4. Physical Lots', count: traceData.batches.length, tone: 'emerald' },
-                        ...(!hideFinancialCost
-                          ? [{ label: '5. Vendor Bills', count: traceData.vendorBills.length, tone: 'indigo' }]
-                          : []),
-                      ].map((step) => (
-                        <div
-                          key={step.label}
-                          className={`p-3 rounded-xl border ${
-                            isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-[#090A0F] border-slate-800/80'
-                          }`}
-                        >
-                          <div className={`text-[10px] uppercase font-semibold ${textMuted}`}>{step.label}</div>
-                          <div className="text-base font-bold font-mono tabular-nums mt-1">{step.count}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Stage 1: Purchase Requests */}
-                    <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold flex items-center gap-1.5">
-                          <ClipboardList className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
-                          Stage 1: Purchase Requests (PR)
-                        </span>
-                        <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.purchaseRequests.length} records</span>
-                      </div>
-                      {traceData.purchaseRequests.length === 0 ? (
-                        <p className={`text-[11px] ${textMuted}`}>Direct PO or initial baseline stock (no upstream PR recorded).</p>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {traceData.purchaseRequests.map((pr) => (
-                            <div
-                              key={pr.id}
-                              className={`p-3 rounded-lg border flex flex-col gap-1.5 ${
-                                isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-[#12141C] border-slate-800/80'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                {onNavigateToProcurementDoc ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setTraceTargetSku(null);
-                                      onNavigateToProcurementDoc('pr', pr.id);
-                                    }}
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px] font-bold cursor-pointer ${
-                                      isLight
-                                        ? 'bg-white border-slate-300 text-[#0F4C3A] hover:bg-emerald-50'
-                                        : 'bg-[#090A0F] border-slate-700 text-emerald-300 hover:bg-slate-800'
-                                    }`}
-                                  >
-                                    {pr.id}
-                                    <ExternalLink className="w-2.5 h-2.5" />
-                                  </button>
-                                ) : (
-                                  <span className="font-mono font-bold">{pr.id}</span>
-                                )}
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase border border-slate-300/60 dark:border-slate-700">
-                                  {pr.status}
-                                </span>
-                              </div>
-                              <div className={`text-[11px] flex flex-wrap gap-x-3 gap-y-0.5 font-mono tabular-nums ${textMuted}`}>
-                                <span>Qty: {pr.suggestedQuantity}</span>
-                                <span>Store: {pr.storeName || pr.storeId || 'Hub'}</span>
-                                <span>By: {pr.requestedBy}</span>
-                                {!hideFinancialCost && pr.totalEstimatedCost !== undefined && (
-                                  <span>Est: {formatIDR(pr.totalEstimatedCost)}</span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Stage 2: Purchase Orders */}
-                    <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-                          Stage 2: Purchase Orders (PO)
-                        </span>
-                        <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.purchaseOrders.length} records</span>
-                      </div>
-                      {traceData.purchaseOrders.length === 0 ? (
-                        <p className={`text-[11px] ${textMuted}`}>No Purchase Orders linked to this SKU.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {traceData.purchaseOrders.map((po) => {
-                            const skuLine = po.items.find((i) => i.sku === traceData.sku) || po.items[0];
-                            return (
-                              <div
-                                key={po.id}
-                                className={`p-3 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-                                  isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-[#12141C] border-slate-800/80'
-                                }`}
-                              >
-                                <div className="space-y-1">
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    {onNavigateToProcurementDoc ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setTraceTargetSku(null);
-                                          onNavigateToProcurementDoc('po', po.id);
-                                        }}
-                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px] font-bold cursor-pointer ${
-                                          isLight
-                                            ? 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
-                                            : 'bg-sky-950/40 border-sky-800/60 text-sky-300 hover:bg-sky-900/60'
-                                        }`}
-                                      >
-                                        {po.id}
-                                        <ExternalLink className="w-2.5 h-2.5" />
-                                      </button>
-                                    ) : (
-                                      <span className="font-mono font-bold">{po.id}</span>
-                                    )}
-                                    <span className="font-semibold">{po.supplierName}</span>
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border border-slate-300/60 dark:border-slate-700">
-                                      {po.status}
-                                    </span>
-                                  </div>
-                                  <div className={`text-[11px] font-mono tabular-nums ${textMuted}`}>
-                                    {po.storeName} · ETA {po.expectedDeliveryDate}
-                                    {po.sourcePrId ? ` · Source: ${po.sourcePrId}` : ''}
-                                  </div>
-                                </div>
-                                <div className="text-right font-mono tabular-nums text-[11px]">
-                                  {skuLine && (
-                                    <div className="font-semibold">
-                                      Rcvd {skuLine.receivedQuantity} / {skuLine.orderedQuantity}
-                                      {skuLine.remainingBackorder > 0 ? ` (${skuLine.remainingBackorder} backorder)` : ''}
-                                    </div>
-                                  )}
-                                  {!hideFinancialCost && po.totalCost !== undefined && (
-                                    <div className={textMuted}>PO Total: {formatIDR(po.totalCost)}</div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Stage 3: Goods Receipts */}
-                    <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold flex items-center gap-1.5">
-                          <Truck className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
-                          Stage 3: Goods Receipts (GR / Dock Inward)
-                        </span>
-                        <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.goodsReceipts.length} records</span>
-                      </div>
-                      {traceData.goodsReceipts.length === 0 ? (
-                        <p className={`text-[11px] ${textMuted}`}>No Goods Receipts recorded for this SKU.</p>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {traceData.goodsReceipts.map((gr) => {
-                            const skuGr = gr.items.find((i) => i.sku === traceData.sku);
-                            return (
-                              <div
-                                key={gr.id}
-                                className={`p-3 rounded-lg border space-y-1 ${
-                                  isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-[#12141C] border-slate-800/80'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  {onNavigateToProcurementDoc ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setTraceTargetSku(null);
-                                        onNavigateToProcurementDoc('gr', gr.id);
-                                      }}
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px] font-bold cursor-pointer ${
-                                        isLight
-                                          ? 'bg-emerald-50 border-emerald-200 text-[#0F4C3A] hover:bg-emerald-100'
-                                          : 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/60'
-                                      }`}
-                                    >
-                                      {gr.id}
-                                      <ExternalLink className="w-2.5 h-2.5" />
-                                    </button>
-                                  ) : (
-                                    <span className="font-mono font-bold">{gr.id}</span>
-                                  )}
-                                  <span className="font-mono text-[10px] tabular-nums font-bold text-[#0F4C3A] dark:text-emerald-400">
-                                    +{skuGr?.quantityReceived ?? 0} rcvd
-                                  </span>
-                                </div>
-                                <div className={`text-[11px] font-mono ${textMuted}`}>
-                                  SJ: {gr.deliveryNoteNumber} · PO: {gr.poId}
-                                </div>
-                                <div className={`text-[10px] ${textMuted}`}>
-                                  {gr.storeName} · By {gr.receivedBy} ({skuGr?.qualityCondition || 'Verified'})
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Stage 4: Physical Lots & Warehouse Racks */}
-                    <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold flex items-center gap-1.5">
-                          <Boxes className="w-3.5 h-3.5 text-[#0F4C3A] dark:text-emerald-400" />
-                          Stage 4: Physical Lots / Batches &amp; Rack Bins
-                        </span>
-                        <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.batches.length} lots</span>
-                      </div>
-                      {traceData.batches.length === 0 ? (
-                        <p className={`text-[11px] ${textMuted}`}>No active batch/lot records found in scope.</p>
-                      ) : (
-                        <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800/80">
-                          <table className="w-full text-left text-[11px] font-mono">
-                            <thead>
-                              <tr className={tableHeaderClass}>
-                                <th className="py-2 px-3">Lot / Batch</th>
-                                <th className="py-2 px-3">Store &amp; Rack</th>
-                                <th className="py-2 px-3">Upstream Refs</th>
-                                <th className="py-2 px-3 text-right">Stock</th>
-                                {!hideFinancialCost && <th className="py-2 px-3 text-right">Unit Cost</th>}
-                                <th className="py-2 px-3 text-right">Expiry / Status</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80">
-                              {traceData.batches.map((b) => (
-                                <tr key={b.batchId}>
-                                  <td className="py-2 px-3">
-                                    <div className="font-bold">{b.lotNumber}</div>
-                                    <div className={`text-[10px] ${textMuted}`}>{b.batchId}</div>
-                                  </td>
-                                  <td className="py-2 px-3 font-sans">
-                                    <div>{b.storeName}</div>
-                                    <div className={`text-[10px] font-mono ${textMuted}`}>
-                                      {b.rackBinCode ? `${b.rackBinCode}${b.rackLabel ? ` (${b.rackLabel})` : ''}` : b.warehouseZoneId}
-                                    </div>
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    <div className="flex flex-wrap gap-1">
-                                      {b.sourcePoNumber && <span>{b.sourcePoNumber}</span>}
-                                      {b.sourceGrId && <span className="text-emerald-600 dark:text-emerald-400">· {b.sourceGrId}</span>}
-                                      {b.sourcePrId && <span className={textMuted}>· {b.sourcePrId}</span>}
-                                    </div>
-                                  </td>
-                                  <td className="py-2 px-3 text-right tabular-nums font-bold">
-                                    {b.currentStock} / {b.initialQuantity}
-                                  </td>
-                                  {!hideFinancialCost && (
-                                    <td className="py-2 px-3 text-right tabular-nums">
-                                      {b.unitCost !== undefined ? formatIDR(b.unitCost) : '—'}
-                                    </td>
-                                  )}
-                                  <td className="py-2 px-3 text-right">
-                                    <div>{b.expiryDate.split('T')[0]}</div>
-                                    <div className={`text-[10px] uppercase ${textMuted}`}>{b.status.replace(/_/g, ' ')}</div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Stage 5: Vendor Bills & AP (Hidden when Financial Cost Masked / No Valuation Permission) */}
-                    {!hideFinancialCost && (
-                      <div className={`p-3.5 rounded-xl border space-y-2.5 ${isLight ? 'bg-white border-slate-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold flex items-center gap-1.5">
-                            <Receipt className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                            Stage 5: Vendor Bills &amp; Accounts Payable (3-Way Match)
-                          </span>
-                          <span className={`font-mono text-[10px] ${textMuted}`}>{traceData.vendorBills.length} bills</span>
-                        </div>
-                        {traceData.vendorBills.length === 0 ? (
-                          <p className={`text-[11px] ${textMuted}`}>No Vendor Bills posted yet for upstream POs of this SKU.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            {traceData.vendorBills.map((vb) => (
-                              <div
-                                key={vb.id}
-                                className={`p-3 rounded-lg border flex items-center justify-between gap-2 ${
-                                  isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-[#12141C] border-slate-800/80'
-                                }`}
-                              >
-                                <div className="space-y-1">
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    {onNavigateToVendorBill ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setTraceTargetSku(null);
-                                          onNavigateToVendorBill({ mode: 'view', billId: vb.id, poId: vb.poId });
-                                        }}
-                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[11px] font-bold cursor-pointer ${
-                                          isLight
-                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                                            : 'bg-indigo-950/40 border-indigo-800/60 text-indigo-300 hover:bg-indigo-900/60'
-                                        }`}
-                                      >
-                                        {vb.id}
-                                        <ExternalLink className="w-2.5 h-2.5" />
-                                      </button>
-                                    ) : (
-                                      <span className="font-mono font-bold">{vb.id}</span>
-                                    )}
-                                    <span className="font-mono text-[11px]">{vb.billNumber}</span>
-                                  </div>
-                                  <div className={`text-[10px] font-mono ${textMuted}`}>
-                                    {vb.poId} · {vb.status} · {vb.paymentStatus}
-                                  </div>
-                                </div>
-                                <div className="text-right font-mono tabular-nums font-bold">
-                                  {formatIDR(vb.grandTotalIDR)}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-
-            {/* Footer */}
-            <div
-              className={`p-3.5 border-t flex justify-end ${
-                isLight ? 'border-slate-200 bg-slate-50/70' : 'border-slate-800/80 bg-[#090A0F]'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setTraceTargetSku(null);
-                  setTraceData(null);
-                  setTraceError(null);
-                }}
-                className="px-4 py-2 text-xs font-semibold bg-[#164E29] hover:bg-[#0F4C3A] dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50 text-white rounded-xl transition-all cursor-pointer"
-              >
-                Close Lineage
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {/* Bidirectional Inbound Supply-Chain Traceability Modal (PR -> PO -> GR -> Lot -> Vendor Bill) */}
+      {traceabilityTarget && (
+        <ItemTraceabilityModal
+          theme={theme}
+          sku={traceabilityTarget.sku}
+          productName={traceabilityTarget.productName}
+          onClose={() => setTraceabilityTarget(null)}
+          onNavigateToDocument={onNavigateToDocument}
+        />
       )}
     </div>
   );
