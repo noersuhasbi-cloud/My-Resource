@@ -30,6 +30,7 @@ import {
   B2BCartItem,
   B2BWholesaleOrder,
   GiroPaymentRecord,
+  CompanyPublicBranding,
 } from './types';
 import { STORE_LOCATIONS, PRODUCTS, INITIAL_DEMO_ACCOUNT, INITIAL_ORDERS } from './data/mockData';
 import { auth } from './lib/firebase';
@@ -58,6 +59,7 @@ export default function App() {
   });
 
   const [enableB2BAndStorefrontPortal, setEnableB2BAndStorefrontPortal] = useState<boolean>(false);
+  const [companyBranding, setCompanyBranding] = useState<CompanyPublicBranding | null>(null);
 
   const [storefrontMode, setStorefrontMode] = useState<'b2c' | 'b2b'>(() => {
     try {
@@ -132,7 +134,10 @@ export default function App() {
       if (!active) return;
       if (statusRes) {
         setStoreStatus((prev) => (JSON.stringify(prev) === JSON.stringify(statusRes) ? prev : statusRes));
-        const flagEnabled = Boolean(statusRes.enableB2BAndStorefrontPortal);
+        if (statusRes.primaryCompany) {
+          setCompanyBranding(statusRes.primaryCompany);
+        }
+        const flagEnabled = Boolean(statusRes.enableB2BFeatures ?? statusRes.enableB2BAndStorefrontPortal);
         setEnableB2BAndStorefrontPortal((prev) => (prev === flagEnabled ? prev : flagEnabled));
         if (flagEnabled) {
           const hash = window.location.hash;
@@ -162,8 +167,23 @@ export default function App() {
         });
       }
     });
+    const onBrandingUpdated = (ev: Event) => {
+      const customEv = ev as CustomEvent<CompanyPublicBranding | undefined>;
+      if (customEv.detail) {
+        setCompanyBranding(customEv.detail);
+      } else {
+        apiClient
+          .getStoreStatus()
+          .then((res) => {
+            if (res?.primaryCompany) setCompanyBranding(res.primaryCompany);
+          })
+          .catch(() => {});
+      }
+    };
+    window.addEventListener('grocemart-company-branding-updated', onBrandingUpdated);
     return () => {
       active = false;
+      window.removeEventListener('grocemart-company-branding-updated', onBrandingUpdated);
     };
   }, []);
 
@@ -641,6 +661,7 @@ export default function App() {
           onReturnToStorefront={handleExitToStorefront}
           onShowToast={showToast}
           enableB2BAndStorefrontPortal={enableB2BAndStorefrontPortal}
+          companyBranding={companyBranding}
         />
         <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       </div>
@@ -658,6 +679,7 @@ export default function App() {
             onReturnToStorefront={handleExitToStorefront}
             onShowToast={showToast}
             enableB2BAndStorefrontPortal={enableB2BAndStorefrontPortal}
+            companyBranding={companyBranding}
           />
           <ToastContainer toasts={toasts} onDismiss={dismissToast} />
         </div>
@@ -673,8 +695,9 @@ export default function App() {
           onLogout={handleAdminLogout}
           onShowToast={showToast}
           enableB2BAndStorefrontPortal={enableB2BAndStorefrontPortal}
+          companyBranding={companyBranding}
           onErpSettingsUpdated={(cfg) => {
-            const nextFlag = Boolean(cfg?.enableB2BAndStorefrontPortal);
+            const nextFlag = Boolean(cfg?.enableB2BFeatures ?? cfg?.enableB2BAndStorefrontPortal);
             setEnableB2BAndStorefrontPortal((prev) => (prev === nextFlag ? prev : nextFlag));
           }}
         />

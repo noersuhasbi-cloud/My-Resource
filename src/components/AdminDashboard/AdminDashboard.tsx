@@ -36,6 +36,7 @@ import type {
   TrialGovernanceStatusSnapshot,
   ProcurementFocusTarget,
   VendorBillBridgeTarget,
+  CompanyPublicBranding,
 } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
@@ -134,6 +135,7 @@ interface AdminDashboardProps {
   onLogout?: () => void;
   onShowToast: (title: string, message: string) => void;
   enableB2BAndStorefrontPortal?: boolean;
+  companyBranding?: CompanyPublicBranding | null;
   onErpSettingsUpdated?: (erpSettings: ErpConfigurationSettings) => void;
 }
 
@@ -143,6 +145,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogout,
   onShowToast,
   enableB2BAndStorefrontPortal: propEnableB2BPortal = false,
+  companyBranding,
   onErpSettingsUpdated,
 }) => {
   // Theme Toggle: Synchronized with global DarkModeContext
@@ -270,7 +273,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     if (!activeStaffSession) return;
     const portalEnabled = Boolean(
-      enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal
+      enterpriseSettings?.erpSettings?.enableB2BFeatures ??
+        enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ??
+        propEnableB2BPortal
     );
 
     if (!isDashboardTabAllowed(activeStaffSession, activeTab, trialGovernance, portalEnabled)) {
@@ -304,13 +309,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     }
 
-    if (!isAccountingSubTabAllowed(activeStaffSession, accountingDeepSubTab)) {
+    if (!isAccountingSubTabAllowed(activeStaffSession, accountingDeepSubTab) || (!portalEnabled && accountingDeepSubTab === 'b2b_ar')) {
       const nextSubTab = getDefaultAccountingSubTabForSession(activeStaffSession);
-      if (nextSubTab !== accountingDeepSubTab) {
+      if (nextSubTab !== accountingDeepSubTab && (portalEnabled || nextSubTab !== 'b2b_ar')) {
         setAccountingDeepSubTab(nextSubTab);
+      } else if (!portalEnabled && accountingDeepSubTab === 'b2b_ar') {
+        setAccountingDeepSubTab('pnl');
       }
     }
-  }, [activeStaffSession, activeTab, accountingDeepSubTab, trialGovernance, enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal, propEnableB2BPortal]);
+  }, [activeStaffSession, activeTab, accountingDeepSubTab, trialGovernance, enterpriseSettings?.erpSettings?.enableB2BFeatures, enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal, propEnableB2BPortal]);
 
   useEffect(() => {
     if (!activeStaffSession) return;
@@ -1034,8 +1041,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         activeStaffSession={activeStaffSession}
         trialGovernance={trialGovernance}
         enableB2BAndStorefrontPortal={Boolean(
-          enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal
+          enterpriseSettings?.erpSettings?.enableB2BFeatures ??
+            enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ??
+            propEnableB2BPortal
         )}
+        companyBranding={companyBranding}
       />
 
       {/* 2. Main Content Wrapper with Dynamic Left Margin corresponding to Sidebar */}
@@ -1938,7 +1948,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0F4C3A] text-white uppercase tracking-wider">
-                      Module 4 • Global Scalability
+                      Module 4 • Cold-Chain Climate
                     </span>
                     <span className={`text-xs ${textMuted}`}>
                       Climate-Adaptive IoT Cold-Chain Engine
@@ -1948,7 +1958,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     Climate-Adaptive Chiller &amp; Sub-Zero Storage Thresholds
                   </h3>
                   <p className={`text-xs ${textMuted} mt-0.5`}>
-                    Dynamically adjusts IoT alert baselines based on local outdoor heatwaves (e.g. Australia extreme heat vs European temperate) to trigger early cooling alerts before spoilage occurs.
+                    Dynamically adjusts IoT alert baselines based on Indonesian regional ambient profiles (e.g. Jakarta/Bali tropical humid heat vs Bandung highland) to trigger early cooling alerts before spoilage occurs.
                   </p>
                 </div>
 
@@ -2138,6 +2148,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <EnterpriseInventoryView
               theme={theme}
               activeStaffSession={activeStaffSession}
+              enableB2BFeatures={Boolean(
+                enterpriseSettings?.erpSettings?.enableB2BFeatures ??
+                  enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ??
+                  propEnableB2BPortal
+              )}
               selectedOutletFilter={selectedOutletFilter === 'CONSOLIDATED' ? 'ALL' : selectedOutletFilter}
               onOutletFilterChange={setSelectedOutletFilter}
               selectedStorageZoneFilter={selectedStorageZoneFilter}
@@ -2417,9 +2432,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             selectedStore={selectedGlobalStore}
             storeOutlets={storeOutlets}
             activeStaffSession={activeStaffSession}
+            enableB2BFeatures={Boolean(
+              enterpriseSettings?.erpSettings?.enableB2BFeatures ??
+                enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ??
+                propEnableB2BPortal
+            )}
             onShowToast={onShowToast}
             onNavigateToQuotations={
-              Boolean(enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal)
+              Boolean(
+                enterpriseSettings?.erpSettings?.enableB2BFeatures ??
+                  enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ??
+                  propEnableB2BPortal
+              )
                 ? () => setActiveTab('quotations')
                 : undefined
             }
@@ -2434,6 +2458,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <AccountingModule
             theme={theme}
             activeStaffSession={activeStaffSession}
+            enableB2BFeatures={Boolean(
+              enterpriseSettings?.erpSettings?.enableB2BFeatures ??
+                enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ??
+                propEnableB2BPortal
+            )}
             selectedStore={selectedFinanceStore}
             onStoreChange={(s) => {
               if (isCurrentRoleBranchScoped) return;
@@ -2731,7 +2760,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               setActiveTab('accounting');
             }}
             onNavigateToQuotations={
-              Boolean(enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ?? propEnableB2BPortal)
+              Boolean(
+                enterpriseSettings?.erpSettings?.enableB2BFeatures ??
+                  enterpriseSettings?.erpSettings?.enableB2BAndStorefrontPortal ??
+                  propEnableB2BPortal
+              )
                 ? () => setActiveTab('quotations')
                 : undefined
             }

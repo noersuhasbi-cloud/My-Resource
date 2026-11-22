@@ -2,6 +2,7 @@ import type {
   StoreOperationalStatus,
   StoreOutletSchedule,
   OutletType,
+  CompanyProfile,
   WarehouseZone,
   StoreInventoryStock,
   InventoryItem,
@@ -3270,11 +3271,66 @@ export const apiClient = {
   // -------------------------------------------------------------
   // EDITABLE OUTLET / BRANCH PROFILES & QUOTA + MULTI-BRANCH MONITOR
   // -------------------------------------------------------------
+  async getAdminCompanies(): Promise<{
+    success: boolean;
+    companies: CompanyProfile[];
+    primaryCompany: CompanyProfile;
+  }> {
+    const res = await fetchApi('/api/admin/settings/companies');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load company profiles');
+    }
+    return data;
+  },
+
+  async createAdminCompany(payload: Partial<CompanyProfile> & { companyName: string }): Promise<{
+    success: boolean;
+    company: CompanyProfile;
+    companies: CompanyProfile[];
+    primaryCompany: CompanyProfile;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/settings/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Gagal membuat profil perusahaan');
+    }
+    return data;
+  },
+
+  async updateAdminCompany(
+    id: string,
+    patch: Partial<CompanyProfile>
+  ): Promise<{
+    success: boolean;
+    company: CompanyProfile;
+    companies: CompanyProfile[];
+    primaryCompany: CompanyProfile;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/settings/companies/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Gagal memperbarui profil perusahaan');
+    }
+    return data;
+  },
+
   async getAdminOutlets(): Promise<{
     success: boolean;
     outlets: StoreOutletSchedule[];
     quota: { activeOutlets: number; maxAllowedOutlets: number; remainingSlots: number };
     branchOptions: Array<{ storeId: string; storeName: string; hubType: string }>;
+    companies?: CompanyProfile[];
   }> {
     const res = await fetchApi('/api/admin/settings/outlets');
     const data = await res.json().catch(() => ({}));
@@ -3287,6 +3343,8 @@ export const apiClient = {
   async createAdminOutlet(payload: {
     branchCode: string;
     name: string;
+    parentCompanyId?: string;
+    branchPartnerName?: string;
     outletType: OutletType;
     address: string;
     city: string;
@@ -3324,6 +3382,8 @@ export const apiClient = {
       branchCode: string;
       name: string;
       storeName: string;
+      parentCompanyId: string;
+      branchPartnerName: string;
       outletType: OutletType;
       address: string;
       city: string;

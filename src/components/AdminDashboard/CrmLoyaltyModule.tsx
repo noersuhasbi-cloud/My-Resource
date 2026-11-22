@@ -66,6 +66,7 @@ interface CrmLoyaltyModuleProps {
   onShowToast: (title: string, message: string) => void;
   onNavigateToQuotations?: () => void;
   onRefreshData?: () => void;
+  enableB2BFeatures?: boolean;
 }
 
 type CrmSubTab =
@@ -129,6 +130,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
   onShowToast,
   onNavigateToQuotations,
   onRefreshData,
+  enableB2BFeatures = false,
 }) => {
   const isLight = theme === 'light';
   const cardClass = isLight
@@ -143,7 +145,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
   const textTitle = isLight ? 'text-slate-900' : 'text-slate-100';
   const textMuted = isLight ? 'text-slate-500' : 'text-slate-400';
 
-  const [subTab, setSubTab] = useState<CrmSubTab>('pipeline');
+  const [subTab, setSubTab] = useState<CrmSubTab>(enableB2BFeatures ? 'pipeline' : 'directory');
   const [pipelineViewMode, setPipelineViewMode] = useState<'kanban' | 'list'>('kanban');
   const [overview, setOverview] = useState<CrmOverviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -187,7 +189,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
     creditLimitIDR: number;
     paymentTerms: 'CASH' | 'NET_7' | 'NET_14' | 'NET_30';
   }>({
-    accountType: 'B2B_ACCOUNT',
+    accountType: enableB2BFeatures ? 'B2B_ACCOUNT' : 'B2C_MEMBER',
     name: '',
     companyName: '',
     phone: '',
@@ -363,6 +365,16 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
     loadStandingOrders();
     loadClaims();
   }, [selectedStore]);
+
+  useEffect(() => {
+    if (!enableB2BFeatures) {
+      if (subTab === 'pipeline') setSubTab('directory');
+      if (directoryFilter === 'B2B_ACCOUNT') setDirectoryFilter('ALL');
+      if (accForm.accountType === 'B2B_ACCOUNT') {
+        setAccForm((p) => ({ ...p, accountType: 'B2C_MEMBER' }));
+      }
+    }
+  }, [enableB2BFeatures, subTab, directoryFilter, accForm.accountType]);
 
   useEffect(() => {
     if (subTab === 'kanvas_kasbon') {
@@ -804,6 +816,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
     const list = overview?.accounts || [];
     const q = directorySearch.trim().toLowerCase();
     return list.filter((acc) => {
+      if (!enableB2BFeatures && acc.accountType === 'B2B_ACCOUNT') return false;
       if (directoryFilter !== 'ALL' && acc.accountType !== directoryFilter) return false;
       if (!q) return true;
       return (
@@ -814,7 +827,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
         acc.id.toLowerCase().includes(q)
       );
     });
-  }, [overview?.accounts, directoryFilter, directorySearch]);
+  }, [overview?.accounts, directoryFilter, directorySearch, enableB2BFeatures]);
 
   const kpis = overview?.kpis;
 
@@ -836,7 +849,9 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
               </span>
             </div>
             <p className={`text-xs mt-0.5 ${textMuted}`}>
-              Manage B2B HORECA leads, loyalty tier accrual (1 pt / Rp 10.000), RFM churn win-back campaigns, and predictive restock alerts.
+              {enableB2BFeatures
+                ? 'Manage B2B HORECA leads, loyalty tier accrual (1 pt / Rp 10.000), RFM churn win-back campaigns, and predictive restock alerts.'
+                : 'Manage retail loyalty members, tier accrual (1 pt / Rp 10.000), RFM churn win-back campaigns, and predictive restock alerts.'}
             </p>
           </div>
         </div>
@@ -877,53 +892,59 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
             <Ticket className="w-3.5 h-3.5" />
             <span>Quick Customer Claim / e-Voucher</span>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!dealForm.crmAccountId && overview?.accounts?.length) {
-                setDealForm((p) => ({ ...p, crmAccountId: overview.accounts[0].id }));
-              }
-              setIsNewDealOpen(true);
-            }}
-            className="px-3.5 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New B2B Deal</span>
-          </button>
+          {enableB2BFeatures && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!dealForm.crmAccountId && overview?.accounts?.length) {
+                  setDealForm((p) => ({ ...p, crmAccountId: overview.accounts[0].id }));
+                }
+                setIsNewDealOpen(true);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New B2B Deal</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 4 KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+      {/* KPI Summary Cards */}
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${enableB2BFeatures ? 'xl:grid-cols-4' : 'xl:grid-cols-3'} gap-3.5`}>
         <div className={`${cardClass} p-4`}>
           <div className="flex items-center justify-between">
             <span className={`text-[11px] font-bold uppercase tracking-wider ${textMuted}`}>
-              Active Members &amp; B2B
+              {enableB2BFeatures ? 'Active Members & B2B' : 'Active Retail Members'}
             </span>
             <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <p className={`text-2xl font-extrabold font-mono mt-1.5 ${textTitle}`}>
-            {kpis?.totalActiveMembers ?? 0}
+            {enableB2BFeatures ? (kpis?.totalActiveMembers ?? 0) : (kpis?.b2cMembersCount ?? 0)}
           </p>
           <p className={`text-[11px] mt-1 ${textMuted}`}>
-            {kpis?.b2cMembersCount ?? 0} B2C Retail · {kpis?.b2bAccountsCount ?? 0} B2B Key Accounts
+            {enableB2BFeatures
+              ? `${kpis?.b2cMembersCount ?? 0} B2C Retail · ${kpis?.b2bAccountsCount ?? 0} B2B Key Accounts`
+              : 'Registered Retail Loyalty Members'}
           </p>
         </div>
 
-        <div className={`${cardClass} p-4`}>
-          <div className="flex items-center justify-between">
-            <span className={`text-[11px] font-bold uppercase tracking-wider ${textMuted}`}>
-              Open B2B Pipeline (Monthly)
-            </span>
-            <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+        {enableB2BFeatures && (
+          <div className={`${cardClass} p-4`}>
+            <div className="flex items-center justify-between">
+              <span className={`text-[11px] font-bold uppercase tracking-wider ${textMuted}`}>
+                Open B2B Pipeline (Monthly)
+              </span>
+              <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <p className={`text-2xl font-extrabold font-mono mt-1.5 text-indigo-600 dark:text-indigo-400`}>
+              {formatIDR(kpis?.b2bPipelineValueIDR ?? 0)}
+            </p>
+            <p className={`text-[11px] mt-1 ${textMuted}`}>
+              Weighted forecast: {formatIDR(kpis?.weightedPipelineValueIDR ?? 0)} / mo
+            </p>
           </div>
-          <p className={`text-2xl font-extrabold font-mono mt-1.5 text-indigo-600 dark:text-indigo-400`}>
-            {formatIDR(kpis?.b2bPipelineValueIDR ?? 0)}
-          </p>
-          <p className={`text-[11px] mt-1 ${textMuted}`}>
-            Weighted forecast: {formatIDR(kpis?.weightedPipelineValueIDR ?? 0)} / mo
-          </p>
-        </div>
+        )}
 
         <div className={`${cardClass} p-4`}>
           <div className="flex items-center justify-between">
@@ -956,12 +977,21 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
         </div>
       </div>
 
-      {/* 4 Sub-Tabs Navigation */}
+      {/* Sub-Tabs Navigation */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {(
           [
-            { id: 'pipeline', label: 'B2B Deal Pipeline', icon: Kanban, badge: overview?.deals.length },
-            { id: 'directory', label: 'Customer 360° Directory', icon: Users, badge: overview?.accounts.length },
+            ...(enableB2BFeatures
+              ? [{ id: 'pipeline' as CrmSubTab, label: 'B2B Deal Pipeline', icon: Kanban, badge: overview?.deals.length }]
+              : []),
+            {
+              id: 'directory',
+              label: 'Customer 360° Directory',
+              icon: Users,
+              badge: enableB2BFeatures
+                ? overview?.accounts.length
+                : (overview?.accounts || []).filter((a) => a.accountType !== 'B2B_ACCOUNT').length,
+            },
             { id: 'rfm_campaigns', label: 'RFM & Omnichannel Campaigns', icon: Send },
             {
               id: 'predictive_restock',
@@ -1023,7 +1053,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {/* ============================================================ */}
       {/* SUB-TAB 1: B2B DEAL PIPELINE (GROCEMATRIX™ KANBAN + LIST)     */}
       {/* ============================================================ */}
-      {subTab === 'pipeline' && (
+      {enableB2BFeatures && subTab === 'pipeline' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <p className={`text-xs ${textMuted}`}>
@@ -1255,8 +1285,8 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
               {(
                 [
                   { id: 'ALL', label: 'All Accounts' },
-                  { id: 'B2C_MEMBER', label: 'B2C Retail Members' },
-                  { id: 'B2B_ACCOUNT', label: 'B2B Key Accounts' },
+                  { id: 'B2C_MEMBER', label: 'Retail Members' },
+                  ...(enableB2BFeatures ? [{ id: 'B2B_ACCOUNT' as CrmAccountType, label: 'B2B Key Accounts' }] : []),
                 ] as Array<{ id: 'ALL' | CrmAccountType; label: string }>
               ).map((f) => (
                 <button
@@ -2352,24 +2382,26 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                {(['B2B_ACCOUNT', 'B2C_MEMBER'] as CrmAccountType[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setAccForm((p) => ({ ...p, accountType: t }))}
-                    className={`py-2 rounded-xl text-xs font-bold border cursor-pointer ${
-                      accForm.accountType === t
-                        ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
-                        : isLight
-                        ? 'bg-slate-50 border-slate-200 text-slate-700'
-                        : 'bg-slate-900/90 border-slate-800/80 text-slate-300'
-                    }`}
-                  >
-                    {t === 'B2B_ACCOUNT' ? 'B2B Key Account' : 'B2C Retail Member'}
-                  </button>
-                ))}
-              </div>
+              {enableB2BFeatures && (
+                <div className="grid grid-cols-2 gap-2">
+                  {(['B2B_ACCOUNT', 'B2C_MEMBER'] as CrmAccountType[]).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setAccForm((p) => ({ ...p, accountType: t }))}
+                      className={`py-2 rounded-xl text-xs font-bold border cursor-pointer ${
+                        accForm.accountType === t
+                          ? 'bg-[#0F4C3A] text-white border-[#0F4C3A]'
+                          : isLight
+                          ? 'bg-slate-50 border-slate-200 text-slate-700'
+                          : 'bg-slate-900/90 border-slate-800/80 text-slate-300'
+                      }`}
+                    >
+                      {t === 'B2B_ACCOUNT' ? 'B2B Key Account' : 'B2C Retail Member'}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="space-y-2.5 text-xs">
                 <div>
@@ -2469,7 +2501,7 @@ export const CrmLoyaltyModule: React.FC<CrmLoyaltyModuleProps> = ({
       {/* ============================================================ */}
       {/* MODAL 3: NEW B2B DEAL MODAL                                  */}
       {/* ============================================================ */}
-      {isNewDealOpen &&
+      {enableB2BFeatures && isNewDealOpen &&
         createPortal(
           <div
             className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"

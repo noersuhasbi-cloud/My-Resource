@@ -20,3 +20,23 @@ export function generateQrisReference(): string {
   }
   return ref;
 }
+
+export function isSafeLogoUrl(raw?: string | null): boolean {
+  const val = String(raw || '').trim();
+  if (!val) return false;
+  if (/^(javascript|vbscript|data:text\/html|data:image\/svg\+xml)/i.test(val)) return false;
+  if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(val)) return val.length <= 2_800_000;
+  return /^https?:\/\/[^\s"'<>]+$/i.test(val) || /^\/[A-Za-z0-9._\-\/]+$/.test(val);
+}
+
+export function getCompanyMonogram(name?: string | null): string {
+  const cleaned = String(name || '')
+    .replace(/\b(PT|CV|TBK|UD|PD)\b/gi, '')
+    .trim();
+  if (!cleaned) return 'GM';
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return cleaned.slice(0, 2).toUpperCase();
+}

@@ -158,6 +158,59 @@ export type UserRole =
   | 'receiving_clerk'
   | 'executive';
 
+export type IndonesiaTimezone = 'Asia/Jakarta' | 'Asia/Makassar' | 'Asia/Jayapura';
+
+export interface CompanySocialMedia {
+  instagram?: string;
+  whatsappBusiness?: string;
+  tiktok?: string;
+  linkedin?: string;
+}
+
+export interface CompanyProfile {
+  id: string;
+  companyName: string;
+  partnerName: string;
+  logoUrl?: string;
+  npwp: string;
+  isPrimary?: boolean;
+  street: string;
+  city: string;
+  province: string;
+  postalCode: string;
+  country: 'Indonesia';
+  currency: 'IDR';
+  timezone: IndonesiaTimezone;
+  emailDomain: string;
+  companyEmail: string;
+  phoneNumber: string;
+  website: string;
+  socialMedia: CompanySocialMedia;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type CompanyPublicBranding = Pick<
+  CompanyProfile,
+  | 'id'
+  | 'companyName'
+  | 'partnerName'
+  | 'logoUrl'
+  | 'npwp'
+  | 'street'
+  | 'city'
+  | 'province'
+  | 'postalCode'
+  | 'country'
+  | 'currency'
+  | 'timezone'
+  | 'emailDomain'
+  | 'companyEmail'
+  | 'phoneNumber'
+  | 'website'
+  | 'socialMedia'
+>;
+
 export interface StoreOperationalStatus {
   isOpen: boolean;
   isHolidayMode: boolean;
@@ -167,6 +220,8 @@ export interface StoreOperationalStatus {
   allowCatalogBrowsing: boolean;
   updatedAt: string;
   enableB2BAndStorefrontPortal?: boolean;
+  enableB2BFeatures?: boolean;
+  primaryCompany?: CompanyPublicBranding;
 }
 
 export type OutletType = 'FLAGSHIP_STORE' | 'DARK_STORE' | 'CENTRAL_HUB' | 'EXPRESS_MART';
@@ -177,6 +232,9 @@ export interface StoreOutletSchedule {
   branchCode?: string;
   storeName: string;
   name?: string;
+  parentCompanyId?: string;
+  parentCompanyName?: string;
+  branchPartnerName?: string;
   outletType?: OutletType;
   address?: string;
   city: 'Jakarta' | 'Bandung' | 'Surabaya' | 'Bali' | 'Yogyakarta' | 'Medan' | string;
@@ -2533,6 +2591,9 @@ export interface ErpConfigurationSettings {
   maxAllowedOutlets?: number; // Maximum active outlets allowed under SaaS quota (default 10)
   maxAllowedUsers?: number; // Maximum active user accounts allowed under SaaS quota (default 25)
   enableB2BAndStorefrontPortal?: boolean; // Feature flag controlling Customer Storefront, B2B Portal & Quotations visibility (default false)
+  enableB2BFeatures?: boolean; // Alias/Master switch hiding CRM B2B & all B2B surfaces by default (false)
+  localizationCountry?: 'Indonesia';
+  primaryCurrency?: 'IDR';
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -3047,6 +3108,9 @@ export interface BranchMonitorHubSummary {
   storeId: string;
   branchCode: string;
   storeName: string;
+  parentCompanyId?: string;
+  parentCompanyName?: string;
+  branchPartnerName?: string;
   city: string;
   district: string;
   hubType: 'Retail Flagship' | 'Dark Store' | 'Central CDC' | 'Express Mart';

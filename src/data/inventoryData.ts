@@ -2044,6 +2044,9 @@ export const INITIAL_ENTERPRISE_SETTINGS: EnterpriseSettingsConfig = {
     maxAllowedOutlets: 10,
     maxAllowedUsers: 25,
     enableB2BAndStorefrontPortal: false,
+    enableB2BFeatures: false,
+    localizationCountry: 'Indonesia',
+    primaryCurrency: 'IDR',
   },
 };
 

@@ -93,6 +93,7 @@ interface AccountingModuleProps {
   vendorBillBridgeTarget?: VendorBillBridgeTarget | null;
   onClearVendorBillBridge?: () => void;
   onNavigateToProcurementDoc?: (subTab: 'pr' | 'po' | 'gr', docId: string) => void;
+  enableB2BFeatures?: boolean;
 }
 
 export const AccountingModule: React.FC<AccountingModuleProps> = ({
@@ -116,6 +117,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   vendorBillBridgeTarget,
   onClearVendorBillBridge,
   onNavigateToProcurementDoc,
+  enableB2BFeatures = false,
 }) => {
   const isLight = theme === 'light';
   const { triggerPrint } = usePrint();
@@ -487,7 +489,9 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
             { id: 'gl', label: 'General Ledger Drill-Down', icon: ReceiptText },
             { id: 'coa', label: 'Chart of Accounts (COA)', icon: Building2 },
             { id: 'vendor_bills', label: 'Vendor Bills & AP', icon: FileCheck },
-            { id: 'b2b_ar', label: 'B2B AR & Giro Clearing', icon: CreditCard },
+            ...(enableB2BFeatures
+              ? [{ id: 'b2b_ar', label: 'B2B AR & Giro Clearing', icon: CreditCard }]
+              : []),
             { id: 'analytic_budgets', label: 'Analytic Budgets', icon: PieChart },
             { id: 'margin_analysis', label: 'Margin Analysis', icon: BarChart3 },
             { id: 'consignment', label: 'Consignment (Titip Jual)', icon: Handshake },
@@ -592,27 +596,12 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               </div>
 
               <div className="flex items-center gap-3 flex-wrap">
-                {/* Multi-Currency Selector (Module 4) */}
-                <div className={`flex items-center gap-1 p-1 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
-                  <Globe2 className="w-3.5 h-3.5 text-emerald-600 ml-1.5" />
-                  {(['IDR', 'USD', 'EUR', 'AUD'] as SupportedCurrency[]).map((curr) => (
-                    <button
-                      key={curr}
-                      onClick={() => {
-                        setSelectedCurrency(curr);
-                        onShowToast('Reporting Currency Converted', `P&L statement recomputed in ${curr}`);
-                      }}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                        selectedCurrency === curr
-                          ? 'bg-[#0F4C3A] text-white shadow-xs'
-                          : isLight
-                          ? 'text-gray-600 hover:text-gray-900'
-                          : 'text-slate-400 hover:text-slate-100'
-                      }`}
-                    >
-                      {curr}
-                    </button>
-                  ))}
+                {/* Indonesia Currency Lock (IDR Base) */}
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                  <Globe2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-[11px] font-bold font-mono text-[#0F4C3A] dark:text-emerald-400">
+                    IDR (Rp) · Indonesia GAAP
+                  </span>
                 </div>
 
                 <div className={`p-2.5 rounded-xl border ${isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-[#090A0F] border-slate-800/80'}`}>
@@ -1727,6 +1716,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           mode={complianceSubView}
           selectedStore={selectedStore}
           activeStaffSession={activeStaffSession}
+          enableB2BFeatures={enableB2BFeatures}
           onRefreshData={onRefreshData}
           onShowToast={onShowToast}
         />

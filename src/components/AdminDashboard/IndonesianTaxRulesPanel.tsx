@@ -6,12 +6,14 @@ import { apiClient } from '../../services/apiClient';
 interface IndonesianTaxRulesPanelProps {
   theme: 'light' | 'dark';
   canEdit?: boolean;
+  enableB2BFeatures?: boolean;
   onShowToast: (title: string, message: string) => void;
 }
 
 export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = ({
   theme,
   canEdit = true,
+  enableB2BFeatures = false,
   onShowToast,
 }) => {
   const isLight = theme === 'light';
@@ -176,8 +178,8 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
               <th className="py-2.5 px-3">SKU &amp; Product</th>
               <th className="py-2.5 px-3">Indonesian Tax Classification</th>
               <th className="py-2.5 px-3 text-center">Tariff (%)</th>
-              <th className="py-2.5 px-3 text-center">B2C Pricing Mode</th>
-              <th className="py-2.5 px-3 text-center">B2B Pricing Mode</th>
+              <th className="py-2.5 px-3 text-center">Retail Pricing Mode</th>
+              {enableB2BFeatures && <th className="py-2.5 px-3 text-center">B2B Pricing Mode</th>}
             </tr>
           </thead>
           <tbody className={`divide-y ${isLight ? 'divide-gray-100' : 'divide-slate-800/80'}`}>
@@ -238,12 +240,14 @@ export const IndonesianTaxRulesPanel: React.FC<IndonesianTaxRulesPanelProps> = (
                     {rule.b2cTaxInclusive ? 'Tax-Inclusive' : 'Tax-Exclusive'}
                   </button>
                 </td>
-                <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                  <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/10 text-slate-600 dark:text-slate-300 border border-slate-500/20">
-                    <ShieldCheck className="w-3 h-3" />
-                    Tax-Exclusive (Faktur)
-                  </span>
-                </td>
+                {enableB2BFeatures && (
+                  <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/10 text-slate-600 dark:text-slate-300 border border-slate-500/20">
+                      <ShieldCheck className="w-3 h-3" />
+                      Tax-Exclusive (Faktur)
+                    </span>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

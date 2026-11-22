@@ -1,11 +1,17 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { usePrint, type PrintPayload, type InvoiceTrackingFlags } from '../context/PrintContext';
-import { formatIDR } from '../utils/formatters';
+import type { CompanyPublicBranding } from '../types/index.ts';
+import { formatIDR, getCompanyMonogram, isSafeLogoUrl } from '../utils/formatters';
 
 export function renderPrintDocument(
   activePrintPayload: PrintPayload,
-  options?: { printedAt?: string; isPreview?: boolean; invoiceTracking?: InvoiceTrackingFlags }
+  options?: {
+    printedAt?: string;
+    isPreview?: boolean;
+    invoiceTracking?: InvoiceTrackingFlags;
+    companyBranding?: CompanyPublicBranding | null;
+  }
 ): React.ReactNode {
   const printedAt =
     options?.printedAt ??
@@ -15,6 +21,16 @@ export function renderPrintDocument(
     });
   const showLots = options?.invoiceTracking?.displayLotsOnInvoices ?? true;
   const showDeliveryExpiry = options?.invoiceTracking?.displaySerialExpiryOnDeliveryDocs ?? true;
+  const cb = options?.companyBranding;
+  const brandName = cb?.companyName || 'PT GroceMart Ritel Nusantara';
+  const brandUpper = brandName.toUpperCase();
+  const brandMonogram = getCompanyMonogram(brandName);
+  const brandLogo = isSafeLogoUrl(cb?.logoUrl) ? cb!.logoUrl! : '';
+  const brandAddress = cb?.street
+    ? [cb.street, cb.city, cb.province, cb.postalCode].filter(Boolean).join(', ')
+    : 'Jl. Senopati No. 82, Kebayoran Baru, Jakarta Selatan 12110';
+  const brandNpwp = cb?.npwp || '01.308.449.2-007.000';
+  const brandContact = [cb?.phoneNumber, cb?.website].filter(Boolean).join(' · ');
 
   switch (activePrintPayload.type) {
       // =====================================================================
@@ -37,16 +53,30 @@ export function renderPrintDocument(
         return (
           <div className="print-page-thermal80 bg-white text-black font-mono text-[10.5px] leading-snug p-1 space-y-2.5">
             <div className="text-center space-y-1 pb-2 border-b border-dashed border-black">
-              <div className="w-7 h-7 rounded-md border-2 border-black text-black font-black text-xs mx-auto flex items-center justify-center">
-                GM
-              </div>
+              {brandLogo ? (
+                <img
+                  src={brandLogo}
+                  alt={brandName}
+                  className="h-8 w-auto max-w-[120px] object-contain mx-auto"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-md border-2 border-black text-black font-black text-xs mx-auto flex items-center justify-center">
+                  {brandMonogram}
+                </div>
+              )}
               <h3 className="font-extrabold text-xs tracking-wider uppercase">
-                PT GROCEMART RETAIL INDONESIA
+                {brandUpper}
               </h3>
               <p className="text-[9.5px] leading-tight">
                 {r.storeName}
                 <br />
                 {outletAddress}
+                {brandContact ? (
+                  <>
+                    <br />
+                    {brandContact}
+                  </>
+                ) : null}
               </p>
             </div>
 
@@ -254,7 +284,7 @@ export function renderPrintDocument(
                 POS SHIFT Z-REPORT
               </h3>
               <p className="font-bold text-[10px]">{s.storeName}</p>
-              <p className="text-[9px]">PT GroceMart Retail Indonesia</p>
+              <p className="text-[9px]">{brandName}</p>
             </div>
 
             <div className="text-[9.5px] space-y-0.5 pb-2 border-b border-dashed border-black">
@@ -398,13 +428,22 @@ export function renderPrintDocument(
         return (
           <div className="print-page-thermal80 bg-white text-black font-mono text-[10.5px] leading-snug p-1 space-y-2.5">
             <div className="text-center space-y-1 pb-2 border-b border-dashed border-black">
-              <div className="w-7 h-7 rounded-md border-2 border-black text-black font-black text-xs mx-auto flex items-center justify-center">
-                GM
-              </div>
+              {brandLogo ? (
+                <img
+                  src={brandLogo}
+                  alt={brandName}
+                  className="h-8 w-auto max-w-[120px] object-contain mx-auto"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-md border-2 border-black text-black font-black text-xs mx-auto flex items-center justify-center">
+                  {brandMonogram}
+                </div>
+              )}
               <h3 className="font-extrabold text-xs uppercase tracking-wider">
-                GROCEMART ONLINE RECEIPT
+                ONLINE ORDER RECEIPT
               </h3>
-              <p className="text-[9px]">PT GroceMart Retail Indonesia</p>
+              <p className="text-[9px]">{brandName}</p>
+              {brandContact && <p className="text-[8px]">{brandContact}</p>}
             </div>
 
             <div className="text-[9.5px] space-y-0.5 pb-2 border-b border-dashed border-black">
@@ -794,11 +833,11 @@ export function renderPrintDocument(
                       GROCEMART
                     </span>
                     <span className="text-sm font-black tracking-wider uppercase text-slate-900">
-                      PT GROCEMART RETAIL INDONESIA
+                      {brandUpper}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 mt-1">
-                    HQ: Jl. Senopati No. 42, Kebayoran Baru, Jakarta Selatan 12190
+                    HQ: {brandAddress}{brandContact ? ` · ${brandContact}` : ''}
                   </p>
                   <p className="text-[10px] text-slate-500 font-mono">
                     NPWP: 01.345.678.9-012.000 | NIB: 9120003482114 | Izin Edar: KEMENKES-RI
@@ -933,7 +972,7 @@ export function renderPrintDocument(
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs tracking-wider">GROCEMART</span>
-                    <span className="text-sm font-black tracking-wider uppercase text-slate-900">PT GROCEMART RETAIL INDONESIA</span>
+                    <span className="text-sm font-black tracking-wider uppercase text-slate-900">{brandUpper}</span>
                   </div>
                   <p className="text-[11px] text-slate-600 mt-1">Logistics &amp; Fleet Control Center · Jl. Senopati No. 42, Jakarta Selatan</p>
                 </div>
@@ -1018,7 +1057,7 @@ export function renderPrintDocument(
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs tracking-wider">GROCEMART</span>
-                  <span className="text-sm font-black tracking-wider uppercase text-slate-900">PT GROCEMART RETAIL INDONESIA</span>
+                  <span className="text-sm font-black tracking-wider uppercase text-slate-900">{brandUpper}</span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1">Cold-Chain Fleet Telemetry &amp; Payload Quota Governance</p>
               </div>
@@ -1109,10 +1148,10 @@ export function renderPrintDocument(
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs tracking-wider">GROCEMART</span>
-                  <span className="text-sm font-black uppercase tracking-wider">PT GROCEMART RETAIL INDONESIA</span>
+                  <span className="text-sm font-black uppercase tracking-wider">{brandUpper}</span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1">Wholesale Distribution &amp; HoReCa Supply Division</p>
-                <p className="text-[10px] font-mono text-slate-500">NPWP PKP: 01.345.678.9-012.000 · Jl. Senopati No. 42, Jakarta</p>
+                <p className="text-[10px] font-mono text-slate-500">NPWP PKP: {brandNpwp} · {brandAddress}</p>
               </div>
               <div className="text-right">
                 <h3 className="text-lg font-black uppercase tracking-wider text-[#0F4C3A]">FAKTUR PENJUALAN GROSIR</h3>
@@ -1213,7 +1252,7 @@ export function renderPrintDocument(
               </div>
               <div className="space-y-14">
                 <span className="font-semibold text-slate-600">Otorisasi Finance &amp; Tax Officer</span>
-                <div className="border-b border-slate-500 mx-8 pb-1 font-bold">PT GroceMart Retail Indonesia</div>
+                <div className="border-b border-slate-500 mx-8 pb-1 font-bold">{brandName}</div>
               </div>
             </div>
           </div>
@@ -1290,7 +1329,7 @@ export function renderPrintDocument(
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs">GROCEMART</span>
-                  <span className="text-sm font-black uppercase">PT GROCEMART RETAIL INDONESIA</span>
+                  <span className="text-sm font-black uppercase">{brandUpper}</span>
                 </div>
                 <p className="text-xs text-slate-600 mt-1">Return Merchandise Authorization (RMA) &amp; Vendor Credit Note Manifest</p>
               </div>
@@ -1482,7 +1521,7 @@ export function renderPrintDocument(
               <div>
                 <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs">DJP CORETAX COMPLIANT</span>
                 <h3 className="text-lg font-black uppercase mt-2 text-[#0F4C3A]">NOTA RETUR PENJUALAN (CREDIT NOTE)</h3>
-                <p className="text-xs text-slate-600">PT GroceMart Retail Indonesia · {rma.storeName}</p>
+                <p className="text-xs text-slate-600">{brandName} · {rma.storeName}</p>
               </div>
               <div className="text-right font-mono text-xs">
                 <div className="font-bold text-sm">{rma.notaReturNumber}</div>
@@ -1559,7 +1598,7 @@ export function renderPrintDocument(
               <div>
                 <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs">RTV DEBIT NOTE</span>
                 <h3 className="text-lg font-black uppercase mt-2 text-[#0F4C3A]">NOTA RETUR PEMBELIAN (VENDOR DEBIT NOTE)</h3>
-                <p className="text-xs text-slate-600">PT GroceMart Retail Indonesia · {rtv.storeName}</p>
+                <p className="text-xs text-slate-600">{brandName} · {rtv.storeName}</p>
               </div>
               <div className="text-right font-mono text-xs">
                 <div className="font-bold text-sm">{rtv.debitNoteNumber}</div>
@@ -1635,7 +1674,7 @@ export function renderPrintDocument(
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs tracking-wider">GROCEMART</span>
-                  <span className="text-sm font-black tracking-wider uppercase text-slate-900">PT GROCEMART RETAIL INDONESIA</span>
+                  <span className="text-sm font-black tracking-wider uppercase text-slate-900">{brandUpper}</span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1">Executive Management Console · Supply Chain v2.4</p>
                 <p className="text-[10px] text-slate-500 font-mono">
@@ -1751,7 +1790,7 @@ export function renderPrintDocument(
             </div>
 
             <div className="pt-3 border-t border-slate-300 flex items-center justify-between text-[10px] text-slate-500 font-mono break-inside-avoid">
-              <span>PT GroceMart Retail Indonesia · Confidential Executive Report</span>
+              <span>{brandName} · Confidential Executive Report</span>
               <span>ERP System Audit Verified</span>
             </div>
           </div>
@@ -1787,7 +1826,7 @@ export function renderPrintDocument(
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs">GROCEMART ERP</span>
-                  <span className="text-sm font-black uppercase">PT GROCEMART RETAIL INDONESIA</span>
+                  <span className="text-sm font-black uppercase">{brandUpper}</span>
                 </div>
                 <p className="text-[11px] font-mono text-slate-600 mt-1">
                   Entity Scope: {a.selectedStore} · Currency: {a.selectedCurrency}
@@ -2041,7 +2080,7 @@ export function renderPrintDocument(
             )}
 
             <div className="pt-4 border-t border-slate-300 flex justify-between text-[10px] font-mono text-slate-500">
-              <span>PT GroceMart Retail Indonesia · GAAP/PSAK Compliant Financial Statement</span>
+              <span>{brandName} · GAAP/PSAK Compliant Financial Statement</span>
               <span>Audited System Export</span>
             </div>
           </div>
@@ -2089,7 +2128,7 @@ export function renderPrintDocument(
                     GROCEMART
                   </span>
                   <span className="text-sm font-black tracking-wider uppercase text-slate-900">
-                    PT GROCEMART RETAIL INDONESIA
+                    {brandUpper}
                   </span>
                 </div>
                 <h3 className="text-base font-black uppercase mt-2 text-[#0F4C3A]">
@@ -2566,10 +2605,10 @@ export function renderPrintDocument(
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-1 rounded bg-[#0F4C3A] text-white font-mono font-black text-xs tracking-wider">GROCEMART</span>
-                  <span className="text-sm font-black uppercase tracking-wider">PT GROCEMART RETAIL INDONESIA</span>
+                  <span className="text-sm font-black uppercase tracking-wider">{brandUpper}</span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1">B2B Commercial Desk &amp; Cold-Chain HoReCa Supply</p>
-                <p className="text-[10px] font-mono text-slate-500">NPWP PKP: 01.345.678.9-012.000 · Jl. Senopati No. 42, Jakarta Selatan</p>
+                <p className="text-[10px] font-mono text-slate-500">NPWP PKP: {brandNpwp} · {brandAddress}</p>
               </div>
               <div className="text-right">
                 <h3 className="text-lg font-black uppercase tracking-wider text-[#0F4C3A]">
@@ -2702,7 +2741,7 @@ export function renderPrintDocument(
               </div>
               <div className="space-y-14">
                 <span className="font-semibold text-slate-600 block">Authorized Commercial Desk</span>
-                <div className="border-b border-slate-500 mx-8 pb-1 font-bold">PT GroceMart Retail Indonesia</div>
+                <div className="border-b border-slate-500 mx-8 pb-1 font-bold">{brandName}</div>
               </div>
             </div>
 
@@ -2728,7 +2767,7 @@ export function renderPrintDocument(
                     GROCEMART
                   </span>
                   <span className="text-sm font-black uppercase tracking-wider">
-                    PT GROCEMART RETAIL INDONESIA
+                    {brandUpper}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1">
@@ -2868,12 +2907,12 @@ export function renderPrintDocument(
 }
 
 export const UniversalPrintPortal: React.FC = () => {
-  const { activePrintPayload, invoiceTracking } = usePrint();
+  const { activePrintPayload, invoiceTracking, companyBranding } = usePrint();
 
   if (!activePrintPayload || typeof document === 'undefined') return null;
 
   const printRoot = document.getElementById('printable-document-root');
   if (!printRoot) return null;
 
-  return createPortal(renderPrintDocument(activePrintPayload, { invoiceTracking }), printRoot);
+  return createPortal(renderPrintDocument(activePrintPayload, { invoiceTracking, companyBranding }), printRoot);
 };

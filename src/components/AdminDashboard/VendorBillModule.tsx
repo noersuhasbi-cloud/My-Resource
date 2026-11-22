@@ -794,11 +794,8 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                 isLight ? 'bg-white border-gray-200 text-gray-800' : 'bg-[#090A0F] border-slate-800/80 text-slate-200'
               }`}
             >
-              <option value="ALL">All Currencies</option>
+              <option value="ALL">All (IDR)</option>
               <option value="IDR">IDR (Rp)</option>
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="AUD">AUD (A$)</option>
             </select>
           </div>
 
@@ -1344,10 +1341,7 @@ export const VendorBillModule: React.FC<VendorBillModuleProps> = ({
                       isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                     }`}
                   >
-                    <option value="IDR">IDR (Rp) • Local Base</option>
-                    <option value="USD">USD ($) • Rate: 16,000</option>
-                    <option value="EUR">EUR (€) • Rate: 17,200</option>
-                    <option value="AUD">AUD (A$) • Rate: 10,400</option>
+                    <option value="IDR">IDR (Rp) • Indonesian Rupiah</option>
                   </select>
                 </div>
               </div>

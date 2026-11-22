@@ -33,6 +33,7 @@ interface ComplianceAccountingPanelsProps {
   mode: 'rma_rtv' | 'coretax_djp';
   selectedStore: string;
   activeStaffSession?: StaffShiftSession | null;
+  enableB2BFeatures?: boolean;
   onRefreshData: () => void;
   onShowToast: (title: string, message: string) => void;
 }
@@ -42,6 +43,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
   mode,
   selectedStore,
   activeStaffSession,
+  enableB2BFeatures = false,
   onRefreshData,
   onShowToast,
 }) => {
@@ -64,12 +66,19 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
     b2bOrders: any[];
   }>({ posReceipts: [], b2cOrders: [], b2bOrders: [] });
 
-  const [sourceChannel, setSourceChannel] = useState<RmaSourceChannel>('B2B');
+  const [sourceChannel, setSourceChannel] = useState<RmaSourceChannel>(enableB2BFeatures ? 'B2B' : 'POS');
   const [selectedSourceRef, setSelectedSourceRef] = useState<string>('');
   const [disposition, setDisposition] = useState<RmaDisposition>('RESTOCK_ATP');
-  const [refundMethod, setRefundMethod] = useState<RmaRefundMethod>('AR_REDUCTION');
+  const [refundMethod, setRefundMethod] = useState<RmaRefundMethod>(enableB2BFeatures ? 'AR_REDUCTION' : 'CASH');
   const [rmaReason, setRmaReason] = useState<string>('Damaged carton / short-dated delivery return');
   const [isCreatingRma, setIsCreatingRma] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!enableB2BFeatures && sourceChannel === 'B2B') {
+      setSourceChannel('POS');
+      if (refundMethod === 'AR_REDUCTION') setRefundMethod('CASH');
+    }
+  }, [enableB2BFeatures, sourceChannel, refundMethod]);
 
   // RTV form
   const [rtvSku, setRtvSku] = useState<string>('SKU-PRD-002');
@@ -129,7 +138,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
       setRmaSources(sources);
       if (!selectedSourceRef) {
         const defaultRef =
-          sources.b2bOrders[0]?.referenceId ||
+          (enableB2BFeatures ? sources.b2bOrders[0]?.referenceId : undefined) ||
           sources.posReceipts[0]?.referenceId ||
           sources.b2cOrders[0]?.referenceId ||
           '';
@@ -328,7 +337,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                   }}
                   className={inputClass}
                 >
-                  <option value="B2B">B2B Wholesale Order (AR #1200)</option>
+                  {enableB2BFeatures && <option value="B2B">B2B Wholesale Order (AR #1200)</option>}
                   <option value="POS">POS Register Receipt</option>
                   <option value="B2C">B2C Storefront Order</option>
                 </select>
@@ -373,7 +382,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                   onChange={(e) => setRefundMethod(e.target.value as RmaRefundMethod)}
                   className={inputClass}
                 >
-                  <option value="AR_REDUCTION">Reduce B2B AR (#1200)</option>
+                  {enableB2BFeatures && <option value="AR_REDUCTION">Reduce B2B AR (#1200)</option>}
                   <option value="CASH">Cash Refund (#1010)</option>
                   <option value="STORE_CREDIT">Store Credit Voucher (#2020)</option>
                 </select>
@@ -632,7 +641,9 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
                 DJP Coretax / e-Faktur 4.0
               </span>
               <span className="text-xs text-gray-500 dark:text-slate-400">
-                B2B Faktur Pajak · B2C Digunggung · Nota Retur Compliance
+                {enableB2BFeatures
+                  ? 'B2B Faktur Pajak · B2C Digunggung · Nota Retur Compliance'
+                  : 'Retail Digunggung · Nota Retur Compliance'}
               </span>
             </div>
             <h3 className="text-base font-bold mt-1">
@@ -711,7 +722,7 @@ export const ComplianceAccountingPanels: React.FC<ComplianceAccountingPanelsProp
             </div>
             <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
               <span className="font-sans text-[11px] text-gray-500 dark:text-slate-400 block">
-                B2B Missing NPWP/NIK
+                {enableB2BFeatures ? 'B2B Missing NPWP/NIK' : 'Missing NPWP/NIK'}
               </span>
               <span className="text-lg font-extrabold text-rose-600 dark:text-rose-400 block mt-1">
                 {coretaxData.summary.b2bMissingNpwpCount}

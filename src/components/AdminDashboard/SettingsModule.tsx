@@ -42,6 +42,8 @@ import type {
   ItemClassification,
   TrialGovernanceStatusSnapshot,
   ImportExportDiagnosticReport,
+  CompanyProfile,
+  IndonesiaTimezone,
 } from '../../types/index.ts';
 import { TrialGovernancePanel } from './TrialGovernancePanel';
 import {
@@ -57,7 +59,7 @@ import {
   INITIAL_INVENTORY,
 } from '../../data/inventoryData';
 import { apiClient } from '../../services/apiClient';
-import { formatIDR } from '../../utils/formatters';
+import { formatIDR, isSafeLogoUrl, getCompanyMonogram } from '../../utils/formatters';
 import {
   normalizeEnterpriseRole,
   getRoleDisplayLabel,
@@ -125,6 +127,9 @@ import {
   Mail,
   History,
   Barcode,
+  Globe,
+  Phone,
+  Link2,
 } from 'lucide-react';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { ValuationCostingSettingsTab } from './ValuationCostingSettingsTab';
@@ -301,9 +306,35 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     { storeId: string; storeName: string; hubType: string }[]
   >([]);
 
+  // 0B-2. Master Companies State (Multi-Company Hierarchy)
+  const [companiesList, setCompaniesList] = useState<CompanyProfile[]>([]);
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState<boolean>(false);
+  const [editingCompany, setEditingCompany] = useState<CompanyProfile | null>(null);
+  const [isSavingCompany, setIsSavingCompany] = useState<boolean>(false);
+  const [compFormName, setCompFormName] = useState<string>('');
+  const [compFormPartnerName, setCompFormPartnerName] = useState<string>('');
+  const [compFormLogoUrl, setCompFormLogoUrl] = useState<string>('');
+  const [compFormNpwp, setCompFormNpwp] = useState<string>('');
+  const [compFormIsPrimary, setCompFormIsPrimary] = useState<boolean>(false);
+  const [compFormStreet, setCompFormStreet] = useState<string>('');
+  const [compFormCity, setCompFormCity] = useState<string>('Jakarta Selatan');
+  const [compFormProvince, setCompFormProvince] = useState<string>('DKI Jakarta');
+  const [compFormPostalCode, setCompFormPostalCode] = useState<string>('12190');
+  const [compFormTimezone, setCompFormTimezone] = useState<IndonesiaTimezone>('Asia/Jakarta');
+  const [compFormEmailDomain, setCompFormEmailDomain] = useState<string>('');
+  const [compFormEmail, setCompFormEmail] = useState<string>('');
+  const [compFormPhone, setCompFormPhone] = useState<string>('');
+  const [compFormWebsite, setCompFormWebsite] = useState<string>('');
+  const [compFormInstagram, setCompFormInstagram] = useState<string>('');
+  const [compFormWhatsapp, setCompFormWhatsapp] = useState<string>('');
+  const [compFormTiktok, setCompFormTiktok] = useState<string>('');
+  const [compFormLinkedin, setCompFormLinkedin] = useState<string>('');
+
   // Outlet Profile Create / Edit Modal State
   const [isOutletModalOpen, setIsOutletModalOpen] = useState<boolean>(false);
   const [editingOutletProfile, setEditingOutletProfile] = useState<BranchMonitorHubSummary | null>(null);
+  const [outletFormParentCompanyId, setOutletFormParentCompanyId] = useState<string>('COMP-001');
+  const [outletFormBranchPartnerName, setOutletFormBranchPartnerName] = useState<string>('');
   const [outletFormBranchCode, setOutletFormBranchCode] = useState<string>('');
   const [outletFormName, setOutletFormName] = useState<string>('');
   const [outletFormType, setOutletFormType] = useState<OutletType>('FLAGSHIP_STORE');
@@ -484,6 +515,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         grRes,
         monitorRes,
         sysUsersRes,
+        companiesRes,
       ] = await Promise.all([
         canAccounting ? apiClient.getCoaMapping().catch(() => null) : Promise.resolve(null),
         apiClient.getPosConfig().catch(() => null),
@@ -501,6 +533,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         canGoodsReceipts ? apiClient.getGoodsReceipts().catch(() => []) : Promise.resolve([]),
         canViewBranchMonitor && canMonitor ? apiClient.getBranchMonitor().catch(() => null) : Promise.resolve(null),
         canViewBranchMonitor && canSysUsers ? apiClient.getSystemUsers().catch(() => null) : Promise.resolve(null),
+        canViewBranchMonitor ? apiClient.getAdminCompanies().catch(() => null) : Promise.resolve(null),
       ]);
 
       if (coaRes) setCoaConfig(coaRes);
@@ -553,6 +586,9 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           setBranchAssignmentOptions(sysUsersRes.branchOptions);
         }
       }
+      if (companiesRes?.companies) {
+        setCompaniesList(companiesRes.companies);
+      }
     } catch (err) {
       console.error('Failed to load Settings & Configuration:', err);
     } finally {
@@ -564,9 +600,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     if (!canViewBranchMonitor) return;
     setIsLoadingMonitor(true);
     try {
-      const [monitorRes, sysUsersRes] = await Promise.all([
+      const [monitorRes, sysUsersRes, companiesRes] = await Promise.all([
         apiClient.getBranchMonitor().catch(() => null),
         apiClient.getSystemUsers().catch(() => null),
+        apiClient.getAdminCompanies().catch(() => null),
       ]);
       if (monitorRes) setBranchMonitorData(monitorRes);
       if (sysUsersRes?.users) {
@@ -575,6 +612,9 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         if (sysUsersRes.branchOptions?.length) {
           setBranchAssignmentOptions(sysUsersRes.branchOptions);
         }
+      }
+      if (companiesRes?.companies) {
+        setCompaniesList(companiesRes.companies);
       }
     } finally {
       setIsLoadingMonitor(false);
@@ -811,8 +851,144 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     }
   };
 
+  const openCreateCompanyModal = () => {
+    setEditingCompany(null);
+    setCompFormName('');
+    setCompFormPartnerName('');
+    setCompFormLogoUrl('');
+    setCompFormNpwp('');
+    setCompFormIsPrimary(companiesList.length === 0);
+    setCompFormStreet('');
+    setCompFormCity('Jakarta Selatan');
+    setCompFormProvince('DKI Jakarta');
+    setCompFormPostalCode('12190');
+    setCompFormTimezone('Asia/Jakarta');
+    setCompFormEmailDomain('');
+    setCompFormEmail('');
+    setCompFormPhone('+62 21 ');
+    setCompFormWebsite('https://');
+    setCompFormInstagram('');
+    setCompFormWhatsapp('');
+    setCompFormTiktok('');
+    setCompFormLinkedin('');
+    setIsCompanyModalOpen(true);
+  };
+
+  const openEditCompanyModal = (comp: CompanyProfile) => {
+    setEditingCompany(comp);
+    setCompFormName(comp.companyName || '');
+    setCompFormPartnerName(comp.partnerName || '');
+    setCompFormLogoUrl(comp.logoUrl || '');
+    setCompFormNpwp(comp.npwp || '');
+    setCompFormIsPrimary(comp.isPrimary === true);
+    setCompFormStreet(comp.street || '');
+    setCompFormCity(comp.city || 'Jakarta Selatan');
+    setCompFormProvince(comp.province || 'DKI Jakarta');
+    setCompFormPostalCode(comp.postalCode || '12190');
+    setCompFormTimezone(comp.timezone || 'Asia/Jakarta');
+    setCompFormEmailDomain(comp.emailDomain || '');
+    setCompFormEmail(comp.companyEmail || '');
+    setCompFormPhone(comp.phoneNumber || '');
+    setCompFormWebsite(comp.website || '');
+    setCompFormInstagram(comp.socialMedia?.instagram || '');
+    setCompFormWhatsapp(comp.socialMedia?.whatsappBusiness || '');
+    setCompFormTiktok(comp.socialMedia?.tiktok || '');
+    setCompFormLinkedin(comp.socialMedia?.linkedin || '');
+    setIsCompanyModalOpen(true);
+  };
+
+  const handleCompanyLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      onShowToast('Format Logo Ditolak', 'Gunakan file PNG, JPG, WEBP, atau GIF (maksimal 2MB).');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      onShowToast('Ukuran Logo Terlalu Besar', 'Maksimal ukuran file logo adalah 2MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      if (isSafeLogoUrl(result)) {
+        setCompFormLogoUrl(result);
+      } else {
+        onShowToast('Logo Tidak Valid', 'File gambar gagal divalidasi.');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isSuperAdmin) return;
+    if (!compFormName.trim()) {
+      onShowToast('Nama Perusahaan Wajib', 'Isi nama perusahaan terlebih dahulu.');
+      return;
+    }
+    if (compFormLogoUrl.trim() && !isSafeLogoUrl(compFormLogoUrl.trim())) {
+      onShowToast('Logo URL Tidak Aman', 'Logo harus berupa https://, http://, /path, atau gambar PNG/JPG/WEBP/GIF.');
+      return;
+    }
+    setIsSavingCompany(true);
+    try {
+      const payload = {
+        companyName: compFormName.trim(),
+        partnerName: compFormPartnerName.trim(),
+        logoUrl: compFormLogoUrl.trim(),
+        npwp: compFormNpwp.trim(),
+        isPrimary: compFormIsPrimary,
+        street: compFormStreet.trim(),
+        city: compFormCity.trim(),
+        province: compFormProvince.trim(),
+        postalCode: compFormPostalCode.trim(),
+        country: 'Indonesia' as const,
+        currency: 'IDR' as const,
+        timezone: compFormTimezone,
+        emailDomain: compFormEmailDomain.trim(),
+        companyEmail: compFormEmail.trim(),
+        phoneNumber: compFormPhone.trim(),
+        website: compFormWebsite.trim(),
+        socialMedia: {
+          instagram: compFormInstagram.trim() || undefined,
+          whatsappBusiness: compFormWhatsapp.trim() || undefined,
+          tiktok: compFormTiktok.trim() || undefined,
+          linkedin: compFormLinkedin.trim() || undefined,
+        },
+      };
+      const res = editingCompany
+        ? await apiClient.updateAdminCompany(editingCompany.id, payload)
+        : await apiClient.createAdminCompany(payload);
+
+      if (res.companies) setCompaniesList(res.companies);
+      if (res.primaryCompany) {
+        window.dispatchEvent(
+          new CustomEvent('grocemart-company-branding-updated', { detail: res.primaryCompany })
+        );
+      }
+      onShowToast(
+        editingCompany ? 'Perusahaan Diperbarui' : 'Perusahaan Ditambahkan',
+        res.message
+      );
+      setIsCompanyModalOpen(false);
+      setEditingCompany(null);
+      await loadBranchMonitorData();
+      onRefreshData?.();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onShowToast('Gagal Menyimpan Perusahaan', msg);
+    } finally {
+      setIsSavingCompany(false);
+    }
+  };
+
   const openCreateOutletModal = () => {
+    const defaultComp = companiesList.find((c) => c.isPrimary) || companiesList[0];
     setEditingOutletProfile(null);
+    setOutletFormParentCompanyId(defaultComp?.id || 'COMP-001');
+    setOutletFormBranchPartnerName(defaultComp?.partnerName || '');
     setOutletFormBranchCode('');
     setOutletFormName('');
     setOutletFormType('FLAGSHIP_STORE');
@@ -831,7 +1007,14 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
   const openEditOutletModal = (branch: BranchMonitorHubSummary) => {
     const matchedSched = storeOutlets.find((s) => s.storeId === branch.storeId);
+    const defaultComp = companiesList.find((c) => c.isPrimary) || companiesList[0];
     setEditingOutletProfile(branch);
+    setOutletFormParentCompanyId(
+      branch.parentCompanyId || matchedSched?.parentCompanyId || defaultComp?.id || 'COMP-001'
+    );
+    setOutletFormBranchPartnerName(
+      branch.branchPartnerName || matchedSched?.branchPartnerName || ''
+    );
     setOutletFormBranchCode(branch.branchCode || matchedSched?.branchCode || '');
     setOutletFormName(branch.storeName || matchedSched?.name || '');
     setOutletFormType(
@@ -873,6 +1056,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
     try {
       if (editingOutletProfile) {
         const res = await apiClient.updateAdminOutlet(editingOutletProfile.storeId, {
+          parentCompanyId: outletFormParentCompanyId || undefined,
+          branchPartnerName: outletFormBranchPartnerName.trim() || undefined,
           branchCode: outletFormBranchCode.trim().toUpperCase(),
           name: outletFormName.trim(),
           outletType: outletFormType,
@@ -888,9 +1073,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           isActive: outletFormIsActive,
         });
         if (res.branchOptions?.length) setBranchAssignmentOptions(res.branchOptions);
+        if (res.companies?.length) setCompaniesList(res.companies);
         onShowToast('Profil Outlet Diperbarui', res.message);
       } else {
         const res = await apiClient.createAdminOutlet({
+          parentCompanyId: outletFormParentCompanyId || undefined,
+          branchPartnerName: outletFormBranchPartnerName.trim() || undefined,
           branchCode: outletFormBranchCode.trim().toUpperCase(),
           name: outletFormName.trim(),
           outletType: outletFormType,
@@ -906,6 +1094,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           isActive: outletFormIsActive,
         });
         if (res.branchOptions?.length) setBranchAssignmentOptions(res.branchOptions);
+        if (res.companies?.length) setCompaniesList(res.companies);
         onShowToast('Outlet Baru Ditambahkan', res.message);
       }
       setIsOutletModalOpen(false);
@@ -2761,7 +2950,15 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             {/* SECTION 6: INDONESIAN TAXATION, PPN 11%/12% & NPWP/NIK VALIDATOR */}
             {(enterpriseQuickFilter === 'ALL' || enterpriseQuickFilter === 'TAX') && (
               <div className="lg:col-span-2">
-                <IndonesianTaxRulesPanel theme={theme} canEdit={isSuperAdmin} onShowToast={onShowToast} />
+                <IndonesianTaxRulesPanel
+                  theme={theme}
+                  canEdit={isSuperAdmin}
+                  enableB2BFeatures={
+                    erpConfigDraft.enableB2BFeatures === true ||
+                    erpConfigDraft.enableB2BAndStorefrontPortal === true
+                  }
+                  onShowToast={onShowToast}
+                />
               </div>
             )}
 
@@ -3272,30 +3469,59 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </div>
                 </div>
 
-                {/* Portal Feature Visibility Control */}
+                {/* Indonesia-Only Localization Lock */}
+                <div className={`${subCardClass} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold text-gray-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Indonesia-Only Localization Lock (Nasional)</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                      Seluruh konfigurasi mata uang, zona waktu, dan kepatuhan pajak dikunci khusus untuk Indonesia. Pengaturan Europe, Australia &amp; America dinonaktifkan di UI.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono font-bold shrink-0">
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 border border-emerald-500/25">
+                      IDR (Rp)
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      WIB · WITA · WIT
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      PPN · PPh · Coretax
+                    </span>
+                  </div>
+                </div>
+
+                {/* Global B2B & Portal Feature Visibility Control */}
                 <div className={`${subCardClass} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
                   <div className="space-y-0.5">
                     <div className="text-xs font-bold text-gray-900 dark:text-slate-100">
-                      B2B &amp; Customer Storefront Portal Visibility
+                      Global B2B Visibility &amp; Portal Control
                     </div>
                     <p className="text-[11px] text-gray-500 dark:text-slate-400">
-                      When disabled (default), app boots directly to Internal Staff ERP Login and hides Storefront View &amp; Quotations &amp; Pro Forma menus across all roles.
+                      Saat nonaktif (default), seluruh modul B2B (CRM B2B Pipeline, Quotations &amp; Pro Forma, B2B AR &amp; Giro, Katalog B2B, dan Storefront Portal) disembunyikan otomatis.
                     </p>
                   </div>
                   <label className="inline-flex items-center gap-2.5 text-xs font-semibold text-gray-800 dark:text-slate-200 cursor-pointer shrink-0 select-none">
                     <input
                       type="checkbox"
                       disabled={isReadOnlyPolicyRole}
-                      checked={erpConfigDraft.enableB2BAndStorefrontPortal === true}
-                      onChange={(e) =>
+                      checked={
+                        erpConfigDraft.enableB2BFeatures === true ||
+                        erpConfigDraft.enableB2BAndStorefrontPortal === true
+                      }
+                      onChange={(e) => {
+                        const checked = e.target.checked;
                         setErpConfigDraft((p) => ({
                           ...p,
-                          enableB2BAndStorefrontPortal: e.target.checked,
-                        }))
-                      }
+                          enableB2BFeatures: checked,
+                          enableB2BAndStorefrontPortal: checked,
+                        }));
+                      }}
                       className="w-4 h-4 text-[#0F4C3A] rounded border-gray-300 dark:border-slate-700 disabled:opacity-50"
                     />
-                    <span>Enable B2B &amp; Customer Storefront Portal</span>
+                    <span>Enable B2B Module &amp; Portal (CRM B2B, Corporate Quotations &amp; Storefront)</span>
                   </label>
                 </div>
               </div>
@@ -3592,10 +3818,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </span>
                 </div>
                 <h2 className={`text-base sm:text-lg font-bold mt-1 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
-                  Cabang, Omzet &amp; Barang Datang (Multi-Branch Monitor)
+                  Perusahaan, Cabang &amp; Omzet (Multi-Company &amp; Branch Monitor)
                 </h2>
                 <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Real-time branch revenue (POS + B2C + B2B), inventory asset valuation, incoming goods dock arrivals, and RBAC operator branch assignments.
+                  {erpConfigDraft.enableB2BFeatures === true
+                    ? 'Master Company legal entities, branch hierarchy, real-time revenue (POS + B2C + B2B), stock valuation, and dock arrivals.'
+                    : 'Master Company legal entities, branch hierarchy, real-time retail revenue (POS + Online), stock valuation, and dock arrivals.'}
                 </p>
               </div>
 
@@ -3651,7 +3879,9 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
               </div>
               <div className={subCardClass}>
                 <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">
-                  Live Network Omzet (POS + B2C + B2B)
+                  {erpConfigDraft.enableB2BFeatures === true
+                    ? 'Live Network Omzet (POS + B2C + B2B)'
+                    : 'Live Network Omzet (POS + Retail)'}
                 </span>
                 <span className="text-lg font-bold font-mono tabular-nums text-[#0F4C3A] dark:text-emerald-400 mt-1 block">
                   {formatIDR(branchMonitorData?.totals.totalLiveOmzetIDR ?? 0)}
@@ -3676,6 +3906,155 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
             </div>
           </div>
 
+          {/* 0. Master Company Profiles (Multi-Company Hierarchy & Branding) */}
+          <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                  <Building2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                  <span>Master Perusahaan (Company Profile &amp; Branding)</span>
+                </h3>
+                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Kelola badan hukum perusahaan induk, logo resmi (Login, Sidebar &amp; Struk/A4 Print), kontak, domain email, dan lokalisasi Indonesia (IDR).
+                </p>
+              </div>
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={openCreateCompanyModal}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white transition-all cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Tambah Perusahaan</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+              {companiesList.map((comp) => {
+                const safeLogo = isSafeLogoUrl(comp.logoUrl);
+                const tzLabel =
+                  comp.timezone === 'Asia/Makassar'
+                    ? 'WITA (Asia/Makassar)'
+                    : comp.timezone === 'Asia/Jayapura'
+                    ? 'WIT (Asia/Jayapura)'
+                    : 'WIB (Asia/Jakarta)';
+                return (
+                  <div
+                    key={comp.id}
+                    className={`${subCardClass} p-4 flex flex-col justify-between gap-3 border ${
+                      comp.isPrimary
+                        ? 'border-emerald-500/40 dark:border-emerald-500/30'
+                        : 'border-slate-200 dark:border-slate-800/80'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#12141C] flex items-center justify-center overflow-hidden shrink-0">
+                          {safeLogo ? (
+                            <img
+                              src={safeLogo}
+                              alt={comp.companyName}
+                              className="w-full h-full object-contain p-1"
+                            />
+                          ) : (
+                            <span className="text-xs font-extrabold font-mono text-[#0F4C3A] dark:text-emerald-400">
+                              {getCompanyMonogram(comp.companyName)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-sm font-bold truncate ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                              {comp.companyName}
+                            </span>
+                            {comp.isPrimary && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0F4C3A] text-white">
+                                Primary Brand
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            Partner: <strong>{comp.partnerName || '-'}</strong>
+                            {comp.npwp ? ` · NPWP ${comp.npwp}` : ''}
+                          </div>
+                        </div>
+                      </div>
+
+                      {isSuperAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => openEditCompanyModal(comp)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer shrink-0 ${
+                            isLight
+                              ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                              : 'bg-[#12141C] border-slate-700 text-slate-200 hover:bg-slate-800'
+                          }`}
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-200/80 dark:border-slate-800/80">
+                      <div className="flex items-start gap-1.5 text-slate-600 dark:text-slate-300">
+                        <MapPin className="w-3.5 h-3.5 mt-0.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span>
+                          {[comp.street, comp.city, comp.province, comp.postalCode, comp.country]
+                            .filter(Boolean)
+                            .join(', ')}
+                        </span>
+                      </div>
+                      <div className="space-y-0.5 text-slate-600 dark:text-slate-300">
+                        <div className="flex items-center gap-1.5">
+                          <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{comp.companyEmail || '-'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="font-mono">{comp.phoneNumber || '-'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Link2 className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">
+                            {comp.emailDomain ? `@${comp.emailDomain}` : ''}
+                            {comp.website ? ` · ${comp.website}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-[#0F4C3A] dark:text-emerald-300 font-bold">
+                          {comp.currency} (Rp)
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {tzLabel}
+                        </span>
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400 truncate">
+                        {[
+                          comp.socialMedia?.instagram && `IG: ${comp.socialMedia.instagram}`,
+                          comp.socialMedia?.whatsappBusiness && `WA: ${comp.socialMedia.whatsappBusiness}`,
+                          comp.socialMedia?.tiktok && `TT: ${comp.socialMedia.tiktok}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || 'Indonesia Entity'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {companiesList.length === 0 && (
+                <div className="col-span-full py-6 text-center text-xs text-slate-400">
+                  Memuat daftar perusahaan master...
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* 1. Branch Directory & Live Omzet Table */}
           <div className={`${cardClass} p-5 sm:p-6 space-y-4`}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -3685,7 +4064,9 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   <span>Network Branches &amp; Live Omzet</span>
                 </h3>
                 <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Live revenue breakdown per outlet across retail POS, online B2C express, and wholesale B2B channels
+                  {erpConfigDraft.enableB2BFeatures === true
+                    ? 'Live revenue breakdown per outlet across retail POS, online B2C express, and wholesale B2B channels'
+                    : 'Live revenue breakdown per outlet across retail POS and online express channels'}
                 </p>
               </div>
               <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
@@ -3723,6 +4104,12 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           {branch.district}, {branch.city}
                           {branch.targetDailyOmzetIDR ? ` · Target ${formatIDR(branch.targetDailyOmzetIDR)}/hari` : ''}
                         </div>
+                        {(branch.parentCompanyName || branch.branchPartnerName) && (
+                          <div className="text-[10px] mt-0.5 text-[#0F4C3A] dark:text-emerald-400 font-medium">
+                            {branch.parentCompanyName || 'Induk Perusahaan'}
+                            {branch.branchPartnerName ? ` · Partner: ${branch.branchPartnerName}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-3">
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 whitespace-nowrap">
@@ -3750,7 +4137,9 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                           {formatIDR(branch.liveOmzetIDR)}
                         </div>
                         <div className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                          POS {formatIDR(branch.posOmzetIDR)} · B2C {formatIDR(branch.b2cOmzetIDR)} · B2B {formatIDR(branch.b2bOmzetIDR)}
+                          {erpConfigDraft.enableB2BFeatures === true
+                            ? `POS ${formatIDR(branch.posOmzetIDR)} · B2C ${formatIDR(branch.b2cOmzetIDR)} · B2B ${formatIDR(branch.b2bOmzetIDR)}`
+                            : `POS ${formatIDR(branch.posOmzetIDR)} · Retail ${formatIDR(branch.b2cOmzetIDR)}`}
                         </div>
                       </td>
                       <td className="py-3 px-3 text-right font-mono tabular-nums">
@@ -4510,6 +4899,36 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                   </div>
 
                   <form onSubmit={handleSaveOutletProfile} className="p-5 space-y-4 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Company Name (Perusahaan Induk) *</label>
+                        <select
+                          value={outletFormParentCompanyId}
+                          onChange={(e) => setOutletFormParentCompanyId(e.target.value)}
+                          className={`${inputClass} border`}
+                        >
+                          {companiesList.map((comp) => (
+                            <option key={comp.id} value={comp.id}>
+                              {comp.companyName}
+                            </option>
+                          ))}
+                          {companiesList.length === 0 && (
+                            <option value="COMP-001">PT GroceMart Ritel Nusantara</option>
+                          )}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Partner (Entitas Mitra Cabang)</label>
+                        <input
+                          type="text"
+                          placeholder="PT Mitra Ritel Cabang"
+                          value={outletFormBranchPartnerName}
+                          onChange={(e) => setOutletFormBranchPartnerName(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className={labelClass}>Kode Cabang *</label>
@@ -4523,7 +4942,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className={labelClass}>Nama Outlet *</label>
+                        <label className={labelClass}>Branch / Nama Outlet *</label>
                         <input
                           type="text"
                           required
@@ -4677,6 +5096,309 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
                       >
                         <Save className="w-3.5 h-3.5" />
                         <span>{isSavingOutletProfile ? 'Menyimpan...' : 'Simpan Profil Outlet'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>,
+              document.body
+            )}
+
+          {/* Modal 4: Create / Edit Master Company (Super Admin) */}
+          {isCompanyModalOpen &&
+            createPortal(
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+                <div
+                  className={`w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${
+                    isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#12141C] border-slate-800 text-slate-100'
+                  }`}
+                >
+                  <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
+                        <span>
+                          {editingCompany
+                            ? `Edit Perusahaan — ${editingCompany.companyName}`
+                            : 'Tambah Perusahaan Induk Baru'}
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Profil badan hukum, logo resmi (Login, Sidebar &amp; Print), alamat Indonesia, zona waktu WIB/WITA/WIT, dan kontak digital.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsCompanyModalOpen(false)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveCompany} className="p-5 space-y-4 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Company Name *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="PT GroceMart Ritel Nusantara"
+                          value={compFormName}
+                          onChange={(e) => setCompFormName(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Partner / Legal Entity</label>
+                        <input
+                          type="text"
+                          placeholder="PT GroceMart Induk Holding"
+                          value={compFormPartnerName}
+                          onChange={(e) => setCompFormPartnerName(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                      <div>
+                        <label className={labelClass}>Logo URL (https:// atau Upload Gambar)</label>
+                        <input
+                          type="text"
+                          placeholder="https://... atau unggah file di samping"
+                          value={compFormLogoUrl}
+                          onChange={(e) => setCompFormLogoUrl(e.target.value)}
+                          className={`${inputClass} border font-mono text-[11px]`}
+                        />
+                        <div className="mt-2 flex items-center gap-2">
+                          <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-[11px] font-semibold cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <Upload className="w-3 h-3" />
+                            <span>Upload Logo (PNG/JPG/WEBP)</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/gif"
+                              onChange={handleCompanyLogoFileChange}
+                              className="hidden"
+                            />
+                          </label>
+                          {compFormLogoUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setCompFormLogoUrl('')}
+                              className="text-[11px] text-rose-600 hover:underline cursor-pointer"
+                            >
+                              Hapus Logo
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Preview Logo &amp; NPWP (16 Digit)</label>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-11 h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#090A0F] flex items-center justify-center overflow-hidden shrink-0">
+                            {isSafeLogoUrl(compFormLogoUrl) ? (
+                              <img
+                                src={isSafeLogoUrl(compFormLogoUrl)!}
+                                alt="Preview"
+                                className="w-full h-full object-contain p-1"
+                              />
+                            ) : (
+                              <span className="text-xs font-extrabold font-mono text-[#0F4C3A] dark:text-emerald-400">
+                                {getCompanyMonogram(compFormName || 'GM')}
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="01.308.449.2-007.000"
+                            value={compFormNpwp}
+                            onChange={(e) => setCompFormNpwp(e.target.value)}
+                            className={`${inputClass} border font-mono`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className={labelClass}>Alamat Jalan (Street)</label>
+                        <input
+                          type="text"
+                          placeholder="Jl. Senopati No. 42, Kebayoran Baru"
+                          value={compFormStreet}
+                          onChange={(e) => setCompFormStreet(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Kota / Kabupaten (City)</label>
+                        <input
+                          type="text"
+                          value={compFormCity}
+                          onChange={(e) => setCompFormCity(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Provinsi (Province)</label>
+                        <input
+                          type="text"
+                          value={compFormProvince}
+                          onChange={(e) => setCompFormProvince(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className={labelClass}>Kode Pos</label>
+                        <input
+                          type="text"
+                          value={compFormPostalCode}
+                          onChange={(e) => setCompFormPostalCode(e.target.value)}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Negara &amp; Mata Uang</label>
+                        <input
+                          type="text"
+                          readOnly
+                          value="Indonesia · IDR (Rp)"
+                          className={`${inputClass} border font-mono opacity-75 cursor-not-allowed`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Zona Waktu Indonesia</label>
+                        <select
+                          value={compFormTimezone}
+                          onChange={(e) => setCompFormTimezone(e.target.value as IndonesiaTimezone)}
+                          className={`${inputClass} border`}
+                        >
+                          <option value="Asia/Jakarta">WIB (Asia/Jakarta)</option>
+                          <option value="Asia/Makassar">WITA (Asia/Makassar)</option>
+                          <option value="Asia/Jayapura">WIT (Asia/Jayapura)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Email Domain</label>
+                        <input
+                          type="text"
+                          placeholder="grocemart.co.id"
+                          value={compFormEmailDomain}
+                          onChange={(e) => setCompFormEmailDomain(e.target.value)}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Company Email</label>
+                        <input
+                          type="email"
+                          placeholder="hq@grocemart.co.id"
+                          value={compFormEmail}
+                          onChange={(e) => setCompFormEmail(e.target.value)}
+                          className={`${inputClass} border`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Nomor Telepon</label>
+                        <input
+                          type="text"
+                          placeholder="+62 21 5550-1990"
+                          value={compFormPhone}
+                          onChange={(e) => setCompFormPhone(e.target.value)}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Website</label>
+                        <input
+                          type="text"
+                          placeholder="https://grocemart.co.id"
+                          value={compFormWebsite}
+                          onChange={(e) => setCompFormWebsite(e.target.value)}
+                          className={`${inputClass} border font-mono`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <div>
+                        <label className={labelClass}>Instagram</label>
+                        <input
+                          type="text"
+                          placeholder="@grocemart.id"
+                          value={compFormInstagram}
+                          onChange={(e) => setCompFormInstagram(e.target.value)}
+                          className={`${inputClass} border text-xs`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>WhatsApp Business</label>
+                        <input
+                          type="text"
+                          placeholder="+62 811..."
+                          value={compFormWhatsapp}
+                          onChange={(e) => setCompFormWhatsapp(e.target.value)}
+                          className={`${inputClass} border text-xs font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>TikTok</label>
+                        <input
+                          type="text"
+                          placeholder="@grocemart.id"
+                          value={compFormTiktok}
+                          onChange={(e) => setCompFormTiktok(e.target.value)}
+                          className={`${inputClass} border text-xs`}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>LinkedIn</label>
+                        <input
+                          type="text"
+                          placeholder="grocemart-id"
+                          value={compFormLinkedin}
+                          onChange={(e) => setCompFormLinkedin(e.target.value)}
+                          className={`${inputClass} border text-xs`}
+                        />
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs font-semibold pt-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={compFormIsPrimary}
+                        onChange={(e) => setCompFormIsPrimary(e.target.checked)}
+                        className="w-4 h-4 rounded text-[#0F4C3A]"
+                      />
+                      <span>Jadikan Perusahaan Utama (Primary Brand untuk Login, Sidebar &amp; Struk/A4 Print)</span>
+                    </label>
+
+                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setIsCompanyModalOpen(false)}
+                        className={`px-4 py-2 rounded-xl text-xs font-semibold border cursor-pointer ${
+                          isLight
+                            ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                            : 'bg-[#090A0F] border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingCompany}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>{isSavingCompany ? 'Menyimpan...' : 'Simpan Perusahaan'}</span>
                       </button>
                     </div>
                   </form>

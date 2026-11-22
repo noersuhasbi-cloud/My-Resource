@@ -121,9 +121,6 @@ interface PosModuleProps {
 
 const CURRENCY_OPTIONS: { code: SupportedCurrency; symbol: string; rateToIDR: number; label: string }[] = [
   { code: 'IDR', symbol: 'Rp', rateToIDR: 1, label: 'Indonesian Rupiah (IDR)' },
-  { code: 'USD', symbol: '$', rateToIDR: 16000, label: 'US Dollar (USD)' },
-  { code: 'EUR', symbol: '€', rateToIDR: 17200, label: 'Euro (EUR)' },
-  { code: 'AUD', symbol: 'A$', rateToIDR: 10400, label: 'Australian Dollar (AUD)' },
 ];
 
 export const PosModule: React.FC<PosModuleProps> = ({
@@ -1571,26 +1568,13 @@ export const PosModule: React.FC<PosModuleProps> = ({
               </button>
             )}
 
-            {/* Multi-Currency Dropdown */}
+            {/* Indonesia IDR Currency Lock */}
             <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-[#090A0F] px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800/80">
-              <Globe className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span className="text-[11px] text-slate-600 dark:text-slate-300 font-semibold hidden sm:inline">Currency:</span>
-              <select
-                value={activeCurrency}
-                onChange={(e) => setActiveCurrency(e.target.value as SupportedCurrency)}
-                className="text-xs font-bold bg-transparent border-0 focus:ring-0 cursor-pointer text-slate-800 dark:text-slate-200"
-              >
-                {CURRENCY_OPTIONS.map((c) => (
-                  <option key={c.code} value={c.code} className="bg-white dark:bg-[#12141C] text-slate-900 dark:text-slate-100">
-                    {c.code} ({c.symbol})
-                  </option>
-                ))}
-              </select>
-              {activeCurrency !== 'IDR' && (
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono hidden md:inline">
-                  1 {activeCurrency} = Rp {currentFx.rateToIDR.toLocaleString()}
-                </span>
-              )}
+              <span className="text-xs font-bold font-mono text-slate-800 dark:text-slate-200">
+                {CURRENCY_OPTIONS[0].code} ({CURRENCY_OPTIONS[0].symbol})
+              </span>
             </div>
 
             {/* Parked Tickets Button */}

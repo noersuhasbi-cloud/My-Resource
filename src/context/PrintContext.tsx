@@ -6,6 +6,7 @@ import type {
   BatchRecallTraceResult,
   CashFlowStatementReport,
   ChartOfAccount,
+  CompanyPublicBranding,
   CustomerRmaRecord,
   DeliveryOrderDocument,
   EnterpriseQuotation,
@@ -209,6 +210,8 @@ interface PrintContextValue {
   activePrintPayload: PrintPayload | null;
   isPreviewOpen: boolean;
   invoiceTracking: InvoiceTrackingFlags;
+  companyBranding: CompanyPublicBranding | null;
+  refreshCompanyBranding: () => void;
   triggerPrint: (payload: PrintPayload, options?: PrintTriggerOptions) => void;
   executePrint: () => void;
   clearPrint: () => void;
@@ -248,8 +251,20 @@ export const PrintProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [activePrintPayload, setActivePrintPayload] = useState<PrintPayload | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
   const [invoiceTracking, setInvoiceTracking] = useState<InvoiceTrackingFlags>(DEFAULT_INVOICE_TRACKING);
+  const [companyBranding, setCompanyBranding] = useState<CompanyPublicBranding | null>(null);
   const printTimerRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  const refreshCompanyBranding = useCallback(() => {
+    apiClient
+      .getStoreStatus()
+      .then((res) => {
+        if (res?.primaryCompany) {
+          setCompanyBranding(res.primaryCompany);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const refreshInvoiceTracking = useCallback(() => {
     apiClient
@@ -264,7 +279,18 @@ export const PrintProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     refreshInvoiceTracking();
-  }, [refreshInvoiceTracking]);
+    refreshCompanyBranding();
+    const onBrandingUpdated = (ev: Event) => {
+      const customEv = ev as CustomEvent<CompanyPublicBranding | undefined>;
+      if (customEv.detail) {
+        setCompanyBranding(customEv.detail);
+      } else {
+        refreshCompanyBranding();
+      }
+    };
+    window.addEventListener('grocemart-company-branding-updated', onBrandingUpdated);
+    return () => window.removeEventListener('grocemart-company-branding-updated', onBrandingUpdated);
+  }, [refreshInvoiceTracking, refreshCompanyBranding]);
 
   const cancelScheduledPrint = useCallback(() => {
     if (printTimerRef.current !== null) {
@@ -331,7 +357,16 @@ export const PrintProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <PrintContext.Provider
-      value={{ activePrintPayload, isPreviewOpen, invoiceTracking, triggerPrint, executePrint, clearPrint }}
+      value={{
+        activePrintPayload,
+        isPreviewOpen,
+        invoiceTracking,
+        companyBranding,
+        refreshCompanyBranding,
+        triggerPrint,
+        executePrint,
+        clearPrint,
+      }}
     >
       {children}
     </PrintContext.Provider>

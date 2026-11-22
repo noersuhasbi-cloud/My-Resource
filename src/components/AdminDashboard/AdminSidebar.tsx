@@ -1,5 +1,6 @@
 import React from 'react';
-import type { StaffShiftSession, TrialGovernanceStatusSnapshot } from '../../types/index.ts';
+import type { CompanyPublicBranding, StaffShiftSession, TrialGovernanceStatusSnapshot } from '../../types/index.ts';
+import { getCompanyMonogram, isSafeLogoUrl } from '../../utils/formatters';
 import {
   hasModuleAccess,
   isAccountingSubTabAllowed,
@@ -118,6 +119,7 @@ interface AdminSidebarProps {
   activeStaffSession?: StaffShiftSession | null;
   trialGovernance?: TrialGovernanceStatusSnapshot | null;
   enableB2BAndStorefrontPortal?: boolean;
+  companyBranding?: CompanyPublicBranding | null;
 }
 
 export function isDashboardTabAllowed(
@@ -165,11 +167,16 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   activeStaffSession,
   trialGovernance,
   enableB2BAndStorefrontPortal = false,
+  companyBranding,
 }) => {
   const isLight = theme === 'light';
+  const sidebarBrandName = companyBranding?.companyName || 'GroceMart';
+  const sidebarLogo = isSafeLogoUrl(companyBranding?.logoUrl) ? companyBranding!.logoUrl! : '';
+  const sidebarMonogram = getCompanyMonogram(sidebarBrandName);
   const allow = (tab: AdminDashboardTab) =>
     isDashboardTabAllowed(activeStaffSession, tab, trialGovernance, enableB2BAndStorefrontPortal);
   const allowAccountingSub = (sub: AccountingSubTab) => {
+    if (sub === 'b2b_ar' && !enableB2BAndStorefrontPortal) return false;
     if (!isAccountingSubTabAllowed(activeStaffSession, sub)) return false;
     if (trialGovernance && activeStaffSession?.roleCode && !isOwnerRoleCode(activeStaffSession.roleCode)) {
       const area = mapAccountingSubTabToGovernanceArea(sub);
@@ -211,21 +218,27 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         }`}
       >
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 overflow-hidden'}`}>
-          <div className="w-9 h-9 rounded-xl bg-[#0F4C3A] flex items-center justify-center shadow-md shadow-[#0F4C3A]/25 text-white font-extrabold text-sm tracking-wider flex-shrink-0">
-            GM
-          </div>
+          {sidebarLogo ? (
+            <div className="w-9 h-9 rounded-xl bg-white dark:bg-[#090A0F] border border-slate-200 dark:border-slate-800/80 flex items-center justify-center p-0.5 shadow-sm flex-shrink-0 overflow-hidden">
+              <img src={sidebarLogo} alt={sidebarBrandName} className="w-full h-full object-contain" />
+            </div>
+          ) : (
+            <div className="w-9 h-9 rounded-xl bg-[#0F4C3A] flex items-center justify-center shadow-md shadow-[#0F4C3A]/25 text-white font-extrabold text-sm tracking-wider flex-shrink-0">
+              {sidebarMonogram}
+            </div>
+          )}
           {!isCollapsed && (
             <div className="truncate animate-fadeIn">
               <div className="flex items-center gap-1.5">
-                <span className={`text-sm font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
-                  GroceMart
+                <span className={`text-sm font-bold tracking-tight truncate max-w-[125px] ${isLight ? 'text-slate-900' : 'text-slate-100'}`} title={sidebarBrandName}>
+                  {sidebarBrandName}
                 </span>
                 <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-[#0F4C3A]/10 text-[#0F4C3A] border border-[#0F4C3A]/20 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800/50 whitespace-nowrap">
                   ERP
                 </span>
               </div>
               <p className={`text-[11px] truncate ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                Enterprise Suite v2.4
+                {companyBranding?.partnerName || 'Enterprise Suite v4.2'}
               </p>
             </div>
           )}

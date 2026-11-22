@@ -109,6 +109,7 @@ interface EnterpriseInventoryViewProps {
   onRefreshData?: () => Promise<void> | void;
   onShowToast: (title: string, message: string) => void;
   renderStocktakeImport?: () => React.ReactNode;
+  enableB2BFeatures?: boolean;
 }
 
 type InventoryViewMode = 'kanban' | 'list' | 'racks' | 'fefo_heatmap' | 'stocktake_opname' | 'repack_bundle' | 'returnables';
@@ -206,6 +207,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   onRefreshData,
   onShowToast,
   renderStocktakeImport,
+  enableB2BFeatures = false,
 }) => {
   const isLight = theme === 'light';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
@@ -222,7 +224,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('ALL');
   const [strategyFilter, setStrategyFilter] = useState<'ALL' | RemovalStrategyType>('ALL');
   const [classificationFilter, setClassificationFilter] = useState<'ALL' | ItemClassification>('ALL');
-  const [includeB2BCatalogRows, setIncludeB2BCatalogRows] = useState<boolean>(true);
+  const [includeB2BCatalogRows, setIncludeB2BCatalogRows] = useState<boolean>(enableB2BFeatures);
   const [showStrategyModal, setShowStrategyModal] = useState<boolean>(false);
   const [showBarcodeLabelModal, setShowBarcodeLabelModal] = useState<boolean>(false);
   const [opnameWorkspaceMode, setOpnameWorkspaceMode] = useState<'standard_import' | 'rack_blind'>('standard_import');
@@ -272,6 +274,15 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
       loadReturnables();
     }
   }, [viewMode, loadReturnables]);
+
+  React.useEffect(() => {
+    if (!enableB2BFeatures) {
+      setIncludeB2BCatalogRows(false);
+      if (channelFilter === 'B2B' || channelFilter === 'BOTH') {
+        setChannelFilter('ALL');
+      }
+    }
+  }, [enableB2BFeatures, channelFilter]);
 
   React.useEffect(() => {
     if (viewMode !== 'repack_bundle') return;
@@ -588,33 +599,37 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
           ],
           progressPercent: b2cTotal > 0 ? Math.round(((b2cTotal - b2cToPick) / b2cTotal) * 100) : 100,
         },
-        {
-          id: 'b2b_dispatch',
-          title: 'B2B Wholesale Bulk Dispatch',
-          subtitle: 'Pallet, Dus & Renceng Outbound (Warung / Agen / HoReCa)',
-          icon: Truck,
-          accentColor: 'text-amber-700 dark:text-amber-400',
-          iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-          barColor: 'bg-amber-600 dark:bg-amber-500',
-          toProcessCount: b2bToDispatch,
-          primaryLabel:
-            b2bToDispatch > 0
-              ? `Dispatch ${b2bToDispatch} Bulk`
-              : b2bWaitingFinance > 0
-              ? `Review ${b2bWaitingFinance} Credit`
-              : 'Fleet & DO Docs',
-          targetTab: (b2bWaitingFinance > 0 && b2bToDispatch === 0 ? 'approvals' : 'logistics') as AdminDashboardTab,
-          secondaryAction: { label: 'Credit Queue', tab: 'approvals' as AdminDashboardTab },
-          metrics: [
-            { label: 'To Dispatch', value: b2bToDispatch, tone: b2bToDispatch > 0 ? 'emerald' : 'slate' },
-            { label: 'Finance Hold', value: b2bWaitingFinance, tone: b2bWaitingFinance > 0 ? 'amber' : 'slate' },
-            { label: 'Dispatched', value: b2bDispatched, tone: 'slate' },
-          ],
-          progressPercent:
-            b2bOrders.length > 0 && hub.id === 'CDC'
-              ? Math.round((b2bDispatched / b2bOrders.length) * 100)
-              : 100,
-        },
+        ...(enableB2BFeatures
+          ? [
+              {
+                id: 'b2b_dispatch',
+                title: 'B2B Wholesale Bulk Dispatch',
+                subtitle: 'Pallet, Dus & Renceng Outbound (Warung / Agen / HoReCa)',
+                icon: Truck,
+                accentColor: 'text-amber-700 dark:text-amber-400',
+                iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                barColor: 'bg-amber-600 dark:bg-amber-500',
+                toProcessCount: b2bToDispatch,
+                primaryLabel:
+                  b2bToDispatch > 0
+                    ? `Dispatch ${b2bToDispatch} Bulk`
+                    : b2bWaitingFinance > 0
+                    ? `Review ${b2bWaitingFinance} Credit`
+                    : 'Fleet & DO Docs',
+                targetTab: (b2bWaitingFinance > 0 && b2bToDispatch === 0 ? 'approvals' : 'logistics') as AdminDashboardTab,
+                secondaryAction: { label: 'Credit Queue', tab: 'approvals' as AdminDashboardTab },
+                metrics: [
+                  { label: 'To Dispatch', value: b2bToDispatch, tone: b2bToDispatch > 0 ? 'emerald' : 'slate' },
+                  { label: 'Finance Hold', value: b2bWaitingFinance, tone: b2bWaitingFinance > 0 ? 'amber' : 'slate' },
+                  { label: 'Dispatched', value: b2bDispatched, tone: 'slate' },
+                ],
+                progressPercent:
+                  b2bOrders.length > 0 && hub.id === 'CDC'
+                    ? Math.round((b2bDispatched / b2bOrders.length) * 100)
+                    : 100,
+              },
+            ]
+          : []),
         {
           id: 'pos_replenishment',
           title: 'POS Shelf Replenishment',
@@ -812,8 +827,12 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
               </span>
               <span aria-hidden="true" className="opacity-60">·</span>
               <span>Multi-Warehouse Operations</span>
-              <span aria-hidden="true" className="opacity-60">·</span>
-              <span>B2B/B2C Catalog Split</span>
+              {enableB2BFeatures && (
+                <>
+                  <span aria-hidden="true" className="opacity-60">·</span>
+                  <span>B2B/B2C Catalog Split</span>
+                </>
+              )}
               <span aria-hidden="true" className="opacity-60">·</span>
               <span>FEFO/FIFO Engine</span>
             </div>
@@ -987,7 +1006,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
 
           <div className={`${subCardClass} p-3.5`}>
             <span className={`text-[11px] font-medium ${textMuted} block`}>
-              On-Hand Quants (B2C + B2B)
+              {enableB2BFeatures ? 'On-Hand Quants (B2C + B2B)' : 'On-Hand Stock Quants'}
             </span>
             <span className="text-sm sm:text-base font-bold font-mono tabular-nums text-[#164E29] dark:text-emerald-400 mt-0.5 block">
               {summaryMetrics.totalPhysicalBaseUnits.toLocaleString('id-ID')} Base Units
@@ -1253,16 +1272,18 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                 <option value="ambient">Ambient Dry</option>
               </select>
 
-              <select
-                value={channelFilter}
-                onChange={(e) => setChannelFilter(e.target.value as ChannelFilter)}
-                className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
-              >
-                <option value="ALL">All Channels (B2C + B2B)</option>
-                <option value="B2C">B2C Retail Eligible</option>
-                <option value="B2B">B2B Wholesale Eligible</option>
-                <option value="BOTH">Dual Channel (Both)</option>
-              </select>
+              {enableB2BFeatures && (
+                <select
+                  value={channelFilter}
+                  onChange={(e) => setChannelFilter(e.target.value as ChannelFilter)}
+                  className={`px-3 py-1.5 text-xs rounded-xl ${inputClass}`}
+                >
+                  <option value="ALL">All Channels (B2C + B2B)</option>
+                  <option value="B2C">B2C Retail Eligible</option>
+                  <option value="B2B">B2B Wholesale Eligible</option>
+                  <option value="BOTH">Dual Channel (Both)</option>
+                </select>
+              )}
 
               <select
                 value={strategyFilter}
@@ -1298,15 +1319,17 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
-              <label className="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includeB2BCatalogRows}
-                  onChange={(e) => setIncludeB2BCatalogRows(e.target.checked)}
-                  className="rounded border-slate-300 text-[#0F4C3A] focus:ring-[#0F4C3A]"
-                />
-                <span className={textMuted}>Include B2B Bulk Catalog SKUs</span>
-              </label>
+              {enableB2BFeatures && (
+                <label className="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includeB2BCatalogRows}
+                    onChange={(e) => setIncludeB2BCatalogRows(e.target.checked)}
+                    className="rounded border-slate-300 text-[#0F4C3A] focus:ring-[#0F4C3A]"
+                  />
+                  <span className={textMuted}>Include B2B Bulk Catalog SKUs</span>
+                </label>
+              )}
               <span className={`text-xs ${textMuted}`}>
                 Showing <strong className={textTitle}>{enrichedListRows.length}</strong> stock quants
               </span>
@@ -1319,7 +1342,9 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className={tableHeaderClass}>
-                    <th className="py-3 px-3.5">SKU &amp; Product (B2B/B2C Split)</th>
+                    <th className="py-3 px-3.5">
+                      {enableB2BFeatures ? 'SKU & Product (B2B/B2C Split)' : 'SKU & Product'}
+                    </th>
                     <th className="py-3 px-3.5">Warehouse &amp; Bin Location</th>
                     <th className="py-3 px-3.5">Lot / Batch &amp; Expiry</th>
                     <th className="py-3 px-3 text-center">Removal Strategy</th>
@@ -1389,14 +1414,16 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                                 )}
                                 <span
                                   className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                    profile.salesChannel === 'B2B'
+                                    enableB2BFeatures && profile.salesChannel === 'B2B'
                                       ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                                      : profile.salesChannel === 'B2C'
+                                      : profile.salesChannel === 'B2C' || !enableB2BFeatures
                                       ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
                                       : 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300'
                                   }`}
                                 >
-                                  {profile.salesChannel === 'BOTH'
+                                  {!enableB2BFeatures
+                                    ? 'Retail'
+                                    : profile.salesChannel === 'BOTH'
                                     ? 'B2C + B2B'
                                     : profile.salesChannel === 'B2B'
                                     ? 'B2B Wholesale'
@@ -1596,10 +1623,10 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                                 })
                               }
                               className="px-2 py-1 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#090A0F] text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] inline-flex items-center gap-1 cursor-pointer"
-                              title="Inspect B2B vs B2C Media, Packaging & Multi-UoM"
+                              title={enableB2BFeatures ? 'Inspect B2B vs B2C Media, Packaging & Multi-UoM' : 'Inspect Retail Media, Packaging & Multi-UoM'}
                             >
                               <Eye className="w-3 h-3" />
-                              B2B/B2C
+                              {enableB2BFeatures ? 'B2B/B2C' : 'Media'}
                             </button>
 
                             <button
@@ -2206,7 +2233,12 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                       {mediaInspector.sku}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300">
-                      Channel: {profile.salesChannel === 'BOTH' ? 'B2C Retail + B2B Wholesale' : profile.salesChannel}
+                      Channel:{' '}
+                      {enableB2BFeatures
+                        ? profile.salesChannel === 'BOTH'
+                          ? 'B2C Retail + B2B Wholesale'
+                          : profile.salesChannel
+                        : 'Retail POS & Store'}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/15 text-sky-700 dark:text-sky-300">
                       {mediaInspector.strategy} Removal
@@ -2230,13 +2262,13 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                 </button>
               </div>
 
-              {/* Strict B2C vs B2B Visual & Packaging Differentiation Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* B2C Retail Card */}
+              {/* Retail & Optional B2B Visual & Packaging Cards */}
+              <div className={`grid grid-cols-1 ${enableB2BFeatures ? 'md:grid-cols-2' : ''} gap-4`}>
+                {/* Retail Card */}
                 <div className={`${subCardClass} p-4 space-y-3`}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider">
-                      B2C Consumer Storefront Asset
+                      Retail Storefront Asset
                     </span>
                     <span className="font-mono text-[11px] font-bold text-[#0F4C3A] dark:text-emerald-400">
                       {formatIDR(mediaInspector.sellingPrice)} / {profile.uomConversion.baseUnitLabel}
@@ -2244,7 +2276,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                   </div>
                   {renderThumbnail(
                     profile.b2cImageUrl,
-                    `${mediaInspector.productName} B2C Retail`,
+                    `${mediaInspector.productName} Retail`,
                     `${mediaInspector.sku}-b2c`,
                     'w-full h-40 rounded-xl'
                   )}
@@ -2262,45 +2294,47 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                   </div>
                 </div>
 
-                {/* B2B Wholesale Card */}
-                <div className={`${subCardClass} p-4 space-y-3`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
-                      B2B Wholesale Master Carton / Pallet
-                    </span>
-                    <span className="font-mono text-[11px] font-bold text-amber-700 dark:text-amber-300">
-                      {profile.uomConversion.unitsPerCarton}x {profile.uomConversion.baseUnitLabel} / {profile.uomConversion.wholesaleUnitLabel}
-                    </span>
-                  </div>
-                  {renderThumbnail(
-                    profile.b2bImageUrl,
-                    `${mediaInspector.productName} B2B Wholesale`,
-                    `${mediaInspector.sku}-b2b`,
-                    'w-full h-40 rounded-xl'
-                  )}
-                  <div className="space-y-1.5 text-xs">
-                    <div>
-                      <span className={`text-[10px] uppercase font-semibold ${textMuted} block`}>
-                        Wholesale Carton &amp; Pallet Spec
+                {/* B2B Wholesale Card (only when enableB2BFeatures is ON) */}
+                {enableB2BFeatures && (
+                  <div className={`${subCardClass} p-4 space-y-3`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                        B2B Wholesale Master Carton / Pallet
                       </span>
-                      <span className={`font-medium ${textTitle}`}>{profile.wholesalePackagingSpec}</span>
+                      <span className="font-mono text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                        {profile.uomConversion.unitsPerCarton}x {profile.uomConversion.baseUnitLabel} / {profile.uomConversion.wholesaleUnitLabel}
+                      </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[10px]">
+                    {renderThumbnail(
+                      profile.b2bImageUrl,
+                      `${mediaInspector.productName} B2B Wholesale`,
+                      `${mediaInspector.sku}-b2b`,
+                      'w-full h-40 rounded-xl'
+                    )}
+                    <div className="space-y-1.5 text-xs">
                       <div>
-                        <span className={textMuted}>Outer GTIN:</span>{' '}
-                        <strong className={textTitle}>{profile.outerBoxBarcode}</strong>
+                        <span className={`text-[10px] uppercase font-semibold ${textMuted} block`}>
+                          Wholesale Carton &amp; Pallet Spec
+                        </span>
+                        <span className={`font-medium ${textTitle}`}>{profile.wholesalePackagingSpec}</span>
                       </div>
-                      <div>
-                        <span className={textMuted}>Gross Wt:</span>{' '}
-                        <strong className={textTitle}>{profile.grossWeightKg} kg</strong>
-                      </div>
-                      <div className="col-span-2">
-                        <span className={textMuted}>Pallet Ti-Hi:</span>{' '}
-                        <strong className={textTitle}>{profile.palletDimensions}</strong>
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200 dark:border-slate-800/80 font-mono text-[10px]">
+                        <div>
+                          <span className={textMuted}>Outer GTIN:</span>{' '}
+                          <strong className={textTitle}>{profile.outerBoxBarcode}</strong>
+                        </div>
+                        <div>
+                          <span className={textMuted}>Gross Wt:</span>{' '}
+                          <strong className={textTitle}>{profile.grossWeightKg} kg</strong>
+                        </div>
+                        <div className="col-span-2">
+                          <span className={textMuted}>Pallet Ti-Hi:</span>{' '}
+                          <strong className={textTitle}>{profile.palletDimensions}</strong>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Lot / Batch Breakdown for this SKU */}

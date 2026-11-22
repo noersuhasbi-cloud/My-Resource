@@ -4,9 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import type { StaffShiftSession } from '../types/index.ts';
+import type { CompanyPublicBranding, StaffShiftSession } from '../types/index.ts';
 import { apiClient } from '../services/apiClient';
 import { useDarkMode } from '../context/DarkModeContext';
+import { getCompanyMonogram, isSafeLogoUrl } from '../utils/formatters';
 import {
   ShieldCheck,
   Lock,
@@ -24,6 +25,7 @@ interface AdminLoginProps {
   onReturnToStorefront: () => void;
   onShowToast?: (title: string, message: string) => void;
   enableB2BAndStorefrontPortal?: boolean;
+  companyBranding?: CompanyPublicBranding | null;
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({
@@ -31,9 +33,13 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   onReturnToStorefront,
   onShowToast,
   enableB2BAndStorefrontPortal = false,
+  companyBranding,
 }) => {
   const { theme, toggleDarkMode: toggleTheme } = useDarkMode();
   const isLight = theme === 'light';
+  const brandName = companyBranding?.companyName || 'PT GroceMart Ritel Nusantara';
+  const brandLogo = isSafeLogoUrl(companyBranding?.logoUrl) ? companyBranding!.logoUrl! : '';
+  const brandMonogram = getCompanyMonogram(brandName);
 
   const [identifierInput, setIdentifierInput] = useState<string>('');
   const [passwordInput, setPasswordInput] = useState<string>('');
@@ -153,13 +159,19 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
           <div className="p-6 sm:p-8 border-b border-gray-200 dark:border-slate-800/80 bg-gradient-to-r from-emerald-50/60 via-white to-gray-50/60 dark:from-[#12141C] dark:via-[#12141C] dark:to-emerald-950/60 gm-hero-banner">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-[#0F4C3A] text-white flex items-center justify-center font-extrabold text-xl shadow-md shadow-[#0F4C3A]/20 shrink-0">
-                  GM
-                </div>
+                {brandLogo ? (
+                  <div className="w-12 h-12 rounded-xl bg-white dark:bg-[#090A0F] border border-gray-200 dark:border-slate-800/80 flex items-center justify-center p-1 shadow-sm shrink-0 overflow-hidden">
+                    <img src={brandLogo} alt={brandName} className="w-full h-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-[#0F4C3A] text-white flex items-center justify-center font-extrabold text-xl shadow-md shadow-[#0F4C3A]/20 shrink-0">
+                    {brandMonogram}
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-100 font-display">
-                      GroceMart ERP &amp; POS Suite
+                      {brandName}
                     </h1>
                     <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-[#0F4C3A] border border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800/50 font-mono">
                       v4.2 ENTERPRISE
@@ -283,7 +295,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               <ShieldCheck className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-500" />
               <span>ISO 27001 Certified · General Ledger Financial Immutability Enforced</span>
             </div>
-            <span className="font-mono text-[11px]">PT Bumi Retail Sejahtera (GroceMart)</span>
+            <span className="font-mono text-[11px]">
+              {brandName}
+              {companyBranding?.phoneNumber ? ` · ${companyBranding.phoneNumber}` : ''}
+            </span>
           </div>
         </div>
       </main>

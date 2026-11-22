@@ -74,6 +74,9 @@ import type {
   StoreOperationalStatus,
   StoreOutletSchedule,
   OutletType,
+  CompanyProfile,
+  CompanyPublicBranding,
+  IndonesiaTimezone,
   ItemClassification,
   TrialGovernanceConfig,
   TrialGovernanceStatusSnapshot,
@@ -374,19 +377,116 @@ let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDER
 let customerOrders: Order[] = JSON.parse(JSON.stringify(INITIAL_ORDERS));
 let enterpriseSettings: EnterpriseSettingsConfig = JSON.parse(JSON.stringify(INITIAL_ENTERPRISE_SETTINGS));
 
+const INITIAL_COMPANIES: CompanyProfile[] = [
+  {
+    id: 'COMP-001',
+    companyName: 'PT GroceMart Ritel Nusantara',
+    partnerName: 'PT Bumi Retail Sejahtera Tbk',
+    logoUrl: '',
+    npwp: '01.308.449.2-007.000',
+    isPrimary: true,
+    street: 'Jl. Senopati No. 82, Kebayoran Baru',
+    city: 'Jakarta Selatan',
+    province: 'DKI Jakarta',
+    postalCode: '12110',
+    country: 'Indonesia',
+    currency: 'IDR',
+    timezone: 'Asia/Jakarta',
+    emailDomain: '@grocemart.co.id',
+    companyEmail: 'corporate@grocemart.co.id',
+    phoneNumber: '+62 21 5550 1888',
+    website: 'https://www.grocemart.co.id',
+    socialMedia: {
+      instagram: '@grocemart.id',
+      whatsappBusiness: '+62 811 9000 1888',
+      tiktok: '@grocemart.id',
+      linkedin: 'company/grocemart-nusantara',
+    },
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'System Seed',
+  },
+];
+
+let companiesList: CompanyProfile[] = JSON.parse(JSON.stringify(INITIAL_COMPANIES));
+
+const ALLOWED_ID_TIMEZONES: IndonesiaTimezone[] = ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura'];
+
+function normalizeIndonesiaTimezone(tz?: string): IndonesiaTimezone {
+  if (tz && ALLOWED_ID_TIMEZONES.includes(tz as IndonesiaTimezone)) return tz as IndonesiaTimezone;
+  if (tz === 'WITA') return 'Asia/Makassar';
+  if (tz === 'WIT') return 'Asia/Jayapura';
+  return 'Asia/Jakarta';
+}
+
+function sanitizeCompanyLogoUrl(raw?: string): { valid: boolean; value: string; error?: string } {
+  const val = String(raw || '').trim();
+  if (!val) return { valid: true, value: '' };
+  if (/^(javascript|vbscript|data:text\/html|data:image\/svg\+xml)/i.test(val)) {
+    return { valid: false, value: '', error: 'Format Logo URL tidak diizinkan demi keamanan.' };
+  }
+  if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(val)) {
+    if (val.length > 2_800_000) {
+      return { valid: false, value: '', error: 'Ukuran gambar logo melebihi batas maksimal 2 MB.' };
+    }
+    return { valid: true, value: val };
+  }
+  if (/^https?:\/\/[^\s"'<>]+$/i.test(val) || /^\/[A-Za-z0-9._\-\/]+$/.test(val)) {
+    return { valid: true, value: val };
+  }
+  return { valid: false, value: '', error: 'Logo harus berupa URL http(s)://, path lokal /, atau gambar PNG/JPG/WEBP base64.' };
+}
+
+function sanitizeWebsiteUrl(raw?: string): string {
+  const val = String(raw || '').trim();
+  if (!val) return '';
+  if (/^(javascript|vbscript|data:)/i.test(val)) return '';
+  if (/^https?:\/\//i.test(val)) return val;
+  return `https://${val}`;
+}
+
+function getPrimaryCompany(): CompanyProfile {
+  return companiesList.find((c) => c.isPrimary) || companiesList[0] || INITIAL_COMPANIES[0];
+}
+
+function toPublicCompanyBranding(comp: CompanyProfile): CompanyPublicBranding {
+  return {
+    id: comp.id,
+    companyName: comp.companyName,
+    partnerName: comp.partnerName,
+    logoUrl: comp.logoUrl,
+    npwp: comp.npwp,
+    street: comp.street,
+    city: comp.city,
+    province: comp.province,
+    postalCode: comp.postalCode,
+    country: 'Indonesia',
+    currency: 'IDR',
+    timezone: normalizeIndonesiaTimezone(comp.timezone),
+    emailDomain: comp.emailDomain,
+    companyEmail: comp.companyEmail,
+    phoneNumber: comp.phoneNumber,
+    website: comp.website,
+    socialMedia: { ...(comp.socialMedia || {}) },
+  };
+}
+
 function mergeErpSettings(raw?: Partial<ErpConfigurationSettings> | null): ErpConfigurationSettings {
   const base = INITIAL_ERP_SETTINGS;
   const src = raw || {};
   const rawMarginFloor = Number(src.minMarginFloorPct);
   const rawMaxOutlets = Number(src.maxAllowedOutlets);
   const rawMaxUsers = Number(src.maxAllowedUsers);
+  const b2bEnabled = src.enableB2BFeatures === true || src.enableB2BAndStorefrontPortal === true;
   return {
     ...base,
     ...src,
     minMarginFloorPct: Number.isFinite(rawMarginFloor) ? Math.max(0, Math.min(50, rawMarginFloor)) : (base.minMarginFloorPct ?? 2.0),
     maxAllowedOutlets: Number.isFinite(rawMaxOutlets) ? Math.max(1, Math.min(500, Math.round(rawMaxOutlets))) : (base.maxAllowedOutlets ?? 10),
     maxAllowedUsers: Number.isFinite(rawMaxUsers) ? Math.max(1, Math.min(500, Math.round(rawMaxUsers))) : (base.maxAllowedUsers ?? 25),
-    enableB2BAndStorefrontPortal: src.enableB2BAndStorefrontPortal === true,
+    enableB2BAndStorefrontPortal: b2bEnabled,
+    enableB2BFeatures: b2bEnabled,
+    localizationCountry: 'Indonesia',
+    primaryCurrency: 'IDR',
     ojolChannelRates: {
       grabMart: { ...base.ojolChannelRates.grabMart, ...(src.ojolChannelRates?.grabMart || {}) },
       goMart: { ...base.ojolChannelRates.goMart, ...(src.ojolChannelRates?.goMart || {}) },
@@ -4186,12 +4286,17 @@ function enrichOutletSchedule(st: StoreOutletSchedule, idx: number): StoreOutlet
   const name = (st.name || st.storeName || st.storeId).trim();
   const branchCode = deriveDefaultBranchCode(st, idx);
   const phone = st.phone || st.contactPhone || '+62 21 5550100';
+  const primary = getPrimaryCompany();
+  const matchedCompany = (st.parentCompanyId ? companiesList.find((c) => c.id === st.parentCompanyId) : undefined) || primary;
   return {
     ...st,
     id: st.id || st.storeId,
     branchCode,
     name,
     storeName: st.storeName || name,
+    parentCompanyId: matchedCompany.id,
+    parentCompanyName: matchedCompany.companyName,
+    branchPartnerName: (st.branchPartnerName || matchedCompany.partnerName || '').trim(),
     outletType,
     address: st.address || `${st.district || 'Central'}, ${st.city || 'Indonesia'}`,
     phone,
@@ -7825,6 +7930,7 @@ function captureServerState() {
     savedAt: new Date().toISOString(),
     isCleanProductionMode,
     erpSettings: enterpriseSettings.erpSettings,
+    companiesList,
     storeStatus,
     storeSchedules,
     warehouseZones,
@@ -7914,6 +8020,11 @@ function captureServerState() {
 function applyServerState(snap: any) {
   if (!snap || typeof snap !== 'object') return;
   isCleanProductionMode = Boolean(snap.isCleanProductionMode);
+  if (Array.isArray(snap.companiesList) && snap.companiesList.length > 0) {
+    companiesList = snap.companiesList;
+  } else {
+    companiesList = JSON.parse(JSON.stringify(INITIAL_COMPANIES));
+  }
   if (snap.storeStatus) storeStatus = snap.storeStatus;
   if (Array.isArray(snap.storeSchedules)) {
     storeSchedules = snap.storeSchedules.map((st: StoreOutletSchedule, idx: number) => enrichOutletSchedule(st, idx));
@@ -8404,6 +8515,7 @@ async function initializeCleanProductionStore(req?: Request) {
 
     // Preserve enterpriseSettings (Coretax/PPN/MDR/Margin Floor), COA mapping, POS config, RBAC & warehouse structure
     const preservedEnterpriseSettings = JSON.parse(JSON.stringify(enterpriseSettings));
+    const preservedCompaniesList = JSON.parse(JSON.stringify(companiesList));
     const preservedCoaMapping = JSON.parse(JSON.stringify(coaMappingConfig));
     const preservedPosConfig = JSON.parse(JSON.stringify(posCheckoutConfig));
     const preservedOperatorAssignments = JSON.parse(JSON.stringify(operatorBranchAssignments));
@@ -8492,6 +8604,7 @@ async function initializeCleanProductionStore(req?: Request) {
 
     // Restore preserved configuration & RBAC roles
     enterpriseSettings = preservedEnterpriseSettings;
+    companiesList = preservedCompaniesList;
     coaMappingConfig = preservedCoaMapping;
     posCheckoutConfig = preservedPosConfig;
     operatorBranchAssignments = preservedOperatorAssignments;
@@ -10341,9 +10454,13 @@ async function startServer() {
   // STORE OPERATIONS & SCHEDULES MANAGEMENT ENDPOINTS
   // -------------------------------------------------------------
   app.get(['/api/admin/store-status', '/api/store-status', '/api/store/status'], (_req: Request, res: Response) => {
+    const erp = getErpSettings();
+    const b2bOn = erp.enableB2BFeatures === true || erp.enableB2BAndStorefrontPortal === true;
     res.json({
       ...storeStatus,
-      enableB2BAndStorefrontPortal: getErpSettings().enableB2BAndStorefrontPortal === true,
+      enableB2BAndStorefrontPortal: b2bOn,
+      enableB2BFeatures: b2bOn,
+      primaryCompany: toPublicCompanyBranding(getPrimaryCompany()),
     });
   });
 
@@ -17429,7 +17546,21 @@ async function startServer() {
       return res.status(400).json({ error: 'minMarginFloorPct must be between 0% and 50%.' });
     }
     mergedErp.minMarginFloorPct = Number(normalizedMarginFloor.toFixed(2));
-    mergedErp.enableB2BAndStorefrontPortal = Boolean(mergedErp.enableB2BAndStorefrontPortal);
+    const nextB2BState =
+      patch.enableB2BFeatures !== undefined && patch.enableB2BAndStorefrontPortal === undefined
+        ? Boolean(patch.enableB2BFeatures)
+        : patch.enableB2BAndStorefrontPortal !== undefined && patch.enableB2BFeatures === undefined
+        ? Boolean(patch.enableB2BAndStorefrontPortal)
+        : Boolean(
+            patch.enableB2BFeatures ??
+              patch.enableB2BAndStorefrontPortal ??
+              mergedErp.enableB2BFeatures ??
+              mergedErp.enableB2BAndStorefrontPortal
+          );
+    mergedErp.enableB2BAndStorefrontPortal = nextB2BState;
+    mergedErp.enableB2BFeatures = nextB2BState;
+    mergedErp.localizationCountry = 'Indonesia';
+    mergedErp.primaryCurrency = 'IDR';
 
     if (patch.maxAllowedOutlets !== undefined) {
       if (!isCallerSuperAdminForUserMgmt(req)) {
@@ -17564,6 +17695,189 @@ async function startServer() {
     });
   });
 
+  // --- 1A1. MULTI-COMPANY PROFILE MASTER (LOGO, ADDRESS, IDR/WIB, CONTACTS & SOCIALS) ---
+  app.get('/api/admin/settings/companies', (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      companies: companiesList,
+      primaryCompany: getPrimaryCompany(),
+    });
+  });
+
+  app.post('/api/admin/settings/companies', (req: Request, res: Response) => {
+    if (!isCallerSuperAdminForUserMgmt(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat menambah profil perusahaan.',
+      });
+    }
+    const body = (req.body || {}) as Partial<CompanyProfile>;
+    const companyName = String(body.companyName || '').trim();
+    if (!companyName) {
+      return res.status(400).json({ success: false, error: 'Nama Perusahaan (Company Name) wajib diisi.' });
+    }
+    if (body.currency && body.currency !== 'IDR') {
+      return res.status(400).json({ success: false, error: 'Sistem terkunci pada mata uang Rupiah Indonesia (IDR).' });
+    }
+    if (body.country && body.country !== 'Indonesia') {
+      return res.status(400).json({ success: false, error: 'Lokalisasi sistem terkunci untuk wilayah Indonesia.' });
+    }
+    const logoCheck = sanitizeCompanyLogoUrl(body.logoUrl);
+    if (!logoCheck.valid) {
+      return res.status(400).json({ success: false, code: 'INVALID_LOGO_URL', error: logoCheck.error });
+    }
+    const rawDomain = String(body.emailDomain || '').trim();
+    const emailDomain = rawDomain ? (rawDomain.startsWith('@') ? rawDomain : `@${rawDomain}`) : '@grocemart.co.id';
+    const nextId = `COMP-${String(companiesList.length + 1).padStart(3, '0')}`;
+    const shouldBePrimary = body.isPrimary === true || companiesList.length === 0;
+    if (shouldBePrimary) {
+      companiesList.forEach((c) => {
+        c.isPrimary = false;
+      });
+    }
+    const newComp: CompanyProfile = {
+      id: nextId,
+      companyName,
+      partnerName: String(body.partnerName || companyName).trim(),
+      logoUrl: logoCheck.value,
+      npwp: String(body.npwp || '').trim(),
+      isPrimary: shouldBePrimary,
+      street: String(body.street || '').trim(),
+      city: String(body.city || 'Jakarta').trim(),
+      province: String(body.province || 'DKI Jakarta').trim(),
+      postalCode: String(body.postalCode || '').trim(),
+      country: 'Indonesia',
+      currency: 'IDR',
+      timezone: normalizeIndonesiaTimezone(body.timezone),
+      emailDomain,
+      companyEmail: String(body.companyEmail || '').trim(),
+      phoneNumber: String(body.phoneNumber || '').trim(),
+      website: sanitizeWebsiteUrl(body.website),
+      socialMedia: {
+        instagram: String(body.socialMedia?.instagram || '').trim(),
+        whatsappBusiness: String(body.socialMedia?.whatsappBusiness || '').trim(),
+        tiktok: String(body.socialMedia?.tiktok || '').trim(),
+        linkedin: String(body.socialMedia?.linkedin || '').trim(),
+      },
+      updatedAt: new Date().toISOString(),
+      updatedBy: getEffectiveOperatorName(req),
+    };
+    companiesList.push(newComp);
+    appendAuditTrailLog({
+      req,
+      actorName: getEffectiveOperatorName(req),
+      actorRole: 'super_admin',
+      branchScope: 'CONSOLIDATED',
+      module: 'SECURITY',
+      action: 'COMPANY_PROFILE_CREATED',
+      referenceId: newComp.id,
+      summary: `Created company profile ${newComp.companyName} (Partner: ${newComp.partnerName}, Currency: IDR, TZ: ${newComp.timezone}).`,
+    });
+    scheduleStateSave();
+    return res.status(201).json({
+      success: true,
+      company: newComp,
+      companies: companiesList,
+      primaryCompany: getPrimaryCompany(),
+      message: `Perusahaan '${newComp.companyName}' berhasil ditambahkan.`,
+    });
+  });
+
+  app.patch('/api/admin/settings/companies/:id', (req: Request, res: Response) => {
+    if (!isCallerSuperAdminForUserMgmt(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat memperbarui profil perusahaan.',
+      });
+    }
+    const targetId = String(req.params.id || '').trim();
+    const idx = companiesList.findIndex((c) => c.id === targetId);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: `Perusahaan '${targetId}' tidak ditemukan.` });
+    }
+    const body = (req.body || {}) as Partial<CompanyProfile>;
+    if (body.currency && body.currency !== 'IDR') {
+      return res.status(400).json({ success: false, error: 'Sistem terkunci pada mata uang Rupiah Indonesia (IDR).' });
+    }
+    if (body.country && body.country !== 'Indonesia') {
+      return res.status(400).json({ success: false, error: 'Lokalisasi sistem terkunci untuk wilayah Indonesia.' });
+    }
+    const existing = companiesList[idx];
+    if (body.companyName !== undefined) {
+      const cleanName = String(body.companyName).trim();
+      if (!cleanName) {
+        return res.status(400).json({ success: false, error: 'Nama Perusahaan tidak boleh kosong.' });
+      }
+      existing.companyName = cleanName;
+    }
+    if (body.partnerName !== undefined) existing.partnerName = String(body.partnerName).trim();
+    if (body.logoUrl !== undefined) {
+      const logoCheck = sanitizeCompanyLogoUrl(body.logoUrl);
+      if (!logoCheck.valid) {
+        return res.status(400).json({ success: false, code: 'INVALID_LOGO_URL', error: logoCheck.error });
+      }
+      existing.logoUrl = logoCheck.value;
+    }
+    if (body.npwp !== undefined) existing.npwp = String(body.npwp).trim();
+    if (body.street !== undefined) existing.street = String(body.street).trim();
+    if (body.city !== undefined) existing.city = String(body.city).trim();
+    if (body.province !== undefined) existing.province = String(body.province).trim();
+    if (body.postalCode !== undefined) existing.postalCode = String(body.postalCode).trim();
+    if (body.timezone !== undefined) existing.timezone = normalizeIndonesiaTimezone(body.timezone);
+    if (body.emailDomain !== undefined) {
+      const d = String(body.emailDomain).trim();
+      existing.emailDomain = d ? (d.startsWith('@') ? d : `@${d}`) : '';
+    }
+    if (body.companyEmail !== undefined) existing.companyEmail = String(body.companyEmail).trim();
+    if (body.phoneNumber !== undefined) existing.phoneNumber = String(body.phoneNumber).trim();
+    if (body.website !== undefined) existing.website = sanitizeWebsiteUrl(body.website);
+    if (body.socialMedia !== undefined) {
+      existing.socialMedia = {
+        instagram: String(body.socialMedia?.instagram ?? existing.socialMedia?.instagram ?? '').trim(),
+        whatsappBusiness: String(body.socialMedia?.whatsappBusiness ?? existing.socialMedia?.whatsappBusiness ?? '').trim(),
+        tiktok: String(body.socialMedia?.tiktok ?? existing.socialMedia?.tiktok ?? '').trim(),
+        linkedin: String(body.socialMedia?.linkedin ?? existing.socialMedia?.linkedin ?? '').trim(),
+      };
+    }
+    if (body.isPrimary === true) {
+      companiesList.forEach((c) => {
+        c.isPrimary = c.id === existing.id;
+      });
+    }
+    existing.country = 'Indonesia';
+    existing.currency = 'IDR';
+    existing.updatedAt = new Date().toISOString();
+    existing.updatedBy = getEffectiveOperatorName(req);
+
+    // Cascade company name update to linked outlets
+    storeSchedules.forEach((s) => {
+      if (s.parentCompanyId === existing.id) {
+        s.parentCompanyName = existing.companyName;
+      }
+    });
+
+    appendAuditTrailLog({
+      req,
+      actorName: getEffectiveOperatorName(req),
+      actorRole: 'super_admin',
+      branchScope: 'CONSOLIDATED',
+      module: 'SECURITY',
+      action: 'COMPANY_PROFILE_UPDATED',
+      referenceId: existing.id,
+      summary: `Updated company profile ${existing.companyName} (Primary: ${existing.isPrimary ? 'Yes' : 'No'}, TZ: ${existing.timezone}).`,
+    });
+    scheduleStateSave();
+    return res.json({
+      success: true,
+      company: existing,
+      companies: companiesList,
+      primaryCompany: getPrimaryCompany(),
+      message: `Profil perusahaan '${existing.companyName}' berhasil diperbarui.`,
+    });
+  });
+
   // --- 1A2. EDITABLE OUTLET / BRANCH PROFILES & QUOTA MANAGEMENT (SUPER ADMIN) ---
   app.get('/api/admin/settings/outlets', (_req: Request, res: Response) => {
     res.json({
@@ -17571,6 +17885,7 @@ async function startServer() {
       outlets: storeSchedules.map((st, idx) => enrichOutletSchedule(st, idx)),
       quota: getOutletQuotaSummary(),
       branchOptions: getDynamicBranchOptions(),
+      companies: companiesList,
     });
   });
 
@@ -17595,6 +17910,17 @@ async function startServer() {
       ? (body.outletType as OutletType)
       : 'FLAGSHIP_STORE';
     const nextIsActive = body.isActive !== false;
+
+    const requestedCompanyId = String(body.parentCompanyId || '').trim();
+    let parentCompany = getPrimaryCompany();
+    if (requestedCompanyId) {
+      const foundComp = companiesList.find((c) => c.id === requestedCompanyId);
+      if (!foundComp) {
+        return res.status(400).json({ success: false, error: `Perusahaan induk '${requestedCompanyId}' tidak ditemukan.` });
+      }
+      parentCompany = foundComp;
+    }
+    const cleanBranchPartner = String(body.branchPartnerName || parentCompany.partnerName || '').trim();
 
     if (!cleanName) {
       return res.status(400).json({ success: false, error: 'Nama Outlet / Cabang wajib diisi.' });
@@ -17638,6 +17964,9 @@ async function startServer() {
         branchCode: cleanCode,
         name: cleanName,
         storeName: cleanName,
+        parentCompanyId: parentCompany.id,
+        parentCompanyName: parentCompany.companyName,
+        branchPartnerName: cleanBranchPartner,
         outletType,
         address: cleanAddress,
         city: cleanCity,
@@ -17784,6 +18113,18 @@ async function startServer() {
     if (body.outletType !== undefined && validTypes.includes(body.outletType)) {
       existing.outletType = body.outletType;
     }
+    if (body.parentCompanyId !== undefined) {
+      const reqCompId = String(body.parentCompanyId).trim();
+      const matchedComp = reqCompId ? companiesList.find((c) => c.id === reqCompId) : getPrimaryCompany();
+      if (!matchedComp) {
+        return res.status(400).json({ success: false, error: `Perusahaan induk '${reqCompId}' tidak ditemukan.` });
+      }
+      existing.parentCompanyId = matchedComp.id;
+      existing.parentCompanyName = matchedComp.companyName;
+    }
+    if (body.branchPartnerName !== undefined) {
+      existing.branchPartnerName = String(body.branchPartnerName).trim();
+    }
     if (body.address !== undefined) existing.address = String(body.address).trim();
     if (body.city !== undefined) existing.city = String(body.city).trim() || existing.city;
     if (body.district !== undefined) existing.district = String(body.district).trim() || existing.district;
@@ -17916,6 +18257,9 @@ async function startServer() {
         storeId: st.storeId,
         branchCode,
         storeName: st.storeName,
+        parentCompanyId: st.parentCompanyId,
+        parentCompanyName: st.parentCompanyName,
+        branchPartnerName: st.branchPartnerName,
         city: st.city,
         district: st.district,
         hubType,

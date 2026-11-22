@@ -89,7 +89,7 @@ function getDocumentMeta(payload: PrintPayload): {
 }
 
 export const PrintPreviewModal: React.FC = () => {
-  const { activePrintPayload, isPreviewOpen, invoiceTracking, executePrint, clearPrint } = usePrint();
+  const { activePrintPayload, isPreviewOpen, invoiceTracking, companyBranding, executePrint, clearPrint } = usePrint();
   const [zoom, setZoom] = useState<ZoomLevel>(100);
 
   // Set helpful default zoom per paper format whenever a new document preview opens
@@ -235,6 +235,7 @@ export const PrintPreviewModal: React.FC = () => {
                 printedAt: previewTimestamp,
                 isPreview: true,
                 invoiceTracking,
+                companyBranding,
               })}
             </div>
           </div>
