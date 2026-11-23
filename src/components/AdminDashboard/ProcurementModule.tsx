@@ -54,6 +54,7 @@ import {
   Barcode,
   History,
   ExternalLink,
+  RotateCcw,
 } from 'lucide-react';
 import { VendorBillModule } from './VendorBillModule';
 import { DocumentDispatchModal } from './DocumentDispatchModal';
@@ -125,8 +126,71 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
     : ['purchasing', 'admin', 'coo', 'super_admin'].includes(canonicalRole);
   const isWarehouseRole = canonicalRole === 'warehouse';
   const canViewValuation = canSessionViewValuation(activeStaffSession);
+  const canIssuePurchaseReturn =
+    !activeStaffSession?.roleCode ||
+    ['PURCHASING_HEAD', 'WAREHOUSE_HEAD', 'AP_STAFF', 'STORE_MANAGER', 'CLIENT_OWNER', 'PLATFORM_OWNER', 'SUPER_ADMIN'].includes(
+      activeStaffSession.roleCode
+    );
   const [approvingPoId, setApprovingPoId] = useState<string | null>(null);
   const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
+
+  // Purchase Return & Debit Note (NRP) Modal State
+  const [returnTargetGr, setReturnTargetGr] = useState<GoodsReceiptRecord | null>(null);
+  const [returnSku, setReturnSku] = useState<string>('');
+  const [returnQty, setReturnQty] = useState<number>(1);
+  const [returnLot, setReturnLot] = useState<string>('');
+  const [returnReason, setReturnReason] = useState<string>('Damaged / Spoiled on Goods Receipt');
+  const [isSubmittingPurchaseReturn, setIsSubmittingPurchaseReturn] = useState<boolean>(false);
+
+  const openPurchaseReturnModal = (gr: GoodsReceiptRecord) => {
+    const firstItem = gr.items[0];
+    setReturnTargetGr(gr);
+    setReturnSku(firstItem?.sku || '');
+    setReturnQty(firstItem ? Math.min(1, firstItem.quantityReceived) : 1);
+    setReturnLot(firstItem?.batchNumber || '');
+    setReturnReason('Damaged / Spoiled on Goods Receipt');
+  };
+
+  const handleSubmitPurchaseReturn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!returnTargetGr || !returnSku) return;
+    const grLine = returnTargetGr.items.find((it) => it.sku === returnSku);
+    if (!grLine) {
+      onShowToast('Invalid Item', 'Selected SKU is not present on this Goods Receipt.');
+      return;
+    }
+    const qty = Number(returnQty || 0);
+    if (!Number.isFinite(qty) || qty <= 0 || qty > grLine.quantityReceived) {
+      onShowToast(
+        'Invalid Return Quantity',
+        `Return quantity must be > 0 and <= GR received quantity (${grLine.quantityReceived}).`
+      );
+      return;
+    }
+    setIsSubmittingPurchaseReturn(true);
+    try {
+      const res = await apiClient.createPurchaseReturn({
+        grId: returnTargetGr.id,
+        poId: returnTargetGr.poId,
+        vendorBillId: returnTargetGr.linkedVendorBillId || returnTargetGr.linkedVendorBillIds?.[0],
+        supplierName: returnTargetGr.vendorName,
+        storeId: returnTargetGr.storeId,
+        storeName: returnTargetGr.storeName,
+        sku: grLine.sku,
+        productName: grLine.productName,
+        lotNumber: returnLot.trim() || grLine.batchNumber,
+        quantityReturned: qty,
+        reason: returnReason.trim() || 'Damaged / Spoiled on Goods Receipt',
+      });
+      onShowToast('Debit Note Issued', res.message);
+      setReturnTargetGr(null);
+      onRefreshData();
+    } catch (err: any) {
+      onShowToast('Purchase Return Error', err.message || 'Failed to issue Purchase Return Debit Note');
+    } finally {
+      setIsSubmittingPurchaseReturn(false);
+    }
+  };
 
   // Modal States
   const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
@@ -2527,6 +2591,23 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           ))}
                         </div>
                       )}
+                      {gr.linkedReturnIds && gr.linkedReturnIds.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {gr.linkedReturnIds.map((retId) => (
+                            <span
+                              key={retId}
+                              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-mono font-semibold ${
+                                isLight
+                                  ? 'bg-rose-50 border-rose-200 text-rose-700'
+                                  : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
+                              }`}
+                              title={`Coretax Purchase Return Debit Note ${retId}`}
+                            >
+                              {retId}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className={`py-3.5 px-4 font-mono ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>
                       {gr.deliveryNoteNumber}
@@ -2624,6 +2705,21 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                           <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
                             Verified
                           </span>
+                        )}
+                        {canIssuePurchaseReturn && gr.items.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => openPurchaseReturnModal(gr)}
+                            className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap ${
+                              isLight
+                                ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                                : 'bg-rose-950/40 text-rose-300 border-rose-800/60 hover:bg-rose-900/60'
+                            }`}
+                            title="Issue Purchase Return & Coretax Debit Note (NRP)"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Return / Debit Note</span>
+                          </button>
                         )}
                         <button
                           type="button"
@@ -4105,6 +4201,150 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           onShowToast={onShowToast}
         />
       )}
+
+      {/* MODAL: PURCHASE RETURN TO VENDOR & CORETAX DEBIT NOTE (NRP) */}
+      {returnTargetGr &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[105] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
+            onClick={() => setReturnTargetGr(null)}
+          >
+            <div
+              className={`border rounded-2xl w-full max-w-lg p-5 sm:p-6 space-y-4 shadow-2xl my-auto gm-modal-pop ${
+                isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={`flex items-start justify-between gap-3 border-b pb-3 ${isLight ? 'border-gray-200' : 'border-slate-800/80'}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                    <RotateCcw className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold">Purchase Return &amp; Debit Note (NRP)</h3>
+                    <p className="text-[11px] font-mono text-gray-500 dark:text-slate-400">
+                      GR #{returnTargetGr.id} · PO #{returnTargetGr.poId} · {returnTargetGr.vendorName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReturnTargetGr(null)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitPurchaseReturn} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block font-semibold mb-1">Goods Receipt Line Item</label>
+                  <select
+                    value={returnSku}
+                    onChange={(e) => {
+                      const nextSku = e.target.value;
+                      setReturnSku(nextSku);
+                      const line = returnTargetGr.items.find((it) => it.sku === nextSku);
+                      if (line) {
+                        setReturnLot(line.batchNumber || '');
+                        setReturnQty(Math.min(1, line.quantityReceived));
+                      }
+                    }}
+                    className={`w-full px-3 py-2 rounded-xl border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                    }`}
+                  >
+                    {returnTargetGr.items.map((it) => (
+                      <option key={it.sku} value={it.sku}>
+                        {it.productName} ({it.sku}) — Received: {it.quantityReceived} · Lot: {it.batchNumber}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {(() => {
+                  const selectedLine = returnTargetGr.items.find((it) => it.sku === returnSku);
+                  const maxQty = selectedLine?.quantityReceived || 1;
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold mb-1">
+                          Return Quantity (Max {maxQty})
+                        </label>
+                        <input
+                          type="number"
+                          min={0.01}
+                          max={maxQty}
+                          step="any"
+                          required
+                          value={returnQty}
+                          onChange={(e) => setReturnQty(Math.max(0, Number(e.target.value) || 0))}
+                          className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
+                            isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold mb-1">Batch / Lot Number</label>
+                        <input
+                          type="text"
+                          value={returnLot}
+                          onChange={(e) => setReturnLot(e.target.value)}
+                          placeholder="Batch / Lot #"
+                          className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                            isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div>
+                  <label className="block font-semibold mb-1">Return Reason &amp; Quality Notes</label>
+                  <input
+                    type="text"
+                    required
+                    value={returnReason}
+                    onChange={(e) => setReturnReason(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border ${
+                      isLight ? 'bg-white border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                    }`}
+                  />
+                </div>
+
+                <div
+                  className={`p-3 rounded-xl border text-[11px] leading-relaxed ${
+                    isLight ? 'bg-amber-50/70 border-amber-200 text-amber-900' : 'bg-amber-950/25 border-amber-800/50 text-amber-200'
+                  }`}
+                >
+                  Reduces Inventory (#1040) &amp; PPN Masukan (#2026) and offsets Trade AP (#2010) — or books Vendor Advance (#1150) if the linked bill is already settled — while generating a DJP Coretax Nota Retur Pembelian (<span className="font-mono font-bold">NRP-*</span>).
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 dark:border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setReturnTargetGr(null)}
+                    className={`px-4 py-2 rounded-xl border font-semibold cursor-pointer ${
+                      isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-300'
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingPurchaseReturn}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold cursor-pointer"
+                  >
+                    {isSubmittingPurchaseReturn ? 'Issuing Debit Note...' : 'Issue Purchase Return (NRP)'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

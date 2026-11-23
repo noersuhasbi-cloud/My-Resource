@@ -169,6 +169,7 @@ import type {
   CompanyProfile,
   CompanyPublicBranding,
   VendorBillPoPrefillResponse,
+  ConsumableIssuanceRecord,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
@@ -3037,6 +3038,10 @@ export const apiClient = {
   },
 
   async createComplianceRtv(payload: {
+    grId?: string;
+    goodsReceiptId?: string;
+    poId?: string;
+    vendorBillId?: string;
     qcInspectionId?: string;
     supplierId?: string;
     supplierName?: string;
@@ -3165,11 +3170,20 @@ export const apiClient = {
   async closePosShift(payload: {
     shiftId?: string;
     storeId: string;
-    denominations: PosShiftDenominationCount[];
-    countedQrisBatchIDR: number;
-    countedEdcBatchIDR: number;
+    denominations?: PosShiftDenominationCount[];
+    actualClosingCashIDR?: number;
+    countedQrisBatchIDR?: number;
+    countedEdcBatchIDR?: number;
     notes?: string;
-  }): Promise<{ success: boolean; shift: PosRegisterShiftSession; zReportNumber: string; message: string }> {
+  }): Promise<{
+    success: boolean;
+    shift: PosRegisterShiftSession;
+    zReportNumber: string;
+    expectedCashIDR?: number;
+    actualClosingCashIDR?: number;
+    cashVarianceIDR?: number;
+    message: string;
+  }> {
     const res = await fetchApi('/api/pos/shifts/close', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -5021,4 +5035,150 @@ export const apiClient = {
     });
     return res.json().catch(() => ({ success: false }));
   },
+
+  // -------------------------------------------------------------
+  // 5 OPERATIONAL CLOSURE APIS (POS RETURN, PURCHASE RETURN, CONSUMABLES, OPENING BALANCES)
+  // -------------------------------------------------------------
+  async submitPosReturn(payload: {
+    receiptNumber: string;
+    supervisorPin: string;
+    refundMethod?: RmaRefundMethod;
+    customerNpwpOrNik?: string;
+    reason?: string;
+    notes?: string;
+    items: Array<{
+      sku: string;
+      productName?: string;
+      category?: string;
+      quantity: number;
+      unitPriceIDR?: number;
+      unitCostIDR?: number;
+      disposition: 'RESTOCK' | 'DAMAGED_WASTE' | RmaDisposition;
+      lotNumber?: string;
+      reason?: string;
+    }>;
+  }): Promise<{
+    success: boolean;
+    rma: CustomerRmaRecord;
+    posReturn: POSReturnRecord;
+    notaReturNumber: string;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/pos/returns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to process POS return & Nota Retur');
+    }
+    return data;
+  },
+
+  async createPurchaseReturn(payload: {
+    grId?: string;
+    goodsReceiptId?: string;
+    poId?: string;
+    vendorBillId?: string;
+    qcInspectionId?: string;
+    supplierId?: string;
+    supplierName?: string;
+    supplierNpwp?: string;
+    storeId?: string;
+    storeName?: string;
+    sku: string;
+    productName?: string;
+    lotNumber?: string;
+    quantityReturned: number;
+    unit?: string;
+    unitCostIDR?: number;
+    reason?: string;
+  }): Promise<{
+    success: boolean;
+    rtv: VendorRtvDebitNote;
+    notaReturNumber: string;
+    apOffsetIDR: number;
+    vendorPrepaymentAdvanceIDR: number;
+    linkedBillId?: string;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/procurement/purchase-returns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to issue Purchase Return Debit Note');
+    }
+    return data;
+  },
+
+  async getConsumableIssuances(storeId?: string): Promise<{
+    success: boolean;
+    issuances: ConsumableIssuanceRecord[];
+  }> {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'ALL' && storeId !== 'CONSOLIDATED') params.append('storeId', storeId);
+    const res = await fetchApi(`/api/admin/inventory/consumables/issuances?${params.toString()}`);
+    if (!res.ok) return { success: false, issuances: [] };
+    return res.json().catch(() => ({ success: false, issuances: [] }));
+  },
+
+  async issueConsumableUsage(payload: {
+    sku: string;
+    storeId?: string;
+    quantity: number;
+    department?: string;
+    purpose?: string;
+  }): Promise<{
+    success: boolean;
+    issuance: ConsumableIssuanceRecord;
+    remainingAvailableStock: number;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/inventory/consumables/issue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to issue internal consumable usage');
+    }
+    return data;
+  },
+
+  async setOpeningBalances(payload: {
+    storeId?: string;
+    effectiveDate?: string;
+    cashOnHand1010IDR: number;
+    bankAccounts1020IDR: number;
+    openingAccountsReceivable1110IDR: number;
+    openingAccountsPayable2010IDR: number;
+    notes?: string;
+  }): Promise<{
+    success: boolean;
+    batchRef: string;
+    effectiveDate: string;
+    storeId: string;
+    glVoucherIds: string[];
+    netEquityOffsetIDR: number;
+    totalDebit: number;
+    totalCredit: number;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/accounting/opening-balances', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Failed to post opening balances');
+    }
+    return data;
+  },
 };
+

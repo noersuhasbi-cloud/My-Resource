@@ -1543,7 +1543,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
               <Banknote className="w-3.5 h-3.5" />
               <span>
                 {activeShift
-                  ? `Shift Open · ${activeShift.transactionCount} Txn`
+                  ? `Close Register / Z-Report · ${activeShift.transactionCount} Txn`
                   : 'Open Register (Modal Awal)'}
               </span>
             </button>
@@ -3380,34 +3380,51 @@ export const PosModule: React.FC<PosModuleProps> = ({
                   {historyReceipts.length === 0 ? (
                     <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-8">No POS transactions yet today.</p>
                   ) : (
-                    historyReceipts.map((rcp) => (
-                      <div
-                        key={rcp.receiptNumber}
-                        onClick={() => setCompletedReceipt(rcp)}
-                        className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-all hover:border-emerald-500/50 ${
-                          isLight ? 'bg-gray-50 border-gray-200 hover:bg-white' : 'bg-[#090A0F] border-slate-800/80 hover:bg-slate-900/70'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between font-bold">
-                          <span className="font-mono">{rcp.receiptNumber}</span>
-                          <span className="text-emerald-600 dark:text-emerald-400">{formatIDR(rcp.total)}</span>
+                    historyReceipts.map((rcp) => {
+                      const hasReturn = (rcp.returnIds?.length ?? 0) > 0;
+                      const allReturned =
+                        rcp.items.length > 0 &&
+                        rcp.items.every((it) => Number(rcp.returnedBySku?.[it.sku] || 0) >= it.quantity);
+                      return (
+                        <div
+                          key={rcp.receiptNumber}
+                          onClick={() => setCompletedReceipt(rcp)}
+                          className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-all hover:border-emerald-500/50 ${
+                            isLight ? 'bg-gray-50 border-gray-200 hover:bg-white' : 'bg-[#090A0F] border-slate-800/80 hover:bg-slate-900/70'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between font-bold gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono">{rcp.receiptNumber}</span>
+                              {hasReturn && (
+                                <span
+                                  className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-mono font-bold border border-amber-500/30"
+                                  title={rcp.returnIds?.join(', ')}
+                                >
+                                  {allReturned ? 'Returned' : `Partial Return (${rcp.returnIds?.length})`}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-emerald-600 dark:text-emerald-400">{formatIDR(rcp.total)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                            <span>{new Date(rcp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="uppercase font-mono">{rcp.paymentMethod}</span>
+                            <button
+                              type="button"
+                              disabled={allReturned}
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                setRmaTargetReceipt(rcp);
+                              }}
+                              className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold hover:bg-amber-500/25 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+                            >
+                              {allReturned ? 'Fully Returned' : 'Process RMA'}
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                          <span>{new Date(rcp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          <span className="uppercase font-mono">{rcp.paymentMethod}</span>
-                          <button
-                            type="button"
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              setRmaTargetReceipt(rcp);
-                            }}
-                            className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold hover:bg-amber-500/25 cursor-pointer"
-                          >
-                            Process RMA
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -3468,6 +3485,7 @@ export const PosModule: React.FC<PosModuleProps> = ({
         onClose={() => setRmaTargetReceipt(null)}
         onCompleted={() => {
           loadProducts();
+          loadHistory();
           loadShiftState();
           if (onInventoryUpdated) onInventoryUpdated();
         }}

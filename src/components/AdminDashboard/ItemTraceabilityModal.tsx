@@ -17,6 +17,7 @@ import {
   MapPin,
   ExternalLink,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
 import type {
   CrossDocumentNavTarget,
@@ -854,6 +855,98 @@ export const ItemTraceabilityModal: React.FC<ItemTraceabilityModalProps> = ({
                               {gid}
                             </button>
                           ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* STAGE 6: PURCHASE RETURNS & DEBIT NOTES (NRP) */}
+              <section className={`rounded-2xl border p-4 space-y-3 ${cardClass}`}>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 text-rose-700 dark:text-rose-400">
+                    <RotateCcw className="w-4 h-4" />
+                    6. Purchase Returns &amp; Vendor Debit Notes (NRP)
+                  </h4>
+                  <span className={`text-[11px] font-mono tabular-nums ${mutedText}`}>
+                    {(data.purchaseReturns || []).length} return(s)
+                  </span>
+                </div>
+
+                {(data.purchaseReturns || []).length === 0 ? (
+                  <p className={`text-xs py-2 ${mutedText}`}>
+                    No Purchase Return / Debit Notes recorded against this SKU.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {(data.purchaseReturns || []).map((ret) => (
+                      <div
+                        key={ret.id}
+                        className={`p-3.5 rounded-xl border space-y-2 ${
+                          isLight
+                            ? 'bg-[#F7F9F8] border-[#DFE7E2]'
+                            : 'bg-[#12141C] border-slate-800/80'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md border font-mono text-xs font-bold ${chipButtonClass('amber')}`}>
+                            {ret.debitNoteNumber}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${getStatusPillClass(
+                              ret.status,
+                              isLight
+                            )}`}
+                          >
+                            {ret.status}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs tabular-nums">
+                          <span className={mutedText}>
+                            Qty: <strong className="font-mono">{ret.quantityReturned} {ret.unit}</strong> · Lot{' '}
+                            <strong className="font-mono">{ret.lotNumber}</strong>
+                          </span>
+                          {!data.financialDataMasked && typeof ret.totalDebitNoteIDR === 'number' && (
+                            <span className="font-mono font-bold text-rose-700 dark:text-rose-300">
+                              {formatIDR(ret.totalDebitNoteIDR)}
+                              {typeof ret.ppnMasukanReversedIDR === 'number' && ret.ppnMasukanReversedIDR > 0
+                                ? ` (incl. PPN ${formatIDR(ret.ppnMasukanReversedIDR)})`
+                                : ''}
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-[11px] ${mutedText}`}>
+                          {ret.supplierName} · {ret.reason}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          {ret.sourceGrId && (
+                            <button
+                              type="button"
+                              onClick={() => handleJump({ target: 'gr', documentId: ret.sourceGrId! })}
+                              className={`px-2 py-0.5 rounded-md border font-mono text-[11px] font-semibold cursor-pointer ${chipButtonClass('emerald')}`}
+                            >
+                              {ret.sourceGrId}
+                            </button>
+                          )}
+                          {ret.poId && (
+                            <button
+                              type="button"
+                              onClick={() => handleJump({ target: 'po', documentId: ret.poId! })}
+                              className={`px-2 py-0.5 rounded-md border font-mono text-[11px] font-semibold cursor-pointer ${chipButtonClass('sky')}`}
+                            >
+                              {ret.poId}
+                            </button>
+                          )}
+                          {!data.financialDataMasked && ret.vendorBillId && (
+                            <button
+                              type="button"
+                              onClick={() => handleJump({ target: 'vendor_bill', documentId: ret.vendorBillId! })}
+                              className={`px-2 py-0.5 rounded-md border font-mono text-[11px] font-semibold cursor-pointer ${chipButtonClass('indigo')}`}
+                            >
+                              {ret.vendorBillId}
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}

@@ -89,6 +89,8 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
   });
   const [countedQrisBatchIDR, setCountedQrisBatchIDR] = useState<number>(0);
   const [countedEdcBatchIDR, setCountedEdcBatchIDR] = useState<number>(0);
+  const [useDirectCashInput, setUseDirectCashInput] = useState<boolean>(false);
+  const [directClosingCashIDR, setDirectClosingCashIDR] = useState<number>(0);
   const [closingNotes, setClosingNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [finalizedZReport, setFinalizedZReport] = useState<PosRegisterShiftSession | null>(null);
@@ -104,11 +106,14 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
   }, [isOpen, activeShift]);
 
   const countedCashTotal = useMemo(() => {
+    if (useDirectCashInput) {
+      return Math.max(0, Math.round(Number(directClosingCashIDR) || 0));
+    }
     return IDR_DENOMINATIONS.reduce(
       (sum, denom) => sum + denom * (Math.max(0, denomCounts[denom] || 0)),
       0
     );
-  }, [denomCounts]);
+  }, [denomCounts, useDirectCashInput, directClosingCashIDR]);
 
   if (!isOpen) return null;
 
@@ -163,18 +168,21 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
     if (!activeShift) return;
     setIsSubmitting(true);
     try {
-      const denominations: PosShiftDenominationCount[] = IDR_DENOMINATIONS.map((denom) => {
-        const count = Math.max(0, denomCounts[denom] || 0);
-        return {
-          denomination: denom,
-          count,
-          subtotalIDR: denom * count,
-        };
-      });
+      const denominations: PosShiftDenominationCount[] = useDirectCashInput
+        ? []
+        : IDR_DENOMINATIONS.map((denom) => {
+            const count = Math.max(0, denomCounts[denom] || 0);
+            return {
+              denomination: denom,
+              count,
+              subtotalIDR: denom * count,
+            };
+          });
       const res = await apiClient.closePosShift({
         shiftId: activeShift.id,
         storeId,
         denominations,
+        ...(useDirectCashInput ? { actualClosingCashIDR: countedCashTotal } : {}),
         countedQrisBatchIDR,
         countedEdcBatchIDR,
         notes: closingNotes,
@@ -310,7 +318,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                 </span>
                 <span className="text-[10px] text-gray-600 dark:text-slate-300">
                   {(finalizedZReport.cashVarianceIDR || 0) !== 0
-                    ? `Posted to COA #5220 (${finalizedZReport.varianceGlVoucherIds?.join(', ')})`
+                    ? `Posted to ${(finalizedZReport.cashVarianceIDR || 0) < 0 ? 'COA #6090 Cash Short' : 'COA #4090 Cash Over'} (${finalizedZReport.varianceGlVoucherIds?.join(', ')})`
                     : 'Balanced — Zero GL variance needed'}
                 </span>
               </div>
@@ -344,7 +352,7 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
                 <span>Declare Shift &amp; Open Petty Cash Float (Modal Awal Laci)</span>
               </div>
               <p className="text-[11px] mt-0.5">
-                Cashier must declare the shift, live timestamp, and starting petty cash drawer float before processing any sales so Z-Report variance (COA #5220) is reconciled accurately.
+                Cashier must declare the shift, live timestamp, and starting petty cash drawer float before processing any sales so Z-Report variance (COA #6090 Cash Short / #4090 Cash Over) is reconciled accurately.
               </p>
             </div>
 
@@ -459,43 +467,90 @@ export const PosShiftModal: React.FC<PosShiftModalProps> = ({
               </span>
             </div>
 
-            {/* Indonesian Rupiah Denomination Matrix */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {IDR_DENOMINATIONS.map((denom) => {
-                const count = denomCounts[denom] || 0;
-                return (
-                  <div
-                    key={denom}
-                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
-                      isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
-                    }`}
-                  >
-                    <div>
-                      <span className="font-mono font-bold block">
-                        Rp {denom.toLocaleString('id-ID')}
-                      </span>
-                      <span className="text-[10px] font-mono text-gray-500 dark:text-slate-400">
-                        {formatIDR(denom * count)}
-                      </span>
-                    </div>
-                    <input
-                      type="number"
-                      min={0}
-                      value={count}
-                      onChange={(e) =>
-                        setDenomCounts((prev) => ({
-                          ...prev,
-                          [denom]: Math.max(0, parseInt(e.target.value, 10) || 0),
-                        }))
-                      }
-                      className={`w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border ${
-                        isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
-                      }`}
-                    />
-                  </div>
-                );
-              })}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-gray-600 dark:text-slate-300">
+                Physical Drawer Count Method
+              </span>
+              <div className={`inline-flex rounded-lg border p-0.5 ${isLight ? 'bg-gray-100 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                <button
+                  type="button"
+                  onClick={() => setUseDirectCashInput(false)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${
+                    !useDirectCashInput
+                      ? 'bg-[#0F4C3A] text-white'
+                      : 'text-gray-600 dark:text-slate-400'
+                  }`}
+                >
+                  Denomination Matrix
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseDirectCashInput(true)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${
+                    useDirectCashInput
+                      ? 'bg-[#0F4C3A] text-white'
+                      : 'text-gray-600 dark:text-slate-400'
+                  }`}
+                >
+                  Direct Cash Total
+                </button>
+              </div>
             </div>
+
+            {useDirectCashInput ? (
+              <div>
+                <label className="block font-semibold mb-1">Actual Closing Cash in Drawer (IDR)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1000}
+                  required
+                  value={directClosingCashIDR}
+                  onChange={(e) => setDirectClosingCashIDR(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="Enter blind physical drawer cash total..."
+                  className={`w-full px-3 py-2.5 rounded-xl border font-mono text-sm font-bold ${
+                    isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                  }`}
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {IDR_DENOMINATIONS.map((denom) => {
+                  const count = denomCounts[denom] || 0;
+                  return (
+                    <div
+                      key={denom}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                        isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
+                      }`}
+                    >
+                      <div>
+                        <span className="font-mono font-bold block">
+                          Rp {denom.toLocaleString('id-ID')}
+                        </span>
+                        <span className="text-[10px] font-mono text-gray-500 dark:text-slate-400">
+                          {formatIDR(denom * count)}
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        value={count}
+                        onChange={(e) =>
+                          setDenomCounts((prev) => ({
+                            ...prev,
+                            [denom]: Math.max(0, parseInt(e.target.value, 10) || 0),
+                          }))
+                        }
+                        className={`w-16 px-2 py-1 text-center font-mono font-bold rounded-lg border ${
+                          isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+                        }`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* EDC & QRIS Batch Totals + Counted Cash Sum */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
@@ -635,34 +690,73 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
 }) => {
   const isLight = theme === 'light';
   const [selectedSkus, setSelectedSkus] = useState<Record<string, boolean>>({});
+  const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
   const [dispositions, setDispositions] = useState<Record<string, RmaDisposition>>({});
   const [refundMethod, setRefundMethod] = useState<RmaRefundMethod>('CASH');
   const [customerNpwpOrNik, setCustomerNpwpOrNik] = useState<string>('');
+  const [supervisorPin, setSupervisorPin] = useState<string>('');
   const [reason, setReason] = useState<string>('Damaged / Customer Return at Register');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
     if (receipt) {
-      setSelectedSkus({});
+      const nextSelected: Record<string, boolean> = {};
+      const nextQty: Record<string, number> = {};
+      receipt.items.forEach((it) => {
+        const already = Number(receipt.returnedBySku?.[it.sku] || 0);
+        const remaining = Math.max(0, Number((it.quantity - already).toFixed(2)));
+        nextSelected[it.sku] = remaining > 0;
+        nextQty[it.sku] = remaining;
+      });
+      setSelectedSkus(nextSelected);
+      setReturnQuantities(nextQty);
       setDispositions({});
       setCustomerNpwpOrNik('');
+      setSupervisorPin('');
       setReason('Damaged / Customer Return at Register');
     }
   }, [receipt?.receiptNumber]);
 
   if (!receipt) return null;
 
-  const toggleSku = (sku: string) => {
+  const getRemainingQty = (sku: string, purchasedQty: number) => {
+    const already = Number(receipt.returnedBySku?.[sku] || 0);
+    return Math.max(0, Number((purchasedQty - already).toFixed(2)));
+  };
+
+  const hasAnyReturnable = receipt.items.some((it) => getRemainingQty(it.sku, it.quantity) > 0);
+
+  const toggleSku = (sku: string, remaining: number) => {
+    if (remaining <= 0) return;
     setSelectedSkus((prev) => ({ ...prev, [sku]: !(prev[sku] ?? true) }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const chosenItems = receipt.items.filter((it) => selectedSkus[it.sku] ?? true);
+    const chosenItems = receipt.items.filter((it) => {
+      const rem = getRemainingQty(it.sku, it.quantity);
+      return rem > 0 && (selectedSkus[it.sku] ?? true);
+    });
     if (chosenItems.length === 0) {
-      onShowToast('Select Items', 'Choose at least one line item to return.');
+      onShowToast('Select Items', 'Choose at least one item with remaining returnable quantity.');
       return;
     }
+    for (const it of chosenItems) {
+      const rem = getRemainingQty(it.sku, it.quantity);
+      const q = Number(returnQuantities[it.sku] ?? rem);
+      if (!Number.isFinite(q) || q <= 0 || q > rem + 1e-6) {
+        onShowToast(
+          'Invalid Return Quantity',
+          `Return quantity for ${it.name} must be between 0.01 and ${rem}.`
+        );
+        return;
+      }
+    }
+    if (!supervisorPin.trim()) {
+      onShowToast('Supervisor PIN Required', 'Enter a Store Manager or Owner Supervisor PIN to authorize refund.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const receiptSubtotal = Number(receipt.subtotal || 0);
@@ -671,32 +765,35 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
         receiptSubtotal > 0 && receiptDiscount > 0
           ? Math.max(0, (receiptSubtotal - Math.min(receiptSubtotal, receiptDiscount)) / receiptSubtotal)
           : 1;
-      const res = await apiClient.createComplianceRma({
-        sourceChannel: 'POS',
-        sourceReferenceId: receipt.receiptNumber,
-        storeId: receipt.storeId,
-        storeName: receipt.storeName,
-        customerName: 'POS Walk-in Customer',
-        customerNpwpOrNik: customerNpwpOrNik.trim() || undefined,
+      const res = await apiClient.submitPosReturn({
+        receiptNumber: receipt.receiptNumber,
+        supervisorPin: supervisorPin.trim(),
         refundMethod,
-        items: chosenItems.map((it) => ({
-          sku: it.sku,
-          productName: it.name,
-          category: it.category,
-          quantity: it.quantity,
-          unitPriceIDR: Math.round(it.unitPrice * netDiscountRatio),
-          unitCostIDR: it.unitCost,
-          disposition: dispositions[it.sku] || 'RESTOCK_ATP',
-          lotNumber: it.lotNumber,
-          reason,
-        })),
+        customerNpwpOrNik: customerNpwpOrNik.trim() || undefined,
+        reason,
         notes: `POS Receipt Return (${receipt.receiptNumber})`,
+        items: chosenItems.map((it) => {
+          const rem = getRemainingQty(it.sku, it.quantity);
+          const qty = Number(returnQuantities[it.sku] ?? rem);
+          const disp = dispositions[it.sku] || 'RESTOCK_ATP';
+          return {
+            sku: it.sku,
+            productName: it.name,
+            category: it.category,
+            quantity: qty,
+            unitPriceIDR: Math.round(it.unitPrice * netDiscountRatio),
+            unitCostIDR: it.unitCost,
+            disposition: disp === 'SCRAP_QUARANTINE' ? 'DAMAGED_WASTE' : 'RESTOCK',
+            lotNumber: it.lotNumber,
+            reason,
+          };
+        }),
       });
       onShowToast('Nota Retur Issued', res.message);
       onCompleted();
       onClose();
     } catch (err: any) {
-      onShowToast('RMA Error', err.message || 'Failed to issue Nota Retur');
+      onShowToast('POS Return Error', err.message || 'Failed to issue Nota Retur');
     } finally {
       setIsSubmitting(false);
     }
@@ -708,7 +805,7 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop ${
+        className={`w-full max-w-2xl rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[calc(100vh-2rem)] overflow-y-auto gm-modal-pop ${
           isLight
             ? 'bg-white border-gray-200 text-slate-900'
             : 'bg-[#12141C] border-slate-800/80 text-slate-100'
@@ -719,9 +816,9 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
           <div className="flex items-center gap-2.5">
             <RotateCcw className="w-5 h-5 text-amber-600 dark:text-amber-400" />
             <div>
-              <h3 className="text-base font-bold">Process Return / RMA &amp; Nota Retur</h3>
+              <h3 className="text-base font-bold">Controlled POS Return / RMA &amp; Nota Retur</h3>
               <p className="text-[11px] font-mono text-gray-500 dark:text-slate-400">
-                Receipt #{receipt.receiptNumber} · DJP PPN Keluaran Auto-Adjustment
+                Receipt #{receipt.receiptNumber} · Supervisor PIN Gated · DJP PPN Keluaran Reversal
               </p>
             </div>
           </div>
@@ -735,53 +832,93 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          <div className="space-y-2 max-h-56 overflow-y-auto">
+          {!hasAnyReturnable && (
+            <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200 font-semibold">
+              All line items on receipt #{receipt.receiptNumber} have already been fully returned.
+            </div>
+          )}
+
+          <div className="space-y-2 max-h-60 overflow-y-auto">
             {receipt.items.map((item) => {
-              const checked = selectedSkus[item.sku] ?? true;
+              const alreadyReturned = Number(receipt.returnedBySku?.[item.sku] || 0);
+              const remaining = getRemainingQty(item.sku, item.quantity);
+              const checked = remaining > 0 && (selectedSkus[item.sku] ?? true);
               const disp = dispositions[item.sku] || 'RESTOCK_ATP';
+              const qtyVal = returnQuantities[item.sku] ?? remaining;
               return (
                 <div
                   key={item.sku}
-                  className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-                    isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'
+                  className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                    remaining <= 0
+                      ? isLight
+                        ? 'bg-gray-100/80 border-gray-200 opacity-65'
+                        : 'bg-[#090A0F]/60 border-slate-800/60 opacity-65'
+                      : isLight
+                      ? 'bg-gray-50 border-gray-200'
+                      : 'bg-[#090A0F] border-slate-800/80'
                   }`}
                 >
-                  <label className="flex items-center gap-2.5 cursor-pointer">
+                  <label className={`flex items-center gap-2.5 ${remaining > 0 ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
                     <input
                       type="checkbox"
+                      disabled={remaining <= 0}
                       checked={checked}
-                      onChange={() => toggleSku(item.sku)}
+                      onChange={() => toggleSku(item.sku, remaining)}
                       className="w-4 h-4 rounded accent-[#0F4C3A]"
                     />
                     <div>
                       <span className="font-bold block">{item.name}</span>
                       <span className="font-mono text-[10px] text-gray-500 dark:text-slate-400">
-                        {item.quantity} {item.unit} · {formatIDR(item.lineTotal)}
+                        Bought: {item.quantity} {item.unit} · {formatIDR(item.lineTotal)}
+                        {alreadyReturned > 0 ? ` · Returned: ${alreadyReturned}` : ''} · Rem: {remaining}
                       </span>
                     </div>
                   </label>
 
-                  <select
-                    value={disp}
-                    onChange={(e) =>
-                      setDispositions((prev) => ({
-                        ...prev,
-                        [item.sku]: e.target.value as RmaDisposition,
-                      }))
-                    }
-                    className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold ${
-                      isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
-                    }`}
-                  >
-                    <option value="RESTOCK_ATP">Good Condition (Restock ATP)</option>
-                    <option value="SCRAP_QUARANTINE">Damaged/Expired (Scrap Quarantine)</option>
-                  </select>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">Qty:</span>
+                      <input
+                        type="number"
+                        min={remaining > 0 ? 0.01 : 0}
+                        max={remaining}
+                        step="any"
+                        disabled={!checked || remaining <= 0}
+                        value={qtyVal}
+                        onChange={(e) =>
+                          setReturnQuantities((prev) => ({
+                            ...prev,
+                            [item.sku]: Math.min(remaining, Math.max(0, Number(e.target.value) || 0)),
+                          }))
+                        }
+                        className={`w-16 px-2 py-1 rounded-lg border font-mono text-center font-bold ${
+                          isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+                        }`}
+                      />
+                    </div>
+                    <select
+                      disabled={!checked || remaining <= 0}
+                      value={disp}
+                      onChange={(e) =>
+                        setDispositions((prev) => ({
+                          ...prev,
+                          [item.sku]: e.target.value as RmaDisposition,
+                        }))
+                      }
+                      className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold ${
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+                      }`}
+                    >
+                      <option value="RESTOCK_ATP">Good Condition (Restock ATP)</option>
+                      <option value="SCRAP_QUARANTINE">Damaged / Spoiled Waste (#6030)</option>
+                    </select>
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block font-semibold mb-1">Refund Settlement</label>
               <select
@@ -796,14 +933,29 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block font-semibold mb-1">Buyer NIK / NPWP (Optional Nota Retur)</label>
+              <label className="block font-semibold mb-1">Buyer NIK / NPWP (Optional)</label>
               <input
                 type="text"
                 value={customerNpwpOrNik}
                 onChange={(e) => setCustomerNpwpOrNik(e.target.value)}
-                placeholder="16-digit NIK/NPWP for DJP Nota Retur"
+                placeholder="16-digit NIK/NPWP"
                 className={`w-full px-3 py-2 rounded-xl border font-mono ${
                   isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                }`}
+              />
+            </div>
+            <div>
+              <label className="block font-semibold mb-1 text-rose-700 dark:text-rose-400">
+                Supervisor PIN (Manager / Owner)
+              </label>
+              <input
+                type="password"
+                required
+                value={supervisorPin}
+                onChange={(e) => setSupervisorPin(e.target.value)}
+                placeholder="Manager PIN (e.g. 1234)"
+                className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
+                  isLight ? 'bg-white border-rose-300' : 'bg-[#090A0F] border-rose-800/70 text-slate-100'
                 }`}
               />
             </div>
@@ -831,10 +983,10 @@ export const PosRmaQuickModal: React.FC<PosRmaQuickModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold cursor-pointer"
+              disabled={isSubmitting || !hasAnyReturnable}
+              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold cursor-pointer"
             >
-              {isSubmitting ? 'Issuing Credit Note...' : 'Issue Nota Retur & Update Stock'}
+              {isSubmitting ? 'Authorizing & Issuing Nota Retur...' : 'Authorize & Issue Nota Retur'}
             </button>
           </div>
         </form>

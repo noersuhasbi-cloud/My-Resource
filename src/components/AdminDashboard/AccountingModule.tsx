@@ -55,6 +55,7 @@ import {
   Upload,
   FileSpreadsheet,
   Activity,
+  WalletCards,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { VendorBillModule } from './VendorBillModule';
@@ -123,7 +124,58 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   const { triggerPrint } = usePrint();
   const canonicalRole = normalizeEnterpriseRole(activeStaffSession?.userRole);
   const canManageAccountingAndGiro = ['admin', 'coo', 'super_admin'].includes(canonicalRole);
+  const canSetOpeningBalances =
+    !activeStaffSession?.roleCode ||
+    ['HEAD_ACCOUNTING', 'ACCOUNTING_TAX', 'CLIENT_OWNER', 'PLATFORM_OWNER', 'SUPER_ADMIN'].includes(
+      activeStaffSession.roleCode
+    );
   const isBranchLocked = isBranchScopedRole(canonicalRole);
+
+  // Financial Opening Balance Setup Modal State (#3010 Opening Balance Equity)
+  const [isOpeningBalancesOpen, setIsOpeningBalancesOpen] = useState<boolean>(false);
+  const [obEffectiveDate, setObEffectiveDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [obCash1010, setObCash1010] = useState<number>(0);
+  const [obBank1020, setObBank1020] = useState<number>(0);
+  const [obAr1110, setObAr1110] = useState<number>(0);
+  const [obAp2010, setObAp2010] = useState<number>(0);
+  const [obNotes, setObNotes] = useState<string>('Initial Opening Balance Setup');
+  const [isSubmittingOb, setIsSubmittingOb] = useState<boolean>(false);
+
+  const handleSubmitOpeningBalances = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const totalInput = (obCash1010 || 0) + (obBank1020 || 0) + (obAr1110 || 0) + (obAp2010 || 0);
+    if (totalInput <= 0) {
+      onShowToast('Invalid Amount', 'Enter at least one positive opening balance (> Rp 0).');
+      return;
+    }
+    setIsSubmittingOb(true);
+    try {
+      const targetStore =
+        selectedStore && selectedStore !== 'ALL' && selectedStore !== 'CONSOLIDATED'
+          ? selectedStore
+          : 'store-jkt-senopati';
+      const res = await apiClient.setOpeningBalances({
+        storeId: targetStore,
+        effectiveDate: obEffectiveDate,
+        cashOnHand1010IDR: obCash1010,
+        bankAccounts1020IDR: obBank1020,
+        openingAccountsReceivable1110IDR: obAr1110,
+        openingAccountsPayable2010IDR: obAp2010,
+        notes: obNotes,
+      });
+      onShowToast('Opening Balances Posted', res.message);
+      setIsOpeningBalancesOpen(false);
+      setObCash1010(0);
+      setObBank1020(0);
+      setObAr1110(0);
+      setObAp2010(0);
+      onRefreshData();
+    } catch (err: any) {
+      onShowToast('Opening Balance Error', err.message || 'Failed to post opening balances');
+    } finally {
+      setIsSubmittingOb(false);
+    }
+  };
 
   // Multi-Currency Selection (Module 4)
   const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>('IDR');
@@ -656,6 +708,18 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Print Statement</span>
+              </button>
+            )}
+
+            {canSetOpeningBalances && (
+              <button
+                type="button"
+                onClick={() => setIsOpeningBalancesOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-[#0F4C3A] hover:bg-[#0b382b] text-white shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                title="Initialize Opening Balances against COA #3010 Opening Balance Equity"
+              >
+                <WalletCards className="w-3.5 h-3.5" />
+                <span>Set Opening Balances</span>
               </button>
             )}
 
@@ -3023,6 +3087,190 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
         </div>,
         document.body
       )}
+
+      {/* FINANCIAL OPENING BALANCE SETUP MODAL (COA #3010) */}
+      {isOpeningBalancesOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[105] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
+            onClick={() => setIsOpeningBalancesOpen(false)}
+          >
+            <div
+              className={`border rounded-2xl w-full max-w-lg p-5 sm:p-6 space-y-4 shadow-2xl my-auto gm-modal-pop ${
+                isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-gray-200 dark:border-slate-800/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-400">
+                    <WalletCards className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold">Financial Opening Balance Setup</h3>
+                    <p className="text-[11px] font-mono text-gray-500 dark:text-slate-400">
+                      Balanced Double-Entry Offset to COA #3010 Opening Balance Equity
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsOpeningBalancesOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {enterpriseSettings?.erpSettings?.accountingLockBeforeDate && (
+                <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>
+                    Period Lock Active: Effective dates on or before{' '}
+                    <strong className="font-mono">{enterpriseSettings.erpSettings.accountingLockBeforeDate}</strong> are blocked.
+                  </span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitOpeningBalances} className="space-y-3.5 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold mb-1">Cash on Hand (#1010) IDR</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={obCash1010}
+                      onChange={(e) => setObCash1010(Math.max(0, Number(e.target.value) || 0))}
+                      className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">Bank Accounts (#1020) IDR</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={obBank1020}
+                      onChange={(e) => setObBank1020(Math.max(0, Number(e.target.value) || 0))}
+                      className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">Opening Accounts Receivable (#1110) IDR</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={obAr1110}
+                      onChange={(e) => setObAr1110(Math.max(0, Number(e.target.value) || 0))}
+                      className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">Opening Accounts Payable (#2010) IDR</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={obAp2010}
+                      onChange={(e) => setObAp2010(Math.max(0, Number(e.target.value) || 0))}
+                      className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold mb-1">Effective Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={obEffectiveDate}
+                      onChange={(e) => setObEffectiveDate(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-xl border font-mono ${
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1">Audit Memo / Notes</label>
+                    <input
+                      type="text"
+                      value={obNotes}
+                      onChange={(e) => setObNotes(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-xl border ${
+                        isLight ? 'bg-white border-gray-300' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {(() => {
+                  const totalAssets = (obCash1010 || 0) + (obBank1020 || 0) + (obAr1110 || 0);
+                  const totalLiab = obAp2010 || 0;
+                  const netEquity = totalAssets - totalLiab;
+                  const balancedSum = Math.max(totalAssets, totalLiab);
+                  return (
+                    <div
+                      className={`p-3 rounded-xl border space-y-1 font-mono text-[11px] ${
+                        isLight ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' : 'bg-emerald-950/25 border-emerald-800/50 text-emerald-200'
+                      }`}
+                    >
+                      <div className="flex justify-between">
+                        <span>Total Assets (#1010 + #1020 + #1110):</span>
+                        <span className="font-bold">{formatIDR(totalAssets)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total Liabilities (#2010 AP):</span>
+                        <span className="font-bold">{formatIDR(totalLiab)}</span>
+                      </div>
+                      <div className="flex justify-between pt-1 border-t border-emerald-500/20">
+                        <span>Auto-Balanced #3010 Opening Balance Equity:</span>
+                        <span className="font-bold">
+                          {netEquity >= 0 ? `CR ${formatIDR(netEquity)}` : `DR ${formatIDR(Math.abs(netEquity))}`}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[10px] opacity-80">
+                        <span>Voucher Proof:</span>
+                        <span>DR {formatIDR(balancedSum)} === CR {formatIDR(balancedSum)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 dark:border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setIsOpeningBalancesOpen(false)}
+                    className={`px-4 py-2 rounded-xl border font-semibold cursor-pointer ${
+                      isLight ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-slate-900/90 border-slate-800/80 text-slate-300'
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingOb}
+                    className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-50 text-white font-bold cursor-pointer"
+                  >
+                    {isSubmittingOb ? 'Posting Opening Balances...' : 'Post Balanced Opening Entries'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

@@ -66,6 +66,7 @@ import {
   Scissors,
   Zap,
   GitBranch,
+  PackageMinus,
 } from 'lucide-react';
 import { BarcodeShelfLabelModal } from './BarcodeShelfLabelModal';
 import { WarehouseRackSetupPanel } from './WarehouseRackSetupPanel';
@@ -438,6 +439,56 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
         return true;
       });
   }, [filteredTiers, wholesaleQuantRows, removalStrategies, batches, warehouseBins, inventory, channelFilter, strategyFilter, classificationFilter]);
+
+  // Store Consumable Issuance (#1050 -> #5040) Modal State
+  const canIssueConsumables =
+    !activeStaffSession?.roleCode ||
+    ['WAREHOUSE_HEAD', 'WAREHOUSE_STAFF', 'STORE_MANAGER', 'HEAD_ACCOUNTING', 'CLIENT_OWNER', 'PLATFORM_OWNER', 'SUPER_ADMIN'].includes(
+      activeStaffSession.roleCode
+    );
+  const [consumableIssueTarget, setConsumableIssueTarget] = useState<{
+    sku: string;
+    productName: string;
+    storeId: string;
+    storeName: string;
+    unit: string;
+    availableStock: number;
+    unitCost: number;
+  } | null>(null);
+  const [issueQty, setIssueQty] = useState<number>(1);
+  const [issueDepartment, setIssueDepartment] = useState<string>('Store Operations');
+  const [issuePurpose, setIssuePurpose] = useState<string>('POS Terminal / Daily Store Operations Usage');
+  const [isSubmittingConsumable, setIsSubmittingConsumable] = useState<boolean>(false);
+
+  const handleConfirmConsumableIssuance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!consumableIssueTarget) return;
+    const qty = Number(issueQty || 0);
+    if (!Number.isFinite(qty) || qty <= 0 || qty > consumableIssueTarget.availableStock) {
+      onShowToast(
+        'Invalid Quantity',
+        `Issued quantity must be > 0 and <= available ATP (${consumableIssueTarget.availableStock} ${consumableIssueTarget.unit}).`
+      );
+      return;
+    }
+    setIsSubmittingConsumable(true);
+    try {
+      const res = await apiClient.issueConsumableUsage({
+        sku: consumableIssueTarget.sku,
+        storeId: consumableIssueTarget.storeId,
+        quantity: qty,
+        department: issueDepartment.trim() || 'Store Operations',
+        purpose: issuePurpose.trim() || 'Internal Store Usage',
+      });
+      onShowToast('Consumable Issued', res.message);
+      setConsumableIssueTarget(null);
+      if (onRefreshData) await onRefreshData();
+    } catch (err: any) {
+      onShowToast('Consumable Issuance Failed', err.message || 'Failed to issue consumable usage');
+    } finally {
+      setIsSubmittingConsumable(false);
+    }
+  };
 
   // Compute live operational counts per Warehouse Hub for GroceMatrix™ Kanban Cards
   const hubKanbanCards = useMemo(() => {
@@ -1616,6 +1667,34 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                               </>
                             )}
 
+                            {canIssueConsumables &&
+                              itemClassification === 'CONSUMABLE' &&
+                              !row.isWholesaleRow &&
+                              safeAvailable > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setConsumableIssueTarget({
+                                      sku: row.sku,
+                                      productName: row.productName,
+                                      storeId: row.storeId,
+                                      storeName: row.storeName,
+                                      unit: row.unit,
+                                      availableStock: safeAvailable,
+                                      unitCost: row.unitCost,
+                                    });
+                                    setIssueQty(Math.min(1, safeAvailable));
+                                    setIssueDepartment('Store Operations');
+                                    setIssuePurpose('POS Terminal / Daily Store Operations Usage');
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer whitespace-nowrap"
+                                  title="Issue internal consumable usage (DR #5040 Store Supplies Expense / CR #1050)"
+                                >
+                                  <PackageMinus className="w-3 h-3" />
+                                  <span>Issue Internal Usage</span>
+                                </button>
+                              )}
+
                             {(() => {
                               const urgentBatch = batches.find(
                                 (b) =>
@@ -2400,6 +2479,120 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
           onNavigateToDocument={onNavigateToDocument}
         />
       )}
+
+      {/* Internal Store Consumable Issuance Modal (COA #1050 -> #5040) */}
+      {consumableIssueTarget &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[105] bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto gm-backdrop-fade"
+            onClick={() => setConsumableIssueTarget(null)}
+          >
+            <div
+              className={`w-full max-w-md rounded-2xl border p-5 sm:p-6 shadow-2xl space-y-4 my-auto gm-modal-pop ${
+                isLight ? 'bg-white border-gray-200 text-slate-900' : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-gray-200 dark:border-slate-800/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                    <PackageMinus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold">Issue Internal Store Consumable</h3>
+                    <p className="text-[11px] font-mono text-gray-500 dark:text-slate-400">
+                      {consumableIssueTarget.sku} · {consumableIssueTarget.storeName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConsumableIssueTarget(null)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmConsumableIssuance} className="space-y-3.5 text-xs">
+                <div className={`p-3 rounded-xl border ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                  <div className="font-bold">{consumableIssueTarget.productName}</div>
+                  <div className="font-mono text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
+                    Available ATP: <strong className="text-[#0F4C3A] dark:text-emerald-400">{consumableIssueTarget.availableStock} {consumableIssueTarget.unit}</strong> · Unit Cost: {formatIDR(consumableIssueTarget.unitCost)}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">
+                    Quantity to Issue ({consumableIssueTarget.unit})
+                  </label>
+                  <input
+                    type="number"
+                    min={0.01}
+                    max={consumableIssueTarget.availableStock}
+                    step="any"
+                    required
+                    value={issueQty}
+                    onChange={(e) => setIssueQty(Math.max(0, Number(e.target.value) || 0))}
+                    className={`w-full px-3 py-2 rounded-xl border font-mono font-bold ${
+                      isLight ? 'bg-white border-gray-300 text-slate-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">Receiving Department / Cost Center</label>
+                  <input
+                    type="text"
+                    required
+                    value={issueDepartment}
+                    onChange={(e) => setIssueDepartment(e.target.value)}
+                    placeholder="e.g. POS Frontline, Cold-Chain Packaging"
+                    className={`w-full px-3 py-2 rounded-xl border ${
+                      isLight ? 'bg-white border-gray-300 text-slate-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">Usage Purpose</label>
+                  <input
+                    type="text"
+                    required
+                    value={issuePurpose}
+                    onChange={(e) => setIssuePurpose(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border ${
+                      isLight ? 'bg-white border-gray-300 text-slate-900' : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
+                    }`}
+                  />
+                </div>
+
+                <div className={`p-3 rounded-xl border text-[11px] font-mono ${isLight ? 'bg-amber-50/70 border-amber-200 text-amber-900' : 'bg-amber-950/25 border-amber-800/50 text-amber-200'}`}>
+                  GL Posting: DR #5040 Store Supplies Expense ({formatIDR(Math.round((issueQty || 0) * consumableIssueTarget.unitCost))}) / CR #1050 Store Supplies Asset
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 dark:border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setConsumableIssueTarget(null)}
+                    className="px-4 py-2 rounded-xl border border-gray-300 dark:border-slate-800/80 font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingConsumable}
+                    className="px-4 py-2 rounded-xl bg-[#0F4C3A] hover:bg-[#0b382b] disabled:opacity-50 text-white font-bold cursor-pointer"
+                  >
+                    {isSubmittingConsumable ? 'Issuing & Posting GL...' : 'Confirm Internal Issuance'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

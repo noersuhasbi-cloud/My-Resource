@@ -442,6 +442,7 @@ export interface PurchaseOrder {
   closureNotes?: string;
   forceClosedAt?: string;
   isForceClosed?: boolean;
+  linkedReturnIds?: string[];
   updatedAt?: string;
 }
 
@@ -480,6 +481,7 @@ export interface GoodsReceiptRecord {
   unloadingLaborFeeIDR?: number;
   unloadingFeePayerCoa?: '1011' | '1010' | '2010';
   capitalizedToLandedCost?: boolean;
+  linkedReturnIds?: string[];
 }
 
 // -------------------------------------------------------------
@@ -542,6 +544,7 @@ export interface VendorBill {
   approvedBy?: string;
   approvedAt?: string;
   isNonCreditableVat?: boolean;
+  linkedReturnIds?: string[];
 }
 
 export interface CrossDocumentNavTarget {
@@ -601,6 +604,7 @@ export interface ItemInboundTraceabilityResponse {
     grCount: number;
     lotCount: number;
     vendorBillCount: number;
+    purchaseReturnCount?: number;
     totalOnHandStock: number;
     totalIncomingStock: number;
     totalReceivedQty: number;
@@ -684,6 +688,27 @@ export interface ItemInboundTraceabilityResponse {
     remainingDue?: number;
     sourcePoId?: string;
     linkedGrIds: string[];
+  }>;
+  purchaseReturns?: Array<{
+    id: string;
+    debitNoteNumber: string;
+    supplierName: string;
+    storeId: string;
+    storeName: string;
+    lotNumber: string;
+    quantityReturned: number;
+    unit: string;
+    reason: string;
+    status: string;
+    sourceGrId?: string;
+    poId?: string;
+    vendorBillId?: string;
+    createdAt: string;
+    createdBy: string;
+    unitCostIDR?: number;
+    subtotalReturnedIDR?: number;
+    ppnMasukanReversedIDR?: number;
+    totalDebitNoteIDR?: number;
   }>;
 }
 
@@ -1015,7 +1040,7 @@ export interface GeneralLedgerEntry {
   category: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   debit: number;
   credit: number;
-  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'GIRO_PDC_ISSUE' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK' | 'KASBON_COLLECTION' | 'PPH_WITHHOLDING' | 'RETURNABLE_CONTAINER' | 'SUPPLIER_DEBIT_NOTE' | 'SETTLEMENT_RECONCILE' | 'BANK_MUTATION_RECONCILE' | 'CUSTOMER_PREORDER_DP' | 'UNLOADING_LABOR' | 'DRIVER_ALLOWANCE';
+  referenceType: 'QRIS_SALE' | 'PURCHASE_ORDER' | 'PARTIAL_GR' | 'OPEX' | 'INVENTORY_ADJUSTMENT' | 'WASTE_SHRINKAGE' | 'REVERSING_ENTRY' | 'STOCK_RECONCILIATION' | 'RETURN_REFUND' | 'VENDOR_BILL' | 'VENDOR_PAYMENT' | 'POS_SALE' | 'LANDED_COST' | 'B2B_WHOLESALE_ORDER' | 'GIRO_CLEARING' | 'GIRO_BOUNCED' | 'GIRO_BOUNCED_PENALTY' | 'GIRO_PDC_ISSUE' | 'STOCK_OPNAME' | 'TAX_ADJUSTMENT' | 'B2B_AR_CREDIT' | 'PURCHASE_AP' | 'POS_SHIFT_Z_REPORT' | 'POS_SAFE_DROP' | 'CONSIGNMENT_SALE' | 'CONSIGNMENT_SETTLEMENT' | 'REPACK_BUNDLE' | 'CROSS_DOCK' | 'KASBON_COLLECTION' | 'PPH_WITHHOLDING' | 'RETURNABLE_CONTAINER' | 'SUPPLIER_DEBIT_NOTE' | 'SETTLEMENT_RECONCILE' | 'BANK_MUTATION_RECONCILE' | 'CUSTOMER_PREORDER_DP' | 'UNLOADING_LABOR' | 'DRIVER_ALLOWANCE' | 'OPENING_BALANCE';
   referenceId: string; // Order ID or PO ID or GR ID or Waste ID
   description: string;
   isReversal?: boolean;
@@ -1661,6 +1686,8 @@ export interface POSTransactionReceipt {
   isOfflinePendingSync?: boolean;
   marginComplianceStatus?: 'NORMAL' | 'SUPERVISOR_OVERRIDE' | 'CLEARANCE_BELOW_COST';
   belowCostClearanceSkus?: string[];
+  returnIds?: string[];
+  returnedBySku?: Record<string, number>;
 }
 
 // -------------------------------------------------------------
@@ -2915,6 +2942,9 @@ export interface VendorRtvDebitNote {
   id: string; // RTV-2026-0001
   debitNoteNumber: string; // NRP-2026-0001 (Nota Retur Pembelian)
   qcInspectionId?: string;
+  sourceGrId?: string;
+  poId?: string;
+  vendorBillId?: string;
   vendorCreditNoteId?: string;
   supplierId: string;
   supplierName: string;
@@ -4499,4 +4529,22 @@ export interface VendorBillPoPrefillResponse {
   existingBillIds?: string[];
   totalUnbilledGrQty?: number;
 }
+
+export interface ConsumableIssuanceRecord {
+  id: string;
+  sku: string;
+  productName: string;
+  storeId: string;
+  storeName: string;
+  quantity: number;
+  unit: string;
+  unitCostIDR: number;
+  totalExpenseIDR: number;
+  department: string;
+  purpose: string;
+  issuedBy: string;
+  issuedAt: string;
+  glVoucherIds: string[];
+}
+
 
