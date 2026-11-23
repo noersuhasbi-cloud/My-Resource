@@ -283,8 +283,13 @@ async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<R
       if (!headers.has('x-operator-id')) headers.set('x-operator-id', opCtx.userId);
       if (!headers.has('x-user-id')) headers.set('x-user-id', opCtx.userId);
     }
-    if (opCtx.authToken && !headers.has('authorization')) {
-      headers.set('authorization', `Bearer ${opCtx.authToken}`);
+    if (opCtx.authToken) {
+      if (!headers.has('authorization')) {
+        headers.set('authorization', `Bearer ${opCtx.authToken}`);
+      }
+      if (!headers.has('x-session-token')) {
+        headers.set('x-session-token', opCtx.authToken);
+      }
     }
   }
   const finalInit: RequestInit = {
@@ -333,7 +338,11 @@ async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<R
         if (!reqUrl.includes('/auth/login')) {
           try {
             const errBody = await res.clone().json().catch(() => null);
-            if (errBody?.code === 'SESSION_REVOKED_OR_EXPIRED') {
+            if (
+              errBody?.code === 'SESSION_REVOKED_OR_EXPIRED' ||
+              errBody?.code === 'UNAUTHENTICATED' ||
+              errBody?.code === 'INVALID_SESSION_TOKEN'
+            ) {
               window.dispatchEvent(
                 new CustomEvent('grocemart-session-revoked', {
                   detail: {

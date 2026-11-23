@@ -446,7 +446,15 @@ export function normalizeTrialGovernanceConfig(
       : base.durationDays;
 
   let expirationDateIso = base.expirationDateIso;
-  if (typeof raw.expirationDateIso === 'string' && raw.expirationDateIso.trim().length >= 10) {
+  const rawTrialExpiresAt = (raw as any).trialExpiresAt;
+  if (typeof rawTrialExpiresAt === 'number' && Number.isFinite(rawTrialExpiresAt)) {
+    expirationDateIso = new Date(rawTrialExpiresAt).toISOString();
+  } else if (typeof rawTrialExpiresAt === 'string' && rawTrialExpiresAt.trim().length >= 10) {
+    const trimmedAlias = rawTrialExpiresAt.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedAlias) || Number.isFinite(Date.parse(trimmedAlias))) {
+      expirationDateIso = trimmedAlias;
+    }
+  } else if (typeof raw.expirationDateIso === 'string' && raw.expirationDateIso.trim().length >= 10) {
     const trimmed = raw.expirationDateIso.trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed) || Number.isFinite(Date.parse(trimmed))) {
       expirationDateIso = trimmed;

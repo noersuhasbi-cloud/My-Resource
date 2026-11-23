@@ -5228,8 +5228,90 @@ function createInitialSystemUsers(): SystemUserAccount[] {
 }
 
 let systemUsers: SystemUserAccount[] = createInitialSystemUsers();
-const activeAuthTokens = new Map<string, { userId: string; issuedAtMs: number; expiresAtMs: number }>();
+const activeAuthTokens = new Map<
+  string,
+  { userId: string; roleCode: DivisionRoleCode; issuedAtMs: number; expiresAtMs: number }
+>();
 const revokedAuthTokens = new Set<string>();
+
+// Brute-Force & Rate-Limiting Guard (10 consecutive failures -> 5-minute cooldown per identifier & IP)
+const MAX_CONSECUTIVE_AUTH_FAILURES = 10;
+const AUTH_COOLDOWN_MS = 5 * 60 * 1000;
+const authFailureTracker = new Map<
+  string,
+  { consecutiveFails: number; lockedUntilMs: number; lastFailedAtMs: number }
+>();
+const inFlightActionLocks = new Set<string>();
+
+function getClientIpKey(req: Request): string {
+  const fwd = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'].split(',')[0].trim() : '';
+  return (fwd || req.ip || req.socket?.remoteAddress || '127.0.0.1').toLowerCase();
+}
+
+function checkAuthRateLimit(keys: string[], nowMs: number = Date.now()): {
+  limited: boolean;
+  retryAfterSeconds: number;
+  lockedUntilIso?: string;
+} {
+  let maxLockedUntil = 0;
+  for (const key of keys) {
+    if (!key) continue;
+    const rec = authFailureTracker.get(key);
+    if (!rec) continue;
+    if (rec.lockedUntilMs > nowMs) {
+      if (rec.lockedUntilMs > maxLockedUntil) maxLockedUntil = rec.lockedUntilMs;
+    } else if (rec.lockedUntilMs > 0 && rec.lockedUntilMs <= nowMs) {
+      authFailureTracker.delete(key);
+    }
+  }
+  if (maxLockedUntil > nowMs) {
+    return {
+      limited: true,
+      retryAfterSeconds: Math.max(1, Math.ceil((maxLockedUntil - nowMs) / 1000)),
+      lockedUntilIso: new Date(maxLockedUntil).toISOString(),
+    };
+  }
+  return { limited: false, retryAfterSeconds: 0 };
+}
+
+function recordAuthFailure(keys: string[], nowMs: number = Date.now()): {
+  lockedNow: boolean;
+  consecutiveFails: number;
+  lockedUntilIso?: string;
+} {
+  let maxFails = 0;
+  let lockedUntilMs = 0;
+  for (const key of keys) {
+    if (!key) continue;
+    const prev = authFailureTracker.get(key);
+    const nextFails = (prev && nowMs - prev.lastFailedAtMs <= AUTH_COOLDOWN_MS ? prev.consecutiveFails : 0) + 1;
+    const nextLock = nextFails >= MAX_CONSECUTIVE_AUTH_FAILURES ? nowMs + AUTH_COOLDOWN_MS : 0;
+    authFailureTracker.set(key, {
+      consecutiveFails: nextFails,
+      lockedUntilMs: nextLock,
+      lastFailedAtMs: nowMs,
+    });
+    if (nextFails > maxFails) maxFails = nextFails;
+    if (nextLock > lockedUntilMs) lockedUntilMs = nextLock;
+  }
+  return {
+    lockedNow: lockedUntilMs > nowMs,
+    consecutiveFails: maxFails,
+    lockedUntilIso: lockedUntilMs > nowMs ? new Date(lockedUntilMs).toISOString() : undefined,
+  };
+}
+
+function clearAuthFailures(keys: string[]) {
+  for (const key of keys) {
+    if (key) authFailureTracker.delete(key);
+  }
+}
+
+function redactSensitiveText(input: string): string {
+  return String(input || '')
+    .replace(/\b(password|passwd|pwd|pin|supervisorPin|token|bearer)\s*[:=]\s*([^\s,;]+)/gi, '$1=****')
+    .replace(/\berp-(sys|session)-jwt-[A-Za-z0-9\-_]+/gi, 'erp-token-****');
+}
 
 // Non-Destructive Additive Trial / Demo Governance & Import/Export Diagnostics State
 let trialGovernanceConfig: TrialGovernanceConfig = createDefaultTrialGovernanceConfig();
@@ -5254,15 +5336,20 @@ function evaluateRouteGovernancePolicy(
   method: string
 ): {
   allowed: boolean;
-  code?: 'TRIAL_LOCKED' | 'TRIAL_SUBROLE_RESTRICTED' | 'TRIAL_MODULE_RESTRICTED' | 'EXPORT_RESTRICTED';
+  code?:
+    | 'TRIAL_LOCKED'
+    | 'TRIAL_EXPIRED_CONTACT_VENDOR'
+    | 'TRIAL_SUBROLE_RESTRICTED'
+    | 'TRIAL_MODULE_RESTRICTED'
+    | 'EXPORT_RESTRICTED';
   reason?: string;
   snapshot: TrialGovernanceStatusSnapshot;
 } {
   const nowMs = Date.now(); // Authoritative server-side clock (ignores client headers)
   const snapshot = buildServerTrialGovernanceSnapshot(nowMs);
 
-  // Owners / Super Admin always retain governance & recovery access
-  if (isOwnerRoleCode(user.roleCode)) {
+  // Only PLATFORM_OWNER (Vendor Principal) always retains full governance & recovery access
+  if (user.roleCode === 'PLATFORM_OWNER') {
     return { allowed: true, snapshot };
   }
 
@@ -5275,12 +5362,23 @@ function evaluateRouteGovernancePolicy(
   }
 
   if (snapshot.isOperationalLocked) {
-    return {
-      allowed: false,
-      code: 'TRIAL_LOCKED',
-      reason: snapshot.statusMessage,
-      snapshot,
-    };
+    const isClientOwnerRead =
+      user.roleCode === 'CLIENT_OWNER' &&
+      method === 'GET' &&
+      (urlPath.startsWith('/admin/settings/') || urlPath === '/admin/system/health');
+    if (!isClientOwnerRead) {
+      return {
+        allowed: false,
+        code: snapshot.effectiveStatus === 'LOCKED_EXPIRED' ? 'TRIAL_EXPIRED_CONTACT_VENDOR' : 'TRIAL_LOCKED',
+        reason: snapshot.statusMessage,
+        snapshot,
+      };
+    }
+  }
+
+  // CLIENT_OWNER is exempt from sub-role/module overlays once license is active
+  if (isOwnerRoleCode(user.roleCode)) {
+    return { allowed: true, snapshot };
   }
 
   if (!isSubRoleAllowedByGovernance(snapshot, user.roleCode)) {
@@ -5467,7 +5565,7 @@ function evaluateRouteGovernancePolicy(
 }
 
 function sanitizeSystemUserForClient(u: SystemUserAccount): SystemUserAccount {
-  const { password, ...rest } = u;
+  const { password, supervisorPin, ...rest } = u;
   const preset = DIVISION_ROLE_PRESETS[u.roleCode] || DIVISION_ROLE_PRESETS.POS_CASHIER;
   const hideFinancialCost =
     typeof u.hideFinancialCost === 'boolean'
@@ -5476,12 +5574,15 @@ function sanitizeSystemUserForClient(u: SystemUserAccount): SystemUserAccount {
   return {
     ...rest,
     branchName: resolveBranchNameById(u.branchId),
+    hasPassword: Boolean(password),
     maskedPassword: password ? '•'.repeat(Math.min(Math.max(password.length, 6), 12)) : '••••••••',
+    hasSupervisorPin: Boolean(supervisorPin),
+    maskedSupervisorPin: supervisorPin ? '****' : undefined,
     viewCost: !hideFinancialCost,
     hideFinancialCost,
     defaultLandingTab: u.defaultLandingTab || preset.defaultLandingTab,
     modulePermissions: normalizeModulePermissionsInput(u.modulePermissions, u.roleCode),
-  };
+  } as SystemUserAccount;
 }
 
 function buildSessionFromSystemUser(
@@ -5509,7 +5610,7 @@ function buildSessionFromSystemUser(
     userRole: canonicalRole,
     roleCode: user.roleCode,
     divisionLabel: user.divisionLabel,
-    supervisorPin: user.supervisorPin,
+    hasSupervisorPin: Boolean(user.supervisorPin),
     viewCost: canViewCost,
     hideFinancialCost,
     defaultLandingTab,
@@ -5566,53 +5667,148 @@ function findSystemUserByIdOrEmail(identifier?: string | null): SystemUserAccoun
   );
 }
 
-function resolveSystemUserForRequest(req: Request): SystemUserAccount | undefined {
-  // 1. Authorization: Bearer <token>
+function extractSessionTokenFromRequest(req: Request): string {
   const authHeader = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
   if (authHeader.toLowerCase().startsWith('bearer ')) {
-    const token = authHeader.slice(7).trim();
-    const tokenEntry = activeAuthTokens.get(token);
-    if (tokenEntry) {
-      if (Date.now() > tokenEntry.expiresAtMs) {
-        activeAuthTokens.delete(token);
-        revokedAuthTokens.add(token);
-      } else {
-        const byToken = systemUsers.find((u) => u.id === tokenEntry.userId);
-        if (byToken) return byToken;
-      }
-    }
+    const tok = authHeader.slice(7).trim();
+    if (tok) return tok;
   }
-  // 2. Explicit x-operator-id or x-user-id header matching a SystemUserAccount
-  const rawOpId =
-    (typeof req.headers['x-operator-id'] === 'string' && req.headers['x-operator-id'].trim()) ||
+  const sessionHeader = typeof req.headers['x-session-token'] === 'string' ? req.headers['x-session-token'].trim() : '';
+  if (sessionHeader) return sessionHeader;
+  return '';
+}
+
+function validateSessionTokenAndHeaders(req: Request): {
+  ok: boolean;
+  status?: number;
+  code?: string;
+  error?: string;
+  user?: SystemUserAccount;
+} {
+  const token = extractSessionTokenFromRequest(req);
+  if (!token) {
+    return {
+      ok: false,
+      status: 401,
+      code: 'UNAUTHENTICATED',
+      error: 'Authentication required: Missing server-issued session token (Authorization: Bearer or x-session-token).',
+    };
+  }
+  if (revokedAuthTokens.has(token)) {
+    return {
+      ok: false,
+      status: 401,
+      code: 'SESSION_REVOKED_OR_EXPIRED',
+      error: 'Session has been revoked (single-session policy) or expired. Please sign in again.',
+    };
+  }
+  const tokenEntry = activeAuthTokens.get(token);
+  if (!tokenEntry) {
+    return {
+      ok: false,
+      status: 401,
+      code: 'INVALID_SESSION_TOKEN',
+      error: 'Invalid or unknown session token. Forged or stale credentials are not permitted.',
+    };
+  }
+  if (Date.now() > tokenEntry.expiresAtMs) {
+    activeAuthTokens.delete(token);
+    revokedAuthTokens.add(token);
+    return {
+      ok: false,
+      status: 401,
+      code: 'SESSION_REVOKED_OR_EXPIRED',
+      error: 'Session token has expired. Please sign in again.',
+    };
+  }
+
+  const user = systemUsers.find((u) => u.id === tokenEntry.userId);
+  if (!user) {
+    activeAuthTokens.delete(token);
+    return {
+      ok: false,
+      status: 401,
+      code: 'INVALID_SESSION_TOKEN',
+      error: 'Session owner account no longer exists.',
+    };
+  }
+  if (!user.isActive) {
+    activeAuthTokens.delete(token);
+    revokedAuthTokens.add(token);
+    return {
+      ok: false,
+      status: 403,
+      code: 'ACCOUNT_SUSPENDED',
+      error: `Akses Ditolak: Akun '${user.email}' sedang dinonaktifkan oleh Administrator.`,
+    };
+  }
+  if (tokenEntry.roleCode && tokenEntry.roleCode !== user.roleCode) {
+    activeAuthTokens.delete(token);
+    revokedAuthTokens.add(token);
+    return {
+      ok: false,
+      status: 401,
+      code: 'SESSION_REVOKED_OR_EXPIRED',
+      error: 'User role has changed since sign-in. Please re-authenticate.',
+    };
+  }
+
+  // Anti-Header Spoofing Cross-Check: reject forged x-user-id / x-operator-id / x-role-code / x-operator-role
+  const rawUserHeader =
     (typeof req.headers['x-user-id'] === 'string' && req.headers['x-user-id'].trim()) ||
-    undefined;
-  if (rawOpId) {
-    const matched = findSystemUserByIdOrEmail(rawOpId);
-    if (matched) return matched;
-    // Legacy USR-* header explicitly sent -> do NOT fall back to active systemUser
-    return undefined;
-  }
-  // 3. Explicit x-role-code or x-operator-role header without system user ID
-  const rawRole =
-    (typeof req.headers['x-role-code'] === 'string' && req.headers['x-role-code'].trim()) ||
-    (typeof req.headers['x-operator-role'] === 'string' && req.headers['x-operator-role'].trim()) ||
+    (typeof req.headers['x-operator-id'] === 'string' && req.headers['x-operator-id'].trim()) ||
     '';
-  if (rawRole) {
-    const upperRole = rawRole.toUpperCase();
-    const asDivision = systemUsers.find((u) => u.roleCode === upperRole);
-    if (asDivision) return asDivision;
-    if (upperRole === 'SUPER_ADMIN') {
-      const ownerUser = systemUsers.find((u) => isOwnerRoleCode(u.roleCode) && u.isActive);
-      if (ownerUser) return ownerUser;
+  if (rawUserHeader) {
+    const low = rawUserHeader.toLowerCase();
+    const idMatches =
+      rawUserHeader === user.id ||
+      low === user.email.toLowerCase() ||
+      (typeof user.username === 'string' && low === user.username.toLowerCase());
+    if (!idMatches) {
+      return {
+        ok: false,
+        status: 403,
+        code: 'HEADER_IDENTITY_MISMATCH',
+        error: `Security Guard: Supplied identity header '${rawUserHeader}' does not match verified session owner.`,
+      };
     }
-    return undefined;
   }
-  // 4. Current active session if logged in as a SystemUserAccount
-  if (currentActiveStaffSession?.userId) {
-    return systemUsers.find((u) => u.id === currentActiveStaffSession.userId);
+
+  const rawRoleCodeHeader =
+    typeof req.headers['x-role-code'] === 'string' ? req.headers['x-role-code'].trim().toUpperCase() : '';
+  if (rawRoleCodeHeader && rawRoleCodeHeader !== user.roleCode) {
+    return {
+      ok: false,
+      status: 403,
+      code: 'HEADER_IDENTITY_MISMATCH',
+      error: `Security Guard: Supplied role header '${rawRoleCodeHeader}' does not match verified session role '${user.roleCode}'.`,
+    };
   }
-  return undefined;
+
+  const rawOpRoleHeader =
+    typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim() : '';
+  if (rawOpRoleHeader) {
+    const expectedCanonical = divisionRoleToCanonicalRole(user.roleCode);
+    const normalizedSent = normalizeServerRoleStrict(rawOpRoleHeader);
+    if (
+      rawOpRoleHeader.toUpperCase() !== user.roleCode &&
+      (!normalizedSent || normalizedSent !== expectedCanonical)
+    ) {
+      return {
+        ok: false,
+        status: 403,
+        code: 'HEADER_IDENTITY_MISMATCH',
+        error: `Security Guard: Supplied operator role header '${rawOpRoleHeader}' does not match verified session role.`,
+      };
+    }
+  }
+
+  return { ok: true, user };
+}
+
+function resolveSystemUserForRequest(req: Request): SystemUserAccount | undefined {
+  const verified = validateSessionTokenAndHeaders(req);
+  return verified.ok ? verified.user : undefined;
 }
 
 function shouldHideFinancialCostForRequest(req: Request): boolean {
@@ -6609,7 +6805,7 @@ function appendAuditTrailLog(params: {
     module: params.module,
     action: params.action,
     referenceId: params.referenceId,
-    summary: params.summary,
+    summary: redactSensitiveText(params.summary),
   };
   auditTrailLogs.unshift(entry);
   return entry;
@@ -8525,6 +8721,9 @@ async function resetDemoStateToBaseline() {
     systemUsers = createInitialSystemUsers();
     trialGovernanceConfig = createDefaultTrialGovernanceConfig(Date.now());
     activeAuthTokens.clear();
+    revokedAuthTokens.clear();
+    authFailureTracker.clear();
+    inFlightActionLocks.clear();
     currentActiveStaffSession = AVAILABLE_STAFF_USERS[6];
     enterpriseNotificationsList = [];
     seedBaselineEnterpriseNotifications();
@@ -8833,21 +9032,37 @@ async function startServer() {
       });
     };
 
-    // Public / auth / health / read-only lookup exceptions
+    // Public / auth / health / storefront lookup exceptions
     if (
       urlPath === '/health' ||
       urlPath === '/auth/login' ||
       urlPath === '/auth/demo-accounts' ||
-      urlPath.startsWith('/admin/auth/') ||
-      urlPath === '/admin/rbac/current-session' ||
-      urlPath === '/admin/rbac/handover' ||
-      urlPath === '/admin/rbac/check-zone-access'
+      urlPath === '/admin/auth/login' ||
+      urlPath === '/admin/auth/logout' ||
+      urlPath === '/admin/store-status' ||
+      urlPath === '/store-status' ||
+      urlPath === '/store/status' ||
+      urlPath === '/store/outlets' ||
+      urlPath === '/settings/invoice-tracking'
     ) {
       return next();
     }
 
+    // B2B Module Visibility Consistency Guard
+    if (urlPath.startsWith('/b2b/')) {
+      const b2bEnabled = Boolean(getErpSettings().enableB2BFeatures ?? getErpSettings().enableB2BAndStorefrontPortal);
+      if (!b2bEnabled) {
+        return res.status(403).json({
+          success: false,
+          code: 'B2B_MODULE_DISABLED',
+          error: 'B2B & Wholesale Portal is currently disabled in Enterprise Configuration (enableB2BFeatures = false).',
+        });
+      }
+    }
+
     const hasExplicitOperatorAuth = Boolean(
       req.headers['authorization'] ||
+        req.headers['x-session-token'] ||
         req.headers['x-operator-id'] ||
         req.headers['x-user-id'] ||
         req.headers['x-operator-role'] ||
@@ -8859,31 +9074,40 @@ async function startServer() {
       !urlPath.endsWith('/bounce') &&
       !hasExplicitOperatorAuth;
 
-    // Configurable 14-Division Granular Module Permissions Enforcement (SystemUserAccount)
+    // Zero-Trust Session Token & 15-Division Granular Module Permissions Enforcement
     if (
       !isPublicB2bPortalCall &&
       (urlPath.startsWith('/admin/') ||
         urlPath.startsWith('/pos/') ||
         urlPath.startsWith('/b2b/') ||
-        urlPath === '/inventory/fefo-allocate')
+        urlPath.startsWith('/inventory/'))
     ) {
-      const authHeaderRaw = typeof req.headers['authorization'] === 'string' ? req.headers['authorization'].trim() : '';
-      if (authHeaderRaw.toLowerCase().startsWith('bearer ')) {
-        const bearerTok = authHeaderRaw.slice(7).trim();
-        const tokMeta = activeAuthTokens.get(bearerTok);
-        if (tokMeta && Date.now() > tokMeta.expiresAtMs) {
-          activeAuthTokens.delete(bearerTok);
-          revokedAuthTokens.add(bearerTok);
-        }
-        if (revokedAuthTokens.has(bearerTok)) {
-          return res.status(401).json({
-            success: false,
-            code: 'SESSION_REVOKED_OR_EXPIRED',
-            error: 'Session has been revoked (single-session policy) or expired by Trial/Demo Governance timeout. Please sign in again.',
-          });
-        }
+      const authCheck = validateSessionTokenAndHeaders(req);
+      if (!authCheck.ok || !authCheck.user) {
+        securityAuditTrail.unshift({
+          id: `AUD-SEC-2026-${(securityAuditTrail.length + 1).toString().padStart(4, '0')}`,
+          timestamp: new Date().toISOString(),
+          actionType: 'ZONE_CONFIG_UPDATE',
+          resourceId: `${method} ${urlPath}`,
+          userId: rawHeaderOpId || 'ANONYMOUS',
+          userName: rawHeaderOpId || 'Unauthenticated Caller',
+          userRole: effectiveRole,
+          storeId: effectiveBranch,
+          shiftId: 'NONE',
+          status: 'PERMISSION_DENIED',
+          metadata: {
+            securityCode: authCheck.code,
+            clientIp: getClientIpKey(req),
+            reason: authCheck.error,
+          },
+        });
+        return res.status(authCheck.status || 401).json({
+          success: false,
+          code: authCheck.code || 'UNAUTHENTICATED',
+          error: authCheck.error || 'Authentication required.',
+        });
       }
-      const resolvedSystemUser = resolveSystemUserForRequest(req);
+      const resolvedSystemUser = authCheck.user;
       if (resolvedSystemUser) {
         // Additive Trial / Demo Governance & Granular Sub-Role/Module Overlay Guard (Server-Side Authoritative Clock)
         const govResult = evaluateRouteGovernancePolicy(resolvedSystemUser, urlPath, method);
@@ -9388,6 +9612,36 @@ async function startServer() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  app.get('/api/admin/system/health', (_req: Request, res: Response) => {
+    const nowMs = Date.now();
+    const governance = buildServerTrialGovernanceSnapshot(nowMs);
+    const totalGlDebits = generalLedger.reduce((s, g) => s + (Number(g.debit) || 0), 0);
+    const totalGlCredits = generalLedger.reduce((s, g) => s + (Number(g.credit) || 0), 0);
+    const negativeAtpCount = storeInventoryTiers.filter((t) => (Number(t.availableStock) || 0) < 0).length;
+    res.json({
+      status: 'ok',
+      timestamp: new Date(nowMs).toISOString(),
+      securityPosture: {
+        strictTokenAuth: true,
+        credentialRedactionActive: true,
+        bruteForceCooldownSeconds: Math.round(AUTH_COOLDOWN_MS / 1000),
+        maxConsecutiveAuthFailures: MAX_CONSECUTIVE_AUTH_FAILURES,
+        activeSessionsCount: activeAuthTokens.size,
+      },
+      invariants: {
+        activeUsersCount: systemUsers.filter((u) => u.isActive !== false).length,
+        totalUsersCount: systemUsers.length,
+        chartOfAccountsCount: chartOfAccounts.length,
+        generalLedgerEntriesCount: generalLedger.length,
+        glBalanced: Math.abs(totalGlDebits - totalGlCredits) === 0,
+        glDriftIDR: Math.abs(totalGlDebits - totalGlCredits),
+        negativeAtpTiersCount: negativeAtpCount,
+        licenseMode: governance.licenseMode,
+        effectiveTrialStatus: governance.effectiveStatus,
+      },
+    });
+  });
+
   app.post(['/api/admin/system/reset-demo-data', '/api/admin/reset-demo-data'], async (_req: Request, res: Response) => {
     await resetDemoStateToBaseline();
     res.json({
@@ -9423,16 +9677,11 @@ async function startServer() {
 
   const handleUpdateTrialGovernance = (req: Request, res: Response) => {
     const callerSystemUser = resolveSystemUserForRequest(req);
-    const callerRoleHeader = typeof req.headers['x-operator-role'] === 'string' ? req.headers['x-operator-role'].trim().toLowerCase() : '';
-    const isOwner =
-      isOwnerRoleCode(callerSystemUser?.roleCode) ||
-      (!callerSystemUser && (callerRoleHeader === 'super_admin' || currentActiveStaffSession?.userRole === 'super_admin'));
-
-    if (!isOwner) {
+    if (!callerSystemUser || callerSystemUser.roleCode !== 'PLATFORM_OWNER') {
       return res.status(403).json({
         success: false,
-        code: 'RBAC_FORBIDDEN',
-        error: 'Only Super Admin (Owner) is authorized to modify Trial / Demo Governance policies.',
+        code: 'ONLY_PLATFORM_OWNER_ALLOWED',
+        error: 'Access Denied (403): Only Platform Vendor Owner (PLATFORM_OWNER) is authorized to modify Trial / Demo Governance, License Mode, or White-Label settings.',
       });
     }
 
@@ -9512,6 +9761,15 @@ async function startServer() {
   });
 
   app.post('/api/admin/system/restore', async (req: Request, res: Response) => {
+    const callerSys = resolveSystemUserForRequest(req);
+    if (!callerSys || !isOwnerRoleCode(callerSys.roleCode)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Only Platform/Client Owner is authorized to restore system snapshots.',
+      });
+    }
+
     const rawBody = req.body;
     const snap =
       rawBody && typeof rawBody === 'object' && rawBody.snapshot && typeof rawBody.snapshot === 'object'
@@ -9534,9 +9792,27 @@ async function startServer() {
       if (
         !Array.isArray(snap.chartOfAccounts) ||
         snap.chartOfAccounts.length === 0 ||
-        !snap.chartOfAccounts.every((c: any) => c && typeof c.accountCode === 'string' && typeof c.balance === 'number')
+        !snap.chartOfAccounts.every(
+          (c: any) => c && typeof c.accountCode === 'string' && typeof c.balance === 'number' && Number.isFinite(c.balance)
+        )
       ) {
         schemaErrors.push('Missing or invalid non-empty array field: chartOfAccounts.');
+      }
+      if (!Array.isArray(snap.systemUsers) || snap.systemUsers.length === 0) {
+        schemaErrors.push('Missing or invalid non-empty array field: systemUsers.');
+      } else {
+        const hasActivePlatformOwner = snap.systemUsers.some(
+          (u: any) => u && u.roleCode === 'PLATFORM_OWNER' && u.isActive !== false && typeof u.email === 'string'
+        );
+        const hasActiveClientOwner = snap.systemUsers.some(
+          (u: any) => u && u.roleCode === 'CLIENT_OWNER' && u.isActive !== false && typeof u.email === 'string'
+        );
+        if (!hasActivePlatformOwner) {
+          schemaErrors.push('Invariant violation: systemUsers must include at least 1 active PLATFORM_OWNER.');
+        }
+        if (!hasActiveClientOwner) {
+          schemaErrors.push('Invariant violation: systemUsers must include at least 1 active CLIENT_OWNER.');
+        }
       }
       const resolvedErpSettings = snap.erpSettings || snap.enterpriseSettings?.erpSettings;
       if (!resolvedErpSettings || typeof resolvedErpSettings !== 'object' || Array.isArray(resolvedErpSettings)) {
@@ -9548,8 +9824,8 @@ async function startServer() {
       recordImportExportDiagnostic(restoreDiagnostic);
       return res.status(400).json({
         success: false,
-        code: 'INVALID_SNAPSHOT_SCHEMA',
-        error: `Snapshot validation failed: ${schemaErrors.length > 0 ? schemaErrors.join(' ') : restoreDiagnostic.summary}`,
+        code: 'INVALID_BACKUP_SCHEMA',
+        error: `Backup restore rejected: ${schemaErrors.length > 0 ? schemaErrors.join(' ') : restoreDiagnostic.summary}`,
         details: schemaErrors.length > 0 ? schemaErrors : restoreDiagnostic.issues.map((i) => i.rootCause),
         diagnosticReport: restoreDiagnostic,
       });
