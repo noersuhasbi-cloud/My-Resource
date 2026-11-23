@@ -245,6 +245,9 @@ import type {
   FraudTelemetryEvent,
   FraudRadarAlert,
   FraudRadarResponse,
+  CompanyProfile,
+  CompanyPublicBranding,
+  IndonesiaTimezone,
 } from './src/types/index.ts';
 import {
   DEFAULT_MARKDOWN_CONFIG,
@@ -373,19 +376,76 @@ let pickerOrders: PickerOrder[] = JSON.parse(JSON.stringify(INITIAL_PICKER_ORDER
 let customerOrders: Order[] = JSON.parse(JSON.stringify(INITIAL_ORDERS));
 let enterpriseSettings: EnterpriseSettingsConfig = JSON.parse(JSON.stringify(INITIAL_ENTERPRISE_SETTINGS));
 
+function createInitialCompaniesList(): CompanyProfile[] {
+  const nowIso = new Date().toISOString();
+  return [
+    {
+      id: 'COMP-001',
+      companyName: 'PT GroceMart Ritel Nusantara',
+      partnerName: 'Nusantara Fresh Holdings',
+      logoUrl: '',
+      npwp: '01.308.449.2-007.000',
+      street: 'Jl. Senopati No. 82, Kebayoran Baru',
+      city: 'Jakarta Selatan',
+      province: 'DKI Jakarta',
+      postalCode: '12110',
+      country: 'Indonesia',
+      currency: 'IDR',
+      timezone: 'Asia/Jakarta',
+      emailDomain: 'grocemart.co.id',
+      companyEmail: 'finance@grocemart.co.id',
+      phoneNumber: '+62 21 5550199',
+      website: 'https://grocemart.co.id',
+      isPrimary: true,
+      socialMedia: {
+        instagram: '@grocemart.id',
+        whatsappBusiness: '+62 811 9000 8821',
+      },
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+  ];
+}
+let companiesList: CompanyProfile[] = createInitialCompaniesList();
+
+function getPrimaryCompanyBranding(): CompanyPublicBranding | null {
+  const primary = companiesList.find((c) => c.isPrimary) || companiesList[0];
+  if (!primary) return null;
+  return {
+    id: primary.id,
+    companyName: primary.companyName,
+    partnerName: primary.partnerName,
+    logoUrl: primary.logoUrl,
+    npwp: primary.npwp,
+    street: primary.street,
+    city: primary.city,
+    province: primary.province,
+    postalCode: primary.postalCode,
+    phoneNumber: primary.phoneNumber,
+    companyEmail: primary.companyEmail,
+    website: primary.website,
+    isPrimary: primary.isPrimary,
+  };
+}
+
 function mergeErpSettings(raw?: Partial<ErpConfigurationSettings> | null): ErpConfigurationSettings {
   const base = INITIAL_ERP_SETTINGS;
   const src = raw || {};
   const rawMarginFloor = Number(src.minMarginFloorPct);
   const rawMaxOutlets = Number(src.maxAllowedOutlets);
   const rawMaxUsers = Number(src.maxAllowedUsers);
+  const portalFlag =
+    src.enableB2BFeatures !== undefined
+      ? Boolean(src.enableB2BFeatures)
+      : src.enableB2BAndStorefrontPortal === true;
   return {
     ...base,
     ...src,
     minMarginFloorPct: Number.isFinite(rawMarginFloor) ? Math.max(0, Math.min(50, rawMarginFloor)) : (base.minMarginFloorPct ?? 2.0),
     maxAllowedOutlets: Number.isFinite(rawMaxOutlets) ? Math.max(1, Math.min(500, Math.round(rawMaxOutlets))) : (base.maxAllowedOutlets ?? 10),
     maxAllowedUsers: Number.isFinite(rawMaxUsers) ? Math.max(1, Math.min(500, Math.round(rawMaxUsers))) : (base.maxAllowedUsers ?? 25),
-    enableB2BAndStorefrontPortal: src.enableB2BAndStorefrontPortal === true,
+    enableB2BAndStorefrontPortal: portalFlag,
+    enableB2BFeatures: portalFlag,
     ojolChannelRates: {
       grabMart: { ...base.ojolChannelRates.grabMart, ...(src.ojolChannelRates?.grabMart || {}) },
       goMart: { ...base.ojolChannelRates.goMart, ...(src.ojolChannelRates?.goMart || {}) },
@@ -4185,6 +4245,10 @@ function enrichOutletSchedule(st: StoreOutletSchedule, idx: number): StoreOutlet
   const name = (st.name || st.storeName || st.storeId).trim();
   const branchCode = deriveDefaultBranchCode(st, idx);
   const phone = st.phone || st.contactPhone || '+62 21 5550100';
+  const parentCompany =
+    companiesList.find((c) => c.id === st.parentCompanyId) ||
+    companiesList.find((c) => c.isPrimary) ||
+    companiesList[0];
   return {
     ...st,
     id: st.id || st.storeId,
@@ -4200,6 +4264,9 @@ function enrichOutletSchedule(st: StoreOutletSchedule, idx: number): StoreOutlet
       typeof st.targetDailyOmzetIDR === 'number' && Number.isFinite(st.targetDailyOmzetIDR)
         ? Math.max(0, roundIDR(st.targetDailyOmzetIDR))
         : 35000000,
+    parentCompanyId: st.parentCompanyId || parentCompany?.id || 'COMP-001',
+    parentCompanyName: st.parentCompanyName || parentCompany?.companyName,
+    branchPartnerName: st.branchPartnerName ?? parentCompany?.partnerName,
     isActive: st.isActive !== false,
   };
 }
@@ -5567,6 +5634,10 @@ function evaluateSystemUserModulePermission(
   }
   if (urlPath === '/admin/settings/outlets' || urlPath.startsWith('/admin/settings/outlets/')) {
     return mp.settings.view === true || mp.outlets.view === true ? { allowed: true } : deny('settings', 'view');
+  }
+  if (urlPath === '/admin/companies' || urlPath.startsWith('/admin/companies/')) {
+    if (isRead) return mp.settings.view === true || mp.dashboard.view === true ? { allowed: true } : deny('settings', 'view');
+    return mp.settings.approve === true ? { allowed: true } : deny('settings', 'approve');
   }
   if (
     urlPath === '/admin/settings/branch-monitor' ||
@@ -7894,6 +7965,7 @@ function captureServerState() {
     resolvedFraudAlertMeta,
     standingOrdersList,
     customerClaimsList,
+    companiesList,
     qrisTransactionsEntries: Array.from(qrisTransactions.entries()),
     idempotencyStoreEntries: Array.from(idempotencyStore.entries()),
     inTransitTransferLotsEntries: Array.from(inTransitTransferLots.entries()),
@@ -8036,6 +8108,10 @@ function applyServerState(snap: any) {
       ? snap.standingOrdersList
       : createInitialStandingOrders();
   customerClaimsList = Array.isArray(snap.customerClaimsList) ? snap.customerClaimsList : [];
+  companiesList =
+    Array.isArray(snap.companiesList) && snap.companiesList.length > 0
+      ? snap.companiesList
+      : createInitialCompaniesList();
   qrisTransactions.clear();
   if (Array.isArray(snap.qrisTransactionsEntries)) {
     snap.qrisTransactionsEntries.forEach(([k, v]: [string, any]) => qrisTransactions.set(k, v));
@@ -8344,6 +8420,7 @@ async function resetDemoStateToBaseline() {
     promotionRulesList = createInitialPromotionRules();
     standingOrdersList = createInitialStandingOrders();
     customerClaimsList = [];
+    companiesList = createInitialCompaniesList();
     ensureRegulatoryCoaAccounts();
     ensureHalalComplianceMetadata();
     ensurePromoGimmickRuleSeeded();
@@ -8858,6 +8935,7 @@ async function startServer() {
         (urlPath === '/admin/settings/operator-assignments' && method === 'POST') ||
         ((urlPath === '/admin/settings/users' || urlPath.startsWith('/admin/settings/users/')) && method !== 'GET') ||
         ((urlPath === '/admin/settings/outlets' || urlPath.startsWith('/admin/settings/outlets/')) && method !== 'GET') ||
+        ((urlPath === '/admin/companies' || urlPath.startsWith('/admin/companies/')) && method !== 'GET') ||
         (urlPath.startsWith('/admin/settings/coa-account') && method === 'DELETE') ||
         (urlPath === '/admin/compliance/sku-tax-rules' && method === 'PUT')
       ) {
@@ -10316,9 +10394,14 @@ async function startServer() {
   // STORE OPERATIONS & SCHEDULES MANAGEMENT ENDPOINTS
   // -------------------------------------------------------------
   app.get(['/api/admin/store-status', '/api/store-status', '/api/store/status'], (_req: Request, res: Response) => {
+    const portalEnabled = Boolean(
+      getErpSettings().enableB2BFeatures ?? getErpSettings().enableB2BAndStorefrontPortal
+    );
     res.json({
       ...storeStatus,
-      enableB2BAndStorefrontPortal: getErpSettings().enableB2BAndStorefrontPortal === true,
+      enableB2BAndStorefrontPortal: portalEnabled,
+      enableB2BFeatures: portalEnabled,
+      primaryCompany: getPrimaryCompanyBranding(),
     });
   });
 
@@ -10666,7 +10749,7 @@ async function startServer() {
             (r.rackBinCode === (b as any).rackBinCode ||
               (Array.isArray(r.assignedSkus) && r.assignedSkus.some((s) => s.toLowerCase() === skuLower)))
         );
-        const matchedBin = warehouseBinsList.find(
+        const matchedBin = warehouseBins.find(
           (bin) =>
             bin.storeId === b.storeId &&
             (bin.binCode === (b as any).rackBinCode || bin.zoneId === b.warehouseZoneId)
@@ -16291,6 +16374,8 @@ async function startServer() {
         bpjphExpiryDate: inv?.bpjphExpiryDate,
         bpomRegNumber: inv?.bpomRegNumber,
         wholesaleTiers: inv?.wholesaleTiers,
+        priceUpdatedAt: inv?.priceUpdatedAt,
+        isPromoGimmick: Boolean(inv?.isPromoGimmick),
       });
     });
 
@@ -16334,6 +16419,8 @@ async function startServer() {
         bpjphExpiryDate: inv.bpjphExpiryDate,
         bpomRegNumber: inv.bpomRegNumber,
         wholesaleTiers: inv.wholesaleTiers,
+        priceUpdatedAt: inv.priceUpdatedAt,
+        isPromoGimmick: Boolean(inv.isPromoGimmick),
       });
     });
 
@@ -17674,7 +17761,12 @@ async function startServer() {
       return res.status(400).json({ error: 'minMarginFloorPct must be between 0% and 50%.' });
     }
     mergedErp.minMarginFloorPct = Number(normalizedMarginFloor.toFixed(2));
-    mergedErp.enableB2BAndStorefrontPortal = Boolean(mergedErp.enableB2BAndStorefrontPortal);
+    const resolvedPortalFlag =
+      patch.enableB2BFeatures !== undefined
+        ? Boolean(patch.enableB2BFeatures)
+        : Boolean(mergedErp.enableB2BAndStorefrontPortal);
+    mergedErp.enableB2BAndStorefrontPortal = resolvedPortalFlag;
+    mergedErp.enableB2BFeatures = resolvedPortalFlag;
 
     if (patch.maxAllowedOutlets !== undefined) {
       if (!isCallerSuperAdminForUserMgmt(req)) {
@@ -17809,11 +17901,128 @@ async function startServer() {
     });
   });
 
+  // --- 1A1. MULTI-COMPANY MASTER PROFILE ENDPOINTS (BRANDING & LEGAL ENTITIES) ---
+  app.get('/api/admin/companies', (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      companies: companiesList,
+      primaryCompany: getPrimaryCompanyBranding(),
+    });
+  });
+
+  app.post('/api/admin/companies', (req: Request, res: Response) => {
+    if (!isCallerSuperAdminForUserMgmt(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat menambah perusahaan master.',
+      });
+    }
+    const body = (req.body || {}) as Partial<CompanyProfile>;
+    const companyName = String(body.companyName || '').trim();
+    if (!companyName) {
+      return res.status(400).json({ success: false, error: 'Nama perusahaan wajib diisi.' });
+    }
+    const nowIso = new Date().toISOString();
+    const isPrimary = body.isPrimary === true || companiesList.length === 0;
+    if (isPrimary) {
+      companiesList.forEach((c) => {
+        c.isPrimary = false;
+      });
+    }
+    const tz: IndonesiaTimezone =
+      body.timezone === 'Asia/Makassar' || body.timezone === 'Asia/Jayapura'
+        ? body.timezone
+        : 'Asia/Jakarta';
+    const newComp: CompanyProfile = {
+      id: `COMP-${String(companiesList.length + 1).padStart(3, '0')}`,
+      companyName,
+      partnerName: body.partnerName ? String(body.partnerName).trim() : '',
+      logoUrl: body.logoUrl ? String(body.logoUrl).trim() : '',
+      npwp: body.npwp ? String(body.npwp).trim() : '',
+      street: body.street ? String(body.street).trim() : '',
+      city: body.city ? String(body.city).trim() : 'Jakarta Selatan',
+      province: body.province ? String(body.province).trim() : 'DKI Jakarta',
+      postalCode: body.postalCode ? String(body.postalCode).trim() : '12190',
+      country: 'Indonesia',
+      currency: 'IDR',
+      timezone: tz,
+      emailDomain: body.emailDomain ? String(body.emailDomain).trim() : '',
+      companyEmail: body.companyEmail ? String(body.companyEmail).trim() : '',
+      phoneNumber: body.phoneNumber ? String(body.phoneNumber).trim() : '',
+      website: body.website ? String(body.website).trim() : '',
+      socialMedia: body.socialMedia || {},
+      isPrimary,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    companiesList.push(newComp);
+    scheduleStateSave();
+    res.status(201).json({
+      success: true,
+      company: newComp,
+      companies: companiesList,
+      primaryCompany: getPrimaryCompanyBranding(),
+      message: `Perusahaan '${newComp.companyName}' berhasil ditambahkan.`,
+    });
+  });
+
+  app.patch('/api/admin/companies/:id', (req: Request, res: Response) => {
+    if (!isCallerSuperAdminForUserMgmt(req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: 'Akses Ditolak: Hanya Owner / Super Admin yang dapat memperbarui perusahaan master.',
+      });
+    }
+    const id = String(req.params.id || '').trim();
+    const target = companiesList.find((c) => c.id === id);
+    if (!target) {
+      return res.status(404).json({ success: false, error: `Perusahaan '${id}' tidak ditemukan.` });
+    }
+    const patch = (req.body || {}) as Partial<CompanyProfile>;
+    if (patch.companyName !== undefined) {
+      const cleanName = String(patch.companyName).trim();
+      if (!cleanName) return res.status(400).json({ success: false, error: 'Nama perusahaan tidak boleh kosong.' });
+      target.companyName = cleanName;
+    }
+    if (patch.partnerName !== undefined) target.partnerName = String(patch.partnerName).trim();
+    if (patch.logoUrl !== undefined) target.logoUrl = String(patch.logoUrl).trim();
+    if (patch.npwp !== undefined) target.npwp = String(patch.npwp).trim();
+    if (patch.street !== undefined) target.street = String(patch.street).trim();
+    if (patch.city !== undefined) target.city = String(patch.city).trim();
+    if (patch.province !== undefined) target.province = String(patch.province).trim();
+    if (patch.postalCode !== undefined) target.postalCode = String(patch.postalCode).trim();
+    if (patch.timezone === 'Asia/Jakarta' || patch.timezone === 'Asia/Makassar' || patch.timezone === 'Asia/Jayapura') {
+      target.timezone = patch.timezone;
+    }
+    if (patch.emailDomain !== undefined) target.emailDomain = String(patch.emailDomain).trim();
+    if (patch.companyEmail !== undefined) target.companyEmail = String(patch.companyEmail).trim();
+    if (patch.phoneNumber !== undefined) target.phoneNumber = String(patch.phoneNumber).trim();
+    if (patch.website !== undefined) target.website = String(patch.website).trim();
+    if (patch.socialMedia !== undefined) target.socialMedia = { ...target.socialMedia, ...patch.socialMedia };
+    if (patch.isPrimary === true) {
+      companiesList.forEach((c) => {
+        c.isPrimary = c.id === target.id;
+      });
+    }
+    target.updatedAt = new Date().toISOString();
+    scheduleStateSave();
+    res.json({
+      success: true,
+      company: target,
+      companies: companiesList,
+      primaryCompany: getPrimaryCompanyBranding(),
+      message: `Perusahaan '${target.companyName}' berhasil diperbarui.`,
+    });
+  });
+
   // --- 1A2. EDITABLE OUTLET / BRANCH PROFILES & QUOTA MANAGEMENT (SUPER ADMIN) ---
   app.get('/api/admin/settings/outlets', (_req: Request, res: Response) => {
     res.json({
       success: true,
       outlets: storeSchedules.map((st, idx) => enrichOutletSchedule(st, idx)),
+      companies: companiesList,
       quota: getOutletQuotaSummary(),
       branchOptions: getDynamicBranchOptions(),
     });
@@ -17891,6 +18100,8 @@ async function startServer() {
         contactPhone: cleanPhone,
         receiptHeaderNote: String(body.receiptHeaderNote ?? 'Terima kasih telah berbelanja di GroceMart Indonesia!').trim(),
         targetDailyOmzetIDR: Math.max(0, roundIDR(Number(body.targetDailyOmzetIDR ?? 35000000) || 0)),
+        parentCompanyId: body.parentCompanyId ? String(body.parentCompanyId).trim() : undefined,
+        branchPartnerName: body.branchPartnerName ? String(body.branchPartnerName).trim() : undefined,
         isActive: nextIsActive,
         openTime: String(body.openTime || '07:00').trim(),
         closeTime: String(body.closeTime || '22:00').trim(),
@@ -17948,6 +18159,7 @@ async function startServer() {
       success: true,
       outlet: newOutlet,
       outlets: storeSchedules.map((st, idx) => enrichOutletSchedule(st, idx)),
+      companies: companiesList,
       quota: getOutletQuotaSummary(),
       branchOptions: getDynamicBranchOptions(),
       message: `Outlet '${newOutlet.storeName}' (${newOutlet.branchCode}) berhasil ditambahkan.`,
@@ -18057,24 +18269,31 @@ async function startServer() {
     if (body.closureReason !== undefined) existing.closureReason = body.closureReason;
     if (body.isHolidayMode !== undefined) existing.isHolidayMode = Boolean(body.isHolidayMode);
     if (body.holidayNotice !== undefined) existing.holidayNotice = body.holidayNotice;
+    if (body.parentCompanyId !== undefined) {
+      existing.parentCompanyId = String(body.parentCompanyId || '').trim() || undefined;
+    }
+    if (body.branchPartnerName !== undefined) {
+      existing.branchPartnerName = String(body.branchPartnerName || '').trim() || undefined;
+    }
     existing.updatedAt = new Date().toISOString();
 
-    storeSchedules[idx] = existing;
+    const updatedEnriched = enrichOutletSchedule(existing, idx);
+    storeSchedules[idx] = updatedEnriched;
 
     // Synchronize renamed storeName across dependent entities
     storeInventoryTiers.forEach((t) => {
-      if (t.storeId === existing.storeId) {
-        t.storeName = existing.storeName;
+      if (t.storeId === updatedEnriched.storeId) {
+        t.storeName = updatedEnriched.storeName;
       }
     });
     systemUsers.forEach((u) => {
-      if (u.branchId === existing.storeId) {
-        u.branchName = existing.storeName;
+      if (u.branchId === updatedEnriched.storeId) {
+        u.branchName = updatedEnriched.storeName;
       }
     });
     Object.values(operatorBranchAssignments).forEach((entry) => {
-      if (entry.storeId === existing.storeId) {
-        entry.storeName = existing.storeName;
+      if (entry.storeId === updatedEnriched.storeId) {
+        entry.storeName = updatedEnriched.storeName;
       }
     });
     syncAssignmentsOntoProfiles();
@@ -18083,21 +18302,22 @@ async function startServer() {
       req,
       actorName: getEffectiveOperatorName(req),
       actorRole: 'super_admin',
-      branchScope: existing.storeId,
+      branchScope: updatedEnriched.storeId,
       module: 'SECURITY',
       action: 'OUTLET_PROFILE_UPDATED',
-      referenceId: existing.storeId,
-      summary: `Updated outlet profile ${existing.storeName} [${existing.branchCode}] (Type: ${existing.outletType}, Target: Rp ${(existing.targetDailyOmzetIDR || 0).toLocaleString('id-ID')}/day, Active: ${existing.isActive !== false}).`,
+      referenceId: updatedEnriched.storeId,
+      summary: `Updated outlet profile ${updatedEnriched.storeName} [${updatedEnriched.branchCode}] (Type: ${updatedEnriched.outletType}, Target: Rp ${(updatedEnriched.targetDailyOmzetIDR || 0).toLocaleString('id-ID')}/day, Active: ${updatedEnriched.isActive !== false}).`,
     });
     scheduleStateSave();
 
     return res.json({
       success: true,
-      outlet: existing,
+      outlet: updatedEnriched,
       outlets: storeSchedules.map((st, sIdx) => enrichOutletSchedule(st, sIdx)),
+      companies: companiesList,
       quota: getOutletQuotaSummary(),
       branchOptions: getDynamicBranchOptions(),
-      message: `Profil outlet '${existing.storeName}' berhasil disimpan.`,
+      message: `Profil outlet '${updatedEnriched.storeName}' berhasil disimpan.`,
     });
   });
 
@@ -18184,6 +18404,9 @@ async function startServer() {
         totalStockUnits,
         incomingPoCount,
         inTransitTransferCount,
+        parentCompanyId: st.parentCompanyId,
+        parentCompanyName: st.parentCompanyName,
+        branchPartnerName: st.branchPartnerName,
       };
     });
 
@@ -20877,6 +21100,29 @@ async function startServer() {
     const openVendorAdvance1150IDR = getSupplierOpenAdvance1150IDR(po.supplierName);
     const totalUnbilledGrQty = items.reduce((s, it) => s + it.unbilledGrQty, 0);
 
+    const unbilledGrs = linkedGrs
+      .map((g) => {
+        const grItems = g.items.map((gi) => {
+          const matchedPoLine = items.find((it) => it.sku === gi.sku);
+          const remainingUnbilled = matchedPoLine ? matchedPoLine.unbilledGrQty : gi.quantityReceived;
+          return {
+            sku: gi.sku,
+            productName: gi.productName,
+            receivedQty: gi.quantityReceived,
+            unbilledQty: Math.min(gi.quantityReceived, Math.max(0, remainingUnbilled)),
+          };
+        });
+        const grTotalUnbilled = grItems.reduce((s, li) => s + li.unbilledQty, 0);
+        return {
+          grId: g.id,
+          deliveryNoteNumber: g.deliveryNoteNumber,
+          receivedAt: g.receivedAt,
+          totalUnbilledQty: Number(grTotalUnbilled.toFixed(2)),
+          items: grItems,
+        };
+      })
+      .filter((u) => u.totalUnbilledQty > 0);
+
     res.json({
       success: true,
       poId: po.id,
@@ -20888,7 +21134,9 @@ async function startServer() {
       paymentTerms: po.paymentTerms || 'Net 30',
       suggestedTaxPercent: typeof po.taxPercent === 'number' ? po.taxPercent : 11,
       suggestedPphPercent: 0,
+      openAdvance1150IDR: openVendorAdvance1150IDR,
       openVendorAdvance1150IDR,
+      unbilledGrs,
       linkedGrs: linkedGrs.map((g) => ({
         id: g.id,
         deliveryNoteNumber: g.deliveryNoteNumber,
@@ -26977,17 +27225,22 @@ async function startServer() {
     const scope = resolveRequestBranchScope(req);
     const {
       storeId: rawStoreId,
+      branchId: rawBranchId,
       storeName: rawStoreName,
       registerId = 'REG-04',
+      shiftName = 'Morning Shift',
+      openingPettyCashIDR,
       openingFloatIDR = 500000,
       cashierName,
     } = req.body;
-    const storeId = resolvePosRetailStoreId(rawStoreId || (scope.isBranchScoped ? scope.storeId : 'store-jkt-senopati'));
+    const effectiveInputStore = rawStoreId || rawBranchId;
+    const storeId = resolvePosRetailStoreId(effectiveInputStore || (scope.isBranchScoped ? scope.storeId : 'store-jkt-senopati'));
     const shiftBranchViolation = checkBranchIsolationViolation(req, storeId);
     if (shiftBranchViolation) {
       return res.status(403).json({ success: false, code: 'RBAC_FORBIDDEN', error: shiftBranchViolation });
     }
-    const storeName = (rawStoreName && rawStoreId === storeId) ? rawStoreName : resolveBranchNameById(storeId);
+    const storeName = (rawStoreName && effectiveInputStore === storeId) ? rawStoreName : resolveBranchNameById(storeId);
+    const resolvedOpeningFloat = Math.max(0, Number(openingPettyCashIDR ?? openingFloatIDR) || 0);
 
     const existing = posShiftsList.find((s) => s.status === 'OPEN' && s.storeId === storeId);
     if (existing) {
@@ -27004,16 +27257,17 @@ async function startServer() {
       storeId,
       storeName,
       registerId,
+      shiftName: String(shiftName || 'Morning Shift').trim(),
       cashierId: getEffectiveOperatorId(req),
       cashierName: cashierName || getEffectiveOperatorName(req),
       status: 'OPEN',
       openedAt: new Date().toISOString(),
-      openingFloatIDR: Math.max(0, Number(openingFloatIDR) || 0),
+      openingFloatIDR: resolvedOpeningFloat,
       transactionCount: 0,
       expectedCashSalesIDR: 0,
       expectedQrisSalesIDR: 0,
       expectedEdcSalesIDR: 0,
-      expectedTotalCashInDrawerIDR: Math.max(0, Number(openingFloatIDR) || 0),
+      expectedTotalCashInDrawerIDR: resolvedOpeningFloat,
       cashRefundsIDR: 0,
       safeDropsTotalIDR: 0,
     };

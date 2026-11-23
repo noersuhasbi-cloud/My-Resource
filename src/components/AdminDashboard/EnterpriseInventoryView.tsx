@@ -21,6 +21,7 @@ import type {
   ReturnableDirection,
   ItemClassification,
   CrossDocumentNavTarget,
+  VendorBillBridgeTarget,
 } from '../../types/index.ts';
 import type { AdminDashboardTab } from './AdminSidebar';
 import { apiClient } from '../../services/apiClient';
@@ -77,6 +78,7 @@ import { ItemTraceabilityModal } from './ItemTraceabilityModal';
 interface EnterpriseInventoryViewProps {
   theme: 'light' | 'dark';
   activeStaffSession?: StaffShiftSession | null;
+  enableB2BFeatures?: boolean;
   selectedOutletFilter: string;
   onOutletFilterChange: (val: string) => void;
   selectedStorageZoneFilter: string;
@@ -100,6 +102,8 @@ interface EnterpriseInventoryViewProps {
   onSaveRemovalStrategies: (next: Partial<RemovalStrategyConfig>) => Promise<void>;
   onNavigateTab: (tab: AdminDashboardTab) => void;
   onNavigateToDocument?: (nav: CrossDocumentNavTarget) => void;
+  onNavigateToProcurementDoc?: (subTab: 'pr' | 'po' | 'gr', docId: string) => void;
+  onNavigateToVendorBill?: (bridge: Omit<VendorBillBridgeTarget, 'triggerNonce'>) => void;
   onAuditSku: (sku: string) => void;
   onEditTier: (tier: StoreInventoryStock) => void;
   onRefreshData?: () => Promise<void> | void;

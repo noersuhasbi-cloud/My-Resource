@@ -167,6 +167,8 @@ export interface StoreOperationalStatus {
   allowCatalogBrowsing: boolean;
   updatedAt: string;
   enableB2BAndStorefrontPortal?: boolean;
+  enableB2BFeatures?: boolean;
+  primaryCompany?: CompanyPublicBranding | null;
 }
 
 export type OutletType = 'FLAGSHIP_STORE' | 'DARK_STORE' | 'CENTRAL_HUB' | 'EXPRESS_MART';
@@ -195,6 +197,9 @@ export interface StoreOutletSchedule {
   phone?: string;
   receiptHeaderNote?: string;
   targetDailyOmzetIDR?: number;
+  parentCompanyId?: string;
+  parentCompanyName?: string;
+  branchPartnerName?: string;
   isActive?: boolean;
   updatedAt: string;
 }
@@ -2547,6 +2552,9 @@ export interface ErpConfigurationSettings {
   maxAllowedOutlets?: number; // Maximum active outlets allowed under SaaS quota (default 10)
   maxAllowedUsers?: number; // Maximum active user accounts allowed under SaaS quota (default 25)
   enableB2BAndStorefrontPortal?: boolean; // Feature flag controlling Customer Storefront, B2B Portal & Quotations visibility (default false)
+  enableB2BFeatures?: boolean; // Alias for enableB2BAndStorefrontPortal
+  localizationCountry?: string;
+  primaryCurrency?: string;
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -2982,6 +2990,7 @@ export interface PosRegisterShiftSession {
   storeId: string;
   storeName: string;
   registerId: string;
+  shiftName?: string;
   cashierId: string;
   cashierName: string;
   status: 'OPEN' | 'CLOSED';
@@ -3081,6 +3090,9 @@ export interface BranchMonitorHubSummary {
   totalStockUnits: number;
   incomingPoCount: number;
   inTransitTransferCount: number;
+  parentCompanyId?: string;
+  parentCompanyName?: string;
+  branchPartnerName?: string;
 }
 
 export interface BranchMonitorIncomingPO {
@@ -4410,3 +4422,81 @@ export interface ImportExportDiagnosticReport {
   issues: ImportExportDiagnosticIssue[];
   actorName?: string;
 }
+
+export type IndonesiaTimezone = 'Asia/Jakarta' | 'Asia/Makassar' | 'Asia/Jayapura';
+
+export interface CompanySocialMedia {
+  instagram?: string;
+  whatsappBusiness?: string;
+  tiktok?: string;
+  linkedin?: string;
+}
+
+export interface CompanyPublicBranding {
+  id: string;
+  companyName: string;
+  partnerName?: string;
+  logoUrl?: string;
+  npwp?: string;
+  street?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  phoneNumber?: string;
+  companyEmail?: string;
+  website?: string;
+  isPrimary?: boolean;
+}
+
+export interface CompanyProfile extends CompanyPublicBranding {
+  country: 'Indonesia';
+  currency: 'IDR';
+  timezone: IndonesiaTimezone;
+  emailDomain?: string;
+  socialMedia?: CompanySocialMedia;
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+export interface ProcurementFocusTarget {
+  subTab: 'pr' | 'po' | 'gr' | 'vendor_bills';
+  docId?: string;
+  triggerNonce: number;
+}
+
+export interface VendorBillBridgeTarget {
+  mode: 'create' | 'view';
+  poId?: string;
+  grId?: string;
+  grIds?: string[];
+  billId?: string;
+  triggerNonce: number;
+}
+
+export interface VendorBillPoPrefillUnbilledGr {
+  grId: string;
+  deliveryNoteNumber: string;
+  receivedAt: string;
+  totalUnbilledQty: number;
+  items: Array<{
+    sku: string;
+    productName: string;
+    receivedQty: number;
+    unbilledQty: number;
+  }>;
+}
+
+export interface VendorBillPoPrefillResponse {
+  success: boolean;
+  poId: string;
+  poNumber?: string;
+  supplierName: string;
+  storeId: string;
+  storeName: string;
+  suggestedTaxPercent?: number;
+  openAdvance1150IDR: number;
+  unbilledGrs: VendorBillPoPrefillUnbilledGr[];
+  existingBillIds?: string[];
+  totalUnbilledGrQty?: number;
+}
+

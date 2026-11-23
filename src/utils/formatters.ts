@@ -21,12 +21,14 @@ export function generateQrisReference(): string {
   return ref;
 }
 
-export function isSafeLogoUrl(raw?: string | null): boolean {
+export function isSafeLogoUrl(raw?: string | null): string | null {
   const val = String(raw || '').trim();
-  if (!val) return false;
-  if (/^(javascript|vbscript|data:text\/html|data:image\/svg\+xml)/i.test(val)) return false;
-  if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(val)) return val.length <= 2_800_000;
-  return /^https?:\/\/[^\s"'<>]+$/i.test(val) || /^\/[A-Za-z0-9._\-\/]+$/.test(val);
+  if (!val) return null;
+  if (/^(javascript|vbscript|data:text\/html|data:image\/svg\+xml)/i.test(val)) return null;
+  if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(val)) {
+    return val.length <= 2_800_000 ? val : null;
+  }
+  return /^https?:\/\/[^\s"'<>]+$/i.test(val) || /^\/[A-Za-z0-9._\-\/]+$/.test(val) ? val : null;
 }
 
 export function getCompanyMonogram(name?: string | null): string {

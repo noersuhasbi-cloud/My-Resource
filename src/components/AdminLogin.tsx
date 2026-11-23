@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import type { StaffShiftSession } from '../types/index.ts';
+import type { CompanyPublicBranding, StaffShiftSession } from '../types/index.ts';
 import { apiClient } from '../services/apiClient';
 import { useDarkMode } from '../context/DarkModeContext';
 import {
@@ -24,6 +24,7 @@ interface AdminLoginProps {
   onReturnToStorefront: () => void;
   onShowToast?: (title: string, message: string) => void;
   enableB2BAndStorefrontPortal?: boolean;
+  companyBranding?: CompanyPublicBranding | null;
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({

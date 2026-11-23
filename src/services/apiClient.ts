@@ -166,6 +166,9 @@ import type {
   FraudRadarResponse,
   ItemInboundTraceabilityResponse,
   PoBillingPreviewResponse,
+  CompanyProfile,
+  CompanyPublicBranding,
+  VendorBillPoPrefillResponse,
 } from '../types/index.ts';
 import type { PromotionEvaluationResult } from '../utils/promotionEngine.ts';
 import { MOCK_VENDOR_CREDIT_NOTES, DEFAULT_MARKDOWN_CONFIG } from '../utils/groceryEngine.ts';
@@ -741,6 +744,15 @@ export const apiClient = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to load item inbound traceability');
+    }
+    return res.json();
+  },
+
+  async getVendorBillPoPrefill(poId: string): Promise<VendorBillPoPrefillResponse> {
+    const res = await fetchApi(`/api/admin/procurement/vendor-bills/preview/${encodeURIComponent(poId)}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to load PO billing prefill');
     }
     return res.json();
   },
@@ -3129,10 +3141,14 @@ export const apiClient = {
 
   async openPosShift(payload: {
     storeId: string;
+    branchId?: string;
     storeName: string;
     registerId?: string;
+    shiftName?: string;
+    openingPettyCashIDR?: number;
     openingFloatIDR: number;
     cashierName?: string;
+    clientTimestampIso?: string;
   }): Promise<{ success: boolean; shift: PosRegisterShiftSession; message: string }> {
     const res = await fetchApi('/api/pos/shifts/open', {
       method: 'POST',
@@ -3299,7 +3315,65 @@ export const apiClient = {
     return data;
   },
 
+  async getAdminCompanies(): Promise<{
+    success: boolean;
+    companies: CompanyProfile[];
+    primaryCompany: CompanyPublicBranding | null;
+  }> {
+    const res = await fetchApi('/api/admin/companies');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to load master companies');
+    }
+    return data;
+  },
+
+  async createAdminCompany(
+    payload: Omit<CompanyProfile, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<{
+    success: boolean;
+    company: CompanyProfile;
+    companies: CompanyProfile[];
+    primaryCompany: CompanyPublicBranding | null;
+    message: string;
+  }> {
+    const res = await fetchApi('/api/admin/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Gagal membuat perusahaan baru');
+    }
+    return data;
+  },
+
+  async updateAdminCompany(
+    id: string,
+    patch: Partial<CompanyProfile>
+  ): Promise<{
+    success: boolean;
+    company: CompanyProfile;
+    companies: CompanyProfile[];
+    primaryCompany: CompanyPublicBranding | null;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/companies/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Gagal memperbarui perusahaan');
+    }
+    return data;
+  },
+
   async createAdminOutlet(payload: {
+    parentCompanyId?: string;
+    branchPartnerName?: string;
     branchCode: string;
     name: string;
     outletType: OutletType;
@@ -3317,6 +3391,7 @@ export const apiClient = {
     success: boolean;
     outlet: StoreOutletSchedule;
     outlets: StoreOutletSchedule[];
+    companies?: CompanyProfile[];
     quota: { activeOutlets: number; maxAllowedOutlets: number; remainingSlots: number };
     branchOptions: Array<{ storeId: string; storeName: string; hubType: string }>;
     message: string;
@@ -3336,6 +3411,8 @@ export const apiClient = {
   async updateAdminOutlet(
     id: string,
     patch: Partial<{
+      parentCompanyId: string;
+      branchPartnerName: string;
       branchCode: string;
       name: string;
       storeName: string;
@@ -3355,6 +3432,7 @@ export const apiClient = {
     success: boolean;
     outlet: StoreOutletSchedule;
     outlets: StoreOutletSchedule[];
+    companies?: CompanyProfile[];
     quota: { activeOutlets: number; maxAllowedOutlets: number; remainingSlots: number };
     branchOptions: Array<{ storeId: string; storeName: string; hubType: string }>;
     message: string;

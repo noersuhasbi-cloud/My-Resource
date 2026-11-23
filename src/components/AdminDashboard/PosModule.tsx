@@ -3487,6 +3487,10 @@ export const PosModule: React.FC<PosModuleProps> = ({
           sellingPrice: p.sellingPrice,
           pricePerKg: p.pricePerKg,
           isWeighted: p.isWeighted,
+          priceUpdatedAt: p.priceUpdatedAt,
+          wholesaleTiers: p.wholesaleTiers,
+          halalStatus: p.halalStatus,
+          bpjphCertNumber: p.bpjphCertNumber,
         }))}
         onTestScanToPos={(ean13) => {
           setBarcodeInput(ean13);
