@@ -462,7 +462,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Financial Accounting & Multi-Store COA
   const [selectedFinanceStore, setSelectedFinanceStore] = useState<string>(initialLockedBranch || 'CONSOLIDATED');
-  const [financeSubTab, setFinanceSubTab] = useState<'pnl' | 'balance_sheet' | 'cash_flow' | 'gl' | 'coa'>('pnl');
+  const [financeSubTab, setFinanceSubTab] = useState<'pnl' | 'balance_sheet' | 'trial_balance' | 'cash_flow' | 'gl' | 'coa'>('pnl');
   const [chartOfAccounts, setChartOfAccounts] = useState<ChartOfAccount[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<GeneralLedgerEntry[]>([]);
   const [pnlReport, setPnlReport] = useState<ProfitAndLossReport | null>(null);
@@ -1018,7 +1018,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   })();
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'dark' : ''} gm-surface gm-daylight-canvas bg-slate-50 dark:bg-[#090A0F] text-slate-900 dark:text-slate-100 flex font-sans overflow-x-hidden`}>
+    <div className={`min-h-screen ${theme === 'dark' ? 'dark' : ''} gm-erp-shell gm-surface gm-daylight-canvas bg-slate-50 dark:bg-[#090A0F] text-slate-900 dark:text-slate-100 flex font-sans overflow-x-hidden`}>
       {/* 1. Left Vertical Sidebar Component */}
       <AdminSidebar
         theme={theme}
@@ -1057,11 +1057,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       >
         {/* Top Utility Header Bar */}
         <header
-          className="print:hidden gm-chrome-surface bg-white/95 dark:bg-[#090A0F]/95 border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 shadow-xs backdrop-blur-md border-b sticky top-0 z-30 px-4 sm:px-6 py-2.5"
+          className="print:hidden gm-chrome-surface bg-white/95 dark:bg-[#090A0F]/95 border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 shadow-xs backdrop-blur-md border-b sticky top-0 z-30 px-5 sm:px-7 py-3"
         >
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             {/* Left: Mobile Hamburger Toggle + Current Module Breadcrumb */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3.5">
               {/* Mobile Hamburger Trigger */}
               <button
                 onClick={() => setIsMobileSidebarOpen(true)}
@@ -1077,21 +1077,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-400'}`}>
+                  <span className={`text-[12px] font-medium ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                     GroceMart ERP
                   </span>
-                  <ChevronRight className="w-3 h-3 text-slate-400" />
-                  <h1 className={`text-sm sm:text-base font-bold tracking-tight ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  <h1 className={`text-[17px] sm:text-[18px] font-semibold tracking-[-0.01em] ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
                     {currentModuleTitle}
                   </h1>
                 </div>
-                <div className="flex items-center gap-2 mt-0.5 hidden sm:flex">
-                  <span className="inline-flex items-center whitespace-nowrap px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-[#0F4C3A]/10 text-[#0F4C3A] border border-[#0F4C3A]/20 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800/50">
-                    Supply Chain v2.4
+                <div className="flex items-center gap-2.5 mt-0.5 hidden sm:flex">
+                  <span className={`text-[12px] font-medium ${isLight ? 'text-emerald-800' : 'text-emerald-400'}`}>
+                    Supply Chain Suite
                   </span>
-                  <span className="text-[11px] text-slate-400">•</span>
-                  <span className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                    Multi-Warehouse Cold Chain, FEFO &amp; Consolidate COA
+                  <span className="text-[11px] text-slate-400">·</span>
+                  <span className={`text-[12px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Multi-Warehouse Cold Chain, FEFO &amp; Consolidated COA
                   </span>
                 </div>
               </div>
@@ -2239,30 +2239,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>Safety Stock Buffer</label>
+                      <label className={`flex items-center gap-1.5 text-[13px] font-semibold mb-1.5 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
+                        <span>Safety Stock Buffer</span>
+                        <span
+                          title="Minimum threshold quantity before Auto-Replenishment flags this SKU for restock"
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-help"
+                        >
+                          ?
+                        </span>
+                      </label>
                       <input
                         type="number"
                         value={editingTier.safetyStockBuffer}
                         onChange={(e) => setEditingTier({ ...editingTier, safetyStockBuffer: Number(e.target.value) })}
-                        className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
+                        className={`w-full px-3 py-2 text-[13px] rounded-xl ${inputClass}`}
                       />
                     </div>
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>Maximum Bin Capacity</label>
+                      <label className={`block text-[13px] font-semibold mb-1.5 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
+                        Maximum Bin Capacity
+                      </label>
                       <input
                         type="number"
                         value={editingTier.maxCapacity}
                         onChange={(e) => setEditingTier({ ...editingTier, maxCapacity: Number(e.target.value) })}
-                        className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
+                        className={`w-full px-3 py-2 text-[13px] rounded-xl ${inputClass}`}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
-                      Item Classification (POS &amp; COA Routing)
+                    <label className={`flex items-center gap-1.5 text-[13px] font-semibold mb-1.5 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
+                      <span>Item Classification (POS &amp; COA Routing)</span>
+                      <span
+                        title="Determines whether the SKU is sellable at POS (#1040 Merchandise) or blocked for internal assets/consumables"
+                        className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-help"
+                      >
+                        ?
+                      </span>
                     </label>
                     <select
                       value={editingTier.itemClassification || 'MERCHANDISE'}
@@ -2272,7 +2288,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           itemClassification: e.target.value as 'MERCHANDISE' | 'FIXED_ASSET' | 'CONSUMABLE',
                         })
                       }
-                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
+                      className={`w-full px-3 py-2 text-[13px] rounded-xl ${inputClass}`}
                     >
                       <option value="MERCHANDISE">MERCHANDISE — Barang Dagangan (Sellable at POS · COA #1040)</option>
                       <option value="FIXED_ASSET">FIXED_ASSET — Aset Tetap / Peralatan Toko (Blocked at POS · COA #1510)</option>
@@ -2281,24 +2297,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>Handling Instructions (Staff Directives)</label>
+                    <label className={`block text-[13px] font-semibold mb-1.5 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
+                      Handling Instructions (Staff Directives)
+                    </label>
                     <textarea
                       rows={3}
                       value={editingTier.handlingInstructions || ''}
                       onChange={(e) => setEditingTier({ ...editingTier, handlingInstructions: e.target.value })}
                       placeholder="e.g. Keep refrigerated at 4°C with gentle misting. Do not stack beyond 3 tiers."
-                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
+                      className={`w-full px-3 py-2 text-[13px] rounded-xl ${inputClass}`}
                     />
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>Internal Admin Notes</label>
+                    <label className={`block text-[13px] font-semibold mb-1.5 ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
+                      Internal Admin Notes
+                    </label>
                     <input
                       type="text"
                       value={editingTier.internalNotes || ''}
                       onChange={(e) => setEditingTier({ ...editingTier, internalNotes: e.target.value })}
                       placeholder="e.g. Ciwidey morning harvest direct pick-up."
-                      className={`w-full px-3 py-2 text-xs rounded-xl ${inputClass}`}
+                      className={`w-full px-3 py-2 text-[13px] rounded-xl ${inputClass}`}
                     />
                   </div>
 

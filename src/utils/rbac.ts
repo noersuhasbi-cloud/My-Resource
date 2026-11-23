@@ -872,6 +872,7 @@ export function isAccountingSubTabAllowed(
       return canAP;
     case 'pnl':
     case 'balance_sheet':
+    case 'trial_balance':
     case 'cash_flow':
     case 'gl':
     case 'coa':

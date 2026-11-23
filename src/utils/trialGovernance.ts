@@ -720,6 +720,7 @@ export function mapAccountingSubTabToGovernanceArea(subTab: string): keyof Trial
       return 'ap';
     case 'pnl':
     case 'balance_sheet':
+    case 'trial_balance':
     case 'cash_flow':
     case 'gl':
     case 'coa':

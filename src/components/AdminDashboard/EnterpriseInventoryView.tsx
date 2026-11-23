@@ -773,22 +773,22 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   }, [batches, selectedOutletFilter]);
 
   const tabButtonBase =
-    'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer';
+    'inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap shrink-0 cursor-pointer';
   const tabButtonActive =
-    'bg-[#164E29] text-white shadow-sm dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50';
+    'bg-[#164E29] text-white font-semibold shadow-sm dark:bg-emerald-950/80 dark:text-emerald-300 dark:border dark:border-emerald-800/50';
   const tabButtonInactive =
     'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-900/90 hover:text-[#164E29] dark:hover:text-emerald-400';
 
   return (
     <div className="space-y-5 text-slate-900 dark:text-slate-100">
       {/* GroceMatrix™ Inventory Operations Command Header + View Switcher (3-Row Stacked Hierarchy) */}
-      <div className={`${cardClass} p-4 sm:p-5 space-y-3.5`}>
+      <div className={`${cardClass} p-4 sm:p-5 space-y-4`}>
         {/* ROW 1: Full-width Deep Forest Green Header Banner (Clean single-line desktop title, zero collision) */}
         <div className="w-full rounded-xl bg-[#164E29] dark:bg-emerald-950/80 border border-[#164E29] dark:border-emerald-800/50 text-white dark:text-slate-100 px-5 py-4 shadow-sm">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-emerald-100 dark:text-emerald-300">
-              <span className="font-bold uppercase tracking-wider text-white dark:text-emerald-400">
-                GROCEMATRIX™ INVENTORY ENGINE
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] font-medium text-emerald-100 dark:text-emerald-300">
+              <span className="font-semibold text-white dark:text-emerald-400">
+                GroceMatrix™ Inventory Engine
               </span>
               <span aria-hidden="true" className="opacity-60">·</span>
               <span>Multi-Warehouse Operations</span>
@@ -797,7 +797,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
               <span aria-hidden="true" className="opacity-60">·</span>
               <span>FEFO/FIFO Engine</span>
             </div>
-            <h2 className="text-lg sm:text-xl font-bold tracking-tight leading-snug text-white dark:text-slate-100 lg:whitespace-nowrap lg:truncate">
+            <h2 className="text-[19px] sm:text-[20px] font-semibold tracking-[-0.01em] leading-snug text-white dark:text-slate-100 lg:whitespace-nowrap lg:truncate">
               Warehouse Operations, Stock Quants &amp; Lot Traceability
             </h2>
           </div>
@@ -805,11 +805,11 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
 
         {/* ROW 2: Dedicated White/Dark Card Container for Navigation Tabs (Single Crisp 7-Tab Row) */}
         <div
-          className="w-full rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] shadow-xs p-1.5"
+          className="w-full rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#12141C] shadow-xs p-2"
           role="tablist"
           aria-label="Inventory view switcher"
         >
-          <div className="flex flex-wrap lg:flex-nowrap items-center gap-1 overflow-x-auto">
+          <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 overflow-x-auto">
             <button
               type="button"
               role="tab"

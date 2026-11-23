@@ -1810,6 +1810,7 @@ export function renderPrintDocument(
         const titleMap: Record<typeof a.subTab, string> = {
           pnl: 'INCOME STATEMENT (PROFIT & LOSS)',
           balance_sheet: 'BALANCE SHEET (FINANCIAL POSITION)',
+          trial_balance: 'TRIAL BALANCE (NERACA SALDO)',
           cash_flow: 'CASH FLOW STATEMENT',
           gl: 'GENERAL LEDGER AUDIT TRAIL',
           coa: 'CHART OF ACCOUNTS (COA) SCHEDULE',
@@ -1911,6 +1912,73 @@ export function renderPrintDocument(
                 </div>
               </div>
             )}
+
+            {a.subTab === 'trial_balance' && (() => {
+              const tbMap = new Map<string, { code: string; name: string; category: string; debit: number; credit: number }>();
+              a.filteredCOA.forEach((acc) => {
+                if (!tbMap.has(acc.accountCode)) {
+                  tbMap.set(acc.accountCode, {
+                    code: acc.accountCode,
+                    name: acc.accountName,
+                    category: acc.category,
+                    debit: 0,
+                    credit: 0,
+                  });
+                }
+              });
+              a.filteredLedger.forEach((e) => {
+                const row = tbMap.get(e.accountCode) || {
+                  code: e.accountCode,
+                  name: e.accountName,
+                  category: e.category || 'Account',
+                  debit: 0,
+                  credit: 0,
+                };
+                row.debit += Number(e.debit) || 0;
+                row.credit += Number(e.credit) || 0;
+                tbMap.set(e.accountCode, row);
+              });
+              const tbRows = Array.from(tbMap.values()).sort((x, y) => x.code.localeCompare(y.code));
+              const totalDr = tbRows.reduce((s, r) => s + r.debit, 0);
+              const totalCr = tbRows.reduce((s, r) => s + r.credit, 0);
+              return (
+                <table className="w-full text-left text-xs font-sans tabular-nums border border-slate-400 border-collapse">
+                  <thead className="bg-slate-100 border-b border-slate-400 font-semibold text-[11px]">
+                    <tr>
+                      <th className="py-2 px-2.5 border-r border-slate-300">Account</th>
+                      <th className="py-2 px-2.5 border-r border-slate-300">Category</th>
+                      <th className="py-2 px-2.5 border-r border-slate-300 text-right">Total Debit</th>
+                      <th className="py-2 px-2.5 border-r border-slate-300 text-right">Total Credit</th>
+                      <th className="py-2 px-2.5 text-right">Net Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-300">
+                    {tbRows.map((row) => {
+                      const net = row.debit - row.credit;
+                      return (
+                        <tr key={row.code} className="break-inside-avoid">
+                          <td className="py-1.5 px-2.5 border-r border-slate-300 font-semibold">{row.code} {row.name}</td>
+                          <td className="py-1.5 px-2.5 border-r border-slate-300">{row.category}</td>
+                          <td className="py-1.5 px-2.5 border-r border-slate-300 text-right">{fmt(row.debit)}</td>
+                          <td className="py-1.5 px-2.5 border-r border-slate-300 text-right">{fmt(row.credit)}</td>
+                          <td className={`py-1.5 px-2.5 text-right font-semibold ${net < 0 ? 'text-red-600' : ''}`}>
+                            {net < 0 ? `-${fmt(Math.abs(net))}` : fmt(net)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-100 border-t-2 border-slate-500 font-bold">
+                      <td colSpan={2} className="py-2 px-2.5 border-r border-slate-300">Total Trial Balance</td>
+                      <td className="py-2 px-2.5 border-r border-slate-300 text-right">{fmt(totalDr)}</td>
+                      <td className="py-2 px-2.5 border-r border-slate-300 text-right">{fmt(totalCr)}</td>
+                      <td className="py-2 px-2.5 text-right">{fmt(totalDr - totalCr)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              );
+            })()}
 
             {a.subTab === 'cash_flow' && a.cashFlow && (
               <div className="space-y-4 font-mono text-xs">

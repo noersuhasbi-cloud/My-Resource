@@ -451,7 +451,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                       ) : null
                     )}
                   </svg>
-                  <span className="font-mono text-sm font-extrabold tracking-[0.22em] text-slate-900 mt-0.5">
+                  <span className="font-mono gm-preserve-mono text-sm font-bold tracking-[0.22em] text-slate-900 mt-0.5">
                     {ean13Code}
                   </span>
                 </div>
@@ -508,7 +508,7 @@ export const BarcodeShelfLabelModal: React.FC<BarcodeShelfLabelModalProps> = ({
                         ) : null
                       )}
                     </svg>
-                    <span className="font-mono font-bold">{ean13Code}</span>
+                    <span className="font-mono gm-preserve-mono font-bold">{ean13Code}</span>
                   </div>
                   {promoText && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">

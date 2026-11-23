@@ -155,6 +155,16 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
   const [glRefFilter, setGlRefFilter] = useState<string>('ALL');
   const [coaCategoryFilter, setCoaCategoryFilter] = useState<string>('ALL');
 
+  // Expandable Tree States (First 3 groups/sections expanded by default + Expand/Collapse All)
+  const [expandedPnlSections, setExpandedPnlSections] = useState<Set<string>>(
+    () => new Set(['revenue', 'cogs', 'opex'])
+  );
+  const [expandedBsSections, setExpandedBsSections] = useState<Set<string>>(
+    () => new Set(['current_assets', 'fixed_assets', 'current_liabilities'])
+  );
+  const [expandedGlCodes, setExpandedGlCodes] = useState<Set<string> | null>(null);
+  const [expandedTbCodes, setExpandedTbCodes] = useState<Set<string> | null>(null);
+
   // B2B Accounts Receivable & Bilyet Giro State
   const [b2bCustomers, setB2bCustomers] = useState<B2BCustomer[]>([]);
   const [giroRecords, setGiroRecords] = useState<GiroPaymentRecord[]>([]);
@@ -372,30 +382,213 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
     });
   }, [chartOfAccounts, selectedStore, coaCategoryFilter]);
 
+  const deriveJournalPartner = (entry: GeneralLedgerEntry): string => {
+    const desc = entry.description || '';
+    const supMatch = desc.match(/(?:Supplier|Vendor|Distributor|PT|CV|UD)\s+[A-Za-z0-9.&'\-\s]{2,28}/i);
+    if (supMatch) return supMatch[0].trim().replace(/[.,;)]+$/, '');
+    if (entry.referenceType === 'POS_SALE' || entry.referenceType === 'QRIS_SALE') {
+      return entry.storeName ? `Walk-in · ${entry.storeName}` : 'Walk-in Customer';
+    }
+    if (entry.referenceType === 'B2B_WHOLESALE_ORDER' || entry.referenceType === 'GIRO_CLEARING' || entry.referenceType === 'GIRO_BOUNCED') {
+      return 'B2B Wholesale Partner';
+    }
+    if (entry.referenceType === 'VENDOR_BILL' || entry.referenceType === 'VENDOR_PAYMENT' || entry.referenceType === 'PARTIAL_GR' || entry.referenceType === 'PURCHASE_ORDER') {
+      return 'Trade Supplier / Vendor';
+    }
+    return entry.storeName || 'Internal Posting';
+  };
+
+  const renderLedgerAmount = (amountIDR: number, options?: { mutedZero?: boolean; highlightNegative?: boolean; signedNegative?: boolean }) => {
+    const isZero = Math.abs(amountIDR) < 0.005;
+    const isNeg = amountIDR < -0.005;
+    if (isZero) {
+      return (
+        <span className={options?.mutedZero !== false ? 'gm-currency-zero text-slate-400 dark:text-slate-500 font-normal' : ''}>
+          {formatCurrency(0)}
+        </span>
+      );
+    }
+    const absFormatted = formatCurrency(Math.abs(amountIDR));
+    const displayText = isNeg ? `-${absFormatted}` : absFormatted;
+    if (isNeg && options?.highlightNegative !== false) {
+      return <span className="gm-currency-negative font-medium">{displayText}</span>;
+    }
+    return <span>{displayText}</span>;
+  };
+
+  // Hierarchical GL Account Tree Groups (sorted by accountCode, chronological running balance)
+  const glAccountGroups = useMemo(() => {
+    const coaMap = new Map<string, ChartOfAccount>();
+    chartOfAccounts.forEach((acc) => {
+      if (selectedStore !== 'CONSOLIDATED' && acc.storeId && acc.storeId !== selectedStore && acc.storeId !== 'GLOBAL') {
+        return;
+      }
+      if (!coaMap.has(acc.accountCode)) {
+        coaMap.set(acc.accountCode, acc);
+      }
+    });
+
+    const grouped = new Map<
+      string,
+      {
+        accountCode: string;
+        accountName: string;
+        category: string;
+        entries: Array<GeneralLedgerEntry & { partner: string; runningBalance: number }>;
+        totalDebit: number;
+        totalCredit: number;
+        netBalance: number;
+      }
+    >();
+
+    const chronological = [...filteredLedger].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    chronological.forEach((entry) => {
+      const code = entry.accountCode || '0000';
+      const coaMeta = coaMap.get(code);
+      const existing = grouped.get(code) || {
+        accountCode: code,
+        accountName: coaMeta?.accountName || entry.accountName || `Account ${code}`,
+        category: coaMeta?.category || entry.category || 'Account',
+        entries: [],
+        totalDebit: 0,
+        totalCredit: 0,
+        netBalance: 0,
+      };
+      const dr = Number(entry.debit) || 0;
+      const cr = Number(entry.credit) || 0;
+      existing.totalDebit += dr;
+      existing.totalCredit += cr;
+      existing.netBalance = existing.totalDebit - existing.totalCredit;
+      existing.entries.push({
+        ...entry,
+        partner: deriveJournalPartner(entry),
+        runningBalance: existing.netBalance,
+      });
+      grouped.set(code, existing);
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => a.accountCode.localeCompare(b.accountCode));
+  }, [filteredLedger, chartOfAccounts, selectedStore]);
+
+  // Hierarchical Trial Balance Groups (all filtered COA accounts + any GL-only codes)
+  const trialBalanceGroups = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        accountCode: string;
+        accountName: string;
+        category: string;
+        normalBalance: string;
+        totalDebit: number;
+        totalCredit: number;
+        netBalance: number;
+        entries: Array<GeneralLedgerEntry & { partner: string; runningBalance: number }>;
+      }
+    >();
+
+    filteredCOA.forEach((acc) => {
+      if (!map.has(acc.accountCode)) {
+        map.set(acc.accountCode, {
+          accountCode: acc.accountCode,
+          accountName: acc.accountName,
+          category: acc.category,
+          normalBalance: acc.normalBalance,
+          totalDebit: 0,
+          totalCredit: 0,
+          netBalance: 0,
+          entries: [],
+        });
+      }
+    });
+
+    glAccountGroups.forEach((grp) => {
+      const existing = map.get(grp.accountCode);
+      if (existing) {
+        existing.totalDebit = grp.totalDebit;
+        existing.totalCredit = grp.totalCredit;
+        existing.netBalance = grp.netBalance;
+        existing.entries = grp.entries;
+      } else {
+        map.set(grp.accountCode, {
+          accountCode: grp.accountCode,
+          accountName: grp.accountName,
+          category: grp.category,
+          normalBalance: 'Debit',
+          totalDebit: grp.totalDebit,
+          totalCredit: grp.totalCredit,
+          netBalance: grp.netBalance,
+          entries: grp.entries,
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.accountCode.localeCompare(b.accountCode));
+  }, [filteredCOA, glAccountGroups]);
+
+  // Effective expanded sets: default to first 3 accounts until user toggles
+  const resolvedExpandedGlCodes = useMemo(() => {
+    if (expandedGlCodes !== null) return expandedGlCodes;
+    return new Set(glAccountGroups.slice(0, 3).map((g) => g.accountCode));
+  }, [expandedGlCodes, glAccountGroups]);
+
+  const resolvedExpandedTbCodes = useMemo(() => {
+    if (expandedTbCodes !== null) return expandedTbCodes;
+    const withActivity = trialBalanceGroups.filter((g) => g.entries.length > 0);
+    const seedList = withActivity.length > 0 ? withActivity : trialBalanceGroups;
+    return new Set(seedList.slice(0, 3).map((g) => g.accountCode));
+  }, [expandedTbCodes, trialBalanceGroups]);
+
+  const toggleExpandedSet = (
+    setter: React.Dispatch<React.SetStateAction<Set<string> | null>>,
+    current: Set<string>,
+    code: string
+  ) => {
+    const next = new Set(current);
+    if (next.has(code)) next.delete(code);
+    else next.add(code);
+    setter(next);
+  };
+
+  const toggleSectionSet = (
+    setter: React.Dispatch<React.SetStateAction<Set<string>>>,
+    code: string
+  ) => {
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner / Store Segregation Control */}
       <div
-        className={`p-4 sm:p-6 rounded-2xl border transition-all gm-hero-banner ${
+        className={`p-5 sm:p-6 rounded-2xl border transition-all gm-hero-banner ${
           isLight
             ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
             : 'bg-[#12141C] border-slate-800/80'
         }`}
       >
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#0F4C3A] text-white tracking-wide">
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <span className="text-[12px] font-semibold text-[#0F4C3A] dark:text-emerald-400">
                 Double-Entry Accounting
               </span>
-              <span className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+              <span className="text-slate-400 text-xs">·</span>
+              <span className={`text-[12px] ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
                 Indonesian Retail Multi-Store COA Standards
               </span>
             </div>
-            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+            <h2 className={`text-[19px] sm:text-[20px] font-semibold tracking-[-0.01em] ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Financial Statements &amp; Store-Tagged General Ledger
             </h2>
-            <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
+            <p className={`text-[13px] leading-relaxed mt-1 max-w-2xl ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
               Segregated Chart of Accounts (COA) per physical store hub with automated real-time postings for
               QRIS checkouts, PO/GR supplier liabilities, and waste shrinkage expenses.
             </p>
@@ -404,8 +597,8 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           <div className="flex items-center gap-3 flex-wrap">
             {/* Store Hub Filter */}
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-semibold ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
-                Entity:
+              <span className={`text-[13px] font-semibold ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
+                Entity
               </span>
               <select
                 value={selectedStore}
@@ -481,13 +674,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
         </div>
 
         {/* Navigation Sub-Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none mt-6 pt-4 border-t border-gray-200 dark:border-slate-800/80">
+        <div className="flex items-center gap-3 overflow-x-auto scrollbar-none mt-6 pt-4 border-t border-gray-200 dark:border-slate-800/80">
           {[
             { id: 'pnl', label: 'Profit & Loss (P&L)', icon: TrendingUp },
             { id: 'balance_sheet', label: 'Balance Sheet', icon: Scale },
+            { id: 'trial_balance', label: 'Trial Balance', icon: FileSpreadsheet },
             { id: 'cash_flow', label: 'Cash Flow Statement', icon: DollarSign },
-            { id: 'gl', label: 'General Ledger Drill-Down', icon: ReceiptText },
-            { id: 'coa', label: 'Chart of Accounts (COA)', icon: Building2 },
+            { id: 'gl', label: 'General Ledger', icon: ReceiptText },
+            { id: 'coa', label: 'Chart of Accounts', icon: Building2 },
             { id: 'vendor_bills', label: 'Vendor Bills & AP', icon: FileCheck },
             ...(enableB2BFeatures
               ? [{ id: 'b2b_ar', label: 'B2B AR & Giro Clearing', icon: CreditCard }]
@@ -502,15 +696,15 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setSubTab(tab.id as any)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13.5px] whitespace-nowrap shrink-0 transition-all cursor-pointer ${
                   active
-                    ? 'bg-[#0F4C3A] text-white shadow-xs'
+                    ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                     : isLight
-                    ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
+                    ? 'font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    : 'font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-4 h-4" />
                 {tab.label}
               </button>
             );
@@ -518,64 +712,64 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           <button
             type="button"
             onClick={() => setComplianceSubView('rma_rtv')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13.5px] whitespace-nowrap shrink-0 transition-all cursor-pointer ${
               complianceSubView === 'rma_rtv'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                 : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
+                ? 'font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-4 h-4" />
             Returns &amp; Nota Retur
           </button>
           <button
             type="button"
             onClick={() => setComplianceSubView('coretax_djp')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13.5px] whitespace-nowrap shrink-0 transition-all cursor-pointer ${
               complianceSubView === 'coretax_djp'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                 : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
+                ? 'font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
-            <FileCode2 className="w-3.5 h-3.5" />
+            <FileCode2 className="w-4 h-4" />
             Coretax e-Faktur &amp; PPh
           </button>
           <button
             type="button"
             onClick={() => setComplianceSubView('settlement_giro')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13.5px] whitespace-nowrap shrink-0 transition-all cursor-pointer ${
               complianceSubView === 'settlement_giro'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                 : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
+                ? 'font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
-            <CreditCard className="w-3.5 h-3.5" />
+            <CreditCard className="w-4 h-4" />
             QRIS/EDC Settlement &amp; Giro
           </button>
           <button
             type="button"
             onClick={() => setComplianceSubView('executive_health')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13.5px] whitespace-nowrap shrink-0 transition-all cursor-pointer ${
               complianceSubView === 'executive_health'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                 : isLight
-                ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
+                ? 'font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                : 'font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
             }`}
           >
-            <Activity className="w-3.5 h-3.5" />
+            <Activity className="w-4 h-4" />
             Financial Health Overview
           </button>
         </div>
       </div>
 
       <div key={complianceSubView || subTab} className="gm-tab-enter">
-      {/* SUB-TAB 1: PROFIT & LOSS STATEMENT */}
+      {/* SUB-TAB 1: PROFIT & LOSS STATEMENT (HIERARCHICAL TREE) */}
       {!complianceSubView && subTab === 'pnl' && pnlReport && (
         <div
           className={`rounded-2xl border transition-all overflow-hidden ${
@@ -585,137 +779,252 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           }`}
         >
           <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h3 className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
-                  Income Statement (Profit &amp; Loss)
+                <h3 className={`text-[18px] font-semibold tracking-[-0.01em] ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                  Profit and Loss
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
-                  Reporting Scope: <strong className="text-[#0F4C3A] dark:text-emerald-400">{pnlReport.storeName || 'Consolidated'}</strong> • Period: {pnlReport.period}
+                <p className={`text-[13px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
+                  {pnlReport.storeName || 'Consolidated Company-Wide'} · Period {pnlReport.period}
                 </p>
               </div>
 
               <div className="flex items-center gap-3 flex-wrap">
-                {/* Indonesia Currency Lock (IDR Base) */}
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[12px] font-medium ${isLight ? 'bg-white border-gray-200 text-gray-700' : 'bg-[#090A0F] border-slate-800/80 text-slate-300'}`}>
                   <Globe2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-[11px] font-bold font-mono text-[#0F4C3A] dark:text-emerald-400">
-                    IDR (Rp) · Indonesia GAAP
-                  </span>
+                  <span>{selectedCurrency} · Indonesia GAAP</span>
                 </div>
-
-                <div className={`p-2.5 rounded-xl border ${isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-[#090A0F] border-slate-800/80'}`}>
-                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>Gross Margin:</span>
-                  <span className="ml-1.5 font-mono font-bold text-[#0F4C3A] dark:text-emerald-400 text-xs">
-                    {pnlReport.grossMarginPercent}%
-                  </span>
+                <div className={`px-3 py-1.5 rounded-xl border text-[12px] font-sans tabular-nums ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                  <span className={isLight ? 'text-gray-500' : 'text-slate-400'}>Gross Margin </span>
+                  <span className="font-semibold text-[#0F4C3A] dark:text-emerald-400">{pnlReport.grossMarginPercent}%</span>
                 </div>
-                <div className={`p-2.5 rounded-xl border ${isLight ? 'bg-white border-gray-200 shadow-2xs' : 'bg-[#090A0F] border-slate-800/80'}`}>
-                  <span className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>Net Margin:</span>
-                  <span className="ml-1.5 font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
-                    {pnlReport.netMarginPercent}%
-                  </span>
+                <div className={`px-3 py-1.5 rounded-xl border text-[12px] font-sans tabular-nums ${isLight ? 'bg-white border-gray-200' : 'bg-[#090A0F] border-slate-800/80'}`}>
+                  <span className={isLight ? 'text-gray-500' : 'text-slate-400'}>Net Margin </span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">{pnlReport.netMarginPercent}%</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedPnlSections((prev) =>
+                      prev.size === 3 ? new Set() : new Set(['revenue', 'cogs', 'opex'])
+                    )
+                  }
+                  className={`px-3 py-1.5 rounded-xl border text-[12px] font-semibold transition-colors cursor-pointer ${
+                    isLight
+                      ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                      : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800/80 text-slate-200'
+                  }`}
+                >
+                  {expandedPnlSections.size === 3 ? 'Collapse All' : 'Expand All'}
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="p-6 space-y-6 font-mono text-xs">
-            {/* 1. Operating Sales Revenue */}
-            <div className="space-y-2">
-              <div className={`flex justify-between font-bold uppercase text-[11px] pb-1.5 border-b ${
-                isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
-              }`}>
-                <span>1. Operating Sales Revenue</span>
-                <span>Amount ({selectedCurrency})</span>
-              </div>
-              <div className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
-                <span>Gross Customer QRIS Checkout Revenue</span>
-                <span className={`font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
-                  {formatCurrency(pnlReport.grossSalesRevenue)}
-                </span>
-              </div>
-              <div className="flex justify-between pl-4 text-amber-600 dark:text-amber-400">
-                <span>Less: Customer Loyalty Points &amp; Vouchers</span>
-                <span>-{formatCurrency(pnlReport.discountsGiven)}</span>
-              </div>
-              <div className={`flex justify-between font-bold pl-4 pt-1.5 border-t ${
-                isLight ? 'border-gray-200 text-gray-900' : 'border-slate-800/80 text-slate-100'
-              }`}>
-                <span>Net Sales Revenue</span>
-                <span className="text-[#0F4C3A] dark:text-emerald-400">{formatCurrency(pnlReport.netSalesRevenue)}</span>
-              </div>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[13px] font-sans tabular-nums border-collapse">
+              <thead>
+                <tr className={`border-b text-[12px] font-semibold ${
+                  isLight ? 'border-gray-200 text-gray-600' : 'border-slate-800/80 text-slate-400'
+                }`}>
+                  <th className="py-3 px-6">Account / Statement Line</th>
+                  <th className="py-3 px-4 gm-col-tint-partner">Scope / Basis</th>
+                  <th className="py-3 px-6 text-right gm-col-tint-balance">Balance ({selectedCurrency})</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-200/80' : 'divide-slate-800/70'}`}>
+                {/* Section 1: Operating Sales Revenue */}
+                {(() => {
+                  const isOpen = expandedPnlSections.has('revenue');
+                  return (
+                    <>
+                      <tr
+                        onClick={() => toggleSectionSet(setExpandedPnlSections, 'revenue')}
+                        className={`cursor-pointer transition-colors ${isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/50'}`}
+                      >
+                        <td className="py-3 px-6">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-gray-400 text-xs w-3 inline-block">{isOpen ? '▾' : '▸'}</span>
+                            <span className={isOpen ? 'font-semibold text-gray-900 dark:text-slate-100' : 'font-normal text-gray-800 dark:text-slate-200'}>
+                              1. Operating Sales Revenue
+                            </span>
+                            {isOpen && (
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                                isLight ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-slate-800/80 text-slate-300 border-slate-700'
+                              }`}>
+                                Revenue Items
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">POS &amp; Wholesale</td>
+                        <td className="py-3 px-6 text-right gm-col-tint-balance font-semibold text-gray-900 dark:text-slate-100">
+                          {renderLedgerAmount(pnlReport.netSalesRevenue)}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <>
+                          <tr className={isLight ? 'bg-gray-50/30' : 'bg-slate-900/20'}>
+                            <td className="py-2.5 pl-12 pr-6 text-gray-600 dark:text-slate-300">Gross Customer POS &amp; QRIS Revenue</td>
+                            <td className="py-2.5 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">COA 4010</td>
+                            <td className="py-2.5 px-6 text-right gm-col-tint-balance text-gray-800 dark:text-slate-200">
+                              {renderLedgerAmount(pnlReport.grossSalesRevenue)}
+                            </td>
+                          </tr>
+                          <tr className={isLight ? 'bg-gray-50/30' : 'bg-slate-900/20'}>
+                            <td className="py-2.5 pl-12 pr-6 text-gray-600 dark:text-slate-300">Less: Loyalty Points, Vouchers &amp; Promo Markdowns</td>
+                            <td className="py-2.5 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">Sales Contra</td>
+                            <td className="py-2.5 px-6 text-right gm-col-tint-balance">
+                              {renderLedgerAmount(-Math.abs(pnlReport.discountsGiven))}
+                            </td>
+                          </tr>
+                          <tr className={`border-t border-b-[3px] border-double ${
+                            isLight ? 'border-gray-300 text-gray-900' : 'border-slate-700 text-slate-100'
+                          }`}>
+                            <td className="py-2.5 pl-10 pr-6 font-semibold">Total 1. Operating Sales Revenue (Net Sales)</td>
+                            <td className="py-2.5 px-4 gm-col-tint-partner" />
+                            <td className="py-2.5 px-6 text-right gm-col-tint-balance font-semibold text-[#0F4C3A] dark:text-emerald-400">
+                              {renderLedgerAmount(pnlReport.netSalesRevenue)}
+                            </td>
+                          </tr>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
 
-            {/* 2. Cost of Goods Sold */}
-            <div className="space-y-2 pt-2">
-              <div className={`flex justify-between font-bold uppercase text-[11px] pb-1.5 border-b ${
-                isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
-              }`}>
-                <span>2. Cost of Goods Sold (COGS - Weighted Average Valuation)</span>
-                <span>Amount ({selectedCurrency})</span>
-              </div>
-              <div className={`flex justify-between pl-4 ${isLight ? 'text-rose-600' : 'text-red-400'}`}>
-                <span>Direct Organic Farm Acquisition &amp; Butchery Costs</span>
-                <span>-{formatCurrency(pnlReport.costOfGoodsSold)}</span>
-              </div>
-              <div className={`flex justify-between font-bold pl-4 pt-1.5 border-t text-sm ${
-                isLight ? 'border-gray-200 text-[#0F4C3A]' : 'border-slate-800/80 text-emerald-400'
-              }`}>
-                <span>Gross Profit ({pnlReport.grossMarginPercent}% gross margin)</span>
-                <span>{formatCurrency(pnlReport.grossProfit)}</span>
-              </div>
-            </div>
+                {/* Section 2: Cost of Goods Sold */}
+                {(() => {
+                  const isOpen = expandedPnlSections.has('cogs');
+                  return (
+                    <>
+                      <tr
+                        onClick={() => toggleSectionSet(setExpandedPnlSections, 'cogs')}
+                        className={`cursor-pointer transition-colors ${isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/50'}`}
+                      >
+                        <td className="py-3 px-6">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-gray-400 text-xs w-3 inline-block">{isOpen ? '▾' : '▸'}</span>
+                            <span className={isOpen ? 'font-semibold text-gray-900 dark:text-slate-100' : 'font-normal text-gray-800 dark:text-slate-200'}>
+                              2. Cost of Goods Sold (COGS)
+                            </span>
+                            {isOpen && (
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                                isLight ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-slate-800/80 text-slate-300 border-slate-700'
+                              }`}>
+                                WAC / FEFO
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">Weighted Average</td>
+                        <td className="py-3 px-6 text-right gm-col-tint-balance font-semibold">
+                          {renderLedgerAmount(-Math.abs(pnlReport.costOfGoodsSold))}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <>
+                          <tr className={isLight ? 'bg-gray-50/30' : 'bg-slate-900/20'}>
+                            <td className="py-2.5 pl-12 pr-6 text-gray-600 dark:text-slate-300">Direct Farm Acquisition, Cold Chain &amp; Inventory HPP</td>
+                            <td className="py-2.5 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">COA 5010</td>
+                            <td className="py-2.5 px-6 text-right gm-col-tint-balance">
+                              {renderLedgerAmount(-Math.abs(pnlReport.costOfGoodsSold))}
+                            </td>
+                          </tr>
+                          <tr className={`border-t border-b-[3px] border-double ${
+                            isLight ? 'border-gray-300 text-gray-900' : 'border-slate-700 text-slate-100'
+                          }`}>
+                            <td className="py-2.5 pl-10 pr-6 font-semibold">Gross Profit ({pnlReport.grossMarginPercent}% margin)</td>
+                            <td className="py-2.5 px-4 gm-col-tint-partner" />
+                            <td className="py-2.5 px-6 text-right gm-col-tint-balance font-semibold text-[#0F4C3A] dark:text-emerald-400">
+                              {renderLedgerAmount(pnlReport.grossProfit)}
+                            </td>
+                          </tr>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
 
-            {/* 3. Operating & Cold-Chain Expenses (OPEX) */}
-            <div className="space-y-2 pt-2">
-              <div className={`flex justify-between font-bold uppercase text-[11px] pb-1.5 border-b ${
-                isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
-              }`}>
-                <span>3. Operating &amp; Cold-Chain Expenses (OPEX)</span>
-                <span>Amount ({selectedCurrency})</span>
-              </div>
-              {pnlReport.operatingExpenses.map((exp, idx) => (
-                <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
-                  <span>{exp.category}</span>
-                  <span className={isLight ? 'text-rose-600' : 'text-red-400'}>
-                    -{formatCurrency(exp.amount)}
-                  </span>
-                </div>
-              ))}
-              <div className={`flex justify-between font-bold pl-4 pt-1.5 border-t ${
-                isLight ? 'border-gray-200 text-gray-900' : 'border-slate-800/80 text-slate-200'
-              }`}>
-                <span>Total Operating Expenses</span>
-                <span className={isLight ? 'text-rose-600' : 'text-red-400'}>
-                  -{formatCurrency(pnlReport.totalOperatingExpenses)}
-                </span>
-              </div>
-            </div>
-
-            {/* Bottom Line Net Operating Profit */}
-            <div
-              className={`p-4 rounded-xl border flex justify-between items-center font-sans ${
-                isLight
-                  ? 'bg-emerald-50/70 border-emerald-200 text-gray-900'
-                  : 'bg-emerald-950/30 border-emerald-800/50 text-slate-100'
-              }`}
-            >
-              <div>
-                <span className="font-bold text-base">Net Operating Profit</span>
-                <p className={`text-xs ${isLight ? 'text-emerald-700' : 'text-emerald-300'}`}>
-                  Net Profit Margin: {pnlReport.netMarginPercent}% after inventory shrinkage &amp; cold-chain OPEX
-                </p>
-              </div>
-              <span className="font-mono font-bold text-lg text-[#0F4C3A] dark:text-emerald-400">
-                {formatCurrency(pnlReport.netProfit)}
-              </span>
-            </div>
+                {/* Section 3: Operating Expenses */}
+                {(() => {
+                  const isOpen = expandedPnlSections.has('opex');
+                  return (
+                    <>
+                      <tr
+                        onClick={() => toggleSectionSet(setExpandedPnlSections, 'opex')}
+                        className={`cursor-pointer transition-colors ${isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/50'}`}
+                      >
+                        <td className="py-3 px-6">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-gray-400 text-xs w-3 inline-block">{isOpen ? '▾' : '▸'}</span>
+                            <span className={isOpen ? 'font-semibold text-gray-900 dark:text-slate-100' : 'font-normal text-gray-800 dark:text-slate-200'}>
+                              3. Operating &amp; Cold-Chain Expenses (OPEX)
+                            </span>
+                            {isOpen && (
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                                isLight ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-slate-800/80 text-slate-300 border-slate-700'
+                              }`}>
+                                Expense Items
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">{pnlReport.operatingExpenses.length} categories</td>
+                        <td className="py-3 px-6 text-right gm-col-tint-balance font-semibold">
+                          {renderLedgerAmount(-Math.abs(pnlReport.totalOperatingExpenses))}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <>
+                          {pnlReport.operatingExpenses.map((exp, idx) => (
+                            <tr key={idx} className={isLight ? 'bg-gray-50/30' : 'bg-slate-900/20'}>
+                              <td className="py-2.5 pl-12 pr-6 text-gray-600 dark:text-slate-300">{exp.category}</td>
+                              <td className="py-2.5 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">OPEX</td>
+                              <td className="py-2.5 px-6 text-right gm-col-tint-balance">
+                                {renderLedgerAmount(exp.amount === 0 ? 0 : -Math.abs(exp.amount))}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className={`border-t border-b-[3px] border-double ${
+                            isLight ? 'border-gray-300 text-gray-900' : 'border-slate-700 text-slate-100'
+                          }`}>
+                            <td className="py-2.5 pl-10 pr-6 font-semibold">Total 3. Operating &amp; Cold-Chain Expenses</td>
+                            <td className="py-2.5 px-4 gm-col-tint-partner" />
+                            <td className="py-2.5 px-6 text-right gm-col-tint-balance font-semibold">
+                              {renderLedgerAmount(-Math.abs(pnlReport.totalOperatingExpenses))}
+                            </td>
+                          </tr>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </tbody>
+              <tfoot>
+                <tr className={`border-t-2 ${
+                  isLight
+                    ? 'bg-emerald-50/60 border-gray-300 text-gray-900'
+                    : 'bg-emerald-950/25 border-slate-700 text-slate-100'
+                }`}>
+                  <td className="py-4 px-6 font-bold text-[15px]">
+                    Net Operating Profit
+                    <span className="ml-2 text-[12px] font-normal text-gray-500 dark:text-slate-400">
+                      ({pnlReport.netMarginPercent}% net margin)
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 gm-col-tint-partner text-[12px] text-gray-500 dark:text-slate-400">Bottom Line</td>
+                  <td className="py-4 px-6 text-right gm-col-tint-balance font-bold text-[16px] text-[#0F4C3A] dark:text-emerald-400">
+                    {renderLedgerAmount(pnlReport.netProfit)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </div>
       )}
 
-      {/* SUB-TAB 2: BALANCE SHEET */}
+      {/* SUB-TAB 2: BALANCE SHEET (HIERARCHICAL TREE) */}
       {!complianceSubView && subTab === 'balance_sheet' && balanceSheet && (
         <div
           className={`rounded-2xl border transition-all overflow-hidden ${
@@ -725,102 +1034,345 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           }`}
         >
           <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h3 className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
-                  Automated Balance Sheet (Statement of Financial Position)
+                <h3 className={`text-[18px] font-semibold tracking-[-0.01em] ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                  Balance Sheet
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
-                  Period: {balanceSheet.period} • Enterprise Multi-Store Consolidated Matrix
+                <p className={`text-[13px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
+                  Period {balanceSheet.period} · Statement of Financial Position
                 </p>
               </div>
 
-              <div>
+              <div className="flex items-center gap-3 flex-wrap">
                 {balanceSheet.isBalanced ? (
-                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1 rounded-full text-[12px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     Balanced: Assets = Liabilities + Equity
                   </span>
                 ) : (
-                  <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+                  <span className="inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-[12px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30">
                     Discrepancy Detected
                   </span>
                 )}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedBsSections((prev) =>
+                      prev.size === 4 ? new Set() : new Set(['current_assets', 'fixed_assets', 'current_liabilities', 'equity'])
+                    )
+                  }
+                  className={`px-3 py-1.5 rounded-xl border text-[12px] font-semibold transition-colors cursor-pointer ${
+                    isLight
+                      ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                      : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800/80 text-slate-200'
+                  }`}
+                >
+                  {expandedBsSections.size === 4 ? 'Collapse All' : 'Expand All'}
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs">
-            {/* ASSETS */}
-            <div className={`p-5 rounded-xl border space-y-4 ${
-              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-[#090A0F] border-slate-800/80'
-            }`}>
-              <div className="flex justify-between items-center border-b pb-2 border-gray-200 dark:border-slate-800/80">
-                <h4 className="font-bold uppercase tracking-wider text-xs text-[#0F4C3A] dark:text-emerald-400">
-                  Total Assets
-                </h4>
-                <span className="font-bold text-sm text-[#0F4C3A] dark:text-emerald-400">
-                  {formatIDR(balanceSheet.assets.totalAssets)}
-                </span>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>Current Assets</span>
-                {balanceSheet.assets.currentAssets.map((item, idx) => (
-                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
-                    <span>{item.category}</span>
-                    <span>{formatIDR(item.amount)}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-slate-800/80">
-                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>Non-Current Fixed Assets</span>
-                {balanceSheet.assets.nonCurrentAssets.map((item, idx) => (
-                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
-                    <span>{item.category}</span>
-                    <span>{formatIDR(item.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* LIABILITIES & EQUITY */}
-            <div className={`p-5 rounded-xl border space-y-4 ${
-              isLight ? 'bg-white border-gray-200/80 shadow-xs' : 'bg-[#090A0F] border-slate-800/80'
-            }`}>
-              <div className="flex justify-between items-center border-b pb-2 border-gray-200 dark:border-slate-800/80">
-                <h4 className="font-bold uppercase tracking-wider text-xs text-blue-600 dark:text-blue-400">
-                  Liabilities &amp; Equity
-                </h4>
-                <span className="font-bold text-sm text-blue-600 dark:text-blue-400">
-                  {formatIDR(balanceSheet.liabilities.totalLiabilities + balanceSheet.equity.totalEquity)}
-                </span>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>Current Liabilities</span>
-                {balanceSheet.liabilities.currentLiabilities.map((item, idx) => (
-                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
-                    <span>{item.category}</span>
-                    <span>{formatIDR(item.amount)}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-slate-800/80">
-                <span className={`font-bold ${isLight ? 'text-gray-800' : 'text-slate-200'}`}>Shareholders' Equity</span>
-                {balanceSheet.equity.equityItems.map((item, idx) => (
-                  <div key={idx} className={`flex justify-between pl-3 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
-                    <span>{item.category}</span>
-                    <span>{formatIDR(item.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[13px] font-sans tabular-nums border-collapse">
+              <thead>
+                <tr className={`border-b text-[12px] font-semibold ${
+                  isLight ? 'border-gray-200 text-gray-600' : 'border-slate-800/80 text-slate-400'
+                }`}>
+                  <th className="py-3 px-6">Account Classification</th>
+                  <th className="py-3 px-4 gm-col-tint-partner">Section</th>
+                  <th className="py-3 px-6 text-right gm-col-tint-balance">Balance (IDR)</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${isLight ? 'divide-gray-200/80' : 'divide-slate-800/70'}`}>
+                {[
+                  {
+                    key: 'current_assets',
+                    title: 'Current Assets',
+                    sectionLabel: 'Assets',
+                    items: balanceSheet.assets.currentAssets,
+                    total: balanceSheet.assets.currentAssets.reduce((s, i) => s + i.amount, 0),
+                  },
+                  {
+                    key: 'fixed_assets',
+                    title: 'Non-Current Fixed Assets',
+                    sectionLabel: 'Assets',
+                    items: balanceSheet.assets.nonCurrentAssets,
+                    total: balanceSheet.assets.nonCurrentAssets.reduce((s, i) => s + i.amount, 0),
+                  },
+                  {
+                    key: 'current_liabilities',
+                    title: 'Current Liabilities',
+                    sectionLabel: 'Liabilities',
+                    items: balanceSheet.liabilities.currentLiabilities,
+                    total: balanceSheet.liabilities.currentLiabilities.reduce((s, i) => s + i.amount, 0),
+                  },
+                  {
+                    key: 'equity',
+                    title: "Shareholders' Equity",
+                    sectionLabel: 'Equity',
+                    items: balanceSheet.equity.equityItems,
+                    total: balanceSheet.equity.equityItems.reduce((s, i) => s + i.amount, 0),
+                  },
+                ].map((grp) => {
+                  const isOpen = expandedBsSections.has(grp.key);
+                  return (
+                    <React.Fragment key={grp.key}>
+                      <tr
+                        onClick={() => toggleSectionSet(setExpandedBsSections, grp.key)}
+                        className={`cursor-pointer transition-colors ${isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/50'}`}
+                      >
+                        <td className="py-3 px-6">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-gray-400 text-xs w-3 inline-block">{isOpen ? '▾' : '▸'}</span>
+                            <span className={isOpen ? 'font-semibold text-gray-900 dark:text-slate-100' : 'font-normal text-gray-800 dark:text-slate-200'}>
+                              {grp.title}
+                            </span>
+                            {isOpen && (
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                                isLight ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-slate-800/80 text-slate-300 border-slate-700'
+                              }`}>
+                                {grp.items.length} Accounts
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">{grp.sectionLabel}</td>
+                        <td className="py-3 px-6 text-right gm-col-tint-balance font-semibold text-gray-900 dark:text-slate-100">
+                          {renderLedgerAmount(grp.total)}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <>
+                          {grp.items.map((item, idx) => (
+                            <tr key={idx} className={isLight ? 'bg-gray-50/30' : 'bg-slate-900/20'}>
+                              <td className="py-2.5 pl-12 pr-6 text-gray-600 dark:text-slate-300">{item.category}</td>
+                              <td className="py-2.5 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">{grp.sectionLabel}</td>
+                              <td className="py-2.5 px-6 text-right gm-col-tint-balance">
+                                {renderLedgerAmount(item.amount)}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className={`border-t border-b-[3px] border-double ${
+                            isLight ? 'border-gray-300 text-gray-900' : 'border-slate-700 text-slate-100'
+                          }`}>
+                            <td className="py-2.5 pl-10 pr-6 font-semibold">Total {grp.title}</td>
+                            <td className="py-2.5 px-4 gm-col-tint-partner" />
+                            <td className="py-2.5 px-6 text-right gm-col-tint-balance font-semibold">
+                              {renderLedgerAmount(grp.total)}
+                            </td>
+                          </tr>
+                        </>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className={`border-t-2 ${isLight ? 'bg-emerald-50/50 border-gray-300' : 'bg-emerald-950/20 border-slate-700'}`}>
+                  <td className="py-3.5 px-6 font-bold text-[#0F4C3A] dark:text-emerald-400">Total Assets</td>
+                  <td className="py-3.5 px-4 gm-col-tint-partner text-[12px] text-gray-500 dark:text-slate-400">Assets</td>
+                  <td className="py-3.5 px-6 text-right gm-col-tint-balance font-bold text-[15px] text-[#0F4C3A] dark:text-emerald-400">
+                    {renderLedgerAmount(balanceSheet.assets.totalAssets)}
+                  </td>
+                </tr>
+                <tr className={`border-t ${isLight ? 'bg-blue-50/40 border-gray-200' : 'bg-blue-950/20 border-slate-800'}`}>
+                  <td className="py-3.5 px-6 font-bold text-blue-700 dark:text-blue-400">Total Liabilities &amp; Equity</td>
+                  <td className="py-3.5 px-4 gm-col-tint-partner text-[12px] text-gray-500 dark:text-slate-400">Liabilities + Equity</td>
+                  <td className="py-3.5 px-6 text-right gm-col-tint-balance font-bold text-[15px] text-blue-700 dark:text-blue-400">
+                    {renderLedgerAmount(balanceSheet.liabilities.totalLiabilities + balanceSheet.equity.totalEquity)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </div>
       )}
+
+      {/* SUB-TAB 2B: DEDICATED TRIAL BALANCE (HIERARCHICAL ACCOUNT TREE) */}
+      {!complianceSubView && subTab === 'trial_balance' && (() => {
+        const tbTotalDebit = trialBalanceGroups.reduce((s, g) => s + g.totalDebit, 0);
+        const tbTotalCredit = trialBalanceGroups.reduce((s, g) => s + g.totalCredit, 0);
+        const tbVariance = tbTotalDebit - tbTotalCredit;
+        const allTbExpanded = trialBalanceGroups.length > 0 && resolvedExpandedTbCodes.size >= trialBalanceGroups.length;
+        return (
+          <div
+            className={`rounded-2xl border transition-all overflow-hidden ${
+              isLight
+                ? 'bg-white border-gray-200/90 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
+                : 'bg-[#12141C] border-slate-800/80'
+            }`}
+          >
+            <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className={`text-[18px] font-semibold tracking-[-0.01em] ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                    Trial Balance
+                  </h3>
+                  <p className={`text-[13px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
+                    Account-level Debit, Credit &amp; Net Balance hierarchy · DR === CR Variance: {formatCurrency(Math.abs(tbVariance))}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold border ${
+                    tbVariance === 0
+                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                  }`}>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {tbVariance === 0 ? 'Balanced (DR = CR)' : `Variance: ${formatCurrency(tbVariance)}`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedTbCodes(
+                        allTbExpanded ? new Set() : new Set(trialBalanceGroups.map((g) => g.accountCode))
+                      )
+                    }
+                    className={`px-3 py-1.5 rounded-xl border text-[12px] font-semibold transition-colors cursor-pointer ${
+                      isLight
+                        ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                        : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800/80 text-slate-200'
+                    }`}
+                  >
+                    {allTbExpanded ? 'Collapse All' : 'Expand All'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[13px] font-sans tabular-nums border-collapse">
+                <thead>
+                  <tr className={`border-b text-[12px] font-semibold ${
+                    isLight ? 'border-gray-200 text-gray-600' : 'border-slate-800/80 text-slate-400'
+                  }`}>
+                    <th className="py-3 px-5">Account / Line Description</th>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4 gm-col-tint-partner">Partner</th>
+                    <th className="py-3 px-3 text-center">Currency</th>
+                    <th className="py-3 px-4 text-right">Debit</th>
+                    <th className="py-3 px-4 text-right">Credit</th>
+                    <th className="py-3 px-5 text-right gm-col-tint-balance">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isLight ? 'divide-gray-200/80' : 'divide-slate-800/70'}`}>
+                  {trialBalanceGroups.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-10 text-center text-[13px] text-gray-500 dark:text-slate-400">
+                        No accounts available for the selected store hub.
+                      </td>
+                    </tr>
+                  ) : (
+                    trialBalanceGroups.map((group) => {
+                      const isExpanded = resolvedExpandedTbCodes.has(group.accountCode);
+                      return (
+                        <React.Fragment key={group.accountCode}>
+                          <tr
+                            onClick={() => toggleExpandedSet(setExpandedTbCodes, resolvedExpandedTbCodes, group.accountCode)}
+                            className={`cursor-pointer transition-colors ${isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/50'}`}
+                          >
+                            <td className="py-3 px-5">
+                              <span className="inline-flex items-center gap-2">
+                                <span className="text-gray-400 text-xs w-3 inline-block">{isExpanded ? '▾' : '▸'}</span>
+                                <span className={isExpanded ? 'font-semibold text-gray-900 dark:text-slate-100' : 'font-normal text-gray-800 dark:text-slate-200'}>
+                                  {group.accountCode} {group.accountName}
+                                </span>
+                                {isExpanded && (
+                                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                                    isLight ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-slate-800/80 text-slate-300 border-slate-700'
+                                  }`}>
+                                    Journal Items
+                                  </span>
+                                )}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-gray-500 dark:text-slate-400">{group.category}</td>
+                            <td className="py-3 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">
+                              {group.entries.length > 0 ? `${group.entries.length} postings` : 'No postings'}
+                            </td>
+                            <td className="py-3 px-3 text-center text-gray-500 dark:text-slate-400">{selectedCurrency}</td>
+                            <td className="py-3 px-4 text-right font-medium text-gray-900 dark:text-slate-100">
+                              {renderLedgerAmount(group.totalDebit)}
+                            </td>
+                            <td className="py-3 px-4 text-right font-medium text-gray-900 dark:text-slate-100">
+                              {renderLedgerAmount(group.totalCredit)}
+                            </td>
+                            <td className="py-3 px-5 text-right gm-col-tint-balance font-semibold text-gray-900 dark:text-slate-100">
+                              {renderLedgerAmount(group.netBalance)}
+                            </td>
+                          </tr>
+
+                          {isExpanded && (
+                            <>
+                              {group.entries.length === 0 ? (
+                                <tr className={isLight ? 'bg-gray-50/30' : 'bg-slate-900/20'}>
+                                  <td colSpan={7} className="py-2.5 pl-10 pr-5 text-gray-400 dark:text-slate-500 text-[12.5px]">
+                                    No individual journal movements recorded in this period.
+                                  </td>
+                                </tr>
+                              ) : (
+                                group.entries.map((entry) => (
+                                  <tr key={`tb-${group.accountCode}-${entry.id}`} className={isLight ? 'bg-gray-50/30 hover:bg-gray-50/80' : 'bg-slate-900/20 hover:bg-slate-900/50'}>
+                                    <td className="py-2.5 pl-8 pr-5 text-gray-700 dark:text-slate-300">
+                                      <div className="font-medium text-gray-800 dark:text-slate-200">{entry.id}</div>
+                                      <div className="text-[12px] text-gray-500 dark:text-slate-400 truncate max-w-md">{entry.description}</div>
+                                    </td>
+                                    <td className="py-2.5 px-4 text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                                      {entry.timestamp.split('T')[0]}
+                                    </td>
+                                    <td className="py-2.5 px-4 gm-col-tint-partner text-gray-700 dark:text-slate-300">
+                                      {entry.partner}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-center text-gray-500 dark:text-slate-400">{selectedCurrency}</td>
+                                    <td className="py-2.5 px-4 text-right">
+                                      {renderLedgerAmount(entry.debit)}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-right">
+                                      {renderLedgerAmount(entry.credit)}
+                                    </td>
+                                    <td className="py-2.5 px-5 text-right gm-col-tint-balance font-medium">
+                                      {renderLedgerAmount(entry.runningBalance)}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                              <tr className={`border-t border-b-[3px] border-double ${
+                                isLight ? 'border-gray-300 text-gray-900' : 'border-slate-700 text-slate-100'
+                              }`}>
+                                <td colSpan={4} className="py-2.5 pl-8 pr-5 font-semibold">
+                                  Total {group.accountCode} {group.accountName}
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-semibold">{renderLedgerAmount(group.totalDebit)}</td>
+                                <td className="py-2.5 px-4 text-right font-semibold">{renderLedgerAmount(group.totalCredit)}</td>
+                                <td className="py-2.5 px-5 text-right gm-col-tint-balance font-bold">{renderLedgerAmount(group.netBalance)}</td>
+                              </tr>
+                            </>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className={`border-t-2 border-b-[3px] border-double ${
+                    isLight ? 'bg-gray-50/90 border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-700 text-slate-100'
+                  }`}>
+                    <td colSpan={4} className="py-3.5 px-5 font-bold text-[14px]">
+                      Total Trial Balance
+                    </td>
+                    <td className="py-3.5 px-4 text-right font-bold text-[14px]">{renderLedgerAmount(tbTotalDebit)}</td>
+                    <td className="py-3.5 px-4 text-right font-bold text-[14px]">{renderLedgerAmount(tbTotalCredit)}</td>
+                    <td className="py-3.5 px-5 text-right gm-col-tint-balance font-bold text-[14px]">{renderLedgerAmount(tbVariance)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* SUB-TAB 3: CASH FLOW STATEMENT */}
       {!complianceSubView && subTab === 'cash_flow' && cashFlow && (
@@ -832,67 +1384,71 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           }`}
         >
           <div className={`p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
-            <h3 className={`text-lg font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+            <h3 className={`text-[18px] font-semibold tracking-[-0.01em] ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
               Cash Flow Statement
             </h3>
-            <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
-              Operating, Investing, and Financing Cash Movements • {cashFlow.period}
+            <p className={`text-[13px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
+              Operating, Investing, and Financing Cash Movements · {cashFlow.period}
             </p>
           </div>
 
-          <div className="p-6 space-y-5 font-mono text-xs">
-            <div className="space-y-1.5">
-              <div className={`flex justify-between font-bold uppercase pb-1.5 border-b ${
+          <div className="p-6 space-y-6 font-sans tabular-nums text-[13px]">
+            <div className="space-y-2.5">
+              <div className={`flex justify-between font-semibold pb-2 border-b ${
                 isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
               }`}>
                 <span>Cash Flows from Operating Activities</span>
-                <span className="text-[#0F4C3A] dark:text-emerald-400">{formatIDR(cashFlow.netOperatingCash)}</span>
+                <span className="text-[#0F4C3A] dark:text-emerald-400">{renderLedgerAmount(cashFlow.netOperatingCash)}</span>
               </div>
               {cashFlow.operatingActivities.map((act, idx) => (
-                <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
+                <div key={idx} className={`flex justify-between pl-4 py-1 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                   <span>{act.category}</span>
-                  <span className={act.amount < 0 ? (isLight ? 'text-rose-600' : 'text-red-400') : (isLight ? 'text-emerald-600' : 'text-emerald-400')}>
-                    {act.amount < 0 ? `-${formatIDR(Math.abs(act.amount))}` : formatIDR(act.amount)}
+                  <span className={act.amount < 0 ? 'gm-currency-negative font-medium' : act.amount === 0 ? 'gm-currency-zero' : 'text-emerald-600 dark:text-emerald-400 font-medium'}>
+                    {act.amount < 0 ? `-${formatCurrency(Math.abs(act.amount))}` : formatCurrency(act.amount)}
                   </span>
                 </div>
               ))}
             </div>
 
-            <div className="space-y-1.5 pt-2">
-              <div className={`flex justify-between font-bold uppercase pb-1.5 border-b ${
+            <div className="space-y-2.5 pt-2">
+              <div className={`flex justify-between font-semibold pb-2 border-b ${
                 isLight ? 'border-gray-200 text-gray-800' : 'border-slate-800/80 text-slate-200'
               }`}>
                 <span>Cash Flows from Investing Activities</span>
-                <span className="text-blue-600 dark:text-blue-400">{formatIDR(cashFlow.netInvestingCash)}</span>
+                <span className="text-blue-600 dark:text-blue-400">{renderLedgerAmount(cashFlow.netInvestingCash)}</span>
               </div>
               {cashFlow.investingActivities.map((act, idx) => (
-                <div key={idx} className={`flex justify-between pl-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
+                <div key={idx} className={`flex justify-between pl-4 py-1 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                   <span>{act.category}</span>
-                  <span className={act.amount < 0 ? (isLight ? 'text-rose-600' : 'text-red-400') : (isLight ? 'text-emerald-600' : 'text-emerald-400')}>
-                    {act.amount < 0 ? `-${formatIDR(Math.abs(act.amount))}` : formatIDR(act.amount)}
+                  <span className={act.amount < 0 ? 'gm-currency-negative font-medium' : act.amount === 0 ? 'gm-currency-zero' : 'text-emerald-600 dark:text-emerald-400 font-medium'}>
+                    {act.amount < 0 ? `-${formatCurrency(Math.abs(act.amount))}` : formatCurrency(act.amount)}
                   </span>
                 </div>
               ))}
             </div>
 
             <div
-              className={`p-4 rounded-xl border flex justify-between items-center font-sans ${
+              className={`p-4 rounded-xl border flex justify-between items-center ${
                 isLight
                   ? 'bg-white border-gray-200 shadow-xs text-gray-900'
                   : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
               }`}
             >
-              <span className="font-bold text-sm">Ending Liquid Cash Balance</span>
-              <span className="font-mono font-bold text-base text-[#0F4C3A] dark:text-emerald-400">
-                {formatIDR(cashFlow.endingCash)}
+              <span className="font-semibold text-[14px]">Ending Liquid Cash Balance</span>
+              <span className="font-bold text-[16px] text-[#0F4C3A] dark:text-emerald-400">
+                {renderLedgerAmount(cashFlow.endingCash)}
               </span>
             </div>
           </div>
         </div>
       )}
 
-      {/* SUB-TAB 4: GENERAL LEDGER (GL) DRILL-DOWN */}
-      {!complianceSubView && subTab === 'gl' && (
+      {/* SUB-TAB 4: GENERAL LEDGER (HIERARCHICAL TREE-STYLE LEDGER) */}
+      {!complianceSubView && subTab === 'gl' && (() => {
+        const allGlExpanded = glAccountGroups.length > 0 && resolvedExpandedGlCodes.size >= glAccountGroups.length;
+        const grandDr = glAccountGroups.reduce((s, g) => s + g.totalDebit, 0);
+        const grandCr = glAccountGroups.reduce((s, g) => s + g.totalCredit, 0);
+        return (
         <div
           className={`rounded-2xl border transition-all overflow-hidden ${
             isLight
@@ -900,24 +1456,24 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
-          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className={`p-5 sm:p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h3 className={`text-[18px] font-semibold tracking-[-0.01em] ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                     <ReceiptText className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
-                    General Ledger (GL) Immutable Journal Vouchers
+                    General Ledger
                   </h3>
-                  <span className="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
+                  <span className="inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/20">
                     GAAP/IFRS Immutability Enforced
                   </span>
                 </div>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
-                  Double-entry accounting records with audit-grade immutability. Hard deletes are strictly disabled; corrections are made via counter-entries.
+                <p className={`text-[13px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
+                  Expandable account tree with audit-grade immutability. Corrections are posted exclusively via counter-entries.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-gray-400 dark:text-slate-400 absolute left-3 top-2.5" />
                   <input
@@ -925,7 +1481,7 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                     value={glSearch}
                     onChange={(e) => setGlSearch(e.target.value)}
                     placeholder="Search voucher or description..."
-                    className={`pl-8 pr-3 py-1.5 text-xs rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] w-56 ${
+                    className={`pl-8 pr-3 py-1.5 text-[13px] rounded-xl border focus:outline-none focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A] w-56 ${
                       isLight
                         ? 'bg-white border-gray-300 text-gray-900'
                         : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500'
@@ -936,13 +1492,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                 <select
                   value={glRefFilter}
                   onChange={(e) => setGlRefFilter(e.target.value)}
-                  className={`px-2.5 py-1.5 text-xs rounded-xl border font-semibold ${
+                  className={`px-3 py-1.5 text-[13px] rounded-xl border font-medium ${
                     isLight
                       ? 'bg-white border-gray-200 text-gray-800 focus:border-[#0F4C3A]'
                       : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
                   }`}
                 >
                   <option value="ALL">All Ref Types</option>
+                  <option value="POS_SALE">POS Sales</option>
                   <option value="QRIS_SALE">QRIS Sales</option>
                   <option value="PURCHASE_ORDER">PO Accrual</option>
                   <option value="PARTIAL_GR">Goods Receipt</option>
@@ -962,131 +1519,225 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                   <option value="CROSS_DOCK">Cross-Dock Allocation</option>
                   <option value="REVERSING_ENTRY">Reversing Counter-Entries</option>
                 </select>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedGlCodes(
+                      allGlExpanded ? new Set() : new Set(glAccountGroups.map((g) => g.accountCode))
+                    )
+                  }
+                  className={`px-3 py-1.5 rounded-xl border text-[12px] font-semibold transition-colors cursor-pointer ${
+                    isLight
+                      ? 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                      : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800/80 text-slate-200'
+                  }`}
+                >
+                  {allGlExpanded ? 'Collapse All' : 'Expand All'}
+                </button>
               </div>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
+            <table className="w-full text-left text-[13px] font-sans tabular-nums border-collapse">
               <thead>
-                <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
+                <tr className={`border-b text-[12px] font-semibold ${
+                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-600' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
                 }`}>
-                  <th className="py-3 px-4">Entry ID</th>
-                  <th className="py-3 px-4">Date / Outlet</th>
-                  <th className="py-3 px-4">Account Code &amp; Name</th>
+                  <th className="py-3 px-5">Line Description / Ref</th>
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4 gm-col-tint-partner">Partner</th>
+                  <th className="py-3 px-3 text-center">Currency</th>
                   <th className="py-3 px-4 text-right">Debit</th>
                   <th className="py-3 px-4 text-right">Credit</th>
-                  <th className="py-3 px-4">Ref Type</th>
-                  <th className="py-3 px-4">Description</th>
-                  <th className="py-3 px-4 text-right">Audit Action</th>
+                  <th className="py-3 px-5 text-right gm-col-tint-balance">Balance</th>
+                  <th className="py-3 px-4 text-right">Audit</th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
-                {filteredLedger.length === 0 ? (
+              <tbody className={`divide-y ${isLight ? 'divide-gray-200/80' : 'divide-slate-800/70'}`}>
+                {glAccountGroups.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className={`py-8 text-center text-xs font-sans ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+                    <td colSpan={8} className={`py-10 text-center text-[13px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                       No general ledger entries matching current filters.
                     </td>
                   </tr>
                 ) : (
-                  filteredLedger.map((entry) => (
-                    <tr
-                      key={entry.id}
-                      className={`transition-colors ${
-                        entry.isReversal
-                          ? isLight
-                            ? 'bg-purple-50/50 hover:bg-purple-50/80'
-                            : 'bg-purple-950/20 hover:bg-purple-950/30'
-                          : entry.isReversed
-                          ? isLight
-                            ? 'bg-gray-100/50 opacity-75'
-                            : 'bg-slate-900/50 opacity-75'
-                          : isLight
-                          ? 'hover:bg-gray-50/80'
-                          : 'hover:bg-slate-900/60'
-                      }`}
-                    >
-                      <td className="py-3 px-4 font-bold">
-                        <span className={entry.isReversal ? 'text-purple-600 dark:text-purple-400' : 'text-[#0F4C3A] dark:text-emerald-400'}>
-                          {entry.id}
-                        </span>
-                        {entry.isReversal && (
-                          <div className="text-[9px] font-sans text-purple-600 dark:text-purple-400 font-semibold">
-                            Reverses #{entry.reversesVoucherId}
-                          </div>
+                  glAccountGroups.map((group) => {
+                    const isExpanded = resolvedExpandedGlCodes.has(group.accountCode);
+                    return (
+                      <React.Fragment key={group.accountCode}>
+                        {/* Expandable Account Tree Header Row */}
+                        <tr
+                          onClick={() => toggleExpandedSet(setExpandedGlCodes, resolvedExpandedGlCodes, group.accountCode)}
+                          className={`cursor-pointer transition-colors ${isLight ? 'hover:bg-gray-50/70' : 'hover:bg-slate-900/50'}`}
+                        >
+                          <td className="py-3 px-5">
+                            <span className="inline-flex items-center gap-2">
+                              <span className="text-gray-400 text-xs w-3 inline-block">{isExpanded ? '▾' : '▸'}</span>
+                              <span className={isExpanded ? 'font-semibold text-gray-900 dark:text-slate-100' : 'font-normal text-gray-800 dark:text-slate-200'}>
+                                {group.accountCode} {group.accountName}
+                              </span>
+                              {isExpanded && (
+                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                                  isLight ? 'bg-gray-100 text-gray-600 border-gray-200' : 'bg-slate-800/80 text-slate-300 border-slate-700'
+                                }`}>
+                                  Journal Items
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-500 dark:text-slate-400">{group.category}</td>
+                          <td className="py-3 px-4 gm-col-tint-partner text-gray-500 dark:text-slate-400">
+                            {group.entries.length} {group.entries.length === 1 ? 'item' : 'items'}
+                          </td>
+                          <td className="py-3 px-3 text-center text-gray-500 dark:text-slate-400">{selectedCurrency}</td>
+                          <td className="py-3 px-4 text-right font-medium text-gray-900 dark:text-slate-100">
+                            {renderLedgerAmount(group.totalDebit)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-medium text-gray-900 dark:text-slate-100">
+                            {renderLedgerAmount(group.totalCredit)}
+                          </td>
+                          <td className="py-3 px-5 text-right gm-col-tint-balance font-semibold text-gray-900 dark:text-slate-100">
+                            {renderLedgerAmount(group.netBalance)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-[12px] text-gray-400">
+                            {isExpanded ? 'Hide' : 'View'}
+                          </td>
+                        </tr>
+
+                        {/* Indented Child Journal Items */}
+                        {isExpanded && (
+                          <>
+                            {group.entries.map((entry) => (
+                              <tr
+                                key={entry.id}
+                                className={`transition-colors ${
+                                  entry.isReversal
+                                    ? isLight
+                                      ? 'bg-purple-50/40 hover:bg-purple-50/70'
+                                      : 'bg-purple-950/20 hover:bg-purple-950/30'
+                                    : entry.isReversed
+                                    ? isLight
+                                      ? 'bg-gray-100/50 opacity-75'
+                                      : 'bg-slate-900/50 opacity-75'
+                                    : isLight
+                                    ? 'bg-gray-50/30 hover:bg-gray-50/80'
+                                    : 'bg-slate-900/20 hover:bg-slate-900/50'
+                                }`}
+                              >
+                                <td className="py-2.5 pl-8 pr-5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`font-medium ${entry.isReversal ? 'text-purple-600 dark:text-purple-400' : 'text-[#0F4C3A] dark:text-emerald-400'}`}>
+                                      {entry.id}
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                                      entry.referenceType === 'REVERSING_ENTRY'
+                                        ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
+                                        : isLight
+                                        ? 'bg-gray-100 text-gray-600 border-gray-200'
+                                        : 'bg-slate-900/90 text-slate-300 border-slate-800/80'
+                                    }`}>
+                                      {entry.referenceType}
+                                    </span>
+                                    {entry.isReversal && (
+                                      <span className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">
+                                        Reverses #{entry.reversesVoucherId}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className={`text-[12.5px] mt-0.5 max-w-md truncate ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
+                                    {entry.description}
+                                  </div>
+                                </td>
+                                <td className={`py-2.5 px-4 whitespace-nowrap ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
+                                  {entry.timestamp.split('T')[0]}
+                                </td>
+                                <td className={`py-2.5 px-4 gm-col-tint-partner ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
+                                  {entry.partner}
+                                </td>
+                                <td className="py-2.5 px-3 text-center text-gray-500 dark:text-slate-400">
+                                  {selectedCurrency}
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-medium text-gray-900 dark:text-slate-100">
+                                  {renderLedgerAmount(entry.debit)}
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-medium text-gray-900 dark:text-slate-100">
+                                  {renderLedgerAmount(entry.credit)}
+                                </td>
+                                <td className="py-2.5 px-5 text-right gm-col-tint-balance font-medium text-gray-900 dark:text-slate-100">
+                                  {renderLedgerAmount(entry.runningBalance)}
+                                </td>
+                                <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                                  {entry.isReversed ? (
+                                    <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                                      Reversed
+                                    </span>
+                                  ) : entry.isReversal ? (
+                                    <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                                      Counter-Voucher
+                                    </span>
+                                  ) : canManageAccountingAndGiro ? (
+                                    <button
+                                      onClick={(ev) => {
+                                        ev.stopPropagation();
+                                        setReversalReason('');
+                                        setReversingEntry(entry);
+                                      }}
+                                      className={`px-2.5 py-1 text-[12px] font-medium rounded-lg border transition-all cursor-pointer ${
+                                        isLight
+                                          ? 'bg-white hover:bg-gray-100 border-gray-300 text-gray-700 shadow-2xs'
+                                          : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800/80 text-slate-200'
+                                      }`}
+                                      title="Generate an audit-certified reversing counter-entry to correct this voucher"
+                                    >
+                                      Reverse Entry
+                                    </button>
+                                  ) : (
+                                    <span className="text-[11px] text-gray-400 dark:text-slate-500">Posted</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                            {/* Account Group Summary Row */}
+                            <tr className={`border-t border-b-[3px] border-double ${
+                              isLight ? 'border-gray-300 text-gray-900' : 'border-slate-700 text-slate-100'
+                            }`}>
+                              <td colSpan={4} className="py-2.5 pl-8 pr-5 font-semibold">
+                                Total {group.accountCode} {group.accountName}
+                              </td>
+                              <td className="py-2.5 px-4 text-right font-semibold">{renderLedgerAmount(group.totalDebit)}</td>
+                              <td className="py-2.5 px-4 text-right font-semibold">{renderLedgerAmount(group.totalCredit)}</td>
+                              <td className="py-2.5 px-5 text-right gm-col-tint-balance font-bold">{renderLedgerAmount(group.netBalance)}</td>
+                              <td className="py-2.5 px-4" />
+                            </tr>
+                          </>
                         )}
-                      </td>
-                      <td className={`py-3 px-4 text-[11px] font-sans ${isLight ? 'text-gray-700' : 'text-slate-300'}`}>
-                        <div>{entry.timestamp.split('T')[0]}</div>
-                        <span className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
-                          {entry.storeName || 'Senopati'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-sans">
-                        <span className={`font-mono font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
-                          {entry.accountCode}
-                        </span>
-                        <div className={`text-[11px] ${isLight ? 'text-gray-600' : 'text-slate-400'}`}>
-                          {entry.accountName}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                        {entry.debit > 0 ? formatIDR(entry.debit) : '-'}
-                      </td>
-                      <td className="py-3 px-4 text-right font-semibold text-amber-600 dark:text-amber-400">
-                        {entry.credit > 0 ? formatIDR(entry.credit) : '-'}
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center whitespace-nowrap text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                          entry.referenceType === 'REVERSING_ENTRY'
-                            ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
-                            : isLight
-                            ? 'bg-gray-100 text-gray-700 border-gray-200'
-                            : 'bg-slate-900/90 text-slate-300 border-slate-800/80'
-                        }`}>
-                          {entry.referenceType}
-                        </span>
-                      </td>
-                      <td className={`py-3 px-4 text-[11px] font-sans max-w-xs truncate ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
-                        {entry.description}
-                      </td>
-                      <td className="py-3 px-4 text-right font-sans">
-                        {entry.isReversed ? (
-                          <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                            Reversed
-                          </span>
-                        ) : entry.isReversal ? (
-                          <span className="inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                            Counter-Voucher
-                          </span>
-                        ) : canManageAccountingAndGiro ? (
-                          <button
-                            onClick={() => {
-                              setReversalReason('');
-                              setReversingEntry(entry);
-                            }}
-                            className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
-                              isLight
-                                ? 'bg-white hover:bg-gray-100 border-gray-300 text-gray-700 shadow-2xs'
-                                : 'bg-slate-900/90 hover:bg-slate-800 border-slate-800/80 text-slate-200'
-                            }`}
-                            title="Generate an audit-certified reversing counter-entry to correct this voucher"
-                          >
-                            Reverse Entry
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-gray-400 dark:text-slate-500 font-mono">Posted</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </tbody>
+              {glAccountGroups.length > 0 && (
+                <tfoot>
+                  <tr className={`border-t-2 border-b-[3px] border-double ${
+                    isLight ? 'bg-gray-50/90 border-gray-300 text-gray-900' : 'bg-[#090A0F] border-slate-700 text-slate-100'
+                  }`}>
+                    <td colSpan={4} className="py-3.5 px-5 font-bold text-[14px]">
+                      Total General Ledger ({glAccountGroups.length} accounts · {filteredLedger.length} vouchers)
+                    </td>
+                    <td className="py-3.5 px-4 text-right font-bold text-[14px]">{renderLedgerAmount(grandDr)}</td>
+                    <td className="py-3.5 px-4 text-right font-bold text-[14px]">{renderLedgerAmount(grandCr)}</td>
+                    <td className="py-3.5 px-5 text-right gm-col-tint-balance font-bold text-[14px]">{renderLedgerAmount(grandDr - grandCr)}</td>
+                    <td className="py-3.5 px-4" />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* SUB-TAB 5: CHART OF ACCOUNTS (COA) STRUCTURE */}
       {!complianceSubView && subTab === 'coa' && (
@@ -1097,26 +1748,26 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
               : 'bg-[#12141C] border-slate-800/80'
           }`}
         >
-          <div className={`p-5 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className={`p-5 sm:p-6 border-b ${isLight ? 'border-gray-200 bg-gray-50/50' : 'border-slate-800/80 bg-[#090A0F]'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
+                <h3 className={`text-[18px] font-semibold tracking-[-0.01em] ${isLight ? 'text-gray-900' : 'text-slate-100'} flex items-center gap-2`}>
                   <Building2 className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
                   Chart of Accounts (COA) Structure
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
+                <p className={`text-[13px] ${isLight ? 'text-gray-500' : 'text-slate-400'} mt-0.5`}>
                   Multi-Store segregated account hierarchy compliant with standard Indonesian retail bookkeeping
                 </p>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {(['ALL', 'Asset', 'Liability', 'Equity', 'Revenue', 'Expense'] as const).map((cat) => (
                   <button
                     key={cat}
                     onClick={() => setCoaCategoryFilter(cat)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    className={`px-3 py-1.5 text-[12.5px] font-medium rounded-lg transition-all cursor-pointer ${
                       coaCategoryFilter === cat
-                        ? 'bg-[#0F4C3A] text-white shadow-xs'
+                        ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                         : isLight
                         ? 'text-gray-600 hover:bg-gray-100'
                         : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/90'
@@ -1130,17 +1781,17 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
+            <table className="w-full text-left text-[13px] font-sans tabular-nums">
               <thead>
-                <tr className={`border-b text-[10px] uppercase font-semibold tracking-wider ${
-                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-500' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
+                <tr className={`border-b text-[12px] font-semibold ${
+                  isLight ? 'border-gray-200 bg-gray-50/70 text-gray-600' : 'border-slate-800/80 bg-[#090A0F] text-slate-400'
                 }`}>
-                  <th className="py-3 px-4">Code</th>
-                  <th className="py-3 px-4 font-sans">Account Title</th>
-                  <th className="py-3 px-4 font-sans">Category</th>
+                  <th className="py-3 px-5">Code</th>
+                  <th className="py-3 px-4">Account Title</th>
+                  <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4">Normal Balance</th>
-                  <th className="py-3 px-4 font-sans">Reporting Hub</th>
-                  <th className="py-3 px-4 text-right">Current Balance</th>
+                  <th className="py-3 px-4 gm-col-tint-partner">Reporting Hub</th>
+                  <th className="py-3 px-5 text-right gm-col-tint-balance">Current Balance</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isLight ? 'divide-gray-200' : 'divide-slate-800/80'}`}>
@@ -1151,15 +1802,15 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                       isLight ? 'hover:bg-gray-50/80' : 'hover:bg-slate-900/60'
                     }`}
                   >
-                    <td className="py-3.5 px-4 font-bold text-[#0F4C3A] dark:text-emerald-400">
+                    <td className="py-3 px-5 font-semibold text-[#0F4C3A] dark:text-emerald-400">
                       {acc.accountCode}
                     </td>
-                    <td className={`py-3.5 px-4 font-sans font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                    <td className={`py-3 px-4 font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                       {acc.accountName}
                     </td>
-                    <td className="py-3.5 px-4 font-sans">
+                    <td className="py-3 px-4">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
                           acc.category === 'Asset'
                             ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
                             : acc.category === 'Liability'
@@ -1172,14 +1823,14 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                         {acc.category}
                       </span>
                     </td>
-                    <td className={`py-3.5 px-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
+                    <td className={`py-3 px-4 ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                       {acc.normalBalance}
                     </td>
-                    <td className={`py-3.5 px-4 font-sans ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
+                    <td className={`py-3 px-4 gm-col-tint-partner ${isLight ? 'text-gray-600' : 'text-slate-300'}`}>
                       {acc.storeId}
                     </td>
-                    <td className={`py-3.5 px-4 text-right font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
-                      {formatIDR(acc.balance)}
+                    <td className={`py-3 px-5 text-right gm-col-tint-balance font-semibold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                      {renderLedgerAmount(acc.balance)}
                     </td>
                   </tr>
                 ))}
@@ -1279,37 +1930,37 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           </div>
 
           {/* Table 1: Accounts Receivable Aging & Customer Limits */}
-          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'} space-y-4`}>
+          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'} space-y-4 font-sans`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-slate-800/80">
               <div>
-                <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-slate-100 flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span>Wholesale Accounts Receivable Aging Matrix &amp; Plafond</span>
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-slate-400">
+                <p className="text-[13px] text-gray-500 dark:text-slate-400">
                   B2B customer credit limit monitoring, AR aging buckets, and auto-freeze enforcement
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-slate-900/90 text-gray-700 dark:text-slate-300 border border-transparent dark:border-slate-800/80">
+              <span className="text-[12px] tabular-nums font-semibold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-slate-900/90 text-gray-700 dark:text-slate-300 border border-transparent dark:border-slate-800/80">
                 {b2bCustomers.length} Wholesale Accounts
               </span>
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-gray-50 dark:bg-[#090A0F] uppercase text-[10px] font-bold text-gray-500 dark:text-slate-400 border-b border-gray-200 dark:border-slate-800/80">
+              <table className="w-full text-left text-[13px] tabular-nums">
+                <thead className="bg-gray-50 dark:bg-[#090A0F] text-[12px] font-semibold text-gray-600 dark:text-slate-400 border-b border-gray-200 dark:border-slate-800/80">
                   <tr>
-                    <th className="py-3 px-3.5">Customer &amp; Tier</th>
-                    <th className="py-3 px-3.5">Credit Plafond</th>
-                    <th className="py-3 px-3.5">Total AR Due</th>
-                    <th className="py-3 px-3.5">Current (0-30d)</th>
-                    <th className="py-3 px-3.5">31 - 60 Days</th>
-                    <th className="py-3 px-3.5">&gt; 60 Days (Critical)</th>
-                    <th className="py-3 px-3.5">Facility Status</th>
-                    <th className="py-3 px-3.5 text-right">Controller Action</th>
+                    <th className="py-3 px-4">Customer &amp; Tier</th>
+                    <th className="py-3 px-4 text-right">Credit Plafond</th>
+                    <th className="py-3 px-4 text-right gm-col-tint-balance">Total AR Due</th>
+                    <th className="py-3 px-4 text-right">Current (0–30d)</th>
+                    <th className="py-3 px-4 text-right">31–60 Days</th>
+                    <th className="py-3 px-4 text-right">&gt; 60 Days</th>
+                    <th className="py-3 px-4">Facility Status</th>
+                    <th className="py-3 px-4 text-right">Controller Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80 font-medium">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80 font-normal">
                   {b2bCustomers.map((cust) => {
                     const isLocked = cust.status === 'CREDIT_LOCKED';
                     return (
@@ -1318,20 +1969,20 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                           <div className="font-bold text-gray-900 dark:text-slate-100">{cust.companyName}</div>
                           <div className="text-[11px] text-gray-500 dark:text-slate-400">{cust.name} ({cust.tierLabel})</div>
                         </td>
-                        <td className="py-3.5 px-3.5 font-mono text-gray-700 dark:text-slate-300">
-                          {formatIDR(cust.creditLimit)}
+                        <td className="py-3.5 px-4 text-right text-gray-700 dark:text-slate-300">
+                          {renderLedgerAmount(cust.creditLimit)}
                         </td>
-                        <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-slate-100">
-                          {formatIDR(cust.outstandingAR)}
+                        <td className="py-3.5 px-4 text-right gm-col-tint-balance font-semibold text-gray-900 dark:text-slate-100">
+                          {renderLedgerAmount(cust.outstandingAR)}
                         </td>
-                        <td className="py-3.5 px-3.5 font-mono text-emerald-600 dark:text-emerald-400">
-                          {formatIDR(Math.max(0, cust.outstandingAR * 0.7))}
+                        <td className="py-3.5 px-4 text-right text-emerald-700 dark:text-emerald-400">
+                          {renderLedgerAmount(Math.round(Math.max(0, cust.outstandingAR * 0.7)))}
                         </td>
-                        <td className="py-3.5 px-3.5 font-mono text-amber-600 dark:text-amber-400">
-                          {formatIDR(Math.max(0, cust.outstandingAR * 0.2))}
+                        <td className="py-3.5 px-4 text-right text-amber-700 dark:text-amber-400">
+                          {renderLedgerAmount(Math.round(Math.max(0, cust.outstandingAR * 0.2)))}
                         </td>
-                        <td className="py-3.5 px-3.5 font-mono text-rose-600 dark:text-rose-400">
-                          {cust.overdueDaysMax > 0 ? formatIDR(cust.outstandingAR * 0.1) : 'Rp 0'}
+                        <td className="py-3.5 px-4 text-right text-rose-600 dark:text-rose-400">
+                          {renderLedgerAmount(cust.overdueDaysMax > 0 ? Math.round(cust.outstandingAR * 0.1) : 0)}
                         </td>
                         <td className="py-3.5 px-3.5 whitespace-nowrap">
                           {isLocked ? (
@@ -1372,36 +2023,36 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           </div>
 
           {/* Table 2: Bilyet Giro (PDC) Clearing & Bounce Management */}
-          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'} space-y-4`}>
+          <div className={`p-5 sm:p-6 rounded-2xl border ${isLight ? 'bg-white border-gray-200 shadow-xs' : 'bg-[#12141C] border-slate-800/80'} space-y-4 font-sans`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-slate-800/80">
               <div>
-                <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-gray-900 dark:text-slate-100 flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span>Bilyet Giro (PDC) Clearing &amp; Dishonor / Bounce Management</span>
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-slate-400">
+                <p className="text-[13px] text-gray-500 dark:text-slate-400">
                   Warkat giro masuk, eksekusi kliring bank (COA #1020), atau proses tolak kliring dengan denda administratif
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-slate-900/90 text-gray-700 dark:text-slate-300 border border-transparent dark:border-slate-800/80">
+              <span className="text-[12px] tabular-nums font-semibold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-slate-900/90 text-gray-700 dark:text-slate-300 border border-transparent dark:border-slate-800/80">
                 {giroRecords.length} Giro Registers
               </span>
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800/80">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-gray-50 dark:bg-[#090A0F] uppercase text-[10px] font-bold text-gray-500 dark:text-slate-400 border-b border-gray-200 dark:border-slate-800/80">
+              <table className="w-full text-left text-[13px] tabular-nums">
+                <thead className="bg-gray-50 dark:bg-[#090A0F] text-[12px] font-semibold text-gray-600 dark:text-slate-400 border-b border-gray-200 dark:border-slate-800/80">
                   <tr>
-                    <th className="py-3 px-3.5">Giro No &amp; Bank</th>
-                    <th className="py-3 px-3.5">Customer / Drawer</th>
-                    <th className="py-3 px-3.5">Order Ref</th>
-                    <th className="py-3 px-3.5">Clearing Due Date</th>
-                    <th className="py-3 px-3.5">Nominal (IDR)</th>
-                    <th className="py-3 px-3.5">Clearing Status</th>
-                    <th className="py-3 px-3.5 text-right">Controller Action</th>
+                    <th className="py-3 px-4">Giro No &amp; Bank</th>
+                    <th className="py-3 px-4">Customer / Drawer</th>
+                    <th className="py-3 px-4">Order Ref</th>
+                    <th className="py-3 px-4">Clearing Due Date</th>
+                    <th className="py-3 px-4 text-right gm-col-tint-balance">Nominal (IDR)</th>
+                    <th className="py-3 px-4">Clearing Status</th>
+                    <th className="py-3 px-4 text-right">Controller Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80 font-medium">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-800/80 font-normal">
                   {giroRecords.map((giro) => (
                     <tr key={giro.id} className="hover:bg-gray-50/60 dark:hover:bg-slate-900/60 transition-colors">
                       <td className="py-3.5 px-3.5">
@@ -1418,8 +2069,8 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
                         <div className="font-mono">{new Date(giro.clearingDueDate).toLocaleDateString()}</div>
                         <span className="text-[10px] text-gray-400 dark:text-slate-400">Jatuh Tempo Kliring</span>
                       </td>
-                      <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 dark:text-slate-100">
-                        {formatIDR(giro.amountIDR)}
+                      <td className="py-3.5 px-4 text-right gm-col-tint-balance font-semibold text-gray-900 dark:text-slate-100">
+                        {renderLedgerAmount(giro.amountIDR)}
                       </td>
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
                         {giro.status === 'CLEARED' && (
@@ -1725,15 +2376,15 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
       {/* ADDITIVE VIEW: 1-CLICK EXECUTIVE FINANCIAL HEALTH DASHBOARD */}
       {complianceSubView === 'executive_health' && (
         <div className="space-y-5">
-          <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+          <div className={`p-5 sm:p-6 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
             isLight ? 'bg-white border-gray-200/90 shadow-xs' : 'bg-[#12141C] border-slate-800/80'
           }`}>
             <div>
-              <h3 className={`text-base font-bold flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+              <h3 className={`text-[18px] font-semibold tracking-[-0.01em] flex items-center gap-2 ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                 <Activity className="w-4 h-4 text-[#0F4C3A] dark:text-emerald-400" />
-                Executive Summary — Real-Time Financial Health Dashboard
+                Executive Summary — Real-Time Financial Health
               </h3>
-              <p className={`text-xs mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+              <p className={`text-[13px] mt-0.5 ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                 1-click liquidity overview across Cash &amp; Bank balances, Aging Wholesale Receivables, and Upcoming Supplier Payables.
               </p>
             </div>
@@ -1857,10 +2508,10 @@ export const AccountingModule: React.FC<AccountingModuleProps> = ({
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 dark:border-slate-800/80 pb-3">
               <div>
-                <h3 className={`text-base font-bold ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                <h3 className={`text-[16px] font-semibold tracking-[-0.01em] ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
                   QRIS / EDC Batch Settlement &amp; MDR Fee Auto-Reconciliation
                 </h3>
-                <p className={`text-xs ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
+                <p className={`text-[13px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                   Settle clearing balances cleanly: DR #{settlementDestCode} (Net Settled) + DR #6040 (MDR Fee Expense) / CR #{settlementChannel === 'QRIS' ? '1030' : '1020'} (Gross).
                 </p>
               </div>

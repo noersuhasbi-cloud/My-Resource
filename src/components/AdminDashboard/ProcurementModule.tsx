@@ -1091,23 +1091,23 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
       </div>
 
       {/* SUB-TAB NAVIGATION BAR */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
         {!isWarehouseRole && (
           <button
             type="button"
             onClick={() => setActiveTab('auto_replenishment')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13.5px] transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'auto_replenishment'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                 : isLight
-                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+                ? 'bg-white text-gray-700 font-medium hover:bg-gray-100 border border-gray-200'
+                : 'bg-slate-900/90 text-slate-300 font-medium hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span>Auto-Replenishment (Min-Max)</span>
             {replenishmentPlan && replenishmentPlan.skusNeedingRestockCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse whitespace-nowrap">
+              <span className="px-1.5 py-0.5 rounded-full text-[11px] bg-rose-500 text-white font-semibold whitespace-nowrap">
                 {replenishmentPlan.skusNeedingRestockCount}
               </span>
             )}
@@ -1118,12 +1118,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('smart_forecast')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13.5px] transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'smart_forecast'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                 : isLight
-                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+                ? 'bg-white text-gray-700 font-medium hover:bg-gray-100 border border-gray-200'
+                : 'bg-slate-900/90 text-slate-300 font-medium hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <TrendingUp className="w-4 h-4 text-indigo-500" />
@@ -1134,18 +1134,18 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('pr')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13.5px] transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'pr'
-              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
               : isLight
-              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+              ? 'bg-white text-gray-700 font-medium hover:bg-gray-100 border border-gray-200'
+              : 'bg-slate-900/90 text-slate-300 font-medium hover:bg-slate-800 border border-slate-800/80'
           }`}
         >
           <Clock className="w-4 h-4 text-emerald-500" />
           <span>Purchase Requests (PR)</span>
           <span
-            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+            className={`px-1.5 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${
               activeTab === 'pr'
                 ? 'bg-white/15 text-emerald-100 border-white/25'
                 : 'bg-emerald-500/15 text-[#0F4C3A] border-emerald-500/25 dark:text-emerald-300'
@@ -1158,18 +1158,18 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('po')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13.5px] transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'po'
-              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
               : isLight
-              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+              ? 'bg-white text-gray-700 font-medium hover:bg-gray-100 border border-gray-200'
+              : 'bg-slate-900/90 text-slate-300 font-medium hover:bg-slate-800 border border-slate-800/80'
           }`}
         >
           <FileCheck2 className="w-4 h-4 text-blue-500" />
           <span>Purchase Orders (PO)</span>
           <span
-            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+            className={`px-1.5 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${
               activeTab === 'po'
                 ? 'bg-white/15 text-sky-100 border-white/25'
                 : 'bg-blue-500/15 text-blue-700 border-blue-500/25 dark:text-blue-300'
@@ -1182,18 +1182,18 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('gr')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13.5px] transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'gr'
-              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
               : isLight
-              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+              ? 'bg-white text-gray-700 font-medium hover:bg-gray-100 border border-gray-200'
+              : 'bg-slate-900/90 text-slate-300 font-medium hover:bg-slate-800 border border-slate-800/80'
           }`}
         >
           <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           <span>Goods Receipts (GR)</span>
           <span
-            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+            className={`px-1.5 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${
               activeTab === 'gr'
                 ? 'bg-white/15 text-slate-100 border-white/25'
                 : 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-900/90 dark:text-slate-300 dark:border-slate-800/80'
@@ -1211,19 +1211,19 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
               setPreselectedGrId('');
               setActiveTab('vendor_bills');
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13.5px] transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'vendor_bills'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                 : isLight
-                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+                ? 'bg-white text-gray-700 font-medium hover:bg-gray-100 border border-gray-200'
+                : 'bg-slate-900/90 text-slate-300 font-medium hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <Receipt className="w-4 h-4 text-indigo-500" />
             <span>Vendor Bills (3-Way Match)</span>
             {vendorBills.length > 0 && (
               <span
-                className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                className={`px-1.5 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${
                   activeTab === 'vendor_bills'
                     ? 'bg-white/15 text-indigo-100 border-white/25'
                     : 'bg-indigo-500/15 text-indigo-700 border-indigo-500/25 dark:text-indigo-300'
@@ -1238,19 +1238,19 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('vendor_scorecard')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13.5px] transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'vendor_scorecard'
-              ? 'bg-[#0F4C3A] text-white shadow-xs'
+              ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
               : isLight
-              ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-              : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+              ? 'bg-white text-gray-700 font-medium hover:bg-gray-100 border border-gray-200'
+              : 'bg-slate-900/90 text-slate-300 font-medium hover:bg-slate-800 border border-slate-800/80'
           }`}
         >
           <Award className="w-4 h-4 text-amber-500" />
           <span>Vendor Scorecard (SRM)</span>
           {scorecardData && (
             <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+              className={`px-1.5 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${
                 activeTab === 'vendor_scorecard'
                   ? 'bg-white/15 text-amber-100 border-white/25'
                   : 'bg-amber-500/15 text-amber-800 border-amber-500/25 dark:text-amber-300'
@@ -1265,12 +1265,12 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('debit_notes')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13.5px] transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'debit_notes'
-                ? 'bg-[#0F4C3A] text-white shadow-xs'
+                ? 'bg-[#0F4C3A] text-white font-semibold shadow-xs'
                 : isLight
-                ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+                ? 'bg-white text-gray-700 font-medium hover:bg-gray-100 border border-gray-200'
+                : 'bg-slate-900/90 text-slate-300 font-medium hover:bg-slate-800 border border-slate-800/80'
             }`}
           >
             <Receipt className="w-4 h-4 text-rose-500" />

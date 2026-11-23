@@ -3,9 +3,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: 'Lato', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: 'Lato', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: 'Lato', 'Inter', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 :root {
@@ -36,7 +36,8 @@
 }
 
 html, body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Lato', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
   scroll-behavior: smooth;
   overflow-x: clip;
   -webkit-font-smoothing: antialiased;
@@ -55,10 +56,86 @@ aside nav {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Tabular numbers for financial & inventory precision */
+/* Tabular numbers & sans-serif alignment for financial & inventory precision */
 .font-mono,
-.tabular-nums {
+.tabular-nums,
+.gm-tabular,
+table td,
+table th {
   font-variant-numeric: tabular-nums;
+}
+
+@media screen {
+  /* Keep all UI tables, forms, modals & financial readouts in crisp humanist sans-serif instead of jarring monospace */
+  :is(body, .gm-erp-shell) .font-mono:not(.gm-preserve-mono):not(#printable-document-root *),
+  :is(body, .gm-erp-shell) .gm-tabular:not(.gm-preserve-mono):not(#printable-document-root *) {
+    font-family: 'Lato', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #printable-document-root .font-mono,
+  .gm-preserve-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Soften overly heavy 900-weight & wide micro-label tracking globally on screen */
+  :is(body, .gm-erp-shell) .font-black:not(#printable-document-root *) {
+    font-weight: 700;
+  }
+
+  :is(body, .gm-erp-shell) .tracking-widest:not(#printable-document-root *) {
+    letter-spacing: 0.03em;
+  }
+
+  :is(body, .gm-erp-shell) .tracking-wider:not(#printable-document-root *) {
+    letter-spacing: 0.02em;
+  }
+
+  :is(body, .gm-erp-shell) h1:not(#printable-document-root *),
+  :is(body, .gm-erp-shell) h2:not(#printable-document-root *),
+  :is(body, .gm-erp-shell) h3:not(#printable-document-root *) {
+    letter-spacing: -0.01em;
+  }
+
+  /* Breathable global table row rhythm across ERP modules */
+  :is(body, .gm-erp-shell) table:not(.gm-compact-table):not(#printable-document-root *) thead th {
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.015em;
+  }
+
+  :is(body, .gm-erp-shell) table:not(.gm-compact-table):not(#printable-document-root *) tbody td {
+    padding-top: 0.68rem;
+    padding-bottom: 0.68rem;
+    line-height: 1.48;
+  }
+
+  /* Subtle vertical column tinting for Partner & Balance financial ledger columns */
+  html:not(.dark) .gm-col-tint-partner {
+    background-color: rgba(19, 34, 27, 0.022);
+  }
+  html.dark .gm-col-tint-partner {
+    background-color: rgba(255, 255, 255, 0.022);
+  }
+  html:not(.dark) .gm-col-tint-balance {
+    background-color: rgba(15, 76, 58, 0.032);
+  }
+  html.dark .gm-col-tint-balance {
+    background-color: rgba(16, 185, 129, 0.038);
+  }
+
+  /* Zero-value de-emphasis & negative crimson balance accents */
+  .gm-currency-zero {
+    opacity: 0.45;
+  }
+  html:not(.dark) .gm-currency-negative {
+    color: #DC2626;
+  }
+  html.dark .gm-currency-negative {
+    color: #F87171;
+  }
 }
 
 /* Smooth fade-in animation */

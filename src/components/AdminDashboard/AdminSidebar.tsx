@@ -85,6 +85,7 @@ export type AdminDashboardTab =
 export type AccountingSubTab =
   | 'pnl'
   | 'balance_sheet'
+  | 'trial_balance'
   | 'cash_flow'
   | 'gl'
   | 'coa'
@@ -942,15 +943,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 {allowAccountingSub('pnl') && (
                 <button
                   onClick={() => handleAccountingSubClick('pnl')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'pnl'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
                       : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
                   }`}
                 >
-                  <TrendingUp className="w-3 h-3 text-emerald-600" />
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
                   <span className="truncate">P&amp;L Statement</span>
                 </button>
                 )}
@@ -958,31 +959,47 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 {allowAccountingSub('balance_sheet') && (
                 <button
                   onClick={() => handleAccountingSubClick('balance_sheet')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'balance_sheet'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
                       : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
                   }`}
                 >
-                  <Scale className="w-3 h-3 text-blue-600" />
+                  <Scale className="w-3.5 h-3.5 text-blue-600" />
                   <span className="truncate">Balance Sheet</span>
+                </button>
+                )}
+
+                {allowAccountingSub('trial_balance') && (
+                <button
+                  onClick={() => handleAccountingSubClick('trial_balance')}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
+                    activeTab === 'accounting' && accountingSubTab === 'trial_balance'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
+                      : isLight
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="truncate">Trial Balance</span>
                 </button>
                 )}
 
                 {allowAccountingSub('cash_flow') && (
                 <button
                   onClick={() => handleAccountingSubClick('cash_flow')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'cash_flow'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
                       : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
                   }`}
                 >
-                  <DollarSign className="w-3 h-3 text-amber-600" />
+                  <DollarSign className="w-3.5 h-3.5 text-amber-600" />
                   <span className="truncate">Cash Flow Statement</span>
                 </button>
                 )}
@@ -990,15 +1007,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 {allowAccountingSub('gl') && (
                 <button
                   onClick={() => handleAccountingSubClick('gl')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'gl'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
                       : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
                   }`}
                 >
-                  <ReceiptText className="w-3 h-3 text-purple-600" />
+                  <ReceiptText className="w-3.5 h-3.5 text-purple-600" />
                   <span className="truncate">General Ledger (GL)</span>
                 </button>
                 )}
@@ -1006,15 +1023,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 {allowAccountingSub('coa') && (
                 <button
                   onClick={() => handleAccountingSubClick('coa')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'coa'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
                       : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
                   }`}
                 >
-                  <Building2 className="w-3 h-3 text-teal-600" />
+                  <Building2 className="w-3.5 h-3.5 text-teal-600" />
                   <span className="truncate">Chart of Accounts (COA)</span>
                 </button>
                 )}
@@ -1022,15 +1039,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 {allowAccountingSub('vendor_bills') && (
                 <button
                   onClick={() => handleAccountingSubClick('vendor_bills')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'vendor_bills'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
                       : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
                   }`}
                 >
-                  <FileCheck2 className="w-3 h-3 text-indigo-600" />
+                  <FileCheck2 className="w-3.5 h-3.5 text-indigo-600" />
                   <span className="truncate">Vendor Bills &amp; AP</span>
                 </button>
                 )}
@@ -1038,15 +1055,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 {allowAccountingSub('b2b_ar') && (
                 <button
                   onClick={() => handleAccountingSubClick('b2b_ar')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'b2b_ar'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
                       : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
                   }`}
                 >
-                  <CreditCard className="w-3 h-3 text-emerald-600" />
+                  <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
                   <span className="truncate">B2B AR &amp; Giro Clearing</span>
                 </button>
                 )}
@@ -1054,15 +1071,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 {allowAccountingSub('analytic_budgets') && (
                 <button
                   onClick={() => handleAccountingSubClick('analytic_budgets')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'analytic_budgets'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
                       : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
                   }`}
                 >
-                  <PieChart className="w-3 h-3 text-purple-600" />
+                  <PieChart className="w-3.5 h-3.5 text-purple-600" />
                   <span className="truncate">Analytic Budgets</span>
                 </button>
                 )}
@@ -1070,15 +1087,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 {allowAccountingSub('margin_analysis') && (
                 <button
                   onClick={() => handleAccountingSubClick('margin_analysis')}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left ${
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all text-left ${
                     activeTab === 'accounting' && accountingSubTab === 'margin_analysis'
-                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-bold'
+                      ? 'bg-emerald-500/15 text-[#0F4C3A] dark:text-emerald-300 font-semibold'
                       : isLight
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
                   }`}
                 >
-                  <BarChart3 className="w-3 h-3 text-emerald-600" />
+                  <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
                   <span className="truncate">Real-Time Margin Analysis</span>
                 </button>
                 )}

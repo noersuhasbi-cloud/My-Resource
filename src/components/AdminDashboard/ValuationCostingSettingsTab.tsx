@@ -105,13 +105,13 @@ export const ValuationCostingSettingsTab: React.FC<ValuationCostingSettingsTabPr
       : 'bg-[#090A0F] border-slate-800/80 text-slate-100'
   }`;
 
-  const inputClass = `w-full px-3.5 py-2 text-xs rounded-xl border font-medium transition-all ${
+  const inputClass = `w-full px-3.5 py-2 text-[13px] rounded-xl border font-normal transition-all ${
     isLight
       ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600'
       : 'bg-[#090A0F] border-slate-800/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
   } focus:outline-hidden`;
 
-  const labelClass = `block text-xs font-bold mb-1.5 ${isLight ? 'text-slate-800' : 'text-slate-200'} dark:text-slate-200`;
+  const labelClass = `block text-[13px] font-semibold mb-1.5 ${isLight ? 'text-slate-700' : 'text-slate-200'} dark:text-slate-200`;
 
   const handleSaveSettings = async () => {
     setIsSavingConfig(true);
