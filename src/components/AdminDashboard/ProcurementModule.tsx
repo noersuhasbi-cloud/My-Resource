@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { Suspense, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   PurchaseRequest,
@@ -22,6 +22,7 @@ import type {
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import { canSessionViewValuation, hasModuleAccess, isOwnerRoleCode, normalizeEnterpriseRole } from '../../utils/rbac';
+import { getEnterpriseSkuProfile } from '../../utils/inventorySkuHelper';
 import {
   Truck,
   Plus,
@@ -52,6 +53,7 @@ import {
   Award,
   TrendingUp,
   Barcode,
+  Camera,
   History,
   ExternalLink,
   RotateCcw,
@@ -61,6 +63,10 @@ import { DocumentDispatchModal } from './DocumentDispatchModal';
 import { VendorScorecardTab } from './VendorScorecardTab';
 import { SmartDemandForecastTab } from './SmartDemandForecastTab';
 import { QuickBarcodeScannerBar } from './QuickBarcodeScannerBar';
+
+const MobileBarcodeScannerModal = React.lazy(() =>
+  import('../MobileBarcodeScannerModal').then((m) => ({ default: m.MobileBarcodeScannerModal }))
+);
 
 interface ProcurementModuleProps {
   theme: 'light' | 'dark';
@@ -258,6 +264,10 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
   const [directPoNotes, setDirectPoNotes] = useState<string>('');
   const [isSubmittingDirectPO, setIsSubmittingDirectPO] = useState<boolean>(false);
   const [showGrScanner, setShowGrScanner] = useState<boolean>(false);
+  const [showGrCameraScanner, setShowGrCameraScanner] = useState<boolean>(false);
+  const [highlightedGrSku, setHighlightedGrSku] = useState<string | null>(null);
+  const grRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const grQtyInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [lastPriceInfo, setLastPriceInfo] = useState<LastPurchasePriceResponse | null>(null);
   const [isLoadingLastPrice, setIsLoadingLastPrice] = useState<boolean>(false);
   const [reorderSuggestions, setReorderSuggestions] = useState<DemandForecastResponse | null>(null);
@@ -824,6 +834,7 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
 
   const openReceivingModal = (po: PurchaseOrder) => {
     setActiveReceivingPO(po);
+    setHighlightedGrSku(null);
     setReceiveMode('standard');
     setDeliveryNoteInput(`SJ-VND-${Date.now().toString().slice(-5)}`);
     setReceivedByInput('Siti Rahmawati (Receiving Clerk)');
@@ -3157,20 +3168,35 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                     : 'Specify Received Items (Partial Fulfillment Supported)'}
                 </h4>
                 {receiveMode === 'standard' && (
-                  <button
-                    type="button"
-                    onClick={() => setShowGrScanner((v) => !v)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer shrink-0 ${
-                      showGrScanner
-                        ? 'bg-emerald-600 border-emerald-600 text-white'
-                        : isLight
-                        ? 'bg-white border-emerald-300 text-[#0F4C3A] hover:bg-emerald-50'
-                        : 'bg-slate-900/90 border-emerald-800/50 text-emerald-300 hover:bg-slate-800'
-                    }`}
-                  >
-                    <Barcode className="w-3.5 h-3.5" />
-                    {showGrScanner ? 'Hide GR Barcode Scanner' : 'Quick Scan Box (+1 Receive)'}
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setShowGrCameraScanner(true)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer shrink-0 ${
+                        isLight
+                          ? 'bg-white border-[#0F4C3A] text-[#0F4C3A] hover:bg-emerald-50'
+                          : 'bg-[#090A0F] border-emerald-700/70 text-emerald-300 hover:bg-slate-900'
+                      }`}
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      Scan Barcode GR
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowGrScanner((v) => !v)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer shrink-0 ${
+                        showGrScanner
+                          ? 'bg-emerald-600 border-emerald-600 text-white'
+                          : isLight
+                          ? 'bg-white border-emerald-300 text-[#0F4C3A] hover:bg-emerald-50'
+                          : 'bg-slate-900/90 border-emerald-800/50 text-emerald-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Barcode className="w-3.5 h-3.5" />
+                      {showGrScanner ? 'Hide GR Barcode Scanner' : 'Quick Scan Box (+1 Receive)'}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -3246,17 +3272,27 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                 return (
                   <div
                     key={`${item.sku}-${idx}`}
-                    className={`border p-4 rounded-xl space-y-3 ${
-                      isLight
+                    ref={(el) => {
+                      grRowRefs.current[item.sku] = el;
+                    }}
+                    className={`border p-4 rounded-xl space-y-3 transition-all ${
+                      highlightedGrSku === item.sku
+                        ? 'ring-2 ring-[#0F4C3A] dark:ring-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20 border-[#0F4C3A] dark:border-emerald-500'
+                        : isLight
                         ? 'bg-white border-gray-200 shadow-2xs'
                         : 'bg-[#090A0F] border-slate-800/80'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                       <div>
-                        <h5 className={`font-bold text-xs ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
-                          {item.productName}
-                        </h5>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h5 className={`font-bold text-xs ${isLight ? 'text-gray-900' : 'text-slate-100'}`}>
+                            {item.productName}
+                          </h5>
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-[10px] font-semibold text-[#0F4C3A] dark:text-emerald-400">
+                            Rak / Zona: {activeReceivingPO.warehouseZoneId || 'WH-JKT-SEN-COLD'}
+                          </span>
+                        </div>
                         <span className={`font-mono text-[10px] ${isLight ? 'text-gray-500' : 'text-slate-400'}`}>
                           {item.sku}
                         </span>
@@ -3272,12 +3308,15 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5">
                       <div>
                         <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
                           Quantity Received Now
                         </label>
                         <input
+                          ref={(el) => {
+                            grQtyInputRefs.current[item.sku] = el;
+                          }}
                           type="number"
                           min={0}
                           max={item.remainingBackorder}
@@ -3333,6 +3372,28 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
                             setReceivingItemsState((prev) => ({
                               ...prev,
                               [item.sku]: { ...itemState, batchNumber: val },
+                            }));
+                          }}
+                          className={`w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border ${
+                            isLight
+                              ? 'bg-white border-slate-300 text-slate-900 focus:border-[#0F4C3A] focus:ring-1 focus:ring-[#0F4C3A]'
+                              : 'bg-[#12141C] border-slate-800/80 text-slate-100'
+                          }`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={`block text-[10px] mb-1 font-semibold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                          Expired Date
+                        </label>
+                        <input
+                          type="date"
+                          value={itemState.expiryDate}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setReceivingItemsState((prev) => ({
+                              ...prev,
+                              [item.sku]: { ...itemState, expiryDate: val },
                             }));
                           }}
                           className={`w-full px-2.5 py-1.5 text-xs font-mono rounded-lg border ${
@@ -4345,6 +4406,82 @@ export const ProcurementModule: React.FC<ProcurementModuleProps> = ({
           </div>,
           document.body
         )}
+
+      {showGrCameraScanner && activeReceivingPO && (
+        <Suspense fallback={null}>
+          <MobileBarcodeScannerModal
+            isOpen={showGrCameraScanner}
+            onClose={() => setShowGrCameraScanner(false)}
+            theme={theme}
+            mode="goods_receipt"
+            title={`Scan Barcode GR — PO #${activeReceivingPO.id}`}
+            subtitle={`Vendor: ${activeReceivingPO.supplierName} · Scan barcode dus/produk untuk menyorot item PO.`}
+            catalogItems={activeReceivingPO.items.map((it) => {
+              const invMeta = inventory.find((i) => i.sku === it.sku);
+              const profile = getEnterpriseSkuProfile(
+                it.sku,
+                invMeta?.category || 'produce',
+                invMeta?.unit || 'pcs'
+              );
+              return {
+                sku: it.sku,
+                productName: it.productName,
+                unit: invMeta?.unit || 'pcs',
+                barcode: invMeta?.barcode,
+                outerBoxBarcode: profile.outerBoxBarcode,
+                binLocation: activeReceivingPO.warehouseZoneId || profile.defaultBinLocation,
+                currentCount: receivingItemsState[it.sku]?.quantityReceived ?? 0,
+                maxAllowedQty: it.remainingBackorder,
+              };
+            })}
+            onCaptureScan={({ code }) => {
+              const q = code.trim().toLowerCase();
+              const poItem = activeReceivingPO.items.find((it) => {
+                const invMeta = inventory.find((i) => i.sku === it.sku);
+                const profile = getEnterpriseSkuProfile(
+                  it.sku,
+                  invMeta?.category || 'produce',
+                  invMeta?.unit || 'pcs'
+                );
+                return (
+                  it.sku.toLowerCase() === q ||
+                  (invMeta?.barcode && invMeta.barcode.toLowerCase() === q) ||
+                  (profile.outerBoxBarcode && profile.outerBoxBarcode.toLowerCase() === q)
+                );
+              });
+
+              if (!poItem) {
+                return {
+                  ok: false,
+                  title: 'Barcode Tidak Terdaftar di PO',
+                  detail: `Kode "${code}" tidak ada pada PO #${activeReceivingPO.id}`,
+                };
+              }
+
+              setHighlightedGrSku(poItem.sku);
+              onShowToast(
+                'Item PO Cocok',
+                `${poItem.productName} (${poItem.sku}) — Isi Qty Diterima / Expired Date (Sisa PO: ${poItem.remainingBackorder}).`
+              );
+              window.setTimeout(() => {
+                grRowRefs.current[poItem.sku]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                grQtyInputRefs.current[poItem.sku]?.focus();
+                grQtyInputRefs.current[poItem.sku]?.select();
+              }, 120);
+              window.setTimeout(() => {
+                setHighlightedGrSku((prev) => (prev === poItem.sku ? null : prev));
+              }, 4500);
+
+              return {
+                ok: true,
+                title: `${poItem.productName} (${poItem.sku})`,
+                detail: `Sisa PO: ${poItem.remainingBackorder} · Zona: ${activeReceivingPO.warehouseZoneId || 'WH-JKT-SEN-COLD'}`,
+                closeAfter: true,
+              };
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

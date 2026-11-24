@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import type {
@@ -127,10 +127,12 @@ import {
   Mail,
   History,
   Barcode,
+  Camera,
   Globe,
   Phone,
   Link2,
 } from 'lucide-react';
+import { getEnterpriseSkuProfile } from '../../utils/inventorySkuHelper';
 import { ApprovalMatrixModule } from './ApprovalMatrixModule';
 import { ValuationCostingSettingsTab } from './ValuationCostingSettingsTab';
 import { WarehouseRoutingSettingsTab } from './WarehouseRoutingSettingsTab';
@@ -140,6 +142,10 @@ import { IndonesianTaxRulesPanel } from './IndonesianTaxRulesPanel';
 import { CommunicationGatewaySettingsTab } from './CommunicationGatewaySettingsTab';
 import { AuditTrailKpiTab } from './AuditTrailKpiTab';
 import { QuickBarcodeScannerBar } from './QuickBarcodeScannerBar';
+
+const MobileBarcodeScannerModal = React.lazy(() =>
+  import('../MobileBarcodeScannerModal').then((m) => ({ default: m.MobileBarcodeScannerModal }))
+);
 
 export type SettingsSubTab =
   | 'enterprise'
@@ -411,6 +417,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [opnameSearch, setOpnameSearch] = useState<string>('');
   const [isPartialCycleMode, setIsPartialCycleMode] = useState<boolean>(false);
   const [showOpnameBarcodeScanner, setShowOpnameBarcodeScanner] = useState<boolean>(false);
+  const [showOpnameCameraScanner, setShowOpnameCameraScanner] = useState<boolean>(false);
+  const [opnameCameraNonce, setOpnameCameraNonce] = useState<number>(1);
   const [opnameItems, setOpnameItems] = useState<Record<string, number>>({});
   const [opnameNotes, setOpnameNotes] = useState<Record<string, string>>({});
   const [opnameSessions, setOpnameSessions] = useState<StockOpnameSession[]>([]);
@@ -1926,6 +1934,7 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
       if (res.success) {
         onShowToast('Stock Opname Reconciled', res.message);
         setOpnameSessions((prev) => [res.session, ...prev]);
+        setOpnameCameraNonce((n) => n + 1);
         if (onRefreshData) onRefreshData();
       }
     } catch (err: any) {
@@ -7045,6 +7054,19 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
 
                     <button
                       type="button"
+                      onClick={() => setShowOpnameCameraScanner(true)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                        isLight
+                          ? 'bg-white border-[#0F4C3A] text-[#0F4C3A] hover:bg-emerald-50'
+                          : 'bg-slate-900/90 border-emerald-700/70 text-emerald-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Scan Kamera HP</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setShowOpnameBarcodeScanner((v) => !v)}
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                         showOpnameBarcodeScanner
@@ -8156,6 +8178,56 @@ SKU-BAK-001,Artisan Country Sourdough Loaf,bakery,28,24000,40000,10,650g loaf,He
         <AuditTrailKpiTab theme={theme} onShowToast={onShowToast} />
       )}
       </div>
+
+      {showOpnameCameraScanner && (
+        <Suspense fallback={null}>
+          <MobileBarcodeScannerModal
+            isOpen={showOpnameCameraScanner}
+            onClose={() => setShowOpnameCameraScanner(false)}
+            theme={theme}
+            mode="stocktake"
+            title={`Scan Kamera HP — Stock Opname (${opnameStoreId})`}
+            subtitle="Scan barcode produk untuk mencatat hitungan fisik. Stok sistem & GL belum berubah sebelum Post GL Reconciliations."
+            catalogItems={filteredOpnameTiers.map((t) => {
+              const invMatch = INITIAL_INVENTORY.find((i) => i.sku === t.sku);
+              const profile = getEnterpriseSkuProfile(t.sku, t.category, t.unit);
+              return {
+                sku: t.sku,
+                productName: t.productName,
+                unit: t.unit,
+                barcode: invMatch?.barcode,
+                outerBoxBarcode: profile.outerBoxBarcode,
+                binLocation: t.warehouseZoneId || profile.defaultBinLocation,
+                currentCount: opnameItems[t.sku] !== undefined ? opnameItems[t.sku] : 0,
+              };
+            })}
+            hideSystemStock={false}
+            onCaptureScan={async ({ code, matchedItem, qty, applyMode }) => {
+              const res = await apiClient.scanIncrementStocktake(
+                `STD-SETTINGS-${opnameStoreId}-${opnameCameraNonce}`,
+                {
+                  barcode: code,
+                  sku: matchedItem?.sku,
+                  deltaQty: qty ?? 1,
+                  mode: applyMode ?? 'add',
+                  storeId: opnameStoreId,
+                }
+              );
+              setOpnameItems((prev) => ({
+                ...prev,
+                [res.sku]: res.countedQty,
+              }));
+              onShowToast('Scan Opname Tercatat', res.message);
+              return {
+                ok: true,
+                title: res.message,
+                detail: `Hitungan draft: ${res.countedQty} ${res.unit}`,
+                totalCount: res.countedQty,
+              };
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Barcode,
+  Camera,
   CheckCircle2,
   ClipboardCheck,
   EyeOff,
@@ -28,6 +29,11 @@ import {
   isBranchScopedRole,
   normalizeEnterpriseRole,
 } from '../../utils/rbac';
+import { getEnterpriseSkuProfile } from '../../utils/inventorySkuHelper';
+
+const MobileBarcodeScannerModal = React.lazy(() =>
+  import('../MobileBarcodeScannerModal').then((m) => ({ default: m.MobileBarcodeScannerModal }))
+);
 
 interface RackBlindOpnamePanelProps {
   theme: 'light' | 'dark';
@@ -82,6 +88,8 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
   const [isCommitting, setIsCommitting] = useState<boolean>(false);
   const [lastResult, setLastResult] = useState<RackStocktakeCommitResponse | null>(null);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState<boolean>(false);
+  const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
+  const [rackScanNonce, setRackScanNonce] = useState<number>(1);
 
   useEffect(() => {
     if (lockedBranchId) {
@@ -157,6 +165,36 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
   const outletName =
     storeOutlets.find((s) => s.storeId === outletId)?.storeName || 'GroceMart Flagship';
 
+  const rackScannerCatalogItems = useMemo(() => {
+    return scopedBatches
+      .filter(
+        (b) => b.status !== 'quarantined' && b.status !== 'recalled' && b.status !== 'expired'
+      )
+      .map((b) => {
+        const invMeta = invBySku[b.sku];
+        const profile = getEnterpriseSkuProfile(
+          b.sku,
+          invMeta?.category || 'produce',
+          invMeta?.unit || 'pcs'
+        );
+        const curRaw = countsByBatch[b.batchId];
+        const currentCount =
+          curRaw !== undefined && curRaw !== '' && !Number.isNaN(Number(curRaw))
+            ? Number(curRaw)
+            : 0;
+        return {
+          sku: b.sku,
+          productName: b.productName,
+          unit: invMeta?.unit || 'pcs',
+          barcode: invMeta?.barcode,
+          outerBoxBarcode: profile.outerBoxBarcode,
+          lotNumber: b.lotNumber,
+          binLocation: b.rackBinCode || profile.defaultBinLocation,
+          currentCount,
+        };
+      });
+  }, [scopedBatches, invBySku, countsByBatch]);
+
   const handlePrintBlindSheet = () => {
     const selectedRackObj = rackFilter !== 'ALL' ? rackByCode[rackFilter] : undefined;
     triggerPrint({
@@ -219,6 +257,7 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
       setLastResult(res);
       setCountsByBatch({});
       setNotesByBatch({});
+      setRackScanNonce((n) => n + 1);
       onShowToast(
         res.routedToApproval ? 'Routed to Approval Matrix' : 'Rack Opname Committed',
         res.message
@@ -260,6 +299,15 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowCameraScanner(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border bg-white dark:bg-[#090A0F] border-[#0F4C3A] dark:border-emerald-700/70 text-[#0F4C3A] dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-slate-900/90 transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] cursor-pointer shrink-0"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Scan Kamera HP
+            </button>
+
             <button
               type="button"
               onClick={() => setShowBarcodeScanner((v) => !v)}
@@ -633,6 +681,76 @@ export const RackBlindOpnamePanel: React.FC<RackBlindOpnamePanelProps> = ({
             </table>
           </div>
         </div>
+      )}
+
+      {showCameraScanner && (
+        <Suspense fallback={null}>
+          <MobileBarcodeScannerModal
+            isOpen={showCameraScanner}
+            onClose={() => setShowCameraScanner(false)}
+            theme={theme}
+            mode="stocktake"
+            title={`Scan Kamera HP — Rack Opname (${rackFilter === 'ALL' ? 'Semua Rak' : rackFilter})`}
+            subtitle="Mode Buta Aktif · Stok sistem disembunyikan. Scan barcode produk atau kode Lot/Batch."
+            catalogItems={rackScannerCatalogItems}
+            hideSystemStock={true}
+            onCaptureScan={async ({ code, matchedItem, qty, applyMode }) => {
+              const q = code.trim().toLowerCase();
+              const matchedBatch = scopedBatches.find((b) => {
+                const invMeta = invBySku[b.sku];
+                const profile = getEnterpriseSkuProfile(
+                  b.sku,
+                  invMeta?.category || 'produce',
+                  invMeta?.unit || 'pcs'
+                );
+                return (
+                  b.lotNumber.toLowerCase() === q ||
+                  b.batchId.toLowerCase() === q ||
+                  b.sku.toLowerCase() === q ||
+                  (invMeta?.barcode && invMeta.barcode.toLowerCase() === q) ||
+                  (profile.outerBoxBarcode && profile.outerBoxBarcode.toLowerCase() === q) ||
+                  (matchedItem && b.sku === matchedItem.sku && (!matchedItem.lotNumber || b.lotNumber === matchedItem.lotNumber))
+                );
+              });
+              if (!matchedBatch) {
+                return {
+                  ok: false,
+                  title: 'Batch Tidak Ditemukan',
+                  detail: `Tidak ada batch aktif pada rak/zona terpilih yang cocok dengan "${code}".`,
+                };
+              }
+              if (
+                matchedBatch.status === 'quarantined' ||
+                matchedBatch.status === 'recalled' ||
+                matchedBatch.status === 'expired'
+              ) {
+                return {
+                  ok: false,
+                  title: 'Batch Terkunci',
+                  detail: `Batch ${matchedBatch.lotNumber} berstatus LOCKED (${matchedBatch.status.toUpperCase()}).`,
+                };
+              }
+              const res = await apiClient.scanIncrementStocktake(`RACK-DRAFT-${outletId}-${rackScanNonce}`, {
+                barcode: code,
+                sku: matchedBatch.sku,
+                deltaQty: qty ?? 1,
+                mode: applyMode ?? 'add',
+                storeId: outletId,
+              });
+              setCountsByBatch((prev) => ({
+                ...prev,
+                [matchedBatch.batchId]: String(res.countedQty),
+              }));
+              onShowToast('Scan Rack Opname Tercatat', res.message);
+              return {
+                ok: true,
+                title: `${matchedBatch.productName} (${matchedBatch.lotNumber})`,
+                detail: `Rak ${matchedBatch.rackBinCode || 'UNASSIGNED'} · Hitungan = ${res.countedQty} ${res.unit}`,
+                totalCount: res.countedQty,
+              };
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

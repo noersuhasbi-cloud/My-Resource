@@ -2347,6 +2347,22 @@ let blindOpnameSheetsList: BlindOpnameSheet[] = [
   },
 ];
 
+interface StocktakeScanDraftLine {
+  sku: string;
+  productName: string;
+  unit: string;
+  countedQty: number;
+  countedLotNumber?: string;
+  notes?: string;
+  lastScannedAt: string;
+  lastScannedBy: string;
+}
+
+const stocktakeScanDrafts = new Map<
+  string,
+  { storeId: string; items: Record<string, StocktakeScanDraftLine> }
+>();
+
 let posShiftsList: PosRegisterShiftSession[] = [
   {
     id: 'SHF-2026-0000',
@@ -6158,6 +6174,12 @@ function evaluateSystemUserModulePermission(
     return mp.inventory.create === true || mp.inventory.edit === true ? { allowed: true } : deny('inventory', 'create');
   }
 
+  if (urlPath.startsWith('/admin/inventory/stocktakes/') && urlPath.endsWith('/scan-increment')) {
+    return mp.inventory.create === true || mp.inventory.edit === true
+      ? { allowed: true }
+      : deny('inventory', 'create');
+  }
+
   // 14. Batch Recall & Quality Control / Cold Chain
   if (urlPath.startsWith('/admin/batch-recall/') || urlPath.startsWith('/admin/compliance/recall-execute')) {
     if (isRead) {
@@ -8406,6 +8428,7 @@ function applyServerState(snap: any) {
     snap.qrisTransactionsEntries.forEach(([k, v]: [string, any]) => qrisTransactions.set(k, v));
   }
   idempotencyStore.clear();
+  stocktakeScanDrafts.clear();
   if (Array.isArray(snap.idempotencyStoreEntries)) {
     snap.idempotencyStoreEntries.forEach(([k, v]: [string, any]) => idempotencyStore.set(k, v));
   }
@@ -8813,6 +8836,7 @@ async function initializeCleanProductionStore(req?: Request) {
     crmActivities = [];
     qrisTransactions.clear();
     idempotencyStore.clear();
+    stocktakeScanDrafts.clear();
     inTransitTransferLots.clear();
 
     // Zero out physical stock quantities while preserving product & warehouse catalog definitions
@@ -9541,6 +9565,11 @@ async function startServer() {
           const allowed: CanonicalServerRole[] = ['warehouse', 'store_manager', 'admin', 'coo', 'super_admin'];
           if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
         }
+      }
+
+      if (urlPath.startsWith('/admin/inventory/stocktakes/') && urlPath.endsWith('/scan-increment')) {
+        const allowed: CanonicalServerRole[] = ['warehouse', 'store_manager', 'coo', 'super_admin'];
+        if (!allowed.includes(effectiveRole)) return denyAccess(allowed);
       }
 
       if (urlPath.startsWith('/admin/compliance/recall-execute')) {
@@ -28230,6 +28259,254 @@ async function startServer() {
       sheet,
       glVoucherIds: glIds,
       message: `Blind Opname ${sheet.sheetNumber} approved. Stock levels & COA #5210 Shrinkage Variance synchronized.`,
+    });
+  });
+
+  const EXPLICIT_OUTER_BOX_BARCODES: Record<string, string> = {
+    'SKU-PRD-001': '8997021001012',
+    'SKU-PRD-002': '8997021001029',
+    'SKU-DAI-001': '8997021002019',
+    'SKU-MEA-001': '8997021003016',
+    'B2B-BRS-001': '8997021004013',
+    'B2B-MYK-001': '8997021005010',
+    'B2B-MIE-001': '8997021006017',
+    'B2B-DET-001': '8997021008082',
+  };
+
+  function getOuterBoxBarcodeForSku(sku: string): string {
+    return (
+      EXPLICIT_OUTER_BOX_BARCODES[sku] ||
+      `8997021${sku.replace(/[^0-9]/g, '').padEnd(6, '0').slice(0, 6)}`
+    );
+  }
+
+  function resolveCatalogSkuFromBarcode(rawCode: string): string | null {
+    const q = String(rawCode || '').trim().toLowerCase();
+    if (!q) return null;
+    const invHit = inventoryList.find(
+      (i) => i.sku.toLowerCase() === q || (i.barcode && i.barcode.toLowerCase() === q)
+    );
+    if (invHit) return invHit.sku;
+    const batchHit = inventoryBatches.find(
+      (b) => b.lotNumber?.toLowerCase() === q || b.batchId?.toLowerCase() === q || b.sku.toLowerCase() === q
+    );
+    if (batchHit) return batchHit.sku;
+    const tierHit = storeInventoryTiers.find(
+      (t) => t.sku.toLowerCase() === q || getOuterBoxBarcodeForSku(t.sku).toLowerCase() === q
+    );
+    if (tierHit) return tierHit.sku;
+    return null;
+  }
+
+  app.patch('/api/admin/inventory/stocktakes/:id/scan-increment', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const {
+      barcode,
+      sku: rawSku,
+      lotNumber,
+      deltaQty = 1,
+      mode = 'add',
+      storeId: bodyStoreId,
+      countedLotNumber,
+      notes,
+    } = (req.body || {}) as {
+      barcode?: string;
+      sku?: string;
+      lotNumber?: string;
+      deltaQty?: number;
+      mode?: 'add' | 'set';
+      storeId?: string;
+      countedLotNumber?: string;
+      notes?: string;
+    };
+
+    const parsedDelta = Number(deltaQty);
+    if (!Number.isFinite(parsedDelta) || (mode === 'set' ? parsedDelta < 0 : parsedDelta === 0)) {
+      return res.status(400).json({
+        success: false,
+        error: 'deltaQty must be a valid finite number (non-zero for add, >= 0 for set).',
+      });
+    }
+
+    const rawLookup = String(barcode || rawSku || lotNumber || '').trim();
+    if (!rawLookup) {
+      return res.status(400).json({
+        success: false,
+        error: 'barcode, sku, or lotNumber is required.',
+      });
+    }
+
+    const operatorName = getEffectiveOperatorName(req);
+    const resolvedSys = resolveSystemUserForRequest(req);
+    const effectiveRole = getEffectiveRequestRole(req);
+    const isBlindFinancialMask =
+      resolvedSys?.hideFinancialCost === true ||
+      resolvedSys?.viewCost === false ||
+      effectiveRole === 'warehouse';
+
+    // 1. Check Blind Opname Sheets first (BLIND-OPN-* or SO-BLIND-*)
+    const sheet = blindOpnameSheetsList.find((s) => s.id === id || s.sheetNumber === id);
+    if (sheet) {
+      const branchViolation = checkBranchIsolationViolation(req, sheet.storeId);
+      if (branchViolation) {
+        return res.status(403).json({
+          success: false,
+          code: 'RBAC_FORBIDDEN',
+          error: branchViolation,
+        });
+      }
+      if (sheet.status !== 'COUNTING') {
+        return res.status(400).json({
+          success: false,
+          error: `Blind Count Sheet ${sheet.sheetNumber} is '${sheet.status}' and cannot accept scan increments.`,
+        });
+      }
+
+      const q = rawLookup.toLowerCase();
+      const resolvedSkuFromCatalog = resolveCatalogSkuFromBarcode(rawLookup);
+      const matchedLine = sheet.items.find((line) => {
+        if (line.sku.toLowerCase() === q) return true;
+        if (resolvedSkuFromCatalog && line.sku.toLowerCase() === resolvedSkuFromCatalog.toLowerCase()) return true;
+        if (line.expectedLotNumber?.toLowerCase() === q || line.countedLotNumber?.toLowerCase() === q) return true;
+        if (getOuterBoxBarcodeForSku(line.sku).toLowerCase() === q) return true;
+        return false;
+      });
+
+      if (!matchedLine) {
+        return res.status(404).json({
+          success: false,
+          error: `Barcode/SKU '${rawLookup}' tidak ada dalam daftar Blind Opname ${sheet.sheetNumber}.`,
+        });
+      }
+
+      const previousQty = Number(matchedLine.countedQty || 0);
+      const nextQty =
+        mode === 'set'
+          ? Math.max(0, Number(parsedDelta.toFixed(2)))
+          : Math.max(0, Number((previousQty + parsedDelta).toFixed(2)));
+      matchedLine.countedQty = nextQty;
+      if (countedLotNumber && String(countedLotNumber).trim()) {
+        matchedLine.countedLotNumber = String(countedLotNumber).trim();
+      }
+      if (notes !== undefined && String(notes).trim()) {
+        matchedLine.notes = String(notes).trim();
+      }
+      scheduleStateSave();
+
+      const sanitizedSheet: BlindOpnameSheet = {
+        ...sheet,
+        items: sheet.items.map(({ systemQty: _sys, unitCostIDR: _cost, varianceQty: _vq, varianceValueIDR: _vv, ...visible }) => visible),
+      };
+
+      const deltaApplied = Number((nextQty - previousQty).toFixed(2));
+      return res.json({
+        success: true,
+        stocktakeId: sheet.id,
+        sheetNumber: sheet.sheetNumber,
+        storeId: sheet.storeId,
+        sku: matchedLine.sku,
+        productName: matchedLine.productName,
+        unit: matchedLine.unit,
+        previousQty,
+        countedQty: nextQty,
+        deltaApplied,
+        blindMasked: true,
+        liveStockMutated: false,
+        sheet: sanitizedSheet,
+        message: `${mode === 'add' && deltaApplied >= 0 ? `+${deltaApplied}` : `=${nextQty}`} ${matchedLine.productName} (Total Scan: ${nextQty} ${matchedLine.unit})`,
+      });
+    }
+
+    // 2. Session-based / Standard or Rack Draft Stocktake atomic counter (never mutates COA #1040 or live tiers)
+    const scope = resolveRequestBranchScope(req);
+    const targetStoreId =
+      bodyStoreId && bodyStoreId !== 'ALL' && bodyStoreId !== 'CONSOLIDATED'
+        ? bodyStoreId
+        : scope.isBranchScoped
+        ? scope.storeId
+        : 'store-jkt-senopati';
+
+    const branchViolation = checkBranchIsolationViolation(req, targetStoreId);
+    if (branchViolation) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: branchViolation,
+      });
+    }
+
+    const q = rawLookup.toLowerCase();
+    const resolvedSku = resolveCatalogSkuFromBarcode(rawLookup) || rawLookup;
+    const tier = storeInventoryTiers.find(
+      (t) => t.storeId === targetStoreId && t.sku.toLowerCase() === resolvedSku.toLowerCase()
+    );
+    const invItem = inventoryList.find(
+      (i) => i.sku.toLowerCase() === resolvedSku.toLowerCase() || (i.barcode && i.barcode.toLowerCase() === q)
+    );
+    const matchedBatch = inventoryBatches.find(
+      (b) =>
+        b.storeId === targetStoreId &&
+        (b.batchId.toLowerCase() === q || b.lotNumber.toLowerCase() === q || b.sku.toLowerCase() === resolvedSku.toLowerCase())
+    );
+
+    if (!tier && !invItem && !matchedBatch) {
+      return res.status(404).json({
+        success: false,
+        error: `Barcode/SKU '${rawLookup}' tidak ditemukan pada cabang ${targetStoreId}.`,
+      });
+    }
+
+    const canonicalSku = tier?.sku || matchedBatch?.sku || invItem!.sku;
+    const lineKey = matchedBatch && id.startsWith('RACK-') ? matchedBatch.batchId : canonicalSku;
+    const productName = tier?.productName || matchedBatch?.productName || invItem?.productName || invItem?.name || canonicalSku;
+    const unit = tier?.unit || invItem?.unit || 'pcs';
+
+    let draft = stocktakeScanDrafts.get(id);
+    if (!draft) {
+      draft = { storeId: targetStoreId, items: {} };
+      stocktakeScanDrafts.set(id, draft);
+    }
+    if (draft.storeId !== targetStoreId) {
+      return res.status(403).json({
+        success: false,
+        code: 'RBAC_FORBIDDEN',
+        error: `Stocktake draft '${id}' belongs to '${draft.storeId}', not '${targetStoreId}'.`,
+      });
+    }
+
+    const existingLine = draft.items[lineKey];
+    const previousQty = existingLine ? Number(existingLine.countedQty || 0) : 0;
+    const nextQty =
+      mode === 'set'
+        ? Math.max(0, Number(parsedDelta.toFixed(2)))
+        : Math.max(0, Number((previousQty + parsedDelta).toFixed(2)));
+
+    draft.items[lineKey] = {
+      sku: canonicalSku,
+      productName,
+      unit,
+      countedQty: nextQty,
+      countedLotNumber: countedLotNumber || matchedBatch?.lotNumber || existingLine?.countedLotNumber,
+      notes: notes !== undefined ? notes : existingLine?.notes,
+      lastScannedAt: new Date().toISOString(),
+      lastScannedBy: operatorName,
+    };
+
+    const deltaApplied = Number((nextQty - previousQty).toFixed(2));
+    return res.json({
+      success: true,
+      stocktakeId: id,
+      storeId: targetStoreId,
+      sku: canonicalSku,
+      batchId: matchedBatch?.batchId,
+      productName,
+      unit,
+      previousQty,
+      countedQty: nextQty,
+      deltaApplied,
+      blindMasked: isBlindFinancialMask,
+      liveStockMutated: false,
+      message: `${mode === 'add' && deltaApplied >= 0 ? `+${deltaApplied}` : `=${nextQty}`} ${productName} (Total Scan: ${nextQty} ${unit})`,
     });
   });
 

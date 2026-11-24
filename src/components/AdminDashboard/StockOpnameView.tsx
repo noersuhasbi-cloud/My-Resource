@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { Suspense, useState, useMemo, useEffect } from 'react';
 import type {
   StoreOutletSchedule,
   StoreInventoryStock,
@@ -25,9 +25,15 @@ import {
   Plus,
   Minus,
   Barcode,
+  Camera,
 } from 'lucide-react';
 import { INITIAL_INVENTORY } from '../../data/inventoryData';
+import { getEnterpriseSkuProfile } from '../../utils/inventorySkuHelper';
 import { QuickBarcodeScannerBar } from './QuickBarcodeScannerBar';
+
+const MobileBarcodeScannerModal = React.lazy(() =>
+  import('../MobileBarcodeScannerModal').then((m) => ({ default: m.MobileBarcodeScannerModal }))
+);
 
 interface StockOpnameViewProps {
   theme: 'light' | 'dark';
@@ -87,6 +93,8 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
   const [zoneFilter, setZoneFilter] = useState<string>('ALL');
   const [isPartialCycleMode, setIsPartialCycleMode] = useState<boolean>(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState<boolean>(false);
+  const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
+  const [scanSessionNonce, setScanSessionNonce] = useState<number>(1);
   const [varianceFilter, setVarianceFilter] = useState<
     'ALL' | 'DISCREPANCY_ONLY' | 'SURPLUS_ONLY' | 'DEFICIT_ONLY'
   >('ALL');
@@ -150,6 +158,22 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
       return true;
     });
   }, [partitionedTiers, varianceFilter, physicalCounts]);
+
+  const scannerCatalogItems = useMemo(() => {
+    return partitionedTiers.map((t) => {
+      const invMatch = INITIAL_INVENTORY.find((i) => i.sku === t.sku);
+      const profile = getEnterpriseSkuProfile(t.sku, t.category, t.unit);
+      return {
+        sku: t.sku,
+        productName: t.productName,
+        unit: t.unit,
+        barcode: invMatch?.barcode,
+        outerBoxBarcode: profile.outerBoxBarcode,
+        binLocation: t.warehouseZoneId || profile.defaultBinLocation,
+        currentCount: physicalCounts[t.sku] !== undefined ? physicalCounts[t.sku] : 0,
+      };
+    });
+  }, [partitionedTiers, physicalCounts]);
 
   // Real-time calculated aggregate summary metrics
   const opnameStats = useMemo(() => {
@@ -233,6 +257,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
   const handleResetCounts = () => {
     setPhysicalCounts({});
     setItemNotes({});
+    setScanSessionNonce((n) => n + 1);
     onShowToast('Inputs Reset', 'Physical count entries cleared to default book stock.');
   };
 
@@ -299,6 +324,7 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
       onShowToast('Stock Opname Reconciled', res.message);
       setPhysicalCounts({});
       setItemNotes({});
+      setScanSessionNonce((n) => n + 1);
 
       if (onRefreshData) {
         onRefreshData();
@@ -511,6 +537,19 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
               />
               <span>Partial Cycle ({partitionedTiers.length}/{warehouseTiers.length} SKUs)</span>
             </label>
+
+            <button
+              type="button"
+              onClick={() => setShowCameraScanner(true)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                isLight
+                  ? 'bg-white border-[#0F4C3A] text-[#0F4C3A] hover:bg-emerald-50'
+                  : 'bg-[#090A0F] border-emerald-700/70 text-emerald-300 hover:bg-slate-900/90'
+              }`}
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Scan Kamera HP
+            </button>
 
             <button
               type="button"
@@ -1033,6 +1072,44 @@ export const StockOpnameView: React.FC<StockOpnameViewProps> = ({
           </table>
         </div>
       </div>
+
+      {showCameraScanner && (
+        <Suspense fallback={null}>
+          <MobileBarcodeScannerModal
+            isOpen={showCameraScanner}
+            onClose={() => setShowCameraScanner(false)}
+            theme={theme}
+            mode="stocktake"
+            title={`Scan Kamera HP — ${currentOutlet.storeName}`}
+            subtitle="Scan barcode kemasan untuk mencatat hitungan fisik ke sesi opname."
+            catalogItems={scannerCatalogItems}
+            hideSystemStock={false}
+            onCaptureScan={async ({ code, matchedItem, qty, applyMode }) => {
+              const res = await apiClient.scanIncrementStocktake(
+                `STD-DRAFT-${selectedWarehouseId}-${scanSessionNonce}`,
+                {
+                  barcode: code,
+                  sku: matchedItem?.sku,
+                  deltaQty: qty ?? 1,
+                  mode: applyMode ?? 'add',
+                  storeId: selectedWarehouseId,
+                }
+              );
+              setPhysicalCounts((prev) => ({
+                ...prev,
+                [res.sku]: res.countedQty,
+              }));
+              onShowToast('Scan Opname Tercatat', res.message);
+              return {
+                ok: true,
+                title: res.message,
+                detail: `Draft fisik: ${res.countedQty} ${res.unit}`,
+                totalCount: res.countedQty,
+              };
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

@@ -3138,6 +3138,47 @@ export const apiClient = {
     return res.json();
   },
 
+  async scanIncrementStocktake(
+    stocktakeId: string,
+    payload: {
+      barcode?: string;
+      sku?: string;
+      lotNumber?: string;
+      deltaQty?: number;
+      mode?: 'add' | 'set';
+      storeId?: string;
+      countedLotNumber?: string;
+      notes?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    stocktakeId: string;
+    sheetNumber?: string;
+    storeId: string;
+    sku: string;
+    batchId?: string;
+    productName: string;
+    unit: string;
+    previousQty: number;
+    countedQty: number;
+    deltaApplied: number;
+    blindMasked: boolean;
+    liveStockMutated: boolean;
+    sheet?: BlindOpnameSheet;
+    message: string;
+  }> {
+    const res = await fetchApi(`/api/admin/inventory/stocktakes/${encodeURIComponent(stocktakeId)}/scan-increment`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error((data as any)?.error || 'Failed to record stocktake barcode scan');
+    }
+    return data;
+  },
+
   async getActivePosShift(storeId: string): Promise<{ activeShift: PosRegisterShiftSession | null }> {
     const params = new URLSearchParams({ storeId });
     const res = await fetchApi(`/api/pos/shifts/active?${params.toString()}`);

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { Suspense, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   B2BWholesaleOrder,
@@ -43,6 +43,7 @@ import {
   ArrowRightLeft,
   Barcode,
   Boxes,
+  Camera,
   CheckCircle2,
   ClipboardList,
   Clock,
@@ -75,6 +76,10 @@ import { RepackBundlePanel } from './RepackBundlePanel';
 import { FefoHeatmapRackVisualizer } from './FefoHeatmapRackVisualizer';
 import { FlashSaleClearanceModal } from './FlashSaleClearanceModal';
 import { ItemTraceabilityModal } from './ItemTraceabilityModal';
+
+const MobileBarcodeScannerModal = React.lazy(() =>
+  import('../MobileBarcodeScannerModal').then((m) => ({ default: m.MobileBarcodeScannerModal }))
+);
 
 interface EnterpriseInventoryViewProps {
   theme: 'light' | 'dark';
@@ -178,6 +183,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = ({
   theme,
   activeStaffSession,
+  enableB2BFeatures = false,
   selectedOutletFilter,
   onOutletFilterChange,
   selectedStorageZoneFilter,
@@ -225,6 +231,7 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
   const [includeB2BCatalogRows, setIncludeB2BCatalogRows] = useState<boolean>(true);
   const [showStrategyModal, setShowStrategyModal] = useState<boolean>(false);
   const [showBarcodeLabelModal, setShowBarcodeLabelModal] = useState<boolean>(false);
+  const [showLookupScanner, setShowLookupScanner] = useState<boolean>(false);
   const [opnameWorkspaceMode, setOpnameWorkspaceMode] = useState<'standard_import' | 'rack_blind'>('standard_import');
   const [savingStrategy, setSavingStrategy] = useState<boolean>(false);
   const [mediaInspector, setMediaInspector] = useState<MediaInspectorTarget | null>(null);
@@ -439,6 +446,83 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
         return true;
       });
   }, [filteredTiers, wholesaleQuantRows, removalStrategies, batches, warehouseBins, inventory, channelFilter, strategyFilter, classificationFilter]);
+
+  const lookupCatalogItems = useMemo(() => {
+    const activeBranch = isBranchScoped
+      ? lockedBranchId
+      : selectedOutletFilter !== 'ALL' && selectedOutletFilter !== 'CONSOLIDATED'
+      ? selectedOutletFilter
+      : null;
+
+    const bySku = new Map<string, {
+      sku: string;
+      productName: string;
+      unit?: string;
+      barcode?: string;
+      outerBoxBarcode?: string;
+      lotNumber?: string;
+      binLocation?: string;
+      currentCount?: number | null;
+    }>();
+
+    allTiers
+      .filter((t) => !activeBranch || t.storeId === activeBranch)
+      .forEach((tier) => {
+        if (bySku.has(tier.sku)) return;
+        const invMeta = inventory.find((it) => it.sku === tier.sku);
+        const profile = getEnterpriseSkuProfile(tier.sku, tier.category, tier.unit);
+        const strategy = resolveEffectiveRemovalStrategy(tier.sku, tier.category, removalStrategies);
+        const lotInfo = resolveLotAndFefoForTier(
+          tier.sku,
+          tier.storeId,
+          tier.warehouseZoneId,
+          batches,
+          warehouseBins,
+          strategy,
+          profile.defaultBinLocation
+        );
+        bySku.set(tier.sku, {
+          sku: tier.sku,
+          productName: tier.productName,
+          unit: tier.unit,
+          barcode: invMeta?.barcode,
+          outerBoxBarcode: profile.outerBoxBarcode,
+          lotNumber: lotInfo.lotNumber,
+          binLocation: lotInfo.binLocation,
+          currentCount: tier.physicalStock,
+        });
+      });
+
+    if (enableB2BFeatures && (!activeBranch || activeBranch === 'store-jkt-senopati')) {
+      wholesaleProducts.forEach((wp) => {
+        if (bySku.has(wp.sku)) return;
+        const invMeta = inventory.find((it) => it.sku === wp.sku);
+        const profile = getEnterpriseSkuProfile(wp.sku, wp.category, wp.baseUnit);
+        bySku.set(wp.sku, {
+          sku: wp.sku,
+          productName: wp.name,
+          unit: wp.baseUnit,
+          barcode: invMeta?.barcode,
+          outerBoxBarcode: profile.outerBoxBarcode,
+          binLocation: profile.defaultBinLocation,
+          currentCount: wp.currentStockBaseUnits,
+        });
+      });
+    }
+
+    return Array.from(bySku.values());
+  }, [
+    allTiers,
+    wholesaleProducts,
+    enableB2BFeatures,
+    isBranchScoped,
+    lockedBranchId,
+    selectedOutletFilter,
+    inventory,
+    removalStrategies,
+    batches,
+    warehouseBins,
+  ]);
 
   // Store Consumable Issuance (#1050 -> #5040) Modal State
   const canIssueConsumables =
@@ -1316,15 +1400,26 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
                 <option value="CONSUMABLE">Consumable (#1050)</option>
               </select>
 
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={inventorySearch}
-                  onChange={(e) => onInventorySearchChange(e.target.value)}
-                  placeholder="Search SKU or item..."
-                  className={`pl-8 pr-3 py-1.5 text-xs rounded-xl w-48 ${inputClass}`}
-                />
+              <div className="flex items-center gap-1.5">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={inventorySearch}
+                    onChange={(e) => onInventorySearchChange(e.target.value)}
+                    placeholder="Search SKU or item..."
+                    className={`pl-8 pr-3 py-1.5 text-xs rounded-xl w-44 sm:w-48 ${inputClass}`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLookupScanner(true)}
+                  aria-label="Scan barcode untuk cari item"
+                  title="Scan Kamera HP (Quick Item & Traceability Lookup)"
+                  className="p-1.5 min-h-[32px] min-w-[32px] rounded-xl border border-[#0F4C3A] dark:border-emerald-700/70 bg-white dark:bg-[#090A0F] text-[#0F4C3A] dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-slate-900 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
 
@@ -2593,6 +2688,52 @@ export const EnterpriseInventoryView: React.FC<EnterpriseInventoryViewProps> = (
           </div>,
           document.body
         )}
+
+      {showLookupScanner && (
+        <Suspense fallback={null}>
+          <MobileBarcodeScannerModal
+            isOpen={showLookupScanner}
+            onClose={() => setShowLookupScanner(false)}
+            theme={theme}
+            mode="lookup"
+            title="Quick Item & Traceability Lookup"
+            subtitle="Scan barcode kemasan untuk memfilter Stock & Lot List atau membuka PR ↔ PO ↔ GR Traceability."
+            catalogItems={lookupCatalogItems}
+            secondaryActionLabel="Buka Rak, Lot & Traceability"
+            onSecondaryAction={(item) =>
+              setTraceabilityTarget({
+                sku: item.sku,
+                productName: item.productName,
+              })
+            }
+            onCaptureScan={({ code, matchedItem }) => {
+              const q = code.trim().toLowerCase();
+              const matched =
+                matchedItem ||
+                lookupCatalogItems.find(
+                  (it) =>
+                    it.sku.toLowerCase() === q ||
+                    it.barcode?.toLowerCase() === q ||
+                    it.outerBoxBarcode?.toLowerCase() === q ||
+                    it.lotNumber?.toLowerCase() === q
+                );
+              if (!matched) {
+                return {
+                  ok: false,
+                  title: 'Item Tidak Ditemukan',
+                  detail: `Barcode "${code}" tidak cocok dengan katalog stok outlet aktif.`,
+                };
+              }
+              onInventorySearchChange(matched.sku);
+              return {
+                ok: true,
+                title: `${matched.productName}`,
+                detail: `SKU: ${matched.sku} · Rak: ${matched.binLocation || '-'} · Lot: ${matched.lotNumber || '-'}`,
+              };
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

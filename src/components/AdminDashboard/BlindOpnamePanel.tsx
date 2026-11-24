@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Camera,
   CheckCircle2,
   ClipboardCheck,
   EyeOff,
@@ -15,6 +16,12 @@ import type { BlindOpnameSheet, StaffShiftSession } from '../../types/index.ts';
 import { apiClient } from '../../services/apiClient';
 import { formatIDR } from '../../utils/formatters';
 import { normalizeEnterpriseRole } from '../../utils/rbac';
+import { INITIAL_INVENTORY } from '../../data/inventoryData';
+import { getEnterpriseSkuProfile } from '../../utils/inventorySkuHelper';
+
+const MobileBarcodeScannerModal = React.lazy(() =>
+  import('../MobileBarcodeScannerModal').then((m) => ({ default: m.MobileBarcodeScannerModal }))
+);
 
 interface BlindOpnamePanelProps {
   theme: 'light' | 'dark';
@@ -46,6 +53,7 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
   const [countsDraft, setCountsDraft] = useState<Record<string, { qty: string; lot: string; notes: string }>>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isActioning, setIsActioning] = useState<boolean>(false);
+  const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
 
   const loadSheets = async () => {
     setIsLoading(true);
@@ -67,6 +75,29 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
   }, [selectedStoreId]);
 
   const activeSheet = sheets.find((s) => s.id === activeSheetId) || sheets[0] || null;
+
+  const scannerCatalogItems = useMemo(() => {
+    if (!activeSheet) return [];
+    return activeSheet.items.map((line) => {
+      const invMeta = INITIAL_INVENTORY.find((i) => i.sku === line.sku);
+      const profile = getEnterpriseSkuProfile(line.sku, line.category, line.unit);
+      const draftQtyStr = countsDraft[line.sku]?.qty;
+      const currentCount =
+        draftQtyStr !== undefined && draftQtyStr !== '' && !Number.isNaN(Number(draftQtyStr))
+          ? Number(draftQtyStr)
+          : line.countedQty ?? 0;
+      return {
+        sku: line.sku,
+        productName: line.productName,
+        unit: line.unit,
+        barcode: invMeta?.barcode,
+        outerBoxBarcode: profile.outerBoxBarcode,
+        lotNumber: countsDraft[line.sku]?.lot || line.countedLotNumber || line.expectedLotNumber,
+        binLocation: line.binLocation,
+        currentCount,
+      };
+    });
+  }, [activeSheet, countsDraft]);
 
   useEffect(() => {
     if (!activeSheet) return;
@@ -293,15 +324,29 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               {activeSheet.status === 'COUNTING' && canCount && (
-                <button
-                  type="button"
-                  disabled={isActioning}
-                  onClick={handleSubmitCount}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
-                >
-                  {isActioning ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5" />}
-                  <span>Submit Blind Count for Audit</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowCameraScanner(true)}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                      isLight
+                        ? 'bg-white border-[#0F4C3A] text-[#0F4C3A] hover:bg-emerald-50'
+                        : 'bg-[#090A0F] border-emerald-700/70 text-emerald-300 hover:bg-slate-900'
+                    }`}
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Scan Kamera HP</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isActioning}
+                    onClick={handleSubmitCount}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    {isActioning ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5" />}
+                    <span>Submit Blind Count for Audit</span>
+                  </button>
+                </>
               )}
 
               {activeSheet.status === 'PENDING_APPROVAL' && canApprove && (
@@ -501,6 +546,48 @@ export const BlindOpnamePanel: React.FC<BlindOpnamePanelProps> = ({
           </div>
         </div>
       ) : null}
+
+      {showCameraScanner && activeSheet && (
+        <Suspense fallback={null}>
+          <MobileBarcodeScannerModal
+            isOpen={showCameraScanner}
+            onClose={() => setShowCameraScanner(false)}
+            theme={theme}
+            mode="stocktake"
+            title={`Scan Kamera HP — ${activeSheet.sheetNumber}`}
+            subtitle="Mode Buta Aktif · Scan langsung memperbarui draft hitungan secara atomik."
+            catalogItems={scannerCatalogItems}
+            hideSystemStock={true}
+            onCaptureScan={async ({ code, matchedItem, qty, applyMode }) => {
+              const res = await apiClient.scanIncrementStocktake(activeSheet.id, {
+                barcode: code,
+                sku: matchedItem?.sku,
+                deltaQty: qty ?? 1,
+                mode: applyMode ?? 'add',
+                storeId: activeSheet.storeId,
+              });
+              if (res.sheet) {
+                setSheets((prev) => prev.map((s) => (s.id === res.sheet!.id ? res.sheet! : s)));
+              }
+              setCountsDraft((prev) => ({
+                ...prev,
+                [res.sku]: {
+                  qty: String(res.countedQty),
+                  lot: prev[res.sku]?.lot || matchedItem?.lotNumber || '',
+                  notes: prev[res.sku]?.notes || '',
+                },
+              }));
+              onShowToast('Scan Opname Tercatat', res.message);
+              return {
+                ok: true,
+                title: res.message,
+                detail: `Sheet ${activeSheet.sheetNumber} · Draft fisik ${res.countedQty} ${res.unit}`,
+                totalCount: res.countedQty,
+              };
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };
