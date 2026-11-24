@@ -1051,7 +1051,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* 2. Main Content Wrapper with Dynamic Left Margin corresponding to Sidebar */}
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
+        className={`flex-1 flex flex-col min-w-0 gm-sidebar-main ${
           isSidebarCollapsed ? 'lg:pl-20 print:pl-0' : 'lg:pl-64 print:pl-0'
         }`}
       >

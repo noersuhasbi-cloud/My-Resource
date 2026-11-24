@@ -16638,6 +16638,7 @@ async function startServer() {
       const token = `erp-sys-jwt-${nowMs}-${crypto.randomBytes(24).toString('hex')}-${matchedSystemUser.id}`;
       activeAuthTokens.set(token, {
         userId: matchedSystemUser.id,
+        roleCode: matchedSystemUser.roleCode,
         issuedAtMs: nowMs,
         expiresAtMs: nowMs + ttlMinutes * 60 * 1000,
       });
@@ -16789,8 +16790,10 @@ async function startServer() {
 
     const legacyTtlMinutes = Math.max(5, trialGovernanceConfig.demoSessionTimeoutMinutes || 120);
     const legacyToken = `erp-session-jwt-${nowMs}-${crypto.randomBytes(24).toString('hex')}-${target.userId}`;
+    const legacySystemUser = systemUsers.find((u) => u.id === target.userId);
     activeAuthTokens.set(legacyToken, {
       userId: target.userId,
+      roleCode: target.roleCode || legacySystemUser?.roleCode || 'POS_CASHIER',
       issuedAtMs: nowMs,
       expiresAtMs: nowMs + legacyTtlMinutes * 60 * 1000,
     });

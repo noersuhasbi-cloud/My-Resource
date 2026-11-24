@@ -1394,6 +1394,7 @@ export interface StaffShiftSession {
   roleCode?: DivisionRoleCode;
   divisionLabel?: string;
   supervisorPin?: string;
+  hasSupervisorPin?: boolean;
   viewCost?: boolean;
   hideFinancialCost?: boolean;
   defaultLandingTab?: string;

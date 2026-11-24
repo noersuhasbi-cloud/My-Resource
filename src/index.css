@@ -262,6 +262,68 @@ table th {
 }
 
 /* Tactile Sidebar, Sub-Tab & Interactive Button Micro-Feedback */
+.gm-sidebar-aside {
+  overflow-x: hidden;
+  transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: width;
+}
+
+.gm-sidebar-main {
+  transition:
+    width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-left 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding-left 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gm-sidebar-header {
+  transition:
+    height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.gm-sidebar-label {
+  white-space: nowrap;
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out,
+    max-width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-left 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gm-sidebar-section-header {
+  white-space: nowrap;
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out,
+    height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-bottom 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gm-sidebar-submenu {
+  transition:
+    max-height 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease-out,
+    padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gm-sidebar-toggle {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.gm-sidebar-toggle:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.gm-sidebar-toggle-icon {
+  transition: transform 200ms ease-out;
+}
+
 aside nav button,
 .gm-nav-item,
 .gm-tab-btn {
@@ -295,6 +357,14 @@ button:not(:disabled):active {
     animation: none !important;
   }
 
+  .gm-sidebar-aside,
+  .gm-sidebar-main,
+  .gm-sidebar-header,
+  .gm-sidebar-label,
+  .gm-sidebar-section-header,
+  .gm-sidebar-submenu,
+  .gm-sidebar-toggle,
+  .gm-sidebar-toggle-icon,
   aside nav button,
   .gm-nav-item,
   .gm-tab-btn,
@@ -302,6 +372,7 @@ button:not(:disabled):active {
     transition: none !important;
   }
 
+  .gm-sidebar-toggle:active:not(:disabled),
   button:not(:disabled):active {
     transform: none !important;
   }
